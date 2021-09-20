@@ -1,0 +1,13 @@
+image:
+  repository: virtru/keycloak-poc
+  tag: 0.3.5
+  pullPolicy: Always
+imagePullSecrets:
+  - name: virtru-regcred
+extraEnv: |
+  - name: KEYCLOAK_USER
+    value: technoking
+  - name: KEYCLOAK_PASSWORD
+    value: elon-musk-is-a-dork
+  - name: ATTRIBUTE_PROVIDER_URL
+    value: http://attribute-provider:5000

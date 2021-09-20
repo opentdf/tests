@@ -1,0 +1,20 @@
+{
+  "files": ["src/**/*.js"],
+  "formats": [
+    {
+      "name": "stylish",
+      "output": "console"
+    },
+    {
+      "name": "html",
+      "output": "file",
+      "path": "lint-report/lint-report.html"
+    },
+    {
+      "name": "json",
+      "output": "file",
+      "path": "lint-report/lint-report.json"
+    }
+  ],
+  "cliEngineConfig": {}
+}

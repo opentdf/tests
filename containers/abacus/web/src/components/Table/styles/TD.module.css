@@ -1,0 +1,6 @@
+.dataCell {
+  padding: 0 var(--vds-spacer-sm);
+  height: 36px;
+  text-align: left;
+}
+

@@ -1,0 +1,88 @@
+# Default values for eas.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 3
+
+image:
+  name: virtru/tdf-entity-attribute-service:3.4.1-n000.he52adfd4
+  pullPolicy: IfNotPresent
+
+secretName: "etheria-secrets"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 4010
+
+ingress:
+  enabled: true
+  annotations: {}
+  hosts:
+    - host: eas.example.local
+      paths:
+      - backend:
+          service:
+            name: eas
+            port: 4010
+        path: /(.*)
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources:
+  limits:
+    cpu: 400m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Pod disruption budget
+maxUnavailable: 1
+
+endpoints:
+  # todo fix the next line, helper or whatever
+  kasDefaultUrl: https://kas/
+
+livenessProbe:
+readinessProbe:

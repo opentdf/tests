@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -eu
+
+if [[ "${BUILDKITE_STEP_KEY:-}" == minikube ]]; then
+  echo "--- :checkered_flag: ${BUILDKITE_COMMAND} was a minikube command, so do cleanup!"
+  build-temp/bin/minikube delete
+  docker system prune -af --volumes
+fi

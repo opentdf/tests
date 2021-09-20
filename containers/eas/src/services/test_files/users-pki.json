@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Charlie",
+    "userId": "CN=Charlie_1234",
+    "email": "Charlie@pki.example.com",
+    "attributes": [
+      "https://eas.virtru.com/attr/language/value/urdu",
+      "https://eas.virtru.com/attr/language/value/french",
+      "https://eas.virtru.com/attr/language/value/japanese"
+    ]
+  },
+  {
+    "name": "Bob",
+    "userId": "CN=bob_5678",
+    "email": "bob@pki.example.com",
+    "attributes": [
+      "https://eas.virtru.com/attr/language/value/german",
+      "https://eas.virtru.com/attr/language/value/french",
+      "https://eas.virtru.com/attr/language/value/italian"
+    ]
+  }
+]

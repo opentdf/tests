@@ -1,0 +1,9 @@
+.searchContainer {
+  display: flex;
+}
+
+.searchInput {
+  flex-grow: 1;
+  display: flex;
+  margin-right: var(--vds-spacer-sm);
+}

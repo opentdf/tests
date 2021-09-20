@@ -1,0 +1,9 @@
+apiVersion: v2
+appVersion: b616e2fc768a75005726c40fe5f1460a655f08ca
+description: A Helm chart for Kubernetes
+name: eas
+type: application
+version: 1.0.0
+maintainers:
+  - name: Virtru
+icon: https://cdn-assets-cloud.frontify.com/s3/frontify-cloud-files-us/eyJwYXRoIjoiZnJvbnRpZnlcL2FjY291bnRzXC8wMFwvNzQyMTlcL3Byb2plY3RzXC8xMDI4NjNcL2Fzc2V0c1wvZDBcLzM3OTI4MThcLzE0Y2M5MGNiYzcxZDU0NzNiODE1MWNlNDQyMDQ4N2FjLTE1NzYwODYyNzkucG5nIn0:frontify:4uH-8AMfHqeBnF7dWc5RBKk7Y28JJfYzM5pgvuk8SNE

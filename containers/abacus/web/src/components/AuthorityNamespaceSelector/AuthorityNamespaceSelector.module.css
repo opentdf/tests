@@ -1,0 +1,16 @@
+.container {
+  display: flex;
+  flex: auto;
+  justify-content: center;
+  margin: 0 0 var(--vds-spacer-sm) 0;
+}
+
+.label {
+  font: var(--vds-font-heading-xxs);
+  color: var(--vds-color-slate-darkest);
+  padding: 7px 10px 0;
+}
+
+.component {
+  min-width: 310px;
+}

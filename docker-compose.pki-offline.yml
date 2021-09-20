@@ -1,0 +1,105 @@
+# TODO DEPRECATED - this should be dropped in favor of a Helm-based install
+version: "3.8"
+services:
+  eas:
+    image: tdf3.service.eas:0.3.0
+    depends_on:
+      - postgres
+    environment:
+      - EAS_ATTRIBUTES_JSON
+      - EAS_DB_PATH=/eas_app/db/data/eas_database.sqlite
+      - EAS_ENTITY_ID_HEADER=X-Forwarded-Entity-Id
+      - EAS_PRIVATE_KEY
+      - EAS_CERTIFICATE
+      - EAS_USERS_JSON=${EAS_USERS_JSON:-/eas_app/config/users-pki.json}
+      - FLASK_DEBUG=True
+      - GUNICORN_WORKERS=1
+      - KAS_DEFAULT_URL=https://etheria.local:4443/kas
+      - KAS_EC_SECP256R1_CERTIFICATE
+      - LOGLEVEL=DEBUG
+      - MONOLOG_LEVEL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=eas_user
+      - POSTGRES_PASSWORD=eas_password
+      - POSTGRES_DB=eas_db
+      - EAS_UID=908
+    expose:
+      - 4010
+    ports:
+    - 4010:4010
+    logging:
+      options:
+        max-file: "5"
+        max-size: "10m"
+    volumes:
+      - ./certs/eas-private.pem:/certs/eas-private.pem
+      - ./certs/eas-public.pem:/certs/eas-public.pem
+      - ./certs/kas-ec-secp256r1-public.pem:/certs/kas-ec-secp256r1-public.pem
+      - ./certs/kas-public.pem:/certs/kas-public.pem
+  kas:
+    image: tdf3.service.kas:0.2.1
+    environment:
+      - EAS_HOST=https://etheria.local/eas/
+      - FLASK_DEBUG=True
+      - GUNICORN_WORKERS=1
+      - CA_CERT_PATH=/certs/ca.crt
+      - CLIENT_CERT_PATH=/certs/kas-ec.crt
+      - CLIENT_KEY_PATH=/certs/kas-ec.key
+      - LOGLEVEL=DEBUG
+      - MONOLOG_LEVEL
+      - KAS_UID=909
+    expose:
+      - 8000
+    ports:
+      - 8000:8000
+    logging:
+      options:
+        max-file: "5"
+        max-size: "10m"
+    volumes:
+      - ./certs:/certs
+  abacus:
+    image: tdf3.service.abacus:0.1.0
+    depends_on:
+      - eas
+    expose:
+      - 80
+  etheria.local:
+    depends_on:
+      - eas
+      - kas
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      - EAS_ENTITY_ID_HEADER=X-Forwarded-Entity-Id
+      - EAS_URL=http://eas:4010
+      - KAS_URL=http://kas:8000
+      - NGINX_HOST=etheria.local
+      - ABACUS_URL=http://abacus
+      - SET_PKI_MODE=on
+      - MONOLOG_LEVEL
+    hostname: etheria.local
+    image: nginx:1.19.4
+    logging:
+      options:
+        max-file: "5"
+        max-size: "10m"
+    ports:
+      - 80:80
+      - 443:443
+      - 4443:4443
+    volumes:
+      - ./certs/ca.crt:/etc/nginx/ca-crt.pem
+      - ./certs/reverse-proxy.crt:/etc/nginx/server-crt.pem
+      - ./certs/reverse-proxy.key:/etc/nginx/server-key.pem
+      - ./reverse-proxy/entrypoint.sh:/entrypoint.sh
+      - ./reverse-proxy/logs:/var/log/nginx
+      - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.template
+  postgres:
+    image: postgres:12
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=eas_user
+      - POSTGRES_PASSWORD=eas_password
+      - POSTGRES_DB=eas_db

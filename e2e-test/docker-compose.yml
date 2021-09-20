@@ -1,0 +1,185 @@
+version: "3.8"
+networks:
+  default:
+    internal: true
+volumes:
+  key-store:
+services:
+  eas:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ../containers/service_entity_object
+    depends_on:
+      - migration
+      - postgres
+    environment:
+      - EAS_PRIVATE_KEY
+      - EAS_ENTITY_EXPIRATION=99
+      - KAS_DEFAULT_URL=http://kas:8000
+      - KAS_EC_SECP256R1_CERTIFICATE
+      - KAS_CERTIFICATE
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=tdf_entitlement_reader
+      - POSTGRES_PASSWORD=myPostgresPassword
+      - POSTGRES_DATABASE=tdf_database
+      - POSTGRES_SCHEMA=tdf_entitlement
+    expose:
+      - 4010
+    restart: always
+    healthcheck:
+      test: "wget -O /dev/null -T 1 localhost:4010/healthz?probe=liveness"
+      interval: "60s"
+      timeout: "2s"
+      start_period: "5s"
+      retries: 1
+  attribute-authority:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ../containers/service_attribute_authority
+    depends_on:
+      - migration
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=tdf_attribute_manager
+      - POSTGRES_PASSWORD=myPostgresPassword
+      - POSTGRES_DATABASE=tdf_database
+      - POSTGRES_SCHEMA=tdf_attribute
+    expose:
+      - 4020
+    ports:
+      - 4020:4020
+    restart: always
+    healthcheck:
+      test: "wget -O /dev/null -T 1 localhost:4020/healthz?probe=liveness"
+      interval: "60s"
+      timeout: "2s"
+      start_period: "5s"
+      retries: 1
+  entitlement:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ../containers/service_entitlement
+    depends_on:
+      - migration
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=tdf_entitlement_manager
+      - POSTGRES_PASSWORD=myPostgresPassword
+      - POSTGRES_DATABASE=tdf_database
+      - POSTGRES_SCHEMA=tdf_entitlement
+    expose:
+      - 4030
+    restart: always
+    healthcheck:
+      test: "wget -O /dev/null -T 1 localhost:4030/healthz?probe=liveness"
+      interval: "60s"
+      timeout: "2s"
+      start_period: "5s"
+      retries: 1
+  entity:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ../containers/service_entity
+    depends_on:
+      - migration
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=tdf_entity_manager
+      - POSTGRES_PASSWORD=myPostgresPassword
+      - POSTGRES_DATABASE=tdf_database
+      - POSTGRES_SCHEMA=tdf_entity
+    expose:
+      - 4040
+    restart: always
+    healthcheck:
+      test: "wget -O /dev/null -T 1 localhost:4040/healthz?probe=liveness"
+      interval: "60s"
+      timeout: "2s"
+      start_period: "5s"
+      retries: 1
+  kas:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ../containers/kas
+      dockerfile: Dockerfile
+    command: ["gunicorn", "--config", "gunicorn.conf.py", "wsgi:app"]
+    depends_on:
+      - attribute-authority
+      - eas
+    environment:
+      - EAS_HOST=http://attribute-authority:4020
+      - EAS_CERTIFICATE
+      - FLASK_DEBUG=True
+      - FLASK_TESTING=True
+      - JSON_LOGGER=False
+      - KAS_EC_SECP256R1_PRIVATE_KEY
+      - KAS_EC_SECP256R1_CERTIFICATE
+      - KAS_PRIVATE_KEY
+      - KAS_CERTIFICATE
+      - LOGLEVEL=INFO
+      - MONOLOG_LEVEL
+      - GUNICORN_THREADS=1
+      - GUNICORN_WORKERS=1
+    expose:
+      - 8000
+    volumes:
+      - ../containers/python_base/certs:/certs
+    restart: always
+    healthcheck:
+      test: "wget -O /dev/null -T 1 localhost:8000/healthz?probe=liveness"
+      interval: "60s"
+      timeout: "2s"
+      start_period: "5s"
+      retries: 1
+  e2e-test:
+    build:
+      context: ..
+      dockerfile: e2e-test/Dockerfile
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+        - PY_OSS_VERSION=${PY_OSS_VERSION:-==1.1.1}
+    depends_on:
+      - eas
+      - kas
+      - attribute-authority
+      - entitlement
+      - entity
+    environment:
+      - KAS_HOST=http://kas:8000
+      - ENTITY_OBJECT_HOST=http://eas:4010
+      - ATTRIBUTE_AUTHORITY_HOST=http://attribute-authority:4020
+      - ENTITLEMENT_HOST=http://entitlement:4030
+      - ENTITY_HOST=http://entity:4040
+  postgres:
+    image: postgres:12
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=master_user
+      - POSTGRES_PASSWORD=master_password
+      - POSTGRES_DB=tdf_database
+      - POSTGRES_HOST_AUTH_METHOD=trust
+  migration:
+    build:
+      args:
+        - PY_OSS_VERSION=${PY_OSS_VERSION:-==1.1.1}
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ..
+      dockerfile: containers/migration/Dockerfile
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=master_user
+      - POSTGRES_PASSWORD=master_password
+      - POSTGRES_DATABASE=tdf_database
+    depends_on:
+      - postgres

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+START_APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${START_APP_DIR}/../../" >/dev/null && pwd)"
+export PATH="$PATH:$PROJECT_ROOT/tools"
+
+echo START_APP_DIR [$START_APP_DIR]
+echo PROJECT_ROOT $PROJECT_ROOT
+echo PATH $PATH
+
+(
+  monolog DEBUG "genkeys-if-needed $PORT"
+  cd "$PROJECT_ROOT"
+  tools/genkeys-if-needed
+)
+
+export EAS_HOST=https://etheria.local/eas/
+export KEYCLOAK_PUBLIC_KEY="$PROJECT_ROOT/certs/keycloak-public.pem"
+export CA_CERT_PATH="$PROJECT_ROOT/certs/ca.crt"
+
+[ -f "$PROJECT_ROOT/certs/.env" ] && . "$PROJECT_ROOT/certs/.env"
+export EAS_CERTIFICATE
+export KAS_EC_SECP256R1_PRIVATE_KEY
+export KAS_EC_SECP256R1_CERTIFICATE
+export KAS_PRIVATE_KEY
+export KAS_CERTIFICATE
+
+if [ -z $1]; then
+  PORT=8000
+else
+  PORT=$1
+fi
+
+monolog INFO "Starting KAS on port $PORT"
+(
+  cd $PROJECT_ROOT/kas_app
+  pipenv install --deploy
+  JSON_LOGGER=False pipenv run gunicorn --config gunicorn.conf.py -b :$PORT wsgi:app
+)

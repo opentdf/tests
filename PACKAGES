@@ -1,0 +1,7 @@
+# Lists all packages to build; used by tools/monotest, among others
+
+abacus/web
+eas
+kas_app
+kas_core
+nanotdf

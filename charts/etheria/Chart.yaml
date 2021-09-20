@@ -1,0 +1,33 @@
+apiVersion: v2
+dependencies:
+- name: abacus
+  repository: file://../abacus
+  version: '^1.0.0'
+- name: attribute-provider
+  repository: file://../attribute_provider
+  version: '^0.0.4'
+- name: kas
+  repository: file://../kas
+  version: '^1.0.0'
+- name: eas
+  repository: file://../eas
+  version: '^1.0.0'
+- name: keycloak-bootstrap
+  repository: file://../keycloak_bootstrap
+  version: '^0.1.0'
+- name: attribute-authority
+  repository: file://../attribute_authority
+  version: '^1.0.0'
+- name: entitlement
+  repository: file://../entitlement
+  version: '^1.0.0'
+- name: tdf-storage
+  repository: file://../remote_payload
+  version: '^1.0.0'
+description: Virtru Open Source Helm Chart
+name: etheria
+type: application
+version: 0.1.1
+maintainers:
+  - name: Virtru
+icon: https://inxmad4bw31barrx17wec71c-wpengine.netdna-ssl.com/wp-content/uploads/2018/12/o_efa1e48d0db5ebc8-4.png

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "service_entity_object.name" . }}-cm
+data:
+  POSTGRES_HOST: {{ .Values.postgres.host }}
+  POSTGRES_USER: {{ .Values.postgres.user }}
+{{/*  POSTGRES_PASSWORD: deployment.envFrom.secretRef.entity-object-secrets*/}}
+  POSTGRES_DATABASE: {{ .Values.postgres.database }}
+  POSTGRES_SCHEMA: {{ .Values.postgres.schema }}
+  EAS_ENTITY_EXPIRATION: {{ quote .Values.entityObject.expiration }}
+  KAS_DEFAULT_URL: {{ .Values.truststore.kasURL }}
+{{/*  EAS_PRIVATE_KEY: deployment.envFrom.secretRef.entity-object-secrets*/}}
+{{/*  KAS_CERTIFICATE: deployment.envFrom.secretRef.entity-object-secrets*/}}
+{{/*  KAS_EC_SECP256R1_CERTIFICATE: deployment.envFrom.secretRef.entity-object-secrets*/}}

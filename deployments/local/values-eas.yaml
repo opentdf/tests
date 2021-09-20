@@ -1,0 +1,32 @@
+endpoints:
+  kasDefaultUrl: https://abacus.etheria.local/kas
+replicaCount: 1
+service:
+  type: ClusterIP
+
+# Development image for minikube - for nonlocal envs, override this with a proper version
+# This should be preloaded into minikube by a local setup script
+image:
+  name: tdf3.service.eas:virtrulocal
+  pullPolicy: Never
+
+livenessProbe: null
+readinessProbe: null
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+  enabled: true
+  hosts:
+  - host: abacus.etheria.local
+    paths:
+      - backend:
+          service:
+            name: eas
+            port: 4010
+        path: /eas
+  tls:
+  - hosts:
+    - abacus.etheria.local
+    secretName: eas-tls

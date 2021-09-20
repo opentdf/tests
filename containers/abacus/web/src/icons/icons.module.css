@@ -1,0 +1,9 @@
+.alignBottom {
+  vertical-align: bottom;
+}
+
+.inline {
+  vertical-align: bottom;
+  width: 18px;
+  height: 18px;
+}

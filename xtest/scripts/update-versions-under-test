@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Updates version requirements for libraries under test:
+#
+# Virtru Proprietary SDKs:
+#    JS_SDK_VERSION: virtru-sdk for javascript
+#
+# TDF3 Reference SDKs:
+#    JS_OSS_VERSION: tdf3-js for javascript
+#    PY_OSS_VERSION: tdf3sdk for python
+#
+# Docker image build args:
+#     PY_OSS_VERSION: tdf3sdk for python
+#     PY_VERSION: Python
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${APP_DIR}/../../" >/dev/null && pwd)"
+TOOLS_DIR="$PROJECT_ROOT/containers/python_base/tools"
+export PATH="$PATH:$TOOLS_DIR"
+
+if [ -x "$PROJECT_ROOT/buildkite-scripts/wrap/npm.sh" ]; then
+  export enpeeem="$PROJECT_ROOT/buildkite-scripts/wrap/npm.sh"
+  ln -s "$PROJECT_ROOT/buildkite-scripts" "$PROJECT_ROOT/xtest/buildkite-scripts"
+else
+  export enpeeem=npm
+fi
+
+cd "$PROJECT_ROOT/xtest" ||
+  {
+    monolog ERROR "Failed to [cd ${PROJECT_ROOT}/xtest]"
+    exit 1
+  }
+
+_update_package() {
+  # Updates a version number as described
+  local package_name
+  local goal_version
+  local curr_version
+
+  package_name=$1
+  shift
+  goal_version=$1
+  shift
+  curr_version=$(jq -r --arg p "${package_name}" '.dependencies[$p]' package.json)
+  if [[ "${curr_version}" == "${goal_version}" ]]; then
+    monolog INFO "Not updating ${package_name}; already at [${goal_version}]"
+  elif jq --arg p "${package_name}" --arg v "${goal_version}" '.dependencies[$p] = $v' package.json >tmp.json; then
+    monolog INFO "Updated ${package_name} from [${curr_version}] to [${goal_version}]"
+    mv tmp.json package.json
+    for i in {1..4}; do
+      # Update package-lock with new deps from the updated version of the requested package
+      if "${enpeeem}" install; then
+        return 0
+      fi
+      if [[ $i == 4 ]]; then
+        monolog ERROR "npm install failed after update"
+        exit 2
+      fi
+      monolog INFO "Still waiting for  npm to install( ${i} / 4) ..."
+      sleep $((i * 10))
+    done
+  else
+    monolog ERROR "Unable to update js ${package_name} to [${goal_version}]"
+    exit 1
+  fi
+}
+
+# To test, do something like:
+#   JS_SDK_VERSION=2.1.5-alpha.1.5 scripts/update-versions-under-test
+_update_html() {
+  for html in sdk/js/browser/testpage*.html; do
+    sed "s|/js/latest/virtru-sdk.min.js|/js/${1}/virtru-sdk.min.js|g" "$html" >"${html}.tmp"
+    mv "${html}.tmp" "$html"
+  done
+}
+
+if [[ "$JS_SDK_VERSION" ]]; then
+  monolog INFO "Updating virtru-sdk for js to [${JS_SDK_VERSION}]"
+  _update_html "$JS_SDK_VERSION"
+  _update_package virtru-sdk "$JS_SDK_VERSION"
+fi
+
+if [[ "$JS_OSS_VERSION" ]]; then
+  monolog INFO "Updating tdf3 for js to [${JS_OSS_VERSION}]"
+  _update_package tdf3-js "$JS_OSS_VERSION"
+fi
+
+# Docker images accept PY_OSS_VERSION as build arg.  value "==1.0.0"
+if [[ "$PY_OSS_VERSION" ]]; then
+  monolog INFO "Setting python tdf3sdk version to [${PY_OSS_VERSION}]"
+  cat >sdk/py/oss/requirements.txt <<EOF
+tdf3sdk$PY_OSS_VERSION
+EOF
+fi

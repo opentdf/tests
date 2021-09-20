@@ -1,0 +1,19 @@
+.DS_Store
+.idea/
+.pytest_cache
+.scannerwork
+.venv*
+.vscode
+__pycache__
+node_modules
+
+*.deb
+*.egg-info
+*.pyc
+*.swp
+
+# @SECURITY we don't want to commit keys
+key_stash/*
+!key_stash/README.md
+
+*.sqlite

@@ -1,0 +1,10 @@
+.button {
+  background: none;
+  font-size: var(--vds-font-size-md);
+  color: var(--vds-color-blue-darker);
+  font-family: var(--vds-font-family-body);
+  text-decoration: underline;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}

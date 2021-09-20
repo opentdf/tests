@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@easRoot/*": ["../../eas/*"],
+    }
+  },
+  "exclude": [
+      "node_modules",
+      ".storybook",
+      "scripts",
+      "out",
+      ".next",
+      "dist"
+  ]
+}

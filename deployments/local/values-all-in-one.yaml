@@ -1,0 +1,112 @@
+abacus:
+  ingress:
+    hosts:
+    - host: abacus.etheria.local
+      paths:
+      - backend:
+          service:
+            name: abacus
+            port: 443
+        path: /(.*)
+      - backend:
+          service:
+            name: eas
+            port: 4010
+        path: /eas/(.*)
+      - backend:
+          service:
+            name: kas
+            port: 8000
+        path: /kas/(.*)
+    tls:
+    - hosts:
+      - abacus.etheria.local
+      secretName: abacus-tls
+  endpoints:
+    eas: https://abacus.etheria.local/eas
+    kas: https://abacus.etheria.local/kas
+    abacus: https://abacus.etheria.local
+    nginxHost: abacus.etheria.local
+eas:
+  replicaCount: 1
+  ingress:
+    hosts:
+    - host: abacus.etheria.local
+      paths:
+      - /eas
+    tls:
+    - hosts:
+      - abacus.etheria.local
+      secretName: eas-tls
+
+  endpoints:
+    kasDefaultUrl: https://abacus.etheria.local/kas
+
+  image:
+    name: tdf3.service.eas:virtrulocal
+    pullPolicy: Never
+
+  livenessProbe: null
+  readinessProbe: null
+
+kas:
+  replicaCount: 1
+  ingress:
+    hosts:
+    - host: abacus.etheria.local
+      paths:
+      - /kas
+    tls:
+    - hosts:
+      - abacus.etheria.local
+      secretName: kas-tls
+
+  endpoints:
+    easHost: https://abacus.etheria.local/eas
+
+  image:
+    name: tdf3.service.kas:virtrulocal
+    pullPolicy: Never
+
+  livenessProbe: null
+  readinessProbe: null
+
+attribute-provider:
+  image:
+    name: tdf3.service.attribute_provider:virtrulocal
+    pullPolicy: Never
+
+keycloak-bootstrap:
+  image:
+    name: tdf3.service.keycloak_bootstrap:virtrulocal
+    pullPolicy: Never
+
+attribute-authority:
+  image:
+    name: tdf3.service.attribute_authority:virtrulocal
+    pullPolicy: Never
+  postgres:
+    host: my-tdfdb-postgresql.default.svc.cluster.local
+    port: 5432
+    user: postgres
+    schema: tdf_attribute
+
+
+entitlement:
+  image:
+    name: tdf3.service.entitlement:virtrulocal
+    pullPolicy: Never
+  postgres:
+    host: my-tdfdb-postgresql.default.svc.cluster.local
+    port: 5432
+    database: tdf_database
+    schema: tdf_entitlement
+
+tdf-storage:
+  image:
+    name: tdf3.service.remote_payload:virtrulocal
+    pullPolicy: Never
+
+  s3Bucket: "virtru-tdf-webservice"
+  s3BucketRegion: "us-east-1"
+

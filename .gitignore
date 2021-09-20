@@ -1,0 +1,48 @@
+*.deb
+*.egg-info
+*.log
+*.pyc
+*.sqlite
+*.swp
+*.tmp
+*.DS_Store
+*~
+node_modules
+
+.DS_Store
+.pytest_cache
+.scannerwork
+.venv*
+.vscode
+.run
+.build
+__pycache__
+/.idea/
+/build/
+/build-temp/
+/kas/.idea/
+coverage-reports
+.coverage
+
+# @SECURITY
+certs/*
+!certs/README.md
+*.pem
+/.env
+
+.argo/ci-files
+/performance-test/.env
+kubeconfig
+/containers/abacus/eas-openapi.yaml
+/containers/python_base/certs/*
+!/containers/python_base/certs/README.md
+# EAS requires checked-in test certs IN TWO SPOTS(?), allow them
+!/containers/eas/src/util/keys/keys_for_tests/*
+!/containers/eas/src/services/test_files/key_stash/*
+# KAS requires checked-in test certs, allow them
+!/containers/kas/kas_core/tdf3_kas_core/util/keys/keys_for_tests/*
+
+# Helm
+charts/etheria/Chart.lock
+charts/etheria/charts
+/.helm/

@@ -1,0 +1,64 @@
+.sandbox {
+  border: solid 2px var(--vds-color-white);
+  padding: 0;
+  font-size: 13px;
+}
+.sandboxEntries {
+  display: flex;
+    padding: 12px;
+}
+.sandboxEntries > * {
+  flex: 1 0 auto;
+}
+.sandboxEntries > fieldset {
+  border: 0;
+  padding: 0;
+}
+.legend {
+  padding: 0;
+}
+
+.legend span {
+    margin-left: 10px;
+    color: #2D323B;
+}
+
+.rowContent {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 170px;
+    display: flex;
+    align-items: center;
+}
+
+.effect {
+  background: var(--vds-color-slate-darker);
+  color: var(--vds-color-white);
+  margin: 0 -2px -2px;
+  padding: 4px 38px;
+  line-height: 24px;
+}
+
+.checkboxRow {
+  margin: 6px 0 6px 24px;
+}
+
+.checkboxRow [type='checkbox'],
+.checkboxRow [type='radio'] {
+  width: 18px;
+  height: 18px;
+  margin-right: 12px;
+  vertical-align: text-bottom;
+}
+
+.titleHeader{
+    font: var(--vds-font-heading-xxs);
+    color: var(--vds-color-slate-darkest);
+    padding-bottom: 6px;
+}
+
+.mainContainer{
+    background-color: #deeeff;
+    width: 419px;
+}

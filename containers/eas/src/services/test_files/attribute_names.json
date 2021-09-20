@@ -1,0 +1,9 @@
+{
+  "https://acme.com/attr/IntellectualProperty": {
+    "rule": "hierarchy",
+    "order": ["TradeSecret", "Proprietary", "BusinessSensitive", "Open"]
+  },
+  "https://acme.mil/attr/AcmeRestrictions": {
+    "rule": "allOf"
+  }
+}

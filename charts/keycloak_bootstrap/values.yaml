@@ -1,0 +1,14 @@
+name: 'keycloak-bootstrap'
+replicaCount: 1
+image:
+  name: virtru/keycloak-bootstrap:0.3.5
+  pullPolicy: Always
+  pullSecret: virtru-regcred
+keycloak:
+  hostname: http://keycloak-http
+  clientId: tdf-client
+  clientSecret: 123-456
+  username: technoking
+  password: elon-musk-is-a-dork
+  realm: tdf
+istioTerminationHack: false

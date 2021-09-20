@@ -1,0 +1,29 @@
+.main{
+    background: white;
+    width: 480px;
+}
+
+.hierarchyMode{
+    background: transparent;
+    width: 509px;
+    padding: 0;
+}
+
+.attributeList{
+    font: var(--vds-font-heading-xxs);
+    color: var(--vds-color-slate-darkest);
+    margin-bottom: 6px;
+}
+
+.emptyListBlock {
+    height: 240px;
+    min-width: 200px;
+    color: var(--vds-color-slate-darker);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.whiteBlock {
+    background-color: white;
+}

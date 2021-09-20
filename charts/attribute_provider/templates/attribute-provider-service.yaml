@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+  labels:
+    chart: "{{ $.Chart.Name }}-{{ $.Chart.Version }}"
+    release: "{{ $.Release.Name }}"
+    heritage: "{{ $.Release.Service }}"
+spec:
+  ports:
+    - port: {{ .Values.port }}
+      appProtocol: http
+      targetPort: {{ .Values.port }}
+      name: attribute-provider
+  selector:
+    app: {{ .Values.name }}

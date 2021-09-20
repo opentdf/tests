@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Start an EAS service
+#
+# Example usage:
+#
+#   pipenv shell
+#   . scripts/test.env
+#   ./scripts/start
+
+if [ -z $1]; then
+  PORT=4010
+else
+  PORT=$1
+fi
+
+echo "Starting EAS on port $PORT"
+
+LOGLEVEL=DEBUG JSON_LOGGER=False gunicorn \
+  --config gunicorn.conf.py \
+  -b :$PORT wsgi:app

@@ -1,0 +1,42 @@
+endpoints:
+  abacus: https://abacus.etheria.local
+  eas: https://abacus.etheria.local/eas
+  kas: https://abacus.etheria.local/kas
+  nginxHost: abacus.etheria.local
+
+# Development image for minikube - for nonlocal envs, override this with a proper version
+# This should be preloaded into minikube by a local setup script
+image:
+  repository: tdf3.service.abacus
+  tag: virtrulocal
+  pullPolicy: Never
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: 'true'
+  enabled: true
+  hosts:
+    - host: abacus.etheria.local
+      paths:
+        - backend:
+            service:
+              name: abacus
+              port: 443
+          path: /(.*)
+        - backend:
+            service:
+              name: eas
+              port: 4010
+          path: /eas/(.*)
+        - backend:
+            service:
+              name: kas
+              port: 8000
+          path: /kas/(.*)
+  tls:
+    - hosts:
+        - abacus.etheria.local
+      secretName: abacus-tls

@@ -1,0 +1,96 @@
+# This compose file should only build (and NOT run/stand up) images - there should only be `build` sections included.
+# See *.run.* compose files for running these images
+#
+# Note that many of these images depend on `python_base` being built first - since `docker compose` does not enforce
+# build order, you need to run `docker compose build python_base && docker_compose build` to make sure the base image
+# is built before the other images are - the `build_all.sh` script will do this for you.
+version: "3.8"
+services:
+
+  python-base:
+    image: tdf3.python.base:${PY_VERSION:-3.9}
+    build:
+      args:
+        - ALPINE_VERSION=${ALPINE_VERSION:-3.13}
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ./containers/python_base
+      dockerfile: Dockerfile
+
+  eas:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ./containers/eas
+      dockerfile: Dockerfile
+    image: tdf3.service.eas:${ETHERIA_TAG:-virtrulocal}
+
+  kas:
+    build:
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      context: ./containers/kas
+      dockerfile: Dockerfile
+    image: tdf3.service.kas:${ETHERIA_TAG:-virtrulocal}
+
+  abacus:
+    build:
+      context: ./containers/abacus
+      dockerfile: Dockerfile
+      target: server
+      args:
+        abacusBaseUrl: /abacus
+        abacusAssetPrefix: /abacus
+        easApiUrl: https://etheria.local/eas
+    image: tdf3.service.abacus:${ETHERIA_TAG:-virtrulocal}
+
+  attribute_provider:
+    build:
+      context: ./containers/attribute_provider
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      dockerfile: Dockerfile
+    image: tdf3.service.attribute_provider:${ETHERIA_TAG:-virtrulocal}
+
+  keycloak:
+    build:
+      context: ./containers/keycloak-protocol-mapper
+      args:
+        - MAVEN_VERSION=${MAVEN_VERSION:-3.6.3}
+        - JDK_VERSION=${JDK_VERSION:-11}
+        # INTENTIONALLY tying this version to upstream KC image version
+        - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-13.0.1}
+      dockerfile: Dockerfile
+    # INTENTIONALLY tying this version to upstream KC image version
+    image: tdf3.service.keycloak:${ETHERIA_TAG:-virtrulocal}
+
+  keycloak_bootstrap:
+    build:
+      context: ./containers/keycloak_bootstrap
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      dockerfile: Dockerfile
+    image: tdf3.service.keycloak_bootstrap:${ETHERIA_TAG:-virtrulocal}
+
+  attribute_authority:
+    build:
+      context: ./containers/service_attribute_authority
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      dockerfile: Dockerfile
+    image: tdf3.service.attribute_authority:${ETHERIA_TAG:-virtrulocal}
+
+  entitlement:
+    build:
+      context: ./containers/service_entitlement
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      dockerfile: Dockerfile
+    image: tdf3.service.entitlement:${ETHERIA_TAG:-virtrulocal}
+
+  remote_payload:
+    build:
+      context: ./containers/service_remote_payload
+      args:
+        - PY_VERSION=${PY_VERSION:-3.9}
+      dockerfile: Dockerfile
+    image: tdf3.service.remote_payload:${ETHERIA_TAG:-virtrulocal}

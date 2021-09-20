@@ -1,0 +1,26 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+gunicorn = "*"
+python-json-logger = "*"
+requests = "*"
+statsd = "*"
+tdf3-kas-core = {editable = true, path = "./../kas_core"}
+wsgicors = "*"
+importlib_metadata = "*"
+
+[dev-packages]
+Flake8 = "*"
+Flask = "*"
+autopep8 = "*"
+coverage = "*"
+flake8_docstrings = "*"
+mypy = "*"
+pytest = "==6.0.2"
+pytest-watch = "*"
+
+[requires]
+python_version = "3"

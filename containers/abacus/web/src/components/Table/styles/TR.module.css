@@ -1,0 +1,35 @@
+.dataRow {
+  text-align: left;
+  font: var(--vds-font-md);
+  color: var(--vds-color-slate-darkest);
+  position: relative;
+  background: var(--vds-color-slate-lightest);
+  border: none;
+}
+
+/* stylelint-disable plugin/selector-tag-no-without-class */
+thead .dataRow {
+  background: var(--vds-color-slate-darker);
+}
+
+.bordered.dataRow {
+  border-top: 1px solid var(--vds-color-slate-lighter);
+}
+
+tbody .disabled {
+  outline: none;
+  border: none;
+  background: var(--vds-color-slate-even-lighter);
+}
+
+.disabled.dataRow {
+  background: var(--vds-color-slate-even-lighter);
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.newEntity {
+  background-color: lightgreen;
+}

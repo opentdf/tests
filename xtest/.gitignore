@@ -1,0 +1,10 @@
+node_modules/
+tmp/
+.DS_Store
+.nyc_output/
+*.out
+*.log
+*.tdf
+*.untdf
+plain.txt
+*.pem

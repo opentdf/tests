@@ -1,0 +1,60 @@
+.container {
+    margin: auto;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.wrapper{
+    padding: var(--vds-spacer-sm);;
+}
+
+.buttonContainer{
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    flex-direction: row;
+    justify-content: flex-end;
+    padding-top: 16px;
+}
+
+.item {
+    margin-bottom: var(--vds-spacer-sm);
+}
+
+.cardAccessType {
+    padding-right: var(--vds-spacer-xs);
+}
+
+.cardAccessValue {
+    font-weight: 100;
+}
+
+.attributeList{
+    font: var(--vds-font-heading-xxs);
+    color: var(--vds-color-slate-darkest);
+}
+
+.btnCancel{
+    width: 108px;
+    margin-right: 14px;
+}
+
+.btnSave{
+    width: 192px;
+}
+
+.emptyListBlock {
+    height: 240px;
+    min-width: 200px;
+    color: var(--vds-color-slate-darker);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.attributeListMain{
+    margin-top: 24px;
+}

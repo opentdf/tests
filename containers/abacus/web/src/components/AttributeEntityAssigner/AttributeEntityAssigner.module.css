@@ -1,0 +1,9 @@
+.itemGroup {
+  margin-bottom: var(--vds-spacer-md);
+}
+
+.label {
+  display: block;
+  font: var(--vds-font-md-bold);
+  color: var(--vds-color-slate-darkest);
+}

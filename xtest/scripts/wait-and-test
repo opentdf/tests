@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Wait for EAS and KAS before starting test
+# Example:
+#   wait-and-test config-file.json [arguments to runner.py]
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${APP_DIR}/../../" >/dev/null && pwd)"
+export PATH="$PATH:$APP_DIR:$PROJECT_ROOT/tools"
+
+monolog TRACE "wait-and-test ${*}"
+
+runner=("python3" "test/runner.py")
+
+cfg_file=$1
+shift
+
+argc=$#
+argv=("$@")
+
+i=1
+end=$((argc - 1))
+while [ $i -le $end ]; do
+  i_next=$((i + 1))
+  if [[ "--stage" == "${argv[i]}" ]]; then
+    stage="${argv[i_next]}"
+  fi
+  i=$i_next
+done
+
+monolog TRACE "wait-and-test stage=$stage"
+
+_maybe-install-cert() {
+  monolog TRACE "wait-and-test:_maybe-install-cert ${*}"
+  # Install a custom root certificate authority for testing, if found
+  if [ -z ${TDF3_CERT_AUTHORITY} ]; then
+    monolog INFO "No custom root certificate specified; running in NOAUTH mode"
+    return 0
+  fi
+  if [ ! -f ${TDF3_CERT_AUTHORITY} ]; then
+    monolog WARN "No custom root certificate found at ${TDF3_CERT_AUTHORITY}; falling back to NOAUTH mode"
+    return 0
+  fi
+  if ! chmod 644 ${TDF3_CERT_AUTHORITY}; then
+    monolog WARN "Unable to chmod 644 cert; continuing anyway"
+  fi
+  if update-ca-certificates; then
+    monolog INFO "Certificate successfully installed"
+  else
+    local rval=$?
+    monolog ERROR "Certificate installation failure; read https://gist.github.com/epcim/03f66dfa85ad56604c7b8e6df79614e0"
+    return $rval
+  fi
+}
+
+_wait-for() {
+  monolog TRACE "wait-and-test:_wait-for ${*}"
+  local service=$1
+  shift
+
+  local service_url=$(jq -r ".${stage}.${service}Healthz" <${cfg_file})
+  if [ -z $service_url ]; then
+    service_url=$(jq -r ".${stage}.${service}Endpoint" <${cfg_file})
+  fi
+
+  if [ -z $service_url ]; then
+    monolog ERROR "Failed to load config using [jq .${stage}.${service}Endpoint ${cfg_file}]"
+    return 1
+  fi
+
+  local curl_opts
+  if [ -z ${TDF3_CERT_AUTHORITY} ]; then
+    wait-for-service "$service_url"
+  else
+    local cert_base
+    if [ -f "$PROJECT_ROOT/certs/Alice_1234.crt" ]; then
+      cert_base="$PROJECT_ROOT/certs/Alice_1234"
+    else
+      cert_base="$PROJECT_ROOT/xtest/Alice_1234"
+    fi
+    wait-for-service --ca "${TDF3_CERT_AUTHORITY}" --cert-base "${cert_base}" "$service_url"
+  fi
+}
+
+_maybe-install-cert
+
+monolog INFO --- "wait-and-test Starting to wait"
+
+sleep 1
+for x in eas kas; do
+  if ! _wait-for $x; then
+    monolog ERROR "Failed to find $x"
+    exit 1
+  fi
+done
+
+monolog INFO --- "Starting oss local test"
+cd "$PROJECT_ROOT/xtest"
+"${runner[@]}" "$@"

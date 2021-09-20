@@ -1,0 +1,11 @@
+---
+{{- if .Values.maxUnavailable }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "eas.fullname" . }}
+spec:
+  maxUnavailable: {{ .Values.maxUnavailable }}
+  selector:
+    {{- include "eas.selectorLabels" . | nindent 4 }}
+{{- end }}
