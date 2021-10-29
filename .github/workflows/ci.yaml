@@ -8,12 +8,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - run: scripts/check-version-is.sh
       - uses: actions/setup-node@v2
         with:
           node-version: '16.x'
           cache: 'npm'
           cache-dependency-path: '**/package-lock.json'
+      - run: make all
       - run: make test
+      - run: make lint
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
