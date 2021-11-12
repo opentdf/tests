@@ -1,27 +1,29 @@
 {
-  "include": [
-    "src","test"
-  ],  
   "compilerOptions": {
-    "target": "es2017",
-    "composite": true,
-    "module": "ESNext",
-    "sourceMap": true,
-    "outDir": "dist/esm",
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
+    "allowJs": true,
     "alwaysStrict": true,
-
-    /* Additional Checks */
-    "noUnusedLocals": true,
-    "noImplicitReturns": true,
-    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "composite": true,
+    "declaration": true,
+    "declarationDir": "./dist/types",
+    "declarationMap": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "inlineSourceMap": true,
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "target": "esnext"
+  },
+  "include": ["src", "test"]
 }
