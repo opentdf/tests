@@ -25,7 +25,9 @@ const Client = () => {
   const onDeleteKey = useCallback(
     (attribute) => {
       entityClient.delete(
-        `/entitlement/v1/entity/${entityId}/attribute/${attribute}`,
+        `/entitlement/v1/entity/${entityId}/attribute/${encodeURIComponent(
+          attribute,
+        )}`,
       );
     },
     [entityId],

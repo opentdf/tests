@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
-import { Card, Typography, List, Form, Radio } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Form, List, Radio, Table, Typography } from "antd";
 
 import { components } from "../../attributes";
 import { useAuthorities, useAttrs } from "../../hooks";
-import { Link } from "react-router-dom";
 import CreateAttribute from "./CreateAttribute";
 import { useLazyFetch } from "../../hooks/useFetch";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
+
+import "./Attributes.css";
+import { OrderCard } from "../../components";
+import { EntityAttribute } from "../../types/entitlements";
+import { OrderList } from "./components";
 
 type Attribute = components["schemas"]["Attribute"];
 type AttributeRuleType = components["schemas"]["AttributeRuleType"];
@@ -15,31 +19,61 @@ const tuple = <T extends AttributeRuleType[]>(...args: T) => args;
 const attributeRuleTypes = tuple("hierarchy", "anyOf", "allOf");
 // @ts-ignore
 
+const TABLE_COLUMNS = [
+  {
+    title: "Attribute",
+    dataIndex: "attribute",
+    key: "attribute",
+  },
+  {
+    title: "EntityId",
+    dataIndex: "entityId",
+    key: "entityId",
+  },
+  {
+    title: "State",
+    dataIndex: "state",
+    key: "state",
+  },
+];
+
 const Attributes = () => {
   const authorities = useAuthorities();
-  const [getAttrEntities, data] = useLazyFetch(entityClient);
+  const [getAttrEntities, entities] =
+    useLazyFetch<EntityAttribute[]>(entityClient);
 
-  console.log(`data`, data);
   const [authority] = authorities;
   const { attrs } = useAttrs(authority);
   const [form] = Form.useForm();
 
   const [activeAuthority, setActiveAuthority] = useState(authority);
+  const [activeTabKey, setActiveTab] = useState("");
+  const [isEdit, setIsEdit] = useState(false);
+  const [activeOrderList, setActiveOrderList] = useState<string[]>([]);
 
   const handleAuthorityChange = (e: any) => {
     setActiveAuthority(e.target.value);
+  };
+
+  const handleEditClick = () => {
+    setIsEdit(true);
   };
 
   const handleOrderClick = useCallback(
     (attribute: Attribute, orderItem: string) => {
       const { authorityNamespace, name } = attribute;
 
-      const path = `${authorityNamespace}/attr/${name}/value/${orderItem}`;
+      const path = encodeURIComponent(
+        `${authorityNamespace}/attr/${name}/value/${orderItem}`,
+      );
 
       getAttrEntities({
         method: Method.GET,
-        path: `/entitlement/v1/attribute/${path}/entity`,
+        path: `/entitlement/v1/attribute/${path}/entity/`,
       });
+
+      setActiveTab(orderItem);
+      setActiveOrderList(attribute.order);
     },
     [getAttrEntities],
   );
@@ -48,61 +82,16 @@ const Attributes = () => {
     form.setFieldsValue({ authorities: authority });
   }, [authority, form]);
 
-  const renderItem = useCallback(
-    (item: Attribute) => {
-      const { name, authorityNamespace, order, state } = item;
-
-      return (
-        <List.Item>
-          <Card
-            title={
-              <div>
-                <Typography.Title level={3}>{name}</Typography.Title>
-                <Typography.Text strong>{state}</Typography.Text>
-                <Typography.Text type="secondary"> Access</Typography.Text>
-              </div>
-            }
-            actions={[
-              <Link to={""} key="details">
-                Details
-              </Link>,
-              <Link to={""} key="edit">
-                Edit Rule
-              </Link>,
-            ]}
-          >
-            {order.map((orderItem) => (
-              <div onClick={() => handleOrderClick(item, orderItem)}>
-                <Card.Grid
-                  key={orderItem}
-                  style={{
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                  }}
-                >
-                  <Typography.Text strong>{orderItem} </Typography.Text>
-                  <Typography.Text type="secondary">
-                    {authorityNamespace}
-                  </Typography.Text>
-                </Card.Grid>
-              </div>
-            ))}
-          </Card>
-        </List.Item>
-      );
-    },
-    [handleOrderClick],
-  );
+  const handleReorder = useCallback((list) => {
+    setActiveOrderList(list);
+  }, []);
 
   return (
     <>
       <Typography.Title level={2}>Attribute Rules</Typography.Title>
 
       <List
-        grid={{ gutter: 16, column: 2 }}
-        dataSource={attrs}
-        renderItem={renderItem}
+        grid={{ gutter: 3, xs: 1, column: 2 }}
         footer={<CreateAttribute authorityNameSpace={activeAuthority} />}
         header={
           <Form form={form}>
@@ -118,7 +107,50 @@ const Attributes = () => {
             </Form.Item>
           </Form>
         }
-      />
+      >
+        {attrs.map((attr) => {
+          const { name, order, state } = attr;
+
+          const handleTabChange = (tab: string) => {
+            handleOrderClick(attr, tab);
+          };
+
+          const isActive = order.find(
+            (orderItem) => orderItem === activeTabKey,
+          );
+
+          const tabList = order.map((orderItem) => ({
+            key: orderItem,
+            tab: orderItem,
+          }));
+
+          return (
+            <List.Item key={attr.name}>
+              <OrderCard
+                activeTabKey={activeTabKey}
+                name={name}
+                onEditClick={handleEditClick}
+                onTabChange={handleTabChange}
+                state={state}
+                tabList={tabList}
+              >
+                {isActive && (
+                  <Table columns={TABLE_COLUMNS} dataSource={entities} />
+                )}
+
+                {isActive && isEdit && (
+                  <div>
+                    <OrderList
+                      list={activeOrderList}
+                      onReorder={handleReorder}
+                    />
+                  </div>
+                )}
+              </OrderCard>
+            </List.Item>
+          );
+        })}
+      </List>
     </>
   );
 };

@@ -7,15 +7,16 @@ export type Method = 'get' | 'delete' | "put" | 'post';
 export type Config = { method: Method, path: string, params?: Record<any, any>; };
 
 export const useFetch = <T>(client: AxiosInstance, config: Config): [T | undefined,] => {
+  const { method, path, params } = config;
+
   const [data, setData] = useState<T>();
 
   useEffect(() => {
     const { token, cancel } = getCancellationConfig();
 
-    client
-    [config.method](config.path, {
+    client[method](path, {
       cancelToken: token,
-      ...config.params
+      ...params
     })
       .then((res) => {
         setData(res.data);
@@ -25,7 +26,7 @@ export const useFetch = <T>(client: AxiosInstance, config: Config): [T | undefin
     return () => {
       cancel("Operation canceled by the user.");
     };
-  }, [client, config.method, config.params, config.path]);
+  }, [client, method, params, path]);
 
 
   return [data];
