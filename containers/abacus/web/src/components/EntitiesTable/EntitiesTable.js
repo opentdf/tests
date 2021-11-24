@@ -1,17 +1,12 @@
-import React, { useCallback, useContext } from 'react';
+import { useCallback, useContext, useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useReducerAsync } from 'use-reducer-async';
 import { EntityContext } from '@/hooks/useNewEntity';
-// NOTE(PLAT-875): Deleted for demo
-// eslint-disable-next-line no-unused-vars
-import { Table, THead, TBody, TD, TH, TR } from '@/components/Table';
+import { Table, THead, TBody, TH, TR } from '@/components/Table';
 import generateTestIds from '@/helpers/generateTestIds';
 import RemoveConfirmationModal from '@/components/RemoveConfirmationModal';
 import { ACTIONS, asyncActionHandlers, entitiesReducer } from '@/reducers/entitiesReducer';
-
 import EntityRows from './EntityRows';
-
-const { useState, useEffect } = React;
 
 // New entity effect (ms)
 const NEW_ENTITY_EFFECT_MS = 2 * 1000;
@@ -22,6 +17,7 @@ function EntitiesTable({ attrName, attrValue, namespace, isViewEntityMode }) {
   const { newEntity, setNewEntity } = useContext(EntityContext);
   const [entityToDelete, setEntityToDelete] = useState('');
   const [entities, dispatch] = useReducerAsync(entitiesReducer, [], asyncActionHandlers);
+
   const attributeURI = `${namespace}/attr/${attrName}/value/${attrValue}`;
 
   useEffect(() => {
@@ -64,10 +60,6 @@ function EntitiesTable({ attrName, attrValue, namespace, isViewEntityMode }) {
     setEntityToDelete('');
   }, []);
 
-  // NOTE(PLAT-875): Deleted for demo
-  // const encodedNs = encodeURIComponent(namespace);
-  // const addEntity = `/attributes/${encodedNs}/attr/${attrName}/value/${attrValue}/add-entity`;
-
   return (
     <div data-testid={testIds._}>
       <Table>
@@ -95,24 +87,6 @@ function EntitiesTable({ attrName, attrValue, namespace, isViewEntityMode }) {
                 />
               );
             })}
-          {/* // NOTE(PLAT-875): Deleted for demo */}
-          {/* {!isViewEntityMode && ( */}
-          {/*  <TR isBordered> */}
-          {/*    <TD colSpan={5}> */}
-          {/*      <div style={{ fontSize: '13px', textAlign: 'center' }}> */}
-          {/*        /!* eslint-disable-next-line jsx-a11y/anchor-is-valid *!/ */}
-          {/*        <a */}
-          {/*          style={{ */}
-          {/*            fontSize: '13px', */}
-          {/*          }} */}
-          {/*          href={addEntity} */}
-          {/*        > */}
-          {/*          + Assign entity to attribute */}
-          {/*        </a> */}
-          {/*      </div> */}
-          {/*    </TD> */}
-          {/*  </TR> */}
-          {/* )} */}
         </TBody>
       </Table>
       {entityToDelete ? (

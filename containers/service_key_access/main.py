@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import sys
 from enum import Enum
 from typing import Optional
 
@@ -10,30 +11,25 @@ from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from tdf3_kas_core import nano_tdf_rewrap, tdf3_rewrap
 from tdf3_kas_core.models import KeyMaster, RewrapPluginRunner, Entity
+from tdf3_kas_core.services import _nano_tdf_rewrap, _tdf3_rewrap
 
 app = FastAPI()
 
-private_key = str.encode(os.getenv("KAS_PRIVATE_KEY"))
-serialization.load_pem_private_key(private_key, password=None)
-
-
-eas_certificate = x509.load_pem_x509_certificate(
-    str.encode(os.getenv("EAS_CERTIFICATE"))
-)
-eas_certificate_pem = eas_certificate.public_bytes(
-    encoding=serialization.Encoding.PEM,
-).decode("utf-8")
-# eas_certificate = eas_certificate.public_key().public_bytes(
-#     encoding=serialization.Encoding.PEM,
-#     format=serialization.PublicFormat.SubjectPublicKeyInfo,
-# ).decode('utf-8')
+private_key = ""
 
 
 @app.on_event("startup")
 async def startup():
-    pass
+    global private_key
+    private_key = str.encode(os.getenv("KAS_PRIVATE_KEY"))
+    serialization.load_pem_private_key(private_key, password=None)
+    eas_certificate = x509.load_pem_x509_certificate(
+        str.encode(os.getenv("EAS_CERTIFICATE"))
+    )
+    eas_certificate.public_bytes(
+        encoding=serialization.Encoding.PEM,
+    ).decode("utf-8")
 
 
 @app.on_event("shutdown")
@@ -41,7 +37,7 @@ async def shutdown():
     pass
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def read_semver():
     return {"Hello": "World"}
 
@@ -51,7 +47,7 @@ class ProbeType(str, Enum):
     readiness = "readiness"
 
 
-@app.get("/healthz")
+@app.get("/healthz", include_in_schema=False)
 async def read_liveness(probe: ProbeType = ProbeType.liveness):
     return {"healthz": probe}
 
@@ -128,11 +124,11 @@ async def rewrap(request: WrappedKeyRequest):
     )
     entity = Entity(request.entity.userId, entity_public_key)
     if request.algorithm == "ec:secp256r1":
-        return nano_tdf_rewrap(
+        return _nano_tdf_rewrap(
             request.dict(), context, plugin_runner, key_master, entity
         )
     else:
-        return tdf3_rewrap(request.dict(), context, plugin_runner, key_master, entity)
+        return _tdf3_rewrap(request.dict(), context, plugin_runner, key_master, entity)
 
 
 def construct_from_raw_canonical(canonical):
@@ -200,3 +196,7 @@ class AuthorizationError(Error):
 
 class KeyAccessError(Error):
     """Raise if a key access is malformed."""
+
+
+if __name__ == "__main__":
+    print(json.dumps(app.openapi()), file=sys.stdout)

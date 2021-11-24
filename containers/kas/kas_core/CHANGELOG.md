@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]: https://github.com/virtru/etheria/compare/master...HEAD
 
+- PLAT-1417
+  - Add 30 seconds of leeway to jwt token expiry, customizable with variable
+    `KAS_JWT_LEEWAY` up to 120 seconds (2 minutes)
+  - Log details about claims on invalid token attempts
+
+## 0.8.5 - 2021-11-15
+
+- PLAT-1337
+  - Update kas and attribute URI validation to allow one-label hostnames
+  - Fixes bug in validation that would allow unsupported characters after the
+    attribute value
+
+
 ## 0.8.4 - 2021-06-30
 
 PLAT-946

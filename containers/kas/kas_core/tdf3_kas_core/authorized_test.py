@@ -38,6 +38,12 @@ TflXyM4Jk7qPhVcP8gVmHfdq6RNKi2MvY_jOqU384dUojHBfrUP5FJVXGUKDHV
 D54ic3t2yZtcN8dqe26LA
 """
 
+@pytest.fixture
+def no_leeway():
+    old_value = authorized.leeway
+    authorized.leeway = 0
+    yield
+    authorized.leeway = old_value
 
 def test_authorized_pass():
     """Test authorized."""
@@ -85,7 +91,7 @@ def test_jwt_utilities_rs256_unpack_sad():
         authorized.unpack_rs256_jwt(jwt, bogus)
 
 
-def test_jwt_utilities_rs256_unpack_expiration_hrs():
+def test_jwt_utilities_rs256_unpack_expiration_hrs(no_leeway):
     """Test validatation attempt with bogus public key."""
     expected = {"foo": "bar"}
     private = get_private_key_from_disk("test")
@@ -95,7 +101,7 @@ def test_jwt_utilities_rs256_unpack_expiration_hrs():
         authorized.unpack_rs256_jwt(jwt, public)
 
 
-def test_jwt_utilities_rs256_unpack_expiration_sec():
+def test_jwt_utilities_rs256_unpack_expiration_sec(no_leeway):
     """Test validatation attempt with bogus public key."""
     expected = {"foo": "bar"}
     private = get_private_key_from_disk("test")
@@ -103,3 +109,13 @@ def test_jwt_utilities_rs256_unpack_expiration_sec():
     jwt = authorized.pack_rs256_jwt(expected, private, exp_sec=-1)
     with pytest.raises(JWTError):
         authorized.unpack_rs256_jwt(jwt, public)
+
+
+def test_jwt_utilities_rs256_unpack_expiration_leeway():
+    """Test validatation attempt with bogus public key."""
+    expected = {"foo": "bar"}
+    private = get_private_key_from_disk("test")
+    public = get_public_key_from_disk("test")
+    jwt = authorized.pack_rs256_jwt(expected, private, exp_sec=-1)
+    actual = authorized.unpack_rs256_jwt(jwt, public)
+    assert actual == expected

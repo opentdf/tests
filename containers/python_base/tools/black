@@ -72,15 +72,15 @@ _list-changed() {
   # this line:
   # git diff --name-only \
   git diff --name-only --cached --diff-filter=ACM |
-    grep '\.py$'
+    grep -e '\.py$' -e '^Tiltfile'
 }
 
 _list-all() {
   # List all python source files that are probably source files.
   # Checking gitignore is slower than excluding these big directories explicitly.
   find "$1" \
-    -type d \( -name .git -o -name node_modules -o -name .venv\* -o -name build \) -prune -o \
-    -type f \( -name '*.py' -o -name '*.pyi' \) -print
+    -type d \( -name .git -o -name node_modules -o -name tilt_modules -o -name .venv\* -o -name build \) -prune -o \
+    -type f \( -name '*.py' -o -name '*.pyi' -o -name 'Tiltfile*' \) -print
 }
 
 if [[ "$#" == 0 ]]; then

@@ -1,8 +1,8 @@
 # NOTE - This base image is used here, but it should also really be used in other places such as the e2e test
 # NOTE - The version is also needed in the site-packages COPY command below and should be x.x not x.x.x
-ARG MAVEN_VERSION=3.6.3
+ARG MAVEN_VERSION=3.8.2
 ARG JDK_VERSION=11
-ARG KEYCLOAK_VERSION=13.0.1
+ARG KEYCLOAK_VERSION=15.0.2
 
 FROM maven:${MAVEN_VERSION}-jdk-${JDK_VERSION} as build
 

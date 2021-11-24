@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import generateClient, { SERVICE_EAS } from '@/helpers/requestClient';
+import generateClient, { SERVICE_ATTRIBUTES } from '@/helpers/requestClient';
 
-const client = generateClient(SERVICE_EAS);
+const client = generateClient(SERVICE_ATTRIBUTES);
 
 function useAttributeRule(name, value, namespace) {
   const [attributeRule, setAttributeRule] = useState([]);
@@ -9,7 +9,7 @@ function useAttributeRule(name, value, namespace) {
   useEffect(() => {
     async function fetchData() {
       if (name !== undefined && value !== undefined && namespace !== undefined) {
-        const { data } = await client['src.web.attribute.get_value']({ name, value, namespace });
+        const { data } = await client.read_attribute_v1_attr_get({ name, value, namespace });
         setAttributeRule(data);
       }
     }

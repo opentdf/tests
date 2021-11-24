@@ -1,7 +1,7 @@
 ARG PY_VERSION=3.9
 
 # stage - build
-FROM tdf3.python.base:${PY_VERSION} AS build
+FROM virtru/tdf-python-base:${PY_VERSION} AS build
 WORKDIR /tool
 # Install tool dependencies
 COPY containers/migration/Pipfile .

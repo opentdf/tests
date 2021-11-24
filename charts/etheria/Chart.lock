@@ -1,0 +1,27 @@
+dependencies:
+- name: abacus
+  repository: file://../abacus
+  version: 1.0.0
+- name: attribute-provider
+  repository: file://../attribute_provider
+  version: 0.0.4
+- name: kas
+  repository: file://../kas
+  version: 1.0.0
+- name: eas
+  repository: file://../eas
+  version: 1.0.0
+- name: keycloak-bootstrap
+  repository: file://../keycloak_bootstrap
+  version: 0.1.6
+- name: attribute-authority
+  repository: file://../attribute_authority
+  version: 1.0.0
+- name: entitlement
+  repository: file://../entitlement
+  version: 1.0.0
+- name: tdf-storage
+  repository: file://../remote_payload
+  version: 1.0.0
+digest: sha256:5bb263986eac5b46d176394651a82c3712793b371e4481aa167a34638285befe
+generated: "2021-09-29T14:00:15.263797-04:00"

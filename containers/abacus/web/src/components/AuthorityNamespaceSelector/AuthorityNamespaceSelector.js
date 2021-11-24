@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Select } from '@/components/Virtruoso';
+import { useCallback, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Select } from '@/components/Virtruoso';
 
 function AuthorityNamespaceSelector({
   setSelectedNamespace,

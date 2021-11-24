@@ -1,4 +1,3 @@
-import React from 'react';
 import Page from '@/components/Page';
 import Redirect from '@/components/Redirect';
 import useRoutePath from '@/hooks/useRoutePath';

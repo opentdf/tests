@@ -65,6 +65,7 @@ from tdf3_kas_core.server_timing import Timing
 from tdf3_kas_core.authorized import authorized
 from tdf3_kas_core.authorized import authorized_v2
 from tdf3_kas_core.authorized import looks_like_jwt
+from tdf3_kas_core.authorized import leeway
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,7 @@ def rewrap(data, context, plugin_runner, key_master):
                 data["signedRequestToken"],
                 options={"verify_signature": False},
                 algorithms=["RS256", "ES256", "ES384", "ES512"],
+                leeway=leeway,
             )
 
             requestBody = decoded["requestBody"]
@@ -139,6 +141,7 @@ def rewrap(data, context, plugin_runner, key_master):
                 data["signedRequestToken"],
                 signer_public_key,
                 algorithms=["RS256", "ES256", "ES384", "ES512"],
+                leeway=leeway,
             )
         except Exception as e:
             raise UnauthorizedError("Not authorized") from e
@@ -172,6 +175,7 @@ def rewrap(data, context, plugin_runner, key_master):
                 data["authToken"],
                 entity.public_key,
                 algorithms=["RS256", "ES256", "ES384", "ES512"],
+                leeway=leeway,
             )
         except Exception as e:
             raise AuthorizationError("Not authorized") from e
@@ -240,6 +244,7 @@ def rewrap_v2(data, context, plugin_runner, key_master):
             data["signedRequestToken"],
             signer_public_key,
             algorithms=["RS256", "ES256", "ES384", "ES512"],
+            leeway=leeway,
         )
 
         requestBody = decoded["requestBody"]
@@ -248,7 +253,7 @@ def rewrap_v2(data, context, plugin_runner, key_master):
     except ValueError as e:
         raise BadRequestError(f"Error in jwt or content [{e}]") from e
     except Exception:
-        raise UnauthorizedError("Not authorized")
+        raise UnauthorizedError("Not authorized") from e
 
     algorithm = dataJson.get("algorithm", None)
     if algorithm is None:
@@ -522,10 +527,13 @@ def upsert(data, context, plugin_runner, key_master):
     entity = Entity.load_from_raw_data(data["entity"], key_master.get_key("AA-PUBLIC"))
 
     # Check the auth token.
-    if "authToken" not in data:
-        raise AuthorizationError("Entity not authorized")
-
-    authorized(entity.public_key, data["authToken"])
+    try:
+        if "authToken" not in data:
+            raise AuthorizationError("Entity not authorized")
+        authorized(entity.public_key, data["authToken"])
+    except AuthorizationError:
+        logger.warning("Unauthorized access on behalf of [%s]", entity.userId)
+        raise
 
     # Unpack the policy.
     if "policy" not in data:
@@ -581,6 +589,7 @@ def upsert_v2(data, context, plugin_runner, key_master):
             data["signedRequestToken"],
             signer_public_key,
             algorithms=["RS256"],
+            leeway=leeway,
         )
 
         requestBody = decoded["requestBody"]
@@ -589,7 +598,7 @@ def upsert_v2(data, context, plugin_runner, key_master):
     except ValueError as e:
         raise BadRequestError(f"Error in jwt or content [{e}]") from e
     except Exception:
-        raise UnauthorizedError("Not authorized")
+        raise UnauthorizedError("Not authorized") from e
 
     algorithm = dataJson.get("algorithm", None)
     if algorithm is None:

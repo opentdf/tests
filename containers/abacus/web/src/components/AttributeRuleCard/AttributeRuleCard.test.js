@@ -1,4 +1,3 @@
-import React from 'react';
 // NOTE(PLAT-875): Deleted for demo
 // eslint-disable-next-line no-unused-vars
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';

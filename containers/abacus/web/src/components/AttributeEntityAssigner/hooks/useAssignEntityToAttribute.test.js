@@ -28,12 +28,10 @@ test('should set data and state', async () => {
   await waitForNextUpdate();
 
   expect(mockClient).toHaveBeenCalledTimes(2);
-  expect(
-    mockClient
-  ).toHaveBeenCalledWith('src.web.entity_attribute.add_attribute_to_entity_via_attribute', [
-    { attributeURI: `${namespace}/attr/${attrName}/value/${attrValue}` },
-    [entityId],
-  ]);
+  expect(mockClient).toHaveBeenCalledWith(
+    'src.web.entity_attribute.add_attribute_to_entity_via_attribute',
+    [{ attributeURI: `${namespace}/attr/${attrName}/value/${attrValue}` }, [entityId]]
+  );
   expect(result.current.state).toBe(STATES.SUCCESS);
 });
 

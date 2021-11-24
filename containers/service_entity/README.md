@@ -16,6 +16,11 @@ pipenv install
 pipenv run uvicorn main:app --reload --port 4040
 ```
 
+### OpenAPI
+```shell
+pipenv run python3 main.py > openapi.json
+```
+
 ## kubernetes
 
 ### build image

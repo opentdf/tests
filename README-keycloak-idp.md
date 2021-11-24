@@ -44,7 +44,7 @@ $ kubectl create secret docker-registry regcred \
   --docker-password='...' \
   --docker-email=jgrady@virtru.com
 ```
-* Then run: `$ ./deploy-keycloak-local.sh`
+* Then run: `$ make local-cluster`
 * The last command will take about 4 minutes to complete.
   You might see some errors.  This is normal and due to
   system startup ordering:

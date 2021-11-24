@@ -20,7 +20,15 @@ module.exports = {
     });
 
     // Fix for modules which require node apis but don't use them
-    nextConfig.node = { ...config.node, fs: 'empty', path: 'empty' };
+    // nextConfig.node = { ...config.node, fs: 'empty', path: 'empty' };
+    nextConfig.resolve.fallback = {
+      fs: false,
+      path: false,
+      crypto: require.resolve('crypto-browserify'),
+      http: require.resolve('stream-http'),
+      https: require.resolve('https-browserify'),
+      stream: require.resolve('stream-browserify'),
+    };
 
     nextConfig.plugins.push(
       new webpack.DefinePlugin({
@@ -28,9 +36,11 @@ module.exports = {
         'process.env.PKG_VERSION': JSON.stringify(version),
       }),
       // Ignore tests during build
-      new webpack.IgnorePlugin(/(\/__tests__\/.*|(\.|\/)(test|spec))\.[jt]sx?$/),
+      new webpack.IgnorePlugin({
+        resourceRegExp: /(\/__tests__\/.*|(\.|\/)(test|spec))\.[jt]sx?$/,
+      }),
       // Ignore storybook stories
-      new webpack.IgnorePlugin(/\.stories\.js$/),
+      new webpack.IgnorePlugin({ resourceRegExp: /\.stories\.js$/ })
     );
 
     return nextConfig;

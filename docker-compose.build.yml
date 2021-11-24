@@ -8,7 +8,7 @@ version: "3.8"
 services:
 
   python-base:
-    image: tdf3.python.base:${PY_VERSION:-3.9}
+    image: virtru/tdf-python-base:${PY_VERSION:-3.9}
     build:
       args:
         - ALPINE_VERSION=${ALPINE_VERSION:-3.13}
@@ -22,7 +22,7 @@ services:
         - PY_VERSION=${PY_VERSION:-3.9}
       context: ./containers/eas
       dockerfile: Dockerfile
-    image: tdf3.service.eas:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-entity-attribute-service:${ETHERIA_TAG:-virtrulocal}
 
   kas:
     build:
@@ -30,18 +30,7 @@ services:
         - PY_VERSION=${PY_VERSION:-3.9}
       context: ./containers/kas
       dockerfile: Dockerfile
-    image: tdf3.service.kas:${ETHERIA_TAG:-virtrulocal}
-
-  abacus:
-    build:
-      context: ./containers/abacus
-      dockerfile: Dockerfile
-      target: server
-      args:
-        abacusBaseUrl: /abacus
-        abacusAssetPrefix: /abacus
-        easApiUrl: https://etheria.local/eas
-    image: tdf3.service.abacus:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-key-access-service:${ETHERIA_TAG:-virtrulocal}
 
   attribute_provider:
     build:
@@ -49,7 +38,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: tdf3.service.attribute_provider:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-claim-test-webservice:${ETHERIA_TAG:-virtrulocal}
 
   keycloak:
     build:
@@ -58,10 +47,10 @@ services:
         - MAVEN_VERSION=${MAVEN_VERSION:-3.6.3}
         - JDK_VERSION=${JDK_VERSION:-11}
         # INTENTIONALLY tying this version to upstream KC image version
-        - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-13.0.1}
+        - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-15.0.2}
       dockerfile: Dockerfile
     # INTENTIONALLY tying this version to upstream KC image version
-    image: tdf3.service.keycloak:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-keycloak:${ETHERIA_TAG:-virtrulocal}
 
   keycloak_bootstrap:
     build:
@@ -69,7 +58,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: tdf3.service.keycloak_bootstrap:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-keycloak-bootstrap:${ETHERIA_TAG:-virtrulocal}
 
   attribute_authority:
     build:
@@ -77,7 +66,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: tdf3.service.attribute_authority:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-attribute-authority-service:${ETHERIA_TAG:-virtrulocal}
 
   entitlement:
     build:
@@ -85,7 +74,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: tdf3.service.entitlement:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-entitlement-service:${ETHERIA_TAG:-virtrulocal}
 
   remote_payload:
     build:
@@ -93,4 +82,4 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: tdf3.service.remote_payload:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-storage-service:${ETHERIA_TAG:-virtrulocal}

@@ -1,7 +1,7 @@
-import React, { useCallback } from 'react';
-import { Button } from '@/components/Virtruoso';
+import { useCallback } from 'react';
 import { useRouter } from 'next/router';
 import PropTypes from 'prop-types';
+import { Button } from '@/components/Virtruoso';
 import styles from './AttributeRileEditCard.module.css';
 
 function BottomButtons({ requestUpdateAttribute }) {

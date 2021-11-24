@@ -65,7 +65,7 @@ export const requestEntities = [
 
 export const apiMethodResponses = {
   // Get attributes
-  'src.web.attribute_name.find': (query) => {
+  read_attribute_v1_attr_get: (query) => {
     if (query && query.namespace === 'https://etheria.local') {
       return requestAttributes;
     }
@@ -81,6 +81,8 @@ export const apiMethodResponses = {
   // Get entities
   'src.web.entity.find': requestEntities,
   'src.web.entity_attribute.get_entities_for_attribute': requestEntities,
+  read_entity_attribute_relationship_v1_entity__entityId__attribute_get: requestEntities,
+  read_relationship_v1_entity_attribute_get: requestEntities,
   // Assign entity to an attribute
   'src.web.entity_attribute.add_attribute_to_entity_via_attribute': null,
   'src.web.entity_attribute.delete_attribute_from_entity': null,

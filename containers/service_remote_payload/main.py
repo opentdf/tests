@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import sys
 import uuid as uuid
 from enum import Enum
 from http import HTTPStatus
@@ -15,7 +17,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=(os.environ.get("CORS_ORIGINS").split(",")),
+    allow_origins=(os.environ.get("CORS_ORIGINS", "").split(",")),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,7 +63,7 @@ class StorageMultipart(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    s3 = boto3.resource('s3')
+    s3 = boto3.resource("s3")
     s3.meta.client.head_bucket(Bucket=os.getenv("BUCKET"))
 
 
@@ -69,10 +71,10 @@ async def startup():
 async def create_storage():
     payload_key = str(uuid.uuid4())
     name = os.getenv("BUCKET")
-    sts_client = boto3.client('sts')
+    sts_client = boto3.client("sts")
     # https://docs.aws.amazon.com/STS/latest/APIReference/API_GetFederationToken.html
     token = sts_client.get_federation_token(
-        Name='uploader',
+        Name="uploader",
         Policy='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListAllMyBuckets","Resource":"arn:aws:s3:::*"},{"Effect":"Allow","Action":["s3:ListBucket","s3:GetBucketLocation"],"Resource":"arn:aws:s3:::'
         + name
         + '"},{"Effect":"Allow","Action":["s3:PutObject","s3:PutObjectAcl","s3:GetObject","s3:GetObjectAcl","s3:DeleteObject"],"Resource":"arn:aws:s3:::'
@@ -82,7 +84,7 @@ async def create_storage():
     )
     try:
         s3_client = boto3.client(
-            's3',
+            "s3",
             aws_access_key_id=token["Credentials"]["AccessKeyId"],
             aws_secret_access_key=token["Credentials"]["SecretAccessKey"],
             aws_session_token=token["Credentials"]["SessionToken"],
@@ -116,13 +118,17 @@ class ProbeType(str, Enum):
     readiness = "readiness"
 
 
-@app.get("/healthz", status_code=HTTPStatus.NO_CONTENT)
+@app.get("/healthz", status_code=HTTPStatus.NO_CONTENT, include_in_schema=False)
 async def read_liveness(probe: ProbeType = ProbeType.liveness):
     if probe == ProbeType.readiness:
-        s3 = boto3.resource('s3')
+        s3 = boto3.resource("s3")
         try:
             s3.Bucket(os.getenv("BUCKET"))
         except ClientError as e:
             logging.error(e)
             raise HTTPException(status_code=500, detail=f"{str(e)}") from e
     return Response()  # empty response
+
+
+if __name__ == "__main__":
+    print(json.dumps(app.openapi()), file=sys.stdout)

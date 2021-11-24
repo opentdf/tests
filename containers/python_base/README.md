@@ -3,7 +3,7 @@
 ### Base build image
 
 #### Docker Hub
-https://hub.docker.com/repository/docker/virtru/etheria-base-build
+https://hub.docker.com/repository/docker/virtru/tdf-python-base
 
 #### Buildkite
 https://buildkite.com/virtru/etheria-base
@@ -11,7 +11,7 @@ https://buildkite.com/virtru/etheria-base
 #### Local build
 ```shell
 cd service_base
-docker build --tag virtru/etheria-base-build .
+docker build --tag virtru/tdf-python-base .
 ```
 
 #### Update requirements.txt

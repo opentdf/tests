@@ -30,7 +30,8 @@ class AttributePolicy(object):
         if not namespace:
             raise AttributePolicyConfigError("No namespace string")
         if not attr_namespace_check.match(namespace):
-            raise AttributePolicyConfigError(namespace)
+            logger.error("Attribute policy config error for namespace [%s]", namespace)
+            return
         self.__namespace = namespace
 
         # Check and remember the rule for the policy

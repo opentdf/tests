@@ -1,5 +1,0 @@
-# Development image for minikube - for nonlocal envs, override this with a proper version
-# This should be preloaded into minikube by a local setup script
-image:
-  name: tdf3.service.attribute-provider:virtrulocal
-  pullPolicy: Never

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
 import { Select } from '@/components/Virtruoso';
 import generateTestIds from '@/helpers/generateTestIds';
 
-import PropTypes from 'prop-types';
 import { RuleAccessType, RuleAccessTypeDescription } from '@/helpers/attributeRuleTypes';
 import styles from './AttributeRuleSelector.module.css';
 

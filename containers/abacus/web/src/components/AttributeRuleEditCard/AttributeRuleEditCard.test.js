@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, waitFor, getNodeText, act, fireEvent } from '@testing-library/react';
 import * as nextRouter from 'next/router';
 import { requestAttributes } from '@/__fixtures__/requestData';
@@ -9,11 +8,21 @@ jest.mock('@/helpers/requestClient');
 const { mockClient } = generateClient;
 
 const push = jest.fn();
-nextRouter.useRouter = () => ({ push });
+nextRouter.useRouter = () => ({
+  push,
+  prefetch: jest.fn(() => Promise.resolve()),
+});
 
 describe('<AttributeEditCard />', () => {
   const attrName = 'ClassificationUS';
   const attr = requestAttributes.find(({ name }) => name === attrName);
+
+  beforeEach(() => {
+    generateClient.mockClient.mockReset();
+    generateClient.mockClient.mockOverrideDefaultResolveValue().mockResolvedValue({
+      data: [attr],
+    });
+  });
 
   it('should render order values in list and sandbox', async () => {
     const { getAllByText } = render(
@@ -68,7 +77,7 @@ describe('<AttributeEditCard />', () => {
 
       const clientParam = [{ name: attrName }, attr];
       expect(mockClient.mock.calls[mockClient.mock.calls.length - 1]).toEqual([
-        'src.web.attribute_name.update',
+        'create_attribute_v1_attr_put',
         clientParam,
       ]);
     });

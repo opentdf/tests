@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+python-keycloak = "==0.24.0"
 uvicorn = {extras = ["standard"], version = "*"}
 fastapi = "*"
 databases = {extras = ["postgresql"], version = "*"}

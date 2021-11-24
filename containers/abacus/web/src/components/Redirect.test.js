@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import Link from '@/test/helpers/mockNextLink';
 import mockNextRouter from '@/test/helpers/mockNextRouter';
@@ -23,11 +22,11 @@ describe('<Redirect />', () => {
   });
 
   it(`should redirect in ${REDIRECT_MS}ms`, () => {
-    jest.useFakeTimers();
+    jest.useFakeTimers('legacy');
     render(<Redirect href={href} as={as} />);
     jest.runAllTimers();
-    expect(setTimeout).toHaveBeenCalledTimes(2);
-    expect(setTimeout).toHaveBeenNthCalledWith(2, expect.any(Function), REDIRECT_MS);
+    expect(setTimeout).toHaveBeenCalledTimes(1);
+    expect(setTimeout).toHaveBeenNthCalledWith(1, expect.any(Function), REDIRECT_MS);
     expect(Router.mock.push).toHaveBeenCalledTimes(1);
     expect(Router.mock.push).toHaveBeenCalledWith(href, as);
   });

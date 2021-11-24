@@ -1,4 +1,3 @@
-import React from 'react';
 import { useRouter } from 'next/router';
 // NOTE(PLAT-875)
 // import { Button } from '@/components/Virtruoso';

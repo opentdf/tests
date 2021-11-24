@@ -9,8 +9,6 @@ export LOCAL_TOOL
 
 monolog TRACE "prep_buildkite: [$0 $*]"
 
-SCRIPT_TO_EXECUTE=$1
-
 # We must source as this adds a new entry to the $PATH
 # shellcheck disable=SC1091
 . "${TOOLS_DIR}/pre-reqs-linux.sh" docker helm kuttl "${LOCAL_TOOL}"
@@ -19,13 +17,13 @@ SCRIPT_TO_EXECUTE=$1
 # shellcheck disable=SC1091
 . "${TOOLS_DIR}/lib-local.sh"
 
-monolog INFO "********** Running Etheria quickstart [${SCRIPT_TO_EXECUTE}] in [$BUILDKITE_BUILD_CHECKOUT_PATH]"
+monolog INFO "********** Running Etheria quickstart [${*}] in [$BUILDKITE_BUILD_CHECKOUT_PATH]"
 cd "$BUILDKITE_BUILD_CHECKOUT_PATH" || {
   monolog ERROR "Not in buildkite"
   exit 1
 }
-bash "${SCRIPT_TO_EXECUTE}" || {
-  monolog ERROR "Failed: [${SCRIPT_TO_EXECUTE}]"
+("${@}") || {
+  monolog ERROR "Failed: [${*}]"
   exit 1
 }
 

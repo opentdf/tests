@@ -14,7 +14,6 @@ const NoSSR = dynamic(() => import('@/components/NoSSR'), { ssr: false });
 
 
 */
-import React from 'react';
 import PropTypes from 'prop-types';
 import generateTestIds from '@/helpers/generateTestIds';
 

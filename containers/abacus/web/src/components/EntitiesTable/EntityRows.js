@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useContext } from 'react';
+import { useCallback, useEffect, useContext } from 'react';
 import PropTypes from 'prop-types';
+import { useRouter } from 'next/router';
 import { TD, TR } from '@/components/Table';
 import LinkButton from '@/components/LinkButton';
 import { EntityContext } from '@/hooks/useNewEntity';
-import { useRouter } from 'next/router';
 
 const TYPE_NPE = 'NPE';
 const TYPE_PERSON = 'Person';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, fireEvent, getByText as getByTextWith } from '@testing-library/react';
 import mockNextRouter from '@/test/helpers/mockNextRouter';
 // NOTE(PLAT-875): Deleted for demo

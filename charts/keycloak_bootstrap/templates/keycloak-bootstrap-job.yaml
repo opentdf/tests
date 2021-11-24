@@ -48,5 +48,4 @@ spec:
       imagePullSecrets:
         - name: {{ .Values.image.pullSecret }}
       {{ end }}
-  backoffLimit: 6
-
+  backoffLimit: 10

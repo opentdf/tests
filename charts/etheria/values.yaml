@@ -73,12 +73,12 @@ kas:
 
 attribute-provider:
   image:
-    name: virtru/claim-test-webservice:0.1.1
+    name: virtru/tdf-claim-test-webservice:0.1.1
   port: 5000
 
 keycloak-bootstrap:
   image:
-    name: virtru/keycloak-bootstrap:0.2.1
+    name: virtru/tdf-keycloak-bootstrap:0.2.1
     pullPolicy: Always
 
 attribute-authority:

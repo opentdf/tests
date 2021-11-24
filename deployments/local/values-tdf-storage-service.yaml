@@ -1,3 +1,0 @@
-# overrides charts/service_remote_payload/values.yaml
-s3Bucket: "datalake.etheria"
-s3BucketRegion: "us-west-2"

@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 // NOTE(PLAT-875): Deleted for demo
 // import Link from 'next/link';

@@ -25,9 +25,9 @@ class AttributeValue(object):
     def __init__(self, attribute=None):
         """Initialize with a attribute string (aka URL or attribute)."""
         if not attribute:
-            raise InvalidAttributeError("No attribute  string")
+            raise InvalidAttributeError("No attribute string")
         if not attr_attribute_check.match(attribute):
-            raise InvalidAttributeError(attribute)
+            raise InvalidAttributeError(f"[{attribute}]")
 
         first_splits = attribute.split(ATTR_)
         second_splits = first_splits[1].split(VALUE_)

@@ -1,5 +1,8 @@
+import json
 import os
+import sys
 from enum import Enum
+from http.client import NO_CONTENT
 from typing import List, Optional
 
 import databases as databases
@@ -56,7 +59,7 @@ async def shutdown():
     await database.disconnect()
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def read_semver():
     return {"Hello": "World"}
 
@@ -66,7 +69,7 @@ class ProbeType(str, Enum):
     readiness = "readiness"
 
 
-@app.get("/healthz", status_code=204)
+@app.get("/healthz", status_code=NO_CONTENT, include_in_schema=False)
 async def read_liveness(probe: ProbeType = ProbeType.liveness):
     if probe == ProbeType.readiness:
         await database.execute("SELECT 1")
@@ -134,3 +137,7 @@ async def create_entity(request: Entity):
     result = await database.execute(query)
     if result:
         return request
+
+
+if __name__ == "__main__":
+    print(json.dumps(app.openapi()), file=sys.stdout)

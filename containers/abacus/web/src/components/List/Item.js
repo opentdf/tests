@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 import { DownArrow, UpArrow } from '@/icons';
 
@@ -41,7 +40,7 @@ function Item({
     itemClasses.push(styles.orderedItem);
     outterPrepend = <div className={styles.orderedDecorator} />;
     if (editable) {
-      innerPrepend = <div key className={styles.orderControl} />;
+      innerPrepend = <div key="ordered-decorator" className={styles.orderControl} />;
     }
   } else {
     itemClasses.push(styles.unorderedItem);

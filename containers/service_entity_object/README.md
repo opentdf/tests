@@ -24,6 +24,12 @@ pipenv install
 pipenv run uvicorn main:app --reload --port 4010
 ```
 
+### OpenAPI
+```shell
+pipenv run python3 main.py > openapi.json
+```
+
+
 ### postgres using Docker
 ```shell
 docker run --rm -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=myPostgresPassword -e POSTGRES_DB=tdf_database postgres:12

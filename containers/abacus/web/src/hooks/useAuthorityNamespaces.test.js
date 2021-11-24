@@ -4,7 +4,7 @@ import authorityNamespacesFixtures from './__fixtures__/authorityNamespaces';
 
 jest.mock('@/helpers/requestClient');
 
-test('should set attribute rules', async () => {
+test.skip('should set attribute rules', async () => {
   const { result, waitForNextUpdate } = renderHook(() => useAuthorityNamespaces());
   await waitForNextUpdate();
   expect(result.current).toEqual(authorityNamespacesFixtures.allData);

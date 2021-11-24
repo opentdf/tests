@@ -1,0 +1,352 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Read Semver",
+        "operationId": "read_semver__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Read Liveness",
+        "operationId": "read_liveness_healthz_get",
+        "parameters": [
+          {
+            "required": false,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProbeType"
+                }
+              ],
+              "default": "liveness"
+            },
+            "name": "probe",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entity/attribute": {
+      "get": {
+        "summary": "Read Relationship",
+        "operationId": "read_relationship_v1_entity_attribute_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Read Relationship V1 Entity Attribute Get",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EntityAttributeRelationship"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entity/{entityId}/attribute": {
+      "get": {
+        "summary": "Read Entity Attribute Relationship",
+        "operationId": "read_entity_attribute_relationship_v1_entity__entityId__attribute_get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Entityid",
+              "type": "string"
+            },
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Create Entity Attribute Relationship",
+        "operationId": "create_entity_attribute_relationship_v1_entity__entityId__attribute_put",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Entityid",
+              "type": "string"
+            },
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Request",
+                "type": "array",
+                "items": {
+                  "maxLength": 2083,
+                  "minLength": 1,
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/attribute/{attributeURI}/entity/": {
+      "put": {
+        "summary": "Create Attribute Entity Relationship",
+        "operationId": "create_attribute_entity_relationship_v1_attribute__attributeURI__entity__put",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Attributeuri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string",
+              "format": "uri"
+            },
+            "name": "attributeURI",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Request",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entity/{entityId}/attribute/{attributeURI}": {
+      "delete": {
+        "summary": "Delete Attribute Entity Relationship",
+        "operationId": "delete_attribute_entity_relationship_v1_entity__entityId__attribute__attributeURI__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Entityid",
+              "type": "string"
+            },
+            "name": "entityId",
+            "in": "path"
+          },
+          {
+            "required": true,
+            "schema": {
+              "title": "Attributeuri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string",
+              "format": "uri"
+            },
+            "name": "attributeURI",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EntityAttributeRelationship": {
+        "title": "EntityAttributeRelationship",
+        "required": [
+          "attribute",
+          "entityId"
+        ],
+        "type": "object",
+        "properties": {
+          "attribute": {
+            "title": "Attribute",
+            "maxLength": 2083,
+            "minLength": 1,
+            "type": "string",
+            "format": "uri"
+          },
+          "entityId": {
+            "title": "Entityid",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "example": {
+          "attribute": "https://eas.local/attr/ClassificationUS/value/Unclassified",
+          "entityId": "Charlie_1234",
+          "state": "active"
+        }
+      },
+      "HTTPValidationError": {
+        "title": "HTTPValidationError",
+        "type": "object",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      },
+      "ProbeType": {
+        "title": "ProbeType",
+        "enum": [
+          "liveness",
+          "readiness"
+        ],
+        "type": "string",
+        "description": "An enumeration."
+      },
+      "ValidationError": {
+        "title": "ValidationError",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "loc": {
+            "title": "Location",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

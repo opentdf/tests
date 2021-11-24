@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react';
 import mockNextRouter from '@/test/helpers/mockNextRouter';
 import AttributeValuePage from '@/pages/attributes/[ns]/attr/[attrName]/value';

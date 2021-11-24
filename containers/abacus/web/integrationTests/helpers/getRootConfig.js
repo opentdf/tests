@@ -1,10 +1,8 @@
 /* eslint-disable import/no-extraneous-dependencies */
 const path = require('path');
 const fs = require('fs');
-const yaml = require('js-yaml');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../');
-const EAS_OPENAPI = 'eas/openapi.yaml';
 const CA_CERT = 'certs/ca.crt';
 const CLIENT_CERT = 'certs/Alice_1234.crt';
 const CLIENT_KEY = 'certs/Alice_1234.crt';
@@ -13,7 +11,18 @@ function getOpenAPISchemas() {
   // Load the OpenApi files
   try {
     return {
-      eas: yaml.safeLoad(fs.readFileSync(path.resolve(ROOT_DIR, EAS_OPENAPI), 'utf8')),
+      claims: fs.readFileSync(
+        path.resolve(ROOT_DIR, 'containers/service_entity_object/openapi.json'),
+        'utf8'
+      ),
+      attributes: fs.readFileSync(
+        path.resolve(ROOT_DIR, 'containers/service_attribute_authority/openapi.json'),
+        'utf8'
+      ),
+      entitlement: fs.readFileSync(
+        path.resolve(ROOT_DIR, 'containers/service_entitlement/openapi.json'),
+        'utf8'
+      ),
     };
   } catch (e) {
     console.error('Could not open EAS and/or KAS OpenAPI files');

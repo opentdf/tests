@@ -7,8 +7,8 @@ all: local-cluster
 local-cluster: all-containers
 	deployments/local/start.sh
 
-all-containers: python-base docker-compose.build.yml containers/abacus/eas-openapi.yaml $(shell find containers)
-	docker pull virtru/etheria-base-build:latest && docker-compose -f docker-compose.build.yml build
+all-containers: python-base docker-compose.build.yml containers/abacus/eas-openapi.yaml $(shell IFS=$'\n' find containers -not -path '*/node_modules/*')
+	docker-compose -f docker-compose.build.yml build
 
 python-base: docker-compose.build.yml $(shell find containers/python_base)
 	docker-compose -f docker-compose.build.yml build python-base

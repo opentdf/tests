@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import generateClient, { SERVICE_EAS } from '@/helpers/requestClient';
+import generateClient, { SERVICE_ATTRIBUTES } from '@/helpers/requestClient';
 
-const client = generateClient(SERVICE_EAS);
+const client = generateClient(SERVICE_ATTRIBUTES);
 
 function useAttributeRules(selectedAuthorityNamespace) {
   const [attributeRules, setAttributeRules] = useState([]);
@@ -9,7 +9,7 @@ function useAttributeRules(selectedAuthorityNamespace) {
   useEffect(() => {
     async function fetchData() {
       if (selectedAuthorityNamespace) {
-        const { data } = await client['src.web.attribute_name.find']({
+        const { data } = await client.read_attribute_v1_attrName_post({
           namespace: selectedAuthorityNamespace,
         });
         setAttributeRules(data);

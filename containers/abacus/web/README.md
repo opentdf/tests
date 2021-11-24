@@ -14,13 +14,13 @@ zip -r abacusDeploy.zip ./abacus/web -x '*/node_modules/*' '*/.next/*' && zip -r
 ```
 
 You can `sftp` or any other sutable way to place this archive to your server.
-####In example we use Ubuntu sever. 
+####In example we use Ubuntu sever.
 
 Things you need to install for your sever:
 - Node.js
 ```bash
 sudo apt install nodejs
-# Install node package mananager 
+# Install node package mananager
 sudo apt install npm
 ```
 - Zip command line tool to unarchive package
@@ -49,7 +49,7 @@ npm ci
 npm run build
 npm run start
 ```
-Now your app running on port 3000 - setup  reverse proxy to serve app on 80 and 443 ports
+Now your app running on port 3000 - setup reverse proxy to serve app on 80 and 443 ports
 
 #### Local Backend
 
@@ -122,12 +122,11 @@ We using react hooks without state machine (redux, flux etc).
 For hooks understanding - https://youtu.be/dpw9EHDh2bM
 
 #### Hints
- - Useful to keep callbacks in `useCallback`   so function wont created every time 
-component rerender. 
+ - Useful to keep callbacks in `useCallback` so function wont created every time component rerender.
 https://reactjs.org/docs/hooks-reference.html#usecallback
 - Also if you want to prevent component rerender you should wrap it in
-`useMemo` https://reactjs.org/docs/hooks-reference.html#usememo. In that case callback passed as property to such component SHOULD be wrapped to `useCallbacks`. Comparison of functions is similar to object comparison. 
-- If you feeling that `useEffect` is not enough for your complex logic (like multiple states depend on multiple variables, or you need multiple `useEffects`) dont be shy to use `useReducer`. Its perfect for those situations and `use-reducer-async` gives us ability to use async request with use reducer (its middleware that can make async request and dispatch event to reducer). 
+`useMemo` https://reactjs.org/docs/hooks-reference.html#usememo. In that case callback passed as property to such component SHOULD be wrapped to `useCallbacks`. Comparison of functions is similar to object comparison.
+- If you feeling that `useEffect` is not enough for your complex logic (like multiple states depend on multiple variables, or you need multiple `useEffects`) dont be shy to use `useReducer`. Its perfect for those situations and `use-reducer-async` gives us ability to use async request with use reducer (its middleware that can make async request and dispatch event to reducer).
 
 ### Working with CSS Modules
 
@@ -158,4 +157,3 @@ Since EAS drives the entity authentication mechanism for KAS we've chosen to uti
 #### What about state management?
 
 With the advent of React 16 inclusion of [React Hooks](https://reactjs.org/docs/hooks-intro.html) state management like Redux is largely unnecessary. We've chosen to use a similar pattern to [Unstated-Next](https://github.com/jamiebuilds/unstated-next).
-

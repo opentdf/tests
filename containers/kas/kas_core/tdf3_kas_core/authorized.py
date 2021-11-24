@@ -2,6 +2,7 @@
 
 import jwt
 import logging
+import os
 import re
 
 from datetime import datetime, timedelta
@@ -27,11 +28,31 @@ JWT_EXCEPTIONS = (
     jwt.exceptions.MissingRequiredClaimError,
 )
 
+# Number of seconds of leeway for expiry in token validation
+# If you need more than 2 mins of leeway, you have a server config problem that you need to fix.
+# NOTE: When we drop support <3.8, add `: typing.Final` below
+max_leeway = 120
+default_leeway = 30
+assert 0 <= default_leeway <= max_leeway
+leeway = default_leeway
+
+
+try:
+    suggested_leeway = int(os.environ["KAS_JWT_LEEWAY"])
+    if 0 <= suggested_leeway <= max_leeway:
+        leeway = suggested_leeway
+        logger.info("KAS_JWT_LEEWAY set to [%s]", suggested_leeway)
+    else:
+        logger.error("KAS_JWT_LEEWAY out of bounds [%s] [%s]", suggested_leeway, max_leeway)
+except KeyError:
+    pass
+except TypeError:
+    logger.error("Invalid KAS_JWT_LEEWAY", exc_info=True)
 
 def unpack_rs256_jwt(jwt_string, public_key):
     """Unpack asymmetric JWT using RSA 256 public key."""
     try:
-        return jwt.decode(jwt_string, public_key, algorithms=["RS256"])
+        return jwt.decode(jwt_string, public_key, algorithms=["RS256"], leeway=leeway)
     except JWT_EXCEPTIONS as err:
         raise JWTError("Error decoding rs256 JWT") from err
 
@@ -96,8 +117,9 @@ def authorized_v2(public_key, auth_token):
 
     try:
         decoded = jwt.decode(
-            auth_token, public_key, audience=audience, algorithms=algorithms
+            auth_token, public_key, audience=audience, algorithms=algorithms, leeway=leeway
         )
     except Exception as e:
+        logger.warning("Unverifiable claims [%s]", decoded)
         raise UnauthorizedError("Not authorized") from e
     return decoded

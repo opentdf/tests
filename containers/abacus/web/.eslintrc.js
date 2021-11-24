@@ -1,5 +1,14 @@
 module.exports = {
-  extends: ['airbnb', 'airbnb/hooks', 'plugin:jest/recommended', 'prettier'],
+  env: {
+    browser: true,
+  },
+  extends: [
+    'airbnb',
+    'airbnb/hooks',
+    'plugin:jest/recommended',
+    'prettier',
+    'plugin:react/jsx-runtime',
+  ],
   parser: 'babel-eslint',
   plugins: ['jest', 'jest-dom', 'prettier', 'testing-library'],
   rules: {

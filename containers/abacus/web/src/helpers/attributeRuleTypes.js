@@ -1,5 +1,3 @@
-import React from 'react';
-
 export const RuleAccessType = {
   PERMISSIVE: 'anyOf',
   RESTRICTIVE: 'allOf',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Button } from 'virtuoso-design-system';
 import AuthorityNamespaceSelector from '@/components/AuthorityNamespaceSelector/AuthorityNamespaceSelector';
@@ -104,9 +104,11 @@ export const EntityAttributeAssigner = ({
           </Button>
         ) : (
           <>
-            <Button variant={Button.VARIANT.SECONDARY} size={Button.SIZE.MEDIUM} onClick={cancel}>
-              Cancel
-            </Button>
+            {cancel && (
+              <Button variant={Button.VARIANT.SECONDARY} size={Button.SIZE.MEDIUM} onClick={cancel}>
+                Cancel
+              </Button>
+            )}
             <div className={styles.buttonBrake} />
             <Button
               variant={Button.VARIANT.PRIMARY}
@@ -144,7 +146,7 @@ EntityAttributeAssigner.defaultProps = {
   attributes: [],
   setSelectedNamespace: () => {},
   assign: () => {},
-  cancel: () => {},
+  cancel: null,
 };
 
 export default EntityAttributeAssigner;

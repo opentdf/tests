@@ -3,7 +3,7 @@ ARG PY_VERSION=3.9
 ARG ALPINE_VERSION=3.13
 
 # stage - build
-FROM virtru/etheria-base-build AS build
+FROM virtru/tdf-python-base:${PY_VERSION} AS build
 WORKDIR /build
 # Install application dependencies
 COPY Pipfile .
@@ -31,16 +31,35 @@ COPY --from=build --chown=root:root /build/ .
 COPY --from=build --chown=root:root /usr/local/lib/python${PY_VERSION}/site-packages/ /usr/local/lib/python${PY_VERSION}/site-packages
 # add any new deployable directories and files from the build stage here
 
-# Publish stats
-ENV STATSD_HOST ""
-ENV STATSD_PORT "8125"
+# Server
+ENV SERVER_ROOT_PATH "/"
+ENV SERVER_PORT "4030"
+ENV SERVER_PUBLIC_NAME ""
+ENV SERVER_LOG_LEVEL "INFO"
+ENV SERVER_CORS_ORIGINS ""
 # Postgres
 ENV POSTGRES_HOST ""
 ENV POSTGRES_PORT "5432"
-ENV POSTGRES_USER ""
+ENV POSTGRES_USER "tdf_entitlement_manager"
 ENV POSTGRES_PASSWORD ""
-ENV POSTGRES_DATABASE ""
-ENV POSTGRES_SCHEMA "tdf_attribute"
+ENV POSTGRES_DATABASE "tdf_database"
+ENV POSTGRES_SCHEMA "tdf_entitlement"
+# OIDC
+ENV OIDC_CLIENT_ID ""
+ENV OIDC_CLIENT_SECRET ""
+ENV OIDC_REALM ""
+## trailing / is required
+ENV OIDC_SERVER_URL ""
+ENV OIDC_AUTHORIZATION_URL ""
+ENV OIDC_TOKEN_URL ""
+# Disable OpenAPI
+ENV OPENAPI_URL ""
 
-EXPOSE 4030
-ENTRYPOINT python3 -m uvicorn --host 0.0.0.0 --port 4030 main:app
+ENTRYPOINT python3 -m uvicorn \
+    --host 0.0.0.0 \
+    --port ${SERVER_PORT} \
+    --root-path ${SERVER_ROOT_PATH} \
+    --no-use-colors \
+    --no-server-header \
+    --log-level error \
+    main:app

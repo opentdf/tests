@@ -1,8 +1,8 @@
-import useAttributeRules from '@/hooks/useAttributeRules';
 import PropTypes from 'prop-types';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import useAttributeRules from '@/hooks/useAttributeRules';
 import RuleSandbox from '@/components/RuleSandbox';
-import generateClient, { SERVICE_EAS } from '@/helpers/requestClient';
+import generateClient, { SERVICE_ATTRIBUTES } from '@/helpers/requestClient';
 import AttributeRuleSelector from '@/components/AttributeRuleSelector';
 import BottomButtons from '@/components/AttributeRuleEditCard/BottomButtons';
 import AttributeList from '@/components/AttributeListCard';
@@ -40,8 +40,8 @@ const AttributeEditCard = ({ attr, ns }) => {
     setRuleSandboxConfig(_sandboxConfig);
   }, []);
   const requestUpdateAttribute = useCallback(async () => {
-    const client = generateClient(SERVICE_EAS);
-    await client['src.web.attribute_name.update'](
+    const client = generateClient(SERVICE_ATTRIBUTES);
+    await client.create_attribute_v1_attr_put(
       {
         name: attr,
       },

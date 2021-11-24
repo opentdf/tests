@@ -1,8 +1,7 @@
-import { Info, Copy } from '@/icons';
-import React from 'react';
-import PropTypes from 'prop-types';
-import { generateTestIds } from '@/helpers';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
+import PropTypes from 'prop-types';
+import { Info, Copy } from '@/icons';
+import { generateTestIds } from '@/helpers';
 import styles from './SshKeyValue.module.css';
 
 export const testIds = generateTestIds('ssh_key_value', ['infoIcon', 'keyValue']);

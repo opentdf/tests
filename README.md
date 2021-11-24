@@ -113,6 +113,108 @@ docker compose up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE
 > Note: OIDC-enabled deployments do not use the flows described below, or docker-compose - they're purely Helm/Minikube based and exclude deprecated services like EAS.
 > Refer to the [OIDC Readme](README-keycloak-idp.md) for instructions on how to deploy Eternia with Keycloak and OIDC.
 
+## Installation in Isolated Kubernetes Clusters
+
+If you are working on a kubernetes cluster that does not have access to the Internet,
+the `tools/build-offline-bundle` script can generate an archive of all backend services.
+
+### Building the offline bundle
+
+To build the bundle, on a connected server that has recent (2021+) versions of the following tools
+(some of which may be installed with `tools/pre-reqs` on linux and macos):
+
+- The bash shell
+- git
+- docker
+- helm
+- python
+- curl
+- npm (for abacus)
+
+Running the `tools/build-offline-bundle` script will create a zip file in the `build/` folder named `offline-bundle-[date]-[short digest].zip.
+
+Another script, `tools/test-offline-bundle`, can be used to validate that a build was created and can start, using a local k8s cluster created with kind.
+
+#### NB: Including Third Party Libraries
+
+The current third party bundles, kind and postgresql, may require manual editing of the `build-offline-bundle` script to get the appripriate tag and SHA hash. See within the script for notes.
+
+### Using the offline bundle
+
+The offline bundle includes:
+
+- Images
+- Charts
+
+### Install images locally
+
+The images are installed in separate files.
+opentdf-service-images-[tag].tar includes all the opentdf custom backend microservices.
+third-party-image-service-[tag].tar includes individual images of various required and optional third party services. For the configuration we describe here, we require only the postgresql image.
+
+These images must be made available to your cluster's registry. One way to do this is to first install them to a local docker registry, and then push them to a remote registry, using `docker load` and `docker push`.
+
+
+```sh
+docker load export/*.tar
+docker images --format="{{json .Repository }}"  | sort | uniq | tr -d '"'| grep ^virtru/tdf | while read name; do docker push $name; done
+```
+
+### Configuring the backend
+
+To install the app, we need to configure the helm values to match the configuration of your system, and to include secrets that are unique to your installation.
+
+#### Secrets
+
+For this example, we will use self signed certificates and secrets:
+
+```sh
+export/tools/genkeys-if-needed
+kubectl create secret generic etheria-secrets \
+    "--from-file=EAS_PRIVATE_KEY=export/certs/eas-private.pem" \
+    "--from-file=EAS_CERTIFICATE=export/certs/eas-public.pem" \
+    "--from-file=KAS_EC_SECP256R1_CERTIFICATE=export/certs/kas-ec-secp256r1-public.pem" \
+    "--from-file=KAS_CERTIFICATE=export/certs/kas-public.pem" \
+    "--from-file=KAS_EC_SECP256R1_PRIVATE_KEY=export/certs/kas-ec-secp256r1-private.pem" \
+    "--from-file=KAS_PRIVATE_KEY=export/certs/kas-private.pem" \
+    "--from-file=ca-cert.pem=export/certs/ca.crt" || e "create etheria-secrets failed"
+```
+
+We will also need to generate and use a custom postgres password.
+
+```sh
+POSTGRES_PW=$(openssl rand -base64 40)
+sed -i '' "s/myPostgresPassword/${POSTGRES_PW}/" export/deployment/values-postgresql-tdf.yaml
+kubectl create secret generic attribute-authority-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
+kubectl create secret generic entitlement-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
+```
+
+> TODO: Move keycloak creds into secrets.
+
+#### Names and Values
+
+##### `values-all-in-one`: Primary backend configuration
+
+Replace the values for `host` and `kasDefaultUrl` with your public domain name.
+
+> TODO: Migrate into a true umbrella charts, to include the ability to set a single host
+
+##### `values-postgresql-tdf`: Advanced Postgres Configuration
+
+This should be left alone, but may be edited as needed for insight into postres, or schema upgrades.
+
+### Helm Installation
+
+From the export folder, run:
+
+```sh
+TAG=$(<BUNDLE_TAG)
+helm upgrade --install keycloak charts/keycloak-15.0.1.tgz -f deployment/values-virtru-keycloak.yaml --set image.tag=${TAG}
+helm upgrade --install etheria charts/etheria -f deployment/values-all-in-one.yaml
+```
+
+
+
 ## Swagger-UI
 
 KAS and EAS servers support Swagger UI to provide documentation and easier interaction for the REST API.  
@@ -168,6 +270,10 @@ against an instance of Etheria deployed to a cluster (local minikube, or remote)
 
 > Etheria's CI is not currently cluster based, and so the kuttl tests are not being run via CI - this should be corrected when the CI is moved to K8S/Argo.
 
+
+#### Security test
+
+Once a cluster is running, run `security-test/helm-test.sh`
 ### Integration Tests
 
 You can run a complete integration test locally using docker compose with the `docker-compose.ci.yml`, or with the `docker-compose.pki-ci.yml` to use the PKI keys you generated earlier. A helper script is available to run both sets of integration tests, `xtest/scripts/test-in-containers`.
@@ -189,11 +295,9 @@ PY_SDK_VERSION=3.9
 NODE_VERSION=14
 ```
 
-### Security, Performance, and End-to-end Tests
+### Performance, and End-to-end Tests
 
 ```shell script
-docker-compose --env-file certs/.env --file security-test/docker-compose.yml up --build --exit-code-from security-test security-test
-
 docker-compose --env-file certs/.env --file performance-test/docker-compose.yml up --build --exit-code-from performance-test performance-test
 
 docker-compose --env-file certs/.env --file e2e-test/docker-compose.yml up --build --exit-code-from e2e-test e2e-test

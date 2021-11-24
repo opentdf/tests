@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { useReducerAsync } from 'use-reducer-async';
 import { Button } from '@/components/Virtruoso';
 import Page from '@/components/Page';
-import { useRouter } from 'next/router';
 import EntityDetails from '@/components/EntityDetails';
 import useAuthorityNamespaces from '@/hooks/useAuthorityNamespaces';
 import useAttributeRules from '@/hooks/useAttributeRules';
@@ -9,7 +10,6 @@ import { ACTIONS, asyncActionHandlers, entitiesReducer } from '@/reducers/entiti
 import AuthorityNamespaceSelector from '@/components/AuthorityNamespaceSelector';
 import EntityAttributeAssigner from '@/components/EntityAttributeAssigner';
 import RemoveConfirmationModal from '@/components/RemoveConfirmationModal';
-import { useReducerAsync } from 'use-reducer-async';
 import getAttributeUri from '@/helpers/getAttributeUri';
 
 export default function AttributesPage() {

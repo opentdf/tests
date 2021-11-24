@@ -52,18 +52,22 @@ function generateClient() {
   return new Proxy(
     {},
     {
-      get: (target, name) => (...args) => {
-        // If not overriding the default mock data
-        if (mockClient.mock.override !== true) {
-          // Resolve the mock with the fixture data
-          mockClient.mockResolvedValueOnce({ data: getFixtureData(name, args) });
-        }
-        // Call the mock function
-        return mockClient(name, args);
-      },
+      get:
+        (target, name) =>
+        (...args) => {
+          // If not overriding the default mock data
+          if (mockClient.mock.override !== true) {
+            // Resolve the mock with the fixture data
+            mockClient.mockResolvedValueOnce({ data: getFixtureData(name, args) });
+          }
+          // Call the mock function
+          return mockClient(name, args);
+        },
     }
   );
 }
+
+export const generateKeycloakAuthHeaders = () => ({});
 
 // Add the mockClient to the generate function
 generateClient.mockClient = mockClient;

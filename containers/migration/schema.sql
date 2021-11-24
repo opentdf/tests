@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS tdf_attribute.attribute
 (
     id           SERIAL PRIMARY KEY,
     namespace_id INTEGER NOT NULL REFERENCES tdf_attribute.attribute_namespace,
-    state        INTEGER NOT NULL,
+    state        VARCHAR NOT NULL,
     rule         VARCHAR NOT NULL,
     name         VARCHAR NOT NULL UNIQUE, -- ??? COLLATE NOCASE
     description  VARCHAR,

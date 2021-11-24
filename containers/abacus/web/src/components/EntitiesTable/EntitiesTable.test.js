@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react';
 import useNewEntity, { EntityContext } from '@/hooks/useNewEntity';
 import EntitiesTable, { testIds } from './EntitiesTable';

@@ -1,75 +1,97 @@
-import React from 'react';
 import { useRouter } from 'next/router';
-import { Button } from '@/components/Virtruoso';
+import { useEffect, useMemo, useState } from 'react';
+import { Table } from 'antd';
 import Page from '@/components/Page';
 import generateTestIds from '@/helpers/generateTestIds';
+import generateClient, {
+  generateKeycloakAuthHeaders,
+  SERVICE_ENTITLEMENT,
+} from '@/helpers/requestClient';
 
-import EntitiesTable from '@/components/EntitiesTable';
-import useRoutePath from '@/hooks/useRoutePath';
-import useAttributeRule from '@/hooks/useAttributeRule';
+const useClientAttributesTable = (rawData) => {
+  const columns = useMemo(
+    () => [
+      {
+        dataIndex: 'attribute',
+        key: 'attribute',
+        title: 'Attribute',
+      },
+      {
+        dataIndex: 'entityId',
+        key: 'entityId',
+        title: 'EntityId',
+      },
+      {
+        dataIndex: 'state',
+        key: 'state',
+        title: 'State',
+      },
+    ],
+    []
+  );
+
+  const dataSource = rawData.map((item, index) => ({
+    key: index,
+    attribute: item.attribute,
+    entityId: item.entityId,
+    state: item.state,
+  }));
+
+  return { columns, dataSource };
+};
+const client = generateClient(SERVICE_ENTITLEMENT);
 
 export const testIds = generateTestIds('attributes-page', ['selector']);
 
 export default function AttributesPage() {
   const router = useRouter();
-  const routePath = useRoutePath();
   const { ns, attrName, attrValue } = router.query;
-  const attributeRule = useAttributeRule(attrName, attrValue, ns);
   const attrDescription = {
-    attributeUrl: `${ns}/v1/attr/${attrName}/value/${attrValue}`,
-    keyAccessUrl: attributeRule.kasUrl,
-    publicKey: attributeRule.pubKey,
+    attributeUrl: `${ns}/attr/${attrName}/value/${attrValue}`,
   };
+  // entitlements
+  const [entitlements, setEntitlements] = useState([]);
+  useEffect(() => {
+    async function fetchData() {
+      client.interceptors.request.use((config) => {
+        // eslint-disable-next-line no-param-reassign
+        config.headers = {
+          ...config.headers,
+          ...generateKeycloakAuthHeaders(),
+        };
+        return config;
+      });
+      const result =
+        await client.get_attribute_entity_relationship_v1_attribute__attributeURI__entity__get({
+          attributeURI: `${ns}/v1/attr/${attrName}/value/${attrValue}`,
+        });
+      setEntitlements(result.data);
+    }
+    fetchData();
+  }, [attrName, attrValue, ns]);
+
+  const { dataSource, columns } = useClientAttributesTable(entitlements);
+
   return (
     <Page
       contentType={Page.CONTENT_TYPES.VIEW}
-      // NOTE(PLAT-875): Deleted for demo
-      // actions={[
-      //   {
-      //     key: 'edit',
-      //     children: (
-      //       <Button variant={Button.VARIANT.SECONDARY} size={Button.SIZE.MEDIUM}>
-      //         Edit
-      //       </Button>
-      //     ),
-      //   },
-      //   {
-      //     key: 'delete',
-      //     children: (
-      //       <Button variant={Button.VARIANT.NO_OUTLINE} size={Button.SIZE.MEDIUM}>
-      //         Delete
-      //       </Button>
-      //     ),
-      //   },
-      // ]}
       attributeValues={attrDescription}
       actionAlignment={Page.ACTION_ALIGNMENTS.LEFT}
       title="Attribute"
-      contentTitle={`Entities with “${attributeRule.displayName}”`}
-      titleActions={[
-        {
-          key: 'assign',
-          children: (
-            <Button
-              variant={Button.VARIANT.PRIMARY}
-              size={Button.SIZE.SMALL}
-              onClick={() => routePath.pushAttributeValue('add-entity')}
-            >
-              Assign Entity
-            </Button>
-          ),
-        },
-      ]}
+      contentTitle="Entities"
+      titleActions={[]}
       description="Information attached to data and entities that controls which entities can access which data."
     >
       <Page.Breadcrumb text="Attributes" href="/attributes" />
-      <Page.Breadcrumb
-        text={attrName}
-        // NOTE(PLAT-875): Deleted for demo
-        // href={`/attributes/${encodeURIComponent(ns)}/attr/${attrName}`}
-      />
+      <Page.Breadcrumb text={attrName} />
       <Page.Breadcrumb text={attrValue} />
-      <EntitiesTable attrName={attrName} attrValue={attrValue} namespace={ns} />
+      <div>
+        {entitlements && (
+          <>
+            <Table dataSource={dataSource} columns={columns} pagination={false} bordered />
+          </>
+        )}
+      </div>
     </Page>
   );
 }

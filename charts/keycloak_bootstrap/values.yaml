@@ -1,7 +1,7 @@
 name: 'keycloak-bootstrap'
 replicaCount: 1
 image:
-  name: virtru/keycloak-bootstrap:0.3.5
+  name: virtru/tdf-keycloak-bootstrap:0.3.5
   pullPolicy: Always
   pullSecret: virtru-regcred
 keycloak:

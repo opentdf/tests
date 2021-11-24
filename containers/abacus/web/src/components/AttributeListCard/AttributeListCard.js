@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import List from '@/components/List';
 import { RuleAccessType } from '@/helpers/attributeRuleTypes';

@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-Flask = "*"
+Flask = "~=1.0"
 PyJWT = "==1.7.1"
 bitstruct = "*"
 connexion = "*"

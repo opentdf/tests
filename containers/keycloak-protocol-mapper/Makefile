@@ -1,5 +1,5 @@
-IMAGE=virtru/keycloak-poc
-VERSION=0.3.5
+IMAGE=virtru/tdf-keycloak
+VERSION=15.0.2
 
 all: build
 

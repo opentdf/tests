@@ -17,17 +17,24 @@ def test_setup():
     # create attribute
     attribute_authority_host = os.environ["ATTRIBUTE_AUTHORITY_HOST"]
     response = requests.post(
+        f"{attribute_authority_host}/v1/authorityNamespace",
+        params={"request_authority_namespace": "https://eas.local"},
+    )
+    if response.status_code != 200:
+        print(response.text)
+        exit(1)
+    response = requests.post(
         f"{attribute_authority_host}/v1/attr",
         json={
             "authorityNamespace": "https://eas.local",
             "name": "language",
             "rule": "anyOf",
-            "order": [],
-            "values": ["urdu", "french", "japanese", "german"],
+            "state": "published",
+            "order": ["urdu", "french", "japanese", "german"],
         },
     )
     if response.status_code != 200:
-        print(response.json())
+        print(response.text)
         exit(1)
     # create entity
     entity_host = os.environ["ENTITY_HOST"]
@@ -41,7 +48,7 @@ def test_setup():
         },
     )
     if response.status_code != 200:
-        print(response.json())
+        print(response.text)
         exit(1)
     # entitlement
     entitlement_host = os.environ["ENTITLEMENT_HOST"]
@@ -51,7 +58,7 @@ def test_setup():
         json=["https://eas.local/attr/language/value/urdu"],
     )
     if response.status_code != 200:
-        print(response.json())
+        print(response.text)
         exit(1)
 
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import generateClient, { SERVICE_EAS } from '@/helpers/requestClient';
+import generateClient, { SERVICE_ATTRIBUTES } from '@/helpers/requestClient';
 
-const client = generateClient(SERVICE_EAS);
+const client = generateClient(SERVICE_ATTRIBUTES);
 
 function useAuthorityNamespaces({ isDefault = null } = {}) {
   const [authorityNamespaces, setAuthorityNamespaces] = useState([]);
@@ -13,7 +13,7 @@ function useAuthorityNamespaces({ isDefault = null } = {}) {
         if (isDefault) {
           params.isDefault = true;
         }
-        const result = await client['src.web.authority_namespace.get'](params);
+        const result = await client.read_authority_namespace_v1_authorityNamespace_get(params);
         setAuthorityNamespaces(result.data);
       } catch (e) {
         console.error(e.response);

@@ -66,13 +66,6 @@ def test_attribute_policy_constructor_with_no_namespace():
         AttributePolicy()
 
 
-def test_attribute_policy_constructor_with_invalid_namespace():
-    """Test constructor."""
-    namespace = "https:www.example.com/foo"
-    with pytest.raises(AttributePolicyConfigError):
-        AttributePolicy(namespace)
-
-
 def test_attribute_policy_equal():
     """Test constructor."""
     atr1 = AttributePolicy("https://www.example.com/attr/foo")

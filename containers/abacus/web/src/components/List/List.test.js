@@ -1,4 +1,3 @@
-import React from 'react';
 import { cleanup, render, getByText as globalGetByText } from '@testing-library/react';
 
 import List from '.';

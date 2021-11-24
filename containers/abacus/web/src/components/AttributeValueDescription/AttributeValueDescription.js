@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 // NOTE(PLAT-875): Deleted for demo
 // import SshKeyValue from '@/components/SshKeyValue';
@@ -23,15 +22,6 @@ function AttributeValueDescription({ attributeUrl, keyAccessUrl, publicKey }) {
         </a>
       ),
     },
-    {
-      name: 'Key Access Service',
-      value: keyAccessUrl,
-    },
-    // NOTE(PLAT-875): Deleted for demo
-    // {
-    //   name: 'Public Key',
-    //   value: <SshKeyValue sshKey={publicKey} />,
-    // },
   ];
   return (
     <div data-testid={testIds._}>

@@ -1,6 +1,5 @@
-import React from 'react';
-import generateTestIds from '@/helpers/generateTestIds';
 import PropTypes from 'prop-types';
+import generateTestIds from '@/helpers/generateTestIds';
 
 import styles from './AuthorityNamespaceSelector.module.css';
 

@@ -10,7 +10,7 @@ services:
       - EAS_UID=908
       - KAS_UID=909
       - CLIENT_UID=1909
-    image: tdf3.python.base:${PY_VERSION:-3.9}
+    image: virtru/tdf-python-base:${PY_VERSION:-3.9}
     logging:
       options:
         max-file: "5"

@@ -42,12 +42,12 @@ spec:
         [
           { "appName": "kas", "dockerHubRepoName": "virtru/tdf-key-access-service", "hasChart": "true", "hasImage": "true"},
           { "appName": "eas", "dockerHubRepoName": "virtru/tdf-entity-attribute-service", "hasChart": "true", "hasImage": "true" },
-          { "appName": "attribute_provider", "dockerHubRepoName": "virtru/claim-test-webservice", "hasChart": "true", "hasImage": "true" },
-          { "appName": "keycloak_bootstrap", "dockerHubRepoName": "virtru/keycloak-bootstrap", "hasChart": "true", "hasImage": "true" },
+          { "appName": "attribute_provider", "dockerHubRepoName": "virtru/tdf-claim-test-webservice", "hasChart": "true", "hasImage": "true" },
+          { "appName": "keycloak_bootstrap", "dockerHubRepoName": "virtru/tdf-keycloak-bootstrap", "hasChart": "true", "hasImage": "true" },
           { "appName": "attribute_authority", "dockerHubRepoName": "virtru/tdf-attribute-authority-service", "hasChart": "true", "hasImage": "true" },
           { "appName": "entitlement", "dockerHubRepoName": "virtru/tdf-entitlement-service", "hasChart": "true", "hasImage": "true" },
           { "appName": "remote_payload", "dockerHubRepoName": "virtru/tdf-storage-service", "hasChart": "true", "hasImage": "true" },
-          { "appName": "keycloak", "dockerHubRepoName": "virtru/keycloak-poc", "hasChart": "false", "hasImage": "true" },
+          { "appName": "keycloak", "dockerHubRepoName": "virtru/tdf-keycloak", "hasChart": "false", "hasImage": "true" },
           { "appName": "etheria", "dockerHubRepoName": "", "hasChart": "true", "hasImage": "false" }
         ]
     - name: buildImage
@@ -106,8 +106,6 @@ spec:
           docker-compose -f docker-compose.build.yml build python-base;
           docker-compose -f docker-compose.build.yml build {{inputs.parameters.appName}};
           docker image ls;
-          echo "tagging container";
-          docker tag tdf3.service.{{inputs.parameters.appName}}:{{inputs.parameters.imageVersionTag}} {{inputs.parameters.dockerHubRepoName}}:{{inputs.parameters.imageVersionTag}};
           echo "pushing container {{inputs.parameters.dockerHubRepoName}}:{{inputs.parameters.imageVersionTag}} to dockerhub";
           docker push {{inputs.parameters.dockerHubRepoName}}:{{inputs.parameters.imageVersionTag}};
       sidecars:

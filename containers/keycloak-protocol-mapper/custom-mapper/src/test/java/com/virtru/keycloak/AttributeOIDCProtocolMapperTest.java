@@ -3,33 +3,53 @@ package com.virtru.keycloak;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.ws.rs.ApplicationPath;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Application;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
 import org.jboss.resteasy.plugins.server.undertow.UndertowJaxrsServer;
 import org.jboss.resteasy.test.TestPortProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
-import org.junit.jupiter.api.condition.EnabledIf;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.keycloak.models.*;
+import org.keycloak.models.AuthenticatedClientSessionModel;
+import org.keycloak.models.ClientModel;
+import org.keycloak.models.ClientSessionContext;
+import org.keycloak.models.KeycloakContext;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.ProtocolMapperModel;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.session.PersistentAuthenticatedClientSessionAdapter;
+import org.keycloak.models.session.PersistentClientSessionModel;
 import org.keycloak.protocol.oidc.mappers.OIDCAttributeMapperHelper;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.storage.openshift.OpenshiftSAClientAdapter;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.ws.rs.*;
-import javax.ws.rs.core.Application;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import java.util.*;
-
-import static com.virtru.keycloak.AttributeOIDCProtocolMapper.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.virtru.keycloak.AttributeOIDCProtocolMapper.CLAIM_NAME;
+import static com.virtru.keycloak.AttributeOIDCProtocolMapper.PUBLIC_KEY_HEADER;
+import static com.virtru.keycloak.AttributeOIDCProtocolMapper.REMOTE_PARAMETERS_CLIENTID;
+import static com.virtru.keycloak.AttributeOIDCProtocolMapper.REMOTE_PARAMETERS_USERNAME;
+import static com.virtru.keycloak.AttributeOIDCProtocolMapper.REMOTE_URL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class})
@@ -40,6 +60,10 @@ public class AttributeOIDCProtocolMapperTest {
     KeycloakSession keycloakSession;
     @Mock
     UserSessionModel userSessionModel;
+    @Mock
+    PersistentClientSessionModel persistentClientSessionModel;
+    @Mock
+    RealmModel realmModel;
     @Mock
     ClientSessionContext clientSessionContext;
     @Mock
@@ -108,7 +132,7 @@ public class AttributeOIDCProtocolMapperTest {
         assertEquals("xxx-yyy", echoedClaimValue.get("client_id"));
         assertEquals("alice@test.org", echoedClaimValue.get("username"));
         assertTrue(echoedClaimValue.get("token") instanceof Map);
-        assertEquals(43, ((Map) echoedClaimValue.get("token")).keySet().size());
+        assertEquals(44, ((Map) echoedClaimValue.get("token")).keySet().size());
     }
 
     private void assertTransformUserInfo_WithPKHeader() throws Exception {
@@ -127,7 +151,7 @@ public class AttributeOIDCProtocolMapperTest {
         assertEquals("xxx-yyy", echoedClaimValue.get("client_id"));
         assertEquals("alice@test.org", echoedClaimValue.get("username"));
         assertTrue(echoedClaimValue.get("token") instanceof Map);
-        assertEquals(43, ((Map) echoedClaimValue.get("token")).keySet().size());
+        assertEquals(44, ((Map) echoedClaimValue.get("token")).keySet().size());
     }
 
     @EnabledIfSystemProperty(named = "attributemapperTestMode", matches = "config")
@@ -169,21 +193,19 @@ public class AttributeOIDCProtocolMapperTest {
 
         if (pkHeader != null) {
             when(userSessionModel.getLoginUsername()).thenReturn("alice@test.org");
-            List<String> pkHeaders = pkHeader == null ? Collections.emptyList() : Collections.singletonList(pkHeader);
+            List<String> pkHeaders = Collections.singletonList(pkHeader);
             when(httpHeaders.getRequestHeader("testPK")).thenReturn(pkHeaders);
 
             when(clientSessionContext.getAttribute("remote-authorizations", JsonNode.class)).thenReturn(null);
-//            when(clientSessionContext.getScopeString()).thenReturn("email");
             ClientModel csm = new OpenshiftSAClientAdapter("xxx-yyy", null, null, null, null, null);
-            AuthenticatedClientSessionModel authenticatedClientSessionModel =
-                    new PersistentAuthenticatedClientSessionAdapter(null, null, csm, null);
+            AuthenticatedClientSessionModel authenticatedClientSessionModel =  new PersistentAuthenticatedClientSessionAdapter(keycloakSession, persistentClientSessionModel, realmModel, csm, userSessionModel);
             when(userSessionModel.getAuthenticatedClientSessions()).thenReturn(Collections.singletonMap("x", authenticatedClientSessionModel));
         }
     }
 
 
     @BeforeEach
-    public void setup() throws Exception {
+    public void setup() {
         server = new UndertowJaxrsServer().start();
         attributeOIDCProtocolMapper = new AttributeOIDCProtocolMapper();
     }

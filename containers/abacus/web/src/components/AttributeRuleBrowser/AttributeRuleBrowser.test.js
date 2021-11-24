@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { requestAttributes } from '@/__fixtures__/requestData';
 import useAttributeRules from '@/hooks/useAttributeRules';

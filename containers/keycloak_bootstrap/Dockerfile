@@ -14,6 +14,7 @@ COPY bootstrap.py /project/bootstrap.py
 COPY Makefile /project/Makefile
 COPY Pipfile /project/Pipfile
 COPY Pipfile.lock /project/Pipfile.lock
+COPY .pylintrc /project/.pylintrc
 COPY test_bootstrap.py /project/test_bootstrap.py
 
 RUN apk --no-cache --virtual build-dependencies add \

@@ -1,7 +1,6 @@
 /* eslint-disable import/no-extraneous-dependencies */
-import React from 'react';
-import Container from '@/helpers/storybookContainer';
 import { withKnobs, text } from '@storybook/addon-knobs';
+import Container from '@/helpers/storybookContainer';
 import AttributeValueDescription from '.';
 
 export default {

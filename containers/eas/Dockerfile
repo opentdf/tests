@@ -2,7 +2,7 @@
 # NOTE - The version is also needed in the site-packages COPY command below
 ARG PY_VERSION=3.9
 
-FROM tdf3.python.base:${PY_VERSION} AS build
+FROM virtru/tdf-python-base:${PY_VERSION} AS build
 
 # Establish a working directory in the container for tdf3_eas. This directory
 # does not exist but will be created. All future commands root from here.
@@ -28,7 +28,7 @@ RUN pipenv install --dev --system --deploy --ignore-pipfile
 RUN python3 -m compileall .
 
 # stage - production server
-FROM tdf3.python.base:${PY_VERSION} AS production
+FROM virtru/tdf-python-base:${PY_VERSION} AS production
 ARG PY_VERSION
 WORKDIR /eas_app
 RUN apk add --no-cache --upgrade \

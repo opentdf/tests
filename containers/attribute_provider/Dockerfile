@@ -2,7 +2,7 @@
 # NOTE - The version is also needed in the site-packages COPY command below and should be x.x not x.x.x
 ARG PY_VERSION=3.9
 
-FROM tdf3.python.base:${PY_VERSION}
+FROM virtru/tdf-python-base:${PY_VERSION}
 
 ENV FLASK_APP=src/attribute_provider/app.py
 ENV FLASK_ENV=development

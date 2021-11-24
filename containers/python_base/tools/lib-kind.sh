@@ -10,7 +10,11 @@ local_info() {
 }
 
 local_start() {
-  kind create cluster
+  if [[ $RUN_OFFLINE ]]; then
+    kind create cluster --image kindest/node:offline
+  else
+    kind create cluster
+  fi
 }
 
 local_clean() {

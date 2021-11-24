@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 
 export const TEXT_SELECT_VALUES = 'Select data & entity attributes to test access.';

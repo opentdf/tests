@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 import { generateTestIds } from '@/helpers';
 import styles from './DescriptionTable.module.css';

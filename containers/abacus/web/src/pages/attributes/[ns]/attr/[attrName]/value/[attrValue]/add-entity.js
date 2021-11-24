@@ -1,4 +1,3 @@
-import React from 'react';
 import { useRouter } from 'next/router';
 import AttributeEntityAssigner from '@/components/AttributeEntityAssigner';
 import { Button } from '@/components/Virtruoso';

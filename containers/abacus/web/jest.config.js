@@ -22,7 +22,7 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/.next/', '/integrationTests/'],
   testRegex: 'src/.*(/__tests__/.*|(\\.|/)(test|spec))\\.[jt]sx?$',
   transform: {
-    '\\.ya?ml$': 'yaml-jest',
+    '\\.ya?ml$': 'jest-transform-yaml',
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
     // '^.+\\.css$': '<rootDir>/config/jest/cssTransform.js',
   },
@@ -30,8 +30,13 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@easRoot/(.*)$': '<rootDir>/../../eas/$1',
+    '^@claims/(.*)$': '<rootDir>/../../service_entity_object/$1',
+    '^@attributes/(.*)$': '<rootDir>/../../service_attribute_authority/$1',
+    '^@entitlement/(.*)$': '<rootDir>/../../service_entitlement/$1',
     '^.+\\.module\\.(css|sass|scss)$': 'jest-css-modules-transform',
+    '^.+\\.css$$': 'jest-css-modules-transform',
     '\\.svg': '<rootDir>/src/__mocks__/fileMock.js',
   },
   modulePathIgnorePatterns: [],
+  testEnvironment: 'jsdom',
 };

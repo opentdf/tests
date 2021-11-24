@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react';
 import AttributeEntityAssigner, { testIds } from './AttributeEntityAssigner';
 import useSearchEntities from './hooks/useSearchEntities';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, render, fireEvent, waitFor } from '@testing-library/react';
 import SearchEntities, { testIds } from './SearchEntities';
 

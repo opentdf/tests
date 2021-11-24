@@ -1,8 +1,7 @@
 /* eslint-disable import/no-extraneous-dependencies */
-import React from 'react';
+import { withKnobs, text } from '@storybook/addon-knobs';
 import Container from '@/helpers/storybookContainer';
 import SshKeyValue from '@/components/SshKeyValue/SshKeyValue';
-import { withKnobs, text } from '@storybook/addon-knobs';
 
 export default {
   title: 'Ssh Key Value',

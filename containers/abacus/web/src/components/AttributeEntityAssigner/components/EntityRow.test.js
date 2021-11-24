@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import { requestEntities } from '@/__fixtures__/requestData';
 import Entity from '@/models/Entity';
@@ -45,13 +44,14 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
+    const { getByTestId, getByText } = render(<TestEntityRow />);
     expect(getByTestId(testIds._)).toBeInTheDocument();
-    expect(getByTestId(testIds.name)).toHaveTextContent(entity.name);
-    expect(getByTestId(testIds.email)).toHaveTextContent(entity.email);
-    expect(getByTestId(testIds.type)).toHaveTextContent(entity.type);
-    expect(getByTestId(testIds.userId)).toHaveTextContent(entity.userId);
-    expect(getByTestId(testIds.action)).toHaveTextContent('Assign to Attribute');
+    expect(getByText(entity.name)).toBeTruthy();
+    expect(getByText(entity.email)).toBeTruthy();
+    expect(getByText(entity.type)).toBeTruthy();
+    expect(getByText(entity.userId)).toBeTruthy();
+    expect(getByText(entity.email)).toBeTruthy();
+    expect(getByText('Assign to Attribute')).toBeTruthy();
   });
 
   it('should render entity as failure', () => {
@@ -73,8 +73,8 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
-    expect(getByTestId(testIds.action)).toHaveTextContent('Assign to Attribute');
+    const { getByText } = render(<TestEntityRow />);
+    expect(getByText('Assign to Attribute')).toBeTruthy();
   });
 
   it('should render entity as already assigned', () => {
@@ -95,9 +95,9 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
+    const { getByText } = render(<TestEntityRow />);
 
-    expect(getByTestId(testIds.action)).toHaveTextContent('Already assigned');
+    expect(getByText('Already assigned')).toBeTruthy();
   });
 
   it('should render entity as saving', () => {
@@ -113,9 +113,9 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
+    const { getByText } = render(<TestEntityRow />);
 
-    expect(getByTestId(testIds.action)).toHaveTextContent('Saving...');
+    expect(getByText('Saving...')).toBeTruthy();
   });
 
   it('should render entity as assigned', () => {
@@ -131,9 +131,9 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
+    const { getByText } = render(<TestEntityRow />);
 
-    expect(getByTestId(testIds.action)).toHaveTextContent('Assigned');
+    expect(getByText('Assigned')).toBeTruthy();
   });
 
   it('should trigger on assignment', () => {
@@ -155,8 +155,9 @@ describe('<EntityRow />', () => {
         </EntityContext.Provider>
       );
     };
-    const { getByTestId } = render(<TestEntityRow />);
-    expect(getByTestId(testIds.action)).toHaveTextContent('Assign to Attribute');
+    const { getByTestId, getByText } = render(<TestEntityRow />);
+
+    expect(getByText('Assign to Attribute')).toBeTruthy();
 
     fireEvent.click(getByTestId(testIds.assignAction));
 

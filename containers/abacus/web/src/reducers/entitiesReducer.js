@@ -1,7 +1,13 @@
-import generateClient, { SERVICE_EAS } from '@/helpers/requestClient';
+import { toast } from 'react-toastify';
+import generateClient, {
+  generateKeycloakAuthHeaders,
+  SERVICE_EAS,
+  SERVICE_ENTITLEMENT,
+} from '@/helpers/requestClient';
 import findAndDecorate from '@/helpers/decorateArraysObjectItem';
 
 const client = generateClient(SERVICE_EAS);
+const entityClient = generateClient(SERVICE_ENTITLEMENT);
 
 const FETCH = 'FETCH';
 const DELETE = 'DELETE';
@@ -19,51 +25,91 @@ export const ACTIONS = { FETCH, DELETE, ASSIGN, INACTIVATE_ENTITY };
 // This module fit perfectly https://github.com/dai-shi/use-reducer-async#usage
 
 export const asyncActionHandlers = {
-  [INACTIVATE_ENTITY]: ({ dispatch }) => async ({ entity }) => {
-    const inactivateEntity = { ...entity, state: 'inactive' };
-    const { data } = await client['src.web.entity.update']([], inactivateEntity);
-    dispatch({ type: 'INACTIVATE_ENTITY', data });
-  },
-  [FETCH]: ({ dispatch }) => async ({ name, value, namespace }) => {
-    dispatch({ type: 'FETCH_START' });
+  [INACTIVATE_ENTITY]:
+    ({ dispatch }) =>
+    async ({ entity }) => {
+      const inactivateEntity = { ...entity, state: 'inactive' };
+      const { data } = await client['src.web.entity.update']([], inactivateEntity);
+      dispatch({ type: 'INACTIVATE_ENTITY', data });
+    },
+  [FETCH]:
+    ({ dispatch }) =>
+    async ({ entityId }) => {
+      dispatch({ type: 'FETCH_START' });
 
-    const url =
-      name || value || namespace
-        ? 'src.web.entity_attribute.get_entities_for_attribute'
-        : 'src.web.entity.find';
-    const { data } = await client[url]({
-      name,
-      value,
-      namespace,
-    });
-    dispatch({ type: 'FETCH_END', data });
-  },
-  [DELETE]: ({ dispatch }) => async ({ attributeURI, entityId }) => {
-    dispatch({ type: 'LOADING_ENTITY', entityId });
-    try {
-      await client['src.web.entity_attribute.delete_attribute_from_entity']({
-        entityId,
-        attributeURI,
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      dispatch({ type: 'DELETE_END', entityId });
-    }
-  },
-  [ASSIGN]: ({ dispatch }) => async ({ attributeURI, entityId }) => {
-    dispatch({ type: 'LOADING_ENTITY', entityId });
-    try {
-      await client['src.web.entity_attribute.add_attribute_to_entity_via_attribute'](
-        { attributeURI },
-        [entityId]
+      console.log('Fetch Attributes for ', entityId);
+      // add attributes fetch anywhere
+      const url = entityId
+        ? 'read_entity_attribute_relationship_v1_entity__entityId__attribute_get'
+        : 'read_relationship_v1_entity_attribute_get';
+      const { data } = await entityClient[url](
+        { entityId },
+        {},
+        { headers: generateKeycloakAuthHeaders() }
       );
-    } catch (e) {
-      console.error(e);
-    } finally {
-      dispatch({ type: 'RESTORE_END', entityId });
-    }
-  },
+
+      dispatch({ type: 'FETCH_END', data });
+    },
+  [DELETE]:
+    ({ dispatch }) =>
+    async ({ attributeURI, entityId }) => {
+      dispatch({ type: 'LOADING_ENTITY', entityId });
+
+      const headers = generateKeycloakAuthHeaders();
+
+      try {
+        await entityClient.delete_attribute_entity_relationship_v1_entity__entityId__attribute__attributeURI__delete(
+          {
+            entityId,
+            attributeURI,
+          },
+          null,
+          { headers }
+        );
+
+        const { data } =
+          await entityClient.read_entity_attribute_relationship_v1_entity__entityId__attribute_get(
+            { entityId },
+            {},
+            { headers }
+          );
+
+        dispatch({ type: 'FETCH_END', data });
+        toast.success('Deleted!');
+      } catch (e) {
+        toast.error('Failed to delete !');
+        console.error(e);
+      } finally {
+        dispatch({ type: 'DELETE_END', entityId });
+      }
+    },
+  [ASSIGN]:
+    ({ dispatch }) =>
+    async ({ attributeURI, entityId }) => {
+      dispatch({ type: 'LOADING_ENTITY', entityId });
+      try {
+        const headers = generateKeycloakAuthHeaders();
+
+        await entityClient.create_entity_attribute_relationship_v1_entity__entityId__attribute_put(
+          { entityId },
+          [attributeURI],
+          { headers }
+        );
+
+        const { data } =
+          await entityClient.read_entity_attribute_relationship_v1_entity__entityId__attribute_get(
+            { entityId },
+            {},
+            { headers }
+          );
+
+        dispatch({ type: 'FETCH_END', data });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        dispatch({ type: 'RESTORE_END', entityId });
+      }
+    },
 };
 
 const loadingState = { decoration: { loading: true } };
@@ -95,6 +141,7 @@ export const entitiesReducer = (state, action) => {
         ...deletedState,
       });
     case 'RESTORE_END':
+      toast.success('Updated!');
       return findAndDecorate({
         idKey: 'userId',
         idValue: action.entityId,

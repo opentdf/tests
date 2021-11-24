@@ -1,4 +1,3 @@
-import React from 'react';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { withKnobs, text } from '@storybook/addon-knobs';
 import Pagination from './Pagination';
