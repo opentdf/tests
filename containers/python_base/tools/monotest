@@ -17,7 +17,7 @@ export PATH="$PATH:$TOOLS_DIR"
 
 monolog TRACE "monotest: [$0 $*]"
 
-genkeys-if-needed
+genkeys-if-needed || exit 1
 
 _single_pytest() {
   monolog TRACE "_single_pytest: [$*]"
