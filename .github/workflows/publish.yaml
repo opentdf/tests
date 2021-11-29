@@ -1,4 +1,4 @@
-name: publish
+name: Publish
 
 env:
   ARGO_SERVER: "argo.mgmt.virtru.com:443"
@@ -11,9 +11,6 @@ defaults:
   run:
     shell: bash
 on:
-  push:
-    branches:
-      - main
   workflow_call:
 
 jobs:
@@ -22,6 +19,7 @@ jobs:
   # Does not deploy anything or update the repo, just
   # tags and pushes artifacts
   pr_publish:
+    if: github.repository == 'opentdf/backend'
     runs-on: ubuntu-latest
     timeout-minutes: 45 #Potentially unneeded, testing to see if this helps with random 401 failures
     name: PR Publish by Gitref

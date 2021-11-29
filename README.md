@@ -1,31 +1,20 @@
-# Protected Data Format Reference Services and Support Tools · [![Build status](https://badge.buildkite.com/7f4ea01205aa3096d9c5cb3404ce0285b4310d33626f46a049.svg?branch=master)](https://buildkite.com/virtru/etheria-pr)
+# Protected Data Format Reference Services · [![CI](https://github.com/opentdf/backend/actions/workflows/build.yml/badge.svg)](https://github.com/opentdf/backend/actions?query=event%3Apush+branch%3Amain)
 
-This repository is for a reference implementation of the [TDF3 Services](https://github.com/virtru/tdf3-spec), and sufficient tooling and testing to support the development of it.
+
+This repository is for a reference implementation of the [openTDF REST Services](https://github.com/opentdf/spec), and sufficient tooling and testing to support the development of it.
 
 ## Monorepo
 
-Etheria is a monorepo which contains the following projects:
+We store several services combined in a single git repository for ease of development. Thse include:
 
-- EAS
-  - [Readme](eas/README.md)
-  - ![Linting and Coverage](https://github.com/virtru/etheria/workflows/Linting%20and%20Coverage/badge.svg)
-  - ![Validate OpenAPI](https://github.com/virtru/etheria/workflows/Validate%20OpenAPI/badge.svg)
-- KAS
-  - [Readme](kas/lib/README.md)
-  - ![Linting and Coverage](https://github.com/virtru/etheria/workflows/Linting%20and%20Coverage/badge.svg)
-  - ![Validate OpenAPI](https://github.com/virtru/etheria/workflows/Validate%20OpenAPI/badge.svg)
-- Abacus Web
-  - [Readme](abacus/web/README.md) 
-  - ![Abacus Lint & Test](https://github.com/virtru/etheria/workflows/Abacus%20Lint%20&%20Test/badge.svg)
-  - [Storybook](https://virtru.github.io/etheria)
-  - ![Deploy Storybook](https://github.com/virtru/etheria/workflows/Deploy%20Storybook/badge.svg)
-- A reference Keycloak OIDC identity provider handling auth flows
-  - [Readme](README-keycloak-idp.md)
-  - [KUTTL K8S Cluster tests](tests/README.md)
-- _Misc_
-  - ![Docker Deploy](https://github.com/virtru/etheria/workflows/Docker%20Deploy/badge.svg)
-
-In addition to the products there are a number of supporting tools and test suites which are described in this document.
+- [Key Access Service](containers/kas/kas_core/)
+- Authorization Services
+  - [Attributes](containers/service_attribute_authority/)
+  - [Entitlements](containers/service_entitlement)
+  - [Keycloak Claims Mapper](containers/keycloak-protocol-mapper)
+- Tools and shared libraries
+- Helm charts for deploying to kubernetes
+- Integration tests
 
 ### Monorepo structure
 
