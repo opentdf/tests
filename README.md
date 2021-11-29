@@ -54,6 +54,9 @@ https://docs.tilt.dev/install.html
 # Install pre-requisites (drop what you've already got)
 ./tools/pre-reqs docker helm tilt kind octant
 
+# Generate local certs in certs/ directory
+./tools/genkeys-if-needed
+
 # Create a local cluster, using e.g. kind
 kind create cluster --name opentdf
 
