@@ -11,10 +11,10 @@ defaults:
   run:
     shell: bash
 on:
-  pull_request:
+  push:
     branches:
-      - '**' #Match any branch name a PR is created for
-    types: [opened, synchronize, reopened]
+      - main
+  workflow_call:
 
 jobs:
   # Tags every artifact with the current branch's gitref
