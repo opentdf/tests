@@ -409,14 +409,4 @@ Requirements (1) and (2) are described in [generate keys](#generate-keys) above.
 
 _TBD_
 
-## Abacus
-
-To get Abacus up and running
-
-1. Update `abacus.Dockerfile` with the location of the EAS URL `ENV NEXT_PUBLIC_EAS_API_URL https://etheria.local/eas/`
-2. Build Docker image from root dir `docker build --file abacus.Dockerfile . --target server`
-3. Run the image `docker run -d -p 8080:80 -e NEXT_TELEMETRY_DISABLED=1 <container_id>`
-
-See [Abacus's README](abacus/README) for more info.
-
 [^1]: https://docs.docker.com/compose/reference/logs/

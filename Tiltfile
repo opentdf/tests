@@ -90,7 +90,6 @@ k8s_yaml(
 # k8s_yaml(helm('charts/remote_payload', 'remote-payload', values=['deployments/docker-desktop/remote_payload-values.yaml']))
 # deprecated
 # k8s_yaml(helm('charts/eas', 'eas', values=['deployments/docker-desktop/eas-values.yaml']))
-# k8s_yaml(helm('charts/abacus', 'abacus', values=['deployments/docker-desktop/abacus-values.yaml']))
 
 # resource dependencies
 k8s_resource("attribute-authority", resource_deps=["tdf-postgresql"])

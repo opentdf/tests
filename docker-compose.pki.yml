@@ -72,19 +72,7 @@ services:
         max-size: "10m"
     volumes:
       - ./certs:/certs
-  abacus:
-    build:
-      context: .
-      dockerfile: abacus.Dockerfile
-      target: server
-      args:
-        abacusBaseUrl: /abacus
-        abacusAssetPrefix: /abacus
-        easApiUrl: https://etheria.local/eas
-    depends_on:
-      - eas
-    expose:
-      - 80
+
   etheria.local:
     depends_on:
       - eas
@@ -94,7 +82,7 @@ services:
       - EAS_ENTITY_ID_HEADER=X-Forwarded-Entity-Id
       - EAS_URL=http://eas:4010
       - KAS_URL=http://kas:8000
-      - ABACUS_URL=http://abacus
+      - ABACUS_URL=
       - NGINX_HOST=etheria.local
       - SET_PKI_MODE=on
       - MONOLOG_LEVEL

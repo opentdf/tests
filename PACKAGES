@@ -1,6 +1,5 @@
 # Lists all packages to build; used by tools/monotest, among others
 
-containers/abacus/web
 containers/eas
 containers/kas/kas_app
 containers/kas/kas_core

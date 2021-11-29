@@ -34,7 +34,6 @@ certs/*
 .argo/ci-files
 /performance-test/.env
 kubeconfig
-/containers/abacus/eas-openapi.yaml
 /containers/python_base/certs/*
 !/containers/python_base/certs/README.md
 # EAS requires checked-in test certs IN TWO SPOTS(?), allow them

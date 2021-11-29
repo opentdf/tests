@@ -40,16 +40,6 @@ spec:
                 name: kas
                 port:
                   name: http
-    - host: abacus.etheria.local
-      http:
-        paths:
-          - path: /(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: abacus
-                port:
-                  name: http
   tls:
   - hosts:
     - etheria.local

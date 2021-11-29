@@ -1,8 +1,5 @@
 apiVersion: v2
 dependencies:
-- name: abacus
-  repository: file://../abacus
-  version: '^1.0.0'
 - name: attribute-provider
   repository: file://../attribute_provider
   version: '^0.0.4'

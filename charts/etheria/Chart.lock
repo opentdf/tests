@@ -1,7 +1,4 @@
 dependencies:
-- name: abacus
-  repository: file://../abacus
-  version: 1.0.0
 - name: attribute-provider
   repository: file://../attribute_provider
   version: 0.0.4
@@ -23,5 +20,5 @@ dependencies:
 - name: tdf-storage
   repository: file://../remote_payload
   version: 1.0.0
-digest: sha256:5bb263986eac5b46d176394651a82c3712793b371e4481aa167a34638285befe
-generated: "2021-09-29T14:00:15.263797-04:00"
+digest: sha256:9db3200f6371594fd6ee07acd8a9c65b3d978d3489c1357485ff600fbf842ede
+generated: "2021-11-29T16:50:48.47893-05:00"

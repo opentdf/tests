@@ -13,7 +13,6 @@
 3. Update `/etc/hosts` file by adding entries to it
 
    - 192.168.xx.xx    etheria.local
-   - 192.168.xx.xx    abacus.etheria.local
      
 Where `192.168.xx.xx` is your minikube IP
 

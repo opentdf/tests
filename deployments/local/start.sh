@@ -80,7 +80,7 @@ if [[ $LOAD_IMAGES ]]; then
   monolog INFO "Caching locally-built development Etheria images in dev cluster"
   # Cache locally-built `latest` images, bypassing registry.
   # If this fails, try running 'docker-compose build' in the repo root
-  for s in entity-attribute-service key-access-service abacus-web entitlement-service storage-service attribute-authority-service; do
+  for s in entity-attribute-service key-access-service entitlement-service storage-service attribute-authority-service; do
     maybe_load virtru/tdf-$s:${ETHERIA_TAG}
   done
 else
