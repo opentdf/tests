@@ -65,9 +65,8 @@ const AssignAttributeForm: FC<Props> = (props) => {
       updateEntitlement({
         method: Method.PUT,
         path: `/entitlement/v1/entity/${props.entityId}/attribute`,
-        params: [params],
-      }).then((res) => {
-        console.log(`res`, res);
+        data: [params],
+      }).then(() => {
         toast.success("Updated");
       });
     },
@@ -104,6 +103,7 @@ const AssignAttributeForm: FC<Props> = (props) => {
           style={{ width: 200 }}
         />
       </Item>
+
       <Item>
         <Button type="primary" htmlType="submit">
           Submit

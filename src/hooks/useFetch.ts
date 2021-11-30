@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import { getCancellationConfig } from "../service";
 
 export type Method = 'get' | 'delete' | "put" | 'post';
-export type Config = { method: Method, path: string, params?: Record<any, any>; };
+export type Config = { method: Method, path: string, params?: Record<any, any>; data?: Record<any, any>; };
 
 export const useFetch = <T>(client: AxiosInstance, config: Config): [T | undefined,] => {
   const { method, path, params } = config;
@@ -32,15 +32,27 @@ export const useFetch = <T>(client: AxiosInstance, config: Config): [T | undefin
   return [data];
 };
 
-export const useLazyFetch = <T>(client: AxiosInstance,): [(config: Config) => Promise<AxiosResponse<any, any>>, T | undefined] => {
+export const useLazyFetch = <T>(client: AxiosInstance,): [<Q>(config: Config) => Promise<AxiosResponse<Q, any>>, { loading: boolean, data: T | undefined; }] => {
   const [data, setData] = useState<T>();
+  const [loading, setLoading] = useState(false);
 
   const makeRequest = async (config: Config) => {
-    const res = await client[config.method](config.path, config.params);
+
+    setLoading(true);
+    const methods = {
+      get: () => client.get(config.path, config.params),
+      post: () => client.post(config.path, config.data, config.params),
+      put: () => client.put(config.path, config.params),
+      delete: () => client.delete(config.path, config.params)
+    };
+
+    const res = await methods[config.method]();
 
     setData(res.data);
+    setLoading(false);
+
     return res;
   };
 
-  return [makeRequest, data];
+  return [makeRequest, { loading, data }];
 };

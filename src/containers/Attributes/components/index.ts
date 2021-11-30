@@ -1,1 +1,2 @@
-export { default as OrderList } from './OrderList';
+export { default as AttributesHeader } from './AttributesHeader';
+export { AttributeListItem } from '../../AttributeListItem';

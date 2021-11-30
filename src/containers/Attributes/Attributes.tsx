@@ -1,155 +1,134 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Form, List, Radio, Table, Typography } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { List, Typography, Select, Cascader } from "antd";
 
-import { components } from "../../attributes";
 import { useAuthorities, useAttrs } from "../../hooks";
+
 import CreateAttribute from "./CreateAttribute";
-import { useLazyFetch } from "../../hooks/useFetch";
-import { entityClient } from "../../service";
-import { Method } from "../../types/enums";
+import { AttributesHeader, AttributeListItem } from "./components";
 
 import "./Attributes.css";
-import { OrderCard } from "../../components";
-import { EntityAttribute } from "../../types/entitlements";
-import { OrderList } from "./components";
-
-type Attribute = components["schemas"]["Attribute"];
-type AttributeRuleType = components["schemas"]["AttributeRuleType"];
-const tuple = <T extends AttributeRuleType[]>(...args: T) => args;
-const attributeRuleTypes = tuple("hierarchy", "anyOf", "allOf");
 // @ts-ignore
 
-const TABLE_COLUMNS = [
+const { Option } = Select;
+
+enum ORDER {
+  ASC = "ASC",
+  DES = "DES",
+}
+
+const ORDER_MAP = new Map([
+  [ORDER.ASC, "-"],
+  [ORDER.DES, "+"],
+]);
+
+const SORT_OPTIONS = ["id", "entity_id", "namespace", "name", "value"];
+
+const CASCADER_OPTIONS = [
   {
-    title: "Attribute",
-    dataIndex: "attribute",
-    key: "attribute",
+    children: SORT_OPTIONS.map((value) => ({ value, label: value })),
+    label: ORDER.ASC,
+    value: ORDER_MAP.get(ORDER.ASC),
   },
   {
-    title: "EntityId",
-    dataIndex: "entityId",
-    key: "entityId",
-  },
-  {
-    title: "State",
-    dataIndex: "state",
-    key: "state",
+    children: SORT_OPTIONS.map((value) => ({ value, label: value })),
+    label: ORDER.DES,
+    value: ORDER_MAP.get(ORDER.DES),
   },
 ];
 
 const Attributes = () => {
   const authorities = useAuthorities();
-  const [getAttrEntities, entities] =
-    useLazyFetch<EntityAttribute[]>(entityClient);
-
   const [authority] = authorities;
-  const { attrs } = useAttrs(authority);
-  const [form] = Form.useForm();
 
+  const [stateAuthorities, setStateAuthorities] = useState(authorities);
   const [activeAuthority, setActiveAuthority] = useState(authority);
-  const [activeTabKey, setActiveTab] = useState("");
-  const [isEdit, setIsEdit] = useState(false);
-  const [activeOrderList, setActiveOrderList] = useState<string[]>([]);
-
-  const handleAuthorityChange = (e: any) => {
-    setActiveAuthority(e.target.value);
-  };
-
-  const handleEditClick = () => {
-    setIsEdit(true);
-  };
-
-  const handleOrderClick = useCallback(
-    (attribute: Attribute, orderItem: string) => {
-      const { authorityNamespace, name } = attribute;
-
-      const path = encodeURIComponent(
-        `${authorityNamespace}/attr/${name}/value/${orderItem}`,
-      );
-
-      getAttrEntities({
-        method: Method.GET,
-        path: `/entitlement/v1/attribute/${path}/entity/`,
-      });
-
-      setActiveTab(orderItem);
-      setActiveOrderList(attribute.order);
-    },
-    [getAttrEntities],
-  );
+  const { attrs, getAttrs } = useAttrs(activeAuthority);
+  const [stateAttrs, setStateAttrs] = useState(attrs);
+  const [sort, setSort] = useState({
+    order: ORDER_MAP.get(ORDER.ASC),
+    value: "",
+  });
 
   useEffect(() => {
-    form.setFieldsValue({ authorities: authority });
-  }, [authority, form]);
+    setStateAttrs(attrs);
+  }, [attrs]);
 
-  const handleReorder = useCallback((list) => {
-    setActiveOrderList(list);
+  useEffect(() => {
+    setStateAuthorities(authorities);
+  }, [authorities]);
+
+  const handleAuthorityChange = useCallback((value: string) => {
+    setActiveAuthority(value);
   }, []);
+
+  const onAddAttr = useCallback((attr) => {
+    setStateAttrs((prevState) => [...prevState, attr]);
+  }, []);
+
+  const onAddNamespace = useCallback(
+    (namespace) => {
+      setStateAuthorities((prevState) => [...prevState, namespace]);
+      getAttrs(namespace);
+    },
+    [getAttrs],
+  );
+
+  const footer = useMemo(
+    () => (
+      <CreateAttribute
+        authorityNamespace={activeAuthority}
+        onAddAttr={onAddAttr}
+        onAddNamespace={onAddNamespace}
+      />
+    ),
+    [activeAuthority, onAddAttr, onAddNamespace],
+  );
+
+  const header = useMemo(
+    () => (
+      <AttributesHeader
+        activeAuthority={activeAuthority}
+        authorities={stateAuthorities}
+        authority={authority}
+        onAuthorityChange={handleAuthorityChange}
+      />
+    ),
+    [activeAuthority, stateAuthorities, authority, handleAuthorityChange],
+  );
 
   return (
     <>
-      <Typography.Title level={2}>Attribute Rules</Typography.Title>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flex: "1 0 auto",
+        }}
+      >
+        <Typography.Title level={2}>Attribute Rules</Typography.Title>
+
+        <div style={{ flexBasis: "50%" }}>
+          <Cascader
+            changeOnSelect
+            options={CASCADER_OPTIONS}
+            placeholder="Sort by..."
+          />
+        </div>
+      </div>
 
       <List
-        grid={{ gutter: 3, xs: 1, column: 2 }}
-        footer={<CreateAttribute authorityNameSpace={activeAuthority} />}
-        header={
-          <Form form={form}>
-            <Form.Item name="authorities">
-              <Radio.Group
-                buttonStyle="solid"
-                defaultValue={activeAuthority}
-                onChange={handleAuthorityChange}
-                options={authorities}
-                optionType="button"
-                value={activeAuthority}
-              />
-            </Form.Item>
-          </Form>
-        }
+        grid={{ gutter: 3, xs: 2, column: 2 }}
+        footer={footer}
+        header={header}
       >
-        {attrs.map((attr) => {
-          const { name, order, state } = attr;
-
-          const handleTabChange = (tab: string) => {
-            handleOrderClick(attr, tab);
-          };
-
-          const isActive = order.find(
-            (orderItem) => orderItem === activeTabKey,
-          );
-
-          const tabList = order.map((orderItem) => ({
-            key: orderItem,
-            tab: orderItem,
-          }));
-
-          return (
-            <List.Item key={attr.name}>
-              <OrderCard
-                activeTabKey={activeTabKey}
-                name={name}
-                onEditClick={handleEditClick}
-                onTabChange={handleTabChange}
-                state={state}
-                tabList={tabList}
-              >
-                {isActive && (
-                  <Table columns={TABLE_COLUMNS} dataSource={entities} />
-                )}
-
-                {isActive && isEdit && (
-                  <div>
-                    <OrderList
-                      list={activeOrderList}
-                      onReorder={handleReorder}
-                    />
-                  </div>
-                )}
-              </OrderCard>
-            </List.Item>
-          );
-        })}
+        {stateAttrs.map((attr) => (
+          <AttributeListItem
+            activeAuthority={activeAuthority}
+            attr={attr}
+            key={attr.name}
+          />
+        ))}
       </List>
     </>
   );

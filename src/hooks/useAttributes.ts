@@ -1,44 +1,44 @@
-import { useEffect, useMemo, useState } from "react";
-import { useFetch } from ".";
+import { useCallback, useEffect, useState } from 'react';
 import { entityClient } from "../service";
 import { Attribute } from "../types/attributes";
 import { EntityAttribute } from "../types/entitlements";
 import { Method } from "../types/enums";
+import { useLazyFetch } from './useFetch';
 
-export const useAttributes = (entityId: string) => {
+export const useAttributes = () => {
   const [attributes, setAttributes] = useState<EntityAttribute[]>([]);
+  const [getAttrs, { data }] = useLazyFetch<EntityAttribute[]>(entityClient);
 
-  const [data] = useFetch<EntityAttribute[]>(entityClient, { method: Method.GET, path: `/attributes/v1/attrName/${entityId}/attribute` });
+  const buildConfig = useCallback((entityId) => ({ method: Method.GET, path: `/attributes/v1/attrName/${entityId}/attribute` }), []);
 
   useEffect(() => {
-    console.log(`data`, data);
     if (data) {
       setAttributes(data);
     }
-
   }, [data]);
 
-  return { attributes };
+  return { attributes, getAttrs: (entityId: string) => getAttrs(buildConfig(entityId)) };
 };
 
 export const useAttrs = (namespace: string) => {
   const [attrs, setAttrs] = useState<Attribute[]>([]);
+  const [getAttrs, { data }] = useLazyFetch<Attribute[]>(entityClient);
 
-
-  const config = useMemo(() => ({ method: Method.POST, path: `/attributes/v1/attrName`, params: { namespace } }), [namespace]);
-
-  const [data] = useFetch<Attribute[]>(
-    entityClient,
-    config
-  );
+  const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: `/attributes/v1/attrName`, data: { namespace } }), []);
 
   useEffect(() => {
     if (data) {
       setAttrs(data);
     }
-
   }, [data]);
 
-  return { attrs };
+  useEffect(() => {
+    if (!namespace) {
+      return;
+    }
 
+    getAttrs(buildConfig(namespace));
+  }, [namespace]);
+
+  return { attrs, getAttrs: (namespace: string) => getAttrs(buildConfig(namespace)) };
 };

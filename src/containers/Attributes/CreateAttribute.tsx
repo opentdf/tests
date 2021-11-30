@@ -1,43 +1,71 @@
-import { FC } from "react";
-import { Card, Form, Input, Button, Typography } from "antd";
+import { FC, memo, useState, useMemo, Fragment } from "react";
+import { Card, Form, Input, Button, Typography, Select } from "antd";
+import { MinusCircleOutlined, PlusCircleOutlined } from "@ant-design/icons";
+import { toast } from "react-toastify";
 
+import { ATTRIBUTE_RULE_TYPES } from "../../constants/attributeRules";
 import { useLazyFetch } from "../../hooks/useFetch";
+import { Attribute } from "../../types/attributes";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
 
-const { Item } = Form;
+const { Item, List } = Form;
 
-type Props = { authorityNameSpace: string };
+type Props = {
+  authorityNamespace: string;
+  onAddAttr: (attr: Attribute) => void;
+  onAddNamespace: (namespace: string) => void;
+};
+
+type CreateAttributeValues = Omit<Attribute, "authorityNamespace">;
+type CreateAuthorityValues = {
+  request_authority_namespace: string;
+};
 
 const CreateAttribute: FC<Props> = (props) => {
-  const { authorityNameSpace } = props;
+  const { authorityNamespace, onAddAttr, onAddNamespace } = props;
 
   const [createAuthority] = useLazyFetch(entityClient);
   const [createAttributes] = useLazyFetch(entityClient);
 
-  const handleCreateAuthority = (values: {
-    request_authority_namespace: string;
-  }) => {
-    createAuthority({
+  const stateOptions = useMemo(
+    () => ATTRIBUTE_RULE_TYPES.map(([value, label]) => ({ value, label })),
+    [],
+  );
+
+  const handleCreateAuthority = (values: CreateAuthorityValues) => {
+    createAuthority<string[]>({
       method: Method.POST,
       path: `/attributes/v1/authorityNamespace`,
-      params: values,
-    });
+      params: {
+        params: {
+          request_authority_namespace: values.request_authority_namespace,
+        },
+      },
+    })
+      .then((response) => {
+        const [lastItem] = response.data.slice(-1);
+        toast.success("Authority was created");
+        onAddNamespace(lastItem);
+      })
+      .catch(() => {
+        toast.error("Authority was not created");
+      });
   };
 
-  const handleCreateAttribute = (values: {
-    name: string;
-    order: string;
-    rule: string;
-    state: string;
-  }) => {
-    const order = values.order.split(/[ ,]+/);
-
-    createAttributes({
+  const handleCreateAttribute = (values: CreateAttributeValues) => {
+    createAttributes<Attribute>({
       method: Method.POST,
       path: `/attributes/v1/attr`,
-      params: { ...values, order, authorityNameSpace },
-    });
+      data: { ...values, authorityNamespace },
+    })
+      .then((response) => {
+        onAddAttr(response.data);
+        toast.success(`Attribute created for ${authorityNamespace}`);
+      })
+      .catch(() => {
+        toast.error(`Attribute was no created for ${authorityNamespace}`);
+      });
   };
 
   return (
@@ -49,7 +77,7 @@ const CreateAttribute: FC<Props> = (props) => {
           <Form onFinish={handleCreateAuthority}>
             <Item
               name="request_authority_namespace"
-              label="Create NameSpace"
+              label="Create Namespace"
               rules={[{ required: true }]}
             >
               <Input />
@@ -66,25 +94,63 @@ const CreateAttribute: FC<Props> = (props) => {
         <Card.Grid>
           <Typography.Title level={3}>
             Attribute for
-            <Typography.Text italic> {authorityNameSpace}</Typography.Text>
+            <Typography.Text italic> {authorityNamespace}</Typography.Text>
           </Typography.Title>
 
-          <Form onFinish={handleCreateAttribute}>
+          <Form
+            onFinish={handleCreateAttribute}
+            initialValues={{ order: [undefined] }}
+          >
             <Item name="name" label="Name" rules={[{ required: true }]}>
               <Input />
             </Item>
 
             <Item name="rule" label="Rule" rules={[{ required: true }]}>
+              <Select options={stateOptions} />
+            </Item>
+
+            <Item
+              name="state"
+              label="State"
+              rules={[{ required: true }]}
+              initialValue="published"
+              hidden
+            >
               <Input />
             </Item>
 
-            <Item name="state" label="State" rules={[{ required: true }]}>
-              <Input />
-            </Item>
+            <List name="order">
+              {(fields, { add, remove }) => {
+                const lastIndex = fields.length - 1;
 
-            <Item name="order" label="Order" rules={[{ required: true }]}>
-              <Input />
-            </Item>
+                return fields.map((field, index) => {
+                  const isLast = lastIndex === index;
+
+                  return (
+                    <Item required label="Order" key={field.key}>
+                      <Item {...field} noStyle>
+                        <Input style={{ width: "calc(100% - 32px)" }} />
+                      </Item>
+
+                      <Item noStyle>
+                        {isLast ? (
+                          <Button
+                            //! Had to use like this because https://github.com/ant-design/ant-design/issues/24698
+                            onClick={() => add()}
+                            icon={<PlusCircleOutlined />}
+                          />
+                        ) : (
+                          <Button
+                            onClick={() => remove(field.name)}
+                            icon={<MinusCircleOutlined />}
+                          />
+                        )}
+                      </Item>
+                    </Item>
+                  );
+                });
+              }}
+            </List>
 
             <Item>
               <Button type="primary" htmlType="submit">
@@ -98,4 +164,4 @@ const CreateAttribute: FC<Props> = (props) => {
   );
 };
 
-export default CreateAttribute;
+export default memo(CreateAttribute);

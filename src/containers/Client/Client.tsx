@@ -15,7 +15,6 @@ const Client = () => {
   const [entityId, setEntityId] = useState(`service-account-${id}`);
 
   const { client } = useClient(id);
-  console.log(`client`, client);
   const { entityAttributes } = useEntitlements(entityId);
 
   useEffect(() => {

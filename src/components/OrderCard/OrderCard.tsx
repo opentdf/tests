@@ -10,25 +10,52 @@ type ListItem = {
 
 type Props = {
   activeTabKey: string;
+  isActive: boolean;
+  isEdit: boolean;
   name: string;
+  onClose: () => void;
+  onSaveClick: () => void;
+  onTabChange: (item: string) => void;
   state?: string;
   tabList: ListItem[];
-  onTabChange: (item: string) => void;
-  onEditClick: () => void;
+  toggleEdit: () => void;
 };
 
 const OrderCard: FC<Props> = (props) => {
-  const { activeTabKey, name, onTabChange, state, tabList, onEditClick } =
-    props;
+  const {
+    activeTabKey,
+    isActive,
+    isEdit,
+    name,
+    onClose,
+    onSaveClick,
+    onTabChange,
+    state,
+    tabList,
+    toggleEdit,
+  } = props;
 
-  const actions = useMemo(
-    () => [
-      <Button onClick={onEditClick} key="edit">
-        Edit Rule
-      </Button>,
-    ],
-    [onEditClick],
-  );
+  const actions = useMemo(() => {
+    const config = {
+      view: [{ onClick: toggleEdit, key: "edit", text: "Edit Rule" }],
+      edit: [
+        { onClick: onSaveClick, key: "save-rule", text: "Save rule" },
+        { onClick: toggleEdit, key: "cancel", text: "Cancel" },
+      ],
+    };
+
+    if (!isActive && !activeTabKey) {
+      return;
+    }
+
+    const key = isEdit ? "edit" : "view";
+
+    return config[key].map(({ onClick, key, text }) => (
+      <Button onClick={onClick} key={key}>
+        {text}
+      </Button>
+    ));
+  }, [activeTabKey, isActive, isEdit, toggleEdit, onSaveClick]);
 
   const title = useMemo(
     () => (
@@ -41,10 +68,15 @@ const OrderCard: FC<Props> = (props) => {
     [name, state],
   );
 
+  const extra = useMemo(() => {
+    return isActive && <Button onClick={onClose}>Close</Button>;
+  }, [isActive, onClose]);
+
   return (
     <Card
       actions={actions}
       activeTabKey={activeTabKey}
+      extra={extra}
       onTabChange={onTabChange}
       tabList={tabList}
       title={title}

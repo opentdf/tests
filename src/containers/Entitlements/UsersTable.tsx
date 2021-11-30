@@ -38,6 +38,7 @@ const UsersTable: FC<Props> = (props) => {
   return (
     <Table
       bordered
+      className="table"
       columns={columns}
       dataSource={data}
       loading={loading}

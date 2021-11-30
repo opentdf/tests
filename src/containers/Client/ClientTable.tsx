@@ -44,6 +44,7 @@ const ClientTable: FC<Props> = (props) => {
   return (
     <Table
       bordered
+      className="table"
       columns={columns}
       dataSource={entityAttributes}
       pagination={false}
