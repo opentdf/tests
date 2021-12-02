@@ -13,8 +13,8 @@ COPY alembic.ini .
 COPY containers/migration/entrypoint.sh .
 COPY containers/migration/ migration/
 RUN mkdir -p /tool/migration/versions
-COPY containers/service_attribute_authority/ service_attribute_authority/
-COPY containers/service_entitlement/ service_entitlement/
+COPY containers/attributes/ attributes/
+COPY containers/entitlements/ entitlements/
 COPY containers/service_entity/ service_entity/
 COPY containers/service_entity_object/ service_entity_object/
 # Postgres

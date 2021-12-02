@@ -12,8 +12,8 @@ RUN pipenv install --dev --system --deploy --ignore-pipfile
 ENV PYTHONPATH .
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
-# TODO we should use the base python image and not copy in tools
-COPY containers/python_base/tools /tools
+# TODO we should use the base python image and not copy in scripts
+COPY containers/python_base/scripts /scripts
 # test files
 COPY performance-test/*.py .
 COPY performance-test/fast-api-client/ .
@@ -23,8 +23,8 @@ RUN pip3 install tdf3sdk${PY_OSS_VERSION}
 RUN pip3 show tdf3sdk
 # Use local or remote endpoint
 ENV EAS_ENDPOINT http://eas:4010
-CMD /tools/wait-for-service "${EAS_ENDPOINT}/healthz?probe=readiness" \
-    && /tools/wait-for-service "http://kas:8000/healthz?probe=readiness" \
+CMD /scripts/wait-for-service "${EAS_ENDPOINT}/healthz?probe=readiness" \
+    && /scripts/wait-for-service "http://kas:8000/healthz?probe=readiness" \
     && ls -l \
     && python3 main.py \
     && python3 get_time.py

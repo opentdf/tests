@@ -2,7 +2,7 @@
 
 NANOTDF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "$NANOTDF_DIR"/../ >/dev/null && pwd)"
-export PATH="$PATH:$PROJECT_ROOT/tools"
+export PATH="$PATH:$PROJECT_ROOT/scripts"
 
 monolog TRACE "Running [$0${1+ }$*]"
 

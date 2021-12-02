@@ -34,11 +34,11 @@ services:
       timeout: "2s"
       start_period: "5s"
       retries: 1
-  attribute-authority:
+  attributes:
     build:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
-      context: ../containers/service_attribute_authority
+      context: ../containers/attributes
     depends_on:
       - migration
     environment:
@@ -59,11 +59,11 @@ services:
       timeout: "2s"
       start_period: "5s"
       retries: 1
-  entitlement:
+  entitlements:
     build:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
-      context: ../containers/service_entitlement
+      context: ../containers/entitlements
     depends_on:
       - migration
     environment:
@@ -113,10 +113,10 @@ services:
       dockerfile: Dockerfile
     command: ["gunicorn", "--config", "gunicorn.conf.py", "wsgi:app"]
     depends_on:
-      - attribute-authority
+      - attributes
       - eas
     environment:
-      - EAS_HOST=http://attribute-authority:4020
+      - EAS_HOST=http://attributes:4020
       - EAS_CERTIFICATE
       - FLASK_DEBUG=True
       - FLASK_TESTING=True
@@ -150,14 +150,14 @@ services:
     depends_on:
       - eas
       - kas
-      - attribute-authority
-      - entitlement
+      - attributes
+      - entitlements
       - entity
     environment:
       - KAS_HOST=http://kas:8000
       - ENTITY_OBJECT_HOST=http://eas:4010
-      - ATTRIBUTE_AUTHORITY_HOST=http://attribute-authority:4020
-      - ENTITLEMENT_HOST=http://entitlement:4030
+      - ATTRIBUTE_AUTHORITY_HOST=http://attributes:4020
+      - ENTITLEMENT_HOST=http://entitlements:4030
       - ENTITY_HOST=http://entity:4040
   postgres:
     image: postgres:12

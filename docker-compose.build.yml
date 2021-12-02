@@ -52,29 +52,29 @@ services:
     # INTENTIONALLY tying this version to upstream KC image version
     image: virtru/tdf-keycloak:${ETHERIA_TAG:-virtrulocal}
 
-  keycloak_bootstrap:
+  keycloak-bootstrap:
     build:
-      context: ./containers/keycloak_bootstrap
+      context: ./containers/keycloak-bootstrap
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
     image: virtru/tdf-keycloak-bootstrap:${ETHERIA_TAG:-virtrulocal}
 
-  attribute_authority:
+  attributes:
     build:
-      context: ./containers/service_attribute_authority
+      context: ./containers/attributes
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-attribute-authority-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-attributes-service:${ETHERIA_TAG:-virtrulocal}
 
-  entitlement:
+  entitlements:
     build:
-      context: ./containers/service_entitlement
+      context: ./containers/entitlements
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-entitlement-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-entitlements-service:${ETHERIA_TAG:-virtrulocal}
 
   remote_payload:
     build:

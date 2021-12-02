@@ -12,7 +12,7 @@ $ cd etheria/kas_app
 $ scripts/start
 ```
 
-To test, use the `tools/monotest kas_app` command from the monorepo root.
+To test, use the `scripts/monotest kas_app` command from the monorepo root.
 
 ### Run KAS in background
 
@@ -45,7 +45,7 @@ docker run -p "127.0.0.1:4000:8000" tdf3-kas-oss
 
 #### Activate a virtual environment
 
-A KAS server can be run from either dev or test, but only test has the testing tools installed. Run both in separate windows to simultaneously test and run the server. Command lines assume your working directory is the kas_app subdirectory. Before you start, make sure your pipenv is configured via:
+A KAS server can be run from either dev or test, but only test has the testing scripts installed. Run both in separate windows to simultaneously test and run the server. Command lines assume your working directory is the kas_app subdirectory. Before you start, make sure your pipenv is configured via:
 
 ```bash
 pipenv pipenv install --dev
@@ -111,7 +111,7 @@ reference: https://flask.palletsprojects.com/en/master/security/#security-header
 First, let's get everything set up:
 
 ```sh
-tools/genkeys-if-needed
+scripts/genkeys-if-needed
 
 export MONOLOG_LEVEL=0
 export LOGLEVEL=DEBUG
@@ -274,7 +274,7 @@ Okay, so configure local EAS and KAS as described above. From the xtest folder, 
 export MONOLOG_LEVEL=0
 rm -r certs
 echo "This is some plain text" > plain.txt
-tools/genkeys-if-needed
+scripts/genkeys-if-needed
 docker-compose -f docker-compose.yml up --build
 ```
 
@@ -305,7 +305,7 @@ This should not cause problems for the workflow using our current clients, as we
 1. kill all servers (ctrl+c on the docker-compose thread, or otherwise send SIGTERM)
 2. Regenerate the EAS keys:
 ```
-GENKEYS_FOR_APPS=eas tools/genkey-apps
+GENKEYS_FOR_APPS=eas scripts/genkey-apps
 ```
 3. restart with the new keys, e.g. `docker-compose up` (Keys are loaded via local volumes)
 4. Decrypt still works:
@@ -343,6 +343,6 @@ c.decrypt(dp).then(p => {
 #### After rotating KAS key naively
 
 1. kill all servers
-2. `GENKEYS_FOR_APPS=kas tools/genkey-apps`
+2. `GENKEYS_FOR_APPS=kas scripts/genkey-apps`
 3. Try to decrypt using the above script. This will fail with a `CryptoError` as KAS will be unable to unwrap the key information, as it was stored with the old KAS public key.
 4. Try to encrypt. This works since the current EAS default key is generated during startup. This WILL FAIL once the database is made persistent, as the attribute storage will still reference the old key; currently the database is refreshed during the deployment.

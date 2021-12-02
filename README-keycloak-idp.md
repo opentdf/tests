@@ -31,7 +31,7 @@ Keycloak and all relevant dependencies.
 To do this, you will need:
 * Docker Desktop:  https://www.docker.com/products/docker-desktop
 * kubernetes-cli:  `$ brew install kubernetes-cli`
-* A local cluster management, such as minikube or kind. Suggestion: Run `tools/pre-reqs`
+* A local cluster management, such as minikube or kind. Suggestion: Run `scripts/pre-reqs`
   * Make sure minikube is running:  `$ minikube start`
   * Make sure kind is running:  `$ kind create cluster`
 

@@ -1,4 +1,4 @@
-# Lists all packages to build; used by tools/monotest, among others
+# Lists all packages to build; used by scripts/monotest, among others
 
 containers/eas
 containers/kas/kas_app

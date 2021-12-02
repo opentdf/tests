@@ -12,7 +12,7 @@ ENV PYTHONPATH .
 ENV PYTHONPYCACHEPREFIX /app-pyc
 ENV PYTHONUNBUFFERED 1
 
-# NOTE - This must match the UID set for the certs in tools/genkey_apps or the value passed in via docker --user
+# NOTE - This must match the UID set for the certs in scripts/genkey_apps or the value passed in via docker --user
 ENV KAS_UID ${KAS_UID:-909}
 
 # Install the dependencies

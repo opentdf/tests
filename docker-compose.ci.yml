@@ -4,7 +4,7 @@ volumes:
   key-store:
 services:
   genkeys:
-    entrypoint: /tools/wait-after /tools/genkeys-if-needed
+    entrypoint: /scripts/wait-after /scripts/genkeys-if-needed
     environment:
       - MONOLOG_LEVEL
       - EAS_UID=908
@@ -17,7 +17,7 @@ services:
         max-size: "10m"
     volumes:
       - key-store:/certs/
-    working_dir: /tools
+    working_dir: /scripts
   eas:
     depends_on:
       - genkeys
@@ -86,7 +86,7 @@ services:
       - kas
     entrypoint:
       [
-        "/tools/wait-for-file",
+        "/scripts/wait-for-file",
 
         "--ln",
         "/certs/ca.crt",
@@ -131,7 +131,7 @@ services:
       - ./reverse-proxy/entrypoint.sh:/entrypoint.sh:cached
       - ./reverse-proxy/logs:/var/log/nginx:cached
       - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.template:cached
-      - ./containers/python_base/tools:/tools:cached
+      - ./containers/python_base/scripts:/scripts:cached
       - key-store:/certs/
   xtest-py-oss:
     build:

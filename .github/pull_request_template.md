@@ -9,7 +9,7 @@ _Please use the Jira Key or NOREF followd by the changes_
 
 ### Checklist
 
-- [ ] I have added or updated unit tests and run them via `tools/monotest all`
+- [ ] I have added or updated unit tests and run them via `scripts/monotest all`
 - [ ] I have added or updated E2E cluster tests and run them via `kubectl kuttl test tests/cluster'
 - [ ] I have added or updated integration tests in `xtest` (if appropriate)
 - [ ] I have added or updated documentation / readme (if appropriate)

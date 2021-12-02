@@ -18,7 +18,7 @@ RUN apk add --no-cache --upgrade \
     openssl \
     bash
 
-COPY ./tools /tools
+COPY ./scripts /scripts
 
 WORKDIR /build
 # Install pip dependencies

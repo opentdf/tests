@@ -43,7 +43,7 @@ On linux/mac:
 
 ```bash
 cd ..
-tools/monotest eas cov
+scripts/monotest eas cov
 ```
 
 ### Run or test the EAS server locally

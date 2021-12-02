@@ -12,7 +12,7 @@ export POSTGRES_SCHEMA=tdf_entitlement
 export EAS_ENTITY_EXPIRATION=120
 export KAS_DEFAULT_URL="http://localhost:8000"
 # secrets
-# Get secrets from certs/.env created from `tools/genkeys-if-needed`
+# Get secrets from certs/.env created from `scripts/genkeys-if-needed`
 export EAS_PRIVATE_KEY=""
 export KAS_CERTIFICATE=""
 export KAS_EC_SECP256R1_CERTIFICATE=""

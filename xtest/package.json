@@ -27,7 +27,7 @@
   "husky": {
     "hooks": {
       "post-commit": "git update-index -g",
-      "pre-commit": "pretty-quick --pattern \"xtest/**\" --staged && ../tools/shfmt"
+      "pre-commit": "pretty-quick --pattern \"xtest/**\" --staged && ../scripts/shfmt"
     }
   }
 }

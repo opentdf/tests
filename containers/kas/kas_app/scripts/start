@@ -2,7 +2,7 @@
 
 START_APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${START_APP_DIR}/../../" >/dev/null && pwd)"
-export PATH="$PATH:$PROJECT_ROOT/tools"
+export PATH="$PATH:$PROJECT_ROOT/scripts"
 
 echo START_APP_DIR [$START_APP_DIR]
 echo PROJECT_ROOT $PROJECT_ROOT
@@ -11,7 +11,7 @@ echo PATH $PATH
 (
   monolog DEBUG "genkeys-if-needed $PORT"
   cd "$PROJECT_ROOT"
-  tools/genkeys-if-needed
+  scripts/genkeys-if-needed
 )
 
 export EAS_HOST=https://etheria.local/eas/

@@ -14,10 +14,8 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-
       - name: Lint
         run: ct lint --target-branch main --all charts/
-
       - name: Render Templates
         run: |
           cd charts
@@ -32,12 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - name: 🦪 ✔ 🧼🧼🧼
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always tools/*
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always scripts/*
       - name: 🦪 ✅ 🦇🦇🦇
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" bats/bats:1.5.0 tools/*.bats
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" bats/bats:1.5.0 scripts/*.bats
 
   unittest:
     runs-on: ubuntu-latest
@@ -45,29 +41,74 @@ jobs:
       - scriptcheck
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - name: "🐍 KAS Core Pytest"
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" tools/monotest containers/kas/kas_core
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" scripts/monotest containers/kas/kas_core
       - name: "🐍 KAS App Pytest"
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" tools/monotest containers/kas/kas_app
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" scripts/monotest containers/kas/kas_app
 
-  build:
+  build-base:
     runs-on: ubuntu-latest
     needs:
       - unittest
       - helm-lint-test
     steps:
       - uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Build and export
+        uses: docker/build-push-action@v2
         with:
-          fetch-depth: 0
-      - name: CI Build Local Docker Images
-        run: make
-  publish:
+          context: ./containers/python_base
+          tags: opentdf/tdf-python-base:3.9
+          outputs: type=docker,dest=/tmp/tdf-python-base.tar
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tdf-python-base
+          path: /tmp/tdf-python-base.tar
+
+  build-and-publish:
     needs:
-      - build
-    uses: opentdf/backend/.github/workflows/publish.yaml@main
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      - build-base
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo:
+          - attributes
+          - entitlements
+          - kas
+          - keycloak-bootstrap
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: tdf-python-base
+          path: /tmp
+      - name: Load image
+        run: |-
+          docker load --input /tmp/tdf-python-base.tar
+          docker image ls -a
+      - uses: actions/checkout@v2
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: opentdf/tdf-${{ matrix.repo }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: docker.pkg.github.com
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: publish
+        uses: docker/build-push-action@v2
+        with:
+          context: ./containers/${{ matrix.repo }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'opentdf/backend' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

@@ -40,7 +40,7 @@ changes, see the appropriate subfolder.
 ### Added
 
 - Added eas, kas, and xtest subdirectories with initial implementations.
-- Added `shfmt` pre-commit script. Install with `./tools/shfmt --install`.
+- Added `shfmt` pre-commit script. Install with `./scripts/shfmt --install`.
 
 ## [0.0.1] - 2020-04-30
 

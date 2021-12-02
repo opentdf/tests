@@ -6,7 +6,7 @@
 JAVA_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 JAVA_JAR_DIR="$(cd "${JAVA_CLI_DIR}/../" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${JAVA_CLI_DIR}/../../../../" >/dev/null && pwd)"
-export PATH="$PATH:$PROJECT_ROOT/tools"
+export PATH="$PATH:$PROJECT_ROOT/scripts"
 
 # PULL DOWN NECESSARY JARS
 if ! compgen -G "${JAVA_JAR_DIR}/*.jar" >/dev/null; then

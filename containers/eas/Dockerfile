@@ -12,7 +12,7 @@ ENV PYTHONPATH .
 ENV PYTHONPYCACHEPREFIX /app-pyc
 ENV PYTHONUNBUFFERED 1
 
-# NOTE - This must match the GID set for the certs in tools/genkey_apps or the value passed in via docker --user
+# NOTE - This must match the GID set for the certs in scripts/genkey_apps or the value passed in via docker --user
 ENV EAS_UID ${EAS_UID:-908}
 
 # Install apk dependencies

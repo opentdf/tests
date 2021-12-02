@@ -50,7 +50,7 @@ def test_setup():
     if response.status_code != 200:
         print(response.text)
         exit(1)
-    # entitlement
+    # entitlements
     entitlement_host = os.environ["ENTITLEMENT_HOST"]
     entity_id = "Charlie_1234"
     response = requests.put(

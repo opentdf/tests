@@ -22,7 +22,7 @@ on a temporary local volume.
 For local development, you can do the following:
 
 ```
-tools/genkeys-if-needed
+scripts/genkeys-if-needed
 . certs/.env
 export {EAS,KAS{,_EC_SECP256R1}}_{CERTIFICATE,PRIVATE_KEY}
 docker compose -f docker-compose.local.yml up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE_KEY,KAS_EC_SECP256R1_CERTIFICATE,KAS_EC_SECP256R1_PRIVATE_KEY --attach-dependencies etheria.local

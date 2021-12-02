@@ -96,7 +96,7 @@ services:
       - ./reverse-proxy/entrypoint.sh:/entrypoint.sh:cached
       - ./reverse-proxy/logs:/var/log/nginx:cached
       - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.template:cached
-      - ./containers/python_base/tools:/tools:cached
+      - ./containers/python_base/scripts:/scripts:cached
   postgres:
     expose:
       - 5432

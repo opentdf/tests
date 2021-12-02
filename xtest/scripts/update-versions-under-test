@@ -14,7 +14,7 @@
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${APP_DIR}/../../" >/dev/null && pwd)"
-TOOLS_DIR="$PROJECT_ROOT/containers/python_base/tools"
+TOOLS_DIR="$PROJECT_ROOT/containers/python_base/scripts"
 export PATH="$PATH:$TOOLS_DIR"
 
 if [ -x "$PROJECT_ROOT/buildkite-scripts/wrap/npm.sh" ]; then

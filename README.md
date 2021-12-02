@@ -9,8 +9,8 @@ We store several services combined in a single git repository for ease of develo
 
 - [Key Access Service](containers/kas/kas_core/)
 - Authorization Services
-  - [Attributes](containers/service_attribute_authority/)
-  - [Entitlements](containers/service_entitlement)
+  - [Attributes](containers/attributes/)
+  - [Entitlements](containers/entitlements)
   - [Keycloak Claims Mapper](containers/keycloak-protocol-mapper)
 - Tools and shared libraries
 - Helm charts for deploying to kubernetes
@@ -41,10 +41,10 @@ https://docs.tilt.dev/install.html
 
 ```shell
 # Install pre-requisites (drop what you've already got)
-./tools/pre-reqs docker helm tilt kind octant
+./scripts/pre-reqs docker helm tilt kind octant
 
 # Generate local certs in certs/ directory
-./tools/genkeys-if-needed
+./scripts/genkeys-if-needed
 
 # Create a local cluster, using e.g. kind
 kind create cluster --name opentdf
@@ -96,7 +96,7 @@ During this process you will be generating keys for EAS, KAS, the reverse proxy,
 _Note: This quick start guide is not intended to guide you on using pre-generated keys. Please see [Production]
 
 ```sh
-./tools/genkeys-if-needed
+./scripts/genkeys-if-needed
 . certs/.env
 export {EAS,KAS{,_EC_SECP256R1}}_{CERTIFICATE,PRIVATE_KEY}
 docker compose up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE_KEY,KAS_EC_SECP256R1_CERTIFICATE,KAS_EC_SECP256R1_PRIVATE_KEY --build
@@ -108,12 +108,12 @@ docker compose up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE
 ## Installation in Isolated Kubernetes Clusters
 
 If you are working on a kubernetes cluster that does not have access to the Internet,
-the `tools/build-offline-bundle` script can generate an archive of all backend services.
+the `scripts/build-offline-bundle` script can generate an archive of all backend services.
 
 ### Building the offline bundle
 
-To build the bundle, on a connected server that has recent (2021+) versions of the following tools
-(some of which may be installed with `tools/pre-reqs` on linux and macos):
+To build the bundle, on a connected server that has recent (2021+) versions of the following scripts
+(some of which may be installed with `scripts/pre-reqs` on linux and macos):
 
 - The bash shell
 - git
@@ -123,9 +123,9 @@ To build the bundle, on a connected server that has recent (2021+) versions of t
 - curl
 - npm (for abacus)
 
-Running the `tools/build-offline-bundle` script will create a zip file in the `build/` folder named `offline-bundle-[date]-[short digest].zip.
+Running the `scripts/build-offline-bundle` script will create a zip file in the `build/` folder named `offline-bundle-[date]-[short digest].zip.
 
-Another script, `tools/test-offline-bundle`, can be used to validate that a build was created and can start, using a local k8s cluster created with kind.
+Another script, `scripts/test-offline-bundle`, can be used to validate that a build was created and can start, using a local k8s cluster created with kind.
 
 #### NB: Including Third Party Libraries
 
@@ -161,7 +161,7 @@ To install the app, we need to configure the helm values to match the configurat
 For this example, we will use self signed certificates and secrets:
 
 ```sh
-export/tools/genkeys-if-needed
+export/scripts/genkeys-if-needed
 kubectl create secret generic etheria-secrets \
     "--from-file=EAS_PRIVATE_KEY=export/certs/eas-private.pem" \
     "--from-file=EAS_CERTIFICATE=export/certs/eas-public.pem" \
@@ -177,8 +177,8 @@ We will also need to generate and use a custom postgres password.
 ```sh
 POSTGRES_PW=$(openssl rand -base64 40)
 sed -i '' "s/myPostgresPassword/${POSTGRES_PW}/" export/deployment/values-postgresql-tdf.yaml
-kubectl create secret generic attribute-authority-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
-kubectl create secret generic entitlement-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
+kubectl create secret generic attributes-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
+kubectl create secret generic entitlements-secrets --from-literal=POSTGRES_PASSWORD="${POSTGRES_PW}"
 ```
 
 > TODO: Move keycloak creds into secrets.
@@ -219,12 +219,12 @@ README documentation for [KAS](kas_app/README.md) and [EAS](eas/README.md) in th
 
 ## Committing Code
 
-Please use the autoformatters included in the tools directory. To get them
+Please use the autoformatters included in the scripts directory. To get them
 running in git as a pre-commit, use the following:
 
 ```sh
-tools/black --install
-tools/shfmt --install
+scripts/black --install
+scripts/shfmt --install
 ```
 
 These commands will autoformat python and bash scripts after you run 'git commit' but before
@@ -241,13 +241,13 @@ all the unit tests in a python virtual environment.
 To run all the unit tests in the repo:
 
 ``` shell
-tools/monotest all
+scripts/monotest all
 ```
 
 To run a subset of unit tests (e.g. just the `kas_core` tests from the [kas_core](kas_core) subfolder):
 
 ``` shell
-tools/monotest kas_core
+scripts/monotest kas_core
 ```
 
 ### Cluster tests
@@ -359,25 +359,25 @@ the above methods work, and is included here for completeness.
 
 ##### Quick Start
 
-To assist in quickly starting use the `./tools/genkeys-if-needed` to build all the keys. The hostname will be assigned `etheria.local`.
+To assist in quickly starting use the `./scripts/genkeys-if-needed` to build all the keys. The hostname will be assigned `etheria.local`.
 Make sure to add `127.0.0.1           etheria.local` to your `/etc/hosts` or `c:\windows\system32\drivers\etc\hosts`.
 
-Additionally you can set a custom hostname `ETHERIA_HOSTNAME=myhost.com ./tools/genkeys-if-needed`, but you might have to update the docker-compose files.
+Additionally you can set a custom hostname `ETHERIA_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the docker-compose files.
 
 _If you need to customization please see the Advanced Usage guide alongside the Genkey Tools._
 
 1. Decide what your host name will be for the reverse proxy will be (e.g. example.com)
-2. Generate reverse proxy certs `./tools/genkey-reverse-proxy $HOSTNAME_OF_REVERSE_PROXY`
-3. Generate EAS & KAS certs `./tools/genkey-apps`
-4. (Optional) Generate client certificates `./tools/genkey-client` for PKI support
+2. Generate reverse proxy certs `./scripts/genkey-reverse-proxy $HOSTNAME_OF_REVERSE_PROXY`
+3. Generate EAS & KAS certs `./scripts/genkey-apps`
+4. (Optional) Generate client certificates `./scripts/genkey-client` for PKI support
 
 ##### Genkey Tools
 
-Each genkey tools each have a brief help which you can access like
+Each genkey script has a brief help which you can access like
 
-- `./tools/genkey-apps --help`
-- `./tools/genkey-client --help`
-- `./tools/genkey-reverse-proxy --help`
+- `./scripts/genkey-apps --help`
+- `./scripts/genkey-client --help`
+- `./scripts/genkey-reverse-proxy --help`
 
 #### Start Services (non-PKI)
 

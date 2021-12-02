@@ -2,7 +2,7 @@
 
 START_APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${START_APP_DIR}/../../" >/dev/null && pwd)"
-export PATH="$PATH:$PROJECT_ROOT/tools"
+export PATH="$PATH:$PROJECT_ROOT/scripts"
 
 if [[ $POSTGRES_HOST ]]; then
   monolog INFO "EAS.entrypoint: Waiting for postgres..."

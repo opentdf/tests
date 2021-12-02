@@ -20,7 +20,7 @@ WORKDIR /xtest
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 COPY ./xtest /xtest
-COPY ./containers/python_base/tools /tools
+COPY ./containers/python_base/scripts /scripts
 RUN pip3 install --requirement /xtest/requirements.txt
 # install specific version of sdk "==1.0.0"
 RUN pip3 install tdf3sdk${PY_OSS_VERSION}

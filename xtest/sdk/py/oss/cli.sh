@@ -5,7 +5,7 @@
 
 PY_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${PY_CLI_DIR}/../../../../" >/dev/null && pwd)"
-export PATH="$PATH:$PROJECT_ROOT/tools"
+export PATH="$PATH:$PROJECT_ROOT/scripts"
 
 monolog DEBUG "cwd=[$(pwd)] PY_CLI_DIR=$PY_CLI_DIR PROJECT_ROOT=$PROJECT_ROOT $1 $2 $3 $4 $5 $6 $7"
 

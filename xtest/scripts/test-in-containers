@@ -8,7 +8,7 @@
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${APP_DIR}/../../" >/dev/null && pwd)"
-export PATH="$PATH:$APP_DIR:$PROJECT_ROOT/containers/python_base/tools"
+export PATH="$PATH:$APP_DIR:$PROJECT_ROOT/containers/python_base/scripts"
 
 monolog INFO --- "test-in-containers"
 monolog TRACE "test-in-containers"

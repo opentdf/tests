@@ -11,7 +11,7 @@ ENV PYTHONUNBUFFERED 1
 COPY . .
 RUN pip3 install .
 
-# install the test tools
+# install the test packages
 RUN pip3 install pytest pytest-cov
 
 # run the test

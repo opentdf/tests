@@ -12,11 +12,11 @@ dependencies:
 - name: keycloak-bootstrap
   repository: file://../keycloak_bootstrap
   version: '^0.1.0'
-- name: attribute-authority
-  repository: file://../attribute_authority
+- name: attributes
+  repository: file://../attributes
   version: '^1.0.0'
-- name: entitlement
-  repository: file://../entitlement
+- name: entitlements
+  repository: file://../entitlements
   version: '^1.0.0'
 - name: tdf-storage
   repository: file://../remote_payload
