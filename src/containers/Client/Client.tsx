@@ -6,6 +6,7 @@ import AssignAttributeForm from "./AssignAttributeForm";
 import ClientTable from "./ClientTable";
 import { useEntitlements } from "./hooks/useEntitlement";
 import { useClient } from "../../hooks";
+import { Method } from "../../types/enums";
 
 //TODO: switch to correct entityID. Should be 'browsertest' instead of `id`
 
@@ -15,7 +16,20 @@ const Client = () => {
   const [entityId, setEntityId] = useState(`service-account-${id}`);
 
   const { client } = useClient(id);
-  const { entityAttributes } = useEntitlements(entityId);
+  const {
+    getEntitlements,
+    data: entityAttributes,
+    loading,
+  } = useEntitlements();
+
+  useEffect(() => {
+    const config = {
+      method: Method.GET,
+      path: `/entitlement/v1/entity/${entityId}/attribute`,
+    };
+
+    getEntitlements(config);
+  }, [entityId, getEntitlements]);
 
   useEffect(() => {
     setEntityId(`service-account-${id}`);
@@ -32,9 +46,21 @@ const Client = () => {
     [entityId],
   );
 
+  const onAssignAttribute = useCallback(() => {
+    const config = {
+      method: Method.GET,
+      path: `/entitlement/v1/entity/${entityId}/attribute`,
+    };
+
+    getEntitlements(config);
+  }, [entityId, getEntitlements]);
+
   return (
     <section>
-      <AssignAttributeForm entityId={entityId} />
+      <AssignAttributeForm
+        entityId={entityId}
+        onAssignAttribute={onAssignAttribute}
+      />
 
       <Divider />
 
@@ -46,6 +72,7 @@ const Client = () => {
         <ClientTable
           onDeleteKey={onDeleteKey}
           entityAttributes={entityAttributes}
+          loading={loading}
         />
         <Divider />
 

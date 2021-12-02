@@ -1,47 +1,71 @@
-import { Form, Radio, RadioChangeEvent } from "antd";
-import { FC, memo, useEffect } from "react";
+import { Button, Cascader, Popover, Typography } from "antd";
+import FilterForm from "./FilterForm";
 
-const { useForm, Item } = Form;
+enum ORDER {
+  ASC = "ASC",
+  DES = "DES",
+}
 
-type Props = {
-  onAuthorityChange: (authority: string) => void;
-  authority: string;
-  activeAuthority: string;
-  authorities: string[];
-};
+const ORDER_MAP = new Map([
+  [ORDER.ASC, "-"],
+  [ORDER.DES, "+"],
+]);
 
-const AttributesHeader: FC<Props> = (props) => {
-  const { activeAuthority, authorities, authority, onAuthorityChange } = props;
+const SORT_OPTIONS = ["id", "entity_id", "namespace", "name", "value"];
 
-  const [form] = useForm();
+const CASCADER_OPTIONS = [
+  {
+    children: SORT_OPTIONS.map((value) => ({ value, label: value })),
+    label: ORDER.ASC,
+    value: ORDER_MAP.get(ORDER.ASC) || "",
+  },
+  {
+    children: SORT_OPTIONS.map((value) => ({ value, label: value })),
+    label: ORDER.DES,
+    value: ORDER_MAP.get(ORDER.DES) || "",
+  },
+];
 
-  useEffect(() => {
-    form.setFieldsValue({ authorities: authority });
-    onAuthorityChange(authority);
-  }, [authority, form, onAuthorityChange]);
-
-  const handleOnChange = (e: RadioChangeEvent) => {
-    onAuthorityChange(e.target.value);
+const AttributesHeader = () => {
+  const onChange = (value: any) => {
+    console.log(`value`, value);
   };
 
   return (
-    <Form
-      form={form}
-      initialValues={{
-        authorities: authority,
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flex: "1 0 auto",
       }}
     >
-      <Item name="authorities">
-        <Radio.Group
-          buttonStyle="solid"
-          onChange={handleOnChange}
-          options={authorities}
-          optionType="button"
-          value={activeAuthority}
+      <Typography.Title level={2}>Attribute Rules</Typography.Title>
+
+      <div
+        style={{
+          flexBasis: "50%",
+          justifyContent: "flex-end",
+          display: "flex",
+        }}
+      >
+        <Cascader
+          multiple
+          onChange={onChange}
+          options={CASCADER_OPTIONS}
+          placeholder="Sort by..."
         />
-      </Item>
-    </Form>
+
+        <Popover
+          content={<FilterForm />}
+          placement="bottomRight"
+          trigger="click"
+        >
+          <Button>Filters</Button>
+        </Popover>
+      </div>
+    </div>
   );
 };
 
-export default memo(AttributesHeader);
+export default AttributesHeader;

@@ -1,5 +1,5 @@
 import { AxiosInstance, AxiosResponse } from "axios";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { getCancellationConfig } from "../service";
 
@@ -32,27 +32,30 @@ export const useFetch = <T>(client: AxiosInstance, config: Config): [T | undefin
   return [data];
 };
 
-export const useLazyFetch = <T>(client: AxiosInstance,): [<Q>(config: Config) => Promise<AxiosResponse<Q, any>>, { loading: boolean, data: T | undefined; }] => {
+export const useLazyFetch = <T>(client: AxiosInstance): [<Q>(config: Config) => Promise<AxiosResponse<Q, any>>, { loading: boolean, data: T | undefined; }] => {
   const [data, setData] = useState<T>();
   const [loading, setLoading] = useState(false);
 
-  const makeRequest = async (config: Config) => {
+  const makeRequest = useCallback(async (config: Config) => {
 
     setLoading(true);
     const methods = {
       get: () => client.get(config.path, config.params),
       post: () => client.post(config.path, config.data, config.params),
-      put: () => client.put(config.path, config.params),
+      put: () => client.put(config.path, config.data),
       delete: () => client.delete(config.path, config.params)
     };
 
-    const res = await methods[config.method]();
-
-    setData(res.data);
-    setLoading(false);
-
-    return res;
-  };
+    try {
+      const res = await methods[config.method]();
+      setData(res.data);
+      return res;
+    } catch (error) {
+      throw new Error(error as string);
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
 
   return [makeRequest, { loading, data }];
 };

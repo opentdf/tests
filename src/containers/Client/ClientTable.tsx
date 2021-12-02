@@ -3,12 +3,13 @@ import { Table, Button } from "antd";
 import { EntityAttribute } from "../../types/entitlements";
 
 type Props = {
+  entityAttributes?: EntityAttribute[];
+  loading: boolean;
   onDeleteKey: (id: string) => void;
-  entityAttributes: EntityAttribute[];
 };
 
 const ClientTable: FC<Props> = (props) => {
-  const { onDeleteKey, entityAttributes } = props;
+  const { onDeleteKey, entityAttributes, loading } = props;
 
   const columns = useMemo(
     () => [
@@ -48,6 +49,7 @@ const ClientTable: FC<Props> = (props) => {
       columns={columns}
       dataSource={entityAttributes}
       pagination={false}
+      loading={loading}
     />
   );
 };

@@ -10,7 +10,10 @@ import { toast } from "react-toastify";
 const { Item, useForm } = Form;
 
 type Option = { label: string; value: string };
-type Props = { entityId: string };
+type Props = {
+  entityId: string;
+  onAssignAttribute: () => void;
+};
 type FormValues = {
   authority: string;
   name: string;
@@ -18,19 +21,25 @@ type FormValues = {
 };
 
 const AssignAttributeForm: FC<Props> = (props) => {
+  const { onAssignAttribute, entityId } = props;
+
   const [form] = useForm();
-  const [authority] = useAuthorities();
-  const { attrs } = useAttrs(authority);
+  const authorities = useAuthorities();
+  const [authority] = authorities;
+  const { attrs, getAttrs, loading } = useAttrs(authority);
   const [updateEntitlement] = useUpdateEntitlement();
 
   const [selectedName, setSelectedName] = useState();
   const [attributeValOptions, setAttributeValOptions] = useState<Option[]>();
 
-  useEffect(() => {
-    form.setFieldsValue({
-      authority,
-    });
-  }, [authority, form]);
+  const authoritiesOptions = useMemo(
+    () =>
+      authorities.map((attribute) => ({
+        label: attribute,
+        value: attribute,
+      })),
+    [authorities],
+  );
 
   const nameOptions = useMemo(
     () =>
@@ -59,27 +68,38 @@ const AssignAttributeForm: FC<Props> = (props) => {
   }, []);
 
   const onFinish = useCallback(
-    (values: FormValues) => {
-      const params = `${values.authority}/attr/${values.name}/value/${values.value}`;
+    async (values: FormValues) => {
+      const data = `${values.authority}/attr/${values.name}/value/${values.value}`;
 
-      updateEntitlement({
+      await updateEntitlement({
         method: Method.PUT,
-        path: `/entitlement/v1/entity/${props.entityId}/attribute`,
-        data: [params],
-      }).then(() => {
-        toast.success("Updated");
-      });
+        path: `/entitlement/v1/entity/${entityId}/attribute`,
+        data: [data],
+      })
+        .then(() => {
+          toast.success("Entitlement updated!");
+          onAssignAttribute();
+        })
+
+        .catch(() => {
+          toast.error("Could not update entitlement");
+        });
     },
-    [props.entityId, updateEntitlement],
+    [entityId, onAssignAttribute, updateEntitlement],
   );
+
+  const handleAuthorityChange = async (namespace: string) => {
+    await getAttrs(namespace);
+  };
 
   return (
     <Form form={form} layout="inline" size="middle" onFinish={onFinish}>
       <Item label="Authority Namespace">
         <AutoComplete
           defaultActiveFirstOption
-          disabled
           name="authority"
+          onSelect={handleAuthorityChange}
+          options={authoritiesOptions}
           placeholder="Authority..."
           style={{ width: 200 }}
         />
@@ -105,7 +125,7 @@ const AssignAttributeForm: FC<Props> = (props) => {
       </Item>
 
       <Item>
-        <Button type="primary" htmlType="submit">
+        <Button type="primary" htmlType="submit" loading={loading}>
           Submit
         </Button>
       </Item>

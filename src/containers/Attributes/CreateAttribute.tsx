@@ -1,15 +1,14 @@
-import { FC, memo, useState, useMemo, Fragment } from "react";
-import { Card, Form, Input, Button, Typography, Select } from "antd";
-import { MinusCircleOutlined, PlusCircleOutlined } from "@ant-design/icons";
+import { FC, memo, useCallback } from "react";
+import { Affix, Card, Collapse, Typography } from "antd";
 import { toast } from "react-toastify";
 
-import { ATTRIBUTE_RULE_TYPES } from "../../constants/attributeRules";
 import { useLazyFetch } from "../../hooks/useFetch";
 import { Attribute } from "../../types/attributes";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
+import { CreateAttributeForm, CreateAuthorityForm } from "./components";
 
-const { Item, List } = Form;
+const { Panel } = Collapse;
 
 type Props = {
   authorityNamespace: string;
@@ -28,30 +27,28 @@ const CreateAttribute: FC<Props> = (props) => {
   const [createAuthority] = useLazyFetch(entityClient);
   const [createAttributes] = useLazyFetch(entityClient);
 
-  const stateOptions = useMemo(
-    () => ATTRIBUTE_RULE_TYPES.map(([value, label]) => ({ value, label })),
-    [],
-  );
-
-  const handleCreateAuthority = (values: CreateAuthorityValues) => {
-    createAuthority<string[]>({
-      method: Method.POST,
-      path: `/attributes/v1/authorityNamespace`,
-      params: {
+  const handleCreateAuthority = useCallback(
+    (values: CreateAuthorityValues) => {
+      createAuthority<string[]>({
+        method: Method.POST,
+        path: `/attributes/v1/authorityNamespace`,
         params: {
-          request_authority_namespace: values.request_authority_namespace,
+          params: {
+            request_authority_namespace: values.request_authority_namespace,
+          },
         },
-      },
-    })
-      .then((response) => {
-        const [lastItem] = response.data.slice(-1);
-        toast.success("Authority was created");
-        onAddNamespace(lastItem);
       })
-      .catch(() => {
-        toast.error("Authority was not created");
-      });
-  };
+        .then((response) => {
+          const [lastItem] = response.data.slice(-1);
+          toast.success("Authority was created");
+          onAddNamespace(lastItem);
+        })
+        .catch(() => {
+          toast.error("Authority was not created");
+        });
+    },
+    [createAuthority, onAddNamespace],
+  );
 
   const handleCreateAttribute = (values: CreateAttributeValues) => {
     createAttributes<Attribute>({
@@ -69,98 +66,29 @@ const CreateAttribute: FC<Props> = (props) => {
   };
 
   return (
-    <>
-      <Card title={<Typography.Title level={2}>New</Typography.Title>}>
-        <Card.Grid>
-          <Typography.Title level={3}>Authority</Typography.Title>
-
-          <Form onFinish={handleCreateAuthority}>
-            <Item
-              name="request_authority_namespace"
-              label="Create Namespace"
-              rules={[{ required: true }]}
-            >
-              <Input />
-            </Item>
-
-            <Item>
-              <Button type="primary" htmlType="submit">
-                Submit
-              </Button>
-            </Item>
-          </Form>
-        </Card.Grid>
-
-        <Card.Grid>
-          <Typography.Title level={3}>
-            Attribute for
-            <Typography.Text italic> {authorityNamespace}</Typography.Text>
-          </Typography.Title>
-
-          <Form
-            onFinish={handleCreateAttribute}
-            initialValues={{ order: [undefined] }}
+    <Affix offsetBottom={1}>
+      <div>
+        <Collapse>
+          <Panel
+            header={<Typography.Title level={2}>New</Typography.Title>}
+            key="1"
           >
-            <Item name="name" label="Name" rules={[{ required: true }]}>
-              <Input />
-            </Item>
+            <Card>
+              <Card.Grid>
+                <CreateAuthorityForm onFinish={handleCreateAuthority} />
+              </Card.Grid>
 
-            <Item name="rule" label="Rule" rules={[{ required: true }]}>
-              <Select options={stateOptions} />
-            </Item>
-
-            <Item
-              name="state"
-              label="State"
-              rules={[{ required: true }]}
-              initialValue="published"
-              hidden
-            >
-              <Input />
-            </Item>
-
-            <List name="order">
-              {(fields, { add, remove }) => {
-                const lastIndex = fields.length - 1;
-
-                return fields.map((field, index) => {
-                  const isLast = lastIndex === index;
-
-                  return (
-                    <Item required label="Order" key={field.key}>
-                      <Item {...field} noStyle>
-                        <Input style={{ width: "calc(100% - 32px)" }} />
-                      </Item>
-
-                      <Item noStyle>
-                        {isLast ? (
-                          <Button
-                            //! Had to use like this because https://github.com/ant-design/ant-design/issues/24698
-                            onClick={() => add()}
-                            icon={<PlusCircleOutlined />}
-                          />
-                        ) : (
-                          <Button
-                            onClick={() => remove(field.name)}
-                            icon={<MinusCircleOutlined />}
-                          />
-                        )}
-                      </Item>
-                    </Item>
-                  );
-                });
-              }}
-            </List>
-
-            <Item>
-              <Button type="primary" htmlType="submit">
-                Submit
-              </Button>
-            </Item>
-          </Form>
-        </Card.Grid>
-      </Card>
-    </>
+              <Card.Grid>
+                <CreateAttributeForm
+                  onFinish={handleCreateAttribute}
+                  authorityNamespace={authorityNamespace}
+                />
+              </Card.Grid>
+            </Card>
+          </Panel>
+        </Collapse>
+      </div>
+    </Affix>
   );
 };
 

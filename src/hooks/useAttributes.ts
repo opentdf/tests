@@ -22,7 +22,7 @@ export const useAttributes = () => {
 
 export const useAttrs = (namespace: string) => {
   const [attrs, setAttrs] = useState<Attribute[]>([]);
-  const [getAttrs, { data }] = useLazyFetch<Attribute[]>(entityClient);
+  const [getAttrs, { data, loading }] = useLazyFetch<Attribute[]>(entityClient);
 
   const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: `/attributes/v1/attrName`, data: { namespace } }), []);
 
@@ -40,5 +40,5 @@ export const useAttrs = (namespace: string) => {
     getAttrs(buildConfig(namespace));
   }, [namespace]);
 
-  return { attrs, getAttrs: (namespace: string) => getAttrs(buildConfig(namespace)) };
+  return { attrs, getAttrs: (namespace: string) => getAttrs(buildConfig(namespace)), loading };
 };

@@ -1,5 +1,6 @@
 import { FC, useCallback, useMemo, useState } from "react";
 import { List, Table, Divider } from "antd";
+import { toast } from "react-toastify";
 
 import { Attribute } from "../../types/attributes";
 import { EntityAttribute } from "../../types/entitlements";
@@ -49,17 +50,21 @@ const AttributeListItem: FC<Props> = (props) => {
   );
 
   const handleOrderClick = useCallback(
-    (attribute: Attribute, orderItem: string) => {
+    async (attribute: Attribute, orderItem: string) => {
       const { authorityNamespace, name } = attribute;
 
       const path = encodeURIComponent(
         `${authorityNamespace}/attr/${name}/value/${orderItem}`,
       );
 
-      getAttrEntities({
-        method: Method.GET,
-        path: `/entitlement/v1/attribute/${path}/entity/`,
-      });
+      try {
+        await getAttrEntities({
+          method: Method.GET,
+          path: `/entitlement/v1/attribute/${path}/entity/`,
+        });
+      } catch (error) {
+        toast.error("Could not get entities");
+      }
 
       setActiveTab(orderItem);
       setActiveOrderList(attribute.order);
@@ -75,8 +80,8 @@ const AttributeListItem: FC<Props> = (props) => {
     [attr, handleOrderClick],
   );
 
-  const handleSaveClick = useCallback(() => {
-    const params = {
+  const handleSaveClick = useCallback(async () => {
+    const data = {
       authorityNamespace: activeAuthority,
       name: activeAttribute?.name,
       order: activeOrderList,
@@ -84,11 +89,17 @@ const AttributeListItem: FC<Props> = (props) => {
       state: activeAttribute?.state,
     };
 
-    updateRules({
-      method: Method.PUT,
-      path: `/attributes/v1/attr`,
-      params,
-    });
+    try {
+      await updateRules({
+        method: Method.PUT,
+        path: `/attributes/v1/attr`,
+        data,
+      });
+
+      toast.success("Rule was updated!");
+    } catch (error) {
+      toast.error("Could not update rules!");
+    }
   }, [
     activeAttribute,
     activeAuthority,

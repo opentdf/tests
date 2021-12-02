@@ -1,25 +1,14 @@
 import { AxiosResponse } from "axios";
-import { useEffect, useState } from "react";
-import { useFetch } from "../../../hooks";
+import { useMemo } from "react";
 import { Config, useLazyFetch } from "../../../hooks/useFetch";
 import { entityClient } from "../../../service";
-import { EntityAttribute } from "../../../types/entitlements";
-import { Method } from "../../../types/enums";
+import { EntityAttribute } from '../../../types/entitlements';
 
-export const useEntitlements = (entityId: string) => {
-  const [entityAttributes, setEntityAttributes] = useState<EntityAttribute[]>([]);
+export const useEntitlements = () => {
+  const [makeRequest, { data, loading }] = useLazyFetch<EntityAttribute[]>(entityClient);
 
-  const [data] = useFetch<EntityAttribute[]>(entityClient, { method: Method.GET, path: `/entitlement/v1/entity/${entityId}/attribute` });
-
-
-  useEffect(() => {
-    if (data) {
-      setEntityAttributes(data);
-    }
-
-  }, [data]);
-
-  return { entityAttributes };
+  const result = useMemo(() => ({ getEntitlements: makeRequest, data, loading }), [data, loading, makeRequest]);
+  return result;
 };
 
 export const useUpdateEntitlement = (): [(config: Config) => Promise<AxiosResponse<any, any>>] => {
