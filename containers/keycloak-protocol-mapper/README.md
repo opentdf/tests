@@ -35,7 +35,7 @@ and interact with a KAS instance.
 
 From here you can run `deploy-keycloak-minikube.sh` to deploy all the charts to your minikube cluster:
 
-1. Clone [the etheria repo](https://github.com/virtru/etheria) alongside this repo (`keycloak-poc` and `etheria` should be in the same containing directory)
+1. Clone [the etheria repo](https://github.com/opentdf/backend) alongside this repo (`keycloak-poc` and `etheria` should be in the same containing directory)
 1. run `deploy-keycloak-minikube.sh`
 
     1. This will use an upstream Helm chart to install Keycloak in HA mode w/Postgres, with our preconfigured KC image.

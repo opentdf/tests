@@ -91,7 +91,7 @@ maxUnavailable: 1
 
 endpoints:
   easHost: https://eas.NAMESPACE.svc.cluster.local/
-  # TODO replace this with a template var instead of a hardcode when Keycloak charts are merged into Etheria.
+  # TODO replace this with a template var instead of a hardcode when Keycloak charts are merged into opentdf/backend.
   oidcPubkeyEndpoint: http://keycloak-http:80
 
 livenessProbe:

@@ -79,11 +79,11 @@ If all three methods fail, an error is logged.
 
 Once a configuration item is loaded the first time, it is saved in a runtime cache in the EAS instance.
 
-When deployed, environment variables are normally set using `docker-compose.yml` or other methods appropriate to the deployment environment. See the [Etheria README](../README.md)
+When deployed, environment variables are normally set using `docker-compose.yml` or other methods appropriate to the deployment environment. See the [root README](../README.md)
 
 ### Required
 
-See the [Etheria README](../README.md) for instructions on generating keys for EAS and KAS. Keys are required for EAS to operate. Each of the following environment variables must contain a path to the corresponding key:
+See the [root README](../README.md) for instructions on generating keys for EAS and KAS. Keys are required for EAS to operate. Each of the following environment variables must contain a path to the corresponding key:
 
 - EAS_CERTIFICATE
   - PEM data for EAS

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]: https://github.com/virtru/etheria/compare/master...HEAD
+## [Unreleased]: https://github.com/opentdf/backendd/compare/master...HEAD
 
 - PLAT-1417
   - Add 30 seconds of leeway to jwt token expiry, customizable with variable

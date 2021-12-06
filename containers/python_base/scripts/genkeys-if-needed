@@ -7,7 +7,7 @@
 : "${KAS_UID:=909}"
 : "${CLIENT_UID:=1909}"
 
-ETHERIA_HOSTNAME=${ETHERIA_HOSTNAME:="etheria.local"}
+BACKEND_SERVICES_HOSTNAME=${BACKEND_SERVICES_HOSTNAME:="etheria.local"}
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "$TOOLS_DIR"/../ >/dev/null && pwd)"
@@ -28,7 +28,7 @@ else
   mkdir -p certs
   ENV_FILE="$(pwd)/certs/tmp-$(date "+%Y-%m-%d-%H.%M.%S").env"
   echo >"$ENV_FILE"
-  if scripts/genkey-reverse-proxy --env-file "$ENV_FILE" "$ETHERIA_HOSTNAME" &&
+  if scripts/genkey-reverse-proxy --env-file "$ENV_FILE" "$BACKEND_SERVICES_HOSTNAME" &&
     scripts/genkey-apps --env-file "$ENV_FILE" --easuid "$EAS_UID" --kasuid "$KAS_UID" &&
     scripts/genkey-client --uid "$CLIENT_UID" --subj /CN=Alice_1234 --file-basename Alice_1234 &&
     scripts/genkey-client --uid "$CLIENT_UID" --subj /CN=Charlie_1234 --file-basename Charlie_1234 &&

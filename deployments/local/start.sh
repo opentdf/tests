@@ -16,7 +16,7 @@ e() {
   exit $rval
 }
 
-: "${ETHERIA_TAG:="virtrulocal"}"
+: "${SERVICE_IMAGE_TAG:="virtrulocal"}"
 LOAD_IMAGES=1
 LOAD_SECRETS=1
 START_CLUSTER=1
@@ -77,11 +77,11 @@ maybe_load() {
 }
 
 if [[ $LOAD_IMAGES ]]; then
-  monolog INFO "Caching locally-built development Etheria images in dev cluster"
+  monolog INFO "Caching locally-built development opentdf/backend images in dev cluster"
   # Cache locally-built `latest` images, bypassing registry.
   # If this fails, try running 'docker-compose build' in the repo root
   for s in entity-attribute-service key-access-service entitlements-service storage-service attributes-service; do
-    maybe_load virtru/tdf-$s:${ETHERIA_TAG}
+    maybe_load virtru/tdf-$s:${SERVICE_IMAGE_TAG}
   done
 else
   monolog DEBUG "Skipping loading of locally built service images"
@@ -112,14 +112,14 @@ fi
 if [[ $USE_KEYCLOAK ]]; then
   monolog INFO "Caching locally-built development opentdf Keycloak in dev cluster"
   for s in claim-test-webservice keycloak keycloak-bootstrap; do
-    maybe_load virtru/tdf-$s:${ETHERIA_TAG}
+    maybe_load virtru/tdf-$s:${SERVICE_IMAGE_TAG}
   done
 
   monolog INFO --- "Installing Virtru-ified Keycloak"
   if [[ $RUN_OFFLINE ]]; then
-    helm upgrade --install keycloak "${CHART_ROOT}"/keycloak-15.0.1.tgz -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${ETHERIA_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
+    helm upgrade --install keycloak "${CHART_ROOT}"/keycloak-15.0.1.tgz -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
   else
-    helm upgrade --install keycloak --repo https://codecentric.github.io/helm-charts keycloak -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${ETHERIA_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
+    helm upgrade --install keycloak --repo https://codecentric.github.io/helm-charts keycloak -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
   fi
   monolog INFO "Waiting until Keycloak server is ready"
 
@@ -131,7 +131,7 @@ fi
 if [[ $INIT_POSTGRES ]]; then
   monolog INFO --- "Installing Postgresql for opentdf backend"
   if [[ $RUN_OFFLINE ]]; then
-    helm upgrade --install postgresql "${CHART_ROOT}"/postgresql-10.12.2.tgz -f "${DEPLOYMENT_DIR}/values-postgresql-tdf.yaml" --set image.tag=${ETHERIA_TAG:-offline} || e "Unable to helm upgrade postgresql"
+    helm upgrade --install postgresql "${CHART_ROOT}"/postgresql-10.12.2.tgz -f "${DEPLOYMENT_DIR}/values-postgresql-tdf.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-offline} || e "Unable to helm upgrade postgresql"
   else
     helm upgrade --install postgresql --repo https://charts.bitnami.com/bitnami postgresql -f "${DEPLOYMENT_DIR}/values-postgresql-tdf.yaml" || e "Unable to helm upgrade postgresql"
   fi

@@ -90,7 +90,7 @@ for third in kind postgresql; do
   fi
 done
 
-export ETHERIA_TAG="${suffix}"
+export SERVICE_IMAGE_TAG="${suffix}"
 if ! export/deployment/start.sh --offline; then
   monolog ERROR "offline services failed to install"
   exit 1

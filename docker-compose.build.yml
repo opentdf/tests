@@ -22,7 +22,7 @@ services:
         - PY_VERSION=${PY_VERSION:-3.9}
       context: ./containers/eas
       dockerfile: Dockerfile
-    image: virtru/tdf-entity-attribute-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-entity-attribute-service:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   kas:
     build:
@@ -30,7 +30,7 @@ services:
         - PY_VERSION=${PY_VERSION:-3.9}
       context: ./containers/kas
       dockerfile: Dockerfile
-    image: virtru/tdf-key-access-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-key-access-service:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   attribute_provider:
     build:
@@ -38,7 +38,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-claim-test-webservice:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-claim-test-webservice:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   keycloak:
     build:
@@ -50,7 +50,7 @@ services:
         - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-15.0.2}
       dockerfile: Dockerfile
     # INTENTIONALLY tying this version to upstream KC image version
-    image: virtru/tdf-keycloak:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-keycloak:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   keycloak-bootstrap:
     build:
@@ -58,7 +58,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-keycloak-bootstrap:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-keycloak-bootstrap:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   attributes:
     build:
@@ -66,7 +66,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-attributes-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-attributes-service:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   entitlements:
     build:
@@ -74,7 +74,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-entitlements-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-entitlements-service:${SERVICE_IMAGE_TAG:-virtrulocal}
 
   remote_payload:
     build:
@@ -82,4 +82,4 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: virtru/tdf-storage-service:${ETHERIA_TAG:-virtrulocal}
+    image: virtru/tdf-storage-service:${SERVICE_IMAGE_TAG:-virtrulocal}

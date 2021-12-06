@@ -22,9 +22,9 @@ mkdir -p build/export
 today="$(date +%Y-%m-%d)"
 digest="$(git rev-parse --short HEAD)"
 suffix="${today}-${digest}"
-export ETHERIA_TAG="${suffix}"
+export SERVICE_IMAGE_TAG="${suffix}"
 
-echo "${ETHERIA_TAG}" > build/export/BUNDLE_TAG
+echo "${SERVICE_IMAGE_TAG}" > build/export/BUNDLE_TAG
 
 
 # EXPORT SERVICES SOURCE AS ZIP FILE
@@ -34,16 +34,16 @@ if ! git archive --format=zip --prefix=opentdf-backend "--output=build/export/op
   exit 1
 fi
 
-monolog TRACE "Building all containers with tag [${ETHERIA_TAG}]"
+monolog TRACE "Building all containers with tag [${SERVICE_IMAGE_TAG}]"
 if ! make all-containers; then
   monolog ERROR "Failed to build containers"
   exit 1
 fi
 
-monolog TRACE "Building abacus container with tag [${ETHERIA_TAG}]"
+monolog TRACE "Building abacus container with tag [${SERVICE_IMAGE_TAG}]"
 if ! docker build \
         --target server \
-        --tag "virtru/tdf-abacus-web:${ETHERIA_TAG}" \
+        --tag "virtru/tdf-abacus-web:${SERVICE_IMAGE_TAG}" \
         --build-arg abacusBaseUrl=/abacus \
         --build-arg abacusAssetPrefix=/abacus \
         --build-arg easApiUrl=https://etheria.local/eas \
@@ -55,7 +55,7 @@ fi
 
 to_save=()
 for x in entity-attribute-service key-access-service abacus-web claim-test-webservice keycloak keycloak attributes-service entitlements-service storage-service; do
-  to_save+=( "virtru/tdf-${x}:${ETHERIA_TAG}" )
+  to_save+=( "virtru/tdf-${x}:${SERVICE_IMAGE_TAG}" )
 done
 
 monolog TRACE "Save docker images as [build/export/opentdf-service-images-${suffix}.tar] from [${to_save[*]}]"
@@ -129,7 +129,7 @@ if ! rsync -lmr --safe-links --executability --force deployments/local/* build/e
   exit 1
 fi
 
-if ! sed -i '' "s/:virtrulocal/:$ETHERIA_TAG/" "build/export/deployment/values-all-in-one.yaml"; then
+if ! sed -i '' "s/:virtrulocal/:$SERVICE_IMAGE_TAG/" "build/export/deployment/values-all-in-one.yaml"; then
   monolog ERROR "Unable to change deployment image tags"
   exit 1
 fi

@@ -14,7 +14,7 @@ setup(
     description="TDF3 AA proxy for Accounts",
     long_description=LONG_DESCRIPTION,
     keywords="TDF",
-    url="https://github.com/virtru/etheria",
+    url="https://github.com/opentdf/backend",
     license="UNLICENSED",
     platforms="Ubuntu",
     packages=find_packages(exclude=["ez_setup", "examples", "tests"]),

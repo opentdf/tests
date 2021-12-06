@@ -11,9 +11,9 @@ setuptools.setup(
     description="Web service delivering claims object to an IdP",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/virtru/etheria",
+    url="https://github.com/opentdf/backend",
     project_urls={
-        "Bug Tracker": "https://github.com/virtru/etheria/issues",
+        "Bug Tracker": "https://github.com/opentdf/backend/issues",
     },
     classifiers=[
         "Programming Language :: Python :: 3",

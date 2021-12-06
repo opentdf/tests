@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]: https://github.com/virtru/tdf3-aa/compare/master...HEAD
 
-PLAT-453, make pki work with front end sdk: ([#50](https://github.com/virtru/etheria/pull/50)): _minor_
+PLAT-453, make pki work with front end sdk: ([#50](https://github.com/opentdf/backend/pull/50)): _minor_
 
 - NGINX_HOST should be local.virtru.com (its our convention for local host)
 - userId shouldnt be required, otherwise its inconsistent to accounts "defacto reference" implementation

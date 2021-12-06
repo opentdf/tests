@@ -4,7 +4,7 @@ set -euo pipefail
 ETERNIA_PATH="../../../../eternia"
 RUNNER_REPO="virtru/eternia-kuttl-runner"
 
-[ -d $ETERNIA_PATH ] && echo "\nFound eternia repo" || printf "\nIn order to build this test runner, you need a copy of the Eternia git repo cloned next to your Etheria top-level folder"
+[ -d $ETERNIA_PATH ] && echo "\nFound eternia repo" || printf "\nIn order to build this test runner, you need a copy of the Eternia git repo cloned next to your backend top-level folder"
 
 pushd ../../../../eternia
 

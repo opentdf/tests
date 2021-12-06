@@ -67,7 +67,7 @@ $ kubectl create secret docker-registry regcred \
      kubectl --namespace default port-forward deployment/kas 8000
      ```
   * At this point you should be able to access the Keycloak admin portal at `http://localhost:8080`
-  * The default admin username/password should be defined in https://github.com/virtru-corp/etheria/blob/main/charts/keycloak/values.yaml
+  * The default admin username/password should be defined in https://github.com/opentdf/backend/blob/main/charts/keycloak/values.yaml
 
 ## Uninstalling Keycloak et al
 

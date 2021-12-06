@@ -11,7 +11,7 @@ aws eks update-kubeconfig --region us-west-2 --name k8s-mgmt
 # For more info see: https://docs.github.com/en/actions/reference/environment-variables
     argo submit -n argo-events ./.argo/publish/pr-workflow.yaml \
         -p ciCommitSha="$GITHUB_SHA" \
-        -p gitRepoName=etheria \
+        -p gitRepoName=opentdf-backend \
         -p branch="${GITHUB_HEAD_REF#refs/*/}" \
         -p gitRepoUrl="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
         --wait \

@@ -62,7 +62,7 @@ tilt down
 
 ### PR builds
 
-When you open a Github PR, an Argo job will run which will publish all Etheria images and Helm charts to Virtru's image/chart
+When you open a Github PR, an Argo job will run which will publish all openTDF Backend Service images and Helm charts to Virtru's image/chart
 repos under the git shortSha of your PR branch.
 
 To add the Virtru Helm chart repo (one time step)
@@ -81,7 +81,7 @@ For instance, if Argo generated a shortSha of `b616e2f`, to fetch the KAS chart 
 
 `helm pull virtru/kas --version 0.4.4-rc-$(git rev-parse --short HEAD) --devel`
 
-Or, if you wanted to install all of Etheria, you could fetch the top-level chart (which will have all subcharts and images updated to the current PR branch's SHA)
+Or, if you wanted to install all of the openTDF services, you could fetch the top-level chart (which will have all subcharts and images updated to the current PR branch's SHA)
 
 `helm pull virtru/etheria --version 0.1.1-rc-b616e2f --devel`
 
@@ -253,14 +253,14 @@ scripts/monotest kas_core
 ### Cluster tests
 
 Our E2E cluster tests use [kuttl](https://kuttl.dev/docs/cli.html#setup-the-kuttl-kubectl-plugin), and you can run them
-against an instance of Etheria deployed to a cluster (local minikube, or remote)
+against an instance of these services deployed to a cluster (local minikube, or remote)
 
-1. Install Etheria to a Kubernetes cluster (using the quickstart method above, for example)
+1. Install these services to a Kubernetes cluster (using the quickstart method above, for example)
 1. Install [kuttl](https://kuttl.dev/docs/cli.html#setup-the-kuttl-kubectl-plugin)
 1. From the repo root, run `kubectl kuttl test tests/cluster`
 1. For advanced usage and more details, refer to [tests/cluster/README.md](tests/cluster/README.md)
 
-> Etheria's CI is not currently cluster based, and so the kuttl tests are not being run via CI - this should be corrected when the CI is moved to K8S/Argo.
+> The backend's CI is not currently cluster based, and so the kuttl tests are not being run via CI - this should be corrected when the CI is moved to K8S/Argo.
 
 
 #### Security test
@@ -311,7 +311,7 @@ kas        | Some log here
 
 ## Deployment
 
-TBD - Etheria deployment will be done to Kubernetes clusters via Helm chart.
+TBD - The backend deployment will be done to Kubernetes clusters via Helm chart.
 TBD - for an idea of what's involved in this, including what Helm charts are required, [check the local install script](~/Source/etheria/deployments/local/start.sh)
 
 ### (Deprecated) Docker Compose Deployment
@@ -362,7 +362,7 @@ the above methods work, and is included here for completeness.
 To assist in quickly starting use the `./scripts/genkeys-if-needed` to build all the keys. The hostname will be assigned `etheria.local`.
 Make sure to add `127.0.0.1           etheria.local` to your `/etc/hosts` or `c:\windows\system32\drivers\etc\hosts`.
 
-Additionally you can set a custom hostname `ETHERIA_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the docker-compose files.
+Additionally you can set a custom hostname `BACKEND_SERVICES_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the docker-compose files.
 
 _If you need to customization please see the Advanced Usage guide alongside the Genkey Tools._
 

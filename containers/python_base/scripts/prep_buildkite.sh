@@ -17,7 +17,7 @@ monolog TRACE "prep_buildkite: [$0 $*]"
 # shellcheck disable=SC1091
 . "${TOOLS_DIR}/lib-local.sh"
 
-monolog INFO "********** Running Etheria quickstart [${*}] in [$BUILDKITE_BUILD_CHECKOUT_PATH]"
+monolog INFO "********** Running opentdf/backend quickstart [${*}] in [$BUILDKITE_BUILD_CHECKOUT_PATH]"
 cd "$BUILDKITE_BUILD_CHECKOUT_PATH" || {
   monolog ERROR "Not in buildkite"
   exit 1

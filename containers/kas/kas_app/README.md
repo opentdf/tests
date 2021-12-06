@@ -7,7 +7,7 @@ This repo constructs a plain vanilla KAS with attribute config examples.
 Create a local copy of this repository in the directory of your choice and navigate into it:
 
 ```bash
-$ git clone https://github.com/virtru/etheria.git
+$ git clone https://github.com/opentdf/backend.git
 $ cd etheria/kas_app
 $ scripts/start
 ```
@@ -66,7 +66,7 @@ The port number is optional; it defaults to 4000 if it is not specified.
 
 ### Required
 
-See the [Etheria README](../../README.md) for instructions on generating keys for EAS and KAS. Keys are required for EAS to operate. Each of the following environment variables must contain a path to the corresponding key:
+See the [root README](../../README.md) for instructions on generating keys for EAS and KAS. Keys are required for EAS to operate. Each of the following environment variables must contain a path to the corresponding key:
 
 - KAS_PRIVATE_KEY
   - Private key (SECRET) KAS uses to certify responses.

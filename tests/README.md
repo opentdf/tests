@@ -9,7 +9,7 @@ KAS/Keycloak/etc instances running in the same cluster.
 
 #### To run the tests
 1. Clone this repo (`etheria`)
-1. Follow `Minikube Quckstart` in `etheria/README-keycloak-idp.md` to deploy Etheria Helm charts into Minikube
+1. Follow `Minikube Quckstart` in `../README-keycloak-idp.md` to deploy Helm charts into Minikube
 1. [Install KUTTL](https://kuttl.dev/docs/cli.html)
 1. `cd etheria/tests/cluster`
 1. `kubectl kuttl test`

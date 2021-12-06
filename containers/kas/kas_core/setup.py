@@ -11,7 +11,7 @@ setup(
     description="TDF3 KAS Core - Generic KAS for building TDF3 systems",
     author="Virtru",
     author_email="support@virtru.com",
-    url="https://github.com/virtru/etheria.git",
+    url="https://github.com/opentdf/backend.git",
     license="UNLICENSED",
     packages=find_packages(),
     package_data={

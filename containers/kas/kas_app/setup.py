@@ -16,7 +16,7 @@ setup(
     keywords="TDF",
     author="Virtru Corporation",
     author_email="support@virtru.com",
-    url="https://github.com/virtru/etheria",
+    url="https://github.com/opentdf/backend",
     license="ISC",
     platforms="Ubuntu",
     packages=find_packages(exclude=["scripts"]),
