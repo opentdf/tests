@@ -1,0 +1,12 @@
+:root {
+  --default-color: rgba(0, 0, 0, 0.45);
+  --active-color: rgba(0, 0, 0, 0.85);
+}
+
+.nav-link {
+  color: var(--default-color) !important;
+}
+
+.nav-link--active {
+  color: var(--active-color) !important;
+}

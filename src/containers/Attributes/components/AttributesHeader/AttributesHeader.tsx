@@ -1,5 +1,7 @@
-import { Button, Cascader, Popover, Typography } from "antd";
-import FilterForm from "./FilterForm";
+import { Button, Cascader, Popover, Typography, Pagination } from "antd";
+import FilterForm from "../FilterForm";
+
+import styles from "./AttributesHeader.module.css";
 
 enum ORDER {
   ASC = "ASC",
@@ -11,7 +13,7 @@ const ORDER_MAP = new Map([
   [ORDER.DES, "+"],
 ]);
 
-const SORT_OPTIONS = ["id", "entity_id", "namespace", "name", "value"];
+const SORT_OPTIONS = ["entity_id", "name", "namespace", "value"];
 
 const CASCADER_OPTIONS = [
   {
@@ -31,24 +33,21 @@ const AttributesHeader = () => {
     console.log(`value`, value);
   };
 
+  const handlePaginationChange = (pageNumber: number) => {
+    console.log(`pageNumber`, pageNumber);
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        flex: "1 0 auto",
-      }}
-    >
+    <div className={styles.attributeHeader}>
       <Typography.Title level={2}>Attribute Rules</Typography.Title>
 
-      <div
-        style={{
-          flexBasis: "50%",
-          justifyContent: "flex-end",
-          display: "flex",
-        }}
-      >
+      <div className={styles.cascaderContainer}>
+        <Pagination
+          onChange={handlePaginationChange}
+          total={50}
+          showTotal={(total) => `Total ${total} items`}
+        />
+
         <Cascader
           multiple
           onChange={onChange}

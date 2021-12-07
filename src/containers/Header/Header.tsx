@@ -10,7 +10,6 @@ import "./Header.css";
 
 const Header = () => {
   const { pathname } = useLocation();
-  const [, firstLevel] = pathname.split("/");
 
   const routes = useMemo(
     () => [
@@ -37,7 +36,7 @@ const Header = () => {
         activeClassName="nav-link--active"
         to={route.path}
         isActive={(match) => {
-          if (match) {
+          if (match && match.isExact) {
             return true;
           }
 
@@ -68,8 +67,8 @@ const Header = () => {
       ],
     ]);
 
-    return descriptionMap.get(firstLevel);
-  }, [firstLevel]);
+    return descriptionMap.get(pathname);
+  }, [pathname]);
 
   const pageTitle = useMemo(() => {
     const titleMap = new Map([
@@ -77,8 +76,8 @@ const Header = () => {
       ["attributes", "Attributes"],
     ]);
 
-    return titleMap.get(firstLevel) || "Abacus";
-  }, [firstLevel]);
+    return titleMap.get(pathname) || "Abacus";
+  }, [pathname]);
 
   const extra = useMemo(() => [<UserStatus />], []);
 

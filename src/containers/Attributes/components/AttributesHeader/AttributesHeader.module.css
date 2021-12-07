@@ -1,0 +1,13 @@
+.attributeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 1 0 auto;
+}
+
+.cascaderContainer {
+  display: flex;
+  flex-basis: 50%;
+  justify-content: flex-end;
+  gap: 10px;
+}

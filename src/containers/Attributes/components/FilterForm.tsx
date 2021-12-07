@@ -15,25 +15,19 @@ const FilterForm = () => {
       layout="vertical"
     >
       <Row gutter={[8, 8]}>
-        <Col span={12}>
-          <Item label="ID" name="id">
+        <Col>
+          <Item label="Rule" name="rule">
             <Input />
           </Item>
         </Col>
         <Col>
-          <Item label="Rule" name="rule">
+          <Item label="Name" name="name">
             <Input />
           </Item>
         </Col>
       </Row>
 
       <Row gutter={[8, 8]}>
-        <Col>
-          <Item label="Name" name="name">
-            <Input />
-          </Item>
-        </Col>
-
         <Col>
           <Item label="Order" name="values">
             <Input />

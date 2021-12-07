@@ -1,4 +1,3 @@
-export { default as Attribute } from './Attribute';
 export { default as Attributes } from './Attributes';
 export { default as Client } from './Client';
 export { default as Entitlements } from './Entitlements';

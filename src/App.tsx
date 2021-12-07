@@ -10,7 +10,6 @@ import { routes } from "./routes";
 import "./App.css";
 
 const Entitlements = lazy(() => import("./containers/Entitlements"));
-const Attribute = lazy(() => import("./containers/Attribute"));
 const Attributes = lazy(() => import("./containers/Attributes"));
 const Client = lazy(() => import("./containers/Client"));
 const Home = lazy(() => import("./containers/Home"));
@@ -51,9 +50,6 @@ export default function App() {
               <Route path={routes.ATTRIBUTES} exact>
                 <Attributes />
               </Route>
-              <Route path={routes.ATTRIBUTE} exact>
-                <Attribute />
-              </Route>
               <Route path={routes.HOME} exact>
                 <Home />
               </Route>
@@ -63,7 +59,7 @@ export default function App() {
             </Switch>
           </Suspense>
         </Layout.Content>
-        <ToastContainer position={"bottom-center"} />
+        <ToastContainer position="bottom-center" />
       </Layout>
     </Router>
   );
