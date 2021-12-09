@@ -1,6 +1,7 @@
 -- Attributes used in the Trusted Data Format
 
-CREATE DATABASE tdf_database;
+-- run externally, then connect to this database
+-- CREATE DATABASE tdf_database;
 
 -- performs nocase checks
 CREATE COLLATION IF NOT EXISTS NOCASE

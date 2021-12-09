@@ -1,36 +1,39 @@
-Generic single-database configuration.
+## Development
 
-## Database
-
-### Administration
-
-#### Roles
+### Start database
 
 ```shell
-psql \
-   --host=database-tdf.ca6wrojgujgp.us-west-2.rds.amazonaws.com \
-   --port=5432 \
-   --username=postgres \
-   --dbname=postgres
-
-#   6acbki6M
+mkdir -p data
+docker run \
+    --detach \
+    --publish 0.0.0.0:5432:5432 \
+    --volume data:/var/lib/postgresql/data \
+    --env POSTGRES_PASSWORD=myPostgresPassword \
+    --env PGDATA=/var/lib/postgresql/data/pgdata \
+    postgres
 ```
 
+### Initialize schema
+
 ```shell
 psql \
-   --host=pauls-imac.local \
+   --host=localhost \
    --port=5432 \
    --username=postgres \
-   --dbname=tdf_database
+   --dbname=postgres \
+   --command='create database tdf_database;'
+#   myPostgresPassword
 
-#   mysecretpassword
+psql \
+   --host=localhost \
+   --port=5432 \
+   --username=postgres \
+   --dbname=tdf_database \
+   --file=containers/migration/schema.sql
+
+#   myPostgresPassword
 ```
 
 ### Migration
 
 https://github.com/JeffGradyAtVirtru/python-example
-
-### Reference
-
-https://docs.amazonaws.cn/en_us/AmazonRDS/latest/UserGuide/Appendix.PostgreSQL.CommonDBATasks.html
-

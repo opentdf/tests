@@ -3,22 +3,28 @@ import logging
 import os
 import sys
 from enum import Enum
-from http.client import NO_CONTENT
+from http.client import NO_CONTENT, BAD_REQUEST, ACCEPTED
 from pprint import pprint
-from typing import Optional, List
+from typing import Optional, List, Annotated
 
 import databases as databases
 import sqlalchemy
 from asyncpg import UniqueViolationError
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import Depends
+from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi import Security, status
+from fastapi.openapi.utils import get_openapi
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.security import OpenIdConnect
 from keycloak import KeycloakOpenID
-from pydantic import HttpUrl, ValidationError
+from pydantic import BaseSettings, Field
 from pydantic import Json
+from pydantic import ValidationError, AnyUrl
 from pydantic.main import BaseModel
-from pydantic import BaseSettings
+from sqlalchemy import and_
+from sqlalchemy.orm import Session, sessionmaker, declarative_base
+
+from containers.python_base import Pagination, get_query
 
 logging.basicConfig(
     stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", logging.CRITICAL)
@@ -33,12 +39,18 @@ swagger_ui_init_oauth = {
     "scopes": ["email"],
 }
 
+
 class Settings(BaseSettings):
     openapi_url: str = "/openapi.json"
 
+
 settings = Settings()
 
-app = FastAPI(debug=True, swagger_ui_init_oauth=swagger_ui_init_oauth, openapi_url=settings.openapi_url)
+app = FastAPI(
+    debug=True,
+    swagger_ui_init_oauth=swagger_ui_init_oauth,
+    openapi_url=settings.openapi_url,
+)
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
     # format f"{keycloak_url}realms/{realm}/protocol/openid-connect/auth"
@@ -98,7 +110,7 @@ database = databases.Database(DATABASE_URL)
 
 metadata = sqlalchemy.MetaData(schema=POSTGRES_SCHEMA)
 
-table_authority_namespace = sqlalchemy.Table(
+table_authority = sqlalchemy.Table(
     "attribute_namespace",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
@@ -121,11 +133,23 @@ table_attribute = sqlalchemy.Table(
     sqlalchemy.Column("values", sqlalchemy.ARRAY(sqlalchemy.TEXT)),
 )
 
-engine = sqlalchemy.create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = sqlalchemy.create_engine(DATABASE_URL)
+dbase = sessionmaker(bind=engine)
 
 
+def get_db() -> Session:
+    session = dbase()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+class AttributeSchema(declarative_base()):
+    __table__ = table_attribute
+
+
+# middleware
 @app.middleware("http")
 async def add_response_headers(request: Request, call_next):
     response = await call_next(request)
@@ -133,29 +157,79 @@ async def add_response_headers(request: Request, call_next):
     return response
 
 
-class AttributeRuleType(str, Enum):
+# OpenAPI
+tags_metadata = [
+    {
+        "name": "Attributes",
+        "description": "Operations to view data attributes."
+        + "TDF protocol supports ABAC (Attribute Based Access Control)."
+        + "This allows TDF protocol to implement policy driven and highly scalable access control mechanism.",
+    },
+    {
+        "name": "Authorities",
+        "description": "Operations to view and create attribute authorities.",
+    },
+    {
+        "name": "Attributes Definitions",
+        "description": "Operations to manage the rules and metadata of attributes. ",
+    },
+]
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="openTDF",
+        version="1.0.0",
+        license_info={"name": "MIT"},
+        routes=app.routes,
+        tags=tags_metadata,
+    )
+    openapi_schema["info"]["x-logo"] = {
+        "url": "https://inxmad4bw31barrx17wec71c-wpengine.netdna-ssl.com/wp-content/uploads/2018/12/o_efa1e48d0db5ebc8-4.png"
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
+class RuleEnum(str, Enum):
     hierarchy = "hierarchy"
     anyOf = "anyOf"
     allOf = "allOf"
 
 
-class Attribute(BaseModel):
-    authorityNamespace: HttpUrl
-    name: str
-    order: list
-    rule: AttributeRuleType
-    state: Optional[str]
+class AuthorityUrl(AnyUrl):
+    max_length = 2000
+
+
+class AttributeDefinition(BaseModel):
+    authority: AuthorityUrl
+    name: Annotated[str, Field(max_length=2000)]
+    order: Annotated[
+        List[str],
+        Field(max_length=2000),
+    ]
+    rule: RuleEnum
+    state: Annotated[Optional[str], Field(max_length=64)]
 
     class Config:
         schema_extra = {
             "example": {
-                "authorityNamespace": "https://eas.local",
+                "authority": "https://opentdf.io",
                 "name": "IntellectualProperty",
                 "rule": "hierarchy",
                 "state": "published",
                 "order": ["TradeSecret", "Proprietary", "BusinessSensitive", "Open"],
             }
         }
+
+
+class AuthorityDefinition(BaseModel):
+    authority: AuthorityUrl
 
 
 @app.on_event("startup")
@@ -189,60 +263,135 @@ oidc_scheme = OpenIdConnect(
 )
 
 
-@app.get("/v1/attr", response_model=List[Attribute], dependencies=[Depends(get_auth)])
-@app.post(
-    "/v1/attrName", response_model=List[Attribute], dependencies=[Depends(get_auth)]
-)
-async def read_attribute():
+#
+# Attributes
+#
+
+
+@app.get("/attributes", tags=["Attributes"], response_model=List[AnyUrl])
+async def read_attributes(
+    authority: Optional[AuthorityUrl] = None,
+    name: Optional[str] = None,
+    order: Optional[str] = None,
+    sort: Optional[str] = Query(
+        "",
+        regex="^(-*((id)|(state)|(rule)|(name)|(values)),)*-*((id)|(state)|(rule)|(name)|(values))$",
+    ),
+    db: Session = Depends(get_db),
+    pager: Pagination = Depends(Pagination),
+):
+    filter_args = {}
+    if authority:
+        # TODO lookup authority (namespace_id) and get id
+        filter_args["namespace_id"] = authority
+    if name:
+        filter_args["name"] = name
+    if order:
+        filter_args["values"] = order
+
+    sort_args = sort.split(",") if sort else []
+
+    query = get_query(AttributeSchema, db, filter_args, sort_args)
+    logger.debug(query)
+    results = query.all()
     error = None
-    query = table_attribute.select()
-    result = await database.fetch_all(query)
-    attributes: List[Attribute] = []
-    for row in result:
-        try:
-            # lookup
-            query = table_authority_namespace.select().where(
-                table_authority_namespace.c.id
-                == row.get(table_attribute.c.namespace_id)
-            )
-            result_namespace = await database.fetch_one(query)
-            if result_namespace:
-                namespace = result_namespace.get(table_authority_namespace.c.name)
-            else:
-                error = ValidationError
-                break
-            attributes.append(
-                Attribute(
-                    authorityNamespace=namespace,
-                    name=row.get(table_attribute.c.name),
-                    order=row.get("values"),
-                    rule=row.get(table_attribute.c.rule),
-                    state="published",  # row.get(table_attribute.c.state),
+    #  TODO map authority (namespace_id) to id
+    authorities = await read_authorities()
+    attributes: List[AnyUrl] = []
+    for row in results:
+        for value in row.values:
+            try:
+                attributes.append(
+                    AnyUrl(
+                        scheme=f"{authorities[row.namespace_id - 1]}",
+                        host=f"{authorities[row.namespace_id - 1]}",
+                        url=f"{authorities[row.namespace_id - 1]}/attr/{row.name}/value/{value}",
+                    )
                 )
-            )
-        except ValidationError as e:
-            logging.error(e)
-            error = e
+            except ValidationError as e:
+                logging.error(e)
+                error = e
     if error and not attributes:
         raise HTTPException(
             status_code=422, detail=f"attribute error: {str(error)}"
         ) from error
-    return attributes
+    return pager.paginate(attributes)
 
 
-@app.post("/v1/attr", response_model=Attribute, dependencies=[Depends(get_auth)])
-async def create_attribute(request: Attribute):
+#
+# Attributes Definitions
+#
+
+
+@app.get(
+    "/definitions/attributes",
+    tags=["Attributes Definitions"],
+    response_model=List[AttributeDefinition],
+    dependencies=[Depends(get_auth)],
+)
+async def read_attributes_definitions(
+    authority: Optional[AuthorityUrl] = None,
+    name: Optional[str] = None,
+    order: Optional[str] = None,
+    sort: Optional[str] = Query(
+        "",
+        regex="^(-*((id)|(state)|(rule)|(name)|(values)),)*-*((id)|(state)|(rule)|(name)|(values))$",
+    ),
+    db: Session = Depends(get_db),
+    pager: Pagination = Depends(Pagination),
+):
+    filter_args = {}
+    if authority:
+        # TODO lookup authority (namespace_id) and get id
+        filter_args["namespace_id"] = authority
+    if name:
+        filter_args["name"] = name
+    if order:
+        filter_args["values"] = order
+
+    sort_args = sort.split(",") if sort else []
+
+    query = get_query(AttributeSchema, db, filter_args, sort_args)
+    logger.debug(query)
+    results = query.all()
+    #  TODO map authority (namespace_id) to id
+    authorities = await read_authorities()
+    attributes: List[AttributeDefinition] = []
+    for row in results:
+        try:
+            attributes.append(
+                AttributeDefinition(
+                    authority=authorities[row.namespace_id - 1],
+                    name=row.name,
+                    order=row.values,
+                    rule=row.rule,
+                    state=row.state,
+                )
+            )
+        except ValidationError as e:
+            logging.error(e)
+    return pager.paginate(attributes)
+
+
+@app.post(
+    "/definitions/attributes",
+    tags=["Attributes Definitions"],
+    response_model=AttributeDefinition,
+    dependencies=[Depends(get_auth)],
+)
+async def create_attributes_definitions(request: AttributeDefinition):
     # lookup
-    query = table_authority_namespace.select().where(
-        table_authority_namespace.c.name == request.authorityNamespace
-    )
+    query = table_authority.select().where(table_authority.c.name == request.authority)
     result = await database.fetch_one(query)
     if result:
-        if request.rule == AttributeRuleType.hierarchy:
-            isDuplicated = checkDuplicates(request.order)
-            if isDuplicated:
-                raise HTTPException(status_code=400, detail="Duplicated items when Rule is Hierarchy")
-        namespace_id = result.get(table_authority_namespace.c.id)
+        if request.rule == RuleEnum.hierarchy:
+            is_duplicated = check_duplicates(request.order)
+            if is_duplicated:
+                raise HTTPException(
+                    status_code=BAD_REQUEST,
+                    detail="Duplicated items when Rule is Hierarchy",
+                )
+        namespace_id = result.get(table_authority.c.id)
         # insert
         query = table_attribute.insert().values(
             name=request.name,
@@ -254,18 +403,23 @@ async def create_attribute(request: Attribute):
         try:
             await database.execute(query)
         except UniqueViolationError as e:
-            raise HTTPException(status_code=400, detail=f"duplicate: {str(e)}") from e
+            raise HTTPException(
+                status_code=BAD_REQUEST, detail=f"duplicate: {str(e)}"
+            ) from e
     else:
-        raise HTTPException(status_code=400, detail=f"namespace not found")
+        raise HTTPException(status_code=BAD_REQUEST, detail=f"namespace not found")
     return request
 
 
-@app.put("/v1/attr", response_model=Attribute, dependencies=[Depends(get_auth)])
-async def update_attribute(request: Attribute):
+@app.put(
+    "/definitions/attributes",
+    tags=["Attributes Definitions"],
+    response_model=AttributeDefinition,
+    dependencies=[Depends(get_auth)],
+)
+async def update_attribute_definition(request: AttributeDefinition):
     # update
-    query = table_authority_namespace.select().where(
-        table_authority_namespace.c.name == request.authorityNamespace
-    )
+    query = table_authority.select().where(table_authority.c.name == request.authority)
     result = await database.fetch_one(query)
 
     if not result:
@@ -273,10 +427,13 @@ async def update_attribute(request: Attribute):
             status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
         )
 
-    if request.rule == AttributeRuleType.hierarchy:
-        isDuplicated = checkDuplicates(request.order)
-        if isDuplicated:
-            raise HTTPException(status_code=400, detail="Duplicated items when Rule is Hierarchy")
+    if request.rule == RuleEnum.hierarchy:
+        is_duplicated = check_duplicates(request.order)
+        if is_duplicated:
+            raise HTTPException(
+                status_code=BAD_REQUEST,
+                detail="Duplicated items when Rule is Hierarchy",
+            )
 
     query = table_attribute.update().values(
         values=request.order,
@@ -286,39 +443,62 @@ async def update_attribute(request: Attribute):
     return request
 
 
-@app.get("/v1/authorityNamespace", dependencies=[Depends(get_auth)])
-async def read_authority_namespace():
-    query = (
-        table_authority_namespace.select()
-    )  # .where(entity_attribute.c.userid == request.userId)
+@app.delete(
+    "/definitions/attributes",
+    tags=["Attributes Definitions"],
+    status_code=ACCEPTED,
+    dependencies=[Depends(get_auth)],
+)
+async def delete_attributes_definitions(request: AttributeDefinition):
+    statement = table_attribute.delete().where(
+        and_(
+            table_attribute.c.authority == request.authority,
+            table_attribute.c.name == request.name,
+            table_attribute.c.rule == request.rule,
+            table_attribute.c.order == request.order,
+        )
+    )
+    await database.execute(statement)
+    return {}
+
+
+#
+# Authorities
+#
+
+
+@app.get("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
+async def read_authorities():
+    query = table_authority.select()
     result = await database.fetch_all(query)
-    namespaces = []
+    authorities = []
     for row in result:
-        namespaces.append(f"{row.get(table_authority_namespace.c.name)}")
-    return namespaces
+        authorities.append(f"{row.get(table_authority.c.name)}")
+    return authorities
 
 
-@app.post("/v1/authorityNamespace", dependencies=[Depends(get_auth)])
-async def create_authority_namespace(request_authority_namespace: HttpUrl):
+@app.post("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
+async def create_authorities(request: AuthorityDefinition):
     # insert
-    query = table_authority_namespace.insert().values(name=request_authority_namespace)
+    query = table_authority.insert().values(name=request.authority)
     try:
         await database.execute(query)
     except UniqueViolationError as e:
-        raise HTTPException(status_code=400, detail=f"duplicate: {str(e)}") from e
+        raise HTTPException(
+            status_code=BAD_REQUEST, detail=f"duplicate: {str(e)}"
+        ) from e
     # select all
-    query = (
-        table_authority_namespace.select()
-    )  # .where(entity_attribute.c.userid == request.userId)
+    query = table_authority.select()
     result = await database.fetch_all(query)
     namespaces = []
     for row in result:
-        namespaces.append(f"{row.get(table_authority_namespace.c.name)}")
+        namespaces.append(f"{row.get(table_authority.c.name)}")
     return namespaces
 
-#Check for duplicated items when rule is Hierarchy
-def checkDuplicates(hierachyList):
-    if len(hierachyList) == len(set(hierachyList)):
+
+# Check for duplicated items when rule is Hierarchy
+def check_duplicates(hierarchy_list):
+    if len(hierarchy_list) == len(set(hierarchy_list)):
         return False
     else:
         return True

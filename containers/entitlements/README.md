@@ -1,27 +1,49 @@
+# Entitlements
 
-## development
+## Development
 
-### environment variables
+### Start database
+
+see [migration](../migration/README.md)
+
+### Configure server
 ```shell
 export POSTGRES_HOST=localhost
 export POSTGRES_USER=tdf_entitlement_manager
 export POSTGRES_PASSWORD=myPostgresPassword
 export POSTGRES_DATABASE=tdf_database
 export POSTGRES_SCHEMA=tdf_entitlement
+export SERVER_LOG_LEVEL=DEBUG
 ```
 
-### server
+### Start Server
 ```shell
-pipenv install
-pipenv run uvicorn main:app --reload --port 4030
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install --requirement containers/entitlements/requirements.txt
+python3 -m uvicorn containers.entitlements.main:app --reload --port 4030
 ```
 
-### OpenAPI
+### Extract OpenAPI
 ```shell
-pipenv run python3 main.py > openapi.json
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install --requirement containers/entitlements/requirements.txt
+cd containers
+python3 -m entitlements > openapi.json
 ```
 
-## kubernetes
+### View API
+
+#### Swagger UI
+http://localhost:4030/docs
+
+#### ReDoc
+http://localhost:4030/redoc
+
+## Kubernetes
 
 ### build image
 ```shell
@@ -39,9 +61,3 @@ kubectl create secret generic entitlements-secrets --from-literal=POSTGRES_PASSW
 # from project root
 helm upgrade --install entitlements ./charts/entitlements --debug
 ```
-
-## design
-TODO add assumptions of how it is used
-
-TODO link to sqlalchemy for horizontal sharding
-https://arxiv.org/pdf/1406.2294.pdf
