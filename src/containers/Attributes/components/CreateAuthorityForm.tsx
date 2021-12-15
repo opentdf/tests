@@ -1,14 +1,11 @@
 import { FC, memo } from "react";
 import { Typography, Form, Input, Button } from "antd";
+import {AuthorityDefinition} from "../../../types/attributes";
 
 const { Item } = Form;
 const { Title } = Typography;
 
-type CreateAuthorityValues = {
-  request_authority_namespace: string;
-};
-
-type Props = { onFinish: (values: CreateAuthorityValues) => void };
+type Props = { onFinish: (values: AuthorityDefinition) => void };
 
 const CreateAuthorityForm: FC<Props> = (props) => {
   return (
@@ -17,7 +14,7 @@ const CreateAuthorityForm: FC<Props> = (props) => {
 
       <Form onFinish={props.onFinish}>
         <Item
-          name="request_authority_namespace"
+          name="authority"
           label="Create Namespace"
           rules={[{ required: true }]}
         >

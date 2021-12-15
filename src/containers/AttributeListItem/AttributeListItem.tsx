@@ -2,7 +2,7 @@ import { FC, useCallback, useMemo, useState } from "react";
 import { List, Table, Divider } from "antd";
 import { toast } from "react-toastify";
 
-import { AttributeDefinition } from "../../types/attributes";
+import {AttributeDefinition, AuthorityDefinition} from "../../types/attributes";
 import { Entitlements } from "../../types/entitlements";
 import { Method } from "../../types/enums";
 
@@ -13,7 +13,7 @@ import { TABLE_COLUMNS } from "./constants";
 import { AttributeRule, OrderCard, OrderList } from "../../components";
 
 type Props = {
-  activeAuthority: string;
+  activeAuthority: AuthorityDefinition;
   attr: AttributeDefinition;
 };
 

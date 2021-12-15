@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = 'https://etheria-pflynn.com/keycloak/auth/';
+// @ts-ignore
+const serverData = window.SERVER_DATA;
+const baseURL = serverData.authority;
 
 const keyCloakClient = () => {
   const instance = axios.create({

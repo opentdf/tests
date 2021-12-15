@@ -8,6 +8,7 @@ import CreateAttribute from "./CreateAttribute";
 import { AttributesHeader, AttributesListHeader } from "./components";
 
 import "./Attributes.css";
+import {AuthorityDefinition} from "../../types/attributes";
 
 const Attributes = () => {
   const authorities = useAuthorities();
@@ -26,7 +27,7 @@ const Attributes = () => {
     setStateAuthorities(authorities);
   }, [authorities]);
 
-  const handleAuthorityChange = useCallback((value: string) => {
+  const handleAuthorityChange = useCallback((value: AuthorityDefinition) => {
     setActiveAuthority(value);
   }, []);
 

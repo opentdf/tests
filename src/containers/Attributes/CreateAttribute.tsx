@@ -3,7 +3,7 @@ import { Affix, Card, Collapse, Typography } from "antd";
 import { toast } from "react-toastify";
 
 import { useLazyFetch } from "../../hooks/useFetch";
-import { AttributeDefinition } from "../../types/attributes";
+import {AttributeDefinition, AuthorityDefinition} from "../../types/attributes";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
 import { CreateAttributeForm, CreateAuthorityForm } from "./components";
@@ -13,15 +13,12 @@ const serverData = window.SERVER_DATA;
 const { Panel } = Collapse;
 
 type Props = {
-  authorityNamespace: string;
+  authorityNamespace: AuthorityDefinition;
   onAddAttr: (attr: AttributeDefinition) => void;
   onAddNamespace: (namespace: string) => void;
 };
 
 type CreateAttributeValues = Omit<AttributeDefinition, "authority">;
-type CreateAuthorityValues = {
-  request_authority_namespace: string;
-};
 
 const CreateAttribute: FC<Props> = (props) => {
   const { authorityNamespace, onAddAttr, onAddNamespace } = props;
@@ -30,15 +27,11 @@ const CreateAttribute: FC<Props> = (props) => {
   const [createAttributes] = useLazyFetch(entityClient);
 
   const handleCreateAuthority = useCallback(
-    (values: CreateAuthorityValues) => {
+    (value: AuthorityDefinition) => {
       createAuthority<string[]>({
         method: Method.POST,
         path: serverData.attributes + `/authorities`,
-        params: {
-          params: {
-            request_authority_namespace: values.request_authority_namespace,
-          },
-        },
+        data: value,
       })
         .then((response) => {
           const [lastItem] = response.data.slice(-1);
@@ -83,7 +76,7 @@ const CreateAttribute: FC<Props> = (props) => {
               <Card.Grid>
                 <CreateAttributeForm
                   onFinish={handleCreateAttribute}
-                  authorityNamespace={authorityNamespace}
+                  authorityNamespace={authorityNamespace?.authority}
                 />
               </Card.Grid>
             </Card>

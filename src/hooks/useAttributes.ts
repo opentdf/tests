@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { entityClient } from "../service";
-import { AttributeDefinition } from "../types/attributes";
+import {AttributeDefinition, AuthorityDefinition} from "../types/attributes";
 import { Entitlements } from "../types/entitlements";
 import { Method } from "../types/enums";
 import { useLazyFetch } from './useFetch';
@@ -23,11 +23,10 @@ export const useAttributes = () => {
   return { attributes, getAttrs: (entityId: string) => getAttrs(buildConfig(entityId)) };
 };
 
-export const useAttrs = (namespace: string) => {
+export const useAttrs = (authorityDefinition: AuthorityDefinition) => {
   const [attrs, setAttrs] = useState<AttributeDefinition[]>([]);
   const [getAttrs, { data, loading }] = useLazyFetch<AttributeDefinition[]>(entityClient);
-
-  const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: serverData.attributes + `/attributes`, data: { namespace } }), []);
+  const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: serverData.attributes + `/attributes`, data: authorityDefinition }), [authorityDefinition]);
 
   useEffect(() => {
     if (data) {
@@ -36,12 +35,12 @@ export const useAttrs = (namespace: string) => {
   }, [data]);
 
   useEffect(() => {
-    if (!namespace) {
+    if (!authorityDefinition) {
       return;
     }
 
-    getAttrs(buildConfig(namespace));
-  }, [namespace]);
+    getAttrs(buildConfig(authorityDefinition));
+  }, [authorityDefinition,buildConfig,getAttrs]);
 
   return { attrs, getAttrs: (namespace: string) => getAttrs(buildConfig(namespace)), loading };
 };

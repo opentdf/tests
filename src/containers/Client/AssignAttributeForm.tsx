@@ -101,7 +101,6 @@ const AssignAttributeForm: FC<Props> = (props) => {
           defaultActiveFirstOption
           name="authority"
           onSelect={handleAuthorityChange}
-          options={authoritiesOptions}
           placeholder="Authority..."
           style={{ width: 200 }}
         />

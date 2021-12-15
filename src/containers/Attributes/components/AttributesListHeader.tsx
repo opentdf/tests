@@ -1,13 +1,13 @@
 import { Form, Radio, RadioChangeEvent } from "antd";
 import { FC, memo, useEffect } from "react";
-
+import { AuthorityDefinition} from "../../../types/attributes";
 const { useForm, Item } = Form;
 
 type Props = {
-  onAuthorityChange: (authority: string) => void;
-  authority: string;
-  activeAuthority: string;
-  authorities: string[];
+  onAuthorityChange: (authority: AuthorityDefinition) => void;
+  authority: AuthorityDefinition;
+  activeAuthority: AuthorityDefinition;
+  authorities: AuthorityDefinition[];
 };
 
 const AttributesHeader: FC<Props> = (props) => {
@@ -21,21 +21,21 @@ const AttributesHeader: FC<Props> = (props) => {
   }, [authority, form, onAuthorityChange]);
 
   const handleOnChange = (e: RadioChangeEvent) => {
-    onAuthorityChange(e.target.value);
+    const authorityDefinition: AuthorityDefinition = {'authority': e.target.value};
+    onAuthorityChange(authorityDefinition);
   };
 
   return (
     <Form
       form={form}
       initialValues={{
-        authorities: authority,
+        authorities: [authority],
       }}
     >
       <Item name="authorities">
         <Radio.Group
           buttonStyle="solid"
           onChange={handleOnChange}
-          options={authorities}
           optionType="button"
           value={activeAuthority}
         />
