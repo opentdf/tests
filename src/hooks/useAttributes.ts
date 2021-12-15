@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { entityClient } from "../service";
-import { Attribute } from "../types/attributes";
-import { EntityAttribute } from "../types/entitlements";
+import { AttributeDefinition } from "../types/attributes";
+import { Entitlements } from "../types/entitlements";
 import { Method } from "../types/enums";
 import { useLazyFetch } from './useFetch';
 
-export const useAttributes = () => {
-  const [attributes, setAttributes] = useState<EntityAttribute[]>([]);
-  const [getAttrs, { data }] = useLazyFetch<EntityAttribute[]>(entityClient);
+// @ts-ignore
+const serverData = window.SERVER_DATA;
 
-  const buildConfig = useCallback((entityId) => ({ method: Method.GET, path: `/attributes/v1/attrName/${entityId}/attribute` }), []);
+export const useAttributes = () => {
+  const [attributes, setAttributes] = useState<Entitlements[]>([]);
+  const [getAttrs, { data }] = useLazyFetch<Entitlements[]>(entityClient);
+
+  const buildConfig = useCallback((entityId) => ({ method: Method.GET, path: serverData.attributes + `/attributes` }), []);
 
   useEffect(() => {
     if (data) {
@@ -21,10 +24,10 @@ export const useAttributes = () => {
 };
 
 export const useAttrs = (namespace: string) => {
-  const [attrs, setAttrs] = useState<Attribute[]>([]);
-  const [getAttrs, { data, loading }] = useLazyFetch<Attribute[]>(entityClient);
+  const [attrs, setAttrs] = useState<AttributeDefinition[]>([]);
+  const [getAttrs, { data, loading }] = useLazyFetch<AttributeDefinition[]>(entityClient);
 
-  const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: `/attributes/v1/attrName`, data: { namespace } }), []);
+  const buildConfig = useCallback((namespace) => ({ method: Method.POST, path: serverData.attributes + `/attributes`, data: { namespace } }), []);
 
   useEffect(() => {
     if (data) {

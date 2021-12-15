@@ -2,8 +2,8 @@ import { FC, useCallback, useMemo, useState } from "react";
 import { List, Table, Divider } from "antd";
 import { toast } from "react-toastify";
 
-import { Attribute } from "../../types/attributes";
-import { EntityAttribute } from "../../types/entitlements";
+import { AttributeDefinition } from "../../types/attributes";
+import { Entitlements } from "../../types/entitlements";
 import { Method } from "../../types/enums";
 
 import { entityClient } from "../../service";
@@ -14,8 +14,11 @@ import { AttributeRule, OrderCard, OrderList } from "../../components";
 
 type Props = {
   activeAuthority: string;
-  attr: Attribute;
+  attr: AttributeDefinition;
 };
+
+// @ts-ignore
+const serverData = window.SERVER_DATA;
 
 const AttributeListItem: FC<Props> = (props) => {
   const { attr, activeAuthority } = props;
@@ -24,11 +27,11 @@ const AttributeListItem: FC<Props> = (props) => {
   const [activeTabKey, setActiveTab] = useState("");
   const [isEdit, setIsEdit] = useState(false);
   const [activeOrderList, setActiveOrderList] = useState<string[]>([]);
-  const [activeAttribute, setActiveAttribute] = useState<Attribute>();
+  const [activeAttribute, setActiveAttribute] = useState<AttributeDefinition>();
   const [activeRule, setActiveRule] = useState();
 
   const [getAttrEntities, { loading, data: entities }] =
-    useLazyFetch<EntityAttribute[]>(entityClient);
+    useLazyFetch<Entitlements[]>(entityClient);
   const [updateRules] = useLazyFetch(entityClient);
 
   const toggleEdit = useCallback(() => {
@@ -36,13 +39,13 @@ const AttributeListItem: FC<Props> = (props) => {
   }, [isEdit]);
 
   const activeOrderItem = useMemo(
-    () => order.find((orderItem) => orderItem === activeTabKey),
+    () => order.find((orderItem: string) => orderItem === activeTabKey),
     [activeTabKey, order],
   );
 
   const tabList = useMemo(
     () =>
-      order.map((orderItem) => ({
+      order.map((orderItem: string) => ({
         key: orderItem,
         tab: orderItem,
       })),
@@ -50,17 +53,17 @@ const AttributeListItem: FC<Props> = (props) => {
   );
 
   const handleOrderClick = useCallback(
-    async (attribute: Attribute, orderItem: string) => {
-      const { authorityNamespace, name } = attribute;
+    async (attribute: AttributeDefinition, orderItem: string) => {
+      const { authority, name } = attribute;
 
       const path = encodeURIComponent(
-        `${authorityNamespace}/attr/${name}/value/${orderItem}`,
+        `${authority}/attr/${name}/value/${orderItem}`,
       );
 
       try {
         await getAttrEntities({
           method: Method.GET,
-          path: `/entitlement/v1/attribute/${path}/entity/`,
+          path: serverData.attributes + `/entitlements/${path}`,
         });
       } catch (error) {
         toast.error("Could not get entities");
@@ -92,7 +95,7 @@ const AttributeListItem: FC<Props> = (props) => {
     try {
       await updateRules({
         method: Method.PUT,
-        path: `/attributes/v1/attr`,
+        path: serverData.attributes + `/attributes`,
         data,
       });
 

@@ -7,6 +7,8 @@ import { AutoComplete } from "../../components";
 import { Method } from "../../types/enums";
 import { toast } from "react-toastify";
 
+// @ts-ignore
+const serverData = window.SERVER_DATA;
 const { Item, useForm } = Form;
 
 type Option = { label: string; value: string };
@@ -55,7 +57,7 @@ const AssignAttributeForm: FC<Props> = (props) => {
       (attribute) => attribute.name === selectedName,
     );
 
-    const options = selectedAttr?.order.map((option) => ({
+    const options = selectedAttr?.order.map((option: string) => ({
       label: option,
       value: option,
     }));
@@ -73,7 +75,7 @@ const AssignAttributeForm: FC<Props> = (props) => {
 
       await updateEntitlement({
         method: Method.PUT,
-        path: `/entitlement/v1/entity/${entityId}/attribute`,
+        path: serverData.attributes + `/entitlements/${entityId}`,
         data: [data],
       })
         .then(() => {

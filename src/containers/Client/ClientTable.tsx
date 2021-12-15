@@ -1,17 +1,18 @@
 import { FC, useMemo } from "react";
 import { Table, Button } from "antd";
-import { EntityAttribute } from "../../types/entitlements";
+import { Entitlements } from "../../types/entitlements";
 
 type Props = {
-  entityAttributes?: EntityAttribute[];
+  entityAttributes?: Entitlements;
   loading: boolean;
-  onDeleteKey: (id: string) => void;
+  onDeleteKey: (id: { [key: string]: string[] }) => void;
 };
 
 const ClientTable: FC<Props> = (props) => {
   const { onDeleteKey, entityAttributes, loading } = props;
 
-  const columns = useMemo(
+    // @ts-ignore
+    const columns = useMemo(
     () => [
       {
         dataIndex: "attribute",
@@ -32,8 +33,8 @@ const ClientTable: FC<Props> = (props) => {
         title: "Action",
         dataIndex: "",
         key: "x",
-        render: (row: EntityAttribute) => (
-          <Button type="link" onClick={() => onDeleteKey(row.attribute)}>
+        render: (row: { [key: string]: string[] }) => (
+          <Button type="link" onClick={() => onDeleteKey(row)}>
             Delete
           </Button>
         ),
@@ -47,7 +48,7 @@ const ClientTable: FC<Props> = (props) => {
       bordered
       className="table"
       columns={columns}
-      dataSource={entityAttributes}
+      // dataSource={entityAttributes}
       pagination={false}
       loading={loading}
     />

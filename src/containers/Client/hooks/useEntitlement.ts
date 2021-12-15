@@ -2,10 +2,10 @@ import { AxiosResponse } from "axios";
 import { useMemo } from "react";
 import { Config, useLazyFetch } from "../../../hooks/useFetch";
 import { entityClient } from "../../../service";
-import { EntityAttribute } from '../../../types/entitlements';
+import { Entitlements } from '../../../types/entitlements';
 
 export const useEntitlements = () => {
-  const [makeRequest, { data, loading }] = useLazyFetch<EntityAttribute[]>(entityClient);
+  const [makeRequest, { data, loading }] = useLazyFetch<Entitlements[]>(entityClient);
 
   const result = useMemo(() => ({ getEntitlements: makeRequest, data, loading }), [data, loading, makeRequest]);
   return result;

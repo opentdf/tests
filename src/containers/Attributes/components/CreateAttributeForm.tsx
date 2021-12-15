@@ -3,11 +3,11 @@ import { Button, Form, Input, Select, Typography } from "antd";
 import { PlusCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 
 import { ATTRIBUTE_RULE_TYPES } from "../../../constants/attributeRules";
-import { Attribute } from "../../../types/attributes";
+import { AttributeDefinition } from "../../../types/attributes";
 
 const { Item, List } = Form;
 
-type CreateAttributeValues = Omit<Attribute, "authorityNamespace">;
+type CreateAttributeValues = Omit<AttributeDefinition, "authority">;
 
 type Props = {
   authorityNamespace: string;

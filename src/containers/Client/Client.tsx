@@ -9,6 +9,8 @@ import { useClient } from "../../hooks";
 import { Method } from "../../types/enums";
 
 //TODO: switch to correct entityID. Should be 'browsertest' instead of `id`
+// @ts-ignore
+const serverData = window.SERVER_DATA;
 
 const Client = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +27,7 @@ const Client = () => {
   useEffect(() => {
     const config = {
       method: Method.GET,
-      path: `/entitlement/v1/entity/${entityId}/attribute`,
+      path: serverData.attributes + `/entitlements/${entityId}`,
     };
 
     getEntitlements(config);
@@ -38,9 +40,7 @@ const Client = () => {
   const onDeleteKey = useCallback(
     (attribute) => {
       entityClient.delete(
-        `/entitlement/v1/entity/${entityId}/attribute/${encodeURIComponent(
-          attribute,
-        )}`,
+          serverData.attributes + `/entitlements/${entityId}`, attribute
       );
     },
     [entityId],
@@ -49,12 +49,13 @@ const Client = () => {
   const onAssignAttribute = useCallback(() => {
     const config = {
       method: Method.GET,
-      path: `/entitlement/v1/entity/${entityId}/attribute`,
+      path: serverData.attributes + `/entitlements/${entityId}`,
     };
 
     getEntitlements(config);
   }, [entityId, getEntitlements]);
 
+  // @ts-ignore
   return (
     <section>
       <AssignAttributeForm
@@ -71,7 +72,7 @@ const Client = () => {
 
         <ClientTable
           onDeleteKey={onDeleteKey}
-          entityAttributes={entityAttributes}
+          // entityAttributes={entityAttributes}
           loading={loading}
         />
         <Divider />

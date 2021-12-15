@@ -3,20 +3,22 @@ import { Affix, Card, Collapse, Typography } from "antd";
 import { toast } from "react-toastify";
 
 import { useLazyFetch } from "../../hooks/useFetch";
-import { Attribute } from "../../types/attributes";
+import { AttributeDefinition } from "../../types/attributes";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
 import { CreateAttributeForm, CreateAuthorityForm } from "./components";
 
+// @ts-ignore
+const serverData = window.SERVER_DATA;
 const { Panel } = Collapse;
 
 type Props = {
   authorityNamespace: string;
-  onAddAttr: (attr: Attribute) => void;
+  onAddAttr: (attr: AttributeDefinition) => void;
   onAddNamespace: (namespace: string) => void;
 };
 
-type CreateAttributeValues = Omit<Attribute, "authorityNamespace">;
+type CreateAttributeValues = Omit<AttributeDefinition, "authority">;
 type CreateAuthorityValues = {
   request_authority_namespace: string;
 };
@@ -31,7 +33,7 @@ const CreateAttribute: FC<Props> = (props) => {
     (values: CreateAuthorityValues) => {
       createAuthority<string[]>({
         method: Method.POST,
-        path: `/attributes/v1/authorityNamespace`,
+        path: serverData.attributes + `/authorities`,
         params: {
           params: {
             request_authority_namespace: values.request_authority_namespace,
@@ -51,9 +53,9 @@ const CreateAttribute: FC<Props> = (props) => {
   );
 
   const handleCreateAttribute = (values: CreateAttributeValues) => {
-    createAttributes<Attribute>({
+    createAttributes<AttributeDefinition>({
       method: Method.POST,
-      path: `/attributes/v1/attr`,
+      path: serverData.attributes + `/attributes`,
       data: { ...values, authorityNamespace },
     })
       .then((response) => {

@@ -4,41 +4,38 @@
  */
 
 export interface paths {
-  "/": {
-    get: operations["read_semver__get"];
+  "/attributes": {
+    get: operations["read_attributes_attributes_get"];
   };
-  "/healthz": {
-    get: operations["read_liveness_healthz_get"];
+  "/definitions/attributes": {
+    get: operations["read_attributes_definitions_definitions_attributes_get"];
+    put: operations["update_attribute_definition_definitions_attributes_put"];
+    post: operations["create_attributes_definitions_definitions_attributes_post"];
+    delete: operations["delete_attributes_definitions_definitions_attributes_delete"];
   };
-  "/v1/attr": {
-    get: operations["read_attribute_v1_attr_get"];
-    post: operations["create_attribute_v1_attr_post"];
-  };
-  "/v1/attrName": {
-    post: operations["read_attribute_v1_attrName_post"];
-  };
-  "/v1/authorityNamespace": {
-    get: operations["read_authority_namespace_v1_authorityNamespace_get"];
-    post: operations["create_authority_namespace_v1_authorityNamespace_post"];
+  "/authorities": {
+    get: operations["read_authorities_authorities_get"];
+    post: operations["create_authorities_authorities_post"];
   };
 }
 
 export interface components {
   schemas: {
-    Attribute: {
-      authorityNamespace: string;
+    AttributeDefinition: {
+      authority: string;
       name: string;
       order: string[];
-      rule: components["schemas"]["AttributeRuleType"];
+      rule: components["schemas"]["RuleEnum"];
       state?: string;
     };
-    /** An enumeration. */
-    AttributeRuleType: "hierarchy" | "anyOf" | "allOf";
+    AuthorityDefinition: {
+      authority: string;
+    };
     HTTPValidationError: {
       detail?: components["schemas"]["ValidationError"][];
     };
     /** An enumeration. */
-    ProbeType: "liveness" | "readiness";
+    RuleEnum: "hierarchy" | "anyOf" | "allOf";
     ValidationError: {
       loc: string[];
       msg: string;
@@ -48,25 +45,24 @@ export interface components {
 }
 
 export interface operations {
-  read_semver__get: {
+  read_attributes_attributes_get: {
+    parameters: {
+      query: {
+        authority?: string;
+        name?: string;
+        order?: string;
+        sort?: string;
+        offset?: number;
+        limit?: number;
+      };
+    };
     responses: {
       /** Successful Response */
       200: {
         content: {
-          "application/json": unknown;
+          "application/json": string[];
         };
       };
-    };
-  };
-  read_liveness_healthz_get: {
-    parameters: {
-      query: {
-        probe?: components["schemas"]["ProbeType"];
-      };
-    };
-    responses: {
-      /** Successful Response */
-      204: never;
       /** Validation Error */
       422: {
         content: {
@@ -75,22 +71,38 @@ export interface operations {
       };
     };
   };
-  read_attribute_v1_attr_get: {
+  read_attributes_definitions_definitions_attributes_get: {
+    parameters: {
+      query: {
+        authority?: string;
+        name?: string;
+        order?: string;
+        sort?: string;
+        offset?: number;
+        limit?: number;
+      };
+    };
     responses: {
       /** Successful Response */
       200: {
         content: {
-          "application/json": components["schemas"]["Attribute"][];
+          "application/json": components["schemas"]["AttributeDefinition"][];
+        };
+      };
+      /** Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };
   };
-  create_attribute_v1_attr_post: {
+  update_attribute_definition_definitions_attributes_put: {
     responses: {
       /** Successful Response */
       200: {
         content: {
-          "application/json": components["schemas"]["Attribute"];
+          "application/json": components["schemas"]["AttributeDefinition"];
         };
       };
       /** Validation Error */
@@ -102,21 +114,53 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["Attribute"];
+        "application/json": components["schemas"]["AttributeDefinition"];
       };
     };
   };
-  read_attribute_v1_attrName_post: {
+  create_attributes_definitions_definitions_attributes_post: {
     responses: {
       /** Successful Response */
       200: {
         content: {
-          "application/json": components["schemas"]["Attribute"][];
+          "application/json": components["schemas"]["AttributeDefinition"];
+        };
+      };
+      /** Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AttributeDefinition"];
+      };
+    };
   };
-  read_authority_namespace_v1_authorityNamespace_get: {
+  delete_attributes_definitions_definitions_attributes_delete: {
+    responses: {
+      /** Successful Response */
+      202: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AttributeDefinition"];
+      };
+    };
+  };
+  read_authorities_authorities_get: {
     responses: {
       /** Successful Response */
       200: {
@@ -126,12 +170,7 @@ export interface operations {
       };
     };
   };
-  create_authority_namespace_v1_authorityNamespace_post: {
-    parameters: {
-      query: {
-        request_authority_namespace: string;
-      };
-    };
+  create_authorities_authorities_post: {
     responses: {
       /** Successful Response */
       200: {
@@ -146,7 +185,12 @@ export interface operations {
         };
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AuthorityDefinition"];
+      };
+    };
   };
 }
 
-export interface external { }
+export interface external {}
