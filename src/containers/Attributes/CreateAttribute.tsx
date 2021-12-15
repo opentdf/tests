@@ -48,7 +48,7 @@ const CreateAttribute: FC<Props> = (props) => {
   const handleCreateAttribute = (values: CreateAttributeValues) => {
     createAttributes<AttributeDefinition>({
       method: Method.POST,
-      path: serverData.attributes + `/attributes`,
+      path: serverData.attributes + `/definitions/attributes`,
       data: { ...values, authorityNamespace },
     })
       .then((response) => {
