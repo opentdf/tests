@@ -1,12 +1,11 @@
-# This compose file should only build (and NOT run/stand up) images - there should only be `build` sections included.
-# See *.run.* compose files for running these images
+# This docker compose file should only build (and NOT run/stand up) images - there should only be `build` sections included.
+# This is helpful when building things. See the Makefile for use
 #
 # Note that many of these images depend on `python_base` being built first - since `docker compose` does not enforce
 # build order, you need to run `docker compose build python_base && docker_compose build` to make sure the base image
 # is built before the other images are - the `build_all.sh` script will do this for you.
 version: "3.8"
 services:
-
   python-base:
     image: virtru/tdf-python-base:${PY_VERSION:-3.9}
     build:

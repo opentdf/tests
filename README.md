@@ -85,26 +85,6 @@ Or, if you wanted to install all of the openTDF services, you could fetch the to
 
 `helm pull virtru/etheria --version 0.1.1-rc-b616e2f --devel`
 
-### (Deprecated) Local `docker-compose`
-
-If you don't want to fool with `minikube`, you can still stand everything up using `docker-compose` - this is not recommended
-going forward, but it's an option if you want it.
-
-For this mode, we use docker-compose to compose the EAS and KAS services. Part of this process is putting them behind a reverse proxy.
-During this process you will be generating keys for EAS, KAS, the reverse proxy, Certificate Authority (CA), and optionally client certificate.
-
-_Note: This quick start guide is not intended to guide you on using pre-generated keys. Please see [Production]
-
-```sh
-./scripts/genkeys-if-needed
-. certs/.env
-export {EAS,KAS{,_EC_SECP256R1}}_{CERTIFICATE,PRIVATE_KEY}
-docker compose up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE_KEY,KAS_EC_SECP256R1_CERTIFICATE,KAS_EC_SECP256R1_PRIVATE_KEY --build
-```
-
-> Note: OIDC-enabled deployments do not use the flows described below, or docker-compose - they're purely Helm/Minikube based and exclude deprecated services like EAS.
-> Refer to the [OIDC Readme](README-keycloak-idp.md) for instructions on how to deploy Eternia with Keycloak and OIDC.
-
 ## Installation in Isolated Kubernetes Clusters
 
 If you are working on a kubernetes cluster that does not have access to the Internet,
@@ -268,107 +248,27 @@ against an instance of these services deployed to a cluster (local minikube, or 
 Once a cluster is running, run `security-test/helm-test.sh`
 ### Integration Tests
 
-You can run a complete integration test locally using docker compose with the `docker-compose.ci.yml`, or with the `docker-compose.pki-ci.yml` to use the PKI keys you generated earlier. A helper script is available to run both sets of integration tests, `xtest/scripts/test-in-containers`.
-
-To run a local integration test with the test harness running in
-in the host machine, and not in a container, you may do the following:
-
-```sh
-docker-compose -f docker-compose.yml up --build
-cd xtest
-python3 test/runner.py -o Alice_1234 -s local --sdk sdk/py/oss/cli.sh
-```
-
-To test docker-compose using SDK and Python versions, create a .env
-
-```dotenv
-PY_OSS_VERSION===1.1.1
-PY_SDK_VERSION=3.9
-NODE_VERSION=14
-```
-
-### Performance, and End-to-end Tests
-
-```shell script
-docker-compose --env-file certs/.env --file performance-test/docker-compose.yml up --build --exit-code-from performance-test performance-test
-
-docker-compose --env-file certs/.env --file e2e-test/docker-compose.yml up --build --exit-code-from e2e-test e2e-test
-```
-
-## Logs
-
-In development Docker Compose runs in a attached state so logs can be seen from the terminal.
-
-In a detached state logs can be accessed via [docker-compose logs](https://docs.docker.com/compose/reference/logs/)
-
-Example:
-
-```
-> docker-compose logs kas
-Attaching to kas
-kas        | Some log here
-```
+TK
 
 ## Deployment
 
 TBD - The backend deployment will be done to Kubernetes clusters via Helm chart.
 TBD - for an idea of what's involved in this, including what Helm charts are required, [check the local install script](~/Source/etheria/deployments/local/start.sh)
 
-### (Deprecated) Docker Compose Deployment
 
-With Docker Compose deployment is [made easy with Docker Swarm](https://docs.docker.com/engine/swarm/stack-deploy/).
-
-### (Deprecated) Configuration
-
-Deployment configuration can be done through `docker-compose.yml` via the environment property.
-
-#### Workers
-
-The number of worker processes for handling requests.
-
-A positive integer generally in the 2-4 x \$(NUM_CORES) range. You'll want to vary this a bit to find the best for your particular application's work load.
-
-By default, the value of the WEB_CONCURRENCY environment variable. If it is not defined, the default is 1.
-
-#### Threads
-
-The number of worker threads for handling requests.
-
-Run each worker with the specified number of threads.
-
-A positive integer generally in the 2-4 x \$(NUM_CORES) range. You'll want to vary this a bit to find the best for your particular application's work load.
-
-If it is not defined, the default is 1.
-
-This setting only affects the Gthread worker type.
-
-#### Profiling
-
-https://gist.github.com/michaeltcoelho/c8bc65e5c3dce0f85312349353bf155a
-
-https://docs.python.org/3/using/cmdline.html#environment-variables
-
-### Advanced Manual setup
-
-It's better to use one of the [above methods](#local-quickstart) for setup, but this explains the step by step details of how
-the above methods work, and is included here for completeness.
-
-#### Generate Keys
-
-**WARNING: By generating new certs you will invalidate existing entity objects.**
-
-##### Quick Start
+# Customizing your local development experience
+#### Quick Start
 
 To assist in quickly starting use the `./scripts/genkeys-if-needed` to build all the keys. The hostname will be assigned `etheria.local`.
 Make sure to add `127.0.0.1           etheria.local` to your `/etc/hosts` or `c:\windows\system32\drivers\etc\hosts`.
 
-Additionally you can set a custom hostname `BACKEND_SERVICES_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the docker-compose files.
+Additionally you can set a custom hostname `BACKEND_SERVICES_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the Tiltfile and various kubernetes files or helm chart values.
 
 _If you need to customization please see the Advanced Usage guide alongside the Genkey Tools._
 
 1. Decide what your host name will be for the reverse proxy will be (e.g. example.com)
-2. Generate reverse proxy certs `./scripts/genkey-reverse-proxy $HOSTNAME_OF_REVERSE_PROXY`
-3. Generate EAS & KAS certs `./scripts/genkey-apps`
+2. Generate TLS certs for ingress `./scripts/genkey-reverse-proxy $HOSTNAME_OF_REVERSE_PROXY`
+3. Generate service-level certs `./scripts/genkey-apps`
 4. (Optional) Generate client certificates `./scripts/genkey-client` for PKI support
 
 ##### Genkey Tools
@@ -378,35 +278,3 @@ Each genkey script has a brief help which you can access like
 - `./scripts/genkey-apps --help`
 - `./scripts/genkey-client --help`
 - `./scripts/genkey-reverse-proxy --help`
-
-#### Start Services (non-PKI)
-
-1. Update `docker-compose.yml` to use the reverse-proxy CN you defined above rather than `localhost`
-1. Run:
-
-```sh
-. certs/.env
-export {EAS,KAS{,_EC_SECP256R1}}_{CERTIFICATE,PRIVATE_KEY}
-docker compose up -e EAS_CERTIFICATE,EAS_PRIVATE_KEY,KAS_CERTIFICATE,KAS_PRIVATE_KEY,KAS_EC_SECP256R1_CERTIFICATE,KAS_EC_SECP256R1_PRIVATE_KEY --build
-```
-
-_To learn more about [docker-compose see the manual](https://docs.docker.com/compose/reference/up/)._
-
-#### Start Services in PKI mode
-
-If you need support for PKI you can follow these steps.
-There are a few requirements for starting in PKI mode:
-
-1. Must create reverse proxy certificates with a CA
-2. Must create a client certificate signed with CA
-3. (Optional) Install CA and client certificate to OS keychain (_Please search the internet for instructions_)
-
-Requirements (1) and (2) are described in [generate keys](#generate-keys) above.
-
-`docker-compose -f docker-compose.pki.yml up --build`
-
-## Production
-
-_TBD_
-
-[^1]: https://docs.docker.com/compose/reference/logs/

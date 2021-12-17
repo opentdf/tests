@@ -8,7 +8,7 @@ Create a local copy of this repository in the directory of your choice and navig
 
 ```bash
 $ git clone https://github.com/opentdf/backend.git
-$ cd etheria/kas_app
+$ cd containers/kas_app
 $ scripts/start
 ```
 
@@ -17,8 +17,6 @@ To test, use the `scripts/monotest kas_app` command from the monorepo root.
 ### Run KAS in background
 
 [Docker](https://www.docker.com/get-started) must be installed.
-
-**NOTE: It is suggested to use the docker-compose config in the root of this file via the `up_docker_compose.sh` to spin up all services**
 
 Optionally you can use these steps to start the docker container.
 

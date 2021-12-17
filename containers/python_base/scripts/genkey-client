@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Generate new client certificates signed with CA.
 #
-# These can be used to authenticate with a PKI-enabled EAS in a test environment, as with
-# the `docker-compose.pki.yaml` test environment.
 # Usage: genkey-client [options]
 #
 # Environment Overrie
