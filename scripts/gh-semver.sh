@@ -1,35 +1,56 @@
 #!/usr/bin/env bash
-# Validate that version number is same across all expected files
-
+# Create a pre-release (or release) SemVer for the current file based on its
+# git state and 'target' semver found in its package.
+#
+# Examples:
+# 
+# Main branches build beta builds:
+# ```
+#    package.version = 1.2.3
+#    branch = main
+#    workflow run = 256
+#    workflow id = bad
+#    git SHA = decaf
+#    ----
+#    1.2.3-beta.256+bad.decaf
+# ```
+# 
+# Release branches build rc builds:
+# ```
+#    package.version = 1.2.3
+#    branch = release/1.2.3
+#    workflow run = 256
+#    workflow id = bad
+#    git SHA = decaf
+#    ----
+#    1.2.3-rc.256+bad.decaf
+# ```
+# 
+# Tags go to release:
+# ```
+#    package.version = 1.2.3
+#    tag = v1.2.3
+#    workflow run = 256
+#    git SHA = decaf
+#    ----
+#    1.2.3
+# ```
+#
+# 
 set -euo pipefail
 
-: "${GITHUB_REF:=$(git rev-parse --abbrev-ref HEAD)}"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 
-MMP_VER=$(cd lib && node -p "require('./package.json').version")
-
-PRE_RELEASE_TAG=aleph
-case "${GITHUB_REF}" in
-  main)
-    PRE_RELEASE_TAG=beta
-    ;;
-  release/*)
-    PRE_RELEASE_TAG=rc
-    ;;
-  feature*)
-    PRE_RELEASE_TAG=alpha
-    ;;
-  v*)
-    PRE_RELEASE_TAG=
-    ;;
-esac
+: "${DIST_TAG="$("${SCRIPTS_DIR}"/guess-dist-tag.sh)"}"
+: "${MMP_VER=$(cd lib && node -p "require('./package.json').version")}"
 
 BUILD_META=
 if [[ ${GITHUB_RUN_ID:-} ]]; then
   BUILD_META="+${GITHUB_RUN_ID:-0}.${GITHUB_SHA:0:6}"
 fi
 
-if [[ $PRE_RELEASE_TAG ]]; then
-  echo "${MMP_VER}-${PRE_RELEASE_TAG}.${GITHUB_RUN_NUMBER:-0}${BUILD_META}"
+if [[ ${DIST_TAG} != latest ]]; then
+  echo "${MMP_VER}-${DIST_TAG}.${GITHUB_RUN_NUMBER:-0}${BUILD_META}"
 else
   echo "${MMP_VER}"
 fi
