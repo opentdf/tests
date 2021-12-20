@@ -15,14 +15,6 @@ services:
       context: ./containers/python_base
       dockerfile: Dockerfile
 
-  eas:
-    build:
-      args:
-        - PY_VERSION=${PY_VERSION:-3.9}
-      context: ./containers/eas
-      dockerfile: Dockerfile
-    image: virtru/tdf-entity-attribute-service:${SERVICE_IMAGE_TAG:-virtrulocal}
-
   kas:
     build:
       args:
@@ -31,9 +23,9 @@ services:
       dockerfile: Dockerfile
     image: virtru/tdf-key-access-service:${SERVICE_IMAGE_TAG:-virtrulocal}
 
-  attribute_provider:
+  claims:
     build:
-      context: ./containers/attribute_provider
+      context: ./containers/service_entity_objects
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile

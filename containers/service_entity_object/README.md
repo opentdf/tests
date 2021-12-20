@@ -1,3 +1,16 @@
+# Claims Service
+
+The claims service provides `claims` JSON blobs to an identity provider. We
+currently are using Keycloak as the IdP.
+
+1. Upon successful client authentication via tge IdP, Keycloak, that service
+   runs a plugin to invoke this service.
+2. An instance of this Claims serivce processes the request. It creates a
+   Claims Object appropriate for that client in the current context,
+   and returns it to the IdP/Keycloak.
+3. Our IdP then returns a signed JWT with the Claims Object
+   inside.
+
 
 ## development
 
@@ -21,7 +34,7 @@ export KAS_EC_SECP256R1_CERTIFICATE=""
 ### server
 ```shell
 pipenv install
-pipenv run uvicorn main:app --reload --port 4010
+pipenv run uvicorn main:app --reload --port 5000
 ```
 
 ### OpenAPI

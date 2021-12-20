@@ -1,3 +1,4 @@
+import base64
 import datetime
 import json
 import os
@@ -145,6 +146,16 @@ async def read_liveness(probe: ProbeType = ProbeType.liveness):
         await database.execute("SELECT 1")
 
 
+def parse_pk(raw_pk: str) -> bytes: 
+    # Unfortunately, not all base64 implementations pad base64
+    # strings in the way that Python expects (dependent on the length)
+    # - fortunately, we can easily add the padding ourselves here if
+    # it's needed.
+    # See: https://gist.github.com/perrygeo/ee7c65bb1541ff6ac770
+    clientKey = f"{raw_pk}{'=' * ((4 - len(raw_pk) % 4) % 4)}"
+    return base64.b64decode(clientKey)
+
+
 @app.post("/v1/entity_object", response_model=EntityObject)
 async def create_entity_object(eo_request: EntityObjectRequest, request: Request):
     # validate
@@ -159,12 +170,12 @@ async def create_entity_object(eo_request: EntityObjectRequest, request: Request
         )
     try:
         if eo_request.publicKey:
-            serialization.load_pem_public_key(str.encode(eo_request.publicKey))
+            serialization.load_pem_public_key(parse_pk(eo_request.publicKey))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"publicKey: {str(e)}") from e
     try:
         if eo_request.signerPublicKey:
-            serialization.load_pem_public_key(str.encode(eo_request.signerPublicKey))
+            serialization.load_pem_public_key(parse_pk(eo_request.signerPublicKey))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"signerPublicKey: {str(e)}") from e
     attributes = []

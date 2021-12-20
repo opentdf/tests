@@ -36,9 +36,6 @@ certs/*
 kubeconfig
 /containers/python_base/certs/*
 !/containers/python_base/certs/README.md
-# EAS requires checked-in test certs IN TWO SPOTS(?), allow them
-!/containers/eas/src/util/keys/keys_for_tests/*
-!/containers/eas/src/services/test_files/key_stash/*
 # KAS requires checked-in test certs, allow them
 !/containers/kas/kas_core/tdf3_kas_core/util/keys/keys_for_tests/*
 
