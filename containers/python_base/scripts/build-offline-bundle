@@ -111,12 +111,6 @@ if ! helm pull --repo https://charts.bitnami.com/bitnami --version 10.12.2 --des
   exit 1
 fi
 
-# Make sure we have pinned first party helm charts
-if ! helm dependency update "charts/etheria"; then 
-  monolog ERROR "Unable to update composite chart"
-  exit 1
-fi
-
 # Include current charts
 if ! rsync -lmr --safe-links --executability --force charts/* build/export/charts; then
   monolog ERROR "Unable to sync charts"

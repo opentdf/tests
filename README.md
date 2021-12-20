@@ -175,18 +175,6 @@ Replace the values for `host` and `kasDefaultUrl` with your public domain name.
 
 This should be left alone, but may be edited as needed for insight into postres, or schema upgrades.
 
-### Helm Installation
-
-From the export folder, run:
-
-```sh
-TAG=$(<BUNDLE_TAG)
-helm upgrade --install keycloak charts/keycloak-15.0.1.tgz -f deployment/values-virtru-keycloak.yaml --set image.tag=${TAG}
-helm upgrade --install etheria charts/etheria -f deployment/values-all-in-one.yaml
-```
-
-
-
 ## Swagger-UI
 
 KAS and EAS servers support Swagger UI to provide documentation and easier interaction for the REST API.  
