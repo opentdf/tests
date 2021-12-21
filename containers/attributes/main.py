@@ -24,7 +24,7 @@ from pydantic.main import BaseModel
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
-from containers.python_base import Pagination, get_query
+from python_base import Pagination, get_query
 
 logging.basicConfig(
     stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", logging.CRITICAL)

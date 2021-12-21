@@ -49,9 +49,16 @@ docker_build("virtru/tdf-keycloak-bootstrap", "containers/keycloak-bootstrap")
 docker_build("virtru/tdf-keycloak", "containers/keycloak-protocol-mapper")
 docker_build("virtru/tdf-abacus-web", "containers/abacus")
 docker_build(
-    "virtru/tdf-attributes-service", "containers/attributes"
+    "virtru/tdf-attributes-service",
+    context="containers",
+    dockerfile = "containers/attributes/Dockerfile",
+    "containers/attributes"
 )
-docker_build("virtru/tdf-entitlements-service", "containers/entitlements")
+docker_build(
+    "virtru/tdf-entitlements-service",
+    context="containers",
+    dockerfile = "containers/entitlements/Dockerfile",
+)
 docker_build("virtru/tdf-entity-attribute-service", "containers/eas")
 docker_build("virtru/tdf-key-access-service", "containers/kas")
 docker_build("virtru/tdf-storage-service", "containers/service_remote_payload")

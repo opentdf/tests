@@ -16,6 +16,6 @@ docker build --tag virtru/tdf-python-base .
 
 #### Update requirements.txt
 ```shell
-cd service_entity_object
+cd python_base
 pipenv lock --keep-outdated --requirements > ../service_base/requirements.txt
 ```

@@ -1,3 +1,4 @@
+# Context: opentdf/backend/containers
 # NOTE - The version is also needed in the site-packages COPY command below
 ARG PY_VERSION=3.9
 ARG ALPINE_VERSION=3.13
@@ -6,10 +7,11 @@ ARG ALPINE_VERSION=3.13
 FROM virtru/tdf-python-base:${PY_VERSION} AS build
 WORKDIR /build
 # Install application dependencies
-COPY requirements.txt .
+COPY entitlements/requirements.txt .
 RUN pip3 install --no-cache-dir --requirement requirements.txt
 # Install application into WORKDIR
-COPY main.py .
+COPY python_base/*.py python_base/
+COPY entitlements/*.py entitlements/
 # Compile application
 RUN python3 -m compileall .
 
@@ -58,4 +60,4 @@ ENTRYPOINT python3 -m uvicorn \
     --no-use-colors \
     --no-server-header \
     --log-level error \
-    main:app
+    entitlements.main:app
