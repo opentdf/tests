@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = process.env.REACT_APP_BASE_URL;
+// @ts-ignore
+const serverData = window.SERVER_DATA;
+const baseURL = serverData.authority;
 
 const entityClient = () => {
   const instance = axios.create({

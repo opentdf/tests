@@ -23,7 +23,7 @@ export const useAttributes = () => {
   return { attributes, getAttrs: (entityId: string) => getAttrs(buildConfig(entityId)) };
 };
 
-export const useAttrs = (authorityDefinition: AuthorityDefinition) => {
+export const useAttributesDefinitions = (authorityDefinition: AuthorityDefinition) => {
   const [attrs, setAttrs] = useState<AttributeDefinition[]>([]);
   const [getAttrs, { data, loading }] = useLazyFetch<AttributeDefinition[]>(entityClient);
   const buildConfig = useCallback((namespace) => ({ method: Method.GET, path: serverData.attributes + '/attributes' }), [authorityDefinition]);

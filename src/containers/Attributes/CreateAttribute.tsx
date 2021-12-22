@@ -2,7 +2,7 @@ import { FC, memo, useCallback } from "react";
 import { Affix, Card, Collapse, Typography } from "antd";
 import { toast } from "react-toastify";
 
-import { useLazyFetch } from "../../hooks/useFetch";
+import { useLazyFetch } from "../../hooks";
 import {AttributeDefinition, AuthorityDefinition} from "../../types/attributes";
 import { entityClient } from "../../service";
 import { Method } from "../../types/enums";
@@ -18,7 +18,6 @@ type Props = {
   onAddNamespace: (namespace: string) => void;
 };
 
-type CreateAttributeValues = Omit<AttributeDefinition, "authority">;
 
 const CreateAttribute: FC<Props> = (props) => {
   const { authorityNamespace, onAddAttr, onAddNamespace } = props;
@@ -45,7 +44,7 @@ const CreateAttribute: FC<Props> = (props) => {
     [createAuthority, onAddNamespace],
   );
 
-  const handleCreateAttribute = (values: CreateAttributeValues) => {
+  const handleCreateAttribute = (values: AttributeDefinition) => {
     createAttributes<AttributeDefinition>({
       method: Method.POST,
       path: serverData.attributes + `/definitions/attributes`,
@@ -76,7 +75,7 @@ const CreateAttribute: FC<Props> = (props) => {
               <Card.Grid>
                 <CreateAttributeForm
                   onFinish={handleCreateAttribute}
-                  authorityNamespace={authorityNamespace?.authority}
+                  authorityNamespace={authorityNamespace}
                 />
               </Card.Grid>
             </Card>

@@ -3,15 +3,14 @@ import { Button, Form, Input, Select, Typography } from "antd";
 import { PlusCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 
 import { ATTRIBUTE_RULE_TYPES } from "../../../constants/attributeRules";
-import { AttributeDefinition } from "../../../types/attributes";
+import {AttributeDefinition, AuthorityDefinition} from "../../../types/attributes";
 
 const { Item, List } = Form;
 
-type CreateAttributeValues = Omit<AttributeDefinition, "authority">;
 
 type Props = {
-  authorityNamespace: string;
-  onFinish: (values: CreateAttributeValues) => void;
+  authorityNamespace: AuthorityDefinition;
+  onFinish: (values: AttributeDefinition) => void;
 };
 
 const CreateAttributeForm: FC<Props> = (props) => {

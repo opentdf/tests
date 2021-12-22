@@ -2,7 +2,7 @@ import { Button, Form } from "antd";
 import { FC, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthorities } from "../../hooks";
 import { useUpdateEntitlement } from "./hooks/useEntitlement";
-import { useAttrs } from "../../hooks/useAttributes";
+import { useAttributesDefinitions } from "../../hooks";
 import { AutoComplete } from "../../components";
 import { Method } from "../../types/enums";
 import { toast } from "react-toastify";
@@ -28,7 +28,7 @@ const AssignAttributeForm: FC<Props> = (props) => {
   const [form] = useForm();
   const authorities = useAuthorities();
   const [authority] = authorities;
-  const { attrs, getAttrs, loading } = useAttrs(authority);
+  const { attrs, getAttrs, loading } = useAttributesDefinitions(authority);
   const [updateEntitlement] = useUpdateEntitlement();
 
   const [selectedName, setSelectedName] = useState();
