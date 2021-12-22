@@ -9,12 +9,12 @@ const { Item, List } = Form;
 
 
 type Props = {
-  authorityNamespace: AuthorityDefinition;
+  authority: AuthorityDefinition;
   onFinish: (values: AttributeDefinition) => void;
 };
 
 const CreateAttributeForm: FC<Props> = (props) => {
-  const { onFinish, authorityNamespace } = props;
+  const { onFinish, authority } = props;
 
   const stateOptions = useMemo(
     () => ATTRIBUTE_RULE_TYPES.map(([value, label]) => ({ value, label })),
@@ -25,7 +25,7 @@ const CreateAttributeForm: FC<Props> = (props) => {
     <>
       <Typography.Title level={3}>
         Attribute for
-        <Typography.Text italic> {authorityNamespace}</Typography.Text>
+        <Typography.Text italic> {authority}</Typography.Text>
       </Typography.Title>
 
       <Form onFinish={onFinish} initialValues={{ order: [undefined] }}>

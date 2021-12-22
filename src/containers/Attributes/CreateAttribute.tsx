@@ -13,14 +13,14 @@ const serverData = window.SERVER_DATA;
 const { Panel } = Collapse;
 
 type Props = {
-  authorityNamespace: AuthorityDefinition;
+  authority: AuthorityDefinition;
   onAddAttr: (attr: AttributeDefinition) => void;
   onAddNamespace: (namespace: string) => void;
 };
 
 
 const CreateAttribute: FC<Props> = (props) => {
-  const { authorityNamespace, onAddAttr, onAddNamespace } = props;
+  const { authority, onAddAttr, onAddNamespace } = props;
 
   const [createAuthority] = useLazyFetch(entityClient);
   const [createAttributes] = useLazyFetch(entityClient);
@@ -48,14 +48,14 @@ const CreateAttribute: FC<Props> = (props) => {
     createAttributes<AttributeDefinition>({
       method: Method.POST,
       path: serverData.attributes + `/definitions/attributes`,
-      data: { ...values, authorityNamespace },
+      data: { ...values, authority },
     })
       .then((response) => {
         onAddAttr(response.data);
-        toast.success(`Attribute created for ${authorityNamespace}`);
+        toast.success(`Attribute created for ${authority}`);
       })
       .catch(() => {
-        toast.error(`Attribute was no created for ${authorityNamespace}`);
+        toast.error(`Attribute was no created for ${authority}`);
       });
   };
 
@@ -75,7 +75,7 @@ const CreateAttribute: FC<Props> = (props) => {
               <Card.Grid>
                 <CreateAttributeForm
                   onFinish={handleCreateAttribute}
-                  authorityNamespace={authorityNamespace}
+                  authority={authority}
                 />
               </Card.Grid>
             </Card>

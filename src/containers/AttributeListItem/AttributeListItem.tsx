@@ -2,7 +2,7 @@ import { FC, useCallback, useMemo, useState } from "react";
 import { List, Table, Divider } from "antd";
 import { toast } from "react-toastify";
 
-import {AttributeDefinition, AuthorityDefinition} from "../../types/attributes";
+import {AttributeDefinition, AuthorityDefinition, RuleEnum} from "../../types/attributes";
 import { Entitlements } from "../../types/entitlements";
 import { Method } from "../../types/enums";
 
@@ -27,8 +27,14 @@ const AttributeListItem: FC<Props> = (props) => {
   const [activeTabKey, setActiveTab] = useState("");
   const [isEdit, setIsEdit] = useState(false);
   const [activeOrderList, setActiveOrderList] = useState<string[]>([]);
-  const [activeAttribute, setActiveAttribute] = useState<AttributeDefinition>();
-  const [activeRule, setActiveRule] = useState();
+  const [activeAttribute, setActiveAttribute] = useState<AttributeDefinition>({
+    authority: "",
+    name: "",
+    order: [],
+    rule: "allOf",
+    state: ""
+  });
+  const [activeRule, setActiveRule] = useState<RuleEnum>("allOf");
 
   const [getAttrEntities, { loading, data: entities }] =
     useLazyFetch<Entitlements[]>(entityClient);
@@ -84,9 +90,9 @@ const AttributeListItem: FC<Props> = (props) => {
   );
 
   const handleSaveClick = useCallback(async () => {
-    const data = {
-      authorityNamespace: activeAuthority,
-      name: activeAttribute?.name,
+    const data: AttributeDefinition = {
+      authority: activeAuthority.authority,
+      name: activeAttribute.name,
       order: activeOrderList,
       rule: activeRule,
       state: activeAttribute?.state,

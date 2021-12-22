@@ -70,7 +70,7 @@ const Attributes = () => {
       </List>
 
       <CreateAttribute
-        authorityNamespace={activeAuthority}
+        authority={activeAuthority}
         onAddAttr={onAddAttr}
         onAddNamespace={onAddNamespace}
       />
