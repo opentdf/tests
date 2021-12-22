@@ -45,13 +45,13 @@ const AttributeListItem: FC<Props> = (props) => {
   }, [isEdit]);
 
   const activeOrderItem = useMemo(
-    () => order.find((orderItem: string) => orderItem === activeTabKey),
+    () => order?.find((orderItem: string) => orderItem === activeTabKey),
     [activeTabKey, order],
   );
 
   const tabList = useMemo(
     () =>
-      order.map((orderItem: string) => ({
+      order?.map((orderItem: string) => ({
         key: orderItem,
         tab: orderItem,
       })),

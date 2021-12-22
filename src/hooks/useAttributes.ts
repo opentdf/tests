@@ -26,7 +26,7 @@ export const useAttributes = () => {
 export const useAttributesDefinitions = (authorityDefinition: AuthorityDefinition) => {
   const [attrs, setAttrs] = useState<AttributeDefinition[]>([]);
   const [getAttrs, { data, loading }] = useLazyFetch<AttributeDefinition[]>(entityClient);
-  const buildConfig = useCallback((namespace) => ({ method: Method.GET, path: serverData.attributes + '/attributes' }), [authorityDefinition]);
+  const buildConfig = useCallback((namespace) => ({ method: Method.GET, path: serverData.attributes + '/definitions/attributes' }), [authorityDefinition]);
 
   useEffect(() => {
     if (data) {
