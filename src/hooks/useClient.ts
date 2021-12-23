@@ -4,11 +4,13 @@ import { keyCloakClient } from "../service";
 import { Method } from "../types/enums";
 import { Client } from "../types/keycloak";
 
+// @ts-ignore
+const {realm} = window.SERVER_DATA;
 
 export const useClient = (id: string) => {
   const [client, setClient] = useState<Client>({});
 
-  const [data] = useFetch<Client>(keyCloakClient, { method: Method.GET, path: `/admin/realms/tdf/clients/${id}` });
+  const [data] = useFetch<Client>(keyCloakClient, { method: Method.GET, path: `/admin/realms/${realm}/clients/${id}` });
 
   useEffect(() => {
     if (data) {

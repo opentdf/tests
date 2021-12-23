@@ -9,6 +9,9 @@ import UsersTable from "./UsersTable";
 import "./Entitlements.css";
 import { routes } from "../../routes";
 
+// @ts-ignore
+const {realm} = window.SERVER_DATA;
+
 const Entitlements = () => {
   const history = useHistory();
   const [clients, setClients] = useState([]);
@@ -18,13 +21,13 @@ const Entitlements = () => {
     const { token, cancel } = getCancellationConfig();
 
     keyCloakClient
-      .get(`/admin/realms/tdf/clients`, { cancelToken: token })
+      .get(`/admin/realms/${realm}/clients`, { cancelToken: token })
       .then((res) => {
         setClients(res.data);
       });
 
     keyCloakClient
-      .get(`/admin/realms/tdf/users`, { cancelToken: token })
+      .get(`/admin/realms/${realm}/users`, { cancelToken: token })
       .then((res) => {
         setUsers(res.data);
       });
@@ -63,7 +66,7 @@ const Entitlements = () => {
     <section>
       <ClientsTable
         data={formattedClients}
-        loading={!!!clients.length}
+        loading={!clients.length}
         onRowClick={onClientRecordClick}
       />
 
@@ -71,7 +74,7 @@ const Entitlements = () => {
 
       <UsersTable
         data={formattedUsers}
-        loading={!!!users.length}
+        loading={!users.length}
         onRowClick={onUserRecordClick}
       />
     </section>
