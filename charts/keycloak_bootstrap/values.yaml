@@ -1,7 +1,7 @@
 name: 'keycloak-bootstrap'
 replicaCount: 1
 image:
-  name: virtru/tdf-keycloak-bootstrap:0.3.5
+  name: opentdf/keycloak-bootstrap
   pullPolicy: Always
   pullSecret: virtru-regcred
 keycloak:
@@ -11,4 +11,51 @@ keycloak:
   username: technoking
   password: elon-musk-is-a-dork
   realm: tdf
+  passwordUsers: testuser@virtru.com,user1,user2
+  npeClients: null
 istioTerminationHack: false
+attribute:
+  hostname: http://opentdf-attribute
+entitlement:
+  hostname: http://opentdf-entitlement
+  clientId: dcr-test
+  username: user1
+  password: testuser123
+  preloadedClaims:
+    - id: tdf-user
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRX
+    - id: tdf-client
+      attributes:
+        - https://example.com/attr/Classification/value/S
+        - https://example.com/attr/COI/value/PRX
+        - https://example.com/attr/Env/value/CleanRoom
+    - id: user1
+      attributes:
+        - https://example.com/attr/Classification/value/S
+        - https://example.com/attr/COI/value/PRX
+    - id: browsertest
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRA
+    - id: service-account-tdf-client
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRB
+    - id: bob_1234
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRC
+    - id: alice_1234
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRD
+    - id: client_x509
+      attributes:
+        - https://example.com/attr/Classification/value/S
+        - https://example.com/attr/COI/value/PRX
+    - id: dcr-test
+      attributes:
+        - https://example.com/attr/Classification/value/C
+        - https://example.com/attr/COI/value/PRF

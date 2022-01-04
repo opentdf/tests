@@ -28,6 +28,9 @@ class AttributePolicyCache(object):
 
     def load_config(self, attribute_policy_config):
         """Load policies defined in a config dict."""
+        if not attribute_policy_config:
+            logger.warn("No attribute configs found")
+            return
         Timing.start("attribute_load")
         logger.debug(
             "--- Fetch attribute_policy_config  [attribute = %s] ---",

@@ -6,6 +6,9 @@
 load("ext://secret", "secret_yaml_generic")
 load("ext://helm_remote", "helm_remote")
 
+ALPINE_VERSION = "3.13"
+PY_VERSION = "3.9"
+
 # secrets
 k8s_yaml(
     secret_yaml_generic(
@@ -43,25 +46,21 @@ k8s_yaml(
 )
 
 # builds
-docker_build("virtru/tdf-claim-test-webservice", "containers/attribute_provider")
-docker_build("virtru/tdf-python-base", "containers/python_base")
-docker_build("virtru/tdf-keycloak-bootstrap", "containers/keycloak-bootstrap")
-docker_build("virtru/tdf-keycloak", "containers/keycloak-protocol-mapper")
-docker_build("virtru/tdf-abacus-web", "containers/abacus")
-docker_build(
-    "virtru/tdf-attributes-service",
-    context="containers",
-    dockerfile = "containers/attributes/Dockerfile",
-    "containers/attributes"
-)
-docker_build(
-    "virtru/tdf-entitlements-service",
-    context="containers",
-    dockerfile = "containers/entitlements/Dockerfile",
-)
-docker_build("virtru/tdf-entity-attribute-service", "containers/eas")
-docker_build("virtru/tdf-key-access-service", "containers/kas")
-docker_build("virtru/tdf-storage-service", "containers/service_remote_payload")
+docker_build("opentdf/python-base", context = "containers/python_base",
+    build_args = {"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION})
+docker_build("opentdf/keycloak", context = "containers/keycloak-protocol-mapper", build_args = {"MAVEN_VERSION": "3.8.4", "JDK_VERSION":"11", "KEYCLOAK_VERSION":"15.0.2"})
+docker_build("opentdf/attributes", context = "./containers",
+      dockerfile = "./containers/attributes/Dockerfile",
+    build_args = {"PY_VERSION": PY_VERSION})
+docker_build("opentdf/claims", context = "containers/claims",
+    build_args = {"PY_VERSION": PY_VERSION})
+docker_build("opentdf/entitlements", context = "./containers",
+      dockerfile = "./containers/entitlements/Dockerfile",
+    build_args = {"PY_VERSION": PY_VERSION})
+docker_build("opentdf/kas", context = "containers/kas",
+    build_args = {"PY_VERSION": PY_VERSION})
+docker_build("opentdf/storage", context = "containers/storage",
+    build_args = {"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION})
 
 # remote resources
 # usage https://github.com/tilt-dev/tilt-extensions/tree/master/helm_remote#additional-parameters
@@ -94,10 +93,15 @@ k8s_yaml(
 )
 # TODO this service requires actual S3 secrets
 # TODO or use https://github.com/localstack/localstack
-# k8s_yaml(helm('charts/remote_payload', 'remote-payload', values=['deployments/docker-desktop/remote_payload-values.yaml']))
+# k8s_yaml(helm('charts/storage', 'storage', values=['deployments/docker-desktop/storage-values.yaml']))
 # deprecated
 # k8s_yaml(helm('charts/eas', 'eas', values=['deployments/docker-desktop/eas-values.yaml']))
 
 # resource dependencies
 k8s_resource("attributes", resource_deps=["tdf-postgresql"])
 k8s_resource("entitlements", resource_deps=["tdf-postgresql"])
+
+
+# TODO: Add a bootstrap job
+# docker_build("opentdf/keycloak-bootstrap", context = "containers/keycloak-bootstrap",
+#     build_args = {"PY_VERSION": PY_VERSION})

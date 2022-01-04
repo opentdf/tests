@@ -40,10 +40,11 @@ if ! make all-containers; then
   exit 1
 fi
 
+# TODO: Add abacus back!
 monolog TRACE "Building abacus container with tag [${SERVICE_IMAGE_TAG}]"
 if ! docker build \
         --target server \
-        --tag "virtru/tdf-abacus-web:${SERVICE_IMAGE_TAG}" \
+        --tag "opentdf/abacus:${SERVICE_IMAGE_TAG}" \
         --build-arg abacusBaseUrl=/abacus \
         --build-arg abacusAssetPrefix=/abacus \
         --build-arg easApiUrl=https://etheria.local/eas \
@@ -54,8 +55,8 @@ if ! docker build \
 fi
 
 to_save=()
-for x in entity-attribute-service key-access-service abacus-web claim-test-webservice keycloak keycloak attributes-service entitlements-service storage-service; do
-  to_save+=( "virtru/tdf-${x}:${SERVICE_IMAGE_TAG}" )
+for x in abacus attributes claims entitlements kas keycloak keycloak-bootstrap storage; do
+  to_save+=( "opentdf/${x}:${SERVICE_IMAGE_TAG}" )
 done
 
 monolog TRACE "Save docker images as [build/export/opentdf-service-images-${suffix}.tar] from [${to_save[*]}]"

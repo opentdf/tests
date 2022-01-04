@@ -5,7 +5,7 @@
 replicaCount: 3
 
 image:
-  name: virtru/tdf-key-access-service:3.4.1-n000.he52adfd4
+  name: opentdf/kas
   pullPolicy: IfNotPresent
 
 secretName: "etheria-secrets"

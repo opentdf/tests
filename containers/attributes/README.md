@@ -48,7 +48,7 @@ http://localhost:4020/redoc
 ### build image
 ```shell
 # from project root
-docker build --no-cache --tag virtru/tdf-attributes-service:0.2.0 attributes
+docker build --no-cache --tag opentdf/attributes:0.2.0 attributes
 ```
 
 ### secrets

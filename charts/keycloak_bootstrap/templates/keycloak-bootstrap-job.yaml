@@ -37,12 +37,31 @@ spec:
               value: {{ .Values.keycloak.username }}
             - name: keycloak_admin_password
               value: {{ .Values.keycloak.password }}
+            - name: passwordUsers
+              value: {{ .Values.keycloak.passwordUsers }}
             - name: CLIENT_ID
               value: {{ .Values.keycloak.clientId }}
             - name: CLIENT_SECRET
               value: {{ .Values.keycloak.clientSecret }}
             - name: realm
               value: {{ .Values.keycloak.realm }}
+            - name: ATTRIBUTE_AUTHORITY_HOST
+              value: {{ .Values.attribute.hostname }}
+            - name: ENTITLEMENT_HOST
+              value: {{ .Values.entitlement.hostname }}
+            - name: ENTITLEMENT_CLIENT_ID
+              value: {{ .Values.entitlement.clientId }}
+            - name: ENTITLEMENT_USERNAME
+              value: {{ .Values.entitlement.username }}
+            - name: ENTITLEMENT_PASSWORD
+              value: {{ .Values.entitlement.password }}
+          volumeMounts:
+            - name: entitlements-config-volume
+              mountPath: /etc/virtru-config
+      volumes:
+        - name: entitlements-config-volume
+          configMap:
+            name: {{ .Values.name }}-cm
       restartPolicy: Never
       {{ if .Values.image.pullSecret }}
       imagePullSecrets:

@@ -1,10 +1,11 @@
 # Context: opentdf/backend/containers
 # NOTE - The version is also needed in the site-packages COPY command below
+# Context: opentdf/backend/containers
 ARG PY_VERSION=3.9
 ARG ALPINE_VERSION=3.13
 
 # stage - build
-FROM virtru/tdf-python-base:${PY_VERSION} AS build
+FROM opentdf/python-base:${PY_VERSION} AS build
 WORKDIR /build
 # Install application dependencies
 COPY entitlements/requirements.txt .

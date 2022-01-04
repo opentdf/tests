@@ -11,7 +11,7 @@ helm --namespace securecodebox-system upgrade --install securecodebox-operator -
 
 helm upgrade --install zap-advanced secureCodeBox/zap-advanced
 
-for service in attributes:4020 entitlements:4030 key-access:8000; do
+for service in attributes:4020 entitlements:4030 kas:8000; do
   service_name=${service%:*}
   cat <<EOF | kubectl apply -f -
 apiVersion: v1

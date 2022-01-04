@@ -1,4 +1,4 @@
-# Simple TDF3 Key Access Server
+# Simple openTDF Key Access Server
 
 This repo constructs a plain vanilla KAS with attribute config examples.
 
@@ -8,11 +8,11 @@ Create a local copy of this repository in the directory of your choice and navig
 
 ```bash
 $ git clone https://github.com/opentdf/backend.git
-$ cd containers/kas_app
+$ cd containers/kas/kas_app
 $ scripts/start
 ```
 
-To test, use the `scripts/monotest kas_app` command from the monorepo root.
+To test, use the `scripts/monotest kas/kas_app` command from the monorepo root.
 
 ### Run KAS in background
 
@@ -22,19 +22,19 @@ Optionally you can use these steps to start the docker container.
 
 ```
 # this command reads the Dockerfile to build a docker image called
-# "tdf3-kas". The build process copies the local directory into the container
+# "opentdf/kas". The build process copies the local directory into the container
 # and installs the dependencies. If there are no changes to the source code
 # this step goes fast.
 docker build \
   -f Dockerfile \
-  -t tdf3-kas-oss .
+  -t opentdf/kas .
 
 # this command runs a container
 #     -- using the newly minted Docker image "tdf3-kas-oss"
 #     -- publishing its internal 8000 port as external TCP port 8000
 #     -- and a pseudo-TTY connection to the container's stdin (the -it)
 
-docker run -p "127.0.0.1:4000:8000" tdf3-kas-oss
+docker run -p "127.0.0.1:4000:8000" opentdf/kas
 ```
 
 ### Develop locally in a virtual environment
@@ -59,6 +59,10 @@ $ scripts/start 4300
 
 The port number is optional; it defaults to 4000 if it is not specified.
 
+
+# NOTE: OUT OF DATE
+
+TODO: Rewrite this section!
 
 ## Configuration
 

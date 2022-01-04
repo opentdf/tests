@@ -9,7 +9,7 @@ services:
     build:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
-      context: ../containers/service_entity_object
+      context: ../containers/claims
     depends_on:
       - migration
       - postgres

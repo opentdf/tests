@@ -112,7 +112,12 @@ async def get_idp_public_key():
     )
 
 
-async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
+DISABLE_ENTITLEMENTS_AUTH = os.getenv("DISABLE_ENTITLEMENTS_AUTH")
+
+
+async def get_auth(token: str = Security(oauth2_scheme)) -> Json | None:
+    if DISABLE_ENTITLEMENTS_AUTH:
+        return None
     try:
         return keycloak_openid.decode_token(
             token,
@@ -185,7 +190,7 @@ async def shutdown():
 
 @app.get("/", include_in_schema=False)
 async def read_semver():
-    return {"Hello": "World"}
+    return {"Hello": "entitlements"}
 
 
 class ProbeType(str, Enum):
@@ -254,10 +259,9 @@ class Entitlements(BaseModel):
 @app.get(
     "/v1/entity/attribute",
     response_model=List[EntityAttributeRelationship],
-    dependencies=[Depends(get_auth)],
     include_in_schema=False,
 )
-async def read_relationship():
+async def read_relationship(auth_token=Depends(get_auth)):
     query = (
         table_entity_attribute.select()
     )  # .where(entity_attribute.c.userid == request.userId)
@@ -278,9 +282,9 @@ async def read_relationship():
     "/entitlements",
     tags=["Entitlements"],
     response_model=List[Entitlements],
-    dependencies=[Depends(get_auth)],
 )
 async def read_entitlements(
+    auth_token=Depends(get_auth),
     authority: Optional[AuthorityUrl] = None,
     name: Optional[str] = None,
     order: Optional[str] = None,
@@ -349,10 +353,11 @@ def parse_attribute_uri(attribute_uri):
 
 @app.get(
     "/v1/entity/{entityId}/attribute",
-    dependencies=[Depends(get_auth)],
     include_in_schema=False,
 )
-async def read_entity_attribute_relationship(entityId: str):
+async def read_entity_attribute_relationship(
+    entityId: str, auth_token=Depends(get_auth)
+):
     query = table_entity_attribute.select().where(
         table_entity_attribute.c.entity_id == entityId
     )
@@ -370,7 +375,8 @@ async def read_entity_attribute_relationship(entityId: str):
 
 
 @app.post(
-    "/entitlements/{entityId}", tags=["Entitlements"], dependencies=[Depends(get_auth)]
+    "/entitlements/{entityId}",
+    tags=["Entitlements"],
 )
 async def add_entitlements_to_entity(
     entityId: str,
@@ -378,6 +384,7 @@ async def add_entitlements_to_entity(
         List[str],
         Field(max_length=2000, exclusiveMaximum=2000),
     ],
+    auth_token=Depends(get_auth),
 ):
     rows = []
     for attribute_uri in request:
@@ -397,10 +404,11 @@ async def add_entitlements_to_entity(
 
 @app.get(
     "/v1/attribute/{attributeURI:path}/entity/",
-    dependencies=[Depends(get_auth)],
     include_in_schema=False,
 )
-async def get_attribute_entity_relationship(attributeURI: str):
+async def get_attribute_entity_relationship(
+    attributeURI: str, auth_token=Depends(get_auth)
+):
     logger.debug(attributeURI)
     attribute = parse_attribute_uri(attributeURI)
     query = table_entity_attribute.select().where(
@@ -425,11 +433,10 @@ async def get_attribute_entity_relationship(attributeURI: str):
 
 @app.put(
     "/v1/attribute/{attributeURI:path}/entity/",
-    dependencies=[Depends(get_auth)],
     include_in_schema=False,
 )
 async def create_attribute_entity_relationship(
-    attributeURI: HttpUrl, request: List[str]
+    attributeURI: HttpUrl, request: List[str], auth_token=Depends(get_auth)
 ):
     attribute = parse_attribute_uri(attributeURI)
     rows = []
@@ -451,7 +458,6 @@ async def create_attribute_entity_relationship(
     "/entitlements/{entityId}",
     tags=["Entitlements"],
     status_code=ACCEPTED,
-    dependencies=[Depends(get_auth)],
 )
 async def remove_entitlement_from_entity(
     entityId: str,
@@ -459,6 +465,7 @@ async def remove_entitlement_from_entity(
         List[str],
         Field(max_length=2000, exclusiveMaximum=2000),
     ],
+    auth_token=Depends(get_auth),
 ):
     for item in request:
         try:

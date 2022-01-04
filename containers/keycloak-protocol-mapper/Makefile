@@ -1,4 +1,4 @@
-IMAGE=virtru/tdf-keycloak
+IMAGE=opentdf/keycloak
 VERSION=15.0.2
 
 all: build

@@ -1,0 +1,592 @@
+---
+#  .d8b.  d888888b d888888b d8888b. d888888b d8888b. db    db d888888b d88888b
+# d8' `8b `~~88~~' `~~88~~' 88  `8D   `88'   88  `8D 88    88 `~~88~~' 88'
+# 88ooo88    88       88    88oobY'    88    88oooY' 88    88    88    88ooooo
+# 88~~~88    88       88    88`8b      88    88~~~b. 88    88    88    88~~~~~
+# 88   88    88       88    88 `88.   .88.   88   8D 88b  d88    88    88.
+# YP   YP    YP       YP    88   YD Y888888P Y8888P' ~Y8888P'    YP    Y88888P
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: attributes-cm
+data:
+  OIDC_AUTHORIZATION_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/auth
+  OIDC_CLIENT_ID: tdf-attributes
+  OIDC_CLIENT_SECRET: myclientsecret
+  OIDC_CONFIGURATION_URL: http://keycloak/auth/realms/tdf/.well-known/openid-configuration
+  OIDC_REALM: tdf
+  OIDC_SERVER_URL: http://keycloak/auth/
+  OIDC_TOKEN_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/token
+  POSTGRES_DATABASE: tdf_database
+  POSTGRES_HOST: opentdf-postgresql
+  POSTGRES_SCHEMA: tdf_attribute
+  POSTGRES_USER: tdf_attribute_manager
+  SERVER_LOG_LEVEL: DEBUG
+  SERVER_PUBLIC_NAME: Attribute Authority
+  SERVER_ROOT_PATH: /attributes
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: attributes
+  name: opentdf-attributes
+spec:
+  ports:
+    - name: http
+      port: 4020
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: attributes
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentdf-attributes
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: opentdf-attributes
+spec:
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: opentdf-attributes
+                port:
+                  number: 4020
+            path: /attributes(/|$)(.*)
+            pathType: Prefix
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opentdf-attributes
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: opentdf
+      app.kubernetes.io/name: attributes
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: opentdf
+        app.kubernetes.io/name: attributes
+    spec:
+      containers:
+        - envFrom:
+            - secretRef:
+                name: attributes-secrets
+            - configMapRef:
+                name: attributes-cm
+          image: opentdf/attributes
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=liveness
+              port: 4020
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: attributes
+          ports:
+            - containerPort: 4020
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=readiness
+              port: 4020
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: opentdf-attributes
+      serviceAccountName: opentdf-attributes
+      terminationGracePeriodSeconds: 30
+---
+#  .o88b. db       .d8b.  d888888b .88b  d88.
+# d8P  Y8 88      d8' `8b   `88'   88'YbdP`88
+# 8P      88      88ooo88    88    88  88  88
+# 8b      88      88~~~88    88    88  88  88
+# Y8b  d8 88booo. 88   88   .88.   88  88  88
+#  `Y88P' Y88888P YP   YP Y888888P YP  YP  YP
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claims-cm
+data:
+  KAS_DEFAULT_URL: http://opentdf-kas
+  POSTGRES_DATABASE: tdf_database
+  POSTGRES_HOST: opentdf-postgresql
+  POSTGRES_SCHEMA: tdf_entitlement
+  POSTGRES_USER: tdf_entitlement_reader
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: claims
+  name: opentdf-claims
+spec:
+  ports:
+    - name: http
+      port: 5000
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: claims
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: opentdf-claims
+spec:
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: opentdf-claims
+                port:
+                  number: 5000
+            path: /claims(/|$)(.*)
+            pathType: Prefix
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opentdf-claims
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: opentdf
+      app.kubernetes.io/name: claims
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: opentdf
+        app.kubernetes.io/name: claims
+    spec:
+      containers:
+        - envFrom:
+            - secretRef:
+                name: claims-secrets
+            - configMapRef:
+                name: claims-cm
+          image: opentdf/claims
+          imagePullPolicy: IfNotPresent
+          name: claims
+          ports:
+            - containerPort: 5000
+              name: http
+              protocol: TCP
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: opentdf-claims
+      serviceAccountName: opentdf-claims
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentdf-claims
+---
+#    d88888b d8b   db d888888b d888888b d888888b db      d88888b .88b  d88. d88888b d8b   db d888888b .d8888.
+#    88'     888o  88 `~~88~~'   `88'   `~~88~~' 88      88'     88'YbdP`88 88'     888o  88 `~~88~~' 88'  YP
+#    88ooooo 88V8o 88    88       88       88    88      88ooooo 88  88  88 88ooooo 88V8o 88    88    `8bo.
+#    88~~~~~ 88 V8o88    88       88       88    88      88~~~~~ 88  88  88 88~~~~~ 88 V8o88    88      `Y8b.
+#    88.     88  V888    88      .88.      88    88booo. 88.     88  88  88 88.     88  V888    88    db   8D
+#    Y88888P VP   V8P    YP    Y888888P    YP    Y88888P Y88888P YP  YP  YP Y88888P VP   V8P    YP    `8888Y'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: entitlements-cm
+data:
+  OIDC_AUTHORIZATION_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/auth
+  OIDC_CLIENT_ID: tdf-entitlements
+  OIDC_CLIENT_SECRET: myclientsecret
+  OIDC_CONFIGURATION_URL: http://keycloak/auth/realms/tdf/.well-known/openid-configuration
+  OIDC_REALM: tdf
+  OIDC_SERVER_URL: http://keycloak/auth/
+  OIDC_TOKEN_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/token
+  POSTGRES_DATABASE: tdf_database
+  POSTGRES_HOST: opentdf-postgresql
+  POSTGRES_SCHEMA: tdf_entitlement
+  POSTGRES_USER: tdf_entitlement_manager
+  SERVER_LOG_LEVEL: DEBUG
+  SERVER_PUBLIC_NAME: Entitlement
+  SERVER_ROOT_PATH: /entitlements
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: entitlements
+  name: opentdf-entitlements
+spec:
+  ports:
+    - name: http
+      port: 4030
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: entitlements
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: opentdf-entitlements
+spec:
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: opentdf-entitlements
+                port:
+                  number: 4030
+            path: /entitlements(/|$)(.*)
+            pathType: Prefix
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: entitlements
+  name: opentdf-entitlements
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: opentdf
+      app.kubernetes.io/name: entitlements
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/instance: opentdf
+        app.kubernetes.io/managed-by: tilt
+        app.kubernetes.io/name: entitlements
+        tilt.dev/pod-template-hash: 41e0e42a19da9ccfc30a
+    spec:
+      containers:
+        - envFrom:
+            - secretRef:
+                name: entitlements-secrets
+            - configMapRef:
+                name: entitlements-cm
+          image: opentdf/entitlements
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=liveness
+              port: 4030
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: entitlements
+          ports:
+            - containerPort: 4030
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=readiness
+              port: 4030
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: opentdf-entitlements
+      serviceAccountName: opentdf-entitlements
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentdf-entitlements
+---
+#  .d8b.   .o88b.  .o88b. d88888b .d8888. .d8888.
+# d8' `8b d8P  Y8 d8P  Y8 88'     88'  YP 88'  YP
+# 88ooo88 8P      8P      88ooooo `8bo.   `8bo.
+# 88~~~88 8b      8b      88~~~~~   `Y8b.   `Y8b.
+# 88   88 Y8b  d8 Y8b  d8 88.     db   8D db   8D
+# YP   YP  `Y88P'  `Y88P' Y88888P `8888Y' `8888Y'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kas-cm
+data:
+  EAS_HOST: http://opentdf-attributes:4020
+  FLASK_DEBUG: "False"
+  GUNICORN_WORKERS: "2"
+  KEYCLOAK_HOST: http://keycloak
+  LOGLEVEL: INFO
+  OIDC_PUBKEY_ENDPOINT: http://keycloak
+  STATSD_HOST: opentdf-statsd
+  USE_KEYCLOAK: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: kas
+  name: opentdf-kas
+spec:
+  ports:
+    - name: http
+      port: 8000
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: kas
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: opentdf-kas
+spec:
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: opentdf-kas
+                port:
+                  number: 8000
+            path: /kas(/|$)(.*)
+            pathType: Prefix
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: opentdf
+    app.kubernetes.io/name: kas
+  name: opentdf-kas
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: opentdf
+      app.kubernetes.io/name: kas
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: opentdf
+        app.kubernetes.io/name: kas
+    spec:
+      containers:
+        - envFrom:
+            - secretRef:
+                name: kas-secrets
+            - configMapRef:
+                name: kas-cm
+          image: opentdf/kas
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=liveness
+              port: 8000
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: kas
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz?probe=readiness
+              port: 8000
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: opentdf-kas
+      serviceAccountName: opentdf-kas
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentdf-kas
+---
+#    d8888b.  .d88b.   .d88b.  d888888b .d8888. d888888b d8888b.  .d8b.  d8888b.
+#    88  `8D .8P  Y8. .8P  Y8. `~~88~~' 88'  YP `~~88~~' 88  `8D d8' `8b 88  `8D
+#    88oooY' 88    88 88    88    88    `8bo.      88    88oobY' 88ooo88 88oodD'
+#    88~~~b. 88    88 88    88    88      `Y8b.    88    88`8b   88~~~88 88~~~
+#    88   8D `8b  d8' `8b  d8'    88    db   8D    88    88 `88. 88   88 88
+#    Y8888P'  `Y88P'   `Y88P'     YP    `8888Y'    YP    88   YD YP   YP 88
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-keycloak
+spec:
+  template:
+    spec:
+      containers:
+        - name: bootstrap-keycloak
+          image: opentdf/keycloak-bootstrap
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: keycloak_hostname
+              value: http://keycloak
+            - name: keycloak_admin_username
+              value: keycloakadmin
+            - name: keycloak_admin_password
+              value: mykeycloakpassword
+            - name: passwordUsers
+              value: testuser@virtru.com,user1,user2
+            - name: CLIENT_ID
+              value: tdf-client
+            - name: CLIENT_SECRET
+              value: 123-456
+            - name: realm
+              value: tdf
+            - name: ATTRIBUTE_AUTHORITY_HOST
+              value: http://opentdf-attributes:4020
+            - name: ENTITLEMENT_HOST
+              value: http://opentdf-entitlements:4030
+            - name: ENTITLEMENT_CLIENT_ID
+              value: dcr-test
+            - name: ENTITLEMENT_USERNAME
+              value: user1
+            - name: ENTITLEMENT_PASSWORD
+              value: testuser123
+          volumeMounts:
+            - name: bootstrap-keycloak-config-volume
+              mountPath: /etc/virtru-config
+      volumes:
+        - name: bootstrap-keycloak-config-volume
+          configMap:
+            name: bootstrap-keycloak-cm
+      restartPolicy: Never
+  backoffLimit: 6
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bootstrap-keycloak-cm
+data:
+  entitlements.yaml: |-
+    tdf-user:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRX
+    tdf-client:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+      - https://example.com/attr/Env/value/CleanRoom
+    user1:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+    browsertest:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRA
+    service-account-tdf-client:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRB
+    bob_1234:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRC
+    alice_1234:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRD
+    client_x509:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+    dcr-test:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRF

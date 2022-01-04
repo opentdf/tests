@@ -153,7 +153,7 @@
                                 <attributemapperTestMode>env</attributemapperTestMode>
                             </systemPropertyVariables>
                             <environmentVariables>
-                                <ATTRIBUTE_PROVIDER_URL>http://</ATTRIBUTE_PROVIDER_URL>
+                                <CLAIMS_URL>http://</CLAIMS_URL>
                             </environmentVariables>
                         </configuration>
                     </execution>

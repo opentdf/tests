@@ -1,7 +1,7 @@
 ARG PY_VERSION=3.9
 
 # stage - build
-FROM virtru/tdf-python-base:${PY_VERSION} AS build
+FROM opentdf/python-base:${PY_VERSION} AS build
 WORKDIR /tool
 # Install tool dependencies
 COPY containers/migration/Pipfile .
@@ -16,7 +16,7 @@ RUN mkdir -p /tool/migration/versions
 COPY containers/attributes/ attributes/
 COPY containers/entitlements/ entitlements/
 COPY containers/service_entity/ service_entity/
-COPY containers/service_entity_object/ service_entity_object/
+COPY containers/claims/ claims/
 # Postgres
 ENV POSTGRES_HOST ""
 ENV POSTGRES_PORT "5432"

@@ -104,7 +104,7 @@ the virtrudemos.com organization.
 docker run -p 8080:8080 \
   -e KEYCLOAK_USER=admin \
   -e KEYCLOAK_PASSWORD=admin \
-  virtru/tdf-keycloak:0.0.2
+  opentdf/keycloak
 ```
 
 * `cd` to `custom-claim-test-webservice` and follow the directions in `README.md`

@@ -80,8 +80,8 @@ if [[ $LOAD_IMAGES ]]; then
   monolog INFO "Caching locally-built development opentdf/backend images in dev cluster"
   # Cache locally-built `latest` images, bypassing registry.
   # If this fails, try running 'docker-compose build' in the repo root
-  for s in entity-attribute-service key-access-service entitlements-service storage-service attributes-service; do
-    maybe_load virtru/tdf-$s:${SERVICE_IMAGE_TAG}
+  for s in entity-attribute-service kas entitlements storage-service attributes-service; do
+    maybe_load opentdf/$s:${SERVICE_IMAGE_TAG}
   done
 else
   monolog DEBUG "Skipping loading of locally built service images"
@@ -112,7 +112,7 @@ fi
 if [[ $USE_KEYCLOAK ]]; then
   monolog INFO "Caching locally-built development opentdf Keycloak in dev cluster"
   for s in claim-test-webservice keycloak keycloak-bootstrap; do
-    maybe_load virtru/tdf-$s:${SERVICE_IMAGE_TAG}
+    maybe_load opentdf/$s:${SERVICE_IMAGE_TAG}
   done
 
   monolog INFO --- "Installing Virtru-ified Keycloak"

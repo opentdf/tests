@@ -9,7 +9,7 @@ import os, sys
 import attributes.main as service_atribute_authority
 import entitlements.main as entitlements
 import service_entity.main as service_entity
-import service_entity_object.main as service_entity_object
+import claims.main as claims
 
 
 sys.path.append(os.getcwd())
@@ -19,14 +19,14 @@ sys.path.append(os.getcwd())
 config = context.config
 
 section = config.config_ini_section
-config.set_section_option(section, "POSTGRES_USER", service_entity_object.POSTGRES_USER)
+config.set_section_option(section, "POSTGRES_USER", claims.POSTGRES_USER)
 config.set_section_option(
-    section, "POSTGRES_PASSWORD", service_entity_object.POSTGRES_PASSWORD
+    section, "POSTGRES_PASSWORD", claims.POSTGRES_PASSWORD
 )
 config.set_section_option(
-    section, "POSTGRES_DATABASE", service_entity_object.POSTGRES_DATABASE
+    section, "POSTGRES_DATABASE", claims.POSTGRES_DATABASE
 )
-config.set_section_option(section, "POSTGRES_HOST", service_entity_object.POSTGRES_HOST)
+config.set_section_option(section, "POSTGRES_HOST", claims.POSTGRES_HOST)
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)
@@ -39,7 +39,7 @@ target_metadata = [
     service_atribute_authority.metadata,
     entitlements.metadata,
     service_entity.metadata,
-    service_entity_object.metadata,
+    claims.metadata,
 ]
 
 # other values from the config, defined by the needs of env.py,

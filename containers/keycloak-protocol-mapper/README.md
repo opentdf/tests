@@ -83,7 +83,7 @@ There are 3 special bits in this repo you need to care about:
 ### Custom Keycloak image build with custom attribute mapper JAR
 
 We use the upstream Keycloak image and pack a custom JAR file into it - to generate that custom image with the JAR file:
-1. `Makefile` - this will compile the `custom-mapper` JAR, pack it in the `keycloak` container, and then you can run it locally via ` docker run -p 8080:8080 virtru/tdf-keycloak:0.0.2` - just rerun `build-image.sh` after making mapper code changes
+1. `Makefile` - this will compile the `custom-mapper` JAR, pack it in the `keycloak` container, and then you can run it locally via ` docker run -p 8080:8080 opentdf/keycloak:0.0.2` - just rerun `build-image.sh` after making mapper code changes
 
 ### Custom Claim attribute provider build/test
 

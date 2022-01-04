@@ -48,7 +48,7 @@ http://localhost:4030/redoc
 ### build image
 ```shell
 # from project root
-docker build --no-cache --tag virtru/tdf-entitlements-service:0.2.0 entitlements
+docker build --no-cache --tag opentdf/entitlements:0.2.0 entitlements
 ```
 
 ### secrets

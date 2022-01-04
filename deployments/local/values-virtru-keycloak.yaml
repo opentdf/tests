@@ -1,7 +1,7 @@
 # Development image for minikube - for nonlocal envs, override this with a proper version
 # This should be preloaded into minikube by a local setup script
 image:
-  repository: virtru/tdf-keycloak
+  repository: opentdf/keycloak
   tag: virtrulocal
   pullPolicy: Never
 extraEnv: |
@@ -9,5 +9,5 @@ extraEnv: |
     value: technoking
   - name: KEYCLOAK_PASSWORD
     value: elon-musk-is-a-dork
-  - name: ATTRIBUTE_PROVIDER_URL
+  - name: CLAIMS_URL
     value: http://attribute-provider:5000

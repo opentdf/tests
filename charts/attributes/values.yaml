@@ -6,8 +6,7 @@ replicaCount: 1
 
 image:
   pullPolicy: IfNotPresent
-  # value used in https://github.com/virtru/argocd/blob/main/kubernetes/k8s-mgmt/argo-events/etheria/sensor.yaml
-  name: virtru/tdf-attributes-service:3.4.1-n000.he52adfd4
+  name: opentdf/attributes:latest
 
 imagePullSecrets: []
 nameOverride: ""

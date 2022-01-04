@@ -1,5 +1,5 @@
 image:
-  repository: virtru/tdf-keycloak
+  repository: opentdf/keycloak
   tag: 0.3.5
   pullPolicy: Always
 imagePullSecrets:
@@ -8,6 +8,6 @@ extraEnv: |
   - name: KEYCLOAK_USER
     value: technoking
   - name: KEYCLOAK_PASSWORD
-    value: elon-musk-is-a-dork
-  - name: ATTRIBUTE_PROVIDER_URL
-    value: http://attribute-provider:5000
+    value: migrate-this-to-secrets
+  - name: CLAIMS_URL
+    value: http://claims:5000

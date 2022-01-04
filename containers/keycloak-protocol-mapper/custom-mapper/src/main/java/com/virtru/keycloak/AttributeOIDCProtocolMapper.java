@@ -69,7 +69,7 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
                 ProviderConfigProperty.BOOLEAN_TYPE, "false"));
 
         configProperties.add(new ProviderConfigProperty(REMOTE_URL, "Attribute Provider URL",
-                "Full URL of the remote attribute provider service endpoint. Overrides the \"ATTRIBUTE_PROVIDER_URL\" environment variable setting",
+                "Full URL of the remote attribute provider service endpoint. Overrides the \"CLAIMS_URL\" environment variable setting",
                 ProviderConfigProperty.STRING_TYPE, null));
 
         configProperties.add(new ProviderConfigProperty(REMOTE_PARAMETERS, "Parameters",
@@ -171,7 +171,7 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
 
         // Get client ID
         if ("true".equals(mappingModel.getConfig().get(REMOTE_PARAMETERS_CLIENTID))) {
-            formattedParameters.put("client_id", userSession.getAuthenticatedClientSessions().values().stream()
+            formattedParameters.put("userId", userSession.getAuthenticatedClientSessions().values().stream()
                     .map(AuthenticatedClientSessionModel::getClient)
                     .map(ClientModel::getClientId)
                     .distinct()
@@ -200,9 +200,9 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
      * If no client public key has been provided in the request headers noop occurs.  Otherwise, a request
      * is sent as a simple map json document with keys:
      * - token: the oidc token
-     * - client_pk: the client public key
+     * - publicKey: the client public key
      * - username: optional - keycloak user session's username
-     * - client_id: optional - keycloak client id
+     * - userId: optional - keycloak client id
      * - key/value per parameter configuration.
      *
      * @param mappingModel
@@ -219,7 +219,15 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
             List<String> clientPKList = keycloakSession.getContext().getRequestHeaders().getRequestHeader(clientPKHeaderName);
             clientPK = clientPKList == null || clientPKList.isEmpty() ? null : clientPKList.get(0);
         }
+        if (clientPK != null) {
+            if (clientPK.startsWith("LS0")) {
+                byte[] decodedBytes = Base64.getDecoder().decode(clientPK); 
+                clientPK = new String(decodedBytes);
+            }
+            logger.info("Client Cert: " + clientPK);
+        }
         if (clientPK == null) {
+            logger.warn("No client cert for: [" + token.getSubject() + "] within [" + token + "]");
             //noop - return
             return null;
         }
@@ -233,8 +241,8 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
         ResteasyProviderFactory instance = ResteasyProviderFactory.getInstance();
         RegisterBuiltin.register(instance);
         instance.registerProvider(ResteasyJackson2Provider.class);
-        final String url = mappingModel.getConfig().get(REMOTE_URL) == null ? System.getenv("ATTRIBUTE_PROVIDER_URL"): mappingModel.getConfig().get(REMOTE_URL);
-        logger.info("Request attributes for subject: " + token.getSubject());
+        final String url = mappingModel.getConfig().get(REMOTE_URL) == null ? System.getenv("CLAIMS_URL"): mappingModel.getConfig().get(REMOTE_URL);
+        logger.info("Request attributes for subject: [" + token.getSubject() + "] within [" + token + "]");
         CloseableHttpResponse response = null;
         try {
             if(url == null){
@@ -244,8 +252,10 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
             URIBuilder uriBuilder = new URIBuilder(httpReq.getURI());
             httpReq.setURI(uriBuilder.build());
             Map<String, Object> requestEntity = new HashMap<>();
-            requestEntity.put("token", token);
-            requestEntity.put("client_pk", clientPK);
+            requestEntity.put("userId", token.getSubject());
+            requestEntity.put("algorithm", "ec:secp256r1");
+            requestEntity.put("signerPublicKey", clientPK);
+            logger.info("Request: " + requestEntity);
 
             // Build parameters
             for (Map.Entry<String, String> param : parameters.entrySet()) {
@@ -259,13 +269,12 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
             httpReq.setEntity(new StringEntity(objectMapper.writeValueAsString(requestEntity)));
 
             response = client.execute(httpReq);
+            String bodyAsString = EntityUtils.toString(response.getEntity());
             if (response.getStatusLine().getStatusCode() != 200) {
+                logger.warn(response.getStatusLine() + "" + bodyAsString);
                 throw new Exception("Wrong status received for remote claim - Expected: 200, Received: " + response.getStatusLine().getStatusCode() + ":" + url);
             }
-            String bodyAsString = EntityUtils.toString(response.getEntity());
-            if (logger.isDebugEnabled()) {
-                logger.debug(bodyAsString);
-            }
+            logger.debug(bodyAsString);
             return objectMapper.readValue(bodyAsString, JsonNode.class);
         } catch (Exception e) {
             logger.error("Error", e);
@@ -277,6 +286,7 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
                     response.close();
                 }
             } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
     }

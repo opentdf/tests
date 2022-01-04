@@ -40,4 +40,4 @@ kubeconfig
 !/containers/kas/kas_core/tdf3_kas_core/util/keys/keys_for_tests/*
 
 # Helm
-/.helm/
+.helm/

@@ -5,11 +5,12 @@ name = "pypi"
 
 [packages]
 python-keycloak = "==0.26.1"
-PyJWT = "==2.0.1"
-cryptography = "==3.4.6"
+PyJWT = "*"
+cryptography = "*"
 importlib-resources = "*"
 importlib-metadata = "*"
 typing-extensions = "*"
+pyyaml = "*"
 
 [dev-packages]
 build = "*"
