@@ -1,9 +1,10 @@
 # NOTE - The version is also needed in the site-packages COPY command below
 ARG PY_VERSION=3.9
 ARG ALPINE_VERSION=3.13
+ARG CONTAINER_REGISTRY=docker.io
 
 # stage - build
-FROM opentdf/python-base:${PY_VERSION} AS build
+FROM ${CONTAINER_REGISTRY}/opentdf/python-base:${PY_VERSION} AS build
 WORKDIR /build
 # Install application dependencies
 COPY Pipfile .

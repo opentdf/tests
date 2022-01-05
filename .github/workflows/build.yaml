@@ -53,23 +53,51 @@ jobs:
       - helm-lint-test
     steps:
       - uses: actions/checkout@v2
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ghcr.io/opentdf/python-base
+          tags: |
+            type=ref,event=branch
+            type=sha
+            3.10
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Build and export
         uses: docker/build-push-action@v2
         with:
+          build-args: |-
+            ALPINE_VERSION=3.15
+            CONTAINER_REGISTRY=ghcr.io
+            PY_VERSION=3.10
           context: ./containers/python_base
-          tags: opentdf/python-base:3.9
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           outputs: type=docker,dest=/tmp/tdf-python-base.tar
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: tdf-python-base
           path: /tmp/tdf-python-base.tar
+      - name: Publish
+        uses: docker/build-push-action@v2
+        with:
+          build-args: |-
+            ALPINE_VERSION=3.15
+            CONTAINER_REGISTRY=ghcr.io
+            PY_VERSION=3.10
+          context: ./containers/python_base
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'opentdf/backend' }}
 
   build-and-publish-isolated:
     needs:
       - build-base
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -83,7 +111,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: opentdf/${{ matrix.repo }}
+          images: ghcr.io/opentdf/${{ matrix.repo }}
           tags: |
             type=ref,event=branch
             type=sha
@@ -107,6 +135,10 @@ jobs:
       - name: publish
         uses: docker/build-push-action@v2
         with:
+          build-args: |-
+            ALPINE_VERSION=3.15
+            CONTAINER_REGISTRY=ghcr.io
+            PY_VERSION=3.10
           context: ./containers/${{ matrix.repo }}
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'opentdf/backend' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -115,6 +147,9 @@ jobs:
   build-and-publish-with-shared-base:
     needs:
       - build-base
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -127,7 +162,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: opentdf/${{ matrix.repo }}
+          images: ghcr.io/opentdf/${{ matrix.repo }}
           tags: |
             type=ref,event=branch
             type=sha
@@ -151,6 +186,10 @@ jobs:
       - name: publish
         uses: docker/build-push-action@v2
         with:
+          build-args: |-
+            ALPINE_VERSION=3.15
+            CONTAINER_REGISTRY=ghcr.io
+            PY_VERSION=3.10
           context: ./containers
           file: ./containers/${{ matrix.repo }}/Dockerfile
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'opentdf/backend' }}
@@ -160,13 +199,16 @@ jobs:
 
   custom-keycloak-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v2
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: opentdf/keycloak
+          images: ghcr.io/opentdf/keycloak
           tags: |
             type=ref,event=branch
             type=sha
@@ -181,6 +223,10 @@ jobs:
       - name: publish
         uses: docker/build-push-action@v2
         with:
+          build-args: |-
+            MAVEN_VERSION=3.8.4
+            JDK_VERSION=11
+            KEYCLOAK_VERSION=15.0.2
           context: ./containers/keycloak-protocol-mapper
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'opentdf/backend' }}
           tags: ${{ steps.meta.outputs.tags }}

@@ -10,6 +10,7 @@ def local_path(*paths):
 
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
+CONTAINER_REGISTRY = "ghcr.io"
 
 
 #                                                      .
@@ -97,14 +98,14 @@ k8s_yaml(
 #
 
 docker_build(
-    "opentdf/python-base:{}".format(PY_VERSION),
+    "ghcr.io/opentdf/python-base:{}".format(PY_VERSION),
     local_path("containers", "python_base"),
-    build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
+    build_args={"ALPINE_VERSION": ALPINE_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY, "PY_VERSION": PY_VERSION},
 )
 
 docker_build(
-    "opentdf/claims",
-    build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
+    "ghcr.io/opentdf/claims",
+    build_args={"ALPINE_VERSION": ALPINE_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY, "PY_VERSION": PY_VERSION},
     container_args=["--reload"],
     context=local_path("containers", "claims"),
     live_update=[
@@ -117,8 +118,8 @@ docker_build(
 )
 
 docker_build(
-    "opentdf/kas",
-    build_args={"PY_VERSION": PY_VERSION},
+    "ghcr.io/opentdf/kas",
+    build_args={"CONTAINER_REGISTRY": CONTAINER_REGISTRY, "PY_VERSION": PY_VERSION},
     context=local_path("containers", "kas"),
     live_update=[
         sync(local_path("containers", "kas"), "/app"),
@@ -130,10 +131,10 @@ docker_build(
 )
 
 for microservice in ["attributes", "entitlements"]:
-    image_name = "opentdf/" + microservice
+    image_name = "ghcr.io/opentdf/" + microservice
     docker_build(
         image_name,
-        build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
+        build_args={"ALPINE_VERSION": ALPINE_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY, "PY_VERSION": PY_VERSION},
         container_args=["--reload"],
         context=local_path("containers"),
         dockerfile=local_path("containers", microservice, "Dockerfile"),
@@ -148,7 +149,7 @@ for microservice in ["attributes", "entitlements"]:
     )
 
 docker_build(
-    "opentdf/keycloak",
+    "ghcr.io/opentdf/keycloak",
     local_path("containers", "keycloak-protocol-mapper"),
     build_args={
         "MAVEN_VERSION": "3.8.4",
@@ -228,7 +229,7 @@ k8s_resource("ingress-nginx-controller", port_forwards="65432:80")
 #
 
 docker_build(
-    "opentdf/keycloak-bootstrap",
+    "ghcr.io/opentdf/keycloak-bootstrap",
     local_path("containers", "keycloak-bootstrap"),
     build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
 )

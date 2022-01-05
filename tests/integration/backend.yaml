@@ -97,7 +97,7 @@ spec:
                 name: attributes-secrets
             - configMapRef:
                 name: attributes-cm
-          image: opentdf/attributes
+          image: ghcr.io/opentdf/attributes
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -216,7 +216,7 @@ spec:
                 name: claims-secrets
             - configMapRef:
                 name: claims-cm
-          image: opentdf/claims
+          image: ghcr.io/opentdf/claims
           imagePullPolicy: IfNotPresent
           name: claims
           ports:
@@ -336,7 +336,7 @@ spec:
                 name: entitlements-secrets
             - configMapRef:
                 name: entitlements-cm
-          image: opentdf/entitlements
+          image: ghcr.io/opentdf/entitlements
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -465,7 +465,7 @@ spec:
                 name: kas-secrets
             - configMapRef:
                 name: kas-cm
-          image: opentdf/kas
+          image: ghcr.io/opentdf/kas
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -519,7 +519,7 @@ spec:
     spec:
       containers:
         - name: bootstrap-keycloak
-          image: opentdf/keycloak-bootstrap
+          image: ghcr.io/opentdf/keycloak-bootstrap
           imagePullPolicy: IfNotPresent
           env:
             - name: keycloak_hostname

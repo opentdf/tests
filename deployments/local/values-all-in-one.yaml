@@ -16,7 +16,7 @@ eas:
   endpoints:
     kasDefaultUrl: https://abacus.etheria.local/kas
   image:
-    name: opentdf/entity-attribute-service:virtrulocal
+    name: ghcr.io/opentdf/entity-attribute-service:virtrulocal
     pullPolicy: Never
   service:
     type: ClusterIP
@@ -39,23 +39,23 @@ kas:
   endpoints:
     easHost: https://abacus.etheria.local/eas
   image:
-    name: opentdf/kas:virtrulocal
+    name: ghcr.io/opentdf/kas:virtrulocal
     pullPolicy: Never
 
 attribute-provider:
   image:
-    name: opentdf/claim-test-webservice:virtrulocal
+    name: ghcr.io/opentdf/claim-test-webservice:virtrulocal
     pullPolicy: Never
   port: 5000
 
 keycloak-bootstrap:
   image:
-    name: opentdf/keycloak-bootstrap:virtrulocal
+    name: ghcr.io/opentdf/keycloak-bootstrap:virtrulocal
     pullPolicy: Never
 
 attributes:
   image:
-    name: opentdf/attributes:virtrulocal
+    name: ghcr.io/opentdf/attributes:virtrulocal
     pullPolicy: Never
   postgres:
     host: my-tdfdb-postgresql.default.svc.cluster.local
@@ -65,7 +65,7 @@ attributes:
 
 entitlements:
   image:
-    name: entitlements:virtrulocal
+    name: ghcr.io/opentdf/entitlements:virtrulocal
     pullPolicy: Never
   postgres:
     host: my-tdfdb-postgresql.default.svc.cluster.local
@@ -75,7 +75,7 @@ entitlements:
 
 tdf-storage:
   image:
-    name: opentdf/storage:virtrulocal
+    name: ghcr.io/opentdf/storage:virtrulocal
     pullPolicy: Never
   s3Bucket: "datalake.etheria"
   s3BucketRegion: "us-west-2"

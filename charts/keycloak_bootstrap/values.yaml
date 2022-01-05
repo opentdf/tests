@@ -1,7 +1,7 @@
 name: 'keycloak-bootstrap'
 replicaCount: 1
 image:
-  name: opentdf/keycloak-bootstrap
+  name: ghcr.io/opentdf/keycloak-bootstrap
   pullPolicy: Always
   pullSecret: virtru-regcred
 keycloak:
