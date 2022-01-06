@@ -61,15 +61,10 @@ const AttributeListItem: FC<Props> = (props) => {
   const handleOrderClick = useCallback(
     async (attribute: AttributeDefinition, orderItem: string) => {
       const { authority, name } = attribute;
-
-      const path = encodeURIComponent(
-        `${authority}/attr/${name}/value/${orderItem}`,
-      );
-
       try {
         await getAttrEntities({
           method: Method.GET,
-          path: serverData.attributes + `/entitlements/${path}`,
+          path: serverData.entitlements + `/entitlements?authority=${authority}&name=${name}&order=${orderItem}`,
         });
       } catch (error) {
         toast.error("Could not get entities");

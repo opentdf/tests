@@ -8,14 +8,13 @@ import { useEntitlements } from "./hooks/useEntitlement";
 import { useClient } from "../../hooks";
 import { Method } from "../../types/enums";
 
-//TODO: switch to correct entityID. Should be 'browsertest' instead of `id`
 // @ts-ignore
-const serverData = window.SERVER_DATA;
+const {entitlements} = window.SERVER_DATA;
 
 const Client = () => {
   const { id } = useParams<{ id: string }>();
 
-  const [entityId, setEntityId] = useState(`service-account-${id}`);
+  const [entityId, setEntityId] = useState(id);
 
   const { client } = useClient(id);
   const {
@@ -27,20 +26,20 @@ const Client = () => {
   useEffect(() => {
     const config = {
       method: Method.GET,
-      path: serverData.attributes + `/entitlements/${entityId}`,
+      path: entitlements + `/entitlements?entityId=${entityId}`,
     };
 
     getEntitlements(config);
   }, [entityId, getEntitlements]);
 
   useEffect(() => {
-    setEntityId(`service-account-${id}`);
+    setEntityId(`${id}`);
   }, [id]);
 
   const onDeleteKey = useCallback(
     (attribute) => {
       entityClient.delete(
-          serverData.attributes + `/entitlements/${entityId}`, attribute
+          entitlements + `/entitlements/${entityId}`, attribute
       );
     },
     [entityId],
@@ -49,7 +48,7 @@ const Client = () => {
   const onAssignAttribute = useCallback(() => {
     const config = {
       method: Method.GET,
-      path: serverData.attributes + `/entitlements/${entityId}`,
+      path: entitlements + `/entitlements?entityId=${entityId}`,
     };
 
     getEntitlements(config);

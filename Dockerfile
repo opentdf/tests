@@ -23,5 +23,6 @@ ENV KEYCLOAK_HOST "http://localhost/keycloak/auth"
 ENV KEYCLOAK_CLIENT_ID ""
 ENV KEYCLOAK_REALM ""
 ENV ATTRIBUTES_HOST "http://localhost/attributes"
+ENV ENTITLEMENTS_HOST "http://localhost/entitlements"
 
 EXPOSE 80
