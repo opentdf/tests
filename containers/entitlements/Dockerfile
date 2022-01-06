@@ -4,9 +4,10 @@
 ARG PY_VERSION=3.9
 ARG ALPINE_VERSION=3.13
 ARG CONTAINER_REGISTRY=docker.io
+ARG PYTHON_BASE_IMAGE_SELECTOR=:${PY_VERSION}
 
 # stage - build
-FROM ${CONTAINER_REGISTRY}/opentdf/python-base:${PY_VERSION} AS build
+FROM ${CONTAINER_REGISTRY}/opentdf/python-base${PYTHON_BASE_IMAGE_SELECTOR} AS build
 WORKDIR /build
 # Install application dependencies
 COPY entitlements/requirements.txt .

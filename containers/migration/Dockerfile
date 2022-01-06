@@ -1,8 +1,9 @@
 ARG PY_VERSION=3.9
 ARG CONTAINER_REGISTRY=docker.io
+ARG PYTHON_BASE_IMAGE_SELECTOR=:${PY_VERSION}
 
 # stage - build
-FROM ${CONTAINER_REGISTRY}/opentdf/python-base:${PY_VERSION} AS build
+FROM ${CONTAINER_REGISTRY}/opentdf/python-base${PYTHON_BASE_IMAGE_SELECTOR} AS build
 WORKDIR /tool
 # Install tool dependencies
 COPY containers/migration/Pipfile .
