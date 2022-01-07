@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@ant-design/icons": "^4.7.0",
+    "@opentdf/client": "file:./opentdf-client-0.10.0.tgz",
     "@react-keycloak/web": "^3.4.0",
     "@testing-library/jest-dom": "~5.14.1",
     "@testing-library/react": "~11.2.7",
