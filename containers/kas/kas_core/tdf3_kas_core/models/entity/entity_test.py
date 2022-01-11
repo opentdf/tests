@@ -100,14 +100,14 @@ def make_eo():
                     {"attribute": "https://example.com/attr/Classification/value/S"},
                     private_key,
                     algorithm="RS256",
-                ).decode("ascii")
+                )
             },
             {
                 "jwt": jwt.encode(
                     {"attribute": "https://example.com/attr/COI/value/PRX"},
                     private_key,
                     algorithm="RS256",
-                ).decode("ascii")
+                )
             },
         ],
         "publicKey": public_key.public_bytes(
@@ -130,7 +130,7 @@ def test_load_from_raw_data_raises_on_invalid_jwt():
     """Test load_from_raw_data.  Raw data as a dict encoded as a jwt."""
     data = make_eo()
     # invalidate the jwt in the 'cert' field.
-    data["cert"] = data["cert"].decode("ascii") + "aaaaaaa"
+    data["cert"] = data["cert"] + "aaaaaaa"
     public_key = get_public_key_from_disk("test")
     with pytest.raises(tdf3_kas_core.errors.AuthorizationError):
         actual = Entity.load_from_raw_data(data, public_key)

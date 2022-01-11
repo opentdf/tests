@@ -47,21 +47,55 @@ k8s_yaml(
 )
 
 # builds
-docker_build(CONTAINER_REGISTRY + "/opentdf/python-base", context = "containers/python_base",
-    build_args = {"ALPINE_VERSION": ALPINE_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY, "PY_VERSION": PY_VERSION})
-docker_build(CONTAINER_REGISTRY + "/opentdf/keycloak", context = "containers/keycloak-protocol-mapper", build_args = {"MAVEN_VERSION": "3.8.4", "JDK_VERSION":"11", "KEYCLOAK_VERSION":"15.0.2"})
-docker_build(CONTAINER_REGISTRY + "/opentdf/attributes", context = "./containers",
-      dockerfile = "./containers/attributes/Dockerfile",
-    build_args = {"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY})
-docker_build(CONTAINER_REGISTRY + "/opentdf/claims", context = "containers/claims",
-    build_args = {"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY})
-docker_build(CONTAINER_REGISTRY + "/opentdf/entitlements", context = "./containers",
-      dockerfile = "./containers/entitlements/Dockerfile",
-    build_args = {"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY})
-docker_build(CONTAINER_REGISTRY + "/opentdf/kas", context = "containers/kas",
-    build_args = {"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY})
-docker_build(CONTAINER_REGISTRY + "/opentdf/storage", context = "containers/storage",
-    build_args = {"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY})
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/python-base",
+    context="containers/python_base",
+    build_args={
+        "ALPINE_VERSION": ALPINE_VERSION,
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+        "PY_VERSION": PY_VERSION,
+    },
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/keycloak",
+    context="containers/keycloak-protocol-mapper",
+    build_args={
+        "MAVEN_VERSION": "3.8.4",
+        "JDK_VERSION": "11",
+        "KEYCLOAK_VERSION": "15.0.2",
+    },
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/attributes",
+    context="./containers",
+    dockerfile="./containers/attributes/Dockerfile",
+    build_args={"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY},
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/claims",
+    context="containers/claims",
+    build_args={"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY},
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/entitlements",
+    context="./containers",
+    dockerfile="./containers/entitlements/Dockerfile",
+    build_args={"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY},
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/kas",
+    context="containers/kas",
+    build_args={"PY_VERSION": PY_VERSION, "CONTAINER_REGISTRY": CONTAINER_REGISTRY},
+)
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/storage",
+    context="containers/storage",
+    build_args={
+        "ALPINE_VERSION": ALPINE_VERSION,
+        "PY_VERSION": PY_VERSION,
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+    },
+)
 
 # remote resources
 # usage https://github.com/tilt-dev/tilt-extensions/tree/master/helm_remote#additional-parameters

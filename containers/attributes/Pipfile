@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-python-keycloak = "==0.24.0"
+python-keycloak = "==0.25.0"
 uvicorn = {extras = ["standard"], version = "*"}
 fastapi = "*"
 databases = {extras = ["postgresql"], version = "*"}
@@ -12,7 +12,7 @@ sqlalchemy = "*"
 psycopg2-binary = "*"
 
 [dev-packages]
-pytest = "==6.0.2"
+pytest = "*"
 
 [requires]
 python_version = "3"

@@ -41,10 +41,8 @@ jobs:
       - scriptcheck
     steps:
       - uses: actions/checkout@v2
-      - name: "🐍 KAS Core Pytest"
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" scripts/monotest containers/kas/kas_core
-      - name: "🐍 KAS App Pytest"
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.9" scripts/monotest containers/kas/kas_app
+      - name: "🐍 🧪"
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.10" scripts/monotest all
 
   build-base:
     runs-on: ubuntu-latest
@@ -115,7 +113,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: publish
         uses: docker/build-push-action@v2
@@ -158,7 +156,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: publish
         uses: docker/build-push-action@v2
@@ -196,7 +194,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: publish
         uses: docker/build-push-action@v2

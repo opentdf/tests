@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-Flask = "~=1.0"
+Flask = "*"
 gunicorn = "*"
 python-json-logger = "*"
 requests = "*"
@@ -19,7 +19,7 @@ autopep8 = "*"
 coverage = "*"
 flake8_docstrings = "*"
 mypy = "*"
-pytest = "==6.0.2"
+pytest = "*"
 pytest-watch = "*"
 
 [requires]
