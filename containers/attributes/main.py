@@ -291,9 +291,14 @@ async def read_attributes(
 
     sort_args = sort.split(",") if sort else []
 
-    query = get_query(AttributeSchema, db, filter_args, sort_args)
-    logger.debug(query)
-    results = query.all()
+    results = await read_attributes_crud(AttributeSchema, db, filter_args, sort_args)
+
+    return pager.paginate(results)
+
+async def read_attributes_crud(schema, db, filter_args, sort_args):
+    results = get_query(schema, db, filter_args, sort_args)
+    # logger.debug(query)
+    # results = query.all()
     error = None
     #  TODO map authority (namespace_id) to id
     authorities = await read_authorities()
@@ -315,7 +320,7 @@ async def read_attributes(
         raise HTTPException(
             status_code=422, detail=f"attribute error: {str(error)}"
         ) from error
-    return pager.paginate(attributes)
+    return attributes
 
 
 #
@@ -351,9 +356,8 @@ async def read_attributes_definitions(
 
     sort_args = sort.split(",") if sort else []
 
-    query = get_query(AttributeSchema, db, filter_args, sort_args)
-    logger.debug(query)
-    results = query.all()
+    results = get_query(AttributeSchema, db, filter_args, sort_args)
+
     #  TODO map authority (namespace_id) to id
     authorities = await read_authorities()
     attributes: List[AttributeDefinition] = []
@@ -380,6 +384,9 @@ async def read_attributes_definitions(
     dependencies=[Depends(get_auth)],
 )
 async def create_attributes_definitions(request: AttributeDefinition):
+    return await create_attributes_definitions_crud(request)
+
+async def create_attributes_definitions_crud(request):
     # lookup
     query = table_authority.select().where(table_authority.c.name == request.authority)
     result = await database.fetch_one(query)
@@ -418,6 +425,9 @@ async def create_attributes_definitions(request: AttributeDefinition):
     dependencies=[Depends(get_auth)],
 )
 async def update_attribute_definition(request: AttributeDefinition):
+    return await update_attribute_definition_crud(request)
+
+async def update_attribute_definition_crud(request):
     # update
     query = table_authority.select().where(table_authority.c.name == request.authority)
     result = await database.fetch_one(query)
@@ -440,8 +450,6 @@ async def update_attribute_definition(request: AttributeDefinition):
     )
 
     await database.execute(query)
-    return request
-
 
 @app.delete(
     "/definitions/attributes",
@@ -450,6 +458,9 @@ async def update_attribute_definition(request: AttributeDefinition):
     dependencies=[Depends(get_auth)],
 )
 async def delete_attributes_definitions(request: AttributeDefinition):
+    return await delete_attributes_definitions_crud(request)
+
+async def delete_attributes_definitions_crud(request):
     statement = table_attribute.delete().where(
         and_(
             table_attribute.c.authority == request.authority,
@@ -461,14 +472,15 @@ async def delete_attributes_definitions(request: AttributeDefinition):
     await database.execute(statement)
     return {}
 
-
 #
 # Authorities
 #
 
-
 @app.get("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
 async def read_authorities():
+    return await read_authorities_crud()
+
+async def read_authorities_crud():
     query = table_authority.select()
     result = await database.fetch_all(query)
     authorities = []
@@ -479,6 +491,9 @@ async def read_authorities():
 
 @app.post("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
 async def create_authorities(request: AuthorityDefinition):
+    return await create_authorities_crud(request)
+
+async def create_authorities_crud(request):
     # insert
     query = table_authority.insert().values(name=request.authority)
     try:
@@ -494,7 +509,6 @@ async def create_authorities(request: AuthorityDefinition):
     for row in result:
         namespaces.append(f"{row.get(table_authority.c.name)}")
     return namespaces
-
 
 # Check for duplicated items when rule is Hierarchy
 def check_duplicates(hierarchy_list):

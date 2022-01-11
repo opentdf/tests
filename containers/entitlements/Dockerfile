@@ -15,6 +15,8 @@ RUN pip3 install --no-cache-dir --requirement requirements.txt
 # Install application into WORKDIR
 COPY python_base/*.py python_base/
 COPY entitlements/*.py entitlements/
+COPY entitlements/tests entitlements/tests
+
 # Compile application
 RUN python3 -m compileall .
 

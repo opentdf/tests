@@ -13,8 +13,10 @@ WORKDIR /build
 COPY attributes/requirements.txt .
 RUN pip3 install --no-cache-dir --requirement requirements.txt
 # Install application into WORKDIR
+
 COPY python_base/*.py python_base/
 COPY attributes/*.py attributes/
+COPY attributes/tests attributes/tests
 
 # Compile application
 RUN python3 -m compileall .

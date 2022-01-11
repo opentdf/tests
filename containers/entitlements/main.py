@@ -306,9 +306,15 @@ async def read_entitlements(
 
     sort_args = sort.split(",") if sort else []
 
-    query = get_query(EntityAttributeSchema, db, filter_args, sort_args)
-    logger.debug(query)
-    results = query.all()
+    results = await read_entitlements_crud(EntityAttributeSchema, db, filter_args, sort_args)
+    
+    return pager.paginate(results)
+
+
+async def read_entitlements_crud(schema, db, filter_args, sort_args):
+    results = get_query(schema, db, filter_args, sort_args)
+    # logger.debug(query)
+    # results = query.all()
     # query = table_entity_attribute.select().order_by(table_entity_attribute.c.entity_id)
     # result = await database.fetch_all(query)
     # must be ordered by entity_id
@@ -328,8 +334,8 @@ async def read_entitlements(
     # add last
     if previous_entity_id:
         entitlements.append({previous_entity_id: previous_attributes})
-    return pager.paginate(entitlements)
 
+    return entitlements
 
 def parse_attribute_uri(attribute_uri):
     # harden, unit test
@@ -386,6 +392,9 @@ async def add_entitlements_to_entity(
     ],
     auth_token=Depends(get_auth),
 ):
+    return await add_entitlements_to_entity_crud(entityId, request)
+
+async def add_entitlements_to_entity_crud(entityId, request):
     rows = []
     for attribute_uri in request:
         attribute = parse_attribute_uri(attribute_uri)
@@ -400,7 +409,6 @@ async def add_entitlements_to_entity(
     query = table_entity_attribute.insert(rows)
     await database.execute(query)
     return request
-
 
 @app.get(
     "/v1/attribute/{attributeURI:path}/entity/",
@@ -467,6 +475,10 @@ async def remove_entitlement_from_entity(
     ],
     auth_token=Depends(get_auth),
 ):
+
+    return await remove_entitlement_from_entity_crud(entityId, request)
+
+async def remove_entitlement_from_entity_crud(entityId, request):
     for item in request:
         try:
             attribute = parse_attribute_uri(item)
@@ -486,7 +498,6 @@ async def remove_entitlement_from_entity(
         )
         await database.execute(statement)
     return {}
-
 
 if __name__ == "__main__":
     print(json.dumps(app.openapi()), file=sys.stdout)
