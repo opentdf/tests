@@ -58,7 +58,7 @@ metadata:
 spec:
   rules:
     - host: localhost
-      http:
+      http: &paths
         paths:
           - backend:
               service:
@@ -67,6 +67,8 @@ spec:
                   number: 4020
             path: /attributes(/|$)(.*)
             pathType: Prefix
+    - host: host.docker.internal
+      http: *paths
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -105,7 +107,7 @@ spec:
               path: /healthz?probe=liveness
               port: 4020
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           name: attributes
@@ -119,7 +121,7 @@ spec:
               path: /healthz?probe=readiness
               port: 4020
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           terminationMessagePath: /dev/termination-log
@@ -177,7 +179,7 @@ metadata:
 spec:
   rules:
     - host: localhost
-      http:
+      http: &paths
         paths:
           - backend:
               service:
@@ -186,6 +188,8 @@ spec:
                   number: 5000
             path: /claims(/|$)(.*)
             pathType: Prefix
+    - host: host.docker.internal
+      http: *paths
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -291,7 +295,7 @@ metadata:
 spec:
   rules:
     - host: localhost
-      http:
+      http: &paths
         paths:
           - backend:
               service:
@@ -300,6 +304,8 @@ spec:
                   number: 4030
             path: /entitlements(/|$)(.*)
             pathType: Prefix
+    - host: host.docker.internal
+      http: *paths
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -344,7 +350,7 @@ spec:
               path: /healthz?probe=liveness
               port: 4030
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           name: entitlements
@@ -358,7 +364,7 @@ spec:
               path: /healthz?probe=readiness
               port: 4030
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           terminationMessagePath: /dev/termination-log
@@ -423,7 +429,7 @@ metadata:
 spec:
   rules:
     - host: localhost
-      http:
+      http: &paths
         paths:
           - backend:
               service:
@@ -432,6 +438,8 @@ spec:
                   number: 8000
             path: /kas(/|$)(.*)
             pathType: Prefix
+    - host: host.docker.internal
+      http: *paths
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -473,7 +481,7 @@ spec:
               path: /healthz?probe=liveness
               port: 8000
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           name: kas
@@ -487,7 +495,7 @@ spec:
               path: /healthz?probe=readiness
               port: 8000
               scheme: HTTP
-            periodSeconds: 10
+            periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 1
           terminationMessagePath: /dev/termination-log

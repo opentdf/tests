@@ -4,7 +4,6 @@
 *.pyc
 *.sqlite
 *.swp
-*.tgz
 *.tmp
 *.DS_Store
 *~
