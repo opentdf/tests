@@ -2,14 +2,14 @@
   "compilerOptions": {
     "allowJs": true,
     "alwaysStrict": true,
-    "baseUrl": "./src",
+    "baseUrl": "@opentdf/client",
     "composite": true,
     "declaration": true,
     "declarationDir": "./dist/types",
     "declarationMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "inlineSourceMap": true,
+    "inlineSourceMap": false,
     "lib": ["dom", "dom.iterable", "es2020"],
     "module": "esnext",
     "moduleResolution": "node",
@@ -23,7 +23,7 @@
     "strictFunctionTypes": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
-    "target": "es2020"
+    "target": "ES2017"
   },
   "include": ["src", "test"]
 }
