@@ -20,7 +20,7 @@ from pydantic import BaseSettings, Field, AnyUrl
 from pydantic import HttpUrl, validator
 from pydantic import Json
 from pydantic.main import BaseModel
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
 from python_base import Pagination, get_query
@@ -307,7 +307,7 @@ async def read_entitlements(
     sort_args = sort.split(",") if sort else []
 
     results = await read_entitlements_crud(EntityAttributeSchema, db, filter_args, sort_args)
-    
+
     return pager.paginate(results)
 
 
@@ -479,6 +479,8 @@ async def remove_entitlement_from_entity(
     return await remove_entitlement_from_entity_crud(entityId, request)
 
 async def remove_entitlement_from_entity_crud(entityId, request):
+    attribute_conjunctions = []
+
     for item in request:
         try:
             attribute = parse_attribute_uri(item)
@@ -488,16 +490,15 @@ async def remove_entitlement_from_entity_crud(entityId, request):
             ) from e
         logger.debug(entityId)
         logger.debug(attribute)
-        statement = table_entity_attribute.delete().where(
-            and_(
-                table_entity_attribute.c.entity_id == entityId,
-                table_entity_attribute.c.namespace == attribute["namespace"],
-                table_entity_attribute.c.name == attribute["name"],
-                table_entity_attribute.c.value == attribute["value"],
-            )
-        )
-        await database.execute(statement)
+        attribute_conjunctions.append(and_(table_entity_attribute.c.namespace == attribute["namespace"],
+                                           table_entity_attribute.c.name == attribute["name"],
+                                           table_entity_attribute.c.value == attribute["value"]))
+
+
+    await database.execute(table_entity_attribute.delete().where(
+            and_(table_entity_attribute.c.entity_id == entityId, or_(*attribute_conjunctions))))
     return {}
 
+  
 if __name__ == "__main__":
     print(json.dumps(app.openapi()), file=sys.stdout)
