@@ -1,6 +1,28 @@
 # Keycloak flow examples
 
-### Token Exchange flow example
+## Token Exchange flows
+
+### Internal Token to Internal Token Exchange
+
+Internal token exchange is where you exchange a Keycloak-issued token for another Keycloak-issued token.
+
+You might want this if, for instance, Client 1 requests a token on behalf of User 1, but then User 1 wants to hand off to Client 2 - you would then exchange Client 1's token for a Client 2 token - both would still have the principal as User 1, but one would contain claims for User1+Client 1, and the other would contain claims for User1+Client 2
+
+Example:
+
+For this example, we'll be using the example precreated clients `browsertest`, `tdf-client`, and `exchange-target`.
+
+We'll request a token on behalf of the precreated `user1` user via the `browsertest` client, then exchange that token to `tdf-client`, and exchange again to the final client, `exchange-target`
+1. First, we need to explicitly grant permission in Keycloak for a token issued to `browsertest` to be exchanged for a token issued to `tdf-client`
+1. [Follow the Keycloak docs on this to add token exchange permission to `tdf-client`](https://www.keycloak.org/docs/latest/securing_apps/#_client_to_client_permission)
+1. Make sure to hit save on all screens.
+1. Second, we need to explicitly grant permission in Keycloak for a token issued to `tdf-client` to be exchanged for a token issued to `exchange-target`
+1. [Follow the Keycloak docs on this to add token exchange permission to `exchange-target`](https://www.keycloak.org/docs/latest/securing_apps/#_client_to_client_permission)
+1. Make sure to hit save on all screens.
+1. Expose your Keycloak instance on `localhost:8080` (for instance, via `kubectl proxy`)
+1. Once that is done, load up [this Postman example request collection, and invoke them in order](./example-postman-collections/Keycloak Token Exchange- Internal To Internal.postman_collection.json)
+
+### External Token To Internal Token Exchange
 
 Keycloak and the OIDC protocol support exchanging OIDC tokens with other trusted IdPs (Google, Azure, etc)
 - [Docs](https://github.com/keycloak/keycloak-documentation/blob/master/securing_apps/topics/token-exchange/token-exchange.adoc) - See External [External Token to Internal Token Exchange](https://github.com/keycloak/keycloak-documentation/blob/master/securing_apps/topics/token-exchange/token-exchange.adoc#external-token-to-internal-token-exchange)
