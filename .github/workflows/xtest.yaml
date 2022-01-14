@@ -1,0 +1,48 @@
+name: xtest
+on:
+  repository_dispatch:
+    types: [xtest]
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+          registry-url: https://npm.pkg.github.com
+      - name: config ghpr with pat
+        run: |-
+          cd tests/containers
+          echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
+          echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
+      - name: update packages
+        run: |-
+          cd tests/containers
+          ls -l
+          rm opentdf-*.tgz
+          npm pack @opentdf/client@${{ github.event.client_payload.version }}
+          npm pack @opentdf/cli@${{ github.event.client_payload.version }}
+          ls -l
+          cd clients
+          npm i ../*.tgz
+      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+        with:
+          setup-tools: |
+            kubectl
+            helm
+            tilt
+          kubectl: "1.21.1"
+          helm: "3.7.2"
+          tilt: "0.23.4"
+      - run: |
+          kubectl version --client
+          kustomize version
+          tilt version
+      - name: start minikube
+        id: minikube
+        uses: medyagh/setup-minikube@latest
+      - name: tilt-ci
+        run: |-
+          cd tests/integration
+          tilt ci
