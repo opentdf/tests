@@ -6,9 +6,7 @@ replicaCount: 1
 
 image:
   pullPolicy: IfNotPresent
-  repository: opentdf/claims
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  name: opentdf/claims
 
 imagePullSecrets: []
 nameOverride: ""
@@ -35,6 +33,9 @@ securityContext: {}
   # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
+
+secretRef:
+  name: claims-secret
 
 service:
   type: ClusterIP

@@ -115,7 +115,7 @@ async def get_idp_public_key():
 DISABLE_ENTITLEMENTS_AUTH = os.getenv("DISABLE_ENTITLEMENTS_AUTH")
 
 
-async def get_auth(token: str = Security(oauth2_scheme)) -> Json | None:
+async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
     if DISABLE_ENTITLEMENTS_AUTH:
         return None
     try:

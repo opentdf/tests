@@ -1,15 +1,15 @@
 name: 'keycloak-bootstrap'
 replicaCount: 1
 image:
-  name: ghcr.io/opentdf/keycloak-bootstrap
+  name: opentdf/keycloak-bootstrap
   pullPolicy: Always
   pullSecret: virtru-regcred
 keycloak:
   hostname: http://keycloak-http
   clientId: tdf-client
   clientSecret: 123-456
-  username: technoking
-  password: elon-musk-is-a-dork
+  username: keycloakadmin
+  password: mykeycloakpassword
   realm: tdf
   passwordUsers: testuser@virtru.com,user1,user2
   npeClients: null

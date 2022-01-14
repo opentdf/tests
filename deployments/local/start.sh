@@ -16,7 +16,7 @@ e() {
   exit $rval
 }
 
-: "${SERVICE_IMAGE_TAG:="virtrulocal"}"
+: "${SERVICE_IMAGE_TAG:="head"}"
 LOAD_IMAGES=1
 LOAD_SECRETS=1
 START_CLUSTER=1
@@ -117,9 +117,9 @@ if [[ $USE_KEYCLOAK ]]; then
 
   monolog INFO --- "Installing Virtru-ified Keycloak"
   if [[ $RUN_OFFLINE ]]; then
-    helm upgrade --install keycloak "${CHART_ROOT}"/keycloak-15.0.1.tgz -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
+    helm upgrade --install keycloak "${CHART_ROOT}"/keycloak-15.0.1.tgz -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-head} || e "Unable to helm upgrade keycloak"
   else
-    helm upgrade --install keycloak --repo https://codecentric.github.io/helm-charts keycloak -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-virtrulocal} || e "Unable to helm upgrade keycloak"
+    helm upgrade --install keycloak --repo https://codecentric.github.io/helm-charts keycloak -f "${DEPLOYMENT_DIR}/values-virtru-keycloak.yaml" --set image.tag=${SERVICE_IMAGE_TAG:-head} || e "Unable to helm upgrade keycloak"
   fi
   monolog INFO "Waiting until Keycloak server is ready"
 

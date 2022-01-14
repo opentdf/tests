@@ -25,44 +25,72 @@ We store several services combined in a single git repository for ease of develo
 
 This quick start guide is primarily for development and testing the EAS and KAS infrastructure. See [Production](#production) for details on running in production.
 
-### Tilt
+### Prerequisites
 
-https://tilt.dev
+- Install [Docker](https://www.docker.com/)
+    - see https://docs.docker.com/get-docker/
 
-#### Install
+- Install [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/)
+    - On macOS via Homebrew: `brew install kubectl`
+    - Others see https://kubernetes.io/docs/tasks/tools/
 
-https://docs.tilt.dev/install.html
+- Install minikube
+    - On macOS via Homebrew: `brew install minikube`
+    - Others see https://minikube.sigs.k8s.io/docs/start/
 
-`brew install tilt-dev/tap/tilt`
+- Install [kind](https://kind.sigs.k8s.io/)
+  - On macOS via Homebrew: `brew install kind`
+  - On Linux or WSL2 for Windows: `curl -Lo kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64 && chmod +x kind && sudo mv kind /usr/local/bin/kind`
+  - Others see https://kind.sigs.k8s.io/docs/user/quick-start/#installation
 
-#### Usage
+- Install [helm](https://helm.sh/)
+    - On macOS via Homebrew: `brew install helm`
+    - Others see https://helm.sh/docs/intro/install/
 
-##### Local Quickstart
+- Install [Tilt](https://tilt.dev/)
+    - On macOS via Homebrew: `brew install tilt-dev/tap/tilt`
+    - Others see https://docs.tilt.dev/install.html
 
+- Install [ctptl](https://github.com/tilt-dev/ctlptl#readme)
+  - On macOS via Homebrew: `brew install tilt-dev/tap/ctlptl`
+  - Others see https://github.com/tilt-dev/ctlptl#homebrew-maclinux
+
+### Alternative Prerequisites install
 ```shell
 # Install pre-requisites (drop what you've already got)
 ./scripts/pre-reqs docker helm tilt kind octant
+```
 
-# Generate local certs in certs/ directory
+### Generate local certs in certs/ directory
 ./scripts/genkeys-if-needed
 
-# Create a local cluster, using e.g. kind
-kind create cluster --name opentdf
+### Create cluster
 
-# start
-tilt up --context kind-opentdf
+```shell
+ctlptl create cluster kind --registry=ctlptl-registry --name kind-opentdf
+```
 
+### Start cluster
+
+```shell
+tilt up
+```
+ 
 # Hit spacebar to open web UI
 
-# stop and cleanup
+### Cleanup
+
+```shell
 tilt down
+kind delete cluster --name kind-opentdf
+helm repo remove keycloak
 ```
 
 > (Optional) Run `octant` -> This will open a browser window giving you an overview of your local cluster.
 
 ### PR builds
 
-When you open a Github PR, an Argo job will run which will publish all openTDF Backend Service images and Helm charts to Virtru's image/chart
+When you open a GitHub PR, an Argo job will run which will publish all openTDF Backend Service images and Helm charts to Virtru's image/chart
 repos under the git shortSha of your PR branch.
 
 To add the Virtru Helm chart repo (one time step)

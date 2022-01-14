@@ -21,7 +21,7 @@ services:
         - PY_VERSION=${PY_VERSION:-3.9}
       context: ./containers/kas
       dockerfile: Dockerfile
-    image: opentdf/kas:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/kas:${SERVICE_IMAGE_TAG:-head}
 
   claims:
     build:
@@ -29,7 +29,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: opentdf/claims:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/claims:${SERVICE_IMAGE_TAG:-head}
 
   keycloak:
     build:
@@ -41,7 +41,7 @@ services:
         - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-15.0.2}
       dockerfile: Dockerfile
     # INTENTIONALLY tying this version to upstream KC image version
-    image: opentdf/keycloak:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/keycloak:${SERVICE_IMAGE_TAG:-head}
 
   keycloak-bootstrap:
     build:
@@ -49,7 +49,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: opentdf/keycloak-bootstrap:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/keycloak-bootstrap:${SERVICE_IMAGE_TAG:-head}
 
   attributes:
     build:
@@ -57,7 +57,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: opentdf/attributes:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/attributes:${SERVICE_IMAGE_TAG:-head}
 
   entitlements:
     build:
@@ -65,7 +65,7 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: opentdf/entitlements:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/entitlements:${SERVICE_IMAGE_TAG:-head}
 
   storage:
     build:
@@ -73,4 +73,4 @@ services:
       args:
         - PY_VERSION=${PY_VERSION:-3.9}
       dockerfile: Dockerfile
-    image: opentdf/storage:${SERVICE_IMAGE_TAG:-virtrulocal}
+    image: opentdf/storage:${SERVICE_IMAGE_TAG:-head}

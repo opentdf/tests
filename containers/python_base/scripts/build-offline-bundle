@@ -124,7 +124,7 @@ if ! rsync -lmr --safe-links --executability --force deployments/local/* build/e
   exit 1
 fi
 
-if ! sed -i '' "s/:virtrulocal/:$SERVICE_IMAGE_TAG/" "build/export/deployment/values-all-in-one.yaml"; then
+if ! sed -i '' "s/:head/:$SERVICE_IMAGE_TAG/" "build/export/deployment/values-all-in-one.yaml"; then
   monolog ERROR "Unable to change deployment image tags"
   exit 1
 fi

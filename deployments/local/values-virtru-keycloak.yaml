@@ -1,14 +1,15 @@
 # Development image for minikube - for nonlocal envs, override this with a proper version
 # This should be preloaded into minikube by a local setup script
 image:
-  registry: ghcr.io
+#  ghcr.io == GitHub packages
+  registry: docker.io
   repository: opentdf/keycloak
-  tag: virtrulocal
+  tag: head
   pullPolicy: Never
 extraEnv: |
   - name: KEYCLOAK_USER
-    value: technoking
+    value: keycloakadmin
   - name: KEYCLOAK_PASSWORD
-    value: elon-musk-is-a-dork
+    value: mykeycloakpassword
   - name: CLAIMS_URL
     value: http://attribute-provider:5000
