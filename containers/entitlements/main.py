@@ -10,15 +10,12 @@ from typing import Dict, List, Optional, Annotated
 import databases as databases
 import sqlalchemy
 import uritools
-from fastapi import FastAPI, Request, Depends, Query
-from fastapi import Security, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Request, Query, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from keycloak import KeycloakOpenID
-from pydantic import BaseSettings, Field, AnyUrl
-from pydantic import HttpUrl, validator
-from pydantic import Json
+from pydantic import AnyUrl, BaseSettings, Field, HttpUrl, Json, validator
 from pydantic.main import BaseModel
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
@@ -480,20 +477,17 @@ async def remove_entitlement_from_entity(
 
 async def remove_entitlement_from_entity_crud(entityId, request):
     attribute_conjunctions = []
-
-    for item in request:
-        try:
+    try:
+        for item in request:
             attribute = parse_attribute_uri(item)
-        except IndexError as e:
-            raise HTTPException(
-                status_code=BAD_REQUEST, detail=f"invalid: {str(e)}"
-            ) from e
-        logger.debug(entityId)
-        logger.debug(attribute)
-        attribute_conjunctions.append(and_(table_entity_attribute.c.namespace == attribute["namespace"],
+            attribute_conjunctions.append(and_(table_entity_attribute.c.namespace == attribute["namespace"],
                                            table_entity_attribute.c.name == attribute["name"],
                                            table_entity_attribute.c.value == attribute["value"]))
 
+    except IndexError as e:
+        raise HTTPException(
+            status_code=BAD_REQUEST, detail=f"invalid: {str(e)}"
+        ) from e
 
     await database.execute(table_entity_attribute.delete().where(
             and_(table_entity_attribute.c.entity_id == entityId, or_(*attribute_conjunctions))))

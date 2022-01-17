@@ -10,16 +10,11 @@ from typing import Optional, List, Annotated
 import databases as databases
 import sqlalchemy
 from asyncpg import UniqueViolationError
-from fastapi import Depends
-from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi import Security, status
+from fastapi import FastAPI, Depends, HTTPException, Request, Query, Security, status
 from fastapi.openapi.utils import get_openapi
-from fastapi.security import OAuth2AuthorizationCodeBearer
-from fastapi.security import OpenIdConnect
+from fastapi.security import OAuth2AuthorizationCodeBearer, OpenIdConnect
 from keycloak import KeycloakOpenID
-from pydantic import BaseSettings, Field
-from pydantic import Json
-from pydantic import ValidationError, AnyUrl
+from pydantic import AnyUrl, BaseSettings, Field, Json, ValidationError
 from pydantic.main import BaseModel
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
@@ -161,9 +156,8 @@ async def add_response_headers(request: Request, call_next):
 tags_metadata = [
     {
         "name": "Attributes",
-        "description": "Operations to view data attributes."
-        + "TDF protocol supports ABAC (Attribute Based Access Control)."
-        + "This allows TDF protocol to implement policy driven and highly scalable access control mechanism.",
+        "description": """Operations to view data attributes. TDF protocol supports ABAC (Attribute Based Access Control). 
+        This allows TDF protocol to implement policy driven and highly scalable access control mechanism.""",
     },
     {
         "name": "Authorities",
@@ -303,19 +297,21 @@ async def read_attributes_crud(schema, db, filter_args, sort_args):
     #  TODO map authority (namespace_id) to id
     authorities = await read_authorities()
     attributes: List[AnyUrl] = []
-    for row in results:
-        for value in row.values:
-            try:
+
+    try:
+        for row in results:
+            for value in row.values:
                 attributes.append(
-                    AnyUrl(
-                        scheme=f"{authorities[row.namespace_id - 1]}",
-                        host=f"{authorities[row.namespace_id - 1]}",
-                        url=f"{authorities[row.namespace_id - 1]}/attr/{row.name}/value/{value}",
+                        AnyUrl(
+                            scheme=f"{authorities[row.namespace_id - 1]}",
+                            host=f"{authorities[row.namespace_id - 1]}",
+                            url=f"{authorities[row.namespace_id - 1]}/attr/{row.name}/value/{value}",
+                        )
                     )
-                )
-            except ValidationError as e:
-                logging.error(e)
-                error = e
+    except ValidationError as e:
+        logging.error(e)
+        error = e
+        
     if error and not attributes:
         raise HTTPException(
             status_code=422, detail=f"attribute error: {str(error)}"
