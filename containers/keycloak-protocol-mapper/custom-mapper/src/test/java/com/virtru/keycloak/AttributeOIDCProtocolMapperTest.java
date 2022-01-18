@@ -170,10 +170,10 @@ public class AttributeOIDCProtocolMapperTest {
         when(keycloakSession.getContext()).thenReturn(keycloakContext);
         when(keycloakContext.getRequestHeaders()).thenReturn(httpHeaders);
 
+        when(userModel.getId()).thenReturn("1234-4567-8901");
+        when(userSessionModel.getUser()).thenReturn(userModel);
+        
         if (pkHeader != null) {
-            when(userSessionModel.getLoginUsername()).thenReturn("alice@test.org");
-            when(userModel.getId()).thenReturn("1234-4567-8901");
-            when(userSessionModel.getUser()).thenReturn(userModel);
             List<String> pkHeaders = pkHeader == null ? Collections.emptyList() : Collections.singletonList(pkHeader);
             when(httpHeaders.getRequestHeader("testPK")).thenReturn(pkHeaders);
 

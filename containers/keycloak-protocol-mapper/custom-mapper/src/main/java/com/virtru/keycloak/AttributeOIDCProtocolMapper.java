@@ -114,7 +114,7 @@ public class AttributeOIDCProtocolMapper extends AbstractOIDCProtocolMapper impl
         //how legacy code expects `dissems` to work.
         //
         //We will have to fix `dissems` to properly get rid of this hack.
-        token.setSubject(userSession.getLoginUsername());
+        token.setSubject(userSession.getUser().getId());
         logger.info("Custom claims mapper triggered");
         JsonNode claims = clientSessionCtx.getAttribute(REMOTE_AUTHORIZATION_ATTR, JsonNode.class);
         if (logger.isDebugEnabled()) {
