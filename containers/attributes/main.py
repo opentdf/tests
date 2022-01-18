@@ -10,7 +10,7 @@ from typing import Optional, List, Annotated
 import databases as databases
 import sqlalchemy
 from asyncpg import UniqueViolationError
-from fastapi import FastAPI, Depends, HTTPException, Request, Query, Security, status
+from fastapi import FastAPI, Body, Depends, HTTPException, Request, Query, Security, status
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import OAuth2AuthorizationCodeBearer, OpenIdConnect
 from keycloak import KeycloakOpenID
@@ -262,7 +262,14 @@ oidc_scheme = OpenIdConnect(
 #
 
 
-@app.get("/attributes", tags=["Attributes"], response_model=List[AnyUrl])
+@app.get("/attributes",
+         tags=["Attributes"],
+         response_model=List[AnyUrl],
+         responses={
+             200: {"content": {
+                 "application/json": {"example": ["https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
+                                                  "https://opentdf.io/attr/ClassificationUS/value/Unclassified"]}}}}
+         )
 async def read_attributes(
     authority: Optional[AuthorityUrl] = None,
     name: Optional[str] = None,
@@ -329,6 +336,25 @@ async def read_attributes_crud(schema, db, filter_args, sort_args):
     tags=["Attributes Definitions"],
     response_model=List[AttributeDefinition],
     dependencies=[Depends(get_auth)],
+    responses = {
+        200: {
+            "content": {
+                "application/json": {
+                    "example": [
+                        {"authority": "https://opentdf.io",
+                         "name": "IntellectualProperty",
+                         "rule": "hierarchy",
+                         "state": "published",
+                         "order": [
+                             "TradeSecret",
+                             "Proprietary",
+                             "BusinessSensitive",
+                             "Open"
+                         ]}]
+                }
+            }
+        }
+    }
 )
 async def read_attributes_definitions(
     authority: Optional[AuthorityUrl] = None,
@@ -378,8 +404,40 @@ async def read_attributes_definitions(
     tags=["Attributes Definitions"],
     response_model=AttributeDefinition,
     dependencies=[Depends(get_auth)],
+    responses = {
+        200: {
+            "content": {
+                "application/json": {
+                    "example":
+                        {"authority": "https://opentdf.io",
+                         "name": "IntellectualProperty",
+                         "rule": "hierarchy",
+                         "state": "published",
+                         "order": [
+                             "TradeSecret",
+                             "Proprietary",
+                             "BusinessSensitive",
+                             "Open"
+                         ]}
+                }
+            }
+        }
+    }
 )
-async def create_attributes_definitions(request: AttributeDefinition):
+async def create_attributes_definitions(
+        request: AttributeDefinition = Body(...,
+        example = {
+            "authority": "https://opentdf.io",
+            "name": "IntellectualProperty",
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret",
+                "Proprietary",
+                "BusinessSensitive",
+                "Open"
+            ]},)
+):
     return await create_attributes_definitions_crud(request)
 
 async def create_attributes_definitions_crud(request):
@@ -419,8 +477,40 @@ async def create_attributes_definitions_crud(request):
     tags=["Attributes Definitions"],
     response_model=AttributeDefinition,
     dependencies=[Depends(get_auth)],
+    responses = {
+        200: {
+            "content": {
+                "application/json": {
+                    "example":
+                        {"authority": "https://opentdf.io",
+                         "name": "IntellectualProperty",
+                         "rule": "hierarchy",
+                         "state": "published",
+                         "order": [
+                             "TradeSecret",
+                             "Proprietary",
+                             "BusinessSensitive",
+                             "Open"
+                         ]}
+                }
+            }
+        }
+    }
 )
-async def update_attribute_definition(request: AttributeDefinition):
+async def update_attribute_definition(
+        request: AttributeDefinition = Body(...,
+        example = {
+            "authority": "https://opentdf.io",
+            "name": "IntellectualProperty",
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret",
+                "Proprietary",
+                "BusinessSensitive",
+                "Open"
+            ]},)
+):
     return await update_attribute_definition_crud(request)
 
 async def update_attribute_definition_crud(request):
@@ -452,8 +542,22 @@ async def update_attribute_definition_crud(request):
     tags=["Attributes Definitions"],
     status_code=ACCEPTED,
     dependencies=[Depends(get_auth)],
+    responses = {202:  {"description": "No Content", "content":{ "application/json": { "example": {"detail": "Item deleted"} } }}},
 )
-async def delete_attributes_definitions(request: AttributeDefinition):
+async def delete_attributes_definitions(
+        request: AttributeDefinition = Body(...,
+        example = {
+            "authority": "https://opentdf.io",
+            "name": "IntellectualProperty",
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret",
+                "Proprietary",
+                "BusinessSensitive",
+                "Open"
+            ]},)
+):
     return await delete_attributes_definitions_crud(request)
 
 async def delete_attributes_definitions_crud(request):
@@ -472,7 +576,19 @@ async def delete_attributes_definitions_crud(request):
 # Authorities
 #
 
-@app.get("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
+@app.get("/authorities",
+         tags=["Authorities"],
+         dependencies=[Depends(get_auth)],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": ["https://opentdf.io"]
+                     }
+                 }
+             }
+         }
+)
 async def read_authorities():
     return await read_authorities_crud()
 
@@ -485,8 +601,24 @@ async def read_authorities_crud():
     return authorities
 
 
-@app.post("/authorities", tags=["Authorities"], dependencies=[Depends(get_auth)])
-async def create_authorities(request: AuthorityDefinition):
+@app.post("/authorities",
+          tags=["Authorities"],
+          dependencies=[Depends(get_auth)],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": ["https://opentdf.io"]
+                      }
+                  }
+              }
+          }
+)
+async def create_authorities(
+        request: AuthorityDefinition = Body(...,
+        example = {
+            "authority": "https://opentdf.io"})
+):
     return await create_authorities_crud(request)
 
 async def create_authorities_crud(request):
