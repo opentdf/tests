@@ -12,6 +12,7 @@ sqlalchemy = "*"
 psycopg2-binary = "*"
 
 [dev-packages]
+coverage = "*"
 pytest = "*"
 
 [requires]

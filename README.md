@@ -237,13 +237,13 @@ all the unit tests in a python virtual environment.
 To run all the unit tests in the repo:
 
 ``` shell
-scripts/monotest all
+scripts/monotest
 ```
 
 To run a subset of unit tests (e.g. just the `kas_core` tests from the [kas_core](kas_core) subfolder):
 
 ``` shell
-scripts/monotest kas_core
+scripts/monotest containers/kas/kas_core
 ```
 
 ### Cluster tests

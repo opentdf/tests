@@ -9,7 +9,7 @@
 #  Run unit tests for all apps with coverage:
 #   scripts/monotest all cov
 #
-# Usage: scripts/monotest <app> <cov | watch>
+# Usage: scripts/monotest [--coverage] <package dir>
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
@@ -19,31 +19,41 @@ monolog TRACE "monotest: [$0 $*]"
 
 genkeys-if-needed || exit 1
 
+export packages_under_test=()
+export coverage=
+
+while test $# -gt 0; do
+  case "$1" in
+    -c | --cov | --coverage)
+      coverage=1
+      shift
+      ;;
+    --all | all)
+      while IFS='' read -r line; do packages_under_test+=("$line"); done < <(grep -v "^#" <PACKAGES | grep -v "^$")
+      shift
+      ;;
+    *)
+      packages_under_test+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ 0 = "${#packages_under_test[@]}" ]]; then
+  monolog TRACE "monotest: no packages specified, loading all packages to test"
+  while IFS='' read -r line; do packages_under_test+=("$line"); done < <(grep -v "^#" <PACKAGES | grep -v "^$")
+fi
+
+monolog DEBUG "monotest: Testing${coverage:+ with coverage}: [${packages_under_test[*]}]"
+
 _single_pytest() {
   monolog TRACE "_single_pytest: [$*]"
 
-  local project="$1"
+  local package="$1"
   shift
 
-  local kind=plain
-  # Create argument to specify which source subdirectory to check for coverage
-  if [[ $# -gt 0 ]]; then
-    kind="$1"
-    shift
-
-    case "$kind" in
-      cov) ;;
-      watch) ;;
-
-      *)
-        monolog ERROR "Unrecognized python test runner option [$kind]"
-        exit 1
-        ;;
-    esac
-  fi
-
-  if ! cd "${PROJECT_ROOT}/${project}"; then
-    monolog ERROR "Unable to cd [${project}]"
+  if ! cd "${PROJECT_ROOT}/${package}"; then
+    monolog ERROR "Unable to cd [${package}]"
   fi
 
   pip3 install --upgrade pipenv
@@ -56,57 +66,18 @@ _single_pytest() {
   fi
   pipenv install --deploy --dev
 
-  # Develop command line appropriate for basic testing, coverage, or watch
-  case $kind in
-    plain)
-      pipenv run pytest
-      ;;
-    cov)
-      pipenv run coverage run --source=. -m pytest 
-      command_rv=$?
-      if [[ $command_rv = 0 ]]; then
-        monolog TRACE "Collating coverage reports"
-        pipenv run coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
-        pipenv run coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
-      fi
-      return $command_rv
-      ;;
-    watch)
-      pipenv ptw
-      ;;
-    *)
-      monolog ERROR "Unrecognized argument [$2]"
-      exit 1
-      ;;
-  esac
-}
-
-_single_npm_test() {
-  monolog TRACE "_single_npm_test: [$*]"
-
-  local project="$1"
-  shift
-
-  if ! cd "${PROJECT_ROOT}/$project"; then
-    monolog ERROR "Unable to cd [$project]"
-    exit 1
+  if [[ $coverage ]]; then
+    pipenv run coverage run --source=. -m pytest
+    command_rv=$?
+    if [[ $command_rv = 0 ]]; then
+      monolog TRACE "Collating coverage reports"
+      pipenv run coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
+      pipenv run coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
+    fi
+    return $command_rv
+  else
+    pipenv run pytest
   fi
-
-  case $1 in
-    '')
-      npm ci && npm test
-      ;;
-    cov)
-      npm run test-ci
-      ;;
-    watch)
-      npm ci && npm run test-watch
-      ;;
-    *)
-      monolog ERROR "Unrecognized argument [$2]"
-      exit 1
-      ;;
-  esac
 }
 
 _single_package() {
@@ -116,10 +87,7 @@ _single_package() {
     exit 1
   fi
 
-  if [ -f "${PROJECT_ROOT}/$1/package.json" ]; then
-    monolog INFO "Testing $1 as an npm project"
-    _single_npm_test "$@" && monolog DEBUG "Passed [$1]"
-  elif [ -f "${PROJECT_ROOT}/$1/Pipfile" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
+  if [ -f "${PROJECT_ROOT}/$1/Pipfile" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
     monolog INFO "Testing $1 as a python project"
     _single_pytest "$@" && monolog DEBUG "Passed [$1]"
   elif [ -x "${PROJECT_ROOT}/$1/test" ]; then
@@ -131,16 +99,10 @@ _single_package() {
   fi
 }
 
-if [[ all == "$1" ]]; then
-  # NOTE watch and `all` don't play nice together...
-  all_packages=$(grep -v "^#" <PACKAGES | grep -v "^$")
-  for p in $all_packages; do
-    if ! _single_package "$p" "${@:2}"; then
-      rval=$?
-      monolog ERROR "FAILED ${p} ${*:2}"
-      exit $rval
-    fi
-  done
-else
-  _single_package "${@}"
-fi
+for p in "${packages_under_test[@]}"; do
+  if ! _single_package "$p"; then
+    rval=$?
+    monolog ERROR "FAILED ${p}"
+    exit $rval
+  fi
+done

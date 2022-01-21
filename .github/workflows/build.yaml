@@ -41,8 +41,15 @@ jobs:
       - scriptcheck
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: "🐍 🧪"
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.10" scripts/monotest all
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "python:3.10" scripts/monotest --coverage
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   integration-test:
     runs-on: ubuntu-latest
