@@ -40,3 +40,4 @@ kubeconfig
 
 # Helm
 .helm/
+/certs/

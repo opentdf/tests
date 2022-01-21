@@ -82,7 +82,7 @@ tilt up
 
 ```shell
 tilt down
-kind delete cluster --name kind-opentdf
+ctlptl delete cluster kind-opentdf
 helm repo remove keycloak
 ```
 
