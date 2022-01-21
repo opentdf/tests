@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = process.env.REACT_APP_ATTRIBUTES_HOST;
+const baseURL = window.SERVER_DATA.attributes;
 
 const attributesClient = () => {
   const instance = axios.create({

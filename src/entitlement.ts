@@ -36,11 +36,7 @@ export interface components {
     ClaimsObject: {
       attribute: string;
     };
-    EntityAttributeRelationship: {
-      attribute: string;
-      entityId: string;
-      state?: string;
-    };
+    EntityAttributeRelationship: Record<string, string[]>;
     HTTPValidationError: {
       detail?: components["schemas"]["ValidationError"][];
     };
@@ -216,4 +212,4 @@ export interface operations {
   };
 }
 
-export interface external {}
+export interface external { }

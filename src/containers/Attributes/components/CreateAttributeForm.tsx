@@ -7,15 +7,15 @@ import { Attribute } from "../../../types/attributes";
 
 const { Item, List } = Form;
 
-type CreateAttributeValues = Omit<Attribute, "authorityNamespace">;
+type CreateAttributeValues = Omit<Attribute, "authority">;
 
 type Props = {
-  authorityNamespace: string;
+  authority: string;
   onFinish: (values: CreateAttributeValues) => void;
 };
 
 const CreateAttributeForm: FC<Props> = (props) => {
-  const { onFinish, authorityNamespace } = props;
+  const { authority, onFinish } = props;
 
   const stateOptions = useMemo(
     () => ATTRIBUTE_RULE_TYPES.map(([value, label]) => ({ value, label })),
@@ -26,7 +26,7 @@ const CreateAttributeForm: FC<Props> = (props) => {
     <>
       <Typography.Title level={3}>
         Attribute for
-        <Typography.Text italic> {authorityNamespace}</Typography.Text>
+        <Typography.Text italic> {authority}</Typography.Text>
       </Typography.Title>
 
       <Form onFinish={onFinish} initialValues={{ order: [undefined] }}>

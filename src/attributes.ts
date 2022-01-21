@@ -26,7 +26,7 @@ export interface paths {
 export interface components {
   schemas: {
     Attribute: {
-      authorityNamespace: string;
+      authority: string;
       name: string;
       order: string[];
       rule: components["schemas"]["AttributeRuleType"];

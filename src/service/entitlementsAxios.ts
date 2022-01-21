@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = process.env.REACT_APP_ENTITLEMENTS_HOST;
+const baseURL = window.SERVER_DATA.entitlements;
 
 const entitlementsClient = () => {
   const instance = axios.create({

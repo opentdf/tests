@@ -24,9 +24,11 @@ const AutoComplete = (props: AutoCompleteProps & { name: string }) => {
 
   const onSearch = useCallback(
     (searchVal) => {
-      const filteredOptions = options?.filter((option) =>
-        option.value.match(new RegExp(searchVal, "gi")),
-      );
+      const filteredOptions = options?.filter((option) => {
+        const value = String(option.value);
+
+        return value?.match(new RegExp(searchVal, "gi"));
+      });
 
       setComponentOptions(filteredOptions);
     },

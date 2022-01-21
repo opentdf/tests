@@ -3,11 +3,11 @@ import { useHistory } from "react-router";
 import { Divider } from "antd";
 
 import { getCancellationConfig, keyCloakClient } from "../../service";
+import { routes } from "../../routes";
 import ClientsTable from "./ClientsTable";
 import UsersTable from "./UsersTable";
 
 import "./Entitlements.css";
-import { routes } from "../../routes";
 
 const Entitlements = () => {
   const history = useHistory();
@@ -18,13 +18,17 @@ const Entitlements = () => {
     const { token, cancel } = getCancellationConfig();
 
     keyCloakClient
-      .get(`/admin/realms/tdf/clients`, { cancelToken: token })
+      .get(`/admin/realms/${window.SERVER_DATA.realm}/clients`, {
+        cancelToken: token,
+      })
       .then((res) => {
         setClients(res.data);
       });
 
     keyCloakClient
-      .get(`/admin/realms/tdf/users`, { cancelToken: token })
+      .get(`/admin/realms/${window.SERVER_DATA.realm}/users`, {
+        cancelToken: token,
+      })
       .then((res) => {
         setUsers(res.data);
       });

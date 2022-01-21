@@ -2,11 +2,7 @@
 
 ENV VARIABLES to use:
 
-* REACT_APP_SERVER_DATA={'clientId':'','realm':''}
-* REACT_APP_BASE_URL =
-* REACT_APP_KEYCLOAK_HOST =
-* REACT_APP_ENTITLEMENTS_HOST =
-* REACT_APP_ATTRIBUTES_HOST =
+* REACT_APP_SERVER_DATA={'attributes':'','entitlements':'','access':'','authority':'','clientId':'','realm':''}
 
 ## Development
 

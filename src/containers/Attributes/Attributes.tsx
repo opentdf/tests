@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { List } from "antd";
 
-import { useAuthorities, useAttrs } from "../../hooks";
+import { useAuthorities, useDefinitionAttributes } from "../../hooks";
 
 import { AttributeListItem } from "../AttributeListItem";
 import CreateAttribute from "./CreateAttribute";
@@ -15,7 +15,7 @@ const Attributes = () => {
 
   const [stateAuthorities, setStateAuthorities] = useState(authorities);
   const [activeAuthority, setActiveAuthority] = useState(authority);
-  const { attrs, getAttrs } = useAttrs(activeAuthority);
+  const { attrs, getAttrs } = useDefinitionAttributes(activeAuthority);
   const [stateAttrs, setStateAttrs] = useState(attrs);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ const Attributes = () => {
       </List>
 
       <CreateAttribute
-        authorityNamespace={activeAuthority}
+        authority={activeAuthority}
         onAddAttr={onAddAttr}
         onAddNamespace={onAddNamespace}
       />

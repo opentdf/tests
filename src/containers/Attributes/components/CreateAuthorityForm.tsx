@@ -5,7 +5,7 @@ const { Item } = Form;
 const { Title } = Typography;
 
 type CreateAuthorityValues = {
-  request_authority_namespace: string;
+  authority: string;
 };
 
 type Props = { onFinish: (values: CreateAuthorityValues) => void };
@@ -17,7 +17,7 @@ const CreateAuthorityForm: FC<Props> = (props) => {
 
       <Form onFinish={props.onFinish}>
         <Item
-          name="request_authority_namespace"
+          name="authority"
           label="Create Namespace"
           rules={[{ required: true }]}
         >

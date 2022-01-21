@@ -2,7 +2,7 @@ import { Button, Form } from "antd";
 import { FC, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthorities } from "../../hooks";
 import { useUpdateEntitlement } from "./hooks/useEntitlement";
-import { useAttrs } from "../../hooks/useAttributes";
+import { useDefinitionAttributes } from "../../hooks/useAttributes";
 import { AutoComplete } from "../../components";
 import { Method } from "../../types/enums";
 import { toast } from "react-toastify";
@@ -10,10 +10,12 @@ import { toast } from "react-toastify";
 const { Item, useForm } = Form;
 
 type Option = { label: string; value: string };
+
 type Props = {
   entityId: string;
   onAssignAttribute: () => void;
 };
+
 type FormValues = {
   authority: string;
   name: string;
@@ -21,12 +23,13 @@ type FormValues = {
 };
 
 const AssignAttributeForm: FC<Props> = (props) => {
-  const { onAssignAttribute, entityId } = props;
+  const { entityId, onAssignAttribute } = props;
 
   const [form] = useForm();
   const authorities = useAuthorities();
+
   const [authority] = authorities;
-  const { attrs, getAttrs, loading } = useAttrs(authority);
+  const { attrs, getAttrs, loading } = useDefinitionAttributes(authority);
   const [updateEntitlement] = useUpdateEntitlement();
 
   const [selectedName, setSelectedName] = useState();
@@ -34,9 +37,9 @@ const AssignAttributeForm: FC<Props> = (props) => {
 
   const authoritiesOptions = useMemo(
     () =>
-      authorities.map((attribute) => ({
-        label: attribute,
-        value: attribute,
+      authorities.map((authority) => ({
+        label: authority,
+        value: authority,
       })),
     [authorities],
   );
@@ -73,14 +76,13 @@ const AssignAttributeForm: FC<Props> = (props) => {
 
       await updateEntitlement({
         method: Method.PUT,
-        path: `/entitlement/v1/entity/${entityId}/attribute`,
+        path: `/attributes/entitlements/${entityId}`,
         data: [data],
       })
         .then(() => {
           toast.success("Entitlement updated!");
           onAssignAttribute();
         })
-
         .catch(() => {
           toast.error("Could not update entitlement");
         });

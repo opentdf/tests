@@ -11,18 +11,18 @@ import { CreateAttributeForm, CreateAuthorityForm } from "./components";
 const { Panel } = Collapse;
 
 type Props = {
-  authorityNamespace: string;
+  authority: string;
   onAddAttr: (attr: Attribute) => void;
   onAddNamespace: (namespace: string) => void;
 };
 
-type CreateAttributeValues = Omit<Attribute, "authorityNamespace">;
+type CreateAttributeValues = Omit<Attribute, "authority">;
 type CreateAuthorityValues = {
-  request_authority_namespace: string;
+  authority: string;
 };
 
 const CreateAttribute: FC<Props> = (props) => {
-  const { authorityNamespace, onAddAttr, onAddNamespace } = props;
+  const { authority, onAddAttr, onAddNamespace } = props;
 
   const [createAuthority] = useLazyFetch(attributesClient);
   const [createAttributes] = useLazyFetch(attributesClient);
@@ -31,11 +31,9 @@ const CreateAttribute: FC<Props> = (props) => {
     (values: CreateAuthorityValues) => {
       createAuthority<string[]>({
         method: Method.POST,
-        path: `/attributes/v1/authorityNamespace`,
-        params: {
-          params: {
-            request_authority_namespace: values.request_authority_namespace,
-          },
+        path: `/attributes/authorities`,
+        data: {
+          authority: values.authority,
         },
       })
         .then((response) => {
@@ -53,15 +51,15 @@ const CreateAttribute: FC<Props> = (props) => {
   const handleCreateAttribute = (values: CreateAttributeValues) => {
     createAttributes<Attribute>({
       method: Method.POST,
-      path: `/attributes/v1/attr`,
-      data: { ...values, authorityNamespace },
+      path: `/attributes/definitions/attributes`,
+      data: { ...values, authority },
     })
       .then((response) => {
         onAddAttr(response.data);
-        toast.success(`Attribute created for ${authorityNamespace}`);
+        toast.success(`Attribute created for ${authority}`);
       })
       .catch(() => {
-        toast.error(`Attribute was no created for ${authorityNamespace}`);
+        toast.error(`Attribute was no created for ${authority}`);
       });
   };
 
@@ -80,8 +78,8 @@ const CreateAttribute: FC<Props> = (props) => {
 
               <Card.Grid>
                 <CreateAttributeForm
+                  authority={authority}
                   onFinish={handleCreateAttribute}
-                  authorityNamespace={authorityNamespace}
                 />
               </Card.Grid>
             </Card>

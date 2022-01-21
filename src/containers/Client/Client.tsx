@@ -1,21 +1,36 @@
 import { Divider } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
+
+import { Method } from "../../types/enums";
 import { entitlementsClient } from "../../service";
+import { useClient } from "../../hooks";
+import { useEntitlements } from "./hooks/useEntitlement";
+
 import AssignAttributeForm from "./AssignAttributeForm";
 import ClientTable from "./ClientTable";
-import { useEntitlements } from "./hooks/useEntitlement";
-import { useClient } from "../../hooks";
-import { Method } from "../../types/enums";
 
-//TODO: switch to correct entityID. Should be 'browsertest' instead of `id`
+type TableData = {
+  attribute: string;
+  entityId: string;
+};
 
 const Client = () => {
   const { id } = useParams<{ id: string }>();
 
-  const [entityId, setEntityId] = useState(`service-account-${id}`);
+  const [entityId, setEntityId] = useState(id);
 
   const { client } = useClient(id);
+
+  const config = useMemo(
+    () => ({
+      method: Method.GET,
+      path: `/entitlements/entitlements`,
+      params: { params: { entityId } },
+    }),
+    [entityId],
+  );
+
   const {
     getEntitlements,
     data: entityAttributes,
@@ -23,37 +38,48 @@ const Client = () => {
   } = useEntitlements();
 
   useEffect(() => {
-    const config = {
-      method: Method.GET,
-      path: `/entitlement/v1/entity/${entityId}/attribute`,
-    };
-
     getEntitlements(config);
-  }, [entityId, getEntitlements]);
+  }, [config, getEntitlements]);
 
   useEffect(() => {
-    setEntityId(`service-account-${id}`);
+    setEntityId(id);
   }, [id]);
 
   const onDeleteKey = useCallback(
-    (attribute) => {
-      entitlementsClient.delete(
-        `/entitlement/v1/entity/${entityId}/attribute/${encodeURIComponent(
-          attribute,
-        )}`,
-      );
+    (entity: TableData) => {
+      entitlementsClient
+        .delete(`/entitlements/entitlements/${entity.attribute}`, {
+          data: [entity.entityId],
+        })
+        .then(() => getEntitlements(config));
     },
-    [entityId],
+    [config, getEntitlements],
   );
 
   const onAssignAttribute = useCallback(() => {
     const config = {
       method: Method.GET,
-      path: `/entitlement/v1/entity/${entityId}/attribute`,
+      path: `/attributes/entitlements`,
+      params: { params: { entityId } },
     };
 
     getEntitlements(config);
   }, [entityId, getEntitlements]);
+
+  const clientTableData = useMemo(
+    () =>
+      entityAttributes?.reduce((acc: TableData[], item): TableData[] => {
+        const transformedItem = Object.entries(item).flatMap(([key, values]) =>
+          values.map((value) => ({
+            attribute: key,
+            entityId: value,
+          })),
+        );
+
+        return [...acc, ...transformedItem];
+      }, []),
+    [entityAttributes],
+  );
 
   return (
     <section>
@@ -64,14 +90,12 @@ const Client = () => {
 
       <Divider />
 
-      <Divider />
-
       <article>
-        <h2>User {id}</h2>
+        <h2>Client {id}</h2>
 
         <ClientTable
           onDeleteKey={onDeleteKey}
-          entityAttributes={entityAttributes}
+          data={clientTableData}
           loading={loading}
         />
         <Divider />

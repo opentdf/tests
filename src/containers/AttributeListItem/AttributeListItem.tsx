@@ -50,23 +50,26 @@ const AttributeListItem: FC<Props> = (props) => {
   );
 
   const handleOrderClick = useCallback(
-    async (attribute: Attribute, orderItem: string) => {
-      const { authorityNamespace, name } = attribute;
-
-      const path = encodeURIComponent(
-        `${authorityNamespace}/attr/${name}/value/${orderItem}`,
-      );
+    async (attribute: Attribute, order: string) => {
+      const { authority, name } = attribute;
 
       try {
         await getAttrEntities({
           method: Method.GET,
-          path: `/entitlement/v1/attribute/${path}/entity/`,
+          path: `/entitlements/entitlements`,
+          params: {
+            params: {
+              authority: authority,
+              name,
+              order,
+            },
+          },
         });
       } catch (error) {
         toast.error("Could not get entities");
       }
 
-      setActiveTab(orderItem);
+      setActiveTab(order);
       setActiveOrderList(attribute.order);
       setActiveAttribute(attribute);
     },
@@ -82,7 +85,7 @@ const AttributeListItem: FC<Props> = (props) => {
 
   const handleSaveClick = useCallback(async () => {
     const data = {
-      authorityNamespace: activeAuthority,
+      authority: activeAuthority,
       name: activeAttribute?.name,
       order: activeOrderList,
       rule: activeRule,
@@ -92,10 +95,9 @@ const AttributeListItem: FC<Props> = (props) => {
     try {
       await updateRules({
         method: Method.PUT,
-        path: `/attributes/v1/attr`,
+        path: `/attributes/definitions/attributes`,
         data,
       });
-
       toast.success("Rule was updated!");
     } catch (error) {
       toast.error("Could not update rules!");
