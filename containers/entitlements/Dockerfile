@@ -1,8 +1,8 @@
 # Context: opentdf/backend/containers
 # NOTE - The version is also needed in the site-packages COPY command below
 # Context: opentdf/backend/containers
-ARG PY_VERSION=3.9
-ARG ALPINE_VERSION=3.13
+ARG PY_VERSION=3.10
+ARG ALPINE_VERSION=3.15
 ARG CONTAINER_REGISTRY=docker.io
 ARG PYTHON_BASE_IMAGE_SELECTOR=:${PY_VERSION}
 

@@ -1,6 +1,6 @@
 # NOTE - This base image is used here, but it should also really be used in other places such as the e2e test
 # NOTE - The version is also needed in the site-packages COPY command below and should be x.x not x.x.x
-ARG PY_VERSION=3.9
+ARG PY_VERSION=3.10
 ARG CONTAINER_REGISTRY=docker.io
 ARG PYTHON_BASE_IMAGE_SELECTOR=:${PY_VERSION}
 
