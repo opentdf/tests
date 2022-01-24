@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "target": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "Node",
+    "downlevelIteration": true
+  },
+  "rootDir": "./",
+  "include": ["index.*s", "src/**/*.js", "src/**/*.ts", "test/**/*.js", "test/**/*.ts"]
+}
