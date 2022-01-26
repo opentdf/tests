@@ -10,17 +10,26 @@ from typing import Dict, List, Optional, Annotated
 import databases as databases
 import sqlalchemy
 import uritools
-from fastapi import FastAPI, Body, Depends, HTTPException, Path, Request, Query, Security, status
+from fastapi import (
+    FastAPI,
+    Body,
+    Depends,
+    HTTPException,
+    Path,
+    Request,
+    Query,
+    Security,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from keycloak import KeycloakOpenID
 from pydantic import AnyUrl, BaseSettings, Field, HttpUrl, Json, validator
 from pydantic.main import BaseModel
+from python_base import Pagination, get_query
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
-
-from python_base import Pagination, get_query
 
 logging.basicConfig(
     stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", logging.INFO)
@@ -32,19 +41,22 @@ swagger_ui_init_oauth = {
     "clientId": os.getenv("OIDC_CLIENT_ID"),
     "realm": os.getenv("OIDC_REALM"),
     "appName": os.getenv("SERVER_PUBLIC_NAME"),
-    "scopes": ["email"],
+    "scopes": [os.getenv("OIDC_SCOPES")],
 }
 
 
 class Settings(BaseSettings):
     openapi_url: str = "/openapi.json"
+    base_path: str = os.getenv("SERVER_ROOT_PATH", "")
 
 
 settings = Settings()
 
 app = FastAPI(
-    swagger_ui_init_oauth=swagger_ui_init_oauth,
     debug=True,
+    root_path=os.getenv("SERVER_ROOT_PATH", ""),
+    servers=[{"url": settings.base_path}],
+    swagger_ui_init_oauth=swagger_ui_init_oauth,
     openapi_url=settings.openapi_url,
 )
 
@@ -257,25 +269,26 @@ class Entitlements(BaseModel):
     "/v1/entity/attribute",
     response_model=List[EntityAttributeRelationship],
     include_in_schema=False,
-    responses = {
-          200: {
+    responses={
+        200: {
             "content": {
-              "application/json": {
-                "example": [
+                "application/json": {
+                    "example": [
                         {
                             "attribute": "https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
                             "entityId": "tdf-client",
-                            "state": "active"
+                            "state": "active",
                         },
                         {
                             "attribute": "https://opentdf.io/attr/ClassificationUS/value/Unclassified",
                             "entityId": "tdf-client",
-                            "state": "active"
-                        }]
-              }
+                            "state": "active",
+                        },
+                    ]
+                }
             }
-          }
-        },
+        }
+    },
 )
 async def read_relationship(auth_token=Depends(get_auth)):
     query = (
@@ -298,21 +311,21 @@ async def read_relationship(auth_token=Depends(get_auth)):
     "/entitlements",
     tags=["Entitlements"],
     response_model=List[Entitlements],
-    responses = {
-          200: {
+    responses={
+        200: {
             "content": {
-              "application/json": {
-                "example": {
-                "123e4567-e89b-12d3-a456-426614174000": [
-                    "https://opentdf.io/attr/SecurityClearance/value/Unclassified",
-                    "https://opentdf.io/attr/OperationalRole/value/Manager",
-                    "https://opentdf.io/attr/OperationGroup/value/HR",
-                 ],
+                "application/json": {
+                    "example": {
+                        "123e4567-e89b-12d3-a456-426614174000": [
+                            "https://opentdf.io/attr/SecurityClearance/value/Unclassified",
+                            "https://opentdf.io/attr/OperationalRole/value/Manager",
+                            "https://opentdf.io/attr/OperationGroup/value/HR",
+                        ],
+                    }
                 }
-              }
             }
-          }
-        },
+        }
+    },
 )
 async def read_entitlements(
     auth_token=Depends(get_auth),
@@ -328,8 +341,7 @@ async def read_entitlements(
 ):
     filter_args = {}
     if authority:
-        # TODO lookup authority (namespace_id) and get id
-        filter_args["namespace_id"] = authority
+        filter_args["namespace"] = authority
     if name:
         filter_args["name"] = name
     if order:
@@ -337,7 +349,9 @@ async def read_entitlements(
 
     sort_args = sort.split(",") if sort else []
 
-    results = await read_entitlements_crud(EntityAttributeSchema, db, filter_args, sort_args)
+    results = await read_entitlements_crud(
+        EntityAttributeSchema, db, filter_args, sort_args
+    )
 
     return pager.paginate(results)
 
@@ -368,8 +382,8 @@ async def read_entitlements_crud(schema, db, filter_args, sort_args):
 
     return entitlements
 
+
 def parse_attribute_uri(attribute_uri):
-    # harden, unit test
     logger.debug(attribute_uri)
     uri = uritools.urisplit(attribute_uri)
     logger.debug(uri)
@@ -381,39 +395,44 @@ def parse_attribute_uri(attribute_uri):
     path_split_value = uri.path.split("/value/")
     path_split_name = path_split_value[0].split("/attr/")
 
-    return {
-        "namespace": f"{uri.scheme}://{uri.authority}",
-        "name": path_split_name[1],
-        "value": path_split_value[1],
-    }
+    if len(path_split_name) == 2 and len(path_split_value) == 2:
+        return {
+            "namespace": f"{uri.scheme}://{uri.authority}",
+            "name": path_split_name[1],
+            "value": path_split_value[1],
+        }
 
 
 @app.get(
     "/v1/entity/{entityId}/attribute",
     include_in_schema=False,
-    responses = {
-          200: {
+    responses={
+        200: {
             "content": {
-              "application/json": {
-                "example": [
+                "application/json": {
+                    "example": [
                         {
                             "attribute": "https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
                             "entityId": "tdf-client",
-                            "state": "active"
+                            "state": "active",
                         },
                         {
                             "attribute": "https://opentdf.io/attr/ClassificationUS/value/Unclassified",
                             "entityId": "tdf-client",
-                            "state": "active"
-                        }]
-              }
+                            "state": "active",
+                        },
+                    ]
+                }
             }
-          }
         }
+    },
 )
 async def read_entity_attribute_relationship(
-    entityId: str = Path(..., example = "tdf-client",),
-    auth_token=Depends(get_auth)
+    entityId: str = Path(
+        ...,
+        example="tdf-client",
+    ),
+    auth_token=Depends(get_auth),
 ):
     query = table_entity_attribute.select().where(
         table_entity_attribute.c.entity_id == entityId
@@ -434,37 +453,56 @@ async def read_entity_attribute_relationship(
 @app.post(
     "/entitlements/{entityId}",
     tags=["Entitlements"],
-    responses = {
-    200:  {"content":{ "application/json": { "example": ["https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
-                 "https://opentdf.io/attr/ClassificationUS/value/Unclassified"] } }}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": [
+                        "https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
+                        "https://opentdf.io/attr/ClassificationUS/value/Unclassified",
+                    ]
+                }
+            }
+        }
+    },
 )
 async def add_entitlements_to_entity(
-    entityId: str = Path(..., example = "tdf-client",),
+    entityId: str = Path(
+        ...,
+        example="tdf-client",
+    ),
     request: Annotated[
         List[str],
         Field(max_length=2000, exclusiveMaximum=2000),
-    ]= Body(...,
-        example = ["https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
-                 "https://opentdf.io/attr/ClassificationUS/value/Unclassified"]),
+    ] = Body(
+        ...,
+        example=[
+            "https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
+            "https://opentdf.io/attr/ClassificationUS/value/Unclassified",
+        ],
+    ),
     auth_token=Depends(get_auth),
 ):
     return await add_entitlements_to_entity_crud(entityId, request)
+
 
 async def add_entitlements_to_entity_crud(entityId, request):
     rows = []
     for attribute_uri in request:
         attribute = parse_attribute_uri(attribute_uri)
-        rows.append(
-            {
-                "entity_id": entityId,
-                "namespace": attribute["namespace"],
-                "name": attribute["name"],
-                "value": attribute["value"],
-            }
-        )
+        if attribute:
+            rows.append(
+                {
+                    "entity_id": entityId,
+                    "namespace": attribute["namespace"],
+                    "name": attribute["name"],
+                    "value": attribute["value"],
+                }
+            )
     query = table_entity_attribute.insert(rows)
     await database.execute(query)
     return request
+
 
 @app.get(
     "/v1/attribute/{attributeURI:path}/entity/",
@@ -523,39 +561,59 @@ async def create_attribute_entity_relationship(
     tags=["Entitlements"],
     status_code=ACCEPTED,
     responses={
-    202:  {"description": "No Content", "content":{ "application/json": { "example": {"detail": "Item deleted"} } }}},
+        202: {
+            "description": "No Content",
+            "content": {"application/json": {"example": {"detail": "Item deleted"}}},
+        }
+    },
 )
 async def remove_entitlement_from_entity(
-    entityId: str = Path(..., example = "tdf-client",),
+    entityId: str = Path(
+        ...,
+        example="tdf-client",
+    ),
     request: Annotated[
         List[str],
         Field(max_length=2000, exclusiveMaximum=2000),
-    ] = Body(...,
-        example=["https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
-                 "https://opentdf.io/attr/ClassificationUS/value/Unclassified"]),
+    ] = Body(
+        ...,
+        example=[
+            "https://opentdf.io/attr/IntellectualProperty/value/TradeSecret",
+            "https://opentdf.io/attr/ClassificationUS/value/Unclassified",
+        ],
+    ),
     auth_token=Depends(get_auth),
 ):
 
     return await remove_entitlement_from_entity_crud(entityId, request)
+
 
 async def remove_entitlement_from_entity_crud(entityId, request):
     attribute_conjunctions = []
     try:
         for item in request:
             attribute = parse_attribute_uri(item)
-            attribute_conjunctions.append(and_(table_entity_attribute.c.namespace == attribute["namespace"],
-                                           table_entity_attribute.c.name == attribute["name"],
-                                           table_entity_attribute.c.value == attribute["value"]))
+            attribute_conjunctions.append(
+                and_(
+                    table_entity_attribute.c.namespace == attribute["namespace"],
+                    table_entity_attribute.c.name == attribute["name"],
+                    table_entity_attribute.c.value == attribute["value"],
+                )
+            )
 
     except IndexError as e:
-        raise HTTPException(
-            status_code=BAD_REQUEST, detail=f"invalid: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=BAD_REQUEST, detail=f"invalid: {str(e)}") from e
 
-    await database.execute(table_entity_attribute.delete().where(
-            and_(table_entity_attribute.c.entity_id == entityId, or_(*attribute_conjunctions))))
+    await database.execute(
+        table_entity_attribute.delete().where(
+            and_(
+                table_entity_attribute.c.entity_id == entityId,
+                or_(*attribute_conjunctions),
+            )
+        )
+    )
     return {}
 
-  
+
 if __name__ == "__main__":
     print(json.dumps(app.openapi()), file=sys.stdout)
