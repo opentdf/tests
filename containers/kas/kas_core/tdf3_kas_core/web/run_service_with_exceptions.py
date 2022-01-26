@@ -38,6 +38,7 @@ from tdf3_kas_core.errors import PolicyCreateError
 security_headers = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
+    "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'self'; form-action 'self';",
 }
 
 
