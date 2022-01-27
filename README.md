@@ -1,4 +1,4 @@
-# Protected Data Format Reference Services · [![CI](https://github.com/opentdf/backend/actions/workflows/build.yml/badge.svg)](https://github.com/opentdf/backend/actions?query=event%3Apush+branch%3Amain)
+# Protected Data Format Reference Services · [![CI](https://github.com/opentdf/backend/actions/workflows/build.yaml/badge.svg)](https://github.com/opentdf/backend/actions/workflows/build.yaml) · [![Code Quality](https://sonarcloud.io/api/project_badges/measure?project=opentdf_backend&metric=alert_status&token=4fff8ae1ff25f2ed30b5705197309bd4affbd9f1)](https://sonarcloud.io/summary/new_code?id=opentdf_backend)
 
 
 This repository is for a reference implementation of the [openTDF REST Services](https://github.com/opentdf/spec), and sufficient tooling and testing to support the development of it.
