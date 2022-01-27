@@ -56,7 +56,7 @@ const AttributeListItem: FC<Props> = (props) => {
       try {
         await getAttrEntities({
           method: Method.GET,
-          path: `/entitlements/entitlements`,
+          path: `/entitlements`,
           params: {
             params: {
               authority: authority,
@@ -95,7 +95,7 @@ const AttributeListItem: FC<Props> = (props) => {
     try {
       await updateRules({
         method: Method.PUT,
-        path: `/attributes/definitions/attributes`,
+        path: `/definitions/attributes`,
         data,
       });
       toast.success("Rule was updated!");

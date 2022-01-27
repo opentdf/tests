@@ -13,7 +13,8 @@ const entitlementsClient = () => {
     config.headers = {
       ...config.headers,
       authorization: `Bearer ${token}`,
-      accept: 'application/json'
+      accept: 'application/json',
+      "Access-Control-Allow-Origin": "http://localhost:3000"
     };
 
     return config;

@@ -25,7 +25,7 @@ const CreateAuthorityForm: FC<Props> = (props) => {
         </Item>
 
         <Item>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" id="authority-submit">
             Submit
           </Button>
         </Item>

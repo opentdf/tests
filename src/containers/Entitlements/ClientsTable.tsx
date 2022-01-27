@@ -34,9 +34,11 @@ const ClientsTable: FC<Props> = (props) => {
   );
 
   const title = useCallback(() => <b>Clients table</b>, []);
+  const rowKey = useCallback((record: Record) => record.id, []);
 
   return (
     <Table
+      data-test-id="clients-table"
       bordered
       className="table"
       columns={columns}
@@ -44,6 +46,7 @@ const ClientsTable: FC<Props> = (props) => {
       loading={loading}
       onRow={onRow}
       pagination={false}
+      rowKey={rowKey}
       title={title}
     />
   );

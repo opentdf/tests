@@ -10,7 +10,7 @@ type Props = {
   authorities: string[];
 };
 
-const AttributesHeader: FC<Props> = (props) => {
+const AttributesListHeader: FC<Props> = (props) => {
   const { activeAuthority, authorities, authority, onAuthorityChange } = props;
 
   const [form] = useForm();
@@ -44,4 +44,4 @@ const AttributesHeader: FC<Props> = (props) => {
   );
 };
 
-export default memo(AttributesHeader);
+export default memo(AttributesListHeader);

@@ -31,7 +31,7 @@ const CreateAttribute: FC<Props> = (props) => {
     (values: CreateAuthorityValues) => {
       createAuthority<string[]>({
         method: Method.POST,
-        path: `/attributes/authorities`,
+        path: `/authorities`,
         data: {
           authority: values.authority,
         },
@@ -51,7 +51,7 @@ const CreateAttribute: FC<Props> = (props) => {
   const handleCreateAttribute = (values: CreateAttributeValues) => {
     createAttributes<Attribute>({
       method: Method.POST,
-      path: `/attributes/definitions/attributes`,
+      path: `/definitions/attributes`,
       data: { ...values, authority },
     })
       .then((response) => {

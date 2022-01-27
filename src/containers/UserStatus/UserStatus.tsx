@@ -9,12 +9,21 @@ const UserStatus = () => {
       {keycloak.authenticated && (
         <>
           <Avatar size={32}>{keycloak.subject}</Avatar>
-          <Button onClick={() => keycloak.logout()}>Log out</Button>
+          <Button
+            onClick={() => keycloak.logout()}
+            data-test-id="logout-button"
+          >
+            Log out
+          </Button>
         </>
       )}
 
       {!keycloak.authenticated && (
-        <Button type="primary" onClick={() => keycloak.login()}>
+        <Button
+          type="primary"
+          onClick={() => keycloak.login()}
+          data-test-id="login-button"
+        >
           Log in
         </Button>
       )}

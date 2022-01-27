@@ -19,5 +19,10 @@ RUN npm run build
 FROM nginx:stable-alpine as server
 COPY --from=builder /build/build /usr/share/nginx/html
 COPY nginx-default.conf /etc/nginx/templates/default.conf.template
-ENV KEYCLOAK_HOST "http://localhost:8080"
+ENV KEYCLOAK_HOST "http://localhost/keycloak/auth"
+ENV KEYCLOAK_CLIENT_ID ""
+ENV KEYCLOAK_REALM ""
+ENV ATTRIBUTES_HOST "http://localhost/attributes"
+ENV ENTITLEMENTS_HOST "http://localhost/entitlements"
+
 EXPOSE 80

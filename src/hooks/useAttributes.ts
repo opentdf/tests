@@ -10,7 +10,7 @@ export const useDefinitionAttributes = (authority: string) => {
   const [getAttrs, { data, loading }] = useLazyFetch<Attribute[]>(attributesClient);
 
   //TODO: Does this work with authority param?
-  const buildConfig = useCallback((authority) => ({ method: Method.GET, path: `/attributes/definitions/attributes` }), []);
+  const buildConfig = useCallback((authority) => ({ method: Method.GET, path: `/definitions/attributes` }), []);
 
   useEffect(() => {
     if (data) {

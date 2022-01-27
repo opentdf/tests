@@ -29,12 +29,20 @@ const CreateAttributeForm: FC<Props> = (props) => {
         <Typography.Text italic> {authority}</Typography.Text>
       </Typography.Title>
 
-      <Form onFinish={onFinish} initialValues={{ order: [undefined] }}>
+      <Form
+        onFinish={onFinish}
+        initialValues={{ order: [undefined], rule: "hierarchy" }}
+      >
         <Item name="name" label="Name" rules={[{ required: true }]}>
           <Input />
         </Item>
 
-        <Item name="rule" label="Rule" rules={[{ required: true }]}>
+        <Item
+          name="rule"
+          label="Rule"
+          rules={[{ required: true }]}
+          data-test-id="rule-form-item"
+        >
           <Select options={stateOptions} />
         </Item>
 
@@ -82,7 +90,7 @@ const CreateAttributeForm: FC<Props> = (props) => {
         </List>
 
         <Item>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" id="create-attribute-button">
             Submit
           </Button>
         </Item>

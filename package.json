@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@ant-design/icons": "^4.7.0",
+    "@playwright/test": "^1.18.0",
     "@react-keycloak/web": "^3.4.0",
     "@testing-library/jest-dom": "~5.14.1",
     "@testing-library/react": "~11.2.7",
@@ -30,6 +31,7 @@
     "start": "react-scripts start",
     "build": "REACT_APP_SERVER_DATA=__SERVER_DATA__ react-scripts build",
     "test": "react-scripts test",
+    "test:playwright": "playwright test --config=tests/e2e/playwright.config.ts",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

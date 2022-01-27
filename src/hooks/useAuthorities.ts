@@ -9,7 +9,7 @@ export const useAuthorities = () => {
 
   const [data] = useFetch<Authorities>(attributesClient, {
     method: Method.GET,
-    path: `attributes/authorities`
+    path: `/authorities`
   });
 
   useEffect(() => {

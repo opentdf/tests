@@ -25,7 +25,7 @@ const Client = () => {
   const config = useMemo(
     () => ({
       method: Method.GET,
-      path: `/entitlements/entitlements`,
+      path: `/entitlements`,
       params: { params: { entityId } },
     }),
     [entityId],
@@ -48,7 +48,7 @@ const Client = () => {
   const onDeleteKey = useCallback(
     (entity: TableData) => {
       entitlementsClient
-        .delete(`/entitlements/entitlements/${entity.attribute}`, {
+        .delete(`/entitlements/${entity.attribute}`, {
           data: [entity.entityId],
         })
         .then(() => getEntitlements(config));
@@ -59,7 +59,7 @@ const Client = () => {
   const onAssignAttribute = useCallback(() => {
     const config = {
       method: Method.GET,
-      path: `/attributes/entitlements`,
+      path: `/entitlements`,
       params: { params: { entityId } },
     };
 
