@@ -3,7 +3,7 @@ all: dockerbuild
 COMPONENT_NAME=bootstrap
 COMPONENT_NAME_SNAKE=bootstrap
 IMAGE=virtru/keycloak-bootstrap
-VERSION=0.4.1
+VERSION=0.4.2
 VENV_DIR=.venv
 PIPENV_VENV_IN_PROJECT=enabled
 

@@ -159,7 +159,7 @@ def addVirtruDCRSPIREMapper(keycloak_admin, keycloak_client_id):
                     "userinfo.token.claim": "true",
                     "user_workload.namespace": "default",
                     "user_workload.parentid": "spiffe://example.org/ns/spire/sa/spire-agent",
-                    "user_workload.selectors": "k8s:pod-label:datacleanroom:enabled, k8s:ns:default",
+                    "user_workload.selectors": "k8s:pod-label:tdfdatacleanroom:enabled, k8s:ns:default"
                 },
                 "name": "DCR Spire Registration Mapper",
                 "protocolMapper": "virtru-spire-protocolmapper",

@@ -1,5 +1,7 @@
 name: 'keycloak-bootstrap'
 replicaCount: 1
+job:
+  backoffLimit: 10
 image:
   name: opentdf/keycloak-bootstrap
   pullPolicy: Always
