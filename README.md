@@ -4,17 +4,19 @@
 
 ### Setup
 
-Create a `.env` with your values
+Create a `.env` with your values  
 ```dotenv
 REACT_APP_SERVER_DATA={'attributes':'','entitlements':'','access':'','authority':'','clientId':'','realm':''}
 ```
+
+The `REACT_APP_SERVER_DATA` environment variable becomes `window.__SERVER_DATA__`.
 
 ### Server (development)
 
 Starts server on http://localhost:3000  
 `npm run start`
 
-### Server (production)
+### Server (production-like)
 
 ```shell
 docker run -p 3000:80 \
@@ -25,6 +27,8 @@ docker run -p 3000:80 \
   -e ENTITLEMENTS_HOST="http://localhost/v2/entitlements" \
   $(docker build -q .)
 ```
+
+The environment variables becomes `window.__SERVER_DATA__` via an NGINX sub_filter defined in nginx-default.conf
 
 ### OpenAPI
 
@@ -63,3 +67,6 @@ To install
 
 To run (while development server above is running)  
 `npm run test:playwright`
+
+### Lint
+`CI=true npm run build`
