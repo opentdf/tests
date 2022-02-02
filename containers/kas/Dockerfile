@@ -28,7 +28,8 @@ COPY kas_app /kas_app
 COPY kas_core /kas_core
 
 # Compile application
-RUN pipenv install --dev --system --deploy --ignore-pipfile
+RUN pip3 install --no-cache-dir --upgrade pip setuptools pipenv && \
+  pipenv install --dev --system --deploy --ignore-pipfile
 RUN python3 -m compileall .
 
 # stage - production server

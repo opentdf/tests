@@ -31,7 +31,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
 logging.basicConfig(
-    stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", logging.CRITICAL).upper()
+    stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", "CRITICAL").upper()
 )
 logger = logging.getLogger(__package__)
 

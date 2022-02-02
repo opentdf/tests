@@ -108,25 +108,6 @@ docker_build(
 )
 
 docker_build(
-    "ghcr.io/opentdf/claims",
-    build_args={
-        "ALPINE_VERSION": ALPINE_VERSION,
-        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
-        "PY_VERSION": PY_VERSION,
-        "PYTHON_BASE_IMAGE_SELECTOR": "",
-    },
-    container_args=["--reload"],
-    context=local_path("containers", "claims"),
-    live_update=[
-        sync(local_path("containers", "claims"), "/app"),
-        run(
-            "cd /app && pip install -r requirements.txt",
-            trigger=local_path("containers", "claims", "requirements.txt"),
-        ),
-    ],
-)
-
-docker_build(
     "ghcr.io/opentdf/kas",
     build_args={
         "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
@@ -143,7 +124,7 @@ docker_build(
     ],
 )
 
-for microservice in ["attributes", "entitlements"]:
+for microservice in ["attributes", "entitlements", "claims"]:
     image_name = "ghcr.io/opentdf/" + microservice
     docker_build(
         image_name,
@@ -192,7 +173,6 @@ k8s_resource("opentdf-attributes", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-claims", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-entitlements", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"])
-k8s_resource("opentdf-abacus", resource_deps=["opentdf-attributes"])
 
 
 helm_remote(
@@ -268,4 +248,4 @@ docker_build(
 )
 
 k8s_yaml("xtest.yaml")
-k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak"])
+k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"])

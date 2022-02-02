@@ -32,7 +32,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
 logging.basicConfig(
-    stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", logging.INFO)
+    stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", "CRITICAL")
 )
 logger = logging.getLogger(__package__)
 

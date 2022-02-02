@@ -135,7 +135,6 @@ jobs:
     strategy:
       matrix:
         repo:
-          - claims
           - kas
           - keycloak-bootstrap
     steps:
@@ -179,6 +178,7 @@ jobs:
     strategy:
       matrix:
         repo:
+          - claims
           - attributes
           - entitlements
     steps:

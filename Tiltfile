@@ -73,7 +73,8 @@ docker_build(
 )
 docker_build(
     CONTAINER_REGISTRY + "/opentdf/claims",
-    context="containers/claims",
+    context="containers",
+    dockerfile="./containers/claims/Dockerfile",
     build_args={
         "ALPINE_VERSION": ALPINE_VERSION,
         "CONTAINER_REGISTRY": CONTAINER_REGISTRY,

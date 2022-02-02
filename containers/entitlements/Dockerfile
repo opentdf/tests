@@ -10,8 +10,10 @@ ARG PYTHON_BASE_IMAGE_SELECTOR=:${PY_VERSION}
 FROM ${CONTAINER_REGISTRY}/opentdf/python-base${PYTHON_BASE_IMAGE_SELECTOR} AS build
 WORKDIR /build
 # Install application dependencies
-COPY entitlements/requirements.txt .
-RUN pip3 install --no-cache-dir --requirement requirements.txt
+COPY entitlements/requirements.txt entitlements/requirements.txt
+COPY python_base/requirements.txt python_base/requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip setuptools && \
+    pip3 install --no-cache-dir --requirement entitlements/requirements.txt
 # Install application into WORKDIR
 COPY python_base/*.py python_base/
 COPY entitlements/*.py entitlements/
@@ -23,11 +25,7 @@ RUN python3 -m compileall .
 # stage - production server
 FROM python:${PY_VERSION}-alpine${ALPINE_VERSION} AS production
 ARG PY_VERSION
-# Install apk dependencies
-RUN apk add --no-cache --upgrade \
-    bash \
-    postgresql-client \
-    libressl
+
 WORKDIR /app
 COPY --from=build --chown=root:root /build/ .
 # NOTE - the python version needs to be specified in the following COPY command:

@@ -56,27 +56,31 @@ _single_pytest() {
     monolog ERROR "Unable to cd [${package}]"
   fi
 
-  pip3 install --upgrade pipenv
+  rm -rf .venv
+  python3 -m venv .venv
+  # shellcheck source=/dev/null
+  source .venv/bin/activate
+  pip3 install --upgrade pip pytest coverage
 
   # shellcheck source=/dev/null
   [ -f "scripts/test.env" ] && . scripts/test.env
 
   if [[ $CLEAN_VENV ]]; then
-    pipenv clean
+      rm -rf .venv
   fi
-  pipenv install --deploy --dev
+  pip3 install --requirement requirements.txt
 
   if [[ $coverage ]]; then
-    pipenv run coverage run --branch --source=. -m pytest
+    python3 -m coverage run --branch --source=. -m pytest
     command_rv=$?
     if [[ $command_rv = 0 ]]; then
       monolog TRACE "Collating coverage reports"
-      pipenv run coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
-      pipenv run coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
+      python3 -m coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
+      python3 -m coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
     fi
     return $command_rv
   else
-    pipenv run pytest
+    python3 -m pytest
   fi
 }
 
@@ -87,7 +91,8 @@ _single_package() {
     exit 1
   fi
 
-  if [ -f "${PROJECT_ROOT}/$1/Pipfile" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
+  if [ -f "${PROJECT_ROOT}/$1/requirements.txt" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
+    monolog INFO "$(python3 --version)"
     monolog INFO "Testing $1 as a python project"
     _single_pytest "$@" && monolog DEBUG "Passed [$1]"
   elif [ -x "${PROJECT_ROOT}/$1/test" ]; then
