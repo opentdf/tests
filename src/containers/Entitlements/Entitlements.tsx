@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useHistory } from "react-router";
-import { Divider } from "antd";
+import {useCallback, useEffect, useMemo, useState} from "react";
+import {useHistory} from "react-router";
+import {Divider} from "antd";
 
-import { getCancellationConfig, keyCloakClient } from "../../service";
-import { routes } from "../../routes";
+import {getCancellationConfig, keyCloakClient} from "../../service";
+import {routes} from "../../routes";
 import ClientsTable from "./ClientsTable";
 import UsersTable from "./UsersTable";
 
 import "./Entitlements.css";
+import {components} from "../../keycloak";
 
 const Entitlements = () => {
   const history = useHistory();
@@ -22,7 +23,10 @@ const Entitlements = () => {
         cancelToken: token,
       })
       .then((res) => {
-        setClients(res.data);
+          const clientsWithMapper = res.data.filter((element: components["schemas"]["ClientRepresentation"]) => {
+              return element.protocolMappers?.find((pm => pm.protocolMapper === 'virtru-oidc-protocolmapper'));
+          })
+          setClients(clientsWithMapper);
       });
 
     keyCloakClient
@@ -67,7 +71,7 @@ const Entitlements = () => {
     <section>
       <ClientsTable
         data={formattedClients}
-        loading={!!!clients.length}
+        loading={!clients.length}
         onRowClick={onClientRecordClick}
       />
 
@@ -75,7 +79,7 @@ const Entitlements = () => {
 
       <UsersTable
         data={formattedUsers}
-        loading={!!!users.length}
+        loading={!users.length}
         onRowClick={onUserRecordClick}
       />
     </section>
