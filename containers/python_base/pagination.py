@@ -68,6 +68,8 @@ class Pagination:
             link_headers.append('<{url}>; rel="{rel}"'.format(url=prev_url, rel="prev"))
 
         self.response.headers["x-total-count"] = str(count)
+        # ↓↓↓ https://stackoverflow.com/questions/37897523/axios-get-access-to-response-header-fields
+        self.response.headers["Access-Control-Expose-Headers"] = "x-total-count"
         self.response.headers["link"] = ",".join(link_headers)
 
         return item_list[self.skip() : self.skip() + self.limit]
