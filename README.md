@@ -58,7 +58,7 @@ This quick start guide is primarily for development and testing the EAS and KAS 
 ### Alternative Prerequisites install
 ```shell
 # Install pre-requisites (drop what you've already got)
-./scripts/pre-reqs docker helm tilt kind octant
+./scripts/pre-reqs docker helm tilt kind 
 ```
 
 ### Generate local certs in certs/ directory

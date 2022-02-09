@@ -20,6 +20,6 @@ spec:
             - name: KAS_ENDPOINT
               value: http://opentdf-kas:8000
             - name: OIDC_ENDPOINT
-              value: http://keycloak
+              value: http://keycloak-http
       restartPolicy: Never
   backoffLimit: 6

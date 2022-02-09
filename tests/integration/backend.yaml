@@ -395,9 +395,9 @@ data:
   EAS_HOST: http://opentdf-attributes:4020
   FLASK_DEBUG: "False"
   GUNICORN_WORKERS: "2"
-  KEYCLOAK_HOST: http://keycloak
+  KEYCLOAK_HOST: http://keycloak-http
   LOGLEVEL: INFO
-  OIDC_PUBKEY_ENDPOINT: http://keycloak
+  OIDC_PUBKEY_ENDPOINT: http://keycloak-http
   STATSD_HOST: opentdf-statsd
   USE_KEYCLOAK: "1"
 ---
@@ -531,7 +531,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: keycloak_hostname
-              value: http://keycloak
+              value: http://keycloak-http
             - name: keycloak_admin_username
               value: keycloakadmin
             - name: keycloak_admin_password

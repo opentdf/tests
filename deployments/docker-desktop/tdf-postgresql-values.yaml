@@ -7,12 +7,15 @@ global:
       repository: bitnami/postgresql
       tag: 12.7.0
     postgresqlUsername: postgres
-    postgresqlPassword: postgres
+    postgresqlPassword: otdf-pgsql-admin
 
 initdbUser: postgres
-initdbPassword: postgres
+initdbPassword: otdf-pgsql-admin
 initdbScripts:
   init.sql: |
+    -- Keycloak DB
+    CREATE DATABASE keycloak_database;
+
     -- Attributes used in the Trusted Data Format
 
     CREATE DATABASE tdf_database;

@@ -151,9 +151,11 @@ docker_build(
     "ghcr.io/opentdf/keycloak",
     local_path("containers", "keycloak-protocol-mapper"),
     build_args={
+        "CONTAINER_REGISTRY": "docker.io",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
-        "KEYCLOAK_VERSION": "15.0.2",
+        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
+        "KEYCLOAK_BASE_VERSION": "15.0.2",
     },
 )
 
@@ -177,18 +179,17 @@ k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"])
 
 helm_remote(
     "keycloak",
-    repo_name="xtest-bitnami",
-    repo_url="https://charts.bitnami.com/bitnami",
+    version="17.0.1",
+    repo_url="https://codecentric.github.io/helm-charts",
     values=["backend-keycloak-values.yaml"],
-    version="5.1.1",
 )
+
 helm_remote(
     "postgresql",
-    release_name="opentdf",
-    repo_name="xtest-bitnami",
     repo_url="https://charts.bitnami.com/bitnami",
+    release_name="opentdf",
+    version="10.16.2",
     values=["backend-postgresql-values.yaml"],
-    version="10.9.5",
 )
 
 #     o8o
@@ -202,14 +203,14 @@ helm_remote(
 #                      "Y88888P'
 #
 
+# TODO should integrate with a service mesh and stop deploying our own ingress
 # We need to have big headers for the huge bearer tokens we pass around
 # https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
 helm_remote(
     "ingress-nginx",
-    repo_name="xtest-ingress-nginx",
     repo_url="https://kubernetes.github.io/ingress-nginx",
     set=["controller.config.large-client-header-buffers=20 32k"],
-    version="4.0.1",
+    version="4.0.16",
 )
 
 k8s_resource("ingress-nginx-controller", port_forwards="65432:80")

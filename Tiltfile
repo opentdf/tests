@@ -55,9 +55,11 @@ docker_build(
     CONTAINER_REGISTRY + "/opentdf/keycloak",
     context="containers/keycloak-protocol-mapper",
     build_args={
+        "CONTAINER_REGISTRY": "docker.io",
+        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
+        "KEYCLOAK_BASE_VERSION": "15.0.2",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
-        "KEYCLOAK_VERSION": "15.0.2",
     },
 )
 docker_build(
@@ -108,13 +110,15 @@ docker_build(
 # usage https://github.com/tilt-dev/tilt-extensions/tree/master/helm_remote#additional-parameters
 helm_remote(
     "keycloak",
-    repo_url="https://charts.bitnami.com/bitnami",
+    version="17.0.1",
+    repo_url="https://codecentric.github.io/helm-charts",
     values=["deployments/docker-desktop/keycloak-values.yaml"],
 )
 helm_remote(
     "postgresql",
     repo_url="https://charts.bitnami.com/bitnami",
     release_name="tdf",
+    version="10.16.2",
     values=["deployments/docker-desktop/tdf-postgresql-values.yaml"],
 )
 
@@ -185,3 +189,11 @@ k8s_resource("entitlements", resource_deps=["tdf-postgresql"])
 # TODO: Add a bootstrap job
 # docker_build(CONTAINER_REGISTRY + "/opentdf/keycloak-bootstrap", context = "containers/keycloak-bootstrap",
 #     build_args = {"PY_VERSION": PY_VERSION})
+
+# The Postgres chart by default does not remove its Persistent Volume Claims: https://github.com/bitnami/charts/tree/master/bitnami/postgresql#uninstalling-the-chart
+# This means `tilt down && tilt up` will leave behind old PGSQL databases and volumes, causing weirdness.
+# Doing a `tilt down && kubectl delete pvc --all` will solve this
+# Tried to automate that teardown postcommand here with Tilt, and it works for everything but `tilt ci` which keeps
+# waiting for the no-op `apply_cmd` to stream logs as a K8S resource.
+# I have not figured out a clean way to run `down commands` with tilt
+#k8s_custom_deploy("Manual PVC Delete On Teardown", 'echo ""', "kubectl delete pvc --all", "")

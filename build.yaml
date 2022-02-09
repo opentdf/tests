@@ -38,7 +38,7 @@ services:
         - MAVEN_VERSION=${MAVEN_VERSION:-3.6.3}
         - JDK_VERSION=${JDK_VERSION:-11}
         # INTENTIONALLY tying this version to upstream KC image version
-        - KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-15.0.2}
+        - KEYCLOAK_BASE_VERSION=${KEYCLOAK_VERSION:-15.0.2}
       dockerfile: Dockerfile
     # INTENTIONALLY tying this version to upstream KC image version
     image: opentdf/keycloak:${SERVICE_IMAGE_TAG:-head}
