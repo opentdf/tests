@@ -21,18 +21,5 @@ spec:
     {{- end }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
-      http:
-        paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: {{ .backend.service.name }}
-                port:
-                  number: {{ .backend.service.port }}
-          {{- end }}
-    {{- end }}
+  {{- .Values.ingress.rules | toYaml | nindent 4 }}
   {{- end }}

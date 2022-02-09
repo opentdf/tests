@@ -167,6 +167,16 @@ docker_build(
 #  o.  )88b 888    .o  888        `888'     888  888   .o8 888    .o o.  )88b
 #  8""888P' `Y8bod8P' d888b        `8'     o888o `Y8bod8P' `Y8bod8P' 8""888P'
 
+k8s_yaml(
+    helm(
+        "../../charts/attributes",
+        "opentdf-attributes",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"],
+        values=["backend-attributes-values.yaml"],
+    )
+)
+
+
 k8s_yaml("backend.yaml")
 k8s_yaml("frontend.yaml")
 

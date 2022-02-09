@@ -1,0 +1,53 @@
+logLevel: DEBUG
+publicName: "Attribute Authority"
+serverRootPath: /attributes
+oidc:
+  realm: tdf
+  internalHost: http://keycloak/auth
+  externalHost: http://localhost:65432/keycloak/auth
+  clientId: tdf-attributes
+  clientSecret: myclientsecret
+
+image:
+  pullPolicy: IfNotPresent
+  name: ghcr.io/opentdf/attributes:latest
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+
+service:
+  type: ClusterIP
+  port: 4020
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  rules:
+    - host: localhost
+      http: &paths
+        paths:
+          - backend:
+              service:
+                name: opentdf-attributes
+                port:
+                  number: 4020
+            path: /attributes(/|$)(.*)
+            pathType: Prefix
+    - host: host.docker.internal
+      http: *paths
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+postgres:
+  host: opentdf-postgresql
+  port: 5432
+  user: tdf_attribute_manager
+#  value from kubernetes secrets
+  password: ""
+  database: tdf_database
+  schema: tdf_attribute
