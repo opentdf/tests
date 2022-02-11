@@ -1,4 +1,5 @@
 import { Button, Col, Form, Input, Row } from "antd";
+import { AttributesFiltersStore } from '../../../store';
 
 const { Item } = Form;
 
@@ -9,7 +10,9 @@ const FilterForm = () => {
       labelCol={{ span: 24 }}
       wrapperCol={{ span: 24 }}
       onFinish={(values) => {
-        console.log(values);
+        AttributesFiltersStore.update(store => {
+          store.query = { ...values };
+        })
       }}
       autoComplete="off"
       layout="vertical"
@@ -29,7 +32,7 @@ const FilterForm = () => {
 
       <Row gutter={[8, 8]}>
         <Col>
-          <Item label="Order" name="values">
+          <Item label="Order" name="order">
             <Input />
           </Item>
         </Col>

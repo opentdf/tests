@@ -1,8 +1,8 @@
 import { Button, Form } from "antd";
 import { FC, useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthorities } from "../../hooks";
+import { AttributesFiltersStore } from "../../store";
 import { useUpdateEntitlement } from "./hooks/useEntitlement";
-import { useDefinitionAttributes } from "../../hooks/useAttributes";
+import { useDefinitionAttributes } from "../../hooks";
 import { AutoComplete } from "../../components";
 import { Method } from "../../types/enums";
 import { toast } from "react-toastify";
@@ -26,9 +26,8 @@ const AssignAttributeForm: FC<Props> = (props) => {
   const { entityId, onAssignAttribute } = props;
 
   const [form] = useForm();
-  const authorities = useAuthorities();
-
-  const [authority] = authorities;
+  const authorities = AttributesFiltersStore.useState(s => s.possibleAuthorities);
+  const authority = AttributesFiltersStore.useState(s => s.authority);
   const { attrs, getAttrs, loading } = useDefinitionAttributes(authority);
   const [updateEntitlement] = useUpdateEntitlement();
 

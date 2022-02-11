@@ -1,7 +1,10 @@
-import { Button, Cascader, Popover, Typography, Pagination } from "antd";
-import FilterForm from "../FilterForm";
-
 import styles from "./AttributesHeader.module.css";
+import { Button, Cascader, Popover, Typography, Pagination, Select } from "antd";
+
+import FilterForm from "../FilterForm";
+import { AttributesFiltersStore } from "../../../../store";
+
+const { Option } = Select;
 
 enum ORDER {
   ASC = "ASC",
@@ -9,11 +12,11 @@ enum ORDER {
 }
 
 const ORDER_MAP = new Map([
-  [ORDER.ASC, "-"],
-  [ORDER.DES, "+"],
+  [ORDER.ASC, ''],
+  [ORDER.DES, '-'],
 ]);
 
-const SORT_OPTIONS = ["entity_id", "name", "namespace", "value"];
+const SORT_OPTIONS = ['name', 'id', 'rule', 'values'];
 
 const CASCADER_OPTIONS = [
   {
@@ -28,28 +31,65 @@ const CASCADER_OPTIONS = [
   },
 ];
 
-const AttributesHeader = () => {
-  const onChange = (value: any) => {
-    console.log(`value`, value);
+
+type AttributesHeaderProps = {
+  total: number;
+}
+
+const AttributesHeader = ({ total }: AttributesHeaderProps) => {
+  const onChange = (value: any): void => {
+    const sort = value.join('');
+    AttributesFiltersStore.update(s => {
+      s.query.sort = sort;
+    });
   };
 
-  const handlePaginationChange = (pageNumber: number) => {
-    console.log(`pageNumber`, pageNumber);
+  const currentPageNumber = AttributesFiltersStore.useState(s => s.pageNumber);
+
+  const handlePaginationChange = (pageNumber: number): void => {
+    if (pageNumber > currentPageNumber) {
+      AttributesFiltersStore.update(s => {
+        s.query.offset += 1;
+        s.pageNumber += 1;
+      });
+    } else {
+      AttributesFiltersStore.update(s => {
+        s.query.offset -= 1;
+        s.pageNumber -= 1;
+      });
+    }
   };
+
+  const authorities = AttributesFiltersStore.useState(s => s.possibleAuthorities);
+  const authority = AttributesFiltersStore.useState(s => s.authority);
 
   return (
     <div className={styles.attributeHeader}>
-      <Typography.Title level={2}>Attribute Rules</Typography.Title>
+      <Typography.Title level={2}>
+        Attribute Rules
+      </Typography.Title>
 
       <div className={styles.cascaderContainer}>
+        <Select
+          value={authority}
+          placeholder="Loading Authorities"
+          onChange={(value) => {
+            AttributesFiltersStore.update(s => {
+              s.authority = value
+            })
+          }}
+        >
+          {authorities.map(val => <Option key={String(val)} value={String(val)}>{val}</Option>)}
+        </Select>
         <Pagination
           onChange={handlePaginationChange}
-          total={50}
+          total={total}
+          pageSize={10}
+          current={currentPageNumber}
           showTotal={(total) => `Total ${total} items`}
         />
 
         <Cascader
-          multiple
           onChange={onChange}
           options={CASCADER_OPTIONS}
           placeholder="Sort by..."
