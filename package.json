@@ -32,6 +32,8 @@
     "start": "react-scripts start",
     "build": "REACT_APP_SERVER_DATA=__SERVER_DATA__ react-scripts build",
     "test": "react-scripts test",
+    "test:prod": "react-scripts test --watchAll=false --coverage",
+    "test:debug": "react-scripts --inspect-brk test --runInBand --no-cache --setupFilesAfterEnv='./src/setupTests.ts'",
     "test:playwright": "playwright test --config=tests/e2e/playwright.config.ts",
     "eject": "react-scripts eject"
   },
@@ -40,6 +42,16 @@
       "react-app",
       "react-app/jest"
     ]
+  },
+  "jest": {
+    "coverageThreshold": {
+      "global": {
+        "branches": 20,
+        "functions": 10,
+        "lines": 15,
+        "statements": 10
+      }
+    }
   },
   "browserslist": {
     "production": [
