@@ -1,0 +1,7 @@
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:opentdf/frontend.git
+	branch = feature/test-integration
+[submodule "backend"]
+	path = backend
+	url = git@github.com:opentdf/backend.git
