@@ -1,14 +1,14 @@
+import {Header} from "./containers";
+import {routes} from "./routes";
+
+import "./App.css";
 import {lazy, Suspense, useEffect} from "react";
 import {BrowserRouter as Router, Route, Switch} from "react-router-dom";
 import {Button, Input, Layout} from "antd";
 import {toast, ToastContainer} from "react-toastify";
 import {useKeycloak} from "@react-keycloak/web";
-import {AuthProviders, NanoTDFClient} from "@opentdf/client";
-import {Header} from "./containers";
-import {routes} from "./routes";
-
-import "./App.css";
-import {RefreshTokenCredentials} from "@opentdf/client/dist/types/src/nanotdf/types/OIDCCredentials";
+// import {AuthProviders, NanoTDFClient} from "@opentdf/client";
+const virtru = require("tdf3-js");
 
 const Entitlements = lazy(() => import("./containers/Entitlements"));
 const Attributes = lazy(() => import("./containers/Attributes"));
@@ -25,17 +25,32 @@ export default function App() {
     // keycloak authentication
     const {keycloak, initialized} = useKeycloak();
 
+    // @ts-ignore
+    let client;
+
     // messaging
     async function handleClick() {
+        // @ts-ignore
         console.log(client);
         // client.addAttribute("https://opentdf.us/attr/IntellectualProperty/value/Open");
-        cipherText = await client.encrypt(plainText);
-        console.log(cipherText);
-        const clearText = await client.decrypt(cipherText);
-        console.log(clearText);
+        const encryptParams = new virtru.Client.EncryptParamsBuilder()
+          .withStringSource("Hello world")
+          .withOffline()
+          .build();
+        // @ts-ignore
+        const ct = await client.encrypt(encryptParams);
+        const ciphertext = await ct.toString();
+        console.log(`ciphered text :${ciphertext}`);
+        //
+        const decryptParams = new virtru.Client.DecryptParamsBuilder()
+          .withStringSource(ciphertext)
+          .build();
+        // @ts-ignore
+        const plaintextStream = await client.decrypt(decryptParams);
+        const plaintext = await plaintextStream.toString();
+        console.log(`deciphered text :${plaintext}`);
     }
 
-    let client: NanoTDFClient;
     useEffect(() => {
         (async () => {
             if (initialized) {
@@ -44,19 +59,27 @@ export default function App() {
                 sessionStorage.setItem("keycloak", keycloak.token || "");
                 // @ts-ignore
                 const {refreshToken} = keycloak;
+                // @ts-ignore
                 if (!client && refreshToken) {
-                    const oidcCredentials: RefreshTokenCredentials = {
-                        clientId: clientId,
-                        exchange: 'refresh',
+                    // const oidcCredentials: RefreshTokenCredentials = {
+                    //     clientId: clientId,
+                    //     exchange: 'refresh',
+                    //     oidcRefreshToken: refreshToken,
+                    //     // remove /auth/
+                    //     oidcOrigin: authority.replace('/auth/',''),
+                    //     organizationName: realm
+                    // }
+                    // const authProvider = await AuthProviders.refreshAuthProvider(oidcCredentials);
+                    // console.log(authProvider);
+                    // client = new NanoTDFClient(authProvider, access);
+                    // await client.fetchOIDCToken();
+                    client = new virtru.Client.Client({
+                        clientId,
+                        organizationName: realm,
                         oidcRefreshToken: refreshToken,
-                        // remove /auth/
-                        oidcOrigin: authority.replace('/auth/',''),
-                        organizationName: realm
-                    }
-                    const authProvider = await AuthProviders.refreshAuthProvider(oidcCredentials);
-                    console.log(authProvider);
-                    client = new NanoTDFClient(authProvider, access);
-                    await client.fetchOIDCToken();
+                        kasEndpoint: access,
+                        virtruOIDCEndpoint: authority.replace('/auth/',''),
+                    });
                 }
             }
         })()

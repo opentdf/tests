@@ -4,7 +4,6 @@
   "private": true,
   "dependencies": {
     "@ant-design/icons": "^4.7.0",
-    "@opentdf/client": "file:./opentdf-client-0.1.0.tgz",
     "@react-keycloak/web": "^3.4.0",
     "@testing-library/jest-dom": "~5.14.1",
     "@testing-library/react": "~11.2.7",
@@ -24,7 +23,9 @@
     "react-router-dom": "^5.3.0",
     "react-scripts": "4.0.3",
     "react-toastify": "^8.0.3",
+    "tdf3-js": "git+ssh://git@github.com/virtru/tdf3-js.git#oidcWith4.1.5.2",
     "typescript": "~4.4.3",
+    "virtru-base64": "git+ssh://git@github.com/virtru/virtru-base64.git#v0.0.9",
     "web-vitals": "~1.1.2"
   },
   "scripts": {
