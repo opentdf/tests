@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# Revert database to empty file
-
-rm eas/db/data/eas_database.sqlite
-mkdir -p eas/db/data
-touch eas/db/data/eas_database.sqlite
