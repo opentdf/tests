@@ -1,0 +1,60 @@
+{
+  "name": "abacus",
+  "version": "0.3.1",
+  "private": true,
+  "dependencies": {
+    "@ant-design/icons": "^4.7.0",
+    "@react-keycloak/web": "^3.4.0",
+    "@testing-library/jest-dom": "~5.14.1",
+    "@testing-library/react": "~11.2.7",
+    "@testing-library/user-event": "~12.8.3",
+    "@types/jest": "~26.0.24",
+    "@types/node": "~12.20.27",
+    "@types/react": "~17.0.26",
+    "@types/react-dom": "~17.0.9",
+    "@types/react-redux": "^7.1.20",
+    "antd": "^4.17.2",
+    "axios": "^0.24.0",
+    "keycloak-js": "^15.0.2",
+    "oidc-client": "~1.11.5",
+    "react": "~17.0.2",
+    "react-dom": "~17.0.2",
+    "react-oidc-context": "^1.1.0",
+    "react-router-dom": "^5.3.0",
+    "react-scripts": "4.0.3",
+    "react-toastify": "^8.0.3",
+    "tdf3-js": "github:virtru/tdf3-js#oidcWith4.1.5.2",
+    "typescript": "~4.4.3",
+    "web-vitals": "~1.1.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "REACT_APP_SERVER_DATA=__SERVER_DATA__ react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      "last 2 chrome version",
+      "last 2 firefox version",
+      "last 2 edge version",
+      "last 2 and_chr version",
+      "last 2 ios_saf version",
+      "last 2 safari version"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/react-router-dom": "^5.3.2"
+  }
+}
