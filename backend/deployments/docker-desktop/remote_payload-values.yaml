@@ -1,0 +1,2 @@
+s3Bucket: "datalake.etheria"
+s3BucketRegion: "us-west-2"

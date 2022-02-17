@@ -1,0 +1,7 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: basic-encrypt-decrypt-test-runner
+  namespace: default
+status:
+  succeeded: 1

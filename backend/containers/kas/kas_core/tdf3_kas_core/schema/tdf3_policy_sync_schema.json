@@ -1,0 +1,159 @@
+{
+  "$id": "http://virtru.com/tdf3_policy_sync.json",
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "binding": { "$ref": "#/definitions/binding" },
+    "entity": { "$ref": "#/definitions/entity" },
+    "policy": { "$ref": "#/definitions/policy" },
+    "wrapped_key": { "$ref": "#/definitions/wrapped_key" },
+    "auth_token": { "$ref": "#/definitions/auth_token" },
+    "metadata": { "$ref": "#/definitions/metadata" }
+  },
+  "required": ["binding", "entity", "policy", "wrapped_key", "auth_token"],
+  "maxProperties": 6,
+  "definitions": {
+    "algorithm": {
+      "$id": "/properties/algorithm",
+      "type": "string",
+      "title": "The alrogithm used to encrypt the ciphertext ",
+      "default": "",
+      "examples": ["AES-256-GCM"]
+    },
+    "attribute": {
+      "type": "string",
+      "title": "The Attribute Schema ",
+      "default": "",
+      "examples": ["PRX", "AAA", "TS", "USA"]
+    },
+    "attributes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/attribute" }
+    },
+    "auth_token": {
+      "$id": "/properties/auth_token",
+      "type": "string",
+      "title": "Auth token JWT",
+      "default": "",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    },
+    "binding": {
+      "type": "string",
+      "title": "The Binding Schema ",
+      "default": "",
+      "examples": ["0Qb8Cpp8qrFZLARRz4XynTa2jFRsEuLU+cKbnRpco2o="]
+    },
+    "ciphertext": {
+      "$id": "/properties/ciphertext",
+      "type": "string",
+      "title": "The encrypted object",
+      "default": "",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    },
+    "entity": {
+      "type": "object",
+      "title": "The Entity Schema ",
+      "properties": {
+        "userId": { "$ref": "#/definitions/userId" },
+        "attributes": { "$ref": "#/definitions/attributes" },
+        "cert": { "$ref": "#/definitions/cert" },
+        "publicKey": { "$ref": "#/definitions/publicKey" },
+        "aliases": { "$ref": "#/definitions/aliases" }
+      },
+      "required": ["attributes", "publicKey", "cert", "userId"],
+      "maxProperties": 5
+    },
+    "aliases": {
+      "type": "array",
+      "title": "Array of userIds ",
+      "default": [],
+      "items": { "$ref": "#/definitions/userId" }
+    },
+    "userId": {
+      "type": "string",
+      "title": "The entity userId ",
+      "default": "",
+      "examples": ["a@virtru.com"]
+    },
+    "cert": {
+      "type": "string",
+      "title": "The entity cert ",
+      "default": "",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    },
+    "attributes": {
+      "type": "array",
+      "title": "The EntityAttributes Schema ",
+      "default": [],
+      "items": { "$ref": "#/definitions/entity_attribute" }
+    },
+    "entity_attribute": {
+      "type": "object",
+      "title": "The EntityAttribute Schema ",
+      "properties": {
+        "jwt": { "$ref": "#/definitions/jwt" }
+      },
+      "required": ["jwt"],
+      "maxProperties": 1
+    },
+    "iv": {
+      "$id": "/properties/iv",
+      "type": "string",
+      "title": "The initial vector used to encrypt the ciphertext ",
+      "default": "",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "title": "Metadata encrypted with keysplit",
+      "properties": {
+        "algorithm": { "$ref": "#/definitions/algorithm" },
+        "iv": { "$ref": "#/definitions/iv" },
+        "ciphertext": { "$ref": "#/definitions/ciphertext" }
+      },
+      "required": ["algorithm", "iv", "ciphertext"],
+      "maxProperties": 4
+    },
+    "policy": {
+      "$id": "/properties/policy",
+      "type": "string",
+      "title": "The Policy Schema ",
+      "default": "",
+      "examples": [
+        "eyJib2R5IjogeyJkYXRhQXR0cmlidXRlcyI6IFt7InVybCI6ICJodHRwczovL2V4YW1wbGUuY29tL2F0dHIvQ2xhc3NpZmljYXRpb24uUyIsICJuYW1lIjogIlRvcCBTZWNyZXQifSwgeyJ1cmwiOiAiaHR0cHM6Ly9leGFtcGxlLmNvbS9hdHRyL0NPSS5QUlgiLCAibmFtZSI6ICJQcm9qZWN0IFgifV19fQ=="
+      ]
+    },
+    "publicKey": {
+      "type": "string",
+      "title": "The Public_key Schema ",
+      "default": "",
+      "examples": [
+        "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzNH7sQbY8NyoghL0WWhK\n/YmY0yrYJDm3MCSlRVBKHpB1Zbjes2/SXGKhTCifTtHVF5YABPM+XBVTvpo3paEk\n3vsWYXizFfS5FKtHu3k0CExBMjkD7Wb3Uck2FTTRJlgyonwe6Wd6MzuqDqGWk7Iz\nhxnub6dx+UCCi5ZfXpPL6dFMd936Vu+VrKitYJ7sWVN1jOiMfsh2KvVlG5ycb98q\nwPsbi8U9yek8RtZ9KSsde4Uz+MQx1pFNNFmTJ3Wd4inrZcMqJ5NTaxXHGTAWt88b\nP1r30n93qH5EYlwCrgAkjZkEwF04n6kKDI7rus7VN9rx+SE2dTun+Yw1VwzZTY7P\nrQIDAQAB\n-----END PUBLIC KEY-----\n"
+      ]
+    },
+    "jwt": {
+      "type": "string",
+      "title": "The JWT token for an attribute",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    },
+    "wrapped_key": {
+      "$id": "/properties/wrapped_key",
+      "type": "string",
+      "title": "The Wrapped_key Schema ",
+      "default": "",
+      "examples": [
+        "RwpluIcdmSxzdHqPEhDd3jjBbSF8bBpK9CxC+piCTCwdqpTJHDkj40ENHs7oZ4xRL5X5GZAaZaOBdwEMROImSSuOKtwHZWX42TOSdIUpMMK0MXmU85K/G3FMJ7CVmRATUXH5XbES2xm46W3eYiVExkDzRRb+QONI0sYd7ipCwKmoCmzBrGhY83K1fzWz/BAqwGvn7tQMZBIIoef8Q7xaM68tL45MFK5MMvqIAJqiVgIMt98IB2QegQSQHBpFnXfVaEdM37ZeBxDyG9NDSXLGYiXF5J5Af1IhC1ZCWn79sWi4p+hZMRp6qjCR32R3Q+/Jb6ktKVT3kTd4dLRU8+nCEA=="
+      ]
+    }
+  }
+}
