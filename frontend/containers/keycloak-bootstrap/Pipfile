@@ -1,0 +1,24 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+python-keycloak = "==0.25.0"
+PyJWT = "*"
+cryptography = "*"
+importlib-resources = "*"
+importlib-metadata = "*"
+typing-extensions = "*"
+pyyaml = "*"
+
+[dev-packages]
+build = "*"
+setuptools = "*"
+wheel = "*"
+pytest = "*"
+pytest-cov = "*"
+pylint = "*"
+
+[requires]
+python_version = "3"

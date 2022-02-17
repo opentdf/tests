@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Wait for the requested URL
+# Example:
+#   wait-for-service (--ca <authority> --cert-base /path/to/cert-and-key) service:uri
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+export PATH="$PATH:$APP_DIR"
+
+monolog TRACE "wait-for-service ${*}"
+_wait-for() {
+  monolog TRACE "wait-for-service:_wait-for ${*}"
+
+  while [[ $# -gt 0 ]]; do
+    local key="$1"
+    shift
+
+    case "$key" in
+      -h | --help)
+        echo "wait-for-service (--ca <authority> --cert-base /path/to/cert-and-key) service:uri"
+        exit 0
+        ;;
+      --ca)
+        local TDF3_CERT_AUTHORITY=$1
+        shift
+        if [ "$TDF3_CERT_AUTHORITY" = "" ]; then
+          monolog ERROR "--ca requires a certificate"
+          exit 1
+        fi
+        ;;
+      --cert-base)
+        local cert_base=$1
+        shift
+        if [[ ! "$cert_base" ]]; then
+          monolog ERROR "Please specify a cert and key base name"
+          exit 1
+        fi
+        ;;
+      *)
+        local service_url="$key"
+        if [[ $# -gt 0 ]]; then
+          monolog ERROR "Unrecognized options after service url: $*"
+          exit 1
+        fi
+        ;;
+    esac
+  done
+
+  if [ -z "$service_url" ]; then
+    monolog ERROR "Please specify a service url"
+    exit 1
+  fi
+
+  local curl_opts=(--show-error --fail --insecure)
+  if [ -z "${TDF3_CERT_AUTHORITY}" ]; then
+    monolog DEBUG "No certificate authority specified"
+  elif [ -x "${cert_base}" ]; then
+    monolog ERROR "Please specify both a ca and a cert, or neither"
+    exit 1
+  else
+    curl_opts+=(--cacert "${TDF3_CERT_AUTHORITY}" --cert "${cert_base}.crt" --key "${cert_base}.key" --show-error)
+  fi
+
+  monolog INFO "Waiting for $service_url ..."
+  for i in {1..10}; do
+    monolog DEBUG "curl ${curl_opts[*]} ${service_url} ..."
+    curl "${curl_opts[@]}" "${service_url}" 1> >(monolog DEBUG) 2> >(monolog ERROR)
+    if [[ ${PIPESTATUS[0]} == 0 ]]; then
+      return 0
+    fi
+    if [[ $i == 10 ]]; then
+      break
+    fi
+    monolog INFO "wait-for-service [$service_url] ( ${i} / 10) ..."
+    sleep $((i * i * 2))
+  done
+  monolog ERROR "Couldn't connect to $service_url"
+  exit 1
+}
+
+_wait-for "$@"

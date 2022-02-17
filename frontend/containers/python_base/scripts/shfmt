@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Reformat shell scripts via shfmt with a git hook.
+#
+# To install hook: shfmt --install
+# To run on all files: shfmt --all
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+TOOL_NAME="$(basename "$0")"
+PROJECT_DIR="$(git rev-parse --show-toplevel)"
+export PATH="$PATH:$APP_DIR"
+
+_do_shfmt() {
+  docker run -v "$PWD":/work -w /work --rm mvdan/shfmt:v3.3.1 \
+    -i 2 -ci \
+    "${1}"
+}
+
+_install_git_hook() {
+  cd "${PROJECT_DIR}" || exit 1
+  if [ -f package.json ]; then
+    _install_husky
+    # npm project. Use husky
+    if jq -e '(has("husky") | not) or (.husky.hooks | has("pre-commit") | not)' package.json; then
+      if jq '.husky.hooks["pre-commit"]="shfmt"' package.json >tmp-package.json; then
+        cat <tmp-package.json >package.json &&
+          rm tmp-package.json
+      else
+        monolog ERROR "jq failed" && exit 1
+      fi
+    elif jq -e '.husky.hooks["pre-commit"] | contains("shfmt")' package.json; then
+      monolog INFO "shfmt husky hook already installed."
+    else
+      if jq '.husky.hooks["pre-commit"] |= (. + " && shfmt")' package.json >tmp-package.json; then
+        cat <tmp-package.json >package.json &&
+          rm tmp-package.json
+      else
+        monolog ERROR "jq failed" && exit 1
+      fi
+    fi
+  else
+    # non-npm project. Use a direct hook
+    mkdir -p .git/hooks
+    if [ ! -f .git/hooks/pre-commit ]; then
+      cat >.git/hooks/pre-commit <<EOF
+#!/usr/bin/env bash
+
+EOF
+      chmod +x .git/hooks/pre-commit
+    fi
+    if grep "$TOOL_NAME" .git/hooks/pre-commit; then
+      monolog INFO "Hook already present"
+    else
+      cat >>.git/hooks/pre-commit <<EOF
+"$APP_DIR/$TOOL_NAME"
+EOF
+    fi
+  fi
+}
+
+_probably_sh() {
+  if [[ "$1" =~ ^.*\.sh || "$1" =~ ^.*\.bash ]]; then
+    # found by extension
+    true
+  elif [[ $(basename "$1") =~ ^.+\..*$ ]]; then
+    # skipped unknown extension
+    false
+  elif IFS= read -r line <"${x}"; then
+    case $line in
+      "#!/bin/bash" | "#!/usr/bin/env bash")
+        # found by shebang
+        true
+        ;;
+      *)
+        # skipped shebangless file
+        false
+        ;;
+    esac
+  else
+    # skipped by content
+    false
+  fi
+}
+
+_install_husky() {
+  # XXX probably should check version. So far not needed
+  if jq -e '.devDependencies | has("husky")' package.json; then
+    monolog INFO "husky already installed"
+  else
+    npm install husky --save-dev || (monolog ERROR "failed to install husky" && exit 1)
+  fi
+}
+
+updo() {
+  monolog TRACE "updo [${*}]"
+  if git check-ignore -q "$1"; then
+    monolog DEBUG "Ignored file [$1]"
+    return
+  fi
+  if ! _probably_sh "$1"; then
+    monolog DEBUG "Not a shell script [$1]"
+    return
+  fi
+  if ! _do_shfmt "$1" >"$1.tmp"; then
+    monolog ERROR "Unable to shfmt $1"
+    exit 1
+  fi
+  if diff -q "$1.tmp" "$1" >/dev/null; then
+    monolog DEBUG "No change in $1"
+    if ! rm "$1.tmp"; then
+      monolog ERROR "Unable to remove temp file" && exit 1
+    fi
+  elif [ -s "$1.tmp" ]; then
+    monolog DEBUG "Formatted [$1]"
+    # Use cat to overwrite contents to maintain ownership & permissions
+    if cat "$1.tmp" >"$1" && rm "$1.tmp" && git add "$1"; then
+      monolog DEBUG "Added back [$1]"
+    else
+      monolog ERROR "Unable to copy content"
+      exit 1
+    fi
+  else
+    monolog ERROR "Formatted file empty: $1"
+    exit 1
+  fi
+}
+
+if [[ "$#" == 0 ]]; then
+  # Process all changed files in this commit, mostly
+  changed=$(git diff --cached --name-only --diff-filter=ACM)
+  if ! cd "$(git rev-parse --show-toplevel)"; then
+    monolog ERROR "Failed to find project root"
+    exit 1
+  fi
+
+  # Format with Google shell style
+  monolog DEBUG "Formatting changed files: $changed"
+  for x in $changed; do
+    if [[ "${x}" =~ .sh$ || -x "${x}" ]]; then
+      updo "$x"
+    fi
+  done
+elif [[ "$#" == 1 ]]; then
+  case "$1" in
+    "--all")
+      all=$(find "$PROJECT_DIR" -type f \( -name "*.sh" -o -name "*.bash" -o -perm +111 \) -a -not -path '*/node_modules/*' -a -not -path '*/.venv*' -a -not -name '*~')
+      for x in $all; do
+        updo "$x"
+      done
+      ;;
+    "--these")
+      all=$(find . -type f \( -name "*.sh" -o -name "*.bash" -o -perm +111 \) -a -not -path '*/node_modules/*' -a -not -path '*/.venv*' -a -not -name '*~')
+      for x in $all; do
+        updo "$x"
+      done
+      ;;
+    "--install") _install_git_hook ;;
+    *) monolog ERROR "Unrecognized arg: $1" && exit 1 ;;
+  esac
+else
+  monolog ERROR "Please enter zero or one argument"
+  exit 1
+fi
