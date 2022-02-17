@@ -33,4 +33,13 @@ test.describe('<Entitlements/>', () => {
     const header = page.locator('h2', { hasText: `Client ${id}` });
     test.expect(header).toBeTruthy();
   });
+
+  test('Add Entitlements To Entity', async ({ page , authority, attributeName, attributeValue}) => {
+    firstTableRowClick('clients-table', page);
+    await page.waitForNavigation();
+    await page.fill("#authority", authority);
+    await page.fill("#name", attributeName);
+    await page.fill("#value", attributeValue);
+    await page.click("#assign-submit");
+  });
 });

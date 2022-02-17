@@ -9,11 +9,7 @@ import { useEntitlements } from "./hooks/useEntitlement";
 
 import AssignAttributeForm from "./AssignAttributeForm";
 import ClientTable from "./ClientTable";
-
-type TableData = {
-  attribute: string;
-  entityId: string;
-};
+import {TableData} from "../../types/table";
 
 const Client = () => {
   const { id } = useParams<{ id: string }>();
