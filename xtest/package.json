@@ -1,0 +1,17 @@
+{
+  "name": "xtest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "run-test-cli.js",
+  "scripts": {
+    "test_exapmple": "python3 runner.py -o $VIRTRU_SDK_EMAIL -s eternos --sdks sdk/js/node/cli.sh sdk/py/oss/cli.sh",
+    "test": "python3 runner.py -s eternos --sdks sdk/js/node/cli.sh sdk/js/node/cli.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^9.0.0",
+    "tdf3-js": "github:opentdf/tdf3-js#testForPaul"
+  }
+}

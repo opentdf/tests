@@ -2,3 +2,6 @@
 vulnerability/node_modules/
 vulnerability/test-results/
 vulnerability/playwright-report/
+xtest/node_modules
+xtest/tmp
+e2e/.helm

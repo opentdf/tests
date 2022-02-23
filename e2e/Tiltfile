@@ -107,9 +107,25 @@ docker_build(
     },
 )
 
+docker_build("ghcr.io/opentdf/abacus", "../frontend")
+
 docker_build(
-    "ghcr.io/opentdf/abacus",
-    local_path("../", "frontend",),
+    "ghcr.io/opentdf/claims",
+    build_args={
+        "ALPINE_VERSION": ALPINE_VERSION,
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+        "PY_VERSION": PY_VERSION,
+        "PYTHON_BASE_IMAGE_SELECTOR": "",
+    },
+    container_args=["--reload"],
+    context=local_path("containers", "claims"),
+    live_update=[
+        sync(local_path("containers", "claims"), "/app"),
+        run(
+            "cd /app && pip install -r requirements.txt",
+            trigger=local_path("containers", "claims", "requirements.txt"),
+        ),
+    ],
 )
 
 docker_build(
@@ -129,7 +145,7 @@ docker_build(
     ],
 )
 
-for microservice in ["attributes", "entitlements", "claims"]:
+for microservice in ["attributes", "entitlements"]:
     image_name = "ghcr.io/opentdf/" + microservice
     docker_build(
         image_name,
@@ -156,11 +172,9 @@ docker_build(
     "ghcr.io/opentdf/keycloak",
     local_path("containers", "keycloak-protocol-mapper"),
     build_args={
-        "CONTAINER_REGISTRY": "docker.io",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
-        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
-        "KEYCLOAK_BASE_VERSION": "15.0.2",
+        "KEYCLOAK_VERSION": "15.0.2",
     },
 )
 
@@ -172,16 +186,6 @@ docker_build(
 #  o.  )88b 888    .o  888        `888'     888  888   .o8 888    .o o.  )88b
 #  8""888P' `Y8bod8P' d888b        `8'     o888o `Y8bod8P' `Y8bod8P' 8""888P'
 
-k8s_yaml(
-    helm(
-        "../backend/charts/attributes",
-        "opentdf-attributes",
-        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"],
-        values=["backend-attributes-values.yaml"],
-    )
-)
-
-
 k8s_yaml("backend.yaml")
 k8s_yaml("frontend.yaml")
 
@@ -189,22 +193,24 @@ k8s_yaml("frontend.yaml")
 k8s_resource("opentdf-attributes", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-claims", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-entitlements", resource_deps=["opentdf-postgresql"])
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"])
+k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
+k8s_resource("opentdf-abacus", resource_deps=["opentdf-attributes"])
 
 
 helm_remote(
     "keycloak",
-    version="17.0.1",
-    repo_url="https://codecentric.github.io/helm-charts",
+    repo_name="xtest-bitnami",
+    repo_url="https://charts.bitnami.com/bitnami",
     values=["backend-keycloak-values.yaml"],
+    version="5.1.1",
 )
-
 helm_remote(
     "postgresql",
-    repo_url="https://charts.bitnami.com/bitnami",
     release_name="opentdf",
-    version="10.16.2",
+    repo_name="xtest-bitnami",
+    repo_url="https://charts.bitnami.com/bitnami",
     values=["backend-postgresql-values.yaml"],
+    version="10.9.5",
 )
 
 #     o8o
@@ -218,14 +224,14 @@ helm_remote(
 #                      "Y88888P'
 #
 
-# TODO should integrate with a service mesh and stop deploying our own ingress
 # We need to have big headers for the huge bearer tokens we pass around
 # https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
 helm_remote(
     "ingress-nginx",
+    repo_name="xtest-ingress-nginx",
     repo_url="https://kubernetes.github.io/ingress-nginx",
     set=["controller.config.large-client-header-buffers=20 32k"],
-    version="4.0.16",
+    version="4.0.1",
 )
 
 k8s_resource("ingress-nginx-controller", port_forwards="65432:80")
@@ -249,3 +255,21 @@ docker_build(
 )
 
 k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
+
+#    db    db d888888b d88888b .d8888. d888888b
+#    `8b  d8' `~~88~~' 88'     88'  YP `~~88~~'
+#     `8bd8'     88    88ooooo `8bo.      88
+#     .dPYb.     88    88~~~~~   `Y8b.    88
+#    .8P  Y8.    88    88.     db   8D    88
+#    YP    YP    YP    Y88888P `8888Y'    YP
+
+docker_build(
+    "ghcr.io/opentdf/tests-clients",
+    context=local_path("."),
+    dockerfile=local_path("tests", "containers", "clients", "Dockerfile"),
+)
+
+k8s_yaml("xtest.yaml")
+k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak"])
+
+update_settings(max_parallel_updates=1)
