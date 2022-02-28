@@ -24,40 +24,31 @@ entitlement:
   username: user1
   password: testuser123
   preloadedClaims:
-    - id: tdf-user
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRX
-    - id: tdf-client
-      attributes:
-        - https://example.com/attr/Classification/value/S
-        - https://example.com/attr/COI/value/PRX
-        - https://example.com/attr/Env/value/CleanRoom
-    - id: user1
-      attributes:
-        - https://example.com/attr/Classification/value/S
-        - https://example.com/attr/COI/value/PRX
-    - id: browsertest
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRA
-    - id: service-account-tdf-client
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRB
-    - id: bob_1234
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRC
-    - id: alice_1234
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRD
-    - id: client_x509
-      attributes:
-        - https://example.com/attr/Classification/value/S
-        - https://example.com/attr/COI/value/PRX
-    - id: dcr-test
-      attributes:
-        - https://example.com/attr/Classification/value/C
-        - https://example.com/attr/COI/value/PRF
+    tdf-user:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRX
+    tdf-client:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+      - https://example.com/attr/Env/value/CleanRoom
+    user1:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+    browsertest:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRA
+    service-account-tdf-client:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRB
+    bob_1234:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRC
+    alice_1234:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRD
+    client_x509:
+      - https://example.com/attr/Classification/value/S
+      - https://example.com/attr/COI/value/PRX
+    dcr-test:
+      - https://example.com/attr/Classification/value/C
+      - https://example.com/attr/COI/value/PRF
