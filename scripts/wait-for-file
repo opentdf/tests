@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Wait for the given file to exist
+# Example:
+#   wait-for-file files...
+#
+# Options
+#    --ln x y
+#       links file x as y
+#    --wait-cycles k
+#       number of cycles to wait. Will wait at most at most O(k^2) seconds
+#    --
+#      Everything after this is passed as a command to execute
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+export PATH="$PATH:$APP_DIR"
+
+wait_cycles=10
+export wait_cycles
+
+monolog TRACE "wait-for-file ${*}"
+
+wait-for-one() {
+  monolog TRACE "wait-for-one $1"
+  for i in $(seq 1 $wait_cycles); do
+    if [ -f "$1" ]; then
+      monolog TRACE "wait-for-one $1::success on iteration $i"
+      return 0
+    fi
+    if [[ $i == 10 ]]; then
+      break
+    fi
+    monolog DEBUG "wait-for-one [$1] ( ${i} / $wait_cycles) ..."
+    sleep $((i * i * 2))
+  done
+
+  monolog ERROR "wait-for-file failed to find [$1]"
+  exit 1
+}
+
+while test $# -gt 0; do
+  case "$1" in
+    --)
+      shift
+      ("$@")
+      exit $?
+      ;;
+    --wait-cycles)
+      shift
+      wait_cycles="$1"
+      shift
+      ;;
+    --ln)
+      shift
+      src="$1"
+      shift
+      target="$1"
+
+      wait-for-one "$src"
+      if ! ln -s "$src" "$target"; then
+        monolog ERROR "[wait-for-file --ln \"$src\" \"$target\"] failed"
+        exit 1
+      fi
+      shift
+      ;;
+    *)
+      wait-for-one "$1"
+      shift
+      ;;
+  esac
+done

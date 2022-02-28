@@ -9,6 +9,7 @@
 const { Command } = require("commander");
 const { Readable } = require("stream");
 const { Client } = require("tdf3-js");
+require("colors");
 const fs = require("fs");
 
 const program = new Command();
@@ -17,7 +18,7 @@ const config = JSON.parse(
   fs.readFileSync("config-oss.json", { encoding: "utf-8" })
 );
 
-const done = () => process.stderr.write("completed cli.js \n");
+const done = () => process.stderr.write("completed cli.js \n".green);
 
 const setSourceFor = (builder, source) => {
   if (source instanceof Readable) {
@@ -87,10 +88,9 @@ const encrypt = ({ mimeType }) => {
     encryptParamsBuilder.setMimeType(mimeType);
   }
 
-  encryptParamsBuilder.withOffline();
   const client = clientFor(program);
 
-  const encryptParams = encryptParamsBuilder.build();
+  const encryptParams = encryptParamsBuilder.withOffline().build();
 
   client.encrypt(encryptParams).then(ct => {
     ct.pipe(dstAsStream(dstFile, "binary"));

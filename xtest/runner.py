@@ -17,7 +17,7 @@ import base64
 
 SDK_PATHS = [
     "sdk/js/node/cli.sh",
-    # "sdk/js/web/cli.sh",
+    "sdk/js/web/cli.sh",
     # "sdk/py/oss/cli.sh",
     # "sdk/py/nanotdf/cli.sh",
     # "sdk/java/oss/cli.sh",

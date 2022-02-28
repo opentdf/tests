@@ -1,7 +1,7 @@
 load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
 
-PROJECT_ROOT = "../backend"
+PROJECT_ROOT = ".."
 
 
 def local_path(*paths):
@@ -99,7 +99,7 @@ k8s_yaml(
 
 docker_build(
     "ghcr.io/opentdf/python-base",
-    local_path("containers", "python_base"),
+    local_path("../backend/containers", "python_base"),
     build_args={
         "ALPINE_VERSION": ALPINE_VERSION,
         "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
@@ -118,12 +118,12 @@ docker_build(
         "PYTHON_BASE_IMAGE_SELECTOR": "",
     },
     container_args=["--reload"],
-    context=local_path("containers", "claims"),
+    context=local_path("../backend/containers", "claims"),
     live_update=[
-        sync(local_path("containers", "claims"), "/app"),
+        sync(local_path("../backend/containers", "claims"), "/app"),
         run(
             "cd /app && pip install -r requirements.txt",
-            trigger=local_path("containers", "claims", "requirements.txt"),
+            trigger=local_path("../backend/containers", "claims", "requirements.txt"),
         ),
     ],
 )
@@ -135,12 +135,12 @@ docker_build(
         "PY_VERSION": PY_VERSION,
         "PYTHON_BASE_IMAGE_SELECTOR": "",
     },
-    context=local_path("containers", "kas"),
+    context=local_path("../backend/containers", "kas"),
     live_update=[
-        sync(local_path("containers", "kas"), "/app"),
+        sync(local_path("../backend/containers", "kas"), "/app"),
         run(
             "cd /app && pip install -r requirements.txt",
-            trigger=local_path("containers", "kas", "requirements.txt"),
+            trigger=local_path("../backend/containers", "kas", "requirements.txt"),
         ),
     ],
 )
@@ -156,21 +156,21 @@ for microservice in ["attributes", "entitlements"]:
             "PYTHON_BASE_IMAGE_SELECTOR": "",
         },
         container_args=["--reload"],
-        context=local_path("containers"),
-        dockerfile=local_path("containers", microservice, "Dockerfile"),
+        context=local_path("../backend/containers"),
+        dockerfile=local_path("../backend/containers", microservice, "Dockerfile"),
         live_update=[
-            sync(local_path("containers", "python_base"), "/app/python_base"),
-            sync(local_path("containers", microservice), "/app/" + microservice),
+            sync(local_path("../backend/containers", "python_base"), "/app/python_base"),
+            sync(local_path("../backend/containers", microservice), "/app/" + microservice),
             run(
                 "cd /app/ && pip install -r requirements.txt",
-                trigger=local_path("containers", microservice, "requirements.txt"),
+                trigger=local_path("../backend/containers", microservice, "requirements.txt"),
             ),
         ],
     )
 
 docker_build(
     "ghcr.io/opentdf/keycloak",
-    local_path("containers", "keycloak-protocol-mapper"),
+    local_path("../backend/containers", "keycloak-protocol-mapper"),
     build_args={
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
@@ -204,6 +204,7 @@ helm_remote(
     values=["backend-keycloak-values.yaml"],
     version="5.1.1",
 )
+
 helm_remote(
     "postgresql",
     release_name="opentdf",
@@ -250,7 +251,7 @@ k8s_resource("ingress-nginx-controller", port_forwards="65432:80")
 
 docker_build(
     "ghcr.io/opentdf/keycloak-bootstrap",
-    local_path("containers", "keycloak-bootstrap"),
+    local_path("../backend/containers", "keycloak-bootstrap"),
     build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
 )
 
