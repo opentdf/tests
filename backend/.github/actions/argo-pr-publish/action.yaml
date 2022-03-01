@@ -1,0 +1,6 @@
+# action.yml
+name: 'Argo PR publish'
+description: 'Publish openTDF backend services off of a PR context'
+runs:
+  using: 'docker'
+  image: "Dockerfile"

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Runs tests in given project folder.
+#
+# Examples:
+#  Run unit tests for eas app:
+#   scripts/monotest eas
+#  Run unit tests for all apps:
+#   scripts/monotest all
+#  Run unit tests for all apps with coverage:
+#   scripts/monotest all cov
+#
+# Usage: scripts/monotest [--coverage] <package dir>
+
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+export PATH="$PATH:$TOOLS_DIR"
+
+monolog TRACE "monotest: [$0 $*]"
+
+genkeys-if-needed || exit 1
+
+export packages_under_test=()
+export coverage=
+
+while test $# -gt 0; do
+  case "$1" in
+    -c | --cov | --coverage)
+      coverage=1
+      shift
+      ;;
+    --all | all)
+      while IFS='' read -r line; do packages_under_test+=("$line"); done < <(grep -v "^#" <PACKAGES | grep -v "^$")
+      shift
+      ;;
+    *)
+      packages_under_test+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ 0 = "${#packages_under_test[@]}" ]]; then
+  monolog TRACE "monotest: no packages specified, loading all packages to test"
+  while IFS='' read -r line; do packages_under_test+=("$line"); done < <(grep -v "^#" <PACKAGES | grep -v "^$")
+fi
+
+monolog DEBUG "monotest: Testing${coverage:+ with coverage}: [${packages_under_test[*]}]"
+
+_single_pytest() {
+  monolog TRACE "_single_pytest: [$*]"
+
+  local package="$1"
+  shift
+
+  if ! cd "${PROJECT_ROOT}/${package}"; then
+    monolog ERROR "Unable to cd [${package}]"
+  fi
+
+  rm -rf .venv
+  python3 -m venv .venv
+  # shellcheck source=/dev/null
+  source .venv/bin/activate
+  pip3 install --upgrade pip pytest coverage
+
+  # shellcheck source=/dev/null
+  [ -f "scripts/test.env" ] && . scripts/test.env
+
+  if [[ $CLEAN_VENV ]]; then
+      rm -rf .venv
+  fi
+  pip3 install --requirement requirements.txt
+
+  if [[ $coverage ]]; then
+    python3 -m coverage run --branch --source=. -m pytest
+    command_rv=$?
+    if [[ $command_rv = 0 ]]; then
+      monolog TRACE "Collating coverage reports"
+      python3 -m coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
+      python3 -m coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
+    fi
+    return $command_rv
+  else
+    python3 -m pytest
+  fi
+}
+
+_single_package() {
+  monolog TRACE "_single_package: [$*]"
+  if [ ! -d "${PROJECT_ROOT}/$1" ]; then
+    monolog ERROR "Not a package directory [${PROJECT_ROOT}/$1]"
+    exit 1
+  fi
+
+  if [ -f "${PROJECT_ROOT}/$1/requirements.txt" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
+    monolog INFO "$(python3 --version)"
+    monolog INFO "Testing $1 as a python project"
+    _single_pytest "$@" && monolog DEBUG "Passed [$1]"
+  elif [ -x "${PROJECT_ROOT}/$1/test" ]; then
+    monolog INFO "Testing $1 using bundled script"
+    "${PROJECT_ROOT}/$1/test" "${@:2}" && monolog DEBUG "Passed [${*}]"
+  else
+    monolog ERROR "Unable determine package type [${PROJECT_ROOT}/$1]"
+    exit 1
+  fi
+}
+
+for p in "${packages_under_test[@]}"; do
+  if ! _single_package "$p"; then
+    rval=$?
+    monolog ERROR "FAILED ${p}"
+    exit $rval
+  fi
+done

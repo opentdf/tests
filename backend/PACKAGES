@@ -1,0 +1,6 @@
+# Lists all packages to build; used by scripts/monotest, among others
+
+containers/attributes
+containers/entitlements
+containers/kas/kas_app
+containers/kas/kas_core

@@ -1,0 +1,33 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+Flask = "*"
+PyJWT = "*"
+bitstruct = "*"
+connexion = "*"
+cryptography = "*"
+gunicorn = "*"
+jsonschema = "*"
+python-json-logger = "*"
+requests = "*"
+swagger-ui-bundle = "*"
+wsgicors = "*"
+statsd = "*"
+importlib-resources = "*"
+typing-extensions = "*"
+
+[dev-packages]
+Werkzeug = "*"
+build = "*"
+coverage = "*"
+pytest = "*"
+pytest-watch = "*"
+setuptools = "*"
+twine = "*"
+wheel = "*"
+
+[requires]
+python_version = "3"
