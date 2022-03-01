@@ -1,27 +1,27 @@
 const puppeteer = require("puppeteer");
 const resolve = require("path").resolve;
 
-function getCreds(program, configs) {
-  const { clientOptions: clientOpts, userId, dstFile } = program.opts()
+// function getCreds(program, configs) {
+//   const { clientOptions: clientOpts, userId, dstFile } = program.opts()
 
-  const stageName = clientOpts;
-  if (!stageName || !configs[stageName]) {
-    console.error(`Must specify a valid stage, not [${stageName}]`);
-    return {};
-  }
-  const clientOptions = {
-    ...configs[stageName],
-    email: process.env.VIRTRU_SDK_EMAIL
-    // TODO: Set up local eas client for inbox testing.
-  };
-  if (userId) {
-    clientOptions.userId = userId;
-    clientOptions.email = userId;
-  }
-  clientOptions.dstFile = dstFile;
-  console.log(`Constructing Client: ${JSON.stringify(clientOptions, null, 2)}`);
-  return clientOptions;
-}
+//   const stageName = clientOpts;
+//   if (!stageName || !configs[stageName]) {
+//     console.error(`Must specify a valid stage, not [${stageName}]`);
+//     return {};
+//   }
+//   const clientOptions = {
+//     ...configs[stageName],
+//     email: process.env.VIRTRU_SDK_EMAIL
+//     // TODO: Set up local eas client for inbox testing.
+//   };
+//   if (userId) {
+//     clientOptions.userId = userId;
+//     clientOptions.email = userId;
+//   }
+//   clientOptions.dstFile = dstFile;
+//   console.log(`Constructing Client: ${JSON.stringify(clientOptions, null, 2)}`);
+//   return clientOptions;
+// }
 
 async function prepareBrowser(program, creds) {
   const { dstFile } = program.opts()
@@ -62,4 +62,6 @@ async function uploadFile({ selector, srcFile, page }) {
   await page.waitForTimeout(2000);
 }
 
-module.exports = { prepareBrowser, uploadFile, getCreds };
+module.exports = { prepareBrowser, uploadFile };
+
+// module.exports = { prepareBrowser, uploadFile, getCreds };
