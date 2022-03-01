@@ -1,0 +1,10 @@
+{
+  "name": "tdf3-xtest",
+  "version": "0.0.1",
+  "description": "Simple example to encrypt and decrypt files in the TDF3 spec.",
+  "scripts": {},
+  "dependencies": {
+    "@opentdf/cli": "^0.0.2",
+    "@opentdf/client": "^0.0.2"
+  }
+}

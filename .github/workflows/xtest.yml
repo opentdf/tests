@@ -1,0 +1,49 @@
+name: xtest
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  repository_dispatch:
+    types: [xtest]
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+          registry-url: https://npm.pkg.github.com
+      - name: update js client on request
+        if: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload }}
+        run: |-
+          cd xtest/clients
+          npm install @opentdf/client@${{ github.event.client_payload.version }}
+          npm install @opentdf/cli@${{ github.event.client_payload.version }}
+      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+        with:
+          setup-tools: |
+            kubectl
+            helm
+            tilt
+          # This should be in sync with the minikube-deployed kube version below
+          kubectl: "1.23.1"
+          helm: "3.8.0"
+          tilt: "0.23.8"
+      - run: |
+          kubectl version --client
+          kustomize version
+          tilt version
+      - name: start minikube
+        id: minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          minikube-version: 1.25.1
+          # This should be in sync with the setup-tools version above
+          kubernetes-version: 1.23.1
+      - name: tilt-ci
+        run: |-
+          kubectl version
+          cd xtest
+          tilt ci

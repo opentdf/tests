@@ -1,4 +1,6 @@
 .idea
+/backend
+node_modules
 vulnerability/node_modules/
 vulnerability/test-results/
 vulnerability/playwright-report/
