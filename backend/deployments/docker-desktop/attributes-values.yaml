@@ -1,0 +1,6 @@
+postgres:
+  host: tdf-postgresql
+  port: 5432
+  user: tdf_attribute_manager
+  database: tdf_database
+  schema: tdf_attribute

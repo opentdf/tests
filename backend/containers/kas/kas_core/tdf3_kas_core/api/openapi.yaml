@@ -1,0 +1,567 @@
+# OpenAPI Spec https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: Key Access Service
+  termsOfService: https://www.virtru.com/terms-of-service/
+  contact:
+    email: support@virtru.com
+  license:
+    name: MIT
+    url: https://github.com/opentdf/backend/blob/master/LICENSE
+
+externalDocs:
+  description: Developer Hub
+  url: https://developer.virtru.com/
+
+paths:
+  "/":
+    get:
+      summary: Get the current version
+      description: |
+        This endpoint is for OPS so they have something to ping on to verify
+        that the server hasn't died.
+      operationId: tdf3_kas_core.web.heartbeat.ping
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: "0.0.0"
+  /healthz:
+    get:
+      tags:
+        - heartbeat
+      summary: Return current version as semver; useful for liveness checks
+      operationId: tdf3_kas_core.web.heartbeat.healthz
+      parameters:
+        - name: probe
+          description: liveness or readiness
+          in: query
+          schema:
+            default: liveness
+            enum:
+              - liveness
+              - readiness
+            type: string
+      responses:
+        "200":
+          description: Success with a detail message
+        "204":
+          description: Success with no detail message
+        "500":
+          description: Unhealthy, per the requested probe
+  "/kas_public_key":
+    get:
+      summary: "Get the public key for KAS"
+      deprecated: true
+      description: |
+        This endpoint provides a public key for the private key that the
+        kas has internally. The public key is used to wrap object keys in
+        the TDF3 or NanoTDF files.
+      operationId: tdf3_kas_core.web.public_key.get
+      parameters:
+        - name: algorithm
+          description: algorithm type rsa:<keysize> or ec:<curvename>
+          in: query
+          schema:
+            default: rsa:2048
+            type: string
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicKey"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyNotFoundError"
+  "/rewrap":
+    post:
+      summary: Request a rewrap
+      description: |
+        This endpoint performs the primary service of the KAS; to re-wrap
+        data keys as needed to provide access for entities with a TDF that they
+        would like to open.
+      operationId: tdf3_kas_core.web.rewrap.rewrap
+      requestBody:
+        $ref: "#/components/requestBodies/Rewrap"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    type: object
+                    default: {}
+                  kasWrappedKey:
+                    type: string
+                    nullable: true
+                  entityWrappedKey:
+                    type: string
+                    nullable: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AdjudicatorError"
+                  - $ref: "#/components/schemas/AuthorizationError"
+                  - $ref: "#/components/schemas/EntityError"
+                  - $ref: "#/components/schemas/KeyAccessError"
+                  - $ref: "#/components/schemas/KeyNotFoundError"
+                  - $ref: "#/components/schemas/PluginFailedError"
+                  - $ref: "#/components/schemas/PolicyError"
+  "/v2/rewrap":
+    post:
+      summary: Request a rewrap
+      description: |
+        This endpoint performs the primary service of the KAS; to re-wrap
+        data keys as needed to provide access for entities with a TDF that they
+        would like to open.
+      operationId: tdf3_kas_core.web.rewrap.rewrap_v2
+      requestBody:
+        $ref: "#/components/requestBodies/RewrapV2"
+      # security:
+      #   - virtruOIDCBearerToken: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    type: object
+                    default: {}
+                  kasWrappedKey:
+                    type: string
+                    nullable: true
+                  entityWrappedKey:
+                    type: string
+                    nullable: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AdjudicatorError"
+                  - $ref: "#/components/schemas/AuthorizationError"
+                  - $ref: "#/components/schemas/EntityError"
+                  - $ref: "#/components/schemas/KeyAccessError"
+                  - $ref: "#/components/schemas/KeyNotFoundError"
+                  - $ref: "#/components/schemas/PluginFailedError"
+                  - $ref: "#/components/schemas/PolicyError"
+  "/upsert":
+    post:
+      summary: Request a upsert
+      description: |
+        The upsert service is a proxy to the back-end services that persist
+        policies and keys.
+      operationId: tdf3_kas_core.web.upsert.upsert
+      requestBody:
+        $ref: "#/components/requestBodies/Upsert"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                default: []
+                items: {}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AuthorizationError"
+                  - $ref: "#/components/schemas/EntityError"
+                  - $ref: "#/components/schemas/KeyAccessError"
+                  - $ref: "#/components/schemas/KeyNotFoundError"
+                  - $ref: "#/components/schemas/PluginFailedError"
+                  - $ref: "#/components/schemas/PolicyError"
+  "/v2/upsert":
+    post:
+      summary: Request a upsert
+      description: |
+        The upsert service is a proxy to the back-end services that persist
+        policies and keys.
+      operationId: tdf3_kas_core.web.upsert.upsert_v2
+      requestBody:
+        $ref: "#/components/requestBodies/UpsertV2"
+      # security:
+      #   - virtruOIDCBearerToken: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                default: []
+                items: {}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AuthorizationError"
+                  - $ref: "#/components/schemas/EntityError"
+                  - $ref: "#/components/schemas/KeyAccessError"
+                  - $ref: "#/components/schemas/KeyNotFoundError"
+                  - $ref: "#/components/schemas/PluginFailedError"
+                  - $ref: "#/components/schemas/PolicyError"
+
+components:
+# TODO we should declare this in the openapi spec, but
+# if this is present connexion craps the bed unless
+# you define an x-bearerInfoFunc property
+# that points back to a function in your code to parse the token
+#
+# We should do that but not doing it now
+# Example: https://github.com/zalando/connexion/tree/master/examples/openapi3/jwt
+#  securitySchemes:
+#     virtruOIDCBearerToken:
+#       type: http
+#       scheme: bearer
+#       bearerFormat: JWT  # optional, for documentation purposes only
+  responses:
+    ### Errors
+    BadRequest:
+      description: 400 Bad request
+      content:
+        application/json:
+          schema:
+            properties:
+              detail:
+                type: string
+              status:
+                type: number
+                default: 400
+              title:
+                type: string
+                default: Bad request
+              type:
+                type: string
+                default: about:blank
+    NotFound:
+      description: 404 Not found
+      content:
+        application/json:
+          schema:
+            type: string
+    ServerError:
+      description: Server error
+
+    ### Methods
+    PublicKey:
+      description: Public key response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PublicKey"
+    Version:
+      description: Respond with current version
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              version:
+                type: string
+                example: "0.0.0"
+
+  requestBodies:
+    Rewrap:
+      description: Rewrap request body
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required:
+                  - authToken
+                  - entity
+                  - keyAccess
+                maxProperties: 5
+                properties:
+                  authToken:
+                    $ref: "#/components/schemas/AuthToken"
+                  entity:
+                    $ref: "#/components/schemas/Entity"
+                  keyAccess:
+                    $ref: "#/components/schemas/KeyAccess"
+                  policy:
+                    $ref: "#/components/schemas/Policy"
+                  algorithm:
+                    $ref: "#/components/schemas/TDF_Algorithm"
+              - type: object
+                required:
+                  - signedRequestToken
+                maxProperties: 1
+                properties:
+                  signedRequestToken:
+                    $ref: "#/components/schemas/JWT"
+    RewrapV2:
+      description: RewrapV2 request body
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required:
+                  - signedRequestToken
+                maxProperties: 1
+                properties:
+                  signedRequestToken:
+                    $ref: "#/components/schemas/JWT"      
+    Upsert:
+      description: Upsert request body
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required:
+                  - authToken
+                  - entity
+                  - keyAccess
+                  - policy
+                maxProperties: 4
+                properties:
+                  authToken:
+                    $ref: "#/components/schemas/AuthToken"
+                  entity:
+                    $ref: "#/components/schemas/Entity"
+                  keyAccess:
+                    $ref: "#/components/schemas/KeyAccess"
+                  policy:
+                    $ref: "#/components/schemas/Policy"
+              - type: object
+                required:
+                  - signedRequestToken
+    UpsertV2:
+      description: Upsert request body
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required:
+                  - signedRequestToken
+                maxProperties: 1
+                properties:
+                  signedRequestToken:
+                    $ref: "#/components/schemas/JWT"      
+
+  schemas:
+    Algorithm:
+      title: The algorithm used to encrypt the ciphertext
+      type: string
+      enum:
+        - AES-256-GCM
+    Aliases:
+      title: Array of userIds
+      type: array
+      items:
+        $ref: "#/components/schemas/UserId"
+    AuthToken:
+      $ref: "#/components/schemas/JWT"
+    Cert:
+      title: Entity certificate
+      type: string
+    Ciphertext:
+      title: Encrypted object
+      type: string
+    EncryptedMetadata:
+      title: Metadata in encrypted format
+      type: string
+    Entity:
+      description: Entity object
+      type: object
+      required:
+        - cert
+        - publicKey
+        - userId
+      maxProperties: 6
+      properties:
+        aliases:
+          $ref: "#/components/schemas/Aliases"
+        attributes:
+          $ref: "#/components/schemas/EntityAttributes"
+        cert:
+          $ref: "#/components/schemas/Cert"
+        exp:
+          $ref: "#/components/schemas/Exp"
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        userId:
+          $ref: "#/components/schemas/UserId"
+    EntityAttribute:
+      title: Entity attribute
+      required:
+        - jwt
+      properties:
+        jwt:
+          $ref: "#/components/schemas/JWT"
+    EntityAttributes:
+      title: Entity attributes
+      type: array
+      items:
+        $ref: "#/components/schemas/EntityAttribute"
+    Exp:
+      title: JWT expiration date
+      type: number
+    IV:
+      title: Initial vector used to encrypt the ciphertext
+      type: string
+    JWT:
+      title: JSON Web token
+      type: string
+      pattern: ^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$
+    KeyAccess:
+      title: Key access object
+      type: object
+      required:
+        - type
+        - url
+        - protocol
+      properties:
+        encryptedMetadata:
+          $ref: "#/components/schemas/EncryptedMetadata"
+        policySyncOptions:
+          $ref: "#/components/schemas/Policy"
+        policyBinding:
+          $ref: "#/components/schemas/PolicyBinding"
+        protocol:
+          type: string
+          enum:
+            - kas
+        type:
+          type: string
+          enum:
+            - remote
+            - remoteWrapped
+            - wrapped
+        url:
+          type: string
+        wrappedKey:
+          $ref: "#/components/schemas/WrappedKey"
+    Policy:
+      title: Policy
+      type: string
+    PolicyBinding:
+      title: Policy binding
+      type: string
+    PolicySyncOptions:
+      title: Policy sync options
+      type: object
+      properties:
+        url:
+          type: string
+    PublicKey:
+      title: Public key
+      type: string
+      pattern: '-----BEGIN PUBLIC KEY-----(.|\s)*-----END PUBLIC KEY-----(\s)*'
+    UserId:
+      title: User id
+      type: string
+    WrappedKey:
+      title: Wrapped key
+      type: string
+    TDF_Algorithm:
+      description: String to define the type of algorithm the client performing the TDF operations.
+      type: string
+      example: "ec:secp256r1"
+
+    ### Custom Errors
+    AttributePolicyConfigError:
+      title: Attribute policy config error (500)
+      type: string
+    AdjudicatorError:
+      title: Adjudicator error (403)
+      type: string
+    AuthorizationError:
+      title: Authorization error (403)
+      type: string
+    CryptoError:
+      title: Crypto error (403)
+      type: string
+    EntityError:
+      title: Entity error (400)
+      type: string
+    InvalidBindingError:
+      title: Invalid binding error (403)
+      type: string
+    JWTError:
+      title: JWT error (403)
+      type: string
+    KeyAccessError:
+      title: Key access error (403)
+      type: string
+    KeyNotFoundError:
+      title: Key not found error (403)
+      type: string
+    PluginFailedError:
+      title: Plugin failed error (403)
+      type: string
+    PluginIsBadError:
+      title: Plugin is bad error (403)
+      type: string
+    PolicyError:
+      title: Policy error (403)
+      type: string
+    PrivateKeyInvalidError:
+      title: Private key invalid error (403)
+      type: string
+    RequestError:
+      title: Invalid binding error (403)
+      type: string
+    ValidationError:
+      title: Validation error (400)
+      type: string
+    UnknownAttributePolicyError:
+      title: Unknown attribute policy error (403)
+      type: string
+    RequestTimeoutError:
+      title: Request timeout error (503)
+      type: string
+    PolicyNotFoundError:
+      title: Policy not found error (404)
+      type: string
+    ContractNotFoundError:
+      title: Contract not found error (404)
+      type: string
+    PolicyCreateError:
+      title: Policy create error (403)
+      type: string

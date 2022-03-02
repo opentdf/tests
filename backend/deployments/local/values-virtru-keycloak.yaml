@@ -1,0 +1,14 @@
+# Development image for minikube - for nonlocal envs, override this with a proper version
+# This should be preloaded into minikube by a local setup script
+image:
+#  This is for local builds - so the image will NOT be tagged with ghcr.io
+  repository: opentdf/keycloak
+  tag: head
+  pullPolicy: Never
+extraEnv: |
+  - name: KEYCLOAK_USER
+    value: keycloakadmin
+  - name: KEYCLOAK_PASSWORD
+    value: mykeycloakpassword
+  - name: CLAIMS_URL
+    value: http://attribute-provider:5000
