@@ -190,7 +190,7 @@
                 "sha256:d02a7a4ed609583587482eacfdce409a00b633dff04ccf1cb3d478e1f0c50529"
             ],
             "index": "pypi",
-            "version": "==0.25.0"
+            "version": "==0.27.0"
         },
         "pyyaml": {
             "hashes": [
