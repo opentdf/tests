@@ -184,7 +184,7 @@ k8s_yaml("frontend.yaml")
 k8s_resource("opentdf-attributes", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-claims", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-entitlements", resource_deps=["opentdf-postgresql"])
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"])
+k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
 
 
 helm_remote(

@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Runs tests in given project folder.
+#
+# Examples:
+#  Run unit tests for eas app:
+#   scripts/monotest eas
+#  Run unit tests for all apps:
+#   scripts/monotest all
+#  Run unit tests for all apps with coverage:
+#   scripts/monotest all cov
+#
+# Usage: scripts/monotest <app> <cov | watch>
+
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+export PATH="$PATH:$TOOLS_DIR"
+
+monolog TRACE "monotest: [$0 $*]"
+
+genkeys-if-needed || exit 1
+
+_single_pytest() {
+  monolog TRACE "_single_pytest: [$*]"
+
+  local project="$1"
+  shift
+
+  local kind=plain
+  # Create argument to specify which source subdirectory to check for coverage
+  if [[ $# -gt 0 ]]; then
+    kind="$1"
+    shift
+
+    case "$kind" in
+      cov) ;;
+      watch) ;;
+
+      *)
+        monolog ERROR "Unrecognized python test runner option [$kind]"
+        exit 1
+        ;;
+    esac
+  fi
+
+  if ! cd "${PROJECT_ROOT}/${project}"; then
+    monolog ERROR "Unable to cd [${project}]"
+  fi
+
+  pip3 install --upgrade pipenv
+
+  # shellcheck source=/dev/null
+  [ -f "scripts/test.env" ] && . scripts/test.env
+
+  if [[ $CLEAN_VENV ]]; then
+    pipenv clean
+  fi
+  pipenv install --deploy --dev
+
+  # Develop command line appropriate for basic testing, coverage, or watch
+  case $kind in
+    plain)
+      pipenv run pytest
+      ;;
+    cov)
+      pipenv run coverage run --source=. -m pytest 
+      command_rv=$?
+      if [[ $command_rv = 0 ]]; then
+        monolog TRACE "Collating coverage reports"
+        pipenv run coverage xml -o coverage-reports/coverage.xml || monolog WARNING "Coverage xml failure"
+        pipenv run coverage report -m --skip-covered || monolog WARNING "Coverage report failure"
+      fi
+      return $command_rv
+      ;;
+    watch)
+      pipenv ptw
+      ;;
+    *)
+      monolog ERROR "Unrecognized argument [$2]"
+      exit 1
+      ;;
+  esac
+}
+
+_single_npm_test() {
+  monolog TRACE "_single_npm_test: [$*]"
+
+  local project="$1"
+  shift
+
+  if ! cd "${PROJECT_ROOT}/$project"; then
+    monolog ERROR "Unable to cd [$project]"
+    exit 1
+  fi
+
+  case $1 in
+    '')
+      npm ci && npm test
+      ;;
+    cov)
+      npm run test-ci
+      ;;
+    watch)
+      npm ci && npm run test-watch
+      ;;
+    *)
+      monolog ERROR "Unrecognized argument [$2]"
+      exit 1
+      ;;
+  esac
+}
+
+_single_package() {
+  monolog TRACE "_single_package: [$*]"
+  if [ ! -d "${PROJECT_ROOT}/$1" ]; then
+    monolog ERROR "Not a package directory [${PROJECT_ROOT}/$1]"
+    exit 1
+  fi
+
+  if [ -f "${PROJECT_ROOT}/$1/package.json" ]; then
+    monolog INFO "Testing $1 as an npm project"
+    _single_npm_test "$@" && monolog DEBUG "Passed [$1]"
+  elif [ -f "${PROJECT_ROOT}/$1/Pipfile" ] || [ -f "${PROJECT_ROOT}/$1/setup.py" ]; then
+    monolog INFO "Testing $1 as a python project"
+    _single_pytest "$@" && monolog DEBUG "Passed [$1]"
+  elif [ -x "${PROJECT_ROOT}/$1/test" ]; then
+    monolog INFO "Testing $1 using bundled script"
+    "${PROJECT_ROOT}/$1/test" "${@:2}" && monolog DEBUG "Passed [${*}]"
+  else
+    monolog ERROR "Unable determine package type [${PROJECT_ROOT}/$1]"
+    exit 1
+  fi
+}
+
+if [[ all == "$1" ]]; then
+  # NOTE watch and `all` don't play nice together...
+  all_packages=$(grep -v "^#" <PACKAGES | grep -v "^$")
+  for p in $all_packages; do
+    if ! _single_package "$p" "${@:2}"; then
+      rval=$?
+      monolog ERROR "FAILED ${p} ${*:2}"
+      exit $rval
+    fi
+  done
+else
+  _single_package "${@}"
+fi
