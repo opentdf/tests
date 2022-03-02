@@ -1,5 +1,6 @@
 .idea
 /backend
+/frontend
 node_modules
 vulnerability/node_modules/
 vulnerability/test-results/
