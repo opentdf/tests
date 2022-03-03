@@ -73,7 +73,7 @@ jobs:
           kubectl: "1.23.3"
           helm: "3.8.0"
           helmv3: "3.8.0"
-          tilt: "0.23.8"
+          tilt: "0.25.2"
       - run: |
           kustomize version
           tilt version
