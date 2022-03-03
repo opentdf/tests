@@ -15,11 +15,12 @@ def test_claims_constructor():
     """Test the basic constructor."""
     user_id = "Hey It's Me"
     public_key = get_public_key_from_disk("test")
-    attributes = ClaimsAttributes()
+    attributes = {}
+    attributes[user_id] = ClaimsAttributes()
     actual = Claims(user_id, public_key, attributes)
     assert actual.user_id == user_id
     assert actual.client_public_signing_key == public_key
-    assert actual.attributes == attributes
+    assert actual.entity_attributes == attributes
 
 
 def test_claims_constructor_bad_id():
@@ -61,7 +62,7 @@ def test_claims_constructor_with_attributes():
         "https://aa.virtru.com/attr/primary-organization"
         "/value/7b738968-131a-4de9-b4a1-c922f60583e3"
     )
-    attributes = ClaimsAttributes.create_from_list(
+    attributes = ClaimsAttributes.create_from_list(user_id,
         [
             {
                 "attribute": attribute1,
@@ -78,10 +79,10 @@ def test_claims_constructor_with_attributes():
 
     assert actual.user_id == user_id
     assert actual.client_public_signing_key == public_key
-    attr1 = actual.attributes.get(attribute1)
+    attr1 = actual.entity_attributes[user_id].get(attribute1)
     assert attr1.namespace == "https://aa.virtru.com/attr/unique-identifier"
     assert attr1.value == "7b738968-131a-4de9-b4a1-c922f60583e3"
-    attr2 = actual.attributes.get(attribute2)
+    attr2 = actual.entity_attributes[user_id].get(attribute2)
     assert attr2.namespace == "https://aa.virtru.com/attr/primary-organization"
     assert attr2.value == "7b738968-131a-4de9-b4a1-c922f60583e3"
 
@@ -89,18 +90,42 @@ def test_claims_constructor_with_attributes():
 def make_claims_object():
     public_key = get_public_key_from_disk("test")
     data = {
-        "sub": "user@virtru.com",
-        "tdf_claims": {
+        "sub":"user@virtru.com",
+        "tdf_claims":{
             "client_public_signing_key": public_key.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
             ).decode("ascii"),
-            "subject_attributes": [
-                {"attribute": "https://example.com/attr/Classification/value/S"},
-                {"attribute": "https://example.com/attr/COI/value/PRX"},
-            ],
-            "tdf_spec_version": "4.0.0",
+            "entitlements":[
+            {
+                "entity_identifier":"clientsubjectId1-14443434-1111343434-asdfdffff",
+                "entity_attributes":[
+                {
+                    "attribute":"https://example.com/attr/Classification/value/S",
+                    "displayName":"classification"
+                },
+                {
+                    "attribute":"https://example.com/attr/COI/value/PRX",
+                    "displayName":"category of intent"
+                }
+                ]
+            },
+            {
+                "entity_identifier":"user@virtru.com",
+                "entity_attributes":[
+                {
+                    "attribute":"https://example.com/attr/Classification/value/S",
+                    "displayName":"classification"
+                },
+                {
+                    "attribute":"https://example.com/attr/COI/value/PRX",
+                    "displayName":"category of intent"
+                }
+                ]
+            }
+            ]
         },
+        "tdf_spec_version":"4.0.0"
     }
     return data
 

@@ -13,7 +13,7 @@ extraEnv: |
   - name: KEYCLOAK_PASSWORD
     value: mykeycloakpassword
   - name: CLAIMS_URL
-    value: http://opentdf-claims:5000/v1/claims
+    value: http://opentdf-claims:5000/claims
   - name: DB_VENDOR
     value: postgres
   - name: DB_ADDR

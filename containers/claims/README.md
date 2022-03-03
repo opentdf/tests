@@ -1,45 +1,43 @@
-# Claims Service
+# Claims
 
 The claims service provides `claims` JSON blobs to an identity provider. We
 currently are using Keycloak as the IdP.
 
 1. Upon successful client authentication via tge IdP, Keycloak, that service
    runs a plugin to invoke this service.
-2. An instance of this Claims serivce processes the request. It creates a
+2. An instance of the Claims service processes the request. It creates a
    Claims Object appropriate for that client in the current context,
    and returns it to the IdP/Keycloak.
 3. Our IdP then returns a signed JWT with the Claims Object
    inside.
 
+## Development
 
-## development
+### Start database
 
-### environment variables
+see [migration](../migration/README.md)
+
+### Configure server
 ```shell
 export POSTGRES_HOST=localhost
 export POSTGRES_USER=tdf_entitlement_reader
 export POSTGRES_PASSWORD=myPostgresPassword
 export POSTGRES_DATABASE=tdf_database
 export POSTGRES_SCHEMA=tdf_entitlement
-# app
-export EAS_ENTITY_EXPIRATION=120
-export KAS_DEFAULT_URL="http://localhost:8000"
-# secrets
-# Get secrets from certs/.env created from `scripts/genkeys-if-needed`
-export EAS_PRIVATE_KEY=""
-export KAS_CERTIFICATE=""
-export KAS_EC_SECP256R1_CERTIFICATE=""
 ```
 
 ### server
 ```shell
-pipenv install
-pipenv run uvicorn main:app --reload --port 5000
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install --requirement requirements.txt
+python3 -m uvicorn main:app --reload --port 5000
 ```
 
 ### OpenAPI
 ```shell
-pipenv run python3 main.py > openapi.json
+python3 main.py > openapi.json
 ```
 
 
