@@ -1,0 +1,3 @@
+[submodule "tdf3-js"]
+	path = tdf3-js
+	url = git@github.com:opentdf/tdf3-js.git
