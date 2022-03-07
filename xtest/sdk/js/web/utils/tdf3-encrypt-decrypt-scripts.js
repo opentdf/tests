@@ -1,8 +1,8 @@
-const virtru = require("tdf3-js");
+const { Client, TDF } = require("tdf3-js");
 
 async function encrypt(file) {
-  const client = new virtru.Client.Client(window.creds);
-  const encryptParams = new virtru.Client.EncryptParamsBuilder()
+  const client = new Client.Client(window.creds);
+  const encryptParams = new Client.EncryptParamsBuilder()
     .withArrayBufferSource(await file.arrayBuffer())
     .withOffline()
     .build();
@@ -18,8 +18,8 @@ async function encrypt(file) {
 }
 
 async function decrypt(file) {
-  const client = new virtru.Client.Client(window.creds);
-  const decryptParams = new virtru.Client.DecryptParamsBuilder()
+  const client = new Client.Client(window.creds);
+  const decryptParams = new Client.DecryptParamsBuilder()
     .withArrayBufferSource(await file.arrayBuffer())
     .build();
   const dt = await client.decrypt(decryptParams);
@@ -33,8 +33,8 @@ async function decrypt(file) {
 }
 
 async function metadata(file) {
-  const client = new virtru.Client.Client(window.creds);
-  const decryptParams = new virtru.Client.DecryptParamsBuilder()
+  const client = new Client.Client(window.creds);
+  const decryptParams = new Client.DecryptParamsBuilder()
     .withArrayBufferSource(await file.arrayBuffer())
     .build();
   const dt = await client.decrypt(decryptParams);
@@ -50,7 +50,7 @@ async function metadata(file) {
 }
 
 async function manifest(file) {
-  const tdf = new virtru.TDF();
+  const tdf = new TDF();
   await tdf.loadTDFStream({ location: file, type: "file-browser" });
   const a = document.getElementById("download_link_manifest");
 

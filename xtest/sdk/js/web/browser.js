@@ -1,16 +1,11 @@
 const { Command } = require("commander");
-const colors = require('colors');
-const fs = require("fs");
+require('colors');
 const {
   prepareBrowser,
   uploadFile,
   getCreds
 } = require("./utils/tdf3-encrypt-decrypt-helpers.js");
 const program = new Command();
-
-const configs = JSON.parse(
-  fs.readFileSync("config-oss.json", { encoding: "utf-8" })
-);
 
 const done = async browser => {
   try {
@@ -23,18 +18,9 @@ const done = async browser => {
 
 async function encrypt() {
   const { srcFile } = program.opts();
-  // const creds = getCreds(program, configs);
-
-  const creds = {
-    clientId: "tdf-client",
-    organizationName: 'tdf',
-    kasEndpoint: 'http://localhost:8000',
-    clientSecret: '123-456',
-    virtruOIDCEndpoint: 'http://localhost:65432/keycloak/',
-  };
-
+  const creds = getCreds();
   const { page, browser } = await prepareBrowser(program, creds);
-  // var file = fs.readFileSync(program.srcFile, { encoding: "utf-8" });
+
   await uploadFile({
     selector: "#encrypt",
     srcFile,
@@ -46,56 +32,49 @@ async function encrypt() {
 
 async function decrypt() {
   const { srcFile } = program.opts();
-  // const creds = getCreds(program, configs);
-
-  const creds = {
-    clientId: "tdf-client",
-    organizationName: 'tdf',
-    kasEndpoint: 'http://localhost:8000',
-    clientSecret: '123-456',
-    virtruOIDCEndpoint: 'http://localhost:65432/keycloak/',
-  };
-
+  const creds = getCreds();
   const { page, browser } = await prepareBrowser(program, creds);
+
   await uploadFile({
     selector: "#decrypt",
     srcFile,
     page
   });
+
   await done(browser);
 }
 
 async function metadata() {
-  const creds = getCreds(program, configs);
+  const { srcFile } = program.opts();
+  const creds = getCreds();
   const { page, browser } = await prepareBrowser(program, creds);
+
   await uploadFile({
     selector: "#metadata",
-    srcFile: program.srcFile,
+    srcFile,
     page
   });
+
   await done(browser);
 }
 
 async function manifest() {
-  const creds = getCreds(program, configs);
+  const { srcFile } = program.opts();
+  const creds = getCreds();
   const { page, browser } = await prepareBrowser(program, creds);
+
   await uploadFile({
     selector: "#metadata",
-    srcFile: program.srcFile,
+    srcFile,
     page
   });
+
   await done(browser);
 }
-
-const pretty_keys = o => `${Object.keys(o).join(" | ")}`;
 
 program
   .option("-i, --srcFile <path>", "input file")
   .option("-o, --dstFile <path>", "output file")
-  .requiredOption(
-    `-s, --clientOptions <stage name>`,
-    `${pretty_keys(configs)}`
-  );
 
 program
   .command("encrypt")

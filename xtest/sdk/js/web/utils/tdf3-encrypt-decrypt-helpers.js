@@ -1,35 +1,24 @@
 const puppeteer = require("puppeteer");
 const resolve = require("path").resolve;
 
-// function getCreds(program, configs) {
-//   const { clientOptions: clientOpts, userId, dstFile } = program.opts()
-
-//   const stageName = clientOpts;
-//   if (!stageName || !configs[stageName]) {
-//     console.error(`Must specify a valid stage, not [${stageName}]`);
-//     return {};
-//   }
-//   const clientOptions = {
-//     ...configs[stageName],
-//     email: process.env.VIRTRU_SDK_EMAIL
-//     // TODO: Set up local eas client for inbox testing.
-//   };
-//   if (userId) {
-//     clientOptions.userId = userId;
-//     clientOptions.email = userId;
-//   }
-//   clientOptions.dstFile = dstFile;
-//   console.log(`Constructing Client: ${JSON.stringify(clientOptions, null, 2)}`);
-//   return clientOptions;
-// }
+function getCreds() {
+  return {
+    clientId: "tdf-client",
+    organizationName: 'tdf',
+    kasEndpoint: 'http://localhost:8000',
+    clientSecret: '123-456',
+    virtruOIDCEndpoint: 'http://localhost:8080/',
+  };
+}
 
 async function prepareBrowser(program, creds) {
   const { dstFile } = program.opts()
 
   const browser = await puppeteer.launch({
-    slowMo: 10,
+    slowMo: 100,
     defaultViewport: null,
-    headless: true,
+    headless: false,
+    devtools: true,
     ignoreHTTPSErrors: true,
     // --no-sandbox Disables the sandbox for all process types that are normally sandboxed.
     //               Meant to be used as a browser-level switch for testing purposes only.
@@ -62,6 +51,4 @@ async function uploadFile({ selector, srcFile, page }) {
   await page.waitForTimeout(2000);
 }
 
-module.exports = { prepareBrowser, uploadFile };
-
-// module.exports = { prepareBrowser, uploadFile, getCreds };
+module.exports = { prepareBrowser, uploadFile, getCreds };

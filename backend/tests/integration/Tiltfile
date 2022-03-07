@@ -2,16 +2,15 @@ load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
 
 PROJECT_ROOT = "../.."
-
-
-def local_path(*paths):
-    return os.path.join(PROJECT_ROOT, *paths)
-
-
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
 CONTAINER_REGISTRY = "ghcr.io"
 
+def local_path(*paths):
+    return os.path.join(PROJECT_ROOT, *paths)
+
+def from_dotenv(path, key):
+    return str(local('. "{}" && echo "${}"'.format(path, key))).strip()
 
 #                                                      .
 #                                                    .o8
@@ -20,11 +19,6 @@ CONTAINER_REGISTRY = "ghcr.io"
 #  `"Y88b.  888ooo888 888        888     888ooo888   888   `"Y88b.
 #  o.  )88b 888    .o 888   .o8  888     888    .o   888 . o.  )88b
 #  8""888P' `Y8bod8P' `Y8bod8P' d888b    `Y8bod8P'   "888" 8""888P'
-
-
-def from_dotenv(path, key):
-    return str(local('. "{}" && echo "${}"'.format(path, key))).strip()
-
 
 local("./scripts/genkeys-if-needed", dir=local_path())
 
@@ -39,18 +33,18 @@ all_secrets = {
         "KAS_PRIVATE_KEY",
     ]
 }
-all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
 
+all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
 
 def only_secrets_named(*items):
     return {k: all_secrets[k] for k in items}
-
 
 k8s_yaml(
     secret_from_dict(
         "attributes-secrets", inputs=only_secrets_named("POSTGRES_PASSWORD")
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "claims-secrets",
@@ -63,6 +57,7 @@ k8s_yaml(
         ),
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "entitlements-secrets",
@@ -72,6 +67,7 @@ k8s_yaml(
         },
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "kas-secrets",
@@ -106,6 +102,8 @@ docker_build(
         "PY_VERSION": PY_VERSION,
     },
 )
+
+# docker_build("ghcr.io/opentdf/abacus", local_path("../", "frontend"))
 
 docker_build(
     "ghcr.io/opentdf/kas",
@@ -176,7 +174,6 @@ k8s_yaml(
     )
 )
 
-
 k8s_yaml("backend.yaml")
 k8s_yaml("frontend.yaml")
 
@@ -184,8 +181,7 @@ k8s_yaml("frontend.yaml")
 k8s_resource("opentdf-attributes", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-claims", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-entitlements", resource_deps=["opentdf-postgresql"])
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
-
+k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000") #, port_forwards="8000:8000"
 
 helm_remote(
     "keycloak",
@@ -193,6 +189,8 @@ helm_remote(
     repo_url="https://codecentric.github.io/helm-charts",
     values=["backend-keycloak-values.yaml"],
 )
+
+k8s_resource("keycloak", port_forwards="8080:8080")
 
 helm_remote(
     "postgresql",
@@ -223,7 +221,7 @@ helm_remote(
     version="4.0.16",
 )
 
-k8s_resource("ingress-nginx-controller", port_forwards="65432:80")
+k8s_resource("ingress-nginx-controller", port_forwards="65432:80") #, port_forwards="65432:80"
 
 
 #     .o8                               .                .
@@ -245,6 +243,10 @@ docker_build(
 
 k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
 
+# docker_build("ghcr.io/opentdf/tdf3-js", local_path("../", "tdf3-js"))
+
+# k8s_resource("tdf3-js") #, port_forwards="65432:80"
+
 #    db    db d888888b d88888b .d8888. d888888b
 #    `8b  d8' `~~88~~' 88'     88'  YP `~~88~~'
 #     `8bd8'     88    88ooooo `8bo.      88
@@ -259,4 +261,9 @@ docker_build(
 )
 
 k8s_yaml("xtest.yaml")
-k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"])
+
+k8s_resource(
+    "opentdf-xtest",
+    resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"],
+    trigger_mode=TRIGGER_MODE_MANUAL
+)

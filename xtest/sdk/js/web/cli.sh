@@ -14,4 +14,4 @@ if ! cd "${PROJECT_ROOT}/xtest"; then
   exit 1
 fi
 
-node sdk/js/web/browser.js -s $1 $2 -i $3 -o $4 "${@:5}"
+node sdk/js/web/browser.js $1 -i $2 -o $3 "${@:4}"

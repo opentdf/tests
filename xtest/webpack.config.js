@@ -13,7 +13,8 @@ module.exports = {
         "fs": false,
         "stream": false,
         "crypto": false,
-        "constants": false
+        "constants": false,
+        "buffer": false
     },
   }
 };

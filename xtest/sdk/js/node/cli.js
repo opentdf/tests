@@ -9,14 +9,10 @@
 const { Command } = require("commander");
 const { Readable } = require("stream");
 const { Client } = require("tdf3-js");
-require("colors");
 const fs = require("fs");
+require("colors");
 
 const program = new Command();
-
-const config = JSON.parse(
-  fs.readFileSync("config-oss.json", { encoding: "utf-8" })
-);
 
 const done = () => process.stderr.write("completed cli.js \n".green);
 
@@ -31,38 +27,14 @@ const setSourceFor = (builder, source) => {
   return builder;
 };
 
-const clientFor = program => {
-  // const stageName = program.clientOptions;
-  // if (!stageName || !config[stageName]) {
-  //   console.error(
-  //     `Invalid stage [${stageName}]; must be one of ${Object.keys(config)}`
-  //   );
-  //   return {};
-  // }
-  // const clientOptions = {
-  //   ...config[stageName],
-  //   email: process.env.VIRTRU_SDK_EMAIL,
-  //   appId: process.env.VIRTRU_SDK_APP_ID || ""
-  //   // TODO: Set up local eas client for inbox testing.
-  // };
-  // if (program.userId) {
-  //   clientOptions.userId = program.userId;
-  //   clientOptions.email = program.userId;
-  // }
-  // const safeConfig = {
-  //   ...clientOptions,
-  //   appId: "*".repeat(clientOptions.appId.length)
-  // };
-
-  const safeConfig = {
+const createClient = () => {
+  return new Client.Client({
     clientId: "tdf-client",
     organizationName: 'tdf',
     kasEndpoint: 'http://localhost:8000',
     clientSecret: '123-456',
-    virtruOIDCEndpoint: 'http://localhost:65432/keycloak/',
-  };
-
-  return new Client.Client(safeConfig);
+    virtruOIDCEndpoint: 'http://localhost:8080/',
+  });
 };
 
  const dstAsStream = (dstFile, encoding) => {
@@ -88,7 +60,7 @@ const encrypt = ({ mimeType }) => {
     encryptParamsBuilder.setMimeType(mimeType);
   }
 
-  const client = clientFor(program);
+  const client = createClient();
 
   const encryptParams = encryptParamsBuilder.withOffline().build();
 
@@ -106,7 +78,7 @@ const decrypt = () => {
       srcFile
   ).build();
 
-  const client = clientFor(program);
+  const client = createClient();
 
   client.decrypt(decryptParams).then(pt => {
     pt.pipe(dstAsStream(dstFile, "utf8"));
@@ -134,16 +106,13 @@ const metadata = () => {
     new Client.DecryptParamsBuilder(),
     program.srcFile
   ).build();
-  clientFor(program)
+  createClient()
     .decrypt(decryptParams)
     .then(pt => {
       let rewrapped = false;
       pt.on("rewrap", metadata => {
         rewrapped = true;
         jsonToDst(metadata, program.dstFile);
-      });
-      pt.on("data", chunk => {
-        /* ignored */
       });
       pt.on("end", () => {
         if (!rewrapped && !pt.metadata) {
@@ -162,7 +131,7 @@ const manifest = () => {
     new Client.DecryptParamsBuilder(),
     program.srcFile
   ).build();
-  clientFor(program)
+  createClient()
     .decrypt(decryptParams)
     .then(pt => {
       let rewrapped = false;
@@ -173,9 +142,6 @@ const manifest = () => {
         if (process) {
           process.exit();
         }
-      });
-      pt.on("data", () => {
-        /* ignored */
       });
       pt.on("end", () => {
         if (!rewrapped && !pt.manifest) {
@@ -189,12 +155,9 @@ const manifest = () => {
     });
 };
 
-const pretty_keys = o => `${Object.keys(o).join(" | ")}`;
-
 program
   .option("-i, --srcFile <path>", "input file")
   .option("-o, --dstFile <path>", "output file")
-  .requiredOption(`-s, --clientOptions <stage name>`, pretty_keys(config));
 
 program
   .command("encrypt")

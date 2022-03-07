@@ -30,6 +30,13 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 tmp_dir = "tmp/"
 
+isExist = os.path.exists(tmp_dir)
+
+if not isExist:
+  # Create a new directory because it does not exist
+  os.makedirs(tmp_dir)
+  print("The new directory is created!")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Cross-test various TDF libraries.")
@@ -58,13 +65,12 @@ def main():
     sdks = set(args.sdks) if args.sdks else all_sdks
     sdks_to_encrypt = set(args.sdks_encrypt) if args.sdks_encrypt else sdks
     sdks_to_decrypt = set(args.sdks_decrypt) if args.sdks_decrypt else sdks
-    # owner = args.owner
     stage = args.stage
     crud = args.crud
     attrtest = args.attrtest
 
     logger.info("--- main")
-    # setup(crud, stage, owner)
+    # setup()
     # if crud:
     #     logger.info("--- main - crud")
     #     with open("config-oss.json") as config_file:
@@ -128,6 +134,12 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, stage, serial, pt_file):
 
     # Generate plaintext and files
     ct_file, rt_file, mf_file = gen_files(serial)
+    logger.info(
+        "--- Gen Files %s, %s, %s",
+        ct_file,
+        rt_file,
+        mf_file
+    )
 
     # Do the roundtrip.
     logger.info("Encrypt %s", encrypt_sdk)
@@ -141,7 +153,7 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, stage, serial, pt_file):
     if not filecmp.cmp(pt_file, rt_file):
         raise Exception(
             "Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
-            % (serial, pt, rt)
+            % (serial, pt_file, rt_file)
         )
     # TODO(PLAT-532) Support manifest in OSS
     # if m:
@@ -262,12 +274,22 @@ def gen_pt(*, large):
     return pt_file
 
 
-def gen_files(serial, attr_type=""):
-    ct_file = "%stest-%s.tdf" % (tmp_dir, serial)  # ciphertext (TDF)
-    rt_file = "%stest-%s.untdf" % (tmp_dir, serial)  # roundtrip (plaintext)
-    mf_file = "%stest-%s.manifest" % (tmp_dir, serial)  # roundtrip (manifest json)
+def gen_files(serial):
+    ct = "%stest-%s.tdf" % (tmp_dir, serial)  # ciphertext (TDF)
+    rt = "%stest-%s.untdf" % (tmp_dir, serial)  # roundtrip (plaintext)
+    mf = "%stest-%s.manifest" % (tmp_dir, serial)  # roundtrip (manifest json)
 
-    return ct_file, rt_file, mf_file
+    # Create files with "open" func
+    ct_file = open(ct, "w+")
+    rt_file = open(rt, "w+")
+    mf_file = open(mf, "w+")
+
+    # Close files after they are created
+    ct_file.close()
+    rt_file.close()
+    mf_file.close()
+
+    return ct, rt, mf
 
 
 def random_string():
@@ -290,13 +312,13 @@ def encrypt(sdk, stage, pt_file, ct_file, mime_type="application/octet-stream", 
             attributes,
         ]
     else:
-        c = [sdk, stage, "encrypt", pt_file, ct_file, "--mimeType", mime_type]
+        c = [sdk, "encrypt", pt_file, ct_file, "--mimeType", mime_type]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
 
 def decrypt(sdk, stage, ct_file, rt_file):
-    c = [sdk, stage, "decrypt", ct_file, rt_file]
+    c = [sdk, "decrypt", ct_file, rt_file]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
@@ -380,8 +402,8 @@ def delete_users_and_attributes(*, attributeEndpoint, userEndpoint, owner):
     pass
 
 
-def setup(crud, stage):
-    teardown(crud, stage)
+def setup():
+    # teardown(crud, stage)
     os.makedirs(tmp_dir)
 
 
