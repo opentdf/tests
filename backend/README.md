@@ -20,10 +20,12 @@ We store several services combined in a single git repository for ease of develo
 
 1. The `containers` folder contains individual containerized services in folders, each of which should have a `Dockerfile`
 1. The build context for each individual containerized service _should be restricted to the folder of that service_ - shared dependencies should either live in a shared base image, or be installable via package management.
+1. Integration tests are stored in the `tests` folder. Notably, a useful integration test (x86 only) is available by running `cd tests/integration && tilt ci`
+1. A simple local stack can be pulled up with the latest releases of the images by running `tilt up` from the root. To use the latest mainline branches, edit the `CONTAINER_REGISTRY` to point to `ghcr.io` and [follow github's instructions to log into that repository](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
 
 ## Quick Start and Development
 
-This quick start guide is primarily for development and testing the EAS and KAS infrastructure. See [Production](#production) for details on running in production.
+This quick start guide is primarily for development and testing the ABAC and KAS infrastructure. See [Production](#production) for details on running in production.
 
 ### Prerequisites
 
@@ -34,14 +36,16 @@ This quick start guide is primarily for development and testing the EAS and KAS 
     - On macOS via Homebrew: `brew install kubectl`
     - Others see https://kubernetes.io/docs/tasks/tools/
 
-- Install minikube
+- Install a local Kubernetes manager. Options include minikube and kind. I suggest using `ctlptl` (see below) for managing several local clusters.
+
+  - minikube
     - On macOS via Homebrew: `brew install minikube`
     - Others see https://minikube.sigs.k8s.io/docs/start/
 
-- Install [kind](https://kind.sigs.k8s.io/)
-  - On macOS via Homebrew: `brew install kind`
-  - On Linux or WSL2 for Windows: `curl -Lo kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64 && chmod +x kind && sudo mv kind /usr/local/bin/kind`
-  - Others see https://kind.sigs.k8s.io/docs/user/quick-start/#installation
+  - Install [kind](https://kind.sigs.k8s.io/)
+    - On macOS via Homebrew: `brew install kind`
+    - On Linux or WSL2 for Windows: `curl -Lo kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64 && chmod +x kind && sudo mv kind /usr/local/bin/kind`
+    - Others see https://kind.sigs.k8s.io/docs/user/quick-start/#installation
 
 - Install [helm](https://helm.sh/)
     - On macOS via Homebrew: `brew install helm`
@@ -58,11 +62,16 @@ This quick start guide is primarily for development and testing the EAS and KAS 
 ### Alternative Prerequisites install
 ```shell
 # Install pre-requisites (drop what you've already got)
-./scripts/pre-reqs docker helm tilt kind 
+./scripts/pre-reqs docker helm tilt kind
 ```
 
 ### Generate local certs in certs/ directory
+
+> You may need to manually clean the `certs` folder occasionally
+
+```
 ./scripts/genkeys-if-needed
+```
 
 ### Create cluster
 
@@ -72,10 +81,12 @@ ctlptl create cluster kind --registry=ctlptl-registry --name kind-opentdf
 
 ### Start cluster
 
+> TODO([PLAT-1599](https://virtru.atlassian.net/browse/PLAT-1599)) Consolidate integration and root tiltfile.
+
 ```shell
 tilt up
 ```
- 
+
 # Hit spacebar to open web UI
 
 ### Cleanup
@@ -88,32 +99,9 @@ helm repo remove keycloak
 
 > (Optional) Run `octant` -> This will open a browser window giving you an overview of your local cluster.
 
-### PR builds
-
-When you open a GitHub PR, an Argo job will run which will publish all openTDF Backend Service images and Helm charts to Virtru's image/chart
-repos under the git shortSha of your PR branch.
-
-To add the Virtru Helm chart repo (one time step)
-
-``` sh
-helm repo add virtru https://charts.production.virtru.com
-helm repo update
-```
-
-> NOTE: Docker images are tagged with longSha, Helm charts are tagged with shortSha
-> NOTE: You can check the Argo build output to make sure you're using the same SHAs that Argo published.
-
-This means you can fetch any resource built from your PR branch by appending your SHA.
-
-For instance, if Argo generated a shortSha of `b616e2f`, to fetch the KAS chart for that branch, you would run
-
-`helm pull virtru/kas --version 0.4.4-rc-$(git rev-parse --short HEAD) --devel`
-
-Or, if you wanted to install all of the openTDF services, you could fetch the top-level chart (which will have all subcharts and images updated to the current PR branch's SHA)
-
-`helm pull virtru/etheria --version 0.1.1-rc-b616e2f --devel`
-
 ## Installation in Isolated Kubernetes Clusters
+
+> TODO([PLAT-1474])(https://virtru.atlassian.net/browse/PLAT-1474)) Update script
 
 If you are working on a kubernetes cluster that does not have access to the Internet,
 the `scripts/build-offline-bundle` script can generate an archive of all backend services.
@@ -205,13 +193,13 @@ This should be left alone, but may be edited as needed for insight into postres,
 
 ## Swagger-UI
 
-KAS and EAS servers support Swagger UI to provide documentation and easier interaction for the REST API.  
+The microservices support OpenAPI, and can provide documentation and easier interaction for the REST API.
 Add "/ui" to the base URL of the appropriate server. For example, `http://127.0.0.1:4010/ui/`.
 KAS and EAS each have separate REST APIs that together with the SDK support the full TDF3 process for encryption,
 authorization, and decryption.
 
 Swagger-UI can be disabled through the SWAGGER_UI environment variable. See the configuration sections of the
-README documentation for [KAS](kas_app/README.md) and [EAS](eas/README.md) in this repository.
+README documentation for [KAS](kas/kas_app/README.md) for more detail.
 
 ## Committing Code
 
@@ -246,31 +234,20 @@ To run a subset of unit tests (e.g. just the `kas_core` tests from the [kas_core
 scripts/monotest containers/kas/kas_core
 ```
 
-### Cluster tests
 
-Our E2E cluster tests use [kuttl](https://kuttl.dev/docs/cli.html#setup-the-kuttl-kubectl-plugin), and you can run them
-against an instance of these services deployed to a cluster (local minikube, or remote)
+### Security test
 
-1. Install these services to a Kubernetes cluster (using the quickstart method above, for example)
-1. Install [kuttl](https://kuttl.dev/docs/cli.html#setup-the-kuttl-kubectl-plugin)
-1. From the repo root, run `kubectl kuttl test tests/cluster`
-1. For advanced usage and more details, refer to [tests/cluster/README.md](tests/cluster/README.md)
+Once a cluster is running, run `tests/security-test/helm-test.sh`
 
-> The backend's CI is not currently cluster based, and so the kuttl tests are not being run via CI - this should be corrected when the CI is moved to K8S/Argo.
-
-
-#### Security test
-
-Once a cluster is running, run `security-test/helm-test.sh`
 ### Integration Tests
 
-TK
+> TODO(PLAT-1619) Add frontend+backend integration test
 
 ## Deployment
 
-TBD - The backend deployment will be done to Kubernetes clusters via Helm chart.
-TBD - for an idea of what's involved in this, including what Helm charts are required, [check the local install script](~/Source/etheria/deployments/local/start.sh)
+Any deployments are controlled by downstream repositories, e.g. internal to Virtru or other integrators.
 
+> TODO Reference opentdf.us deployment?
 
 # Customizing your local development experience
 #### Quick Start

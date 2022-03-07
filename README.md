@@ -1,9 +1,9 @@
 # tests
 Tests for openTDF
 
-[Vulnerability](vulnerability)  
+[Vulnerability](vulnerability)
 
-Place to run frontend and backend together locally. 
+Place to run frontend and backend together locally.
 Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
 
 
@@ -15,6 +15,6 @@ You can alter [tilt file](e2e/Tiltfile) to change source of containers. For exam
 ```
 docker_build(
     "ghcr.io/opentdf/abacus",
-    local_path("../", "frontend",), // you can change local path to your frontend build 
+    local_path("../", "frontend",), // you can change local path to your frontend build
 )
 ```
