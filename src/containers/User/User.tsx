@@ -8,6 +8,7 @@ import {Method} from "../../types/enums";
 import AssignAttributeForm from "../Client/AssignAttributeForm";
 import ClientTable from "../Client/ClientTable";
 import {TableData} from "../../types/table";
+import {keycloakConfig} from "../../config";
 
 const User = () => {
     const {id} = useParams<{ id: string }>();
@@ -17,14 +18,14 @@ const User = () => {
     useEffect(() => {
         const {token, cancel} = getCancellationConfig();
 
-        keyCloakClient
-            .get(`/admin/realms/${window.SERVER_DATA.realm}/users/${id}`, {
-                cancelToken: token,
-            })
-            .then((res) => {
-                setUser(res.data);
-            })
-            .catch((error) => toast.error(error));
+    keyCloakClient
+      .get(`/admin/realms/${keycloakConfig.realm}/users/${id}`, {
+        cancelToken: token,
+      })
+      .then((res) => {
+        setUser(res.data);
+      })
+      .catch((error) => toast.error(error));
 
         return () => {
             cancel("Operation canceled by the user.");

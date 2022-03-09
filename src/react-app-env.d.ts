@@ -7,6 +7,6 @@ interface Window {
     authority: string,
     clientId: string,
     entitlements: string,
-    realm: string,
+    realms: string[],
   };
 }

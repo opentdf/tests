@@ -26,6 +26,13 @@ export default function App() {
     if (initialized) {
       toast.success(keycloak.idToken);
       sessionStorage.setItem("keycloak", keycloak.token || "");
+      const tmp = localStorage.getItem('realm-tmp');
+
+      if (!keycloak.authenticated && tmp) {
+        localStorage.setItem('realm', tmp);
+        localStorage.removeItem('realm-tmp');
+        window.document.location.href = "/";
+      }
     }
   }, [initialized, keycloak]);
   // attributes

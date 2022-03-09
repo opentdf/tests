@@ -26,5 +26,5 @@ global.SERVER_DATA = {
   authority: 'https://keycloak.opentdf.us/auth/',
   clientId: 'localhost-abacus',
   access: 'https://opentdf.us/kas',
-  realm: 'opentdf-realm'
+  realms: ['opentdf-realm', 'opentdf-realm-1']
 }

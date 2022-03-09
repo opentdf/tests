@@ -3,6 +3,7 @@ import { useFetch } from ".";
 import { keyCloakClient } from "../service";
 import { Method } from "../types/enums";
 import { Client } from "../types/keycloak";
+import { keycloakConfig } from "../config";
 
 
 export const useClient = (id: string) => {
@@ -10,7 +11,7 @@ export const useClient = (id: string) => {
 
   const [data] = useFetch<Client>(keyCloakClient, {
     method: Method.GET,
-    path: `/admin/realms/${window.SERVER_DATA.realm}/clients/${id}`
+    path: `/admin/realms/${keycloakConfig.realm}/clients/${id}`
   });
 
   useEffect(() => {
