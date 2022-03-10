@@ -1,0 +1,26 @@
+name: X-Tests
+on: [push, pull_request]
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '16.x'
+    # todo: install and activate virtual env for python
+    - name: Install dependencies
+      run: |-
+        cd xtest
+        npm ci
+        pip3 install -r requirements.txt
+    - name: Run tests
+      run: |-
+        cd xtest
+        npm run test
+    # - uses: actions/upload-artifact@v2
+    #   if: always()
+    #   with:
+    #     name: playwright-test-results
+    #     path: vulnerability/test-results/
