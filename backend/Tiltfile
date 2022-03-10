@@ -2,42 +2,64 @@
 # reference https://docs.tilt.dev/api.html
 
 # extensions https://github.com/tilt-dev/tilt-extensions
-# nice-to-have change from `ext:` to `@tilt_ext`
-load("ext://secret", "secret_yaml_generic")
 load("ext://helm_remote", "helm_remote")
+load("ext://secret", "secret_from_dict", "secret_yaml_generic")
 
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
-# ghcr.io == GitHub packages
+
+# ghcr.io == GitHub packages. pre-release versions, created from recent green `main` commit
+# docker.io == Docker hub. Manually released versions
 CONTAINER_REGISTRY = "docker.io" # Docker Hub
+
+def from_dotenv(path, key):
+    """Read a variable from a `.env` file"""
+    return str(local('. "{}" && echo "${}"'.format(path, key))).strip()
 
 # secrets
 local("./scripts/genkeys-if-needed")
 
+all_secrets = {
+    v: from_dotenv("./certs/.env", v)
+    for v in [
+        "CA_CERTIFICATE",
+        "EAS_CERTIFICATE",
+        "EAS_PRIVATE_KEY",
+        "KAS_CERTIFICATE",
+        "KAS_EC_SECP256R1_CERTIFICATE",
+        "KAS_EC_SECP256R1_PRIVATE_KEY",
+        "KAS_PRIVATE_KEY",
+    ]
+}
+all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
+all_secrets["ca-cert.pem"] = all_secrets["CA_CERTIFICATE"]
+
+def only_secrets_named(*items):
+    return {k: all_secrets[k] for k in items}
+
 k8s_yaml(
-    secret_yaml_generic(
+    secret_from_dict(
         "etheria-secrets",
-        from_file=[
-            "EAS_PRIVATE_KEY=certs/eas-private.pem",
-            "EAS_CERTIFICATE=certs/eas-public.pem",
-            "KAS_EC_SECP256R1_CERTIFICATE=certs/kas-ec-secp256r1-public.pem",
-            "KAS_CERTIFICATE=certs/kas-public.pem",
-            "KAS_EC_SECP256R1_PRIVATE_KEY=certs/kas-ec-secp256r1-private.pem",
-            "KAS_PRIVATE_KEY=certs/kas-private.pem",
-            "ca-cert.pem=certs/ca.crt",
-        ],
-        from_literal="POSTGRES_PASSWORD=myPostgresPassword",
+        inputs=only_secrets_named(
+            "POSTGRES_PASSWORD",
+            "EAS_CERTIFICATE",
+            "KAS_EC_SECP256R1_CERTIFICATE",
+            "KAS_CERTIFICATE",
+            "KAS_EC_SECP256R1_PRIVATE_KEY",
+            "KAS_PRIVATE_KEY",
+            "ca-cert.pem",
+        ),
     )
 )
 k8s_yaml(
-    secret_yaml_generic(
+    secret_from_dict(
         "attributes-secrets",
-        from_literal="POSTGRES_PASSWORD=myPostgresPassword",
+        inputs=only_secrets_named("POSTGRES_PASSWORD"),
     )
 )
 k8s_yaml(
-    secret_yaml_generic(
-        "entitlements-secrets", from_literal=["POSTGRES_PASSWORD=myPostgresPassword"]
+    secret_from_dict(
+        "entitlements-secrets", inputs=only_secrets_named("POSTGRES_PASSWORD")
     )
 )
 
@@ -159,12 +181,12 @@ k8s_yaml(
 # TODO this service requires actual S3 secrets
 # TODO or use https://github.com/localstack/localstack
 # k8s_yaml(
-#     secret_yaml_generic(
+#     secret_from_dict(
 #         "tdf-storage-secrets",
-#         from_literal=[
-#             "AWS_SECRET_ACCESS_KEY=mySecretAccessKey",
-#             "AWS_ACCESS_KEY_ID=myAccessKeyId",
-#         ],
+#         inputs={
+#             "AWS_SECRET_ACCESS_KEY": "mySecretAccessKey",
+#             "AWS_ACCESS_KEY_ID": "myAccessKeyId",
+#         },
 #     )
 # )
 # docker_build(

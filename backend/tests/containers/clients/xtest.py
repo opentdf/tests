@@ -32,6 +32,8 @@ def encrypt_web(ct_file, rt_file, attributes=None):
     c = [
         "npx",
         "@opentdf/cli",
+        "--log-level",
+        "DEBUG",
         "--kasEndpoint",
         KAS_ENDPOINT,
         "--oidcEndpoint",
@@ -52,6 +54,8 @@ def decrypt_web(ct_file, rt_file):
     c = [
         "npx",
         "@opentdf/cli",
+        "--log-level",
+        "DEBUG",
         "--kasEndpoint",
         KAS_ENDPOINT,
         "--oidcEndpoint",

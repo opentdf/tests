@@ -33,6 +33,8 @@ import tdf3_kas_core.keycloak as keycloak
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.serialization import PublicFormat
 
 from pkg_resources import packaging
 
@@ -48,6 +50,7 @@ from tdf3_kas_core.errors import UnauthorizedError
 from tdf3_kas_core.errors import RouteNotFoundError
 
 from tdf3_kas_core.models import Adjudicator
+from tdf3_kas_core.models import AdjudicatorV2
 from tdf3_kas_core.models import AttributePolicyCache
 from tdf3_kas_core.models import Entity
 from tdf3_kas_core.models import KeyAccess
@@ -211,14 +214,21 @@ def _get_bearer_token_from_header(context):
 
     return idpJWT
 
-
-def _get_tdf_claims(context, key_master):
+def _decode_and_validate_oidc_jwt(context, key_master):
+    """Decodes the JWT in the Authorization header,
+    validates it via the issuer pubkey,
+    then returns the JSON
+    """
     idpJWT = _get_bearer_token_from_header(context)
 
     realmKey = keycloak.fetch_realm_key_by_jwt(idpJWT, key_master)
-    decoded_payload = authorized_v2(realmKey, idpJWT)
+    return authorized_v2(realmKey, idpJWT)
 
-    claims = Claims.load_from_raw_data(decoded_payload)
+def _get_tdf_claims(context, key_master):
+    """Serializes the decoded and validated JWT into KAS's object model stuff.
+    """
+    decodedJwt = _decode_and_validate_oidc_jwt(context, key_master)
+    claims = Claims.load_from_raw_data(decodedJwt)
 
     return claims
 
@@ -233,11 +243,25 @@ def rewrap_v2(data, context, plugin_runner, key_master):
     """
     logger.debug("===== REWRAPV2 SERVICE START ====")
 
+    # TODO our plugin model would be more flexible if we delegated ALL parsing of request body/context to plugins
+    # rather than trying to deserialize parts of the body/context into a fixed object model BEFORE we run the plugins,
+    # where both the plugin caller and the plugin have to agree on/share the object model schema.
+    #
+    # Of course, if our "plugin model" just takes the request context and body and does everything itself,
+    # our plugins are indistinguishable from a garden variety HTTP handler func and having a homegrown "plugin model"
+    # begins to look somewhat redundant/decorative.
+
+    # Validate OIDC JWT, decode it to our "Claims" object model type
     claims = _get_tdf_claims(context, key_master)
+
+    # We want the pubkey from the client that was embedded in the validated JWT,
+    # we will use it to validate the request body signature
     signer_public_key = claims.client_public_signing_key
 
     if "signedRequestToken" not in data:
         raise AuthorizationError("Request not authorized")
+
+    logger.debug("SIGNER PUBKEY: {}".format(signer_public_key.public_bytes(encoding=Encoding.PEM, format=PublicFormat.SubjectPublicKeyInfo).decode("ascii")))
 
     try:
         decoded = jwt.decode(
@@ -262,21 +286,17 @@ def rewrap_v2(data, context, plugin_runner, key_master):
         )
         algorithm = "rsa:2048"
 
-    client_public_key = serialization.load_pem_public_key(
-        str.encode(dataJson["clientPublicKey"]), backend=default_backend()
-    )
-
-    entity = Entity(claims.user_id, client_public_key, claims.attributes)
-
+    # entity = Entity(claims.user_id, client_public_key, claims.attributes)
+    #
     if algorithm == "ec:secp256r1":
-        return _nano_tdf_rewrap(dataJson, context, plugin_runner, key_master, entity)
+        return _nano_tdf_rewrap(dataJson, context, plugin_runner, key_master, claims)
     else:
 
         if "keyAccess" not in dataJson:
             logger.error("Key Access missing from %s", dataJson)
             raise KeyAccessError("No key access object")
 
-        return _tdf3_rewrap(dataJson, context, plugin_runner, key_master, entity)
+        return _tdf3_rewrap_v2(dataJson, context, plugin_runner, key_master, claims)
 
 
 def _tdf3_rewrap(data, context, plugin_runner, key_master, entity):
@@ -365,8 +385,97 @@ def _tdf3_rewrap(data, context, plugin_runner, key_master, entity):
         logger.setLevel(logging.DEBUG)  # dynamically escalate level
         raise AdjudicatorError(m)
 
+def _tdf3_rewrap_v2(data, context, plugin_runner, key_master, claims):
+    """
+    Handle rewrap request for tdf3 type.
+    """
 
-def _nano_tdf_rewrap(data, context, plugin_runner, key_master, entity):
+    # Unpack the policy.
+    if "policy" not in data:
+        raise PolicyError("No policy")
+
+    try:
+        canonical_policy = data["policy"]
+        original_policy = Policy.construct_from_raw_canonical(canonical_policy)
+
+        kas_private = key_master.get_key("KAS-PRIVATE")
+        key_access = KeyAccess.from_raw(
+            data["keyAccess"],
+            private_key=kas_private,
+            canonical_policy=canonical_policy,
+            use="rewrap",
+        )
+    except ValueError as e:
+        raise BadRequestError(f"Error in Policy or Key Binding [{e}]") from e
+
+    #
+    # Run the plugins
+    #
+
+    # Fetch attributes from EAS and create attribute policy cache.
+    attribute_policy_cache = AttributePolicyCache()
+    data_attributes_namespaces = list(
+        original_policy.data_attributes.cluster_namespaces
+    )
+    if data_attributes_namespaces:
+        config = plugin_runner.fetch_attributes(data_attributes_namespaces)
+        attribute_policy_cache.load_config(config)
+
+    # Create adjudicator from the attributes from EAS.
+    adjudicator = AdjudicatorV2(attribute_policy_cache)
+
+    (policy, res) = plugin_runner.update(original_policy, claims, key_access, context)
+
+    # Execute a premature bailout if the plugins provide a rewrapped key.
+    if "entityWrappedKey" in res:
+        logger.debug(
+            "REMOTE RETURNED AN ENTITY WRAPPED KEY [res = %s] REWRAP SERVICE FINISH",
+            res,
+        )
+        # Assume this is ok as is; DO NOT CHECK CREDENTIALS (?)
+        return res
+
+    elif "kasWrappedKey" in res:
+        # replace the wrapped key object in key_access with the new key
+        logger.debug(
+            "REMOTE RETURNED A KAS WRAPPED KEY; B64 KAS Wrapped key=[%s]",
+            res["kasWrappedKey"],
+        )
+        key_access.wrapped_key = res["kasWrappedKey"]
+
+    else:
+        logger.debug("KEY TO REWRAP CAME FROM REQUEST")
+        # A purely KAS operation
+        pass
+
+    # Check to see if the policy will grant the entity access.
+    # Raises an informative error if access is denied.
+    allowed = adjudicator.can_access(policy, claims)
+
+    client_public_key = serialization.load_pem_public_key(
+        str.encode(data["clientPublicKey"]), backend=default_backend()
+    )
+
+    if allowed is True:
+        logger.debug("========= Rewrap allowed = %s", allowed)
+        # Re-wrap the kas-wrapped key with the entity's public key.
+        if key_access.wrapped_key is not None:
+            wrapped_key = WrappedKey.from_raw(key_access.wrapped_key, kas_private)
+            res["entityWrappedKey"] = wrapped_key.rewrap_key(client_public_key)
+            logger.debug("REWRAP SERVICE FINISH")
+            return res
+        else:
+            logger.error("Wrapped key missing from %s", key_access)
+            raise KeyAccessError("No wrapped key in key access model")
+
+    else:
+        # should never get to here. Bug in adjudicator.
+        m = f"Adjudicator returned {allowed} without raising an error"
+        logger.error(m)
+        logger.setLevel(logging.DEBUG)  # dynamically escalate level
+        raise AdjudicatorError(m)
+
+def _nano_tdf_rewrap(data, context, plugin_runner, key_master, claims):
     """
     Handle rewrap request for tdf3 type.
     """
@@ -467,13 +576,13 @@ def _nano_tdf_rewrap(data, context, plugin_runner, key_master, entity):
         attribute_policy_cache.load_config(config)
 
     # Create adjudicator from the attributes from EAS.
-    adjudicator = Adjudicator(attribute_policy_cache)
+    adjudicator = AdjudicatorV2(attribute_policy_cache)
 
-    (policy, res) = plugin_runner.update(original_policy, entity, key_access, context)
+    (policy, res) = plugin_runner.update(original_policy, claims, key_access, context)
 
     # Check to see if the policy will grant the entity access.
     # Raises an informative error if access is denied.
-    allowed = adjudicator.can_access(policy, entity)
+    allowed = adjudicator.can_access(policy, claims)
     if allowed is False:
         m = "Adjudicator returned {} without raising an error".format(allowed)
         logger.error(m)
@@ -481,7 +590,11 @@ def _nano_tdf_rewrap(data, context, plugin_runner, key_master, entity):
         raise AdjudicatorError(m)
 
     # Generate ephemeral rewrap key-pair
-    public_key_bytes = entity.public_key.public_bytes(
+    client_public_key = serialization.load_pem_public_key(
+        str.encode(data["clientPublicKey"]), backend=default_backend()
+    )
+    logger.debug(client_public_key)
+    public_key_bytes = client_public_key.public_bytes(
         serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
     )
     encryptor = ecc_mode.curve.create_encryptor(public_key_bytes)
@@ -609,7 +722,8 @@ def upsert_v2(data, context, plugin_runner, key_master):
         str.encode(dataJson["clientPublicKey"]), backend=default_backend()
     )
 
-    entity = Entity(claims.user_id, client_public_key, claims.attributes)
+    # TODO BML fix
+	# entity = Entity(claims.user_id, client_public_key, claims.attributes)
 
     # Unpack the policy.
     if "policy" not in dataJson:
@@ -631,7 +745,7 @@ def upsert_v2(data, context, plugin_runner, key_master):
     )
 
     # Run the plugins
-    messages = plugin_runner.upsert(original_policy, entity, key_access, context)
+    messages = plugin_runner.upsert(original_policy, claims.entity_attributes, key_access, context)
 
     logger.debug("UPSERTV2 SERVICE FINISH: Upsert Status Messages = [%s]", messages)
 

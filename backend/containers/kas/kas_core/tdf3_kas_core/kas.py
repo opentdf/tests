@@ -14,7 +14,9 @@ from .services import kas_public_key
 
 from .models import HealthzPluginRunner
 from .models import RewrapPluginRunner
+from .models import RewrapPluginRunnerV2
 from .models import UpsertPluginRunner
+from .models import UpsertPluginRunnerV2
 from .models import KeyMaster
 
 from .errors import PluginIsBadError
@@ -72,7 +74,7 @@ def create_session_rewrap_v2(key_master, plugins):
     closure of this factory function.  This pre-loaded dependency injection
     makes the service call cleaner and clearer.
     """
-    plugin_runner = RewrapPluginRunner(plugins)
+    plugin_runner = RewrapPluginRunnerV2(plugins)
 
     def session_rewrap(data, options):
         return rewrap_v2(data, options, plugin_runner, key_master)
@@ -101,8 +103,10 @@ def create_session_upsert_v2(key_master, plugins):
     The other components that the upsert service needs are captured in the
     closure of this factory function.  This pre-loaded dependency injection
     makes the service call cleaner and clearer.
+
+    (narrator voice: "Translation: 'I made this one aspect simpler at the cost of making LITERALLY EVERYTHING ELSE MORE COMPLICATED'")
     """
-    plugin_runner = UpsertPluginRunner(plugins)
+    plugin_runner = UpsertPluginRunnerV2(plugins)
 
     def session_upsert(data, options):
         return upsert_v2(data, options, plugin_runner, key_master)

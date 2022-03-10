@@ -243,6 +243,13 @@ docker_build(
     build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
 )
 
+k8s_resource(
+    "keycloak",
+    links=[
+        link('localhost:65432/auth', 'Keycloak admin console')
+    ],
+)
+
 k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
 
 #    db    db d888888b d88888b .d8888. d888888b
