@@ -2,10 +2,9 @@
   "name": "xtest",
   "version": "1.0.0",
   "description": "",
-  "main": "run-test-cli.js",
+  "main": "runner.py",
   "scripts": {
-    "test_exapmple": "python3 runner.py -o $VIRTRU_SDK_EMAIL -s eternos --sdks sdk/js/node/cli.sh sdk/py/oss/cli.sh",
-    "test": "python3 runner.py -s local --sdks sdk/js/web/cli.sh",
+    "test": "python3 runner.py --sdks sdk/js/node/cli.sh",
     "build-tdf3": "webpack --mode=production"
   },
   "keywords": [],
@@ -14,8 +13,7 @@
   "dependencies": {
     "colors": "^1.4.0",
     "commander": "^9.0.0",
-    "puppeteer": "^13.4.0",
-    "tdf3-js": "github:opentdf/tdf3-js#feature/PLAT-1556"
+    "puppeteer": "^13.4.0"
   },
   "devDependencies": {
     "webpack": "^5.69.1",

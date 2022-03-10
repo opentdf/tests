@@ -2,7 +2,7 @@
  * Simple command-line interface for the TDF3 javascript SDK.
  *
  * Usage:
- *  `node cli.js -s <stage> <encrypt | decrypt> -i <src-file> -o <dst-file>`
+ *  `node cli.js <encrypt | decrypt> -i <src-file> -o <dst-file>`
  *
  * Plaintext is written as UTF8, ciphertext is written as binary.
  */
@@ -162,7 +162,6 @@ program
 program
   .command("encrypt")
   .option(`-m, --mimeType <mimeType>`, "Content Type to apply to the file")
-  .option("-a, --attrs <attributeType>", "the type of attributes to be used")
   .action(encrypt);
 
 program.command("decrypt").action(decrypt);

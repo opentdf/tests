@@ -7,5 +7,6 @@ vulnerability/test-results/
 vulnerability/playwright-report/
 xtest/node_modules
 xtest/tmp
+xtest/sdk/js/web/dist
 e2e/.helm
 certs/

@@ -15,13 +15,8 @@ import string
 import subprocess
 import base64
 
-SDK_PATHS = [
-    "sdk/js/node/cli.sh",
-    "sdk/js/web/cli.sh",
-    # "sdk/py/oss/cli.sh",
-    # "sdk/py/nanotdf/cli.sh",
-    # "sdk/java/oss/cli.sh",
-]
+SDK_PATHS = ["sdk/js/node/cli.sh"]
+
 all_sdks = set(SDK_PATHS)
 
 logger = logging.getLogger("xtest")
@@ -40,20 +35,10 @@ if not isExist:
 
 def main():
     parser = argparse.ArgumentParser(description="Cross-test various TDF libraries.")
-    # parser.add_argument("-o", "--owner", help="User ID for resource owner", required=True)
     parser.add_argument("-S", "--sdks", nargs="+", choices=SDK_PATHS, help="SDK variant")
     parser.add_argument("-E", "--sdks-encrypt", nargs="+", choices=SDK_PATHS, help="SDK variant to use to encrypt")
     parser.add_argument("-D", "--sdks-decrypt", nargs="+", choices=SDK_PATHS, help="SDK variant to use to decrypt")
     parser.add_argument("--no-teardown", action="store_true", help="don't delete temp files")
-    parser.add_argument(
-        "-s",
-        "--stage",
-        help="vpc stage, as found in the appropriat config JSON file",
-        required=True,
-    )
-    parser.add_argument(
-        "--crud", help="Update and delete users and attributes", action="store_true"
-    )
     parser.add_argument(
         "--attrtest", help="Testing with attributes - requires crud", action="store_true"
     )
@@ -65,35 +50,16 @@ def main():
     sdks = set(args.sdks) if args.sdks else all_sdks
     sdks_to_encrypt = set(args.sdks_encrypt) if args.sdks_encrypt else sdks
     sdks_to_decrypt = set(args.sdks_decrypt) if args.sdks_decrypt else sdks
-    stage = args.stage
-    crud = args.crud
     attrtest = args.attrtest
 
     logger.info("--- main")
-    # setup()
-    # if crud:
-    #     logger.info("--- main - crud")
-    #     with open("config-oss.json") as config_file:
-    #         config = json.load(config_file)
-    #     create_users_and_attributes(
-    #         attributeEndpoint=config[stage]["attributeEndpoint"],
-    #         owner=owner,
-    #         userEndpoint=config[stage]["userEndpoint"],
-    #     )
 
     pt_file = gen_pt(large=args.large)
-    try:
-        # TODO(PLAT-533) Support xtest browser and non browser
-        if sdks_to_decrypt or sdks_to_encrypt:
-            run_cli_tests(sdks_to_encrypt, sdks_to_decrypt, stage, pt_file, attrtest)
-            # run_cli_tests(sdks_to_encrypt, sdks_to_decrypt, owner, stage, pt_file, attrtest)
-    finally:
-        if not args.no_teardown:
-            teardown(crud, stage)
+    if sdks_to_decrypt or sdks_to_encrypt:
+        run_cli_tests(sdks_to_encrypt, sdks_to_decrypt, pt_file, attrtest)
 
 
-# def run_cli_tests(sdks_encrypt, sdks_decrypt, owner, stage, pt_file, attrtest):
-def run_cli_tests(sdks_encrypt, sdks_decrypt, stage, pt_file, attrtest):
+def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file, attrtest):
     if not sdks_encrypt or not sdks_decrypt:
         return
     logger.info("--- run_cli_tests %s => %s", sdks_encrypt, sdks_decrypt)
@@ -105,12 +71,9 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, stage, pt_file, attrtest):
             try:
                 # TODO: Parallelize when these start taking a lot of time.
                 if attrtest:
-                    test_cross_roundtrip_with_attributes(
-                        x, y, owner, stage, serial, pt_file
-                    )
+                    test_cross_roundtrip_with_attributes(x, y, serial, pt_file)
                 else:
-                  # test_cross_roundtrip(x, y, owner, stage, serial, pt_file)
-                    test_cross_roundtrip(x, y, stage, serial, pt_file)
+                    test_cross_roundtrip(x, y, serial, pt_file)
             except Exception as e:
                 logger.error("Exception with pass %s => %s", x, y, exc_info=True)
                 fail += [f"{x}=>{y}"]
@@ -123,8 +86,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, stage, pt_file, attrtest):
 
 # Test a roundtrip across the two referenced sdks.
 # Returns True if test succeeded, false otherwise.
-# def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, owner, stage, serial, pt_file):
-def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, stage, serial, pt_file):
+def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     logger.info(
         "--- Begin Test #%s: Roundtrip encrypt(%s) --> decrypt(%s)",
         serial,
@@ -143,11 +105,9 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, stage, serial, pt_file):
 
     # Do the roundtrip.
     logger.info("Encrypt %s", encrypt_sdk)
-    encrypt(encrypt_sdk, stage, pt_file, ct_file, mime_type="text/plain")
+    encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain")
     logger.info("Decrypt %s", decrypt_sdk)
-    decrypt(decrypt_sdk, stage, ct_file, rt_file)
-    # TODO(PLAT-532) Support manifest in OSS
-    # m = manifest(decrypt_sdk, owner, stage, ct_file, mf_file)
+    decrypt(decrypt_sdk, ct_file, rt_file)
 
     # Verify the roundtripped result is the same as our initial plantext.
     if not filecmp.cmp(pt_file, rt_file):
@@ -155,9 +115,6 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, stage, serial, pt_file):
             "Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
             % (serial, pt_file, rt_file)
         )
-    # TODO(PLAT-532) Support manifest in OSS
-    # if m:
-    #     assert m["payload"]["mimeType"] == "text/plain"
     logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
 
 
@@ -185,17 +142,13 @@ def test_cross_roundtrip_with_attributes(encrypt_sdk, decrypt_sdk, serial, pt_fi
 
     for attr_type, attrs in iterations.items():
         # Generate the string and files
-        ct_file, rt_file, mf_file = gen_files(
-            serial, attr_type=attr_type
-        )
+        ct_file, rt_file, mf_file = gen_files(serial, attr_type=attr_type)
 
         # Do the roundtrip.
-        encrypt(
-            encrypt_sdk, owner, stage, pt_file, ct_file, mime_type="text/plain", attributes=attr_type
-        )
+        encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain", attributes=attr_type)
 
         try:
-            decrypt(decrypt_sdk, owner, stage, ct_file, rt_file)
+            decrypt(decrypt_sdk, ct_file, rt_file)
             if attr_type == "Failing Attributes":
                 raise Exception(
                     "Test #%s with %s: FAILED -- Decryption successful when expected to fail"
@@ -298,11 +251,10 @@ def random_string():
     )
 
 
-def encrypt(sdk, stage, pt_file, ct_file, mime_type="application/octet-stream", attributes=""):
+def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", attributes=""):
     if attributes:
         c = [
             sdk,
-            stage,
             "encrypt",
             pt_file,
             ct_file,
@@ -317,14 +269,14 @@ def encrypt(sdk, stage, pt_file, ct_file, mime_type="application/octet-stream", 
     subprocess.check_call(c)
 
 
-def decrypt(sdk, stage, ct_file, rt_file):
+def decrypt(sdk, ct_file, rt_file):
     c = [sdk, "decrypt", ct_file, rt_file]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
 
-def manifest(sdk, owner, stage, ct_file, rt_file):
-    c = [sdk, owner, stage, "manifest", ct_file, rt_file]
+def manifest(sdk, ct_file, rt_file):
+    c = [sdk, "manifest", ct_file, rt_file]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
     with open(rt_file) as json_file:
@@ -374,16 +326,6 @@ def create_users_and_attributes(*, attributeEndpoint, userEndpoint, owner):
             attributes["urduTest"]["attribute"],
         ],
     }
-    # b = {
-    #     "name": "Bob",
-    #     "userId": "bob_test_5678",
-    #     "email": "bobTest@example.com",
-    #     "attributes": [
-    #         attributes['frenchTest']['attribute'],
-    #         attributes['germanTest']['attribute'],
-    #         attributes['italianTest']['attribute'],
-    #     ]
-    # }
     user_response = requests.post(
         userEndpoint,
         json=u,
@@ -395,35 +337,6 @@ def create_users_and_attributes(*, attributeEndpoint, userEndpoint, owner):
                 user_response.status_code, user_response.content
             )
         )
-
-
-def delete_users_and_attributes(*, attributeEndpoint, userEndpoint, owner):
-    # there is no DELETE for attributes in openAPI
-    pass
-
-
-def setup():
-    # teardown(crud, stage)
-    os.makedirs(tmp_dir)
-
-
-def teardown(crud, stage):
-    dirs = [tmp_dir]
-
-    # for thedir in dirs:
-    #     if os.path.isdir(thedir):
-    #         shutil.rmtree(thedir)
-    # if crud:
-    #     with open("config-oss.json") as config_file:
-    #         config = json.load(config_file)
-    #     # delete_users_and_attributes(
-    #     #     attributeEndpoint=config[stage]["attributeEndpoint"],
-    #     #     owner=owner,
-    #     #     userEndpoint=config[stage]["userEndpoint"],
-    #     # )
-    # jar_files = [f for f in os.listdir("sdk/java") if f.endswith(".jar")]
-    # for f in jar_files:
-    #     os.remove(os.path.join("sdk/java", f))
 
 
 if __name__ == "__main__":
