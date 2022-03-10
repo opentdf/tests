@@ -14,8 +14,7 @@
     "@babel/runtime-corejs3": "^7.17.2",
     "colors": "^1.4.0",
     "commander": "^9.0.0",
-    "puppeteer": "^13.4.0",
-    "tdf3-js": "file:../tdf3-js/tdf3-js-4.1.8.tgz"
+    "puppeteer": "^13.4.0"
   },
   "devDependencies": {
     "webpack": "^5.69.1",
