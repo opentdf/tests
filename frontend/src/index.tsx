@@ -5,15 +5,10 @@ import "react-toastify/dist/ReactToastify.css";
 import App from "./App";
 import Keycloak from "keycloak-js";
 import { ReactKeycloakProvider } from "@react-keycloak/web";
-
-const serverData = window.SERVER_DATA;
+import { keycloakConfig } from "./config";
 
 // @ts-ignore
-const keycloak = new Keycloak({
-  url: serverData.authority,
-  clientId: serverData.clientId,
-  realm: serverData.realm,
-});
+const keycloak = new Keycloak({...keycloakConfig});
 
 ReactDOM.render(
   <React.StrictMode>
