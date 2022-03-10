@@ -58,30 +58,4 @@ describe('Binary', () => {
       expect(bin.isString()).to.be.true;
     });
   });
-
-  describe('binary::unicode', () => {
-    it('works with a byteArray and unicode string', () => {
-      // TODO(PLAT-1106): byteArray here is utf-8 encoded. WTF.
-      const byteArray = [227, 131, 145, 227, 130, 185, 227, 131, 175, 227, 131, 188, 227, 131, 137];
-      const bin = Binary.fromByteArray(byteArray);
-      const buffer = bin.asArrayBuffer();
-      const otherBin = Binary.fromArrayBuffer(buffer);
-      expect(otherBin.asString()).to.eql('パスワード');
-    });
-    it('works with an arrayBuffer unicode', () => {
-      const byteArray = [227, 131, 145, 227, 130, 185, 227, 131, 175, 227, 131, 188, 227, 131, 137];
-      const buffer = Buffer.from(byteArray);
-      const bin = Binary.fromBuffer(buffer);
-
-      const actualBuffer = bin.asArrayBuffer();
-      const bufferView = new Uint8Array(actualBuffer);
-      const otherBin = Binary.fromArrayBuffer(actualBuffer);
-      // Check that the lengths match
-      expect(bufferView.length).to.eql(byteArray.length);
-      // TODO(PLAT-1106) Note that some asString methods use `utf-8`
-      // others use latin-1 (ascii/binary). This results in surprising behavior!
-      // Do we rely in this?
-      expect(otherBin.asString()).to.eql('パスワード');
-    });
-  });
 });

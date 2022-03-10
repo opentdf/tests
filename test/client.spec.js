@@ -5,16 +5,27 @@ import { mkdirSync, readFileSync } from 'fs';
 import { Client as TDF } from '../src';
 import { PlaintextStream } from '../src/client/tdf-stream';
 import { TDFCiphertextStream } from '../src/client/tdf-cipher-text-stream';
+const defaultConfig = {
+  organizationName: 'realm',
+  clientId: 'id',
+  kasEndpoint: 'kas',
+  clientSecret: 'secret'
+}
 
-const client = new TDF.Client();
+const client = new TDF.Client(defaultConfig);
 
 const TEMP_DIR = 'temp/';
 
 describe('client wrapper tests', function () {
   it('client params safe', function () {
-    const config = {};
+    const config = {
+      kasEndpoint: 'kasUrl',
+      organizationName: 'realm',
+      clientId: 'id',
+      clientSecret: 'secret'
+    };
     new TDF.Client(config);
-    assert.deepEqual(config, {});
+    assert.deepEqual(config, {...config});
   });
 
   it('encrypt params sane', function () {

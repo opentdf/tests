@@ -1,18 +1,16 @@
 /* eslint-disable no-async-promise-executor */
 import { EventEmitter } from 'events';
-import { post } from 'axios';
-import { sign } from 'jsonwebtoken';
+import axios from 'axios';
 import crc32 from 'buffer-crc32';
-import Url from 'url-parse';
 import { v4 } from 'uuid';
 import { pki } from 'node-forge';
+import jwt from 'jsonwebtoken';
 
 import { AttributeSet, KeyAccess, SplitKey } from './models';
 import { base64 } from './encodings';
 import { cryptoService } from './crypto';
-import { HttpRequest } from './client/auth';
 import { keyMerge, ZipWriter, ZipReader, base64ToBuffer } from './utils';
-import { fromUrl } from './utils/chunkers';
+import { fromUrl } from './utils';
 import { Binary } from './binary';
 import {
   KasDecryptError,
@@ -76,8 +74,7 @@ class TDF extends EventEmitter {
   }
 
   static async generateKeyPair() {
-    const keyPair = await cryptoService.generateKeyPair();
-    return keyPair;
+    return await cryptoService.generateKeyPair();
   }
 
   static async generatePolicyUuid() {
@@ -92,7 +89,7 @@ class TDF extends EventEmitter {
    * @return {Buffer}
    */
   static wrapHtml(payload, manifest, transferUrl) {
-    const parsedUrl = new Url(transferUrl);
+    const parsedUrl = new URL(transferUrl);
     const { origin } = parsedUrl;
     const exportManifest = typeof manifest === 'string' ? manifest : JSON.stringify(manifest);
 
@@ -115,6 +112,22 @@ class TDF extends EventEmitter {
     } catch (e) {
       throw new TdfPayloadExtractionError('There was a problem extracting the TDF3 payload', e);
     }
+  }
+
+  // return a PEM-encoded string from the provided KAS server
+  static async getPublicKeyFromKeyAccessServer(url) {
+    const httpsRegex = /^https:/;
+    if (
+      url.startsWith('http://localhost') ||
+      /^http:\/\/[a-zA-Z.-]*[.]?svc\.cluster\.local($|\/)/.test(url) ||
+      url.startsWith('http://127.0.0.1') ||
+      httpsRegex.test(url)
+    ) {
+      const kasPublicKeyRequest = await axios.get(`${url}/kas_public_key`);
+      return TDF.extractPemFromKeyString(kasPublicKeyRequest.data);
+    }
+
+    throw Error('Public key must be requested over a secure channel');
   }
 
   static extractPemFromKeyString(keyString) {
@@ -155,14 +168,6 @@ class TDF extends EventEmitter {
     return this;
   }
 
-  // customRequestBuilder is any function that can be used to build a custom request body and headers
-  // The builder must accept an object of the following (ob.body, ob.headers, ob.method, ob.url)
-  // and return an object with body and headers params
-  setCustomRequestBuilder(customRequestBuilder) {
-    this.customRequestBuilder = customRequestBuilder;
-    return this;
-  }
-
   // AuthProvider is a class that can be used to build a custom request body and headers
   // The builder must accept an object of the following (ob.body, ob.headers, ob.method, ob.url)
   // and mutate it in place.
@@ -188,10 +193,10 @@ class TDF extends EventEmitter {
    * is missing it throws an error.
    * @param  {Object} options
    * @param  {String} options.type - enum representing how the object key is treated
-   * @param  {String} [ options.attributeUrl ] - URL of the attribute to use for pubKey and kasUrl. Omit to use default.
-   * @param  {String} [ options.url ] - @deprecated directly set the KAS URL
-   * @param  {String} [ options.publicKey ] - @deprecated directly set the (KAS) public key
-   * @param  {String? Object?} [ options.metadata ] - Metadata. Appears to be dead code.
+   * @param  {String} options.attributeUrl - URL of the attribute to use for pubKey and kasUrl. Omit to use default.
+   * @param  {String} options.url - directly set the KAS URL
+   * @param  {String} options.publicKey - directly set the (KAS) public key
+   * @param  {String? Object?} options.metadata - Metadata. Appears to be dead code.
    * @return {<TDF>}- this instance
    */
   addKeyAccess({ type, url, publicKey, attributeUrl, metadata = '' }) {
@@ -220,7 +225,7 @@ class TDF extends EventEmitter {
     // If an attributeUrl is provided try to load with that first.
     if (attributeUrl) {
       const attr = this.attributeSet.get(attributeUrl);
-      if (attr) {
+      if (attr && attr.kasUrl && attr.pubKey) {
         loadKeyAccess(
           this.encryptionInformation,
           createKeyAccess(type, attr.kasUrl, attr.pubKey, metadata)
@@ -242,11 +247,13 @@ class TDF extends EventEmitter {
     const defaultAttr = this.attributeSet.getDefault();
     if (defaultAttr) {
       const { pubKey, kasUrl } = defaultAttr;
-      loadKeyAccess(
-        this.encryptionInformation,
-        createKeyAccess(type, kasUrl, TDF.extractPemFromKeyString(pubKey), metadata)
-      );
-      return this;
+      if (pubKey && kasUrl) {
+        loadKeyAccess(
+          this.encryptionInformation,
+          createKeyAccess(type, kasUrl, TDF.extractPemFromKeyString(pubKey), metadata)
+        );
+        return this;
+      }
     }
     // All failed. Raise an error.
     throw new KeyAccessError('TDF.addKeyAccess: No source for kasUrl or pubKey');
@@ -255,20 +262,6 @@ class TDF extends EventEmitter {
   setPolicy(policy) {
     this.validatePolicyObject(policy);
     this.policy = policy;
-    return this;
-  }
-
-  /**
-   * Add an entity object. This contains attributes with public key info that
-   * is used to make splits and wrap object keys.
-   * @param  {Object} entity - EntityObject
-   * @return {<TDF>}- this instance
-   */
-  setEntity(entity) {
-    this.entity = entity;
-    // Harvest the attributes from this entity object
-    // Don't wait for this promise to resolve.
-    this.attributeSet.addJwtAttributes(this.entity.attributes);
     return this;
   }
 
@@ -367,11 +360,20 @@ class TDF extends EventEmitter {
     }
   }
 
+  buildRequest(method, url, body) {
+    return {
+      headers: {},
+      params: {},
+      method: method,
+      url: url,
+      body: body,
+    };
+  }
+
   // Provide an upsert of key information via each KAS
   // ignoreType if true skips the key access type check when syncing
   async upsert(unsavedManifest, ignoreType = false) {
     const { keyAccess, policy } = unsavedManifest.encryptionInformation;
-    const { entity } = this;
     return Promise.all(
       keyAccess.map(async (keyAccessObject) => {
         // We only care about remote key access objects for the policy sync portion
@@ -380,27 +382,29 @@ class TDF extends EventEmitter {
           return;
         }
 
-        const url = `${keyAccessObject.url}/upsert`;
+        const url = `${keyAccessObject.url}/v2/upsert`;
 
-        const httpReq = new HttpRequest();
-        httpReq.body = {
+        //TODO I dont' think we need a body at all for KAS requests
+        // Do we need ANY of this if it's already embedded in the EO in the Bearer OIDC token?
+        const body = {
           keyAccess: keyAccessObject,
-          entity,
-          policy,
-          // TODO: We can optimize this function by only signing a JWT once
-          authToken: sign({}, this.privateKey, { algorithm: 'RS256', expiresIn: 60 }),
+          policy: unsavedManifest.encryptionInformation.policy,
         };
-        httpReq.url = url;
-        httpReq.method = 'post';
 
+        const httpReq = this.buildRequest('post', url, body);
         if (this.authProvider) {
           await this.authProvider.injectAuth(httpReq);
         }
 
+        // Create a PoP token by signing the body so KAS knows we actually have a private key
+        // Expires in 60 seconds
+        httpReq.body.clientPayloadSignature = jwt.sign(httpReq.body, this.privateKey, {
+          algorithm: 'RS256',
+          expiresIn: 60,
+        });
+
         try {
-          const { data } = await post(httpReq.url, httpReq.body, {
-            headers: httpReq.headers,
-          });
+          await axios.post(url, httpReq.body, { headers: httpReq.headers });
 
           // Remove additional properties which were needed to sync, but not that we want to save to
           // the manifest
@@ -768,30 +772,35 @@ class TDF extends EventEmitter {
   }
 
   async unwrapKey(manifest) {
-    // Create an auth token so the KAS knows we actually have a private key
-    // Expires in 60 seconds
-    const authToken = sign({}, this.privateKey, { algorithm: 'RS256', expiresIn: 60 });
     const { keyAccess } = manifest.encryptionInformation;
     let responseMetadata;
 
     // Get key access information to know the KAS URLS
     // TODO: logic that runs on multiple KAS's
+
     const rewrappedKeys = await Promise.all(
       keyAccess.map(async (keySplitInfo) => {
-        const url = `${keySplitInfo.url}/rewrap`;
+        const url = `${keySplitInfo.url}/v2/rewrap`;
 
-        const httpReq = new HttpRequest();
-        httpReq.body = {
+        const requestBodyStr = JSON.stringify({
+          algorithm: 'RS256',
           keyAccess: keySplitInfo,
-          entity: {
-            ...this.entity,
-            publicKey: this.publicKey,
-          },
+          clientPublicKey: this.publicKey,
           policy: manifest.encryptionInformation.policy,
-          authToken,
+        });
+
+        const jwtPayload = { requestBody: requestBodyStr };
+
+        const requestBody = {
+          signedRequestToken: jwt.sign(jwtPayload, this.privateKey, {
+            algorithm: 'RS256',
+            expiresIn: 60,
+          }),
         };
-        httpReq.url = url;
-        httpReq.method = 'post';
+
+        // Create a PoP token by signing the body so KAS knows we actually have a private key
+        // Expires in 60 seconds
+        let httpReq = this.buildRequest('post', url, requestBody);
 
         if (this.authProvider) {
           await this.authProvider.injectAuth(httpReq);
@@ -801,7 +810,7 @@ class TDF extends EventEmitter {
           // The response from KAS on a rewrap
           const {
             data: { entityWrappedKey, metadata },
-          } = await post(httpReq.url, httpReq.body, { headers: httpReq.headers });
+          } = await axios.post(url, httpReq.body, { headers: httpReq.headers });
           responseMetadata = metadata;
           const key = Binary.fromString(base64.decode(entityWrappedKey));
           const decryptedKeyBinary = await cryptoService.decryptWithPrivateKey(

@@ -105,7 +105,12 @@ class ArrayBufferBinary extends Binary {
   }
 
   asString(): string {
-    return Buffer.from(this.value).toString();
+    const uint8Array = new Uint8Array(this.value);
+    let str = '';
+    for(let i = 0; i < uint8Array.length; i++) {
+      str = str + String.fromCharCode(uint8Array[i]);
+    }
+    return str;
   }
 
   isArrayBuffer(): boolean {

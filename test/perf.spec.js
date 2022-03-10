@@ -150,6 +150,9 @@ async function correctnessTrial(plainFile, sourceType, sourceSize, trialType = '
     const client = new Client.Client({
       kasEndpoint: kasUrl,
       kasPublicKey,
+      organizationName: 'realm',
+      clientId: 'id',
+      clientSecret: 'secret'
     });
 
     const eo = await Mocks.getEntityObject();

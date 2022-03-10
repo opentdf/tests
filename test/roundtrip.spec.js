@@ -31,45 +31,4 @@ function tdfSandbox() {
   return sandbox;
 }
 
-const kasUrl = `http://localhost:4000/`;
 
-describe('Local roundtrip Tests', () => {
-  it('roundtrip string', async () => {
-    const sandbox = tdfSandbox();
-    try {
-      const eo = await Mocks.getEntityObject();
-      const scope = Mocks.getScope();
-
-      const plainString = 'Plain string';
-      const plainStream = new Readable();
-      plainStream.push(plainString);
-      plainStream.push(null);
-
-      const client = new Client.Client({
-        kasEndpoint: kasUrl,
-        kasPublicKey,
-        readerUrl: 'https://local.virtru.com',
-      });
-
-      const ct = await client.encrypt({
-        asHtml: true,
-        keypair: { publicKey: Mocks.entityPublicKey, privateKey: Mocks.entityPrivateKey },
-        eo,
-        metadata: Mocks.getMetadataObject(),
-        offline: true,
-        scope,
-        source: plainStream,
-        windowSize: 1024 * 1024,
-      });
-      const roundTripped = await client.decrypt({
-        eo,
-        keypair: { publicKey: Mocks.entityPublicKey, privateKey: Mocks.entityPrivateKey },
-        source: { type: 'stream', location: ct },
-      });
-      const txt = await roundTripped.toString();
-      assert.equal(txt, plainString);
-    } finally {
-      sandbox.restore();
-    }
-  });
-});

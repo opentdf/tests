@@ -41,7 +41,7 @@ function encodeFallback(input: string): string {
  * Copyright (c) 2012 Niklas von Hertzen
  * MIT License
  */
-function encodeArrayBuffer(arrayBuffer: ArrayBuffer): string {
+export function encodeArrayBuffer(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);
   const len = bytes.length;
   let base64 = '';

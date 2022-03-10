@@ -31,7 +31,7 @@ export function inBrowser(): boolean {
 export function base64ToBuffer(b64: string): Buffer | Uint8Array {
   return inBrowser() && window.atob
     ? Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    : new Buffer(b64, 'base64');
+    : Buffer.from(b64, 'base64');
 }
 
 export function arrayBufferToBuffer(ab: ArrayBuffer): Buffer {
