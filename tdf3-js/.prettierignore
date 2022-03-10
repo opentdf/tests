@@ -1,0 +1,11 @@
+.vscode/
+.idea/
+node_modules
+build
+dist
+**/temp/
+examples/dragdrop/bundle.js
+.nyc_output
+.DS_Store
+!/gitversion.json
+*.tgz
