@@ -3,8 +3,12 @@ import logging
 import os
 import re
 import sys
+import requests
 from enum import Enum
 from http.client import NO_CONTENT, ACCEPTED, BAD_REQUEST
+from urllib.parse import urlparse
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from typing import Dict, List, Optional, Annotated
 
 import databases as databases
@@ -112,25 +116,88 @@ keycloak_openid = KeycloakOpenID(
     verify=True,
 )
 
+DISABLE_ENTITLEMENTS_AUTH = os.getenv("DISABLE_ENTITLEMENTS_AUTH")
 
-async def get_idp_public_key():
-    return (
-        "-----BEGIN PUBLIC KEY-----\n"
-        f"{keycloak_openid.public_key()}"
-        "\n-----END PUBLIC KEY-----"
+
+def get_retryable_request():
+    retry_strategy = Retry(total=3, backoff_factor=1)
+
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+
+    http = requests.Session()
+    http.mount("https://", adapter)
+    http.mount("http://", adapter)
+    return http
+
+
+# Given a realm ID, request that realm's public key from Keycloak's endpoint
+#
+# If anything fails, raise an exception
+#
+# TODO Consider replacing the endpoint here with the OIDC JWKS endpoint
+# Keycloak exposes: `/auth/realms/{realm-name}/.well-known/openid-configuration`
+# This is a low priority though since it doesn't save us from having to get the
+# realmId first and so is a largely cosmetic difference
+async def get_idp_public_key(realm_id):
+    url = f"{os.getenv('OIDC_SERVER_URL')}realms/{realm_id}"
+
+    http = get_retryable_request()
+
+    response = http.get(
+        url, headers={"Content-Type": "application/json"}, timeout=5  # seconds
     )
 
+    if not response.ok:
+        logger.warning("No public key found for Keycloak realm %s", realm_id)
+        raise RuntimeError(
+            f"Failed to download Keycloak public key: [{response.text}]"
+        )
 
-DISABLE_ENTITLEMENTS_AUTH = os.getenv("DISABLE_ENTITLEMENTS_AUTH")
+    try:
+        resp_json = response.json()
+    except Exception as e:
+        logger.warning(
+            f"Could not parse response from Keycloak pubkey endpoint: {response}"
+        )
+        raise e
+
+    keycloak_public_key = f"""-----BEGIN PUBLIC KEY-----
+{resp_json['public_key']}
+-----END PUBLIC KEY-----"""
+
+    logger.debug("Keycloak public key for realm %s: [%s]", realm_id, keycloak_public_key)
+    return keycloak_public_key
+
+# Looks as `iss` header field of token - if this is a Keycloak-issued token,
+# `iss` will have a value like 'https://<KEYCLOAK_SERVER>/auth/realms/<REALMID>
+# so we can parse the URL parts to obtain the realm this token was issued from.
+# Once we know that, we know where to get a pubkey to validate it.
+#
+# `urlparse` should be safe to use as a parser, and if the result is
+# an invalid realm name, no validation key will be fetched, which simply will result
+# in an access denied
+def try_extract_realm(unverified_jwt):
+    issuer_url = unverified_jwt["iss"]
+    # Split the issuer URL once, from the right, on /,
+    # then get the last element of the result - this will be
+    # the realm name for a keycloak-issued token.
+    return urlparse(issuer_url).path.rsplit("/", 1)[-1]
+
 
 
 async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
     if DISABLE_ENTITLEMENTS_AUTH:
         return None
     try:
+        unverified_decode = keycloak_openid.decode_token(
+            token,
+            key='',
+            options={"verify_signature": False, "verify_aud": True, "exp": True},
+        )
+
         return keycloak_openid.decode_token(
             token,
-            key=await get_idp_public_key(),
+            key=await get_idp_public_key(try_extract_realm(unverified_decode)),
             options={"verify_signature": True, "verify_aud": True, "exp": True},
         )
     except Exception as e:

@@ -31,13 +31,16 @@ from .claims import Claims  # noqa: F401
 
 from .plugin_runner import HealthzPluginRunner  # noqa: F401
 from .plugin_runner import RewrapPluginRunner  # noqa: F401
+from .plugin_runner import RewrapPluginRunnerV2  # noqa: F401
 from .plugin_runner import UpsertPluginRunner  # noqa: F401
+from .plugin_runner import UpsertPluginRunnerV2  # noqa: F401
 
 from .wrapped_key import WrappedKey  # noqa: F401
 
 from .key_access import KeyAccess  # noqa: F401
 
 from .adjudicator import Adjudicator  # noqa: F401
+from .adjudicator import AdjudicatorV2  # noqa: F401
 
 from .attribute_policies import AttributePolicyCache  # noqa: F401
 from .attribute_policies import AttributePolicy  # noqa: F401

@@ -45,7 +45,9 @@ class AttributeValue(object):
     def __eq__(self, other):
         """Compare self to other for equality."""
         namespace_equal = self.namespace == other.namespace
+        logger.debug("Is self namespace %s == other namespace %s?", self.namespace, other.namespace)
         value_equal = self.value == other.value
+        logger.debug("Is self value %s == other value %s?", self.value, other.value)
         return namespace_equal and value_equal
 
     def __hash__(self):

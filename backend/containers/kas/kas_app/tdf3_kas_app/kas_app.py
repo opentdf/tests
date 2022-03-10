@@ -74,23 +74,22 @@ def app(name):
             logger.exception(e)
             logger.warning("Version not set")
 
-    # Add the plugins
-    eas_host = os.environ.get("EAS_HOST")
-    if not eas_host:
-        logger.error("EAS host is not configured correctly.")
-
-    logger.info("EAS_HOST = [%s]", eas_host)
-    eas_backend = eas_rewrap_plugin.EASRewrapPlugin(eas_host)
-    kas.use_healthz_plugin(eas_backend)
-    kas.use_rewrap_plugin(eas_backend)
-
     if USE_KEYCLOAK and KEYCLOAK_HOST:
         logger.info("Keycloak integration enabled.")
-        kas.use_rewrap_plugin_v2(eas_backend)
     elif USE_KEYCLOAK or KEYCLOAK_HOST:
         e_msg = "Either USE_KEYCLOAK or KEYCLOAK_HOST are not correctly defined - both are required."
         logger.error(e_msg)
         raise Exception(e_msg)
+    else:
+        # Add EAS junk - not used for OIDC
+        eas_host = os.environ.get("EAS_HOST")
+        if not eas_host:
+            logger.error("EAS host is not configured correctly.")
+
+        logger.info("EAS_HOST = [%s]", eas_host)
+        eas_backend = eas_rewrap_plugin.EASRewrapPlugin(eas_host)
+        kas.use_healthz_plugin(eas_backend)
+        kas.use_rewrap_plugin(eas_backend)
 
     configure_filters(kas)
 

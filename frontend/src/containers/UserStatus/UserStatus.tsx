@@ -1,11 +1,13 @@
 import { useKeycloak } from "@react-keycloak/web";
-import { Avatar, Button } from "antd";
+import {Avatar, Button} from "antd";
+import {SelectRealm} from "./SelectRealm";
 
 const UserStatus = () => {
   const { keycloak } = useKeycloak();
 
   return (
     <>
+      <SelectRealm/>
       {keycloak.authenticated && (
         <>
           <Avatar size={32}>{keycloak.subject}</Avatar>

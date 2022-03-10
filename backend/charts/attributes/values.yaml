@@ -10,7 +10,7 @@ serverRootPath: /attributes
 oidc:
   realm: tdf
   internalHost: http://keycloak/auth
-  externalHost: http://localhost:65432/keycloak/auth
+  externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
   clientSecret: myclientsecret
 

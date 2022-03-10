@@ -118,13 +118,13 @@ kind: ConfigMap
 metadata:
   name: entitlements-cm
 data:
-  OIDC_AUTHORIZATION_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/auth
+  OIDC_AUTHORIZATION_URL: http://localhost:65432/auth/realms/tdf/protocol/openid-connect/auth
   OIDC_CLIENT_ID: tdf-entitlements
   OIDC_CLIENT_SECRET: myclientsecret
   OIDC_CONFIGURATION_URL: http://keycloak/auth/realms/tdf/.well-known/openid-configuration
   OIDC_REALM: tdf
   OIDC_SERVER_URL: http://keycloak/auth/
-  OIDC_TOKEN_URL: http://localhost:65432/keycloak/auth/realms/tdf/protocol/openid-connect/token
+  OIDC_TOKEN_URL: http://localhost:65432/auth/realms/tdf/protocol/openid-connect/token
   POSTGRES_DATABASE: tdf_database
   POSTGRES_HOST: opentdf-postgresql
   POSTGRES_SCHEMA: tdf_entitlement
