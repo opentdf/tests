@@ -10,6 +10,8 @@ jobs:
       with:
         node-version: '16.x'
     # todo: install and activate virtual env for python
+    - name: Build TDF3
+      run: cd tdf3-js && npm pack
     - name: Install dependencies
       run: |-
         cd xtest
