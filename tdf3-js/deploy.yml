@@ -1,0 +1,22 @@
+steps:
+  - block: ':grey_question: Tag release ${TAG_VERSION}?'
+  - label: 'Tag release'
+    commands:
+      - buildkite-scripts/scripts/tag-release.sh
+      - buildkite-agent annotate "Tagged build ${TAG_VERSION} as $$(cat package.json | jq -r
+        '.version')"
+
+  - wait
+
+  - trigger: etheria-xtest
+    label:
+      ':twisted_rightwards_arrows: Run x-plat integration tests with etheria on
+      ${NPM_PACKAGE_NAME}#${BUILDKITE_BRANCH}'
+    build:
+      message: Triggered by deployment $BUILDKITE_PIPELINE_SLUG #$BUILDKITE_BUILD_NUMBER
+      env:
+        # Restrict test to running just the 'compose' environment (aka use local etheria services)
+        TEST_TIERS: compose
+        # Prefer an explicit commit id, in case someone force-pushes the tag for some reason.
+        JS_OSS_VERSION:
+          git+ssh://${BUILDKITE_REPO}#${BUILDKITE_COMMIT:-v$$(cat package.json | jq -r '.version')}
