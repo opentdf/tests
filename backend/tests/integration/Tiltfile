@@ -190,8 +190,6 @@ helm_remote(
     values=["backend-keycloak-values.yaml"],
 )
 
-k8s_resource("keycloak", port_forwards="8080:8080")
-
 helm_remote(
     "postgresql",
     repo_url="https://charts.bitnami.com/bitnami",
@@ -243,6 +241,7 @@ docker_build(
 
 k8s_resource(
     "keycloak",
+    port_forwards="8080:8080",
     links=[
         link('localhost:65432/auth', 'Keycloak admin console')
     ],
@@ -267,10 +266,17 @@ docker_build(
     dockerfile=local_path("tests", "containers", "clients", "Dockerfile"),
 )
 
-k8s_yaml("xtest.yaml")
+# k8s_yaml("xtest.yaml")
 
-k8s_resource(
-    "opentdf-xtest",
-    resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"],
-    trigger_mode=TRIGGER_MODE_MANUAL
+# k8s_resource(
+#     "opentdf-xtest",
+#     resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"],
+#     trigger_mode=TRIGGER_MODE_MANUAL
+# )
+
+local_resource(
+    "test",
+    "cd ../../../xtest && npm run test",
+    resource_deps=["keycloak", "opentdf-kas"]
 )
+# local("cd ../../xtest && npm run test", dir=local_path())

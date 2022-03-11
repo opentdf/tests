@@ -46,15 +46,7 @@ jobs:
       run: |-
         kubectl version
         cd backend/tests/integration
-        tilt up
-    - name: Run tests
-      run: |-
-        cd xtest
-        npm run test
-    - name: Remove tilt
-      run: |-
-        cd backend/tests/integration
-        tilt down
+        tilt ci
     # - uses: actions/upload-artifact@v2
     #   if: always()
     #   with:
