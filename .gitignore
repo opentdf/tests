@@ -1,7 +1,17 @@
 .idea
+.vscode
+.DS_Store
+
 /backend
 /frontend
+/tdf3-js
+
 node_modules
+
 vulnerability/node_modules/
 vulnerability/test-results/
 vulnerability/playwright-report/
+
+/xtest/node_modules/
+/xtest/tmp/
+/xtest/sdk/js/web/dist/

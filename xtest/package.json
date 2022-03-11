@@ -1,0 +1,16 @@
+{
+  "name": "xtest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "runner.py",
+  "scripts": {
+    "test": "python3 runner.py --sdks sdk/js/node/cli.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/runtime-corejs3": "^7.17.2",
+    "commander": "^9.0.0"
+  }
+}

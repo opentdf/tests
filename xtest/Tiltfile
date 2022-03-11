@@ -1,0 +1,7 @@
+include('../backend/tests/integration/Tiltfile')
+
+local_resource(
+    "test",
+    "npm run test",
+    resource_deps=["keycloak", "opentdf-kas"]
+)
