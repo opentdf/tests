@@ -45,5 +45,5 @@ jobs:
     - name: Run tilt
       run: |-
         kubectl version
-        cd backend/tests/integration
+        cd xtest
         tilt ci

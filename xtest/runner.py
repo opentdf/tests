@@ -48,10 +48,10 @@ def main():
 
     pt_file = gen_pt(large=args.large)
     if sdks_to_decrypt or sdks_to_encrypt:
-        run_cli_tests(sdks_to_encrypt, sdks_to_decrypt, pt_file, attrtest)
+        run_cli_tests(sdks_to_encrypt, sdks_to_decrypt, pt_file)
 
 
-def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file, attrtest):
+def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
     if not sdks_encrypt or not sdks_decrypt:
         return
     logger.info("--- run_cli_tests %s => %s", sdks_encrypt, sdks_decrypt)

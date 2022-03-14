@@ -13,5 +13,7 @@ vulnerability/test-results/
 vulnerability/playwright-report/
 
 /xtest/node_modules/
+/xtest/tilt_modules/
 /xtest/tmp/
 /xtest/sdk/js/web/dist/
+/xtest/.helm
