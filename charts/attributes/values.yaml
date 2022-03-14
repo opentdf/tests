@@ -16,7 +16,7 @@ oidc:
 
 image:
   pullPolicy: IfNotPresent
-  name: opentdf/attributes:latest
+  name: opentdf/attributes:main
 
 imagePullSecrets: []
 nameOverride: ""
