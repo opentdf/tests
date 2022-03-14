@@ -10,6 +10,8 @@ jobs:
       with:
         node-version: '16.x'
     # todo: install and activate virtual env for python?
+    - name: Update subtrees
+      run: ./.github/scripts/subtree-pull-all.sh
     - name: Build TDF3
       run: |-
         cd tdf3-js
