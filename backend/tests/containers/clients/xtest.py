@@ -4,14 +4,12 @@
 
 import argparse
 import filecmp
-import json
 import logging
 import os
 import random
 import shutil
 import string
 import subprocess
-import base64
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -158,19 +156,24 @@ def main():
 
     pt_file = gen_pt(large=args.large)
     nano_pt_file = pt_file if not args.large else gen_pt(large=False)
+    failed = []
     try:
         logger.info("TDF3 TESTS:")
-        run_cli_tests(tdf3_sdks_to_encrypt, tdf3_sdks_to_decrypt, pt_file)
+        failed += run_cli_tests(tdf3_sdks_to_encrypt, tdf3_sdks_to_decrypt, pt_file)
         logger.info("NANO TESTS:")
-        run_cli_tests(nano_sdks_to_encrypt, nano_sdks_to_decrypt, nano_pt_file)
+        failed += run_cli_tests(
+            nano_sdks_to_encrypt, nano_sdks_to_decrypt, nano_pt_file
+        )
     finally:
         if not args.no_teardown:
             teardown()
+    if failed:
+        raise Exception(f"tests {failed} FAILED. See output for details.")
 
 
 def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
     logger.info("--- run_cli_tests %s => %s", sdks_encrypt, sdks_decrypt)
-    fail = []
+    failed = []
 
     serial = 0
     for x in sdks_encrypt:
@@ -179,12 +182,9 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
                 test_cross_roundtrip(x, y, serial, pt_file)
             except Exception as e:
                 logger.error("Exception with pass %s => %s", x, y, exc_info=True)
-                fail += [f"{x}=>{y}"]
+                failed += [f"{x}=>{y}"]
             serial += 1
-    if fail:
-        raise Exception(f"TDF3 tests {fail} FAILED. See output for details.")
-    else:
-        logger.info("All tests succeeded!")
+    return failed
 
 
 # Test a roundtrip across the two referenced sdks.
@@ -217,7 +217,7 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
 
 def gen_pt(*, large):
     pt_file = "%stest-plain-%s.txt" % (tmp_dir, "large" if large else "small")
-    length = (5 * 2**30) if large else 128
+    length = (5 * 2 ** 30) if large else 128
     with open(pt_file, "w") as f:
         for i in range(0, length, 16):
             f.write("{:15,d}\n".format(i))

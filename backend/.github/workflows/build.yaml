@@ -88,6 +88,11 @@ jobs:
         run: |-
           kubectl version
           kubectl get pods -A
+      - name: config ghpr with pat
+        run: |-
+          cd tests/containers/clients
+          echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
+          echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Run integration test Tiltfile
         run: |-
           cd tests/integration
