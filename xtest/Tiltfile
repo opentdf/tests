@@ -1,4 +1,4 @@
-include('../backend/tests/integration/Tiltfile')
+include('../backend/tests/integration/Tiltfile_local_frontend')
 
 k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
 k8s_resource("keycloak", port_forwards="8080:8080")

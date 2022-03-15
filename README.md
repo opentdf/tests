@@ -7,4 +7,9 @@ Check Backend "Quick Start and Development" for [Prerequisites](https://github.c
 
 0) To pull latest repos run `.github/scripts/subtree-pull-all.sh`
 1) cd xtest
-2) run `tilt up`
+2) run `ctlptl create cluster kind --registry=ctlptl-registry` 
+3) run `tilt up`
+
+If you are running locally on mac frontend 'npm run build' step may take too long. Possible solution is run this
+command `npm run build` and change frontend/Dockerfile line `RUN npm run build` to `COPY build/ build/` so it won`t
+run it inside docker. Be careful not to push this changes, we won't need that to CI machines that runs on linux. 
