@@ -18,11 +18,12 @@ RUN python3 --version
 
 # test
 WORKDIR /wrk
-COPY ./tests/containers /wrk
-COPY ./scripts /scripts
-RUN pip3 install --requirement /wrk/clients/requirements.txt
-
-WORKDIR /wrk/clients
+COPY ./tests/containers/clients /wrk
 RUN npm install
+# Delete credentials from layer
+RUN rm /wrk/.npmrc
+
+COPY ./scripts /scripts
+RUN pip3 install --requirement /wrk/requirements.txt  || true
 
 CMD ["python3", "xtest.py"]
