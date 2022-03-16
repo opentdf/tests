@@ -10,7 +10,7 @@ oidc:
 
 image:
   pullPolicy: IfNotPresent
-  name: ghcr.io/opentdf/attributes:latest
+  name: ghcr.io/opentdf/attributes:main
 
 serviceAccount:
   # Specifies whether a service account should be created
