@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-projects=( backend frontend tdf3-js )
+projects=( backend client-web frontend tdf3-js )
 now=$(date +"%Y-%m-%dT%H:%M:%S%z")
 
 for project in "${projects[@]}"; do
