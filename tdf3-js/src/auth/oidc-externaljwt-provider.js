@@ -1,4 +1,4 @@
-import VirtruOIDC from'./virtru-oidc';
+import VirtruOIDC from './virtru-oidc';
 
 /**
  * OIDC External JWT Provider for browser contexts.
