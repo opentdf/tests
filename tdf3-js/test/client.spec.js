@@ -9,8 +9,8 @@ const defaultConfig = {
   organizationName: 'realm',
   clientId: 'id',
   kasEndpoint: 'kas',
-  clientSecret: 'secret'
-}
+  clientSecret: 'secret',
+};
 
 const client = new TDF.Client(defaultConfig);
 
@@ -22,10 +22,10 @@ describe('client wrapper tests', function () {
       kasEndpoint: 'kasUrl',
       organizationName: 'realm',
       clientId: 'id',
-      clientSecret: 'secret'
+      clientSecret: 'secret',
     };
     new TDF.Client(config);
-    assert.deepEqual(config, {...config});
+    assert.deepEqual(config, { ...config });
   });
 
   it('encrypt params sane', function () {

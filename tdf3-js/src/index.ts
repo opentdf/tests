@@ -1,6 +1,7 @@
 export { default as Client } from './client';
 export * as Errors from './errors';
 export { default as TDF } from './tdf';
+export { version, clientType } from './version';
 import { MockStream } from './utils/mock-stream';
 
 /**
