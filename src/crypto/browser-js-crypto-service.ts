@@ -92,13 +92,13 @@ async function generateKeyPair(size: number = MIN_ASYMMETRIC_KEY_SIZE_BITS): Pro
 
   const keys: pki.rsa.KeyPair = await new Promise((resolve, reject) => {
     pki.rsa.generateKeyPair(size, /* exponent */ 0x10001, (err, keypair) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(keypair);
-        }
-      });
+      if (err) {
+        reject(err);
+      } else {
+        resolve(keypair);
+      }
     });
+  });
   return {
     publicKey: pki.publicKeyToPem(keys.publicKey),
     privateKey: pki.privateKeyToPem(keys.privateKey),

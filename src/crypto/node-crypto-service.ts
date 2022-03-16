@@ -15,7 +15,6 @@ import {
 import { isValidAsymmetricKeySize } from './crypto-utils';
 import { Stream } from 'stream';
 
-
 let crypto;
 
 try {

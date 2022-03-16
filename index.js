@@ -1,1 +1,1 @@
-export { TDF, Client } from './src';
+export { TDF, Client, version, clientType } from './src';

@@ -6,7 +6,7 @@ import TDF from '../tdf';
 import { PlaintextStream } from './tdf-stream';
 import { TDFCiphertextStream } from './tdf-cipher-text-stream';
 import { AuthProvider, HttpRequest } from './auth';
-import OIDCClientCredentialsProvider from'../auth/oidc-clientcredentials-provider';
+import OIDCClientCredentialsProvider from '../auth/oidc-clientcredentials-provider';
 import OIDCRefreshTokenProvider from '../auth/oidc-refreshtoken-provider';
 import OIDCExternalJwtProvider from '../auth/oidc-externaljwt-provider';
 
@@ -71,7 +71,6 @@ const makeChunkable = async (source) => {
   return fromBuffer(zipBuf);
 };
 
-
 class Client {
   /**
    * An abstraction for protecting and accessing data using TDF3 services.
@@ -114,7 +113,7 @@ class Client {
       }
     }
 
-    if(inBrowser()) {
+    if (inBrowser()) {
       //If you're in a browser and passing client secrets, you're Doing It Wrong.
       if (clientConfig.clientSecret) {
         throw new Error('Client credentials not supported in a browser context');
@@ -254,13 +253,7 @@ class Client {
    * @return {PlaintextStream} - a {@link https://nodejs.org/api/stream.html#stream_class_stream_readable|Readable} stream containing the decrypted plaintext.
    * @see DecryptParamsBuilder
    */
-  async decrypt({
-    source,
-    opts= {},
-    output = null,
-    rcaSource = null,
-    contentLength = null,
-  }) {
+  async decrypt({ source, opts = {}, output = null, rcaSource = null, contentLength = null }) {
     const keypair = await this._getOrCreateKeypair(opts);
     const tdf = TDF.create()
       .setPrivateKey(keypair.privateKey)
@@ -361,8 +354,10 @@ class Client {
 
     if (this.clientConfig.kasEndpoint) {
       try {
-        this.clientConfig.kasPublicKey = await TDF.getPublicKeyFromKeyAccessServer(this.clientConfig.kasEndpoint);
-      } catch(e) {
+        this.clientConfig.kasPublicKey = await TDF.getPublicKeyFromKeyAccessServer(
+          this.clientConfig.kasEndpoint
+        );
+      } catch (e) {
         console.error('Retrieving KAS public key has failed');
         throw new Error(e.message);
       }

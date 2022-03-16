@@ -152,7 +152,7 @@ async function correctnessTrial(plainFile, sourceType, sourceSize, trialType = '
       kasPublicKey,
       organizationName: 'realm',
       clientId: 'id',
-      clientSecret: 'secret'
+      clientSecret: 'secret',
     });
 
     const eo = await Mocks.getEntityObject();
