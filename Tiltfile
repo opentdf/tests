@@ -8,16 +8,18 @@ load('ext://min_tilt_version', 'min_tilt_version')
 
 min_tilt_version('0.25')
 
-ALPINE_VERSION = "3.15"
-PY_VERSION = "3.10"
+ALPINE_VERSION = os.environ.get("ALPINE_VERSION", "3.15")
+PY_VERSION = os.environ.get("PY_VERSION", "3.10")
 
 # ghcr.io == GitHub packages. pre-release versions, created from recent green `main` commit
 # docker.io == Docker hub. Manually released versions
-CONTAINER_REGISTRY = "docker.io" # Docker Hub
+CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")  # Docker Hub
+
 
 def from_dotenv(path, key):
     """Read a variable from a `.env` file"""
     return str(local('. "{}" && echo "${}"'.format(path, key))).strip()
+
 
 # secrets
 local("./scripts/genkeys-if-needed")
@@ -37,8 +39,10 @@ all_secrets = {
 all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
 all_secrets["ca-cert.pem"] = all_secrets["CA_CERTIFICATE"]
 
+
 def only_secrets_named(*items):
     return {k: all_secrets[k] for k in items}
+
 
 k8s_yaml(
     secret_from_dict(
@@ -77,12 +81,19 @@ docker_build(
     },
 )
 docker_build(
+    CONTAINER_REGISTRY + "/opentdf/keycloak-multiarch-base",
+    "containers/keycloak-protocol-mapper/keycloak-containers/server",
+    build_args={
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+    },
+)
+docker_build(
     CONTAINER_REGISTRY + "/opentdf/keycloak",
     context="containers/keycloak-protocol-mapper",
     build_args={
-        "CONTAINER_REGISTRY": "docker.io",
-        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
-        "KEYCLOAK_BASE_VERSION": "15.0.2",
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+        "KEYCLOAK_BASE_IMAGE": CONTAINER_REGISTRY + "/opentdf/keycloak-multiarch-base",
+        "KEYCLOAK_BASE_VERSION": "15.1.1",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
     },
@@ -161,7 +172,10 @@ k8s_yaml(
     helm(
         "charts/claims",
         "claims",
-        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/claims", "secretRef.name=etheria-secrets"],
+        set=[
+            "image.name=" + CONTAINER_REGISTRY + "/opentdf/claims",
+            "secretRef.name=etheria-secrets",
+        ],
         values=["deployments/docker-desktop/claims-values.yaml"],
     )
 )
@@ -221,4 +235,4 @@ k8s_resource("entitlements", resource_deps=["tdf-postgresql"])
 # Tried to automate that teardown postcommand here with Tilt, and it works for everything but `tilt ci` which keeps
 # waiting for the no-op `apply_cmd` to stream logs as a K8S resource.
 # I have not figured out a clean way to run `down commands` with tilt
-#k8s_custom_deploy("Manual PVC Delete On Teardown", 'echo ""', "kubectl delete pvc --all", "")
+# k8s_custom_deploy("Manual PVC Delete On Teardown", 'echo ""', "kubectl delete pvc --all", "")

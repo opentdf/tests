@@ -150,6 +150,20 @@ for microservice in ["attributes", "entitlements", "claims"]:
         ],
     )
 
+local(
+    "make keycloak-repo-clone", dir=local_path("containers", "keycloak-protocol-mapper")
+)
+
+docker_build(
+    "ghcr.io/opentdf/keycloak-multiarch-base",
+    local_path(
+        "containers", "keycloak-protocol-mapper", "keycloak-containers", "server"
+    ),
+    build_args={
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+    },
+)
+
 docker_build(
     "ghcr.io/opentdf/keycloak",
     local_path("containers", "keycloak-protocol-mapper"),
@@ -157,8 +171,8 @@ docker_build(
         "CONTAINER_REGISTRY": "docker.io",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
-        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
-        "KEYCLOAK_BASE_VERSION": "15.0.2",
+        "KEYCLOAK_BASE_IMAGE": "ghcr.io/opentdf/keycloak-multiarch-base",
+        "KEYCLOAK_BASE_VERSION": "15.1.1",
     },
 )
 
@@ -257,9 +271,7 @@ docker_build(
 
 k8s_resource(
     "keycloak",
-    links=[
-        link('localhost:65432/auth', 'Keycloak admin console')
-    ],
+    links=[link("localhost:65432/auth", "Keycloak admin console")],
 )
 
 k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
@@ -278,4 +290,6 @@ docker_build(
 )
 
 k8s_yaml("xtest.yaml")
-k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"])
+k8s_resource(
+    "opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"]
+)
