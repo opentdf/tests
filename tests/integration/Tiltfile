@@ -179,6 +179,15 @@ k8s_yaml(
     )
 )
 
+k8s_yaml(
+    helm(
+        "../../charts/claims",
+        "opentdf-claims",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/claims"],
+        values=["backend-claims-values.yaml"],
+    )
+)
+
 
 k8s_yaml("backend.yaml")
 k8s_yaml("frontend.yaml")
