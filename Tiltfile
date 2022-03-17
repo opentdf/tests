@@ -4,6 +4,9 @@
 # extensions https://github.com/tilt-dev/tilt-extensions
 load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
+load('ext://min_tilt_version', 'min_tilt_version')
+
+min_tilt_version('0.25')
 
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
