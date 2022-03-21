@@ -24,6 +24,6 @@ RUN npm install
 RUN rm /wrk/.npmrc
 
 COPY ./scripts /scripts
-RUN pip3 install --requirement /wrk/requirements.txt  || true
+RUN pip3 install --requirement /wrk/requirements.txt || true
 
 CMD ["python3", "xtest.py"]

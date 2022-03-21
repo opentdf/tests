@@ -19,6 +19,7 @@ jobs:
       - name: update packages
         run: |-
           cd tests/containers/clients
+          npm uninstall @opentdf/cli @opentdf/client
           npm uninstall @opentdf/cli
           npm install @opentdf/cli@${{ github.event.client_payload.version }}
           ls -l node_modules
