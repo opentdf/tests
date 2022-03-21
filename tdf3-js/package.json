@@ -23,7 +23,7 @@
   "scripts": {
     "type-check": "tsc --noEmit",
     "type-check:watch": "npm run type-check -- --watch",
-    "build": "npm run build:ts && npm run build:js && npm run build:browser",
+    "build": "npm run build:ts && npm run build:js && npm run fill-version && npm run build:browser",
     "build:browser": "browserify --debug --standalone tdf3 ./build/index.js -o build/bundle-dev.js && browserify --standalone tdf3 ./build/index.js -o build/bundle.js",
     "build:ts": "tsc -d",
     "build:js": "babel --out-dir build/ --extensions '.js,.ts' --source-maps inline --only 'src/**','test/**','./index.js' .",
@@ -31,9 +31,10 @@
     "pretty": "prettier --write \"./**/*.{css,md,js,json,ts}\"",
     "test": "nyc mocha --require @babel/register --timeout 300000",
     "test:browser-headless": "karma start --single-run --browsers ChromeHeadlessNoSandbox karma.conf.cjs",
-    "lint": "eslint ./{src,test}",
+    "lint": "eslint src test",
     "lint:fix": "eslint --fix ./{src,test}",
-    "prepack": "NODE_ENV=production npm run build"
+    "prepack": "NODE_ENV=production npm run build",
+    "fill-version": "grep -rli 'process.env.PKG_VERSION' ./build/* | xargs -I@ perl -pi -w -e 's/process.env.PKG_VERSION/'\"$(npm pkg get version)\"'/g;' @"
   },
   "husky": {
     "hooks": {
