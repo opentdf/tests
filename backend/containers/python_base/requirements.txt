@@ -6,7 +6,7 @@ asgiref==3.4.1; python_version >= '3.6'
 asyncpg==0.25.0
 cffi==1.15.0
 click==8.0.3; python_version >= '3.6'
-cryptography==36.0.1
+cryptography==36.0.2
 databases[postgresql]==0.5.5
 fastapi==0.73.0
 h11==0.12.0; python_version >= '3.6'

@@ -1,6 +1,5 @@
 image:
-#  This is for local builds - so the image will NOT be tagged with ghcr.io
-  repository: opentdf/keycloak
+  repository: ghcr.io/opentdf/keycloak
   tag: head
   pullPolicy: Never # We expect Tilt to cache these
 postgresql:

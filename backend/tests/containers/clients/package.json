@@ -4,6 +4,7 @@
   "description": "Simple example to encrypt and decrypt files in the TDF3 spec.",
   "scripts": {},
   "dependencies": {
-    "@opentdf/cli": "^0.0.2-aleph.11"
+    "@opentdf/cli": "file:./opentdf-cli-0.0.2.tgz",
+    "@opentdf/client": "file:./opentdf-client-0.0.2.tgz"
   }
 }

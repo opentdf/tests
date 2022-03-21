@@ -1,7 +1,7 @@
 OTDF_IMAGE=opentdf/keycloak
-OTDF_VERSION=15.0.2-r10
-KEYCLOAK_BASE_VERSION=15.0.2
-KEYCLOAK_BASE_IMAGE=virtru/keycloak-base
+OTDF_VERSION=15.1.1-r10
+KEYCLOAK_BASE_VERSION=15.1.1
+KEYCLOAK_BASE_IMAGE=ghcr.io/opentdf/keycloak-multiarch-base
 
 # Destroy any previously-created buildx context
 .PHONY: docker-buildx-armclean
