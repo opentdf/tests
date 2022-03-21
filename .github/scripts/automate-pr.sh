@@ -19,11 +19,14 @@ fi
 current_branch="$(git branch --show-current)"
 
 list-prs-state() {
+  # Let shellcheck ignore this go template
+  # shellcheck disable=SC2016
+  local template='{{range $a, $b := .}}{{.state}}{{end}}'
   gh pr list \
     --head "$1" \
     --state all \
     --json state \
-    --template '{{range $a, $b := .}}{{.state}}{{end}}'
+    --template "${template}"
 }
 
 if [[ "$(git status -s)" ]]; then
