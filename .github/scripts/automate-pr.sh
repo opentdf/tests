@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Automate pushing a PR for syncing a subtree
+# Automate pushing a PR for syncing a subtree.
+#
+# Recommended use: 
+# 1. Checkout a clean repo in a safe place, separate from your current repo.
+# 2. Run this script in a cron jub with the form PROJECT_DIR=/your/clean/repo /path/to/this/script.sh
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 TOOL_NAME="$(basename "$0")"
