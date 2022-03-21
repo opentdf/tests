@@ -72,7 +72,6 @@ services:
       - migration
     environment:
       - EAS_PRIVATE_KEY
-      - EAS_ENTITY_EXPIRATION=99
       - KAS_DEFAULT_URL=http://kas:8000
       - KAS_EC_SECP256R1_CERTIFICATE
       - KAS_CERTIFICATE

@@ -1,8 +1,8 @@
 name: Build Backend
 env:
-  KEYCLOAK_BASE_VERSION: 15.0.2
-  KEYCLOAK_BASE_IMAGE: opentdf/keycloak-multiarch-base
-  KEYCLOAK_OTDF_VERSION: 15.0.2-r1
+  KEYCLOAK_BASE_VERSION: 15.1.1
+  KEYCLOAK_BASE_IMAGE: ghcr.io/opentdf/keycloak-multiarch-base
+  KEYCLOAK_OTDF_VERSION: 15.1.1-r1
   CONTAINER_ARCHS: linux/amd64,linux/arm64
 
 on:
@@ -81,7 +81,7 @@ jobs:
         id: minikube
         uses: medyagh/setup-minikube@latest
         with:
-          minikube-version: 1.25.1
+          minikube-version: 1.25.2
           # This should be in sync with the setup-tools version above
           kubernetes-version: 1.23.3
       - name: Get cluster versions
@@ -97,7 +97,6 @@ jobs:
         run: |-
           cd tests/integration
           tilt ci
-
       - name: Quick check - run/validate local deployment Tiltfile
         run: |-
           tilt ci

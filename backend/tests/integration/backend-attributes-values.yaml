@@ -47,7 +47,7 @@ postgres:
   host: opentdf-postgresql
   port: 5432
   user: tdf_attribute_manager
-#  value from kubernetes secrets
+  #  value from kubernetes secrets
   password: ""
   database: tdf_database
   schema: tdf_attribute

@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]: https://github.com/opentdf/backendd/compare/master...HEAD
 
+- PLAT-1641
+  - Updates to latest version of cryptography to address vulnerabilities
 - PLAT-1417
   - Add 30 seconds of leeway to jwt token expiry, customizable with variable
     `KAS_JWT_LEEWAY` up to 120 seconds (2 minutes)

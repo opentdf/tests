@@ -41,7 +41,7 @@ ingress:
   servicePort: https
   rules:
     - # Ingress host
-      host: 'opentdf.local'
+      host: "opentdf.local"
       # Paths for the host
       paths:
         - path: /
@@ -63,9 +63,8 @@ ingress:
     - opentdf.local
   tls:
     - hosts:
-        - 'opentdf.local'
+        - "opentdf.local"
       secretName: x509-secret
-
 
 extraVolumes: |
   - name: x509
