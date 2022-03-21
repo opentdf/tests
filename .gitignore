@@ -11,6 +11,8 @@ node_modules
 vulnerability/node_modules/
 vulnerability/test-results/
 vulnerability/playwright-report/
+vulnerability/.helm/
+vulnerability/tilt_modules/
 
 /xtest/node_modules/
 /xtest/tilt_modules/
