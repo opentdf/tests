@@ -32,7 +32,7 @@ if [[ "$(git status -s)" ]]; then
 fi
 
 if [[ $current_branch != "main" ]]; then
-  pr_state_now="$(list-prs-state $current_branch)"
+  pr_state_now="$(list-prs-state "$current_branch")"
   if [[ $pr_state_now = *OPEN ]]; then
     echo "[INFO](${TOOL_NAME}) Existing PR found. Working with ${pr_state_now}."
     if subtree-pull-all.sh | grep "No changes found during sync"; then
