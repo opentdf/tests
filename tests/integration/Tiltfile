@@ -1,8 +1,8 @@
 load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
-load('ext://min_tilt_version', 'min_tilt_version')
+load("ext://min_tilt_version", "min_tilt_version")
 
-min_tilt_version('0.25')
+min_tilt_version("0.25")
 
 config.define_string_list("to-run", args=True)
 config.define_string_list("to-edit")
@@ -29,6 +29,13 @@ if 'opentdf-abacus' in to_edit:
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
 CONTAINER_REGISTRY = "ghcr.io"
+KEYCLOAK_BASE_VERSION = str(
+    local(
+        'cut -d- -f1 < "{}"'.format(
+            local_path("containers", "keycloak-protocol-mapper", "VERSION")
+        )
+    )
+).strip()
 
 
 #                                                      .
@@ -189,7 +196,7 @@ docker_build(
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
         "KEYCLOAK_BASE_IMAGE": "ghcr.io/opentdf/keycloak-multiarch-base",
-        "KEYCLOAK_BASE_VERSION": "15.1.1",
+        "KEYCLOAK_BASE_VERSION": KEYCLOAK_BASE_VERSION,
     },
 )
 
