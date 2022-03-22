@@ -2,16 +2,28 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
 replicaCount: 1
 
+# Container image configuration.
 image:
+  # The image selector, also called the 'image name' in k8s documentation
+  # and 'image repository' in docker's guides.
   name: opentdf/storage
+  # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
+# JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
+
+# Select a specific name for the resource, instead of the default, opentdf-claims
 nameOverride: ""
+
+# The fully qualified appname override
 fullnameOverride: ""
 
+# A service account to create
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -21,11 +33,14 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
+# Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
 
+# Values for deployment's spec.template.spec.securityContext
 podSecurityContext: {}
   # fsGroup: 2000
 
+# Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
   # capabilities:
   #   drop:
@@ -34,10 +49,14 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
+# Service configuation information.
 service:
+  # Service `spec.type`
   type: ClusterIP
+  # Port to assign to the `http` port
   port: 4050
 
+# Ingress configuration.
 ingress:
   enabled: false
   annotations: {}
@@ -50,17 +69,11 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Specify required limits for deploying this service to a pod.
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube.
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 autoscaling:
   enabled: false
@@ -77,4 +90,6 @@ affinity: {}
 
 s3Bucket: "datalake"
 s3BucketRegion: "us-east-1"
+
+# Allowed origins for requests from browser clients.
 corsOrigins: "localhost"
