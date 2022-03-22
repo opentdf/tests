@@ -32,7 +32,6 @@ all_secrets = {
     v: from_dotenv(local_path("certs", ".env"), v)
     for v in [
         "EAS_CERTIFICATE",
-        "EAS_PRIVATE_KEY",
         "KAS_CERTIFICATE",
         "KAS_EC_SECP256R1_CERTIFICATE",
         "KAS_EC_SECP256R1_PRIVATE_KEY",
@@ -57,7 +56,6 @@ k8s_yaml(
         inputs=only_secrets_named(
             "POSTGRES_PASSWORD",
             "EAS_CERTIFICATE",
-            "EAS_PRIVATE_KEY",
             "KAS_EC_SECP256R1_CERTIFICATE",
             "KAS_CERTIFICATE",
         ),

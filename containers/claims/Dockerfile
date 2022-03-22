@@ -32,8 +32,6 @@ COPY --from=build --chown=root:root /usr/local/lib/python${PY_VERSION}/site-pack
 # add any new deployable directories and files from the build stage here
 
 # Application
-ENV EAS_PRIVATE_KEY ""
-ENV KAS_DEFAULT_URL ""
 ENV KAS_CERTIFICATE ""
 ENV KAS_EC_SECP256R1_CERTIFICATE ""
 # Server

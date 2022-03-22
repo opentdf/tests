@@ -29,7 +29,6 @@ all_secrets = {
     for v in [
         "CA_CERTIFICATE",
         "EAS_CERTIFICATE",
-        "EAS_PRIVATE_KEY",
         "KAS_CERTIFICATE",
         "KAS_EC_SECP256R1_CERTIFICATE",
         "KAS_EC_SECP256R1_PRIVATE_KEY",

@@ -58,7 +58,6 @@ docker build --no-cache --tag opentdf/claims:0.2.0 claims
 ```shell
 kubectl create secret generic claims-secrets \
   --from-literal=POSTGRES_PASSWORD=myPostgresPassword \
-  --from-file=EAS_PRIVATE_KEY=certs/eas-private.pem \
   --from-file=KAS_CERTIFICATE=certs/kas-public.pem \
   --from-file=KAS_EC_SECP256R1_CERTIFICATE=certs/kas-ec-secp256r1-public.pem
 ```

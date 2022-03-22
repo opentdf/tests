@@ -159,7 +159,6 @@ For this example, we will use self signed certificates and secrets:
 ```sh
 export/scripts/genkeys-if-needed
 kubectl create secret generic etheria-secrets \
-    "--from-file=EAS_PRIVATE_KEY=export/certs/eas-private.pem" \
     "--from-file=EAS_CERTIFICATE=export/certs/eas-public.pem" \
     "--from-file=KAS_EC_SECP256R1_CERTIFICATE=export/certs/kas-ec-secp256r1-public.pem" \
     "--from-file=KAS_CERTIFICATE=export/certs/kas-public.pem" \
