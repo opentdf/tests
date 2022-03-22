@@ -28,7 +28,6 @@ while test $# -gt 0; do
       echo ""
       echo "options:"
       echo "-h, --help                                show brief help"
-      echo "-e nnn, --easuid nnn                      set UID for EAS keyfile (default: $EAS_UID)"
       echo "-k nnn, --kasuid nnn                      set UID for KAS keyfile (default: $KAS_UID)"
       echo ""
       echo "arguments:"
@@ -45,10 +44,6 @@ while test $# -gt 0; do
       echo "Generate keypair with RSA with 4096 bitsize"
       echo "    $PKG RSA 4096"
       exit 0
-      ;;
-    -e | --easuid)
-      EAS_UID="$2"
-      shift 2
       ;;
     --env-file)
       ENV_FILE="$2"
@@ -70,9 +65,8 @@ ALGS="$ALG_RSA"
 
 PRV_SUFFIX="private"
 PUB_SUFFIX="public"
-EAS="eas"
 KAS="kas"
-SERVICES="${GENKEYS_FOR_APPS:-$EAS $KAS}"
+SERVICES="${GENKEYS_FOR_APPS:-$KAS}"
 
 if [ $ALG = $ALG_RSA ]; then
   NEWKEY_TYP="rsa:$RSA_BITSIZE"
@@ -106,16 +100,6 @@ gen_keys() {
   openssl "${args[@]}" \
     2> >(monolog TRACE) ||
     do_fail
-  if [ "$1" = "$EAS" ]; then
-    if [[ $ENV_FILE ]]; then
-      echo "EAS_PRIVATE_KEY=\"$(cat "$PRV_PEM")\"" >>"$ENV_FILE"
-      echo "EAS_CERTIFICATE=\"$(cat "$PUB_PEM")\"" >>"$ENV_FILE"
-    fi
-    if [[ -n $EAS_UID ]]; then
-      chown "$EAS_UID" "$PRV_PEM"
-      chown "$EAS_UID" "$PUB_PEM"
-    fi
-  fi
   if [ "$1" = "$KAS" ]; then
     if [[ $ENV_FILE ]]; then
       echo "KAS_PRIVATE_KEY=\"$(cat "$PRV_PEM")\"" >>"$ENV_FILE"

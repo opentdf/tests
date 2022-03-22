@@ -20,7 +20,8 @@ __pycache__
 **/.idea/
 /build/
 /build-temp/
-/kas/.idea/
+/containers/kas/**/.idea
+/containers/kas/**/build/
 coverage-reports
 .coverage
 
@@ -41,3 +42,6 @@ kubeconfig
 # Helm
 .helm/
 /certs/
+
+**/.helm/
+**/tilt_modules/

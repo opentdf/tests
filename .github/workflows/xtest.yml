@@ -30,7 +30,7 @@ jobs:
         # This should be in sync with the minikube-deployed kube version below
         kubectl: "1.23.1"
         helm: "3.8.0"
-        tilt: "0.23.8"
+        tilt: "0.26.2"
     - run: |
         kubectl version --client
         kustomize version
@@ -46,4 +46,4 @@ jobs:
       run: |-
         kubectl version
         cd xtest
-        tilt ci
+        tilt ci -- --to-edit opentdf-abacus

@@ -24,10 +24,10 @@ setup(
     zip_safe=False,
     install_requires=[
         "Flask",
-        "PyJWT==1.7.1",
+        "PyJWT",
         "bitstruct",
         "connexion",
-        "cryptography==3.4.7",
+        "cryptography",
         "gunicorn",
         "importlib-resources",
         "jsonschema",

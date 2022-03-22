@@ -31,7 +31,7 @@
     "pretty": "prettier --write \"./**/*.{css,md,js,json,ts}\"",
     "test": "nyc mocha --require @babel/register --timeout 300000",
     "test:browser-headless": "karma start --single-run --browsers ChromeHeadlessNoSandbox karma.conf.cjs",
-    "lint": "eslint ./{src,test}",
+    "lint": "eslint src test",
     "lint:fix": "eslint --fix ./{src,test}",
     "prepack": "NODE_ENV=production npm run build",
     "fill-version": "grep -rli 'process.env.PKG_VERSION' ./build/* | xargs -I@ perl -pi -w -e 's/process.env.PKG_VERSION/'\"$(npm pkg get version)\"'/g;' @"

@@ -13,19 +13,18 @@ jobs:
           registry-url: https://npm.pkg.github.com
       - name: config ghpr with pat
         run: |-
-          cd tests/containers
+          cd tests/containers/clients
           echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: update packages
         run: |-
-          cd tests/containers
-          ls -l
-          rm opentdf-*.tgz
-          npm pack @opentdf/client@${{ github.event.client_payload.version }}
-          npm pack @opentdf/cli@${{ github.event.client_payload.version }}
-          ls -l
-          cd clients
-          npm i ../*.tgz
+          cd tests/containers/clients
+          npm uninstall @opentdf/cli @opentdf/client
+          npm uninstall @opentdf/cli
+          npm install @opentdf/cli@${{ github.event.client_payload.version }}
+          ls -l node_modules
+          npm install
+          ls -l node_modules
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
@@ -33,9 +32,9 @@ jobs:
             helm
             tilt
           # This should be in sync with the minikube-deployed kube version below
-          kubectl: "1.23.1"
+          kubectl: "1.23.3"
           helm: "3.8.0"
-          tilt: "0.23.8"
+          tilt: "0.25.2"
       - run: |
           kubectl version --client
           kustomize version
@@ -44,9 +43,9 @@ jobs:
         id: minikube
         uses: medyagh/setup-minikube@master
         with:
-          minikube-version: 1.25.1
+          minikube-version: 1.25.2
           # This should be in sync with the setup-tools version above
-          kubernetes-version: 1.23.1
+          kubernetes-version: 1.23.3
       - name: tilt-ci
         run: |-
           kubectl version

@@ -28,7 +28,7 @@ make dockerbuildpush
 
 ### Build and publish the Keycloak base image (only required for Keycloak version changes)
 
-> Note that the base image `virtru/keycloak-base` is unchanged from the upstream Keycloak image, and
+> Note that the base image `opentdf/keycloak-multiarch-base` is unchanged from the upstream Keycloak image, and
 > should not ever need to be built or published unless we change Keycloak versions,
 > and we can drop it entirely if we make a PR to [Keycloak image](https://github.com/keycloak/keycloak-containers)
 > enabling an `arm64` image build in upstream in the same manner we do here.
