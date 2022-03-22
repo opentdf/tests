@@ -12,8 +12,6 @@ data:
   EAS_HOST: {{ .Values.endpoints.easHost }}
   FLASK_DEBUG: "True"
   GUNICORN_WORKERS: "1"
-  # OIDC_PUBKEY_ENDPOINT: {{ .Values.endpoints.oidcPubkeyEndpoint }}
   KEYCLOAK_HOST: {{ .Values.endpoints.oidcPubkeyEndpoint }}
-  # TODO:  Do we want to make this the default?
-  USE_KEYCLOAK: "1"
   LOGLEVEL: DEBUG
+  USE_KEYCLOAK: "1"

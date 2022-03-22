@@ -3,10 +3,7 @@ kind: ConfigMap
 metadata:
   name: {{ include "claims.name" . }}-cm
 data:
-  POSTGRES_HOST: {{ .Values.postgres.host }}
-  POSTGRES_USER: {{ .Values.postgres.user }}
-{{/*  POSTGRES_PASSWORD: deployment.envFrom.secretRef.claims-secrets*/}}
   POSTGRES_DATABASE: {{ .Values.postgres.database }}
+  POSTGRES_HOST: {{ .Values.postgres.host }}
   POSTGRES_SCHEMA: {{ .Values.postgres.schema }}
-{{/*  KAS_CERTIFICATE: deployment.envFrom.secretRef.claims-secrets*/}}
-{{/*  KAS_EC_SECP256R1_CERTIFICATE: deployment.envFrom.secretRef.claims-secrets*/}}
+  POSTGRES_USER: {{ .Values.postgres.user }}

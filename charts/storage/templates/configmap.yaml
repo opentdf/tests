@@ -3,7 +3,6 @@ kind: ConfigMap
 metadata:
   name: {{ include "storage.name" . }}-cm
 data:
-  BUCKET: {{ .Values.s3Bucket }}
   AWS_DEFAULT_REGION: {{ .Values.s3BucketRegion }}
+  BUCKET: {{ .Values.s3Bucket }}
   CORS_ORIGINS: {{ .Values.corsOrigins }}
-{{/*  POSTGRES_PASSWORD: deployment.envFrom.secretRef.tdf-storage-secrets*/}}
