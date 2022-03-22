@@ -84,9 +84,9 @@ ctlptl create cluster kind --registry=ctlptl-registry --name kind-opentdf
 > TODO([PLAT-1599](https://virtru.atlassian.net/browse/PLAT-1599)) Consolidate integration and root tiltfile.
 
 ```shell
-tilt up
+tilt up # or tilt up -- --to-edit opentdf-abacus if you want to use local frontend
 ```
- 
+
 # Hit spacebar to open web UI
 
 ### Cleanup

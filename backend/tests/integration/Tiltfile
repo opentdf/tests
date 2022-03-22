@@ -4,12 +4,27 @@ load('ext://min_tilt_version', 'min_tilt_version')
 
 min_tilt_version('0.25')
 
-PROJECT_ROOT = "../.."
+config.define_string_list("to-run", args=True)
+config.define_string_list("to-edit")
 
+cfg = config.parse()
+
+to_edit = cfg.get('to-edit', [])
+
+PROJECT_ROOT = "../.."
 
 def local_path(*paths):
     return os.path.join(PROJECT_ROOT, *paths)
 
+OPENTDF_ABACUS_YML = "frontend.yaml"
+
+if 'opentdf-abacus' in to_edit:
+    OPENTDF_ABACUS_YML = "frontend-local.yaml"
+    # frontend folder should be next to backend
+    docker_build(
+        "ghcr.io/opentdf/abacus",
+        local_path("../frontend")
+    )
 
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"
@@ -41,6 +56,7 @@ all_secrets = {
         "KAS_PRIVATE_KEY",
     ]
 }
+
 all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
 
 
@@ -53,6 +69,7 @@ k8s_yaml(
         "attributes-secrets", inputs=only_secrets_named("POSTGRES_PASSWORD")
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "claims-secrets",
@@ -64,6 +81,7 @@ k8s_yaml(
         ),
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "entitlements-secrets",
@@ -73,6 +91,7 @@ k8s_yaml(
         },
     )
 )
+
 k8s_yaml(
     secret_from_dict(
         "kas-secrets",
@@ -202,14 +221,13 @@ k8s_yaml(
 
 
 k8s_yaml("backend.yaml")
-k8s_yaml("frontend.yaml")
+k8s_yaml(OPENTDF_ABACUS_YML)
 
 # resource dependencies
 k8s_resource("opentdf-attributes", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-claims", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-entitlements", resource_deps=["opentdf-postgresql"])
 k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"])
-
 
 helm_remote(
     "keycloak",
@@ -288,6 +306,7 @@ docker_build(
 )
 
 k8s_yaml("xtest.yaml")
+
 k8s_resource(
     "opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"]
 )
