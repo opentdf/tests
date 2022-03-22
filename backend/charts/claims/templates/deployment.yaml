@@ -37,7 +37,7 @@ spec:
           - secretRef:
               name: {{ .Values.secretRef.name }}
           - configMapRef:
-              name: claims-cm
+              name: {{ include "claims.name" . }}-cm
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

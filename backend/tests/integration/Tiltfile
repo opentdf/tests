@@ -1,5 +1,8 @@
 load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
+load('ext://min_tilt_version', 'min_tilt_version')
+
+min_tilt_version('0.25')
 
 PROJECT_ROOT = "../.."
 
@@ -32,7 +35,6 @@ all_secrets = {
     v: from_dotenv(local_path("certs", ".env"), v)
     for v in [
         "EAS_CERTIFICATE",
-        "EAS_PRIVATE_KEY",
         "KAS_CERTIFICATE",
         "KAS_EC_SECP256R1_CERTIFICATE",
         "KAS_EC_SECP256R1_PRIVATE_KEY",
@@ -57,7 +59,6 @@ k8s_yaml(
         inputs=only_secrets_named(
             "POSTGRES_PASSWORD",
             "EAS_CERTIFICATE",
-            "EAS_PRIVATE_KEY",
             "KAS_EC_SECP256R1_CERTIFICATE",
             "KAS_CERTIFICATE",
         ),
@@ -147,6 +148,20 @@ for microservice in ["attributes", "entitlements", "claims"]:
         ],
     )
 
+local(
+    "make keycloak-repo-clone", dir=local_path("containers", "keycloak-protocol-mapper")
+)
+
+docker_build(
+    "ghcr.io/opentdf/keycloak-multiarch-base",
+    local_path(
+        "containers", "keycloak-protocol-mapper", "keycloak-containers", "server"
+    ),
+    build_args={
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+    },
+)
+
 docker_build(
     "ghcr.io/opentdf/keycloak",
     local_path("containers", "keycloak-protocol-mapper"),
@@ -154,8 +169,8 @@ docker_build(
         "CONTAINER_REGISTRY": "docker.io",
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
-        "KEYCLOAK_BASE_IMAGE": "virtru/keycloak-base", #TODO fix this after going public
-        "KEYCLOAK_BASE_VERSION": "15.0.2",
+        "KEYCLOAK_BASE_IMAGE": "ghcr.io/opentdf/keycloak-multiarch-base",
+        "KEYCLOAK_BASE_VERSION": "15.1.1",
     },
 )
 
@@ -173,6 +188,15 @@ k8s_yaml(
         "opentdf-attributes",
         set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"],
         values=["backend-attributes-values.yaml"],
+    )
+)
+
+k8s_yaml(
+    helm(
+        "../../charts/claims",
+        "opentdf-claims",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/claims"],
+        values=["backend-claims-values.yaml"],
     )
 )
 
@@ -245,9 +269,7 @@ docker_build(
 
 k8s_resource(
     "keycloak",
-    links=[
-        link('localhost:65432/auth', 'Keycloak admin console')
-    ],
+    links=[link("localhost:65432/auth", "Keycloak admin console")],
 )
 
 k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
@@ -266,4 +288,6 @@ docker_build(
 )
 
 k8s_yaml("xtest.yaml")
-k8s_resource("opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"])
+k8s_resource(
+    "opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"]
+)

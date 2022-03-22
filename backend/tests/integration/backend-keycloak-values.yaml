@@ -43,7 +43,7 @@ ingress:
       paths:
         - path: /auth(/|$)(.*)
           pathType: Prefix
-    - host: host.docker.internal 
+    - host: host.docker.internal
       paths:
         - path: /auth(/|$)(.*)
           pathType: Prefix

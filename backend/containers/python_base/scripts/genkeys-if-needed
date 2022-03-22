@@ -21,7 +21,7 @@ if ! cd "${PROJECT_ROOT}"; then
   exit 1
 fi
 
-if [ -f certs/eas-private.pem ]; then
+if [ -f "$CERTS_DIR/kas-ec.key" ]; then
   monolog DEBUG "keyfile found"
 else
   monolog INFO "Generating keys..."
@@ -29,7 +29,7 @@ else
   ENV_FILE="$(pwd)/certs/tmp-$(date "+%Y-%m-%d-%H.%M.%S").env"
   echo >"$ENV_FILE"
   if scripts/genkey-reverse-proxy --env-file "$ENV_FILE" "$BACKEND_SERVICES_HOSTNAME" &&
-    scripts/genkey-apps --env-file "$ENV_FILE" --easuid "$EAS_UID" --kasuid "$KAS_UID" &&
+    scripts/genkey-apps --env-file "$ENV_FILE" --kasuid "$KAS_UID" &&
     scripts/genkey-client --uid "$CLIENT_UID" --subj /CN=Alice_1234 --file-basename Alice_1234 &&
     scripts/genkey-client --uid "$CLIENT_UID" --subj /CN=Charlie_1234 --file-basename Charlie_1234 &&
     scripts/genkey-client --uid "$CLIENT_UID" --subj /CN=bob_5678 --file-basename bob_5678 &&
