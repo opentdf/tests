@@ -9,6 +9,7 @@ ENV FLASK_ENV=development
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
 WORKDIR /project
+COPY VERSION VERSION
 COPY bootstrap.py /project/bootstrap.py
 COPY keycloak_bootstrap.py /project/keycloak_bootstrap.py
 COPY entitlements_bootstrap.py /project/entitlements_bootstrap.py

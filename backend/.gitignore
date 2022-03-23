@@ -42,3 +42,6 @@ kubeconfig
 # Helm
 .helm/
 /certs/
+
+**/.helm/
+**/tilt_modules/

@@ -4,12 +4,15 @@
 # extensions https://github.com/tilt-dev/tilt-extensions
 load("ext://helm_remote", "helm_remote")
 load("ext://secret", "secret_from_dict", "secret_yaml_generic")
-load('ext://min_tilt_version', 'min_tilt_version')
+load("ext://min_tilt_version", "min_tilt_version")
 
-min_tilt_version('0.25')
+min_tilt_version("0.25")
 
 ALPINE_VERSION = os.environ.get("ALPINE_VERSION", "3.15")
 PY_VERSION = os.environ.get("PY_VERSION", "3.10")
+KEYCLOAK_BASE_VERSION = str(
+    local('cut -d- -f1 < "{}"'.format("containers/keycloak-protocol-mapper/VERSION"))
+).strip()
 
 # ghcr.io == GitHub packages. pre-release versions, created from recent green `main` commit
 # docker.io == Docker hub. Manually released versions
@@ -92,7 +95,7 @@ docker_build(
     build_args={
         "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
         "KEYCLOAK_BASE_IMAGE": CONTAINER_REGISTRY + "/opentdf/keycloak-multiarch-base",
-        "KEYCLOAK_BASE_VERSION": "15.1.1",
+        "KEYCLOAK_BASE_VERSION": KEYCLOAK_BASE_VERSION,
         "MAVEN_VERSION": "3.8.4",
         "JDK_VERSION": "11",
     },

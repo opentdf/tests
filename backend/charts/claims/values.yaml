@@ -10,8 +10,10 @@ image:
   name: ghcr.io/opentdf/claims
 # JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
+
 # Select a specific name for the resource, instead of the default, opentdf-claims
 nameOverride: ""
+
 # The fully qualified appname override
 fullnameOverride: ""
 
@@ -41,7 +43,11 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-# JSON locating the secret to pull environment variables from
+# JSON to locate a k8s secret containing environment variables.
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+#     KAS_CERTIFICATE: Public key for Key Access service
+#     KAS_EC_SECP256R1_CERTIFICATE: Public key (EC Mode) for Key Access service
 secretRef:
   name: claims-secret
 
@@ -70,12 +76,11 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Specify required limits for deploying this service to a pod.
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube.
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
   #   cpu: 100m
   #   memory: 128Mi
   # requests:
@@ -103,8 +108,6 @@ postgres:
   port: 5432
   # Must be a postgres user with tdf_entitlement_reader role
   user: tdf_entitlement_reader
-  # DO NOT SET value should be in k8s secret `secretRef` as POSTGRES_PASSWORD
-  password: ""
   # The database name within the given server
   database: tdf_database
   # The entitlement schema

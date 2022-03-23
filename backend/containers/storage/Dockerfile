@@ -13,7 +13,8 @@ COPY Pipfile.lock .
 RUN pipenv lock --keep-outdated --requirements > requirements.txt && \
     pip3 install --no-cache-dir -r requirements.txt
 # Install application into WORKDIR
-COPY main.py .
+COPY *.py ./
+COPY VERSION VERSION
 # Compile application
 RUN python3 -m compileall .
 # stage - production server

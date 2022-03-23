@@ -1,12 +1,20 @@
-# Default values for attributes.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
 replicaCount: 1
 
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
 logLevel: DEBUG
+
+# Name of application. Used during oauth flows, for example when connecting to
+# the OpenAPI endpoint with an OAuth authentication
 publicName: "Attribute Authority"
+
+# Base path for this service. Allows serving multiple services from the same
+# origin, e.g. using an ingress with prefix mapping as suggested below.
 serverRootPath: /attributes
+
+# Additional information for connecting to an OIDC provider for AuthN
 oidc:
   realm: tdf
   internalHost: http://keycloak/auth
@@ -14,14 +22,24 @@ oidc:
   clientId: tdf-attributes
   clientSecret: myclientsecret
 
+# Container image configuration.
 image:
-  pullPolicy: IfNotPresent
+  # The image selector, also called the 'image name' in k8s documentation
+  # and 'image repository' in docker's guides.
   name: opentdf/attributes:main
+  # The container's `imagePullPolicy`
+  pullPolicy: IfNotPresent
 
+# JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
+
+# Select a specific name for the resource, instead of the default, opentdf-claims
 nameOverride: ""
+
+# The fully qualified appname override
 fullnameOverride: ""
 
+# A service account to create
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -31,11 +49,14 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
+# Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
 
+# Values for deployment's spec.template.spec.securityContext
 podSecurityContext: {}
   # fsGroup: 2000
 
+# Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
   # capabilities:
   #   drop:
@@ -44,10 +65,14 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
+# Service configuation information.
 service:
+  # Service `spec.type`
   type: ClusterIP
+  # Port to assign to the `http` port
   port: 4020
 
+# Ingress configuration.
 ingress:
   enabled: false
   annotations:
@@ -71,17 +96,11 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Specify required limits for deploying this service to a pod.
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube.
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 autoscaling:
   enabled: false
@@ -96,11 +115,17 @@ tolerations: []
 
 affinity: {}
 
+# Configuration for the database backend
 postgres:
+  # postgres server's k8s name or global DNS for external server
   host: localhost
+  # postgres server port
   port: 5432
+  # Must be a postgres user with tdf_attribute_manager role
   user: tdf_attribute_manager
-#  value from kubernetes secrets
+  # Take value from kubernetes secrets, not this one!
   password: ""
+  # The database name within the given server
   database: tdf_database
+  # The entitlement schema
   schema: tdf_attribute

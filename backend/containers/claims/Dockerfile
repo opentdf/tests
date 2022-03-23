@@ -17,6 +17,7 @@ RUN pip3 install --no-cache-dir --upgrade pip setuptools && \
 # Install application into WORKDIR
 COPY python_base/*.py python_base/
 COPY claims/*.py claims/
+COPY claims/VERSION claims/
 
 # Compile application
 RUN python3 -m compileall .
