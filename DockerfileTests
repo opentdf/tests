@@ -14,7 +14,7 @@ COPY public/ public/
 COPY src/ src/
 COPY tsconfig.json/ .
 COPY craco.config.js/ .
-RUN npm run build
+RUN npm run build:test
 
 # server - nginx alpine
 FROM nginx:stable-alpine as server
@@ -22,7 +22,7 @@ COPY --from=builder /build/build /usr/share/nginx/html
 COPY nginx-default.conf /etc/nginx/templates/default.conf.template
 ENV KEYCLOAK_HOST "http://localhost/keycloak/auth"
 ENV KEYCLOAK_CLIENT_ID ""
-ENV KEYCLOAK_REALM ""
+ENV KEYCLOAK_REALMS ""
 ENV KEYCLOAK_REALMS "tdf"
 ENV ATTRIBUTES_HOST "http://localhost/attributes"
 ENV ENTITLEMENTS_HOST "http://localhost/entitlements"
