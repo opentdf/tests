@@ -1,17 +1,24 @@
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
+logLevel: INFO
+
+# If the debug mode should  be enabled in flask
+flaskDebug: "False"
+
 # Sets the default number of pod replicas in the deployment.
 # Ignored if autoscaling.enabled == true
-replicaCount: 3
+replicaCount: 1
 
 # Container image configuration.
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: opentdf/kas
+  name: ghcr.io/opentdf/kas
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
 # Secret containing an additional ca-cert.pem file for locally signed TLS certs.
-secretName: "etheria-secrets"
+secretName: "kas-secrets"
 
 # JSON passed to the deployment's template.spec.imagePullSecrets.
 imagePullSecrets: []
@@ -33,7 +40,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: null
 
 # Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
@@ -41,17 +48,10 @@ podAnnotations: {}
 # Values for deployment's spec.template.spec.securityContext
 podSecurityContext:
   {}
-  # fsGroup: 2000
 
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext:
   {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
 # Service configuation information.
 service:
@@ -63,27 +63,16 @@ service:
 # Ingress configuration.
 ingress:
   enabled: false
+  className: null
   annotations: {}
-  hosts:
-    - host: etheria.local
-      paths:
-        - /kas
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  hosts: []
+  tls: null
 
 # Specify required limits for deploying this service to a pod.
 # We usually recommend not to specify default resources and to leave this as a conscious
 # choice for the user. This also increases chances charts run on environments with little
 # resources, such as Minikube.
-resources:
-  limits:
-    cpu: 400m
-    memory: 256Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
+resources: {}
 
 autoscaling:
   enabled: false

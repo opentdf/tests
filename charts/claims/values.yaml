@@ -70,14 +70,9 @@ service:
 #         servicePort: service-port  [default: service.port above]
 ingress:
   enabled: false
-  annotations:
-    {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  className: null
+  annotations: {}
+  tls: null
 
 # Specify required limits for deploying this service to a pod.
 # We usually recommend not to specify default resources and to leave this as a conscious
@@ -85,11 +80,6 @@ ingress:
 # resources, such as Minikube.
 resources:
   {}
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 autoscaling:
   enabled: false

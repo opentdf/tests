@@ -1,2 +1,2 @@
-s3Bucket: "datalake.etheria"
+s3Bucket: "datalake.opentdf"
 s3BucketRegion: "us-west-2"

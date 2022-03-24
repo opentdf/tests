@@ -1,4 +1,4 @@
-# etheria Tiltfile for development
+# Tiltfile for development of openTDF backend
 # reference https://docs.tilt.dev/api.html
 
 # extensions https://github.com/tilt-dev/tilt-extensions
@@ -50,7 +50,6 @@ k8s_yaml(
     secret_from_dict(
         "all-the-kas-secrets",
         inputs=only_secrets_named(
-            "POSTGRES_PASSWORD",
             "EAS_CERTIFICATE",
             "KAS_EC_SECP256R1_CERTIFICATE",
             "KAS_CERTIFICATE",

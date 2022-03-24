@@ -1,8 +1,10 @@
 {{- if .Values.ingress.enabled -}}
+{{- $fullName := include "storage.fullname" . -}}
+{{- $servicePort := .Values.service.port -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ $fullName }}
   labels:
     {{- include "storage.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -10,15 +12,12 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.ingress.tls }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
   tls:
-    {{- range .Values.ingress.tls }}
-    - hosts:
-        {{- range .hosts }}
-        - {{ . | quote }}
-        {{- end }}
-      secretName: {{ .secretName }}
-    {{- end }}
+    {{- . | toYaml | nindent 4 }}
   {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
@@ -35,4 +34,4 @@ spec:
                   number: {{ .backend.service.port }}
           {{- end }}
     {{- end }}
-  {{- end }}
+{{- end }}

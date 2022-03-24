@@ -90,15 +90,15 @@ fi
 if [[ $LOAD_SECRETS ]]; then
   $TOOLS_ROOT/genkeys-if-needed || e "Unable to generate keys"
 
-  printf "\nCreating 'etheria-secrets'..."
-  kubectl create secret generic etheria-secrets \
+  printf "\nCreating 'kas-secrets'..."
+  kubectl create secret generic kas-secrets \
     "--from-file=EAS_PRIVATE_KEY=${CERTS_ROOT}/eas-private.pem" \
     "--from-file=EAS_CERTIFICATE=${CERTS_ROOT}/eas-public.pem" \
     "--from-file=KAS_EC_SECP256R1_CERTIFICATE=${CERTS_ROOT}/kas-ec-secp256r1-public.pem" \
     "--from-file=KAS_CERTIFICATE=${CERTS_ROOT}/kas-public.pem" \
     "--from-file=KAS_EC_SECP256R1_PRIVATE_KEY=${CERTS_ROOT}/kas-ec-secp256r1-private.pem" \
     "--from-file=KAS_PRIVATE_KEY=${CERTS_ROOT}/kas-private.pem" \
-    "--from-file=ca-cert.pem=${CERTS_ROOT}/ca.crt" || e "create etheria-secrets failed"
+    "--from-file=ca-cert.pem=${CERTS_ROOT}/ca.crt" || e "create kas-secrets failed"
 
   kubectl create secret generic attributes-secrets --from-literal=POSTGRES_PASSWORD=myPostgresPassword || e "create aa secrets failed"
   kubectl create secret generic entitlements-secrets --from-literal=POSTGRES_PASSWORD=myPostgresPassword || e "create ea secrets failed"

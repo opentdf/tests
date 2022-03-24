@@ -18,4 +18,4 @@ clean-cluster:
 	helm uninstall kas
 	helm uninstall keycloak
 	helm uninstall keycloak-bootstrap
-	kubectl delete secret etheria-secrets
+	kubectl delete secret kas-secrets

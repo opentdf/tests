@@ -26,7 +26,7 @@ oidc:
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: opentdf/attributes:main
+  image: ghcr.io/opentdf/attributes
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
@@ -47,7 +47,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: null
 
 # Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
@@ -76,26 +76,9 @@ service:
 # Ingress configuration.
 ingress:
   enabled: false
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-  rules:
-    - host: localhost
-      http: &paths
-        paths:
-          - backend:
-              service:
-                name: opentdf-attributes
-                port:
-                  number: 4020
-            path: /attributes(/|$)(.*)
-            pathType: Prefix
-    - host: host.docker.internal
-      http: *paths
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  className: null
+  annotations: {}
+  tls: null
 
 # Specify required limits for deploying this service to a pod.
 # We usually recommend not to specify default resources and to leave this as a conscious
