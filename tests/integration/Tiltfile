@@ -310,6 +310,8 @@ docker_build(
     "ghcr.io/opentdf/tests-clients",
     context=local_path("."),
     dockerfile=local_path("tests", "containers", "clients", "Dockerfile"),
+    # TODO(PLAT-1650) Force to x86 mode until we have a python built in aarch64
+    platform="linux/amd64",
 )
 
 k8s_yaml("xtest.yaml")
