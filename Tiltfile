@@ -48,7 +48,7 @@ def only_secrets_named(*items):
 
 k8s_yaml(
     secret_from_dict(
-        "etheria-secrets",
+        "all-the-kas-secrets",
         inputs=only_secrets_named(
             "POSTGRES_PASSWORD",
             "EAS_CERTIFICATE",
@@ -62,13 +62,8 @@ k8s_yaml(
 )
 k8s_yaml(
     secret_from_dict(
-        "attributes-secrets",
+        "postgres-password",
         inputs=only_secrets_named("POSTGRES_PASSWORD"),
-    )
-)
-k8s_yaml(
-    secret_from_dict(
-        "entitlements-secrets", inputs=only_secrets_named("POSTGRES_PASSWORD")
     )
 )
 
@@ -166,7 +161,10 @@ k8s_yaml(
     helm(
         "charts/attributes",
         "attributes",
-        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"],
+        set=[
+            "image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes",
+            "secretRef.name=postgres-password",
+        ],
         values=["deployments/docker-desktop/attributes-values.yaml"],
     )
 )
@@ -176,7 +174,7 @@ k8s_yaml(
         "claims",
         set=[
             "image.name=" + CONTAINER_REGISTRY + "/opentdf/claims",
-            "secretRef.name=etheria-secrets",
+            "secretRef.name=postgres-password",
         ],
         values=["deployments/docker-desktop/claims-values.yaml"],
     )
@@ -185,7 +183,10 @@ k8s_yaml(
     helm(
         "charts/entitlements",
         "entitlements",
-        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements"],
+        set=[
+            "image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements",
+            "secretRef.name=postgres-password",
+        ],
         values=["deployments/docker-desktop/entitlements-values.yaml"],
     )
 )
@@ -193,7 +194,11 @@ k8s_yaml(
     helm(
         "charts/kas",
         "kas",
-        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/kas"],
+        set=[
+            "image.name=" + CONTAINER_REGISTRY + "/opentdf/kas",
+            "secretRef.name=all-the-kas-secrets",
+            "secretName=all-the-kas-secrets",
+        ],
         values=["deployments/docker-desktop/kas-values.yaml"],
     )
 )

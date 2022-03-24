@@ -10,9 +10,10 @@ image:
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
-# JSON passed to the deployment's template.spec.imagePullSecrets
+# Secret containing an additional ca-cert.pem file for locally signed TLS certs.
 secretName: "etheria-secrets"
 
+# JSON passed to the deployment's template.spec.imagePullSecrets.
 imagePullSecrets: []
 
 # Select a specific name for the resource, instead of the default, opentdf-claims
@@ -38,12 +39,13 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
-
 # Values for deployment's spec.template.spec.containers.securityContext
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -63,9 +65,9 @@ ingress:
   enabled: false
   annotations: {}
   hosts:
-  - host: etheria.local
-    paths:
-    - /kas
+    - host: etheria.local
+      paths:
+        - /kas
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -106,6 +108,12 @@ endpoints:
 
 # Adds a container livenessProbe, if set.
 livenessProbe:
+  httpGet:
+    path: /healthz?probe=liveness
+    port: http
 
 # Adds a container readinessProbe, if set.
 readinessProbe:
+  httpGet:
+    path: /healthz?probe=readiness
+    port: http

@@ -53,17 +53,18 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
+
+# JSON locating the secret to pull environment variables from
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: attributes-secrets
 
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
 # Service configuation information.
 service:
@@ -123,8 +124,6 @@ postgres:
   port: 5432
   # Must be a postgres user with tdf_attribute_manager role
   user: tdf_attribute_manager
-  # Take value from kubernetes secrets, not this one!
-  password: ""
   # The database name within the given server
   database: tdf_database
   # The entitlement schema

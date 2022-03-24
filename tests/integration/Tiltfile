@@ -9,22 +9,21 @@ config.define_string_list("to-edit")
 
 cfg = config.parse()
 
-to_edit = cfg.get('to-edit', [])
+to_edit = cfg.get("to-edit", [])
 
 PROJECT_ROOT = "../.."
+
 
 def local_path(*paths):
     return os.path.join(PROJECT_ROOT, *paths)
 
+
 OPENTDF_ABACUS_YML = "frontend.yaml"
 
-if 'opentdf-abacus' in to_edit:
+if "opentdf-abacus" in to_edit:
     OPENTDF_ABACUS_YML = "frontend-local.yaml"
     # frontend folder should be next to backend
-    docker_build(
-        "ghcr.io/opentdf/abacus",
-        local_path("../frontend")
-    )
+    docker_build("ghcr.io/opentdf/abacus", local_path("../frontend"))
 
 ALPINE_VERSION = "3.15"
 PY_VERSION = "3.10"

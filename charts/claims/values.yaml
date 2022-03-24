@@ -31,11 +31,13 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
 # Values for deployment's spec.template.spec.containers.securityContext
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -49,7 +51,7 @@ securityContext: {}
 #     KAS_CERTIFICATE: Public key for Key Access service
 #     KAS_EC_SECP256R1_CERTIFICATE: Public key (EC Mode) for Key Access service
 secretRef:
-  name: claims-secret
+  name: claims-secrets
 
 # Service configuation information.
 service:
@@ -68,7 +70,8 @@ service:
 #         servicePort: service-port  [default: service.port above]
 ingress:
   enabled: false
-  annotations: {}
+  annotations:
+    {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   tls: []
@@ -80,7 +83,8 @@ ingress:
 # We usually recommend not to specify default resources and to leave this as a conscious
 # choice for the user. This also increases chances charts run on environments with little
 # resources, such as Minikube.
-resources: {}
+resources:
+  {}
   #   cpu: 100m
   #   memory: 128Mi
   # requests:

@@ -37,17 +37,25 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
 # Values for deployment's spec.template.spec.containers.securityContext
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
+
+# JSON locating the secret to pull environment variables from
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: storage-secrets
 
 # Service configuation information.
 service:
@@ -59,7 +67,8 @@ service:
 # Ingress configuration.
 ingress:
   enabled: false
-  annotations: {}
+  annotations:
+    {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   hosts:

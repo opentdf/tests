@@ -1,4 +1,4 @@
-name: 'keycloak-bootstrap'
+name: "keycloak-bootstrap"
 replicaCount: 1
 job:
   backoffLimit: 10
