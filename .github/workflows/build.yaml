@@ -118,6 +118,37 @@ jobs:
         run: |-
           tilt ci
 
+  publish-helm-charts:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name }} == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - integration-test
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+        with:
+          setup-tools: helm
+          helm: "3.8.0"
+      - name: Login to GitHub Container Registry
+        run: |-
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+      - name: push
+        run: |
+          cd charts
+          for d in */ ; do
+              if [ -f "$d/Chart.yaml" ]; then
+                echo "Rendering Helm chart $d to validate defaults..."
+                helm package $d
+                helm push *.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+                rm *.tgz
+              fi
+          done
+
   build-base:
     runs-on: ubuntu-latest
     needs:
