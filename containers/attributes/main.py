@@ -107,7 +107,7 @@ def get_retryable_request():
 # This is a low priority though since it doesn't save us from having to get the
 # realmId first and so is a largely cosmetic difference
 async def get_idp_public_key(realm_id):
-    url = f"{os.getenv('OIDC_SERVER_URL')}realms/{realm_id}"
+    url = f"{os.getenv('OIDC_SERVER_URL')}/realms/{realm_id}"
 
     http = get_retryable_request()
 

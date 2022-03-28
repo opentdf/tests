@@ -15,7 +15,7 @@ data:
   OIDC_CLIENT_SECRET: myclientsecret
   OIDC_CONFIGURATION_URL: http://keycloak/auth/realms/tdf/.well-known/openid-configuration
   OIDC_REALM: tdf
-  OIDC_SERVER_URL: http://keycloak/auth/
+  OIDC_SERVER_URL: http://keycloak-http/auth/
   OIDC_TOKEN_URL: http://localhost:65432/auth/realms/tdf/protocol/openid-connect/token
   POSTGRES_DATABASE: tdf_database
   POSTGRES_HOST: opentdf-postgresql

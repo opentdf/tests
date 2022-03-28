@@ -17,7 +17,7 @@ serverRootPath: /attributes
 # Additional information for connecting to an OIDC provider for AuthN
 oidc:
   realm: tdf
-  internalHost: http://keycloak/auth
+  internalHost: http://keycloak-http/auth
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
   clientSecret: myclientsecret
