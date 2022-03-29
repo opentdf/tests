@@ -26,14 +26,17 @@
     "react-scripts": "4.0.3",
     "react-toastify": "^8.0.3",
     "typescript": "~4.4.3",
-    "web-vitals": "~1.1.2"
+    "web-vitals": "~1.1.2",
+    "cross-env": "^7.0.3",
+    "@craco/craco": "^6.4.3"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "REACT_APP_SERVER_DATA=__SERVER_DATA__ react-scripts build",
-    "test": "react-scripts test",
-    "test:prod": "react-scripts test --watchAll=false --coverage",
-    "test:debug": "react-scripts --inspect-brk test --runInBand --no-cache --setupFilesAfterEnv='./src/setupTests.ts'",
+    "start": "craco start",
+    "build": "REACT_APP_SERVER_DATA=__SERVER_DATA__ craco build",
+    "build:test": "REACT_APP_SERVER_DATA=__SERVER_DATA__ cross-env REACT_APP_TEST_MODE=1 craco build",
+    "test": "craco test",
+    "test:prod": "craco test --watchAll=false --coverage",
+    "test:debug": "craco --inspect-brk test --runInBand --no-cache --setupFilesAfterEnv='./src/setupTests.ts'",
     "test:playwright": "playwright test --config=tests/e2e/playwright.config.ts",
     "eject": "react-scripts eject",
     "prepare": "husky install"

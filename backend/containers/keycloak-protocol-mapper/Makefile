@@ -1,6 +1,6 @@
 OTDF_IMAGE=opentdf/keycloak
-OTDF_VERSION=15.1.1-r10
-KEYCLOAK_BASE_VERSION=15.1.1
+OTDF_VERSION:=$(shell cat VERSION)
+KEYCLOAK_BASE_VERSION:=$(shell cut -d- -f1 < VERSION)
 KEYCLOAK_BASE_IMAGE=ghcr.io/opentdf/keycloak-multiarch-base
 
 # Destroy any previously-created buildx context
@@ -13,7 +13,7 @@ docker-buildx-armclean:
 .PHONY: keycloak-repo-clone
 keycloak-repo-clone: docker-buildx-armclean
 	rm -rf keycloak-containers
-	git clone -b ${KEYCLOAK_BASE_VERSION} https://github.com/keycloak/keycloak-containers.git
+	git clone -b $(KEYCLOAK_BASE_VERSION) https://github.com/keycloak/keycloak-containers.git
 
 # Set up a custom buildx context that supports building a multi-arch image
 .PHONY: docker-buildx-armsetup
@@ -33,8 +33,8 @@ keycloak-base-buildpush: docker-buildx-armsetup keycloak-repo-clone
 
 .PHONY: dockerbuild
 dockerbuild:
-	docker build -t ${OTDF_IMAGE}:${OTDF_VERSION} .
+	docker build -t ${OTDF_IMAGE}:$(OTDF_VERSION) .
 
 .PHONY: dockerbuildpush
 dockerbuildpush: dockerbuild
-	docker push ${OTDF_IMAGE}:${OTDF_VERSION}
+	docker push ${OTDF_IMAGE}:$(OTDF_VERSION)

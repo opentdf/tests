@@ -6,15 +6,14 @@ kas:
       kubernetes.io/ingress.class: nginx
     enabled: true
     hosts:
-    - host: abacus.etheria.local
-      paths:
-      - /kas
+      abacus.opentdf.local:
+        "/kas": {}
     tls:
-    - hosts:
-      - abacus.etheria.local
-      secretName: kas-tls
+      - hosts:
+          - abacus.opentdf.local
+        secretName: kas-tls
   endpoints:
-    easHost: https://abacus.etheria.local/eas
+    easHost: https://abacus.opentdf.local/eas
   image:
     name: opentdf/kas:head
     pullPolicy: Never
@@ -54,5 +53,5 @@ tdf-storage:
   image:
     name: opentdf/storage:head
     pullPolicy: Never
-  s3Bucket: "datalake.etheria"
+  s3Bucket: "datalake.opentdf"
   s3BucketRegion: "us-west-2"

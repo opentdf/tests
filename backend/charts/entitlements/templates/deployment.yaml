@@ -31,16 +31,18 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.name }}"
+          image: "{{ .Values.image.image }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
-          - secretRef:
-              name: entitlements-secrets
-          - configMapRef:
-              name: entitlements-cm
+            {{- with .Values.secretRef }}
+            - secretRef:
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            - configMapRef:
+                name: {{ include "entitlements.name" . }}-cm
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.service.port | default "http" }}
               protocol: TCP
           livenessProbe:
             httpGet:

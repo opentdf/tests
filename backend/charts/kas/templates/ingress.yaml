@@ -4,7 +4,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ $fullName }}
   labels:
     {{- include "kas.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -12,29 +12,26 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.ingress.tls }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
   tls:
-    {{- range .Values.ingress.tls }}
-    - hosts:
-        {{- range .hosts }}
-        - {{ . | quote }}
-        {{- end }}
-      secretName: {{ .secretName }}
-    {{- end }}
+    {{- . | toYaml | nindent 4 }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    {{- range $host, $paths := .Values.ingress.hosts }}
+    - host: {{ $host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ . }}
-            pathType: ImplementationSpecific
+          {{- range $path, $backend := $paths }}
+          - path: {{ $path }}
+            pathType: {{ $backend.pathType | default "ImplementationSpecific" | quote }}
             backend:
               service:
-                name: {{ $fullName }}
+                name: {{ $backend.serviceName | default $fullName | quote }}
                 port:
-                  number: {{ $servicePort }}
+                  number: !!int {{ $backend.servicePort | default $servicePort }}
           {{- end }}
     {{- end }}
-  {{- end }}
+{{- end }}

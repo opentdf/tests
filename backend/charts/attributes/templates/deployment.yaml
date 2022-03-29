@@ -31,13 +31,15 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.name }}"
+          image: "{{ .Values.image.image }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
-          - secretRef:
-              name: attributes-secrets
-          - configMapRef:
-              name: attributes-cm
+            {{- with .Values.secretRef }}
+            - secretRef:
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            - configMapRef:
+                name: {{ include "attributes.name" . }}-cm
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

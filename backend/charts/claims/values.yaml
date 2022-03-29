@@ -2,16 +2,27 @@
 # Ignored if autoscaling.enabled == true
 replicaCount: 1
 
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
+logLevel: INFO
+
+rootPath: /
+openapiPath: /openapi.json
+publicName: "Claims"
+
 # Configure the container image to use in the deployment.
 image:
+  # The image selector
+  image: ghcr.io/opentdf/claims
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
-  # The image selector
-  name: ghcr.io/opentdf/claims
+
 # JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
+
 # Select a specific name for the resource, instead of the default, opentdf-claims
 nameOverride: ""
+
 # The fully qualified appname override
 fullnameOverride: ""
 
@@ -30,20 +41,17 @@ podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
 podSecurityContext: {}
-  # fsGroup: 2000
 
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
-# JSON locating the secret to pull environment variables from
+# JSON to locate a k8s secret containing environment variables.
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+#     KAS_CERTIFICATE: Public key for Key Access service
+#     KAS_EC_SECP256R1_CERTIFICATE: Public key (EC Mode) for Key Access service
 secretRef:
-  name: claims-secret
+  name: claims-secrets
 
 # Service configuation information.
 service:
@@ -52,35 +60,11 @@ service:
   # Port to assign to the `http` port
   port: 5000
 
-# Ingress configuration.
-# To configure, set enabled to true and set `hosts` to a map in the form:
-#
-#     [hostname]:
-#       [path]:
-#         pathType:    your-pathtype [default: "ImplementationSpecific"]
-#         serviceName: your-service  [default: service.fullname]
-#         servicePort: service-port  [default: service.port above]
-ingress:
-  enabled: false
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
+# Specify required limits for deploying this service to a pod.
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube.
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 autoscaling:
   enabled: false
@@ -103,16 +87,7 @@ postgres:
   port: 5432
   # Must be a postgres user with tdf_entitlement_reader role
   user: tdf_entitlement_reader
-  # DO NOT SET value should be in k8s secret `secretRef` as POSTGRES_PASSWORD
-  password: ""
   # The database name within the given server
   database: tdf_database
   # The entitlement schema
   schema: tdf_entitlement
-keystore:
-  privateKey: ""
-  certificate: ""
-truststore:
-  kasURL: ""
-  kasCertificate: ""
-  kasECSECP256r1Certificate: ""

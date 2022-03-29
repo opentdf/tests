@@ -13,7 +13,7 @@ spec:
       containers:
         - name: {{ .Values.name }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          image: {{ .Values.image.name }}
+          image: {{ .Values.image.image }}
           {{- if .Values.istioTerminationHack }}
           command: ["/bin/sh", "-c"]
           # The following hack does 2 things:
@@ -35,14 +35,20 @@ spec:
               value: {{ .Values.keycloak.hostname }}
             - name: keycloak_admin_username
               value: {{ .Values.keycloak.username }}
+            {{- with .Values.keycloak.password }}
             - name: keycloak_admin_password
-              value: {{ .Values.keycloak.password }}
+              value: {{ . }}
+            {{- end }}
             - name: passwordUsers
               value: {{ .Values.keycloak.passwordUsers }}
+            {{- with .Values.keycloak.clientId }}
             - name: CLIENT_ID
-              value: {{ .Values.keycloak.clientId }}
+              value: {{ . }}
+            {{- end }}
+            {{- with .Values.keycloak.clientSecret }}
             - name: CLIENT_SECRET
-              value: {{ .Values.keycloak.clientSecret }}
+              value: {{ . }}
+            {{- end }}
             - name: realm
               value: {{ .Values.keycloak.realm }}
             - name: ATTRIBUTE_AUTHORITY_HOST
@@ -55,16 +61,21 @@ spec:
               value: {{ .Values.entitlement.username }}
             - name: ENTITLEMENT_PASSWORD
               value: {{ .Values.entitlement.password }}
+          {{- with .Values.secretRef }}
+          envFrom:
+            - secretRef:
+                {{- toYaml . | nindent 16 }}
+          {{- end }}
           volumeMounts:
-            - name: entitlements-config-volume
+            - name: keycloak-bootstrap-config-volume
               mountPath: /etc/virtru-config
       volumes:
-        - name: entitlements-config-volume
+        - name: keycloak-bootstrap-config-volume
           configMap:
             name: {{ include "keycloak-bootstrap.fullname" . }}-cm
       restartPolicy: Never
-      {{ if .Values.image.pullSecret }}
+      {{ with .Values.image.pullSecret }}
       imagePullSecrets:
-        - name: {{ .Values.image.pullSecret }}
+        - name: {{ . }}
       {{ end }}
   backoffLimit: {{ .Values.job.backoffLimit }}

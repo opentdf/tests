@@ -2,6 +2,7 @@ name: xtest
 on:
   repository_dispatch:
     types: [xtest]
+  workflow_dispatch:
 jobs:
   integration-test:
     runs-on: ubuntu-latest

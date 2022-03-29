@@ -2,10 +2,10 @@ all: dockerbuild
 
 COMPONENT_NAME=bootstrap
 COMPONENT_NAME_SNAKE=bootstrap
-IMAGE=virtru/keycloak-bootstrap
-VERSION=0.4.2
-VENV_DIR=.venv
-PIPENV_VENV_IN_PROJECT=enabled
+IMAGE:=opentdf/keycloak-bootstrap
+VERSION:=$(shell cat VERSION)
+VENV_DIR:=.venv
+PIPENV_VENV_IN_PROJECT := enabled
 
 .PHONY: localbuild
 localbuild: lint
@@ -14,11 +14,11 @@ localbuild: lint
 
 .PHONY: dockerbuild
 dockerbuild:
-	docker build -t ${IMAGE}:${VERSION} .
+	docker build -t $(IMAGE):$(VERSION) .
 
 .PHONY: dockerbuildpush
 dockerbuildpush: dockerbuild
-	docker push ${IMAGE}:${VERSION}
+	docker push $(IMAGE):$(VERSION)
 
 .PHONY: run
 run:
