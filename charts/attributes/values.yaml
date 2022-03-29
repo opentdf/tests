@@ -8,7 +8,7 @@ logLevel: INFO
 
 # Name of application. Used during oauth flows, for example when connecting to
 # the OpenAPI endpoint with an OAuth authentication
-publicName: "Attribute Authority"
+serverPublicName: "Attribute Authority"
 
 # Base path for this service. Allows serving multiple services from the same
 # origin, e.g. using an ingress with prefix mapping as suggested below.
