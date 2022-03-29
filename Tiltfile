@@ -196,7 +196,7 @@ k8s_yaml(
         set=[
             "image.name=" + CONTAINER_REGISTRY + "/opentdf/kas",
             "secretRef.name=all-the-kas-secrets",
-            "secretName=all-the-kas-secrets",
+            "certFileSecretName=all-the-kas-secrets",
         ],
         values=["deployments/docker-desktop/kas-values.yaml"],
     )

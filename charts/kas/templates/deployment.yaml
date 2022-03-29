@@ -44,10 +44,12 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port | default "http" }}
               protocol: TCP
+          {{- if .Values.certFileSecretName }}
           volumeMounts:
             - name: certs
               mountPath: "/certs"
               readOnly: true
+          {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
@@ -71,7 +73,9 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.certFileSecretName }}
       volumes:
-      - name: certs
-        secret:
-          secretName: {{ .Values.secretName }}
+        - name: certs
+          secret:
+            secretName: {{ . }}
+      {{- end }}

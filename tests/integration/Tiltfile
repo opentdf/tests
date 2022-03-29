@@ -64,6 +64,7 @@ all_secrets = {
 }
 
 all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
+all_secrets["OIDC_CLIENT_SECRET"] = "myclientsecret"
 
 
 def only_secrets_named(*items):
@@ -72,7 +73,14 @@ def only_secrets_named(*items):
 
 k8s_yaml(
     secret_from_dict(
-        "attributes-secrets", inputs=only_secrets_named("POSTGRES_PASSWORD")
+        "attributes-secrets", inputs=only_secrets_named("OIDC_CLIENT_SECRET", "POSTGRES_PASSWORD")
+    )
+)
+
+
+k8s_yaml(
+    secret_from_dict(
+        "keycloak-bootstrap-secrets", inputs=only_secrets_named("OIDC_CLIENT_SECRET")
     )
 )
 
@@ -92,7 +100,7 @@ k8s_yaml(
     secret_from_dict(
         "entitlements-secrets",
         inputs={
-            "DISABLE_ENTITLEMENTS_AUTH": "True",
+            "OIDC_CLIENT_SECRET": all_secrets["OIDC_CLIENT_SECRET"],
             "POSTGRES_PASSWORD": all_secrets["POSTGRES_PASSWORD"],
         },
     )
@@ -224,8 +232,34 @@ k8s_yaml(
     )
 )
 
+k8s_yaml(
+    helm(
+        "../../charts/entitlements",
+        "opentdf-entitlements",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements"],
+        values=["backend-entitlements-values.yaml"],
+    )
+)
 
-k8s_yaml("backend.yaml")
+k8s_yaml(
+    helm(
+        "../../charts/kas",
+        "opentdf-kas",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/kas"],
+        values=["backend-kas-values.yaml"],
+    )
+)
+
+k8s_yaml(
+    helm(
+        "../../charts/keycloak_bootstrap",
+        "keycloak-bootstrap",
+        set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/keycloak-bootstrap"],
+        values=["backend-keycloak-bootstrap-values.yaml"],
+    )
+)
+
+k8s_yaml("ingress-class.yaml")
 k8s_yaml(OPENTDF_ABACUS_YML)
 
 # resource dependencies
@@ -295,7 +329,7 @@ k8s_resource(
     links=[link("localhost:65432/auth", "Keycloak admin console")],
 )
 
-k8s_resource("bootstrap-keycloak", resource_deps=["keycloak", "opentdf-entitlements"])
+k8s_resource("keycloak-bootstrap", resource_deps=["keycloak", "opentdf-entitlements"])
 
 #    db    db d888888b d88888b .d8888. d888888b
 #    `8b  d8' `~~88~~' 88'     88'  YP `~~88~~'
@@ -315,5 +349,5 @@ docker_build(
 k8s_yaml("xtest.yaml")
 
 k8s_resource(
-    "opentdf-xtest", resource_deps=["bootstrap-keycloak", "keycloak", "opentdf-kas"]
+    "opentdf-xtest", resource_deps=["keycloak-bootstrap", "keycloak", "opentdf-kas"]
 )

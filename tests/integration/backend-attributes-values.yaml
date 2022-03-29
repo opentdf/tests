@@ -6,7 +6,6 @@ oidc:
   internalHost: http://keycloak-http/auth
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
-  clientSecret: myclientsecret
 
 image:
   pullPolicy: IfNotPresent

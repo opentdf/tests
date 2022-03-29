@@ -4,7 +4,7 @@ replicaCount: 1
 
 # Sets the default loglevel for the application. One of the valid python logging
 # levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
-logLevel: DEBUG
+logLevel: INFO
 
 # Name of application. Used during oauth flows, for example when connecting to
 # the OpenAPI endpoint with an OAuth authentication
@@ -15,12 +15,14 @@ publicName: "Attribute Authority"
 serverRootPath: /attributes
 
 # Additional information for connecting to an OIDC provider for AuthN
+# Note that you must also specify a client secret via a secretRef,
+# in the form of an environment variable such as:
+# OIDC_CLIENT_SECRET: myclientsecret
 oidc:
   realm: tdf
   internalHost: http://keycloak-http/auth
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
-  clientSecret: myclientsecret
 
 # Container image configuration.
 image:
@@ -81,13 +83,11 @@ service:
 #         pathType:    your-pathtype [default: "ImplementationSpecific"]
 #         serviceName: your-service  [default: service.fullname]
 #         servicePort: service-port  [default: service.port above]
-#  To configure HTTPS mode,
-#    tls:
-#      secretName: your-k8s-secret
 ingress:
   enabled: false
   className: null
   annotations: {}
+  hosts: {}
   tls: null
 
 # Specify required limits for deploying this service to a pod.

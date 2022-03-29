@@ -151,6 +151,18 @@ def try_extract_realm(unverified_jwt):
     # the realm name for a keycloak-issued token.
     return urlparse(issuer_url).path.rsplit("/", 1)[-1]
 
+def has_aud(unverified_jwt, audience):
+    aud = unverified_jwt["aud"]
+    if not aud:
+        logger.debug("No aud found in token [%s]", unverified_jwt)
+        return False
+    if isinstance(aud, str):
+        aud = [aud]
+    if audience not in aud:
+        logger.debug("Audience mismatch [%s] ⊄ %s", audience, aud)
+        return False
+    return True
+
 async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
     logger.debug(token)
     if logger.isEnabledFor(logging.DEBUG):
@@ -160,13 +172,14 @@ async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
         unverified_decode = keycloak_openid.decode_token(
             token,
             key='',
-            options={"verify_signature": False, "verify_aud": True, "exp": True},
+            options={"verify_signature": False, "verify_aud": False, "exp": True},
         )
-
+        if not has_aud(unverified_decode, "tdf-attributes"):
+            raise Exception("Invalid audience")
         return keycloak_openid.decode_token(
             token,
             key=await get_idp_public_key(try_extract_realm(unverified_decode)),
-            options={"verify_signature": True, "verify_aud": True, "exp": True},
+            options={"verify_signature": True, "verify_aud": False, "exp": True},
         )
     except Exception as e:
         logger.error(e)
@@ -414,7 +427,7 @@ async def read_attributes_crud(schema, db, filter_args, sort_args):
                     )
                 )
     except ValidationError as e:
-        logging.error(e)
+        logger.error(e)
         error = e
 
     if error and not attributes:
@@ -498,7 +511,7 @@ async def read_attributes_definitions(
                 )
             )
         except ValidationError as e:
-            logging.error(e)
+            logger.error(e)
     return pager.paginate(attributes)
 
 

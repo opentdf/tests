@@ -2,6 +2,25 @@
 # Ignored if autoscaling.enabled == true
 replicaCount: 1
 
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
+logLevel: INFO
+
+# Default name for home page, openAPI
+serverPublicName: Entitlement
+
+# Where to expect requests to REST api
+serverRootPath: /
+# Additional information for connecting to an OIDC provider for AuthN
+# Note that you must also specify a client secret via a secretRef,
+# in the form of an environment variable such as:
+# OIDC_CLIENT_SECRET: myclientsecret
+oidc:
+  realm: tdf
+  internalHost: http://keycloak-http/
+  externalHost: http://localhost:65432/
+  clientId: tdf-entitlement
+
 # Container image configuration.
 image:
   # The image selector, also called the 'image name' in k8s documentation
@@ -33,12 +52,10 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext:
-  {}
+podSecurityContext: {}
 
 # Values for deployment's spec.template.spec.containers.securityContext
-securityContext:
-  {}
+securityContext: {}
 
 # JSON locating the secret to pull environment variables from
 # Notably, this file should include the following environemnt variable definitions:
@@ -61,13 +78,9 @@ service:
 #         pathType:    your-pathtype [default: "ImplementationSpecific"]
 #         serviceName: your-service  [default: service.fullname]
 #         servicePort: service-port  [default: service.port above]
-#  To configure HTTPS mode,
-#    tls:
-#      secretName: your-k8s-secret
 ingress:
   enabled: false
-  annotations:
-    {}
+  annotations: {}
   className: null
   hosts: []
   tls: null

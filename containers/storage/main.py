@@ -13,6 +13,11 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic.main import BaseModel
 
+logging.basicConfig(
+    stream=sys.stdout, level=os.getenv("SERVER_LOG_LEVEL", "CRITICAL").upper()
+)
+logger = logging.getLogger(__package__)
+
 app = FastAPI()
 
 app.add_middleware(
@@ -109,7 +114,7 @@ async def create_storage():
             ),
         )
     except ClientError as e:
-        logging.error(e)
+        logger.error(e)
         raise HTTPException(status_code=400, detail=f"{str(e)}") from e
 
 
@@ -125,7 +130,7 @@ async def read_liveness(probe: ProbeType = ProbeType.liveness):
         try:
             s3.Bucket(os.getenv("BUCKET"))
         except ClientError as e:
-            logging.error(e)
+            logger.error(e)
             raise HTTPException(status_code=500, detail=f"{str(e)}") from e
     return Response()  # empty response
 

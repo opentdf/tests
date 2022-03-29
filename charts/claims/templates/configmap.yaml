@@ -7,3 +7,4 @@ data:
   POSTGRES_HOST: {{ .Values.postgres.host }}
   POSTGRES_SCHEMA: {{ .Values.postgres.schema }}
   POSTGRES_USER: {{ .Values.postgres.user }}
+  SERVER_LOG_LEVEL: {{ .Values.logLevel }}
