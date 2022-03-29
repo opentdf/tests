@@ -41,6 +41,6 @@ spec:
                 port:
                   name: http
   tls:
-  - hosts:
-    - opentdf.local
-    secretName: tls-secret
+    - hosts:
+        - opentdf.local
+      secretName: tls-secret

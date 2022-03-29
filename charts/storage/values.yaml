@@ -9,7 +9,7 @@ replicaCount: 1
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: ghcr.io/opentdf/storage
+  image: ghcr.io/opentdf/storage
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
@@ -64,6 +64,16 @@ service:
   port: 4050
 
 # Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
+#  To configure HTTPS mode,
+#    tls:
+#      secretName: your-k8s-secret
 ingress:
   enabled: false
   annotations:

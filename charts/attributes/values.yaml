@@ -74,6 +74,16 @@ service:
   port: 4020
 
 # Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
+#  To configure HTTPS mode,
+#    tls:
+#      secretName: your-k8s-secret
 ingress:
   enabled: false
   className: null

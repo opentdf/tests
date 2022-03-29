@@ -4,11 +4,11 @@ replicaCount: 1
 
 # Container image configuration.
 image:
-  # The container's `imagePullPolicy`
-  pullPolicy: IfNotPresent
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: ghcr.io/opentdf/entitlements
+  image: ghcr.io/opentdf/entitlements
+  # The container's `imagePullPolicy`
+  pullPolicy: IfNotPresent
 
 # JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
@@ -54,6 +54,16 @@ service:
   port: 4030
 
 # Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
+#  To configure HTTPS mode,
+#    tls:
+#      secretName: your-k8s-secret
 ingress:
   enabled: false
   annotations:

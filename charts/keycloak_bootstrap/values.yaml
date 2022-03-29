@@ -3,7 +3,7 @@ replicaCount: 1
 job:
   backoffLimit: 10
 image:
-  name: ghcr.io/opentdf/keycloak-bootstrap
+  image: ghcr.io/opentdf/keycloak-bootstrap
   pullPolicy: Always
   pullSecret: virtru-regcred
 keycloak:

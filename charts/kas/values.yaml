@@ -13,7 +13,7 @@ replicaCount: 1
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: ghcr.io/opentdf/kas
+  image: ghcr.io/opentdf/kas
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
@@ -60,7 +60,23 @@ service:
   # Port to assign to the `http` port
   port: 8000
 
+# JSON locating the secret to pull environment variables from
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: kas-secrets
+
 # Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
+#  To configure HTTPS mode,
+#    tls:
+#      secretName: your-k8s-secret
 ingress:
   enabled: false
   className: null
@@ -91,9 +107,11 @@ affinity: {}
 maxUnavailable: 1
 
 endpoints:
-  easHost: https://eas.NAMESPACE.svc.cluster.local/
+  # TODO rename to claimsHost or whatever
+  easHost: http://opentdf-attributes:4020
+  statsdHost: opentdf-statsd
   # TODO replace this with a template var instead of a hardcode when Keycloak charts are merged into opentdf/backend.
-  oidcPubkeyEndpoint: http://keycloak-http:80
+  oidcPubkeyEndpoint: http://opentdf-keycloak
 
 # Adds a container livenessProbe, if set.
 livenessProbe:

@@ -23,25 +23,13 @@ service:
 ingress:
   enabled: true
   annotations:
-    kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/rewrite-target: /$2
-  rules:
-    - host: localhost
-      http: &paths
-        paths:
-          - backend:
-              service:
-                name: opentdf-attributes
-                port:
-                  number: 4020
-            path: /attributes(/|$)(.*)
-            pathType: Prefix
-    - host: host.docker.internal
-      http: *paths
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  className: nginx
+  hosts:
+    localhost: &paths
+      "/attributes(/|$)(.*)":
+        pathType: Prefix
+    host.docker.internal: *paths
 
 postgres:
   host: opentdf-postgresql
