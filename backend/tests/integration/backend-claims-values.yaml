@@ -1,15 +1,6 @@
 autoscaling:
   enabled: false
 nameOverride: opentdf-claims
-ingress:
-  enabled: true
-  hosts:
-    localhost:
-      "/claims(/|$)(.*)":
-        pathType: Prefix
-    host.docker.internal:
-      "/claims(/|$)(.*)":
-        pathType: Prefix
 postgres:
   host: opentdf-postgresql
   port: 5432
@@ -21,5 +12,3 @@ secretRef:
   name: claims-secrets
 serviceAccount:
   create: true
-truststore:
-  kasURL: http://opentdf-kas

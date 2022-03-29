@@ -47,7 +47,7 @@ if ! docker build \
         --tag "opentdf/abacus:${SERVICE_IMAGE_TAG}" \
         --build-arg abacusBaseUrl=/abacus \
         --build-arg abacusAssetPrefix=/abacus \
-        --build-arg easApiUrl=https://etheria.local/eas \
+        --build-arg easApiUrl=https://opentdf.local/eas \
         --file containers/abacus/Dockerfile \
         ./containers; then 
   monolog ERROR "Failed to build abacus container"

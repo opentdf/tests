@@ -158,13 +158,13 @@ For this example, we will use self signed certificates and secrets:
 
 ```sh
 export/scripts/genkeys-if-needed
-kubectl create secret generic etheria-secrets \
+kubectl create secret generic kas-secrets \
     "--from-file=EAS_CERTIFICATE=export/certs/eas-public.pem" \
     "--from-file=KAS_EC_SECP256R1_CERTIFICATE=export/certs/kas-ec-secp256r1-public.pem" \
     "--from-file=KAS_CERTIFICATE=export/certs/kas-public.pem" \
     "--from-file=KAS_EC_SECP256R1_PRIVATE_KEY=export/certs/kas-ec-secp256r1-private.pem" \
     "--from-file=KAS_PRIVATE_KEY=export/certs/kas-private.pem" \
-    "--from-file=ca-cert.pem=export/certs/ca.crt" || e "create etheria-secrets failed"
+    "--from-file=ca-cert.pem=export/certs/ca.crt" || e "create kas-secrets failed"
 ```
 
 We will also need to generate and use a custom postgres password.
@@ -251,8 +251,8 @@ Any deployments are controlled by downstream repositories, e.g. internal to Virt
 # Customizing your local development experience
 #### Quick Start
 
-To assist in quickly starting use the `./scripts/genkeys-if-needed` to build all the keys. The hostname will be assigned `etheria.local`.
-Make sure to add `127.0.0.1           etheria.local` to your `/etc/hosts` or `c:\windows\system32\drivers\etc\hosts`.
+To assist in quickly starting use the `./scripts/genkeys-if-needed` to build all the keys. The hostname will be assigned `opentdf.local`.
+Make sure to add `127.0.0.1           opentdf.local` to your `/etc/hosts` or `c:\windows\system32\drivers\etc\hosts`.
 
 Additionally you can set a custom hostname `BACKEND_SERVICES_HOSTNAME=myhost.com ./scripts/genkeys-if-needed`, but you might have to update the Tiltfile and various kubernetes files or helm chart values.
 

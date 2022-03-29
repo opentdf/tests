@@ -10,7 +10,7 @@ export BUCKET=datalake
 export AWS_ACCESS_KEY_ID=AKI...
 export AWS_SECRET_ACCESS_KEY=2Y...
 export AWS_DEFAULT_REGION=us-west-2
-export CORS_ORIGINS="localhost,etheria.local"
+export CORS_ORIGINS="localhost,opentdf.local"
 ```
 
 ### server

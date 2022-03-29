@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kas.name" . }}
+  name: {{ include "kas.fullname" . }}
   labels:
     {{- include "kas.labels" . | nindent 4 }}
 spec:
-{{- if not .Values.autoscaling.enabled }}
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-{{- end }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "kas.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}
       labels:
         {{- include "kas.selectorLabels" . | nindent 8 }}
     spec:
@@ -31,29 +31,33 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.name }}"
+          image: "{{ .Values.image.image }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            {{- with .Values.secretRef }}
+            - secretRef:
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            - configMapRef:
+                name: {{ include "kas.name" . }}-cm
           ports:
             - name: http
-              containerPort: 8000 # todo look here and at service
+              containerPort: {{ .Values.service.port | default "http" }}
               protocol: TCP
-{{- if .Values.livenessProbe }}
-          livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
-{{- end }}
-{{- if .Values.readinessProbe }}
-          readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
-{{- end }}
+          {{- if .Values.certFileSecretName }}
           volumeMounts:
-          - name: certs
-            mountPath: "/certs"
-            readOnly: true
-          envFrom:
-          - secretRef:
-              name: etheria-secrets
-          - configMapRef:
-              name: kas-cm
+            - name: certs
+              mountPath: "/certs"
+              readOnly: true
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       restartPolicy: Always
@@ -69,7 +73,9 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.certFileSecretName }}
       volumes:
-      - name: certs
-        secret:
-          secretName: {{ .Values.secretName }}
+        - name: certs
+          secret:
+            secretName: {{ . }}
+      {{- end }}

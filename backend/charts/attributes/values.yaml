@@ -1,27 +1,47 @@
-# Default values for attributes.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
 replicaCount: 1
 
-logLevel: DEBUG
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
+logLevel: INFO
+
+# Name of application. Used during oauth flows, for example when connecting to
+# the OpenAPI endpoint with an OAuth authentication
 publicName: "Attribute Authority"
+
+# Base path for this service. Allows serving multiple services from the same
+# origin, e.g. using an ingress with prefix mapping as suggested below.
 serverRootPath: /attributes
+
+# Additional information for connecting to an OIDC provider for AuthN
+# Note that you must also specify a client secret via a secretRef,
+# in the form of an environment variable such as:
+# OIDC_CLIENT_SECRET: myclientsecret
 oidc:
   realm: tdf
-  internalHost: http://keycloak/auth
+  internalHost: http://keycloak-http/auth
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
-  clientSecret: myclientsecret
 
+# Container image configuration.
 image:
+  # The image selector, also called the 'image name' in k8s documentation
+  # and 'image repository' in docker's guides.
+  image: ghcr.io/opentdf/attributes
+  # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
-  name: opentdf/attributes:main
 
+# JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
+
+# Select a specific name for the resource, instead of the default, opentdf-claims
 nameOverride: ""
+
+# The fully qualified appname override
 fullnameOverride: ""
 
+# A service account to create
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -29,59 +49,52 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: null
 
+# Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
 
-podSecurityContext: {}
+# Values for deployment's spec.template.spec.securityContext
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# JSON locating the secret to pull environment variables from
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: attributes-secrets
 
+# Values for deployment's spec.template.spec.containers.securityContext
+securityContext: {}
+
+# Service configuation information.
 service:
+  # Service `spec.type`
   type: ClusterIP
+  # Port to assign to the `http` port
   port: 4020
 
+# Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
 ingress:
   enabled: false
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-  rules:
-    - host: localhost
-      http: &paths
-        paths:
-          - backend:
-              service:
-                name: opentdf-attributes
-                port:
-                  number: 4020
-            path: /attributes(/|$)(.*)
-            pathType: Prefix
-    - host: host.docker.internal
-      http: *paths
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  className: null
+  annotations: {}
+  hosts: {}
+  tls: null
 
+# Specify required limits for deploying this service to a pod.
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube.
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 autoscaling:
   enabled: false
@@ -96,11 +109,15 @@ tolerations: []
 
 affinity: {}
 
+# Configuration for the database backend
 postgres:
+  # postgres server's k8s name or global DNS for external server
   host: localhost
+  # postgres server port
   port: 5432
+  # Must be a postgres user with tdf_attribute_manager role
   user: tdf_attribute_manager
-#  value from kubernetes secrets
-  password: ""
+  # The database name within the given server
   database: tdf_database
+  # The entitlement schema
   schema: tdf_attribute

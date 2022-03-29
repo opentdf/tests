@@ -14,7 +14,7 @@ echo PATH $PATH
   scripts/genkeys-if-needed
 )
 
-export EAS_HOST=https://etheria.local/eas/
+export EAS_HOST=https://opentdf.local/eas/
 export KEYCLOAK_PUBLIC_KEY="$PROJECT_ROOT/certs/keycloak-public.pem"
 export CA_CERT_PATH="$PROJECT_ROOT/certs/ca.crt"
 

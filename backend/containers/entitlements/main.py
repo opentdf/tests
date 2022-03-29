@@ -116,9 +116,6 @@ keycloak_openid = KeycloakOpenID(
     verify=True,
 )
 
-DISABLE_ENTITLEMENTS_AUTH = os.getenv("DISABLE_ENTITLEMENTS_AUTH")
-
-
 def get_retryable_request():
     retry_strategy = Retry(total=3, backoff_factor=1)
 
@@ -139,7 +136,7 @@ def get_retryable_request():
 # This is a low priority though since it doesn't save us from having to get the
 # realmId first and so is a largely cosmetic difference
 async def get_idp_public_key(realm_id):
-    url = f"{os.getenv('OIDC_SERVER_URL')}realms/{realm_id}"
+    url = f"{os.getenv('OIDC_SERVER_URL')}/realms/{realm_id}"
 
     http = get_retryable_request()
 
@@ -183,24 +180,34 @@ def try_extract_realm(unverified_jwt):
     # the realm name for a keycloak-issued token.
     return urlparse(issuer_url).path.rsplit("/", 1)[-1]
 
-
+def has_aud(unverified_jwt, audience):
+    aud = unverified_jwt["aud"]
+    if not aud:
+        logger.debug("No aud found in token [%s]", unverified_jwt)
+        return False
+    if isinstance(aud, str):
+        aud = [aud]
+    if audience not in aud:
+        logger.debug("Audience mismatch [%s] ⊄ %s", audience, aud)
+        return False
+    return True
 
 async def get_auth(token: str = Security(oauth2_scheme)) -> Json:
-    if DISABLE_ENTITLEMENTS_AUTH:
-        return None
     try:
         unverified_decode = keycloak_openid.decode_token(
             token,
             key='',
-            options={"verify_signature": False, "verify_aud": True, "exp": True},
+            options={"verify_signature": False, "verify_aud": False, "exp": True},
         )
-
+        if not has_aud(unverified_decode, "tdf-entitlement"):
+            raise Exception("Invalid audience, should be tdf-entitlement")
         return keycloak_openid.decode_token(
             token,
             key=await get_idp_public_key(try_extract_realm(unverified_decode)),
-            options={"verify_signature": True, "verify_aud": True, "exp": True},
+            options={"verify_signature": True, "verify_aud": False, "exp": True},
         )
     except Exception as e:
+        logger.warning("Unverifiable claims [%s]", token, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),  # "Invalid authentication credentials",
