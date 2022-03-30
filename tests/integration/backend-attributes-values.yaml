@@ -1,5 +1,5 @@
 logLevel: DEBUG
-publicName: "Attribute Authority"
+serverPublicName: "Attribute Authority"
 serverRootPath: /attributes
 oidc:
   realm: tdf

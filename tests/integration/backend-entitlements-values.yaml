@@ -1,5 +1,5 @@
 logLevel: DEBUG
-publicName: "Entitlements"
+serverPublicName: "Entitlements"
 serverRootPath: /entitlements
 oidc:
   realm: tdf

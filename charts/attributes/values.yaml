@@ -1,18 +1,18 @@
-# Sets the default number of pod replicas in the deployment.
-# Ignored if autoscaling.enabled == true
-replicaCount: 1
-
 # Sets the default loglevel for the application. One of the valid python logging
 # levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
 logLevel: INFO
+
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
+replicaCount: 1
 
 # Name of application. Used during oauth flows, for example when connecting to
 # the OpenAPI endpoint with an OAuth authentication
 serverPublicName: "Attribute Authority"
 
-# Base path for this service. Allows serving multiple services from the same
-# origin, e.g. using an ingress with prefix mapping as suggested below.
-serverRootPath: /attributes
+# Base path for this service. Allows serving multiple REST services from the
+# same origin, e.g. using an ingress with prefix mapping as suggested below.
+serverRootPath: /
 
 # Additional information for connecting to an OIDC provider for AuthN
 # Note that you must also specify a client secret via a secretRef,
@@ -24,7 +24,7 @@ oidc:
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
 
-# Container image configuration.
+# Configure the container image to use in the deployment.
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
@@ -55,18 +55,16 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext:
-  {}
-  # fsGroup: 2000
+podSecurityContext: {}
 
-# JSON locating the secret to pull environment variables from
+# Values for deployment's spec.template.spec.containers.securityContext
+securityContext: {}
+
+# JSON to locate a k8s secret containing environment variables.
 # Notably, this file should include the following environemnt variable definitions:
 #     POSTGRES_PASSWORD: Password corresponding to postgres.user below
 secretRef:
   name: attributes-secrets
-
-# Values for deployment's spec.template.spec.containers.securityContext
-securityContext: {}
 
 # Service configuation information.
 service:
@@ -85,8 +83,8 @@ service:
 #         servicePort: service-port  [default: service.port above]
 ingress:
   enabled: false
-  className: null
   annotations: {}
+  className: null
   hosts: {}
   tls: null
 
