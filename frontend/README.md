@@ -23,8 +23,8 @@ docker run -p 3000:80 \
   -e KEYCLOAK_HOST="http://localhost/auth/" \
   -e KEYCLOAK_CLIENT_ID="localhost-abacus" \
   -e KEYCLOAK_REALM="opentdf-realm" \
-  -e ATTRIBUTES_HOST="http://localhost/v2/attributes" \
-  -e ENTITLEMENTS_HOST="http://localhost/v2/entitlements" \
+  -e ATTRIBUTES_HOST="http://localhost/api/attributes" \
+  -e ENTITLEMENTS_HOST="http://localhost/api/entitlements" \
   $(docker build -q .)
 ```
 
@@ -36,8 +36,8 @@ Generate TypeScript types from OpenAPI specifications
 reference https://github.com/drwpow/openapi-typescript
 
 ```shell
-npx openapi-typescript https://raw.githubusercontent.com/opentdf/backend/main/containers/service_attribute_authority/openapi.json --output src/attributes.ts
-npx openapi-typescript https://raw.githubusercontent.com/opentdf/backend/main/containers/service_entitlement/openapi.json --output src/entitlement.ts
+npx openapi-typescript ../backend/containers/attributes/openapi.json --output src/attributes.ts
+npx openapi-typescript ../backend/containers/entitlements/openapi.json --output src/entitlement.ts
 ```
 
 Keycloak  
