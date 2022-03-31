@@ -223,70 +223,46 @@ docker_build(
     },
 )
 
-if isCI:
-    docker_build(
-        CONTAINER_REGISTRY + "/opentdf/kas",
-        context="containers/kas",
-        build_args={
-            "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
-            "PY_VERSION": PY_VERSION,
-            "PYTHON_BASE_IMAGE_SELECTOR": "",
-        },
-        live_update=[
-            sync("./containers/kas", "/app"),
-            run(
-                "cd /app && pip install -r requirements.txt",
-                trigger="./containers/kas/requirements.txt",
-            ),
-        ],
-    )
-    for microservice in ["attributes", "entitlements", "claims"]:
-        image_name = CONTAINER_REGISTRY + "/opentdf/" + microservice
-        docker_build(
-            image_name,
-            build_args={
-                "ALPINE_VERSION": ALPINE_VERSION,
-                "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
-                "PY_VERSION": PY_VERSION,
-                "PYTHON_BASE_IMAGE_SELECTOR": "",
-            },
-            container_args=["--reload"],
-            context="containers",
-            dockerfile="./containers/" + microservice + "/Dockerfile",
-            live_update=[
-                sync("./containers/python_base", "/app/python_base"),
-                sync("./containers/" + microservice, "/app/" + microservice),
-                run(
-                    "cd /app/ && pip install -r requirements.txt",
-                    trigger="./containers/" + microservice + "/requirements.txt",
-                ),
-            ],
-        )
-else:
-    for microservice in ["attributes", "entitlements", "claims"]:
-        docker_build(
-            CONTAINER_REGISTRY + "/opentdf/" + microservice,
-            build_args={
-                "ALPINE_VERSION": ALPINE_VERSION,
-                "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
-                "PY_VERSION": PY_VERSION,
-                "PYTHON_BASE_IMAGE_SELECTOR": "",
-            },
-            context="containers",
-            dockerfile="./containers/" + microservice + "/Dockerfile",
-        )
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/kas",
+    build_args={
+        "ALPINE_VERSION": ALPINE_VERSION,
+        "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
+        "PY_VERSION": PY_VERSION,
+        "PYTHON_BASE_IMAGE_SELECTOR": "",
+    },
+    context="containers/kas",
+    live_update=[
+        sync("./containers/kas", "/app"),
+        run(
+            "cd /app && pip install -r requirements.txt",
+            trigger="./containers/kas/requirements.txt",
+        ),
+    ],
+)
 
+for microservice in ["attributes", "entitlements", "claims"]:
+    image_name = CONTAINER_REGISTRY + "/opentdf/" + microservice
     docker_build(
-        CONTAINER_REGISTRY + "/opentdf/kas",
-        context="containers/kas",
+        image_name,
         build_args={
             "ALPINE_VERSION": ALPINE_VERSION,
             "CONTAINER_REGISTRY": CONTAINER_REGISTRY,
             "PY_VERSION": PY_VERSION,
             "PYTHON_BASE_IMAGE_SELECTOR": "",
         },
+        container_args=["--reload"],
+        context="containers",
+        dockerfile="./containers/" + microservice + "/Dockerfile",
+        live_update=[
+            sync("./containers/python_base", "/app/python_base"),
+            sync("./containers/" + microservice, "/app/" + microservice),
+            run(
+                "cd /app/ && pip install -r requirements.txt",
+                trigger="./containers/" + microservice + "/requirements.txt",
+            ),
+        ],
     )
-
 
 # remote resources
 # usage https://github.com/tilt-dev/tilt-extensions/tree/master/helm_remote#additional-parameters
