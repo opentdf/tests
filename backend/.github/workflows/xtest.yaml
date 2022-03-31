@@ -6,6 +6,7 @@ on:
 jobs:
   integration-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
@@ -50,5 +51,4 @@ jobs:
       - name: tilt-ci
         run: |-
           kubectl version
-          cd tests/integration
-          tilt ci
+          tilt ci integration-test

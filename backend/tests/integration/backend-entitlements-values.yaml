@@ -1,6 +1,6 @@
 logLevel: DEBUG
-publicName: "Entitlements"
-serverRootPath: /entitlements
+serverPublicName: "Entitlements"
+serverRootPath: /api/entitlements
 oidc:
   realm: tdf
   internalHost: http://keycloak-http/auth
@@ -29,7 +29,7 @@ ingress:
   className: nginx
   hosts:
     localhost: &paths
-      "/entitlements(/|$)(.*)":
+      "/api/entitlements(/|$)(.*)":
         pathType: Prefix
     host.docker.internal: *paths
 

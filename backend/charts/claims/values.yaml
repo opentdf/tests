@@ -1,18 +1,20 @@
-# Sets the default number of pod replicas in the deployment.
-# Ignored if autoscaling.enabled == true
-replicaCount: 1
-
 # Sets the default loglevel for the application. One of the valid python logging
 # levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
 logLevel: INFO
 
-rootPath: /
-openapiPath: /openapi.json
-publicName: "Claims"
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
+replicaCount: 1
+
+# Name of application. Used during oauth flows, for example when connecting to
+# the OpenAPI endpoint with an OAuth authentication
+serverPublicName: "Claims"
+
 
 # Configure the container image to use in the deployment.
 image:
-  # The image selector
+  # The image selector, also called the 'image name' in k8s documentation
+  # and 'image repository' in docker's guides.
   image: ghcr.io/opentdf/claims
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
