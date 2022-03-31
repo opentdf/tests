@@ -117,11 +117,10 @@ jobs:
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Run integration test Tiltfile
         run: |-
-          cd tests/integration
-          tilt ci opentdf-xtest
+          tilt ci integration-test
       - name: Quick check - run/validate local deployment Tiltfile
         run: |-
-          tilt ci
+          tilt ci all
 
   publish-helm-charts:
     runs-on: ubuntu-latest

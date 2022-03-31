@@ -51,5 +51,4 @@ jobs:
       - name: tilt-ci
         run: |-
           kubectl version
-          cd tests/integration
-          tilt ci opentdf-xtest
+          tilt ci integration-test
