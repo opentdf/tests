@@ -12,7 +12,7 @@ ingress:
   className: nginx
   hosts:
     localhost: &paths
-      "/kas(/|$)(.*)":
+      "/api/kas(/|$)(.*)":
         pathType: Prefix
     host.docker.internal: *paths
 service:

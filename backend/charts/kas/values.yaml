@@ -17,11 +17,7 @@ image:
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
-# Secret containing an additional ca-cert.pem file for locally signed TLS certs.
-# Used for a private PKI mode, for example.
-certFileSecretName: null
-
-# JSON passed to the deployment's template.spec.imagePullSecrets.
+# JSON passed to the deployment's template.spec.imagePullSecrets
 imagePullSecrets: []
 
 # Select a specific name for the resource, instead of the default, opentdf-claims
@@ -52,18 +48,22 @@ podSecurityContext: {}
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
 
+# Secret containing an additional ca-cert.pem file for locally signed TLS certs.
+# Used for a private PKI mode, for example.
+certFileSecretName: null
+
+# JSON to locate a k8s secret containing environment variables.
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: kas-secrets
+
 # Service configuation information.
 service:
   # Service `spec.type`
   type: ClusterIP
   # Port to assign to the `http` port
   port: 8000
-
-# JSON locating the secret to pull environment variables from
-# Notably, this file should include the following environemnt variable definitions:
-#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
-secretRef:
-  name: kas-secrets
 
 # Ingress configuration.
 # To configure, set enabled to true and set `hosts` to a map in the form:

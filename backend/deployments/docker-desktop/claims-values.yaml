@@ -1,5 +1,5 @@
 postgres:
-  host: tdf-postgresql
+  host: opentdf-postgresql
   port: 5432
   user: tdf_entitlement_reader
   database: tdf_database

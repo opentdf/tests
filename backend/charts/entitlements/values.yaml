@@ -1,24 +1,27 @@
-# Sets the default number of pod replicas in the deployment.
-# Ignored if autoscaling.enabled == true
-replicaCount: 1
-
 # Sets the default loglevel for the application. One of the valid python logging
 # levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
 logLevel: INFO
 
-# Default name for home page, openAPI
+# Sets the default number of pod replicas in the deployment.
+# Ignored if autoscaling.enabled == true
+replicaCount: 1
+
+# Name of application. Used during oauth flows, for example when connecting to
+# the OpenAPI endpoint with an OAuth authentication
 serverPublicName: Entitlement
 
-# Where to expect requests to REST api
+# Base path for this service. Allows serving multiple REST services from the
+# same origin, e.g. using an ingress with prefix mapping as suggested below.
 serverRootPath: /
+
 # Additional information for connecting to an OIDC provider for AuthN
 # Note that you must also specify a client secret via a secretRef,
 # in the form of an environment variable such as:
 # OIDC_CLIENT_SECRET: myclientsecret
 oidc:
   realm: tdf
-  internalHost: http://keycloak-http/
-  externalHost: http://localhost:65432/
+  internalHost: http://keycloak-http/auth
+  externalHost: http://localhost:65432/auth
   clientId: tdf-entitlement
 
 # Container image configuration.
@@ -57,7 +60,7 @@ podSecurityContext: {}
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
 
-# JSON locating the secret to pull environment variables from
+# JSON to locate a k8s secret containing environment variables.
 # Notably, this file should include the following environemnt variable definitions:
 #     POSTGRES_PASSWORD: Password corresponding to postgres.user below
 secretRef:
@@ -82,7 +85,7 @@ ingress:
   enabled: false
   annotations: {}
   className: null
-  hosts: []
+  hosts: {}
   tls: null
 
 # Specify required limits for deploying this service to a pod.

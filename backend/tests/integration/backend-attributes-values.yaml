@@ -1,6 +1,6 @@
 logLevel: DEBUG
-publicName: "Attribute Authority"
-serverRootPath: /attributes
+serverPublicName: "Attribute Authority"
+serverRootPath: /api/attributes
 oidc:
   realm: tdf
   internalHost: http://keycloak-http/auth
@@ -26,7 +26,7 @@ ingress:
   className: nginx
   hosts:
     localhost: &paths
-      "/attributes(/|$)(.*)":
+      "/api/attributes(/|$)(.*)":
         pathType: Prefix
     host.docker.internal: *paths
 

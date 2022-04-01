@@ -1,12 +1,10 @@
-# Default values for storage.
+# Sets the default loglevel for the application. One of the valid python logging
+# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
+logLevel: INFO
 
 # Sets the default number of pod replicas in the deployment.
 # Ignored if autoscaling.enabled == true
 replicaCount: 1
-
-# Sets the default loglevel for the application. One of the valid python logging
-# levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
-logLevel: INFO
 
 # Container image configuration.
 image:
@@ -39,21 +37,12 @@ serviceAccount:
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext:
-  {}
-  # fsGroup: 2000
+podSecurityContext: {}
 
 # Values for deployment's spec.template.spec.containers.securityContext
-securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext: {}
 
-# JSON locating the secret to pull environment variables from
+# JSON to locate a k8s secret containing environment variables.
 # Notably, this file should include the following environemnt variable definitions:
 #     POSTGRES_PASSWORD: Password corresponding to postgres.user below
 secretRef:
@@ -78,7 +67,7 @@ ingress:
   enabled: false
   annotations: {}
   className: null
-  hosts: []
+  hosts: {}
   tls: null
 
 # Specify required limits for deploying this service to a pod.

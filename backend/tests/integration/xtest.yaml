@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: xtest
-          image: ghcr.io/opentdf/tests-clients
+          image: opentdf/tests-clients
           imagePullPolicy: IfNotPresent
           env:
             - name: KAS_ENDPOINT
