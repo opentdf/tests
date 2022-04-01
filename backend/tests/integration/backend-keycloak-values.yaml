@@ -36,8 +36,7 @@ secrets:
       DB_PASSWORD: otdf-pgsql-admin
 ingress:
   enabled: true
-  annotations:
-    kubernetes.io/ingress.class: nginx
+  ingressClassName: nginx
   rules:
     - host: localhost
       paths:

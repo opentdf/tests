@@ -4,7 +4,7 @@ replicaCount: 1
 
 # Sets the default loglevel for the application. One of the valid python logging
 # levels: `DEBUG, INFO, WARNING, ERROR, CRITICAL`
-logLevel: DEBUG
+logLevel: INFO
 
 # Name of application. Used during oauth flows, for example when connecting to
 # the OpenAPI endpoint with an OAuth authentication
@@ -15,18 +15,20 @@ publicName: "Attribute Authority"
 serverRootPath: /attributes
 
 # Additional information for connecting to an OIDC provider for AuthN
+# Note that you must also specify a client secret via a secretRef,
+# in the form of an environment variable such as:
+# OIDC_CLIENT_SECRET: myclientsecret
 oidc:
   realm: tdf
-  internalHost: http://keycloak/auth
+  internalHost: http://keycloak-http/auth
   externalHost: http://localhost:65432/auth
   clientId: tdf-attributes
-  clientSecret: myclientsecret
 
 # Container image configuration.
 image:
   # The image selector, also called the 'image name' in k8s documentation
   # and 'image repository' in docker's guides.
-  name: opentdf/attributes:main
+  image: ghcr.io/opentdf/attributes
   # The container's `imagePullPolicy`
   pullPolicy: IfNotPresent
 
@@ -47,23 +49,24 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: null
 
 # Values for the deployment spec.template.metadata.annotations field
 podAnnotations: {}
 
 # Values for deployment's spec.template.spec.securityContext
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
+
+# JSON locating the secret to pull environment variables from
+# Notably, this file should include the following environemnt variable definitions:
+#     POSTGRES_PASSWORD: Password corresponding to postgres.user below
+secretRef:
+  name: attributes-secrets
 
 # Values for deployment's spec.template.spec.containers.securityContext
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
 # Service configuation information.
 service:
@@ -73,28 +76,19 @@ service:
   port: 4020
 
 # Ingress configuration.
+# To configure, set enabled to true and set `hosts` to a map in the form:
+#
+#     [hostname]:
+#       [path]:
+#         pathType:    your-pathtype [default: "ImplementationSpecific"]
+#         serviceName: your-service  [default: service.fullname]
+#         servicePort: service-port  [default: service.port above]
 ingress:
   enabled: false
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-  rules:
-    - host: localhost
-      http: &paths
-        paths:
-          - backend:
-              service:
-                name: opentdf-attributes
-                port:
-                  number: 4020
-            path: /attributes(/|$)(.*)
-            pathType: Prefix
-    - host: host.docker.internal
-      http: *paths
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  className: null
+  annotations: {}
+  hosts: {}
+  tls: null
 
 # Specify required limits for deploying this service to a pod.
 # We usually recommend not to specify default resources and to leave this as a conscious
@@ -123,8 +117,6 @@ postgres:
   port: 5432
   # Must be a postgres user with tdf_attribute_manager role
   user: tdf_attribute_manager
-  # Take value from kubernetes secrets, not this one!
-  password: ""
   # The database name within the given server
   database: tdf_database
   # The entitlement schema

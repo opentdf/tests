@@ -10,8 +10,9 @@ metadata:
     app.kubernetes.io/part-of: kas
 data:
   EAS_HOST: {{ .Values.endpoints.easHost }}
-  FLASK_DEBUG: "True"
-  GUNICORN_WORKERS: "1"
+  FLASK_DEBUG: {{ .Values.flaskDebug | quote }}
+  GUNICORN_WORKERS: {{ .Values.gunicornWorkers | default 1 | quote }}
   KEYCLOAK_HOST: {{ .Values.endpoints.oidcPubkeyEndpoint }}
-  LOGLEVEL: DEBUG
+  LOGLEVEL: {{ .Values.logLevel }}
+  STATSD_HOST: {{ .Values.endpoints.statsdHost }}
   USE_KEYCLOAK: "1"

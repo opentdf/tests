@@ -7,10 +7,9 @@ data:
   # we do not need two config properties for this - just one.
   OIDC_AUTHORIZATION_URL: {{ .Values.oidc.externalHost }}/realms/{{ .Values.oidc.realm}}/protocol/openid-connect/auth
   OIDC_CLIENT_ID: {{ .Values.oidc.clientId }}
-  OIDC_CLIENT_SECRET: {{ .Values.oidc.clientSecret }}
   OIDC_CONFIGURATION_URL: {{ .Values.oidc.internalHost }}/realms/{{ .Values.oidc.realm}}/.well-known/openid-configuration
   OIDC_REALM: {{ .Values.oidc.realm }}
-  OIDC_SERVER_URL: {{ .Values.oidc.internalHost }}/auth
+  OIDC_SERVER_URL: {{ .Values.oidc.internalHost }}
   OIDC_TOKEN_URL: {{ .Values.oidc.externalHost }}/realms/{{ .Values.oidc.realm}}/protocol/openid-connect/token
   POSTGRES_DATABASE: {{ .Values.postgres.database }}
   POSTGRES_HOST: {{ .Values.postgres.host }}

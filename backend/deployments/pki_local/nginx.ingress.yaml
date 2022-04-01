@@ -23,7 +23,7 @@ metadata:
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
 spec:
   rules:
-    - host: etheria.local
+    - host: opentdf.local
       http:
         paths:
           - path: /eas/(.*)
@@ -41,6 +41,6 @@ spec:
                 port:
                   name: http
   tls:
-  - hosts:
-    - etheria.local
-    secretName: tls-secret
+    - hosts:
+        - opentdf.local
+      secretName: tls-secret

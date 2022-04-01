@@ -7,7 +7,7 @@
 : "${KAS_UID:=909}"
 : "${CLIENT_UID:=1909}"
 
-BACKEND_SERVICES_HOSTNAME=${BACKEND_SERVICES_HOSTNAME:="etheria.local"}
+BACKEND_SERVICES_HOSTNAME=${BACKEND_SERVICES_HOSTNAME:="opentdf.local"}
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 PROJECT_ROOT="$(cd "$TOOLS_DIR"/../ >/dev/null && pwd)"

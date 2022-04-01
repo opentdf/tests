@@ -77,6 +77,7 @@ def insertAttrsForUsers(keycloak_admin, entitlement_host, user_attr_map, authTok
                     "Unexpected code [%s] from entitlements service when attempting to entitle user! [%s]",
                     response.status_code,
                     response.text,
+                    exc_info=True,
                 )
                 exit(1)
 
@@ -105,6 +106,7 @@ def insertAttrsForClients(keycloak_admin, entitlement_host, client_attr_map, aut
                     "Unexpected code [%s] from entitlements service when attempting to entitle client! [%s]",
                     response.status_code,
                     response.text,
+                    exc_info=True,
                 )
                 exit(1)
 

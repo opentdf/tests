@@ -31,13 +31,15 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.name }}"
+          image: "{{ .Values.image.image }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
-          - secretRef:
-              name: {{ .Values.secretRef.name }}
-          - configMapRef:
-              name: {{ include "claims.name" . }}-cm
+            {{- with .Values.secretRef }}
+            - secretRef:
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            - configMapRef:
+                name: {{ include "claims.name" . }}-cm
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
@@ -45,11 +47,11 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz?probe=liveness
-              port: http
+              port: {{ .Values.service.port | default "http" }}
           readinessProbe:
             httpGet:
               path: /healthz?probe=readiness
-              port: http
+              port: {{ .Values.service.port | default "http" }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

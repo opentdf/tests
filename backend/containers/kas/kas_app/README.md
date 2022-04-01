@@ -230,7 +230,7 @@ const done = () =>
 const c =
     new Tdf3.Client({
         userId:"bob_5678",
-        entityObjectEndpoint:"https://etheria.local/eas/v1/entity_object",
+        entityObjectEndpoint:"https://opentdf.local/eas/v1/entity_object",
     });
 const dp = new Tdf3.DecryptParamsBuilder().withFileSource("sample.tdf3").build();
 const os = fs.createWriteStream("plain-for-charlie.txt", {flag: "w", encoding: "utf8"});
@@ -286,14 +286,14 @@ docker-compose -f docker-compose.yml up --build
 
 const fs = require("fs");
 const https = require("https");
-https.globalAgent.options.ca = fs.readFileSync('../../etheria/certs/ca.crt');
+https.globalAgent.options.ca = fs.readFileSync('../../certs/ca.crt');
 
 const { Client: Tdf3 } = require("../../tdf3-js/src");
 
 const c =
     new Tdf3.Client({
         userId:"Charlie_1234",
-        entityObjectEndpoint:"https://etheria.local/eas/v1/entity_object",
+        entityObjectEndpoint:"https://opentdf.local/eas/v1/entity_object",
     });
 const ep = new Tdf3.EncryptParamsBuilder().withFileSource("plain.txt").withOffline().build();
 const os = fs.createWriteStream("charlie-01.tdf3", {flag: "w", encoding: "utf8"});
@@ -317,14 +317,14 @@ GENKEYS_FOR_APPS=eas scripts/genkey-apps
 
 const fs = require("fs");
 const https = require("https");
-https.globalAgent.options.ca = fs.readFileSync('../../etheria/certs/ca.crt');
+https.globalAgent.options.ca = fs.readFileSync('../../certs/ca.crt');
 
 const { Client: Tdf3 } = require("../../tdf3-js/src");
 
 const c =
     new Tdf3.Client({
         userId:"Charlie_1234",
-        entityObjectEndpoint:"https://etheria.local/eas/v1/entity_object",
+        entityObjectEndpoint:"https://opentdf.local/eas/v1/entity_object",
     });
 
 const done = () =>

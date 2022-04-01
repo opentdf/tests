@@ -12,7 +12,7 @@ To install the `kuttl` CLI, [go here](https://kuttl.dev/docs/cli.html)
 
 or it can be pointed directly at a test folder, and it can pick up test steps that way:
 
-- `kubectl kuttl test etheria/tests/cluster`
+- `kubectl kuttl test backend/tests/cluster`
 
 ## Details
 - `kuttl` by default will run tests against whatever Kube cluster your `kubeconfig` currently points at.
