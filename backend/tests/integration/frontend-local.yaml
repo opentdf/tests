@@ -33,7 +33,9 @@ kind: ConfigMap
 metadata:
   name: opentdf-abacus-cm
 data:
-  ATTRIBUTES_HOST: http://localhost:65432/attributes/
+  ATTRIBUTES_HOST: http://localhost:65432/api/attributes/
+  ENTITLEMENTS_HOST: http://localhost:65432/api/entitlements/
+  KAS_HOST: http://localhost:65432/api/kas
   KEYCLOAK_CLIENT_ID: dcr-test
   KEYCLOAK_HOST: http://localhost:65432/auth/
   KEYCLOAK_REALM: tdf
@@ -79,7 +81,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: opentdf-abacus-cm
-          image: ghcr.io/opentdf/abacus
+          image: opentdf/abacus
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

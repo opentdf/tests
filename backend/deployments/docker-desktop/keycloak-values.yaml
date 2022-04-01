@@ -22,7 +22,7 @@ extraEnv: |
   - name: DB_VENDOR
     value: postgres
   - name: DB_ADDR
-    value: tdf-postgresql
+    value: opentdf-postgresql
   - name: DB_DATABASE
     value: keycloak_database
   - name: DB_PORT

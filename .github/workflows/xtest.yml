@@ -46,4 +46,4 @@ jobs:
       run: |-
         kubectl version
         cd xtest
-        tilt ci -- --to-edit opentdf-abacus
+        tilt ci integration-test -- --to-edit opentdf-abacus
