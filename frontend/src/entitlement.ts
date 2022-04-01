@@ -4,111 +4,56 @@
  */
 
 export interface paths {
-  "/": {
-    get: operations["read_semver__get"];
+  "/entitlements": {
+    get: operations["read_entitlements_entitlements_get"];
   };
-  "/healthz": {
-    get: operations["read_liveness_healthz_get"];
-  };
-  "/v1/entity/attribute": {
-    get: operations["read_relationship_v1_entity_attribute_get"];
-  };
-  "/v1/entity/claimsobject": {
-    get: operations["read_relationship_v1_entity_claimsobject_get"];
-  };
-  "/v1/entity/{entityId}/attribute": {
-    get: operations["read_entity_attribute_relationship_v1_entity__entityId__attribute_get"];
-    put: operations["create_entity_attribute_relationship_v1_entity__entityId__attribute_put"];
-  };
-  "/v1/entity/{entityId}/claimsobject": {
-    get: operations["read_entity_attribute_relationship_v1_entity__entityId__claimsobject_get"];
-  };
-  "/v1/attribute/{attributeURI}/entity/": {
-    put: operations["create_attribute_entity_relationship_v1_attribute__attributeURI__entity__put"];
-  };
-  "/v1/entity/{entityId}/attribute/{attributeURI}": {
-    delete: operations["delete_attribute_entity_relationship_v1_entity__entityId__attribute__attributeURI__delete"];
+  "/entitlements/{entityId}": {
+    post: operations["add_entitlements_to_entity_entitlements__entityId__post"];
+    delete: operations["remove_entitlement_from_entity_entitlements__entityId__delete"];
   };
 }
 
 export interface components {
   schemas: {
-    ClaimsObject: {
-      attribute: string;
-    };
-    EntityAttributeRelationship: Record<string, string[]>;
+    /**
+     * Entitlements
+     * @example [object Object]
+     */
+    Entitlements: { [key: string]: string[] };
+    /** HTTPValidationError */
     HTTPValidationError: {
+      /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
-    /** An enumeration. */
-    ProbeType: "liveness" | "readiness";
+    /** ValidationError */
     ValidationError: {
+      /** Location */
       loc: string[];
+      /** Message */
       msg: string;
+      /** Error Type */
       type: string;
     };
   };
 }
 
 export interface operations {
-  read_semver__get: {
-    responses: {
-      /** Successful Response */
-      200: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-    };
-  };
-  read_liveness_healthz_get: {
+  read_entitlements_entitlements_get: {
     parameters: {
       query: {
-        probe?: components["schemas"]["ProbeType"];
-      };
-    };
-    responses: {
-      /** Successful Response */
-      204: never;
-      /** Validation Error */
-      422: {
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  read_relationship_v1_entity_attribute_get: {
-    responses: {
-      /** Successful Response */
-      200: {
-        content: {
-          "application/json": components["schemas"]["EntityAttributeRelationship"][];
-        };
-      };
-    };
-  };
-  read_relationship_v1_entity_claimsobject_get: {
-    responses: {
-      /** Successful Response */
-      200: {
-        content: {
-          "application/json": components["schemas"]["ClaimsObject"][];
-        };
-      };
-    };
-  };
-  read_entity_attribute_relationship_v1_entity__entityId__attribute_get: {
-    parameters: {
-      path: {
-        entityId: string;
+        authority?: string;
+        name?: string;
+        order?: string;
+        sort?: string;
+        offset?: number;
+        limit?: number;
       };
     };
     responses: {
       /** Successful Response */
       200: {
         content: {
-          "application/json": unknown;
+          "application/json": components["schemas"]["Entitlements"][];
         };
       };
       /** Validation Error */
@@ -119,7 +64,7 @@ export interface operations {
       };
     };
   };
-  create_entity_attribute_relationship_v1_entity__entityId__attribute_put: {
+  add_entitlements_to_entity_entitlements__entityId__post: {
     parameters: {
       path: {
         entityId: string;
@@ -145,7 +90,7 @@ export interface operations {
       };
     };
   };
-  read_entity_attribute_relationship_v1_entity__entityId__claimsobject_get: {
+  remove_entitlement_from_entity_entitlements__entityId__delete: {
     parameters: {
       path: {
         entityId: string;
@@ -153,28 +98,7 @@ export interface operations {
     };
     responses: {
       /** Successful Response */
-      200: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** Validation Error */
-      422: {
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  create_attribute_entity_relationship_v1_attribute__attributeURI__entity__put: {
-    parameters: {
-      path: {
-        attributeURI: string;
-      };
-    };
-    responses: {
-      /** Successful Response */
-      200: {
+      202: {
         content: {
           "application/json": unknown;
         };
@@ -189,27 +113,9 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": string[];
-      };
-    };
-  };
-  delete_attribute_entity_relationship_v1_entity__entityId__attribute__attributeURI__delete: {
-    parameters: {
-      path: {
-        entityId: string;
-        attributeURI: string;
-      };
-    };
-    responses: {
-      /** Successful Response */
-      204: never;
-      /** Validation Error */
-      422: {
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
       };
     };
   };
 }
 
-export interface external { }
+export interface external {}
