@@ -81,7 +81,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: opentdf-abacus-cm
-          image: ghcr.io/opentdf/abacus
+          image: opentdf/abacus
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

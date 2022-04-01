@@ -52,15 +52,15 @@ spec:
             - name: realm
               value: {{ .Values.keycloak.realm }}
             - name: ATTRIBUTE_AUTHORITY_HOST
-              value: {{ .Values.attribute.hostname }}
+              value: {{ .Values.attributes.hostname }}
             - name: ENTITLEMENT_HOST
-              value: {{ .Values.entitlement.hostname }}
+              value: {{ .Values.entitlements.hostname }}
             - name: ENTITLEMENT_CLIENT_ID
-              value: {{ .Values.entitlement.clientId }}
+              value: {{ .Values.entitlements.clientId }}
             - name: ENTITLEMENT_USERNAME
-              value: {{ .Values.entitlement.username }}
+              value: {{ .Values.entitlements.username }}
             - name: ENTITLEMENT_PASSWORD
-              value: {{ .Values.entitlement.password }}
+              value: {{ .Values.entitlements.password }}
           {{- with .Values.secretRef }}
           envFrom:
             - secretRef:
