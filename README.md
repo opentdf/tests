@@ -22,4 +22,4 @@ Then
 2) `cd ../xtest`
 3) `npm ci && npm i <../tdf3-js/*.tgz> # paste name of the tdf3-js package in place of *`
 4) `pip3 install -r ./requirements.txt`
-5) `tilt up -- --to-edit opentdf-abacus`
+5) `tilt up integration-test -- --to-edit opentdf-abacus`
