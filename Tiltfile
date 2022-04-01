@@ -18,6 +18,7 @@ KEYCLOAK_BASE_VERSION = str(
 # docker.io == Docker hub. Manually released versions
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 
+
 def from_dotenv(path, key):
     # Read a variable from a `.env` file
     return str(local('. "{}" && echo "${}"'.format(path, key))).strip()
@@ -29,27 +30,27 @@ cfg = config.parse()
 to_edit = cfg.get("to-edit", [])
 
 groups = {
-    'all': [
-        'keycloak',
-        'opentdf-kas',
-        'opentdf-attributes',
-        'opentdf-claims',
-        'opentdf-entitlements',
-        'opentdf-postgresql'
+    "all": [
+        "keycloak",
+        "opentdf-kas",
+        "opentdf-attributes",
+        "opentdf-claims",
+        "opentdf-entitlements",
+        "opentdf-postgresql",
     ],
-    'integration-test': [
-        'keycloak',
-        'keycloak-bootstrap',
-        'ingress-nginx-controller',
-        'ingress-nginx-admission-create',
-        'ingress-nginx-admission-patch',
-        'opentdf-attributes',
-        'opentdf-claims',
-        'opentdf-entitlements',
-        'opentdf-kas',
-        'opentdf-abacus',
-        'opentdf-postgresql',
-        'opentdf-xtest'
+    "integration-test": [
+        "keycloak",
+        "keycloak-bootstrap",
+        "ingress-nginx-controller",
+        "ingress-nginx-admission-create",
+        "ingress-nginx-admission-patch",
+        "opentdf-attributes",
+        "opentdf-claims",
+        "opentdf-entitlements",
+        "opentdf-kas",
+        "opentdf-abacus",
+        "opentdf-postgresql",
+        "opentdf-xtest",
     ],
 }
 
@@ -58,8 +59,8 @@ resources = []
 # isCI comes from tests/integration/Tiltfile
 isCI = False
 
-for arg in cfg.get('to-run', []):
-    if arg == 'integration-test':
+for arg in cfg.get("to-run", []):
+    if arg == "integration-test":
         isCI = True
     if arg in groups:
         resources += groups[arg]
@@ -91,15 +92,15 @@ all_secrets = {
     ]
 }
 
-if isCI and not os.path.exists("./containers/keycloak-protocol-mapper/keycloak-containers/server/Dockerfile"):
-    local(
-        "make keycloak-repo-clone",
-        dir="./containers/keycloak-protocol-mapper"
-    )
+if isCI and not os.path.exists(
+    "./containers/keycloak-protocol-mapper/keycloak-containers/server/Dockerfile"
+):
+    local("make keycloak-repo-clone", dir="./containers/keycloak-protocol-mapper")
 
 all_secrets["POSTGRES_PASSWORD"] = "myPostgresPassword"
 all_secrets["OIDC_CLIENT_SECRET"] = "myclientsecret"
 all_secrets["ca-cert.pem"] = all_secrets["CA_CERTIFICATE"]
+
 
 def only_secrets_named(*items):
     return {k: all_secrets[k] for k in items}
@@ -109,10 +110,7 @@ if isCI:
     k8s_yaml(
         secret_from_dict(
             "attributes-secrets",
-            inputs=only_secrets_named(
-                "OIDC_CLIENT_SECRET",
-                "POSTGRES_PASSWORD"
-            )
+            inputs=only_secrets_named("OIDC_CLIENT_SECRET", "POSTGRES_PASSWORD"),
         )
     )
     k8s_yaml(
@@ -130,7 +128,7 @@ if isCI:
     k8s_yaml(
         secret_from_dict(
             "keycloak-bootstrap-secrets",
-            inputs=only_secrets_named("OIDC_CLIENT_SECRET")
+            inputs=only_secrets_named("OIDC_CLIENT_SECRET"),
         )
     )
     k8s_yaml(
@@ -299,37 +297,39 @@ helm_remote(
 #
 # usage https://docs.tilt.dev/helm.html#helm-options
 
-opentdf_attrs_values="deployments/docker-desktop/attributes-values.yaml"
-opentdf_attrs_set=[
+opentdf_attrs_values = "deployments/docker-desktop/attributes-values.yaml"
+opentdf_attrs_set = [
     "image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes",
     "secretRef.name=postgres-password",
 ]
-opentdf_claims_values="deployments/docker-desktop/claims-values.yaml"
-opentdf_claims_set=[
+opentdf_claims_values = "deployments/docker-desktop/claims-values.yaml"
+opentdf_claims_set = [
     "image.name=" + CONTAINER_REGISTRY + "/opentdf/claims",
     "secretRef.name=postgres-password",
 ]
-opentdf_entitlements_values="deployments/docker-desktop/entitlements-values.yaml"
-opentdf_entitlements_set=[
+opentdf_entitlements_values = "deployments/docker-desktop/entitlements-values.yaml"
+opentdf_entitlements_set = [
     "image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements",
     "secretRef.name=postgres-password",
 ]
-opentdf_kas_values="deployments/docker-desktop/kas-values.yaml"
-opentdf_kas_set=[
+opentdf_kas_values = "deployments/docker-desktop/kas-values.yaml"
+opentdf_kas_set = [
     "image.name=" + CONTAINER_REGISTRY + "/opentdf/kas",
     "secretRef.name=all-the-kas-secrets",
     "certFileSecretName=all-the-kas-secrets",
 ]
 
 if isCI:
-    opentdf_attrs_values="tests/integration/backend-attributes-values.yaml"
-    opentdf_attrs_set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"]
-    opentdf_claims_values="tests/integration/backend-claims-values.yaml"
-    opentdf_claims_set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/claims"]
-    opentdf_entitlements_values="tests/integration/backend-entitlements-values.yaml"
-    opentdf_entitlements_set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements"]
-    opentdf_kas_values="tests/integration/backend-kas-values.yaml"
-    opentdf_kas_set=["image.name=" + CONTAINER_REGISTRY + "/opentdf/kas"]
+    opentdf_attrs_values = "tests/integration/backend-attributes-values.yaml"
+    opentdf_attrs_set = ["image.name=" + CONTAINER_REGISTRY + "/opentdf/attributes"]
+    opentdf_claims_values = "tests/integration/backend-claims-values.yaml"
+    opentdf_claims_set = ["image.name=" + CONTAINER_REGISTRY + "/opentdf/claims"]
+    opentdf_entitlements_values = "tests/integration/backend-entitlements-values.yaml"
+    opentdf_entitlements_set = [
+        "image.name=" + CONTAINER_REGISTRY + "/opentdf/entitlements"
+    ]
+    opentdf_kas_values = "tests/integration/backend-kas-values.yaml"
+    opentdf_kas_set = ["image.name=" + CONTAINER_REGISTRY + "/opentdf/kas"]
 
 k8s_yaml(
     helm(
@@ -446,10 +446,7 @@ k8s_resource("ingress-nginx-controller", port_forwards="65432:80")
 docker_build(
     "ghcr.io/opentdf/keycloak-bootstrap",
     "./containers/keycloak-bootstrap",
-    build_args={
-        "ALPINE_VERSION": ALPINE_VERSION,
-        "PY_VERSION": PY_VERSION
-    },
+    build_args={"ALPINE_VERSION": ALPINE_VERSION, "PY_VERSION": PY_VERSION},
 )
 
 k8s_resource(
@@ -457,10 +454,7 @@ k8s_resource(
     links=[link("localhost:65432/auth", "Keycloak admin console")],
 )
 
-k8s_resource(
-    "keycloak-bootstrap",
-    resource_deps=["keycloak", "opentdf-entitlements"]
-)
+k8s_resource("keycloak-bootstrap", resource_deps=["keycloak", "opentdf-entitlements"])
 
 #    db    db d888888b d88888b .d8888. d888888b
 #    `8b  d8' `~~88~~' 88'     88'  YP `~~88~~'
@@ -473,7 +467,7 @@ docker_build(
     "opentdf/tests-clients",
     context="./",
     dockerfile="./tests/containers/clients/Dockerfile",
-    #todo: (PLAT-1650) Force to x86 mode until we have a python built in arch64
+    # todo: (PLAT-1650) Force to x86 mode until we have a python built in arch64
     platform="linux/amd64",
 )
 
@@ -481,12 +475,7 @@ k8s_yaml("tests/integration/xtest.yaml")
 
 k8s_resource(
     "opentdf-xtest",
-    resource_deps=[
-        "keycloak-bootstrap",
-        "keycloak",
-        "opentdf-kas",
-        "opentdf-claims"
-    ]
+    resource_deps=["keycloak-bootstrap", "keycloak", "opentdf-kas", "opentdf-claims"],
 )
 
 # The Postgres chart by default does not remove its Persistent Volume Claims: https://github.com/bitnami/charts/tree/master/bitnami/postgresql#uninstalling-the-chart
