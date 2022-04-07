@@ -18,20 +18,17 @@ export SERVER_LOG_LEVEL=DEBUG
 
 ### Start Server
 ```shell
+cd containers
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install --requirement requirements.txt
-python3 -m uvicorn main:app --reload --port 4020
+python3 -m pip install --requirement claims/requirements.txt
+python3 -m uvicorn claims.main:app --reload --port 4020
 ```
 
 ### Extract OpenAPI
 ```shell
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install --requirement requirements.txt
-python3 main.py > openapi.json
+./scripts/openapi-generator
 ```
 
 ### View API

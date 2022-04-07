@@ -23,6 +23,10 @@ COPY attributes/tests attributes/tests
 # Compile application
 RUN python3 -m compileall attributes/
 
+# Validate openapi
+COPY attributes/openapi.json attributes/
+RUN diff <(python3 -m attributes.main) attributes/openapi.json
+
 # stage - production server
 FROM python:${PY_VERSION}-alpine${ALPINE_VERSION} AS production
 ARG PY_VERSION
