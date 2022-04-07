@@ -649,9 +649,12 @@ async def update_attribute_definition_crud(request):
 
     query = table_attribute.update().values(
         values=request.order,
+        rule=request.rule,
     )
 
     await database.execute(query)
+
+    return request
 
 
 @app.delete(
