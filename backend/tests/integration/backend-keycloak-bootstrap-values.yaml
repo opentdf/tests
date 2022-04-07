@@ -7,10 +7,10 @@ keycloak:
   clientSecret: 123-456
   realm: tdf
 
-attribute:
+attributes:
   hostname: http://opentdf-attributes:4020
 
-entitlement:
+entitlements:
   hostname: http://opentdf-entitlements:4030
   clientId: dcr-test
   username: user1

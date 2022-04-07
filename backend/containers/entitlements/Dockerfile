@@ -23,6 +23,10 @@ COPY entitlements/tests entitlements/tests
 # Compile application
 RUN python3 -m compileall .
 
+# Validate openapi
+COPY entitlements/openapi.json entitlements/
+RUN diff <(python3 -m entitlements.main) entitlements/openapi.json
+
 # stage - production server
 FROM python:${PY_VERSION}-alpine${ALPINE_VERSION} AS production
 ARG PY_VERSION

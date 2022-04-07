@@ -9,6 +9,8 @@ import { routes } from "./routes";
 
 import "./App.css";
 
+import { TargetMode } from "./containers/TargetMode"
+
 const Entitlements = lazy(() => import("./containers/Entitlements"));
 const Attributes = lazy(() => import("./containers/Attributes"));
 const Client = lazy(() => import("./containers/Client"));
@@ -58,6 +60,7 @@ export default function App() {
                 <Attributes />
               </Route>
               <Route path={routes.HOME} exact>
+                <TargetMode />
                 <Home />
               </Route>
               <Route path={routes.CATCH}>

@@ -23,10 +23,13 @@ docker run -p 3000:80 \
   -e KEYCLOAK_HOST="http://localhost/auth/" \
   -e KEYCLOAK_CLIENT_ID="localhost-abacus" \
   -e KEYCLOAK_REALM="opentdf-realm" \
-  -e ATTRIBUTES_HOST="http://localhost/api/attributes" \
-  -e ENTITLEMENTS_HOST="http://localhost/api/entitlements" \
+  -e KEYCLOAK_REALMS="opentdf-realms" \
+  -e ATTRIBUTES_HOST="http://localhost/v2/attributes" \
+  -e ENTITLEMENTS_HOST="http://localhost/v2/entitlements" \
   $(docker build -q .)
 ```
+Input Format : 
+KEYCLOAK_REALMS="item1,item2,item3"
 
 The environment variables becomes `window.__SERVER_DATA__` via an NGINX sub_filter defined in nginx-default.conf
 

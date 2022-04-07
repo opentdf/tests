@@ -28,16 +28,17 @@ export POSTGRES_SCHEMA=tdf_entitlement
 
 ### server
 ```shell
+cd containers
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install --requirement requirements.txt
-python3 -m uvicorn main:app --reload --port 5000
+python3 -m pip install --requirement attributes/requirements.txt
+python3 -m uvicorn attributes.main:app --reload --port 5000
 ```
 
 ### OpenAPI
 ```shell
-python3 main.py > openapi.json
+./scripts/openapi-generator
 ```
 
 

@@ -4,7 +4,7 @@ ARG NODE_VERSION=lts
 # depender - get production dependencies
 FROM node:${NODE_VERSION} as depender
 WORKDIR /build/
-COPY package-lock.json package.json ./
+COPY package-lock.json package.json tdf3-js-*.tgz ./
 RUN npm ci
 
 # builder - create-react-app build
@@ -22,10 +22,10 @@ COPY --from=builder /build/build /usr/share/nginx/html
 COPY nginx-default.conf /etc/nginx/templates/default.conf.template
 ENV KEYCLOAK_HOST "http://localhost/keycloak/auth"
 ENV KEYCLOAK_CLIENT_ID ""
-ENV KEYCLOAK_REALMS ""
+ENV KEYCLOAK_REALM ""
 ENV KEYCLOAK_REALMS "tdf"
 ENV ATTRIBUTES_HOST "http://localhost/attributes"
 ENV ENTITLEMENTS_HOST "http://localhost/entitlements"
-ENV KAS_HOST "http://localhost:8000/kas"
+ENV KAS_HOST "http://localhost:8000"
 
 EXPOSE 80

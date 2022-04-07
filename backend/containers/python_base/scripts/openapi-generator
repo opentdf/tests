@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Generate `openapi.json` files
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+export PATH="$PATH:$APP_DIR"
+
+monolog TRACE "Running [$0${1+ }$*]"
+
+: "${ALPINE_VERSION:="3.15"}"
+: "${PY_VERSION:="3.10"}"
+
+if ! cd "$PROJECT_ROOT"; then
+  monolog ERROR "Unable to find project root [${PROJECT_ROOT}] from APP_DIR=[${APP_DIR}]"
+  exit 1
+fi
+
+today="$(date +%Y-%m-%d)"
+digest="$(git rev-parse --short HEAD)"
+suffix="${today}-${digest}"
+
+monolog TRACE "Building [opentdf/python-base:${PY_VERSION}]"
+if ! docker build \
+  --tag "opentdf/python-base:${PY_VERSION}" \
+  --build-arg ALPINE_VERSION=${ALPINE_VERSION} \
+  --build-arg PY_VERSION=${PY_VERSION} \
+  --file containers/python_base/Dockerfile \
+  ./containers/python_base; then
+  monolog ERROR "Failed to build python_base container"
+  exit 1
+fi
+
+for mservice in attributes claims entitlements; do
+  tag=opentdf/${mservice}:${suffix}
+  monolog TRACE "Building [${tag}]"
+  if ! docker build \
+    --tag "${tag}" \
+    --build-arg PY_VERSION=${PY_VERSION} \
+    --file containers/${mservice}/Dockerfile \
+    ./containers; then
+    monolog ERROR "Failed to build ${mservice} container"
+    exit 1
+  fi
+  if ! docker run --entrypoint python3 "${tag}" -m ${mservice}.main >containers/${mservice}/openapi.json; then
+    monolog ERROR "Failed to extract ${mservice} openapi json"
+    exit 1
+  fi
+  yq -P containers/${mservice}/openapi.json |
+    yq '. head_comment="⚠️ DO NOT EDIT! GENERATED VIA openapi-generator ⚠️"' >containers/${mservice}/openapi.yaml &&
+    npx prettier -w containers/${mservice}/openapi.yaml
+done
+
+monolog DEBUG "Finished [$0${1+ }$*]"
