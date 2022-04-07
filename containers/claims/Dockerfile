@@ -22,6 +22,10 @@ COPY claims/VERSION claims/
 # Compile application
 RUN python3 -m compileall .
 
+# Validate openapi
+COPY claims/openapi.json claims/
+RUN diff <(python3 -m claims.main) claims/openapi.json
+
 # stage - production server
 FROM python:${PY_VERSION}-alpine${ALPINE_VERSION} AS production
 ARG PY_VERSION
