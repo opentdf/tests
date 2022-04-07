@@ -11,8 +11,13 @@ if(!realm) {
     localStorage.setItem("realm", realm);
 }
 
+export const CLIENT_ID = serverData.clientId;
+export const REALM = realm;
+export const AUTHORITY = serverData.authority;
+export const KAS_ENDPOINT = serverData.access;
+
 export const keycloakConfig = {
-    realm,
-    url: serverData.authority,
-    clientId: serverData.clientId,
+    realm: REALM,
+    url: AUTHORITY,
+    clientId: CLIENT_ID,
 };
