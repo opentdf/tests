@@ -9,7 +9,7 @@ import { PlaywrightTestConfig, devices } from '@playwright/test';
  */
 const config: PlaywrightTestConfig = {
 
-  testDir: './tests',
+  testDir: '../frontend/tests/e2e',
 
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
