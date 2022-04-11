@@ -15,7 +15,8 @@ const config: PlaywrightTestConfig = {
   timeout: 30 * 1000,
 
   use: {
-    headless: false,
+    headless: true,
+    browserName: "chromium"
   },
 
   expect: {
