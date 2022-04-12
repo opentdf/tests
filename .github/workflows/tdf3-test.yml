@@ -17,9 +17,10 @@ jobs:
           npm pack
       - name: Install dependencies
         run: |-
-          cd tdf3-test
+          cd frontend
           npm ci
           npm i ../tdf3-js/tdf3-js-4.1.8.tgz
+          cp ../tdf3-js/tdf3-js-4.1.8.tgz ./
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
