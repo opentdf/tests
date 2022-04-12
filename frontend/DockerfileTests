@@ -14,6 +14,7 @@ COPY public/ public/
 COPY src/ src/
 COPY tsconfig.json/ .
 COPY craco.config.js/ .
+RUN npm i ../tdf3-js/tdf3-js-4.1.8.tgz
 RUN npm run build:test
 
 # server - nginx alpine
