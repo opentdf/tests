@@ -19,7 +19,7 @@ jobs:
         run: |-
           cd frontend
           cp ../tdf3-js/tdf3-js-4.1.8.tgz ./
-          cd ../vulnerability
+          cd ../tdf3-js
           npm ci
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
