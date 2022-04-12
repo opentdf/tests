@@ -19,6 +19,8 @@ jobs:
         run: |-
           cd frontend
           cp ../tdf3-js/tdf3-js-4.1.8.tgz ./
+          cd ../vulnerability
+          npm ci
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
@@ -44,4 +46,4 @@ jobs:
         run: |-
           kubectl version
           cd tdf3-test
-          tilt ci integration-test -- --to-edit opentdf-abacus-tdf3
+          tilt ci integration-test test-tdf3 -- --to-edit opentdf-abacus-tdf3

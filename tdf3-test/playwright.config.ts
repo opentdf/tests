@@ -9,7 +9,7 @@ import { PlaywrightTestConfig, devices } from '@playwright/test';
  */
 const config: PlaywrightTestConfig = {
 
-  testDir: '../frontend/tests/e2e',
+  testDir: './tests',
 
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
@@ -47,7 +47,7 @@ const config: PlaywrightTestConfig = {
     actionTimeout: 0,
 
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:65432/',
+    baseURL: 'http://localhost:65432',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',

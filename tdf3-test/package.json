@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test --config=playwright.config.ts ../frontend/tests/e2e/TDF3JS.spec.ts"
+    "test": "playwright test"
   },
   "keywords": [],
   "author": "",
