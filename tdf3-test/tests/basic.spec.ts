@@ -10,7 +10,7 @@ test.describe('<TDF3JS/>', () => {
 
     test('should use TDF3JS to encrypt/decrypt plain text', async ({ page }) => {
         const decryptedText = "Hello, world!";
-        const header = page.locator('h2', { hasText: "Attributes" });
+        const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
 
         const encryptButton = await page.locator("#encrypt-button span");
