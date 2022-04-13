@@ -11,6 +11,6 @@ k8s_resource(
 
 local_resource(
     "test-tdf3",
-    "npm run test",
+    "npm ci && npm run test",
     resource_deps=["keycloak", "keycloak-bootstrap", "opentdf-kas"]
 )
