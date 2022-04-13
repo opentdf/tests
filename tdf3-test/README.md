@@ -3,13 +3,11 @@
 
 ## Overview
 
-Automated checks for vulnerabilities identified during penetration testing
+Automated checks for tdf3 encrypt/decrypt in special Abacus build:test mode
 
 ## Resources
 
 [Playwright](https://playwright.dev/)
-
-[OWASP Zed Attack Proxy (ZAP)](https://www.zaproxy.org/)
 
 ## Execute
 
