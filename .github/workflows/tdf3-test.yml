@@ -19,7 +19,7 @@ jobs:
         run: |-
           cd frontend
           cp ../tdf3-js/tdf3-js-4.1.8.tgz ./
-          cd ../tdf3-js
+          cd ../tdf3-test
           npm ci
           npx playwright install
           npx playwright install-deps
