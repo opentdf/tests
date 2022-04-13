@@ -191,6 +191,11 @@ if "opentdf-abacus" in to_edit:
     # frontend folder should be next to backend
     docker_build("opentdf/abacus", "../frontend")
 
+if "opentdf-abacus-tdf3" in to_edit:
+    OPENTDF_ABACUS_YML = "tests/integration/frontend-local.yaml"
+    # frontend folder should be next to backend
+    docker_build("opentdf/abacus", "../frontend", dockerfile = "../frontend/DockerfileTests")
+
 docker_build(
     CONTAINER_REGISTRY + "/opentdf/python-base",
     context="containers/python_base",
