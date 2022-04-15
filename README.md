@@ -1,5 +1,5 @@
 # tests
-Tests for openTDF
+Tests for OpenTDF
 
 [Vulnerability](vulnerability)
 
