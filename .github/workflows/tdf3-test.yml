@@ -14,7 +14,7 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: Build TDF3
         run: |-
-          cd tdf3-js
+          cd projects/tdf3-js
           npm ci
           npm pack
       - name: Install dependencies
