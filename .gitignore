@@ -2,10 +2,6 @@
 .vscode
 .DS_Store
 
-/backend
-/frontend
-/tdf3-js
-
 node_modules
 
 vulnerability/node_modules/

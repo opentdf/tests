@@ -1,7 +1,0 @@
-## Generic
-.git*
-coverage-reports/*
-
-*.md
-*.sqlite
-sonar-project.properties
