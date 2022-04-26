@@ -5,7 +5,9 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
       - uses: actions/setup-node@v2
         with:
           node-version: '16.x'
@@ -17,7 +19,7 @@ jobs:
           npm pack
       - name: Install dependencies
         run: |-
-          cd frontend
+          cd projects/frontend
           cp ../tdf3-js/tdf3-js-*.tgz ./
           npm i tdf3-js-*.tgz
           cd ../tdf3-test

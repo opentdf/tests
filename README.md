@@ -17,9 +17,9 @@ run it inside docker. Be careful not to push this changes, we won't need that to
 Then
 
 ## For xtests local setup:
-0) `cd tdf3-js`
+0) `cd projects/tdf3-js`
 1) `npm ci && npm pack`
-2) `cd ../xtest`
-3) `npm ci && npm i <../tdf3-js/*.tgz> # paste name of the tdf3-js package in place of *`
+2) `cd ../../xtest`
+3) `npm ci && npm i <../projects/tdf3-js/*.tgz> # paste name of the tdf3-js package in place of *`
 4) `pip3 install -r ./requirements.txt`
 5) `tilt up integration-test -- --to-edit opentdf-abacus`
