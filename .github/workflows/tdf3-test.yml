@@ -2,7 +2,7 @@ name: TDF3-Test
 on:
   pull_request:
   schedule:
-    - cron:  '0 9,21 * * *'
+    - cron: "0 9,21 * * *"
 jobs:
   xtest:
     timeout-minutes: 60
@@ -15,7 +15,7 @@ jobs:
         if: github.event.schedule
       - uses: actions/setup-node@v2
         with:
-          node-version: '16.x'
+          node-version: "16.x"
       # todo: install and activate virtual env for python?
       - name: Build TDF3
         run: |-
