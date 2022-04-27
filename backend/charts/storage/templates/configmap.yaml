@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "storage.name" . }}-cm
-data:
-  AWS_DEFAULT_REGION: {{ .Values.s3BucketRegion }}
-  BUCKET: {{ .Values.s3Bucket }}
-  CORS_ORIGINS: {{ .Values.corsOrigins }}
-  SERVER_LOG_LEVEL: {{ .Values.logLevel }}
