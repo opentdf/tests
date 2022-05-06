@@ -8,7 +8,7 @@
  */
 const { Command } = require("commander");
 const { Readable } = require("stream");
-const { Client } = require("tdf3-js");
+const { Client } = require("client-web");
 const fs = require("fs");
 
 const program = new Command();

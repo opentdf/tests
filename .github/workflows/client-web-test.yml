@@ -1,4 +1,4 @@
-name: TDF3-Test
+name: Client-Web-Test
 on:
   pull_request:
   schedule:
@@ -17,17 +17,17 @@ jobs:
         with:
           node-version: "16.x"
       # todo: install and activate virtual env for python?
-      - name: Build TDF3
+      - name: Build client-web
         run: |-
-          cd projects/tdf3-js
+          cd projects/client-web/lib
           npm ci
           npm pack
       - name: Install dependencies
         run: |-
           cd projects/frontend
-          cp ../tdf3-js/tdf3-js-*.tgz ./
-          npm i tdf3-js-*.tgz
-          cd ../../tdf3-test
+          cp ../client-web/lib/opentdf-client-*.tgz ./
+          npm i opentdf-client-*.tgz
+          cd ../../client-web-test
           npm ci
           npx playwright install
           npx playwright install-deps
@@ -55,5 +55,5 @@ jobs:
       - name: Run tilt
         run: |-
           kubectl version
-          cd tdf3-test
-          tilt ci integration-test test-tdf3 -- --to-edit opentdf-abacus-tdf3
+          cd client-web-test
+          tilt ci integration-test test-client-web -- --to-edit opentdf-abacus-client-web
