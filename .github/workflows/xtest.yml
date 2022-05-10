@@ -17,16 +17,16 @@ jobs:
         with:
           node-version: "16.x"
       # todo: install and activate virtual env for python?
-      - name: Build TDF3
+      - name: Build client-web
         run: |-
-          cd projects/tdf3-js
+          cd projects/client-web/lib
           npm ci
           npm pack
       - name: Install dependencies
         run: |-
           cd xtest
           npm ci
-          npm i ../projects/tdf3-js/tdf3-js-*.tgz
+          npm i ../projects/client-web/lib/opentdf-client-*.tgz
           pip3 install -r requirements.txt
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:

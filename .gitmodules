@@ -7,6 +7,3 @@
 [submodule "projects/frontend"]
 	path = projects/frontend
 	url = git@github.com:/opentdf/frontend
-[submodule "projects/tdf3-js"]
-	path = projects/tdf3-js
-	url = git@github.com:/opentdf/tdf3-js

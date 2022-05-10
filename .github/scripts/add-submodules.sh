@@ -5,7 +5,7 @@ TOOL_NAME="$(basename "$0")"
 : "${PROJECT_DIR:="$(cd "${APP_DIR}" && git rev-parse --show-toplevel)"}"
 export PATH="$PATH:$APP_DIR"
 
-projects=(backend client-web frontend tdf3-js)
+projects=(backend client-web frontend)
 
 if ! cd "$PROJECT_DIR"; then
   echo "[ERROR](${TOOL_NAME}) Unable to change to project dir [${PROJECT_DIR}] from [$(pwd)]"
