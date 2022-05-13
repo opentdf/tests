@@ -58,4 +58,4 @@ jobs:
         run: |-
           kubectl version
           cd client-web-test
-          tilt ci integration-test test-client-web -- --to-edit opentdf-abacus-client-web
+          tilt ci integration-test test-client-web frontend-test -- --to-edit opentdf-abacus-client-web
