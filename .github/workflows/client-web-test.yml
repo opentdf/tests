@@ -28,6 +28,9 @@ jobs:
         run: |-
           cd projects/frontend
           cp ../client-web/lib/opentdf-client-*.tgz ./
+          npm ci
+          npx playwright install
+          npx playwright install-deps
           npm i opentdf-client-*.tgz
           cd ../../client-web-test
           npm ci
