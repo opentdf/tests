@@ -17,6 +17,7 @@ local_resource(
 
 local_resource(
     "frontend-test",
-    "cd ../../projects/frontend && npm run test:playwright",
+    "npm run test:playwright",
+    dir="../projects/frontend",
     resource_deps=["keycloak", "keycloak-bootstrap", "opentdf-kas"]
 )
