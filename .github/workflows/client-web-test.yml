@@ -1,6 +1,7 @@
 name: Client-Web-Test
 on:
   pull_request:
+  workflow_dispatch:
   repository_dispatch:
     types: [xtest]
   schedule:
@@ -28,6 +29,9 @@ jobs:
         run: |-
           cd projects/frontend
           cp ../client-web/lib/opentdf-client-*.tgz ./
+          npm ci
+          npx playwright install
+          npx playwright install-deps
           npm i opentdf-client-*.tgz
           cd ../../client-web-test
           npm ci
@@ -58,4 +62,4 @@ jobs:
         run: |-
           kubectl version
           cd client-web-test
-          tilt ci integration-test test-client-web -- --to-edit opentdf-abacus-client-web
+          tilt ci integration-test test-client-web frontend-test -- --to-edit opentdf-abacus-client-web
