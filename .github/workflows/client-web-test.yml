@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: true
-      - run: git submodule update --remote --recursive
+          submodules: recursive
+      - run: git submodule update --recursive --remote
         if: github.event.schedule
       - uses: actions/setup-node@v2
         with:
@@ -63,3 +63,4 @@ jobs:
           kubectl version
           cd client-web-test
           tilt ci integration-test test-client-web frontend-test -- --to-edit opentdf-abacus-client-web
+#          check
