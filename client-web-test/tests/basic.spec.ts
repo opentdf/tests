@@ -2,6 +2,7 @@ import { expect } from '@playwright/test';
 import { authorize } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import fs from 'fs';
+import path from 'path';
 
 test.describe('<TDF3JS/>', () => {
     test.beforeEach(async ({ page }) => {
@@ -10,6 +11,9 @@ test.describe('<TDF3JS/>', () => {
     });
 
     test('should use FileClient to encrypt/decrypt file text', async ({ page }) => {
+        // @ts-ignore
+        throw __dirname;
+
         const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
         const originalText = fs.readFileSync('./file.txt', 'utf8');
