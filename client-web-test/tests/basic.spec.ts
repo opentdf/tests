@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { authorize } from './helpers/operations';
-import { test } from './helpers/fixtures';
+import fs from 'fs';
 
 test.describe('<TDF3JS/>', () => {
     test.beforeEach(async ({ page }) => {
@@ -8,17 +8,20 @@ test.describe('<TDF3JS/>', () => {
         await page.goto('/');
     });
 
-    test('should use TDF3JS to encrypt/decrypt plain text', async ({ page }) => {
-        const decryptedText = "Hello, world!";
+    test('should use FileClient to encrypt/decrypt file text', async ({ page }) => {
         const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
+        const originalText = fs.readFileSync('./file.txt', 'utf8');
 
-        const encryptButton = await page.locator("#encrypt-button span");
+        // @ts-ignore
+        const [ download ] = await Promise.all([
+            page.waitForEvent('download'), // wait for download to start
+            page.locator('id=username').setInputFiles("./file.txt")
+        ]);
+        // wait for download to complete
+        const path = await download.path();
+        const decryptedText = fs.readFileSync(path, 'utf8');
 
-        await expect(encryptButton).toBeVisible();
-        await encryptButton.click();
-
-        const decryptedMessage = await page.locator( `text=Text deciphered: ${decryptedText}`);
-        await test.expect(decryptedMessage).toBeVisible();
+        expect(decryptedText).toEqual(originalText);
     });
 });
