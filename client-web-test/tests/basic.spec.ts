@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 import { authorize } from './helpers/operations';
+import { test } from './helpers/fixtures';
 import fs from 'fs';
 
 test.describe('<TDF3JS/>', () => {
