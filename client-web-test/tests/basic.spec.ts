@@ -20,7 +20,7 @@ test.describe('<TDF3JS/>', () => {
         // @ts-ignore
         const [ download ] = await Promise.all([
             page.waitForEvent('download'), // wait for download to start
-            page.locator("input[type=\"file\"]").setInputFiles("./file.txt")
+            page.locator("input[type=\"file\"]").setInputFiles(path.join(__dirname, 'file.txt'))
         ]);
         // wait for download to complete
         const stream = await download.createReadStream();
