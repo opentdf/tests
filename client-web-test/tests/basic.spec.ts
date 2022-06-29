@@ -20,16 +20,14 @@ test.describe('<TDF3JS/>', () => {
 
         const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
-        // @ts-ignore
-        const [ download ] = await Promise.all([
-            page.waitForEvent('download'), // wait for download to start
-            page.locator("input[type=\"file\"]").setInputFiles(path.join(__dirname, 'file.txt'))
-        ]);
+        await page.locator("input[type=\"1file\"]").setInputFiles(path.join(__dirname, 'file.txt'));
+        // await page.locator("input[type=\"file\"]").setInputFiles(path.join(__dirname, 'file.txt'));
+
+        const download = await page.waitForEvent('download')
         // wait for download to complete
         const stream = await download.createReadStream();
         const decryptedText = await toString(stream);
 
         expect(decryptedText).toEqual(originalText);
-        await browser.close();
     });
 });
