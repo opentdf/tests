@@ -7,7 +7,6 @@ import path from 'path';
 const originalText = fs.readFileSync(path.join(__dirname, 'file.txt'), 'utf8');
 
 // @ts-ignore
-test.describe.configure({ mode: 'parallel' });
 
 test('should use FileClient to encrypt/decrypt file text', async ({ browser }) => {
     const context = await browser.newContext({ acceptDownloads: true });
