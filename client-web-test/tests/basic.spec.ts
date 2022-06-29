@@ -11,10 +11,13 @@ const originalText = fs.readFileSync(path.join(__dirname, 'file.txt'), 'utf8');
 test.describe('<TDF3JS/>', () => {
     test.beforeEach(async ({ page }) => {
         await authorize(page);
-        await page.goto('/');
     });
 
-    test('should use FileClient to encrypt/decrypt file text', async ({ page }) => {
+    test('should use FileClient to encrypt/decrypt file text', async ({ browser }) => {
+        const context = await browser.newContext({ acceptDownloads: true });
+        const page = await context.newPage();
+        await page.goto('/');
+
         const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
         // @ts-ignore
@@ -27,5 +30,6 @@ test.describe('<TDF3JS/>', () => {
         const decryptedText = await toString(stream);
 
         expect(decryptedText).toEqual(originalText);
+        await browser.close();
     });
 });
