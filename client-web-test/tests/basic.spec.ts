@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { authorize } from './helpers/operations';
+import { test } from './helpers/fixtures';
 import toString from 'stream-to-string';
 import fs from 'fs';
 import path from 'path';
