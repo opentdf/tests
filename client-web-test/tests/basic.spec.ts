@@ -18,7 +18,7 @@ test.describe('<TDF3JS/>', () => {
 
         const header = page.locator('h2:has-text("Attributes")');
         await expect(header).toBeVisible();
-        await page.locator("input[type=\"111file\"]").setInputFiles(path.join(__dirname, 'file.txt'));
+        await page.locator("input[type=\"file\"]").setInputFiles(path.join(__dirname, 'file.txt'));
         // @ts-ignore
         const download = await page.waitForEvent('download'); // wait for download to start
         // wait for download to complete
