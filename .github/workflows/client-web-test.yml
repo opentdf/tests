@@ -7,7 +7,7 @@ on:
   schedule:
     - cron: "0 9,21 * * *"
 jobs:
-  xtest:
+  client-web-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
@@ -62,4 +62,4 @@ jobs:
         run: |-
           kubectl version
           cd client-web-test
-          tilt ci integration-test test-client-web frontend-test -- --to-edit opentdf-abacus-client-web
+          tilt ci test-client-web -- --to-edit opentdf-abacus-client-web
