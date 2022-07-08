@@ -1,5 +1,4 @@
-import { expect } from '@playwright/test';
-import { authorize } from './helpers/operations';
+import { expect, chromium, firefox, webkit } from '@playwright/test';
 import { test } from './helpers/fixtures';
 import toString from 'stream-to-string';
 import fs from 'fs';
@@ -11,15 +10,11 @@ const originalText = fs.readFileSync(path.join(__dirname, 'file.txt'), 'utf8');
 test.use({ acceptDownloads });
 
 test.describe('<TDF3JS/>', () => {
-    test.beforeEach(async ({ page }) => {
-        await authorize(page);
+    test('should use TDF3JS to encrypt/decrypt plain text', async ({ page, browser }) => {
         await page.goto('/');
-    });
-
-    test('should use TDF3JS to encrypt/decrypt plain text', async ({ page }) => {
-        const header = await page.locator('h2:has-text("Attributes")');
-        await expect(header).toBeVisible();
-        await page.locator("input[type=\"file\"]").setInputFiles(path.join(__dirname, 'file.txt'));
+        const input = await page.locator('[data-test-id=file-input]');
+        await expect(input).toBeVisible();
+        await page.locator('[data-test-id=file-input]').setInputFiles(path.join(__dirname, 'file.txt'));
         // @ts-ignore
         const download = await page.waitForEvent('download'); // wait for download to start
         // wait for download to complete
@@ -27,5 +22,6 @@ test.describe('<TDF3JS/>', () => {
         const decryptedText = await toString(stream);
 
         expect(decryptedText).toEqual(originalText);
+        await browser.close();
     });
 });

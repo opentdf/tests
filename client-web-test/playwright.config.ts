@@ -14,18 +14,13 @@ const config: PlaywrightTestConfig = {
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
 
-  use: {
-    headless: true,
-    browserName: "chromium"
-  },
-
   expect: {
 
     /**
      * Maximum time expect() should wait for the condition to be met.
      * For example in `await expect(locator).toHaveText();`
      */
-    timeout: 5000
+    timeout: 10000
   },
 
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -35,13 +30,15 @@ const config: PlaywrightTestConfig = {
   retries: process.env.CI ? 2 : 0,
 
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : 2,
+  workers: process.env.CI ? 1 : 1,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'line',
 
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
+    headless: true,
+    storageState: 'storageState.json',
 
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
     actionTimeout: 0,
@@ -52,29 +49,31 @@ const config: PlaywrightTestConfig = {
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry'
   },
+  globalSetup: require.resolve('./tests/global-setup'),
 
   /* Configure projects for major browsers */
   projects: [
     {
       name: 'chromium',
-
-      /* Project-specific settings. */
       use: {
+        browserName: 'chromium',
         ...devices['Desktop Chrome'],
       },
     },
     {
       name: 'firefox',
       use: {
+        browserName: 'firefox',
         ...devices['Desktop Firefox'],
-      },
+      }
     },
     {
       name: 'webkit',
       use: {
+        browserName: 'webkit',
         ...devices['Desktop Safari'],
-      },
-    }
+      }
+    },
   ]
 };
 export default config;
