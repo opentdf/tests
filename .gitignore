@@ -15,3 +15,5 @@ vulnerability/tilt_modules/
 /xtest/tmp/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
+
+/client-web-test/storageState.json
