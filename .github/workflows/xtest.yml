@@ -44,8 +44,7 @@ jobs:
           kubectl version --client
           kustomize version
           tilt version
-      - name: start minikube
-        id: minikube
+      - name: start minikubeg4d
         uses: medyagh/setup-minikube@master
         with:
           minikube-version: 1.25.2
