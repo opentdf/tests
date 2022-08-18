@@ -1,10 +1,13 @@
-include('../projects/backend/Tiltfile')
+# Tiltfile for development of OpenTDF backend
+# reference https://docs.tilt.dev/api.html
+# extensions https://github.com/tilt-dev/tilt-extensions
 
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
-k8s_resource("keycloak", port_forwards="8080:8080")
+load("../projects/backend/common.Tiltfile", "backend", "CONTAINER_REGISTRY", "OIDC_CLIENT_SECRET")
+
+backend()
 
 local_resource(
     "test",
     "npm run test",
-    resource_deps=["keycloak", "opentdf-kas"]
+    resource_deps=["backend"]
 )
