@@ -1,23 +1,15 @@
 include('../projects/backend/Tiltfile')
-
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
-k8s_resource("keycloak", port_forwards="8080:8080")
-k8s_resource(
-    "opentdf-xtest",
-    resource_deps=["keycloak-bootstrap", "keycloak", "opentdf-kas"],
-    auto_init=False,
-    trigger_mode=TRIGGER_MODE_MANUAL
-)
+include('../projects/backend/xtest.Tiltfile')
 
 local_resource(
     "test-client-web",
     "npm run test",
-    resource_deps=["keycloak", "keycloak-bootstrap", "opentdf-kas"]
+    resource_deps=["xtest-keycloak-bootstrap"]
 )
 
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["keycloak", "keycloak-bootstrap", "opentdf-kas"]
+    resource_deps=["xtest-keycloak-bootstrap"]
 )
