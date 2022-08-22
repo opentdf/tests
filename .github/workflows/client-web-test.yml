@@ -62,4 +62,5 @@ jobs:
         run: |-
           kubectl version
           cd client-web-test
+          cat file.xtest
           tilt ci
