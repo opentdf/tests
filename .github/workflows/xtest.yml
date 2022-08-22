@@ -55,4 +55,6 @@ jobs:
         run: |-
           kubectl version
           cd xtest
+          ls ../projects
+          ls ../projects/backend
           tilt ci -f ../projects/backend/xtest.Tiltfile
