@@ -57,4 +57,4 @@ jobs:
           cd xtest
           ls ../projects
           ls ../projects/backend
-          tilt ci -f ../projects/backend/xtest.Tiltfile
+          tilt ci -f ../projects/backend/Tiltfile.xtest
