@@ -62,5 +62,5 @@ jobs:
         run: |-
           kubectl version
           cd client-web-test
-          cat file.xtest
+          cat ../projects/backend/Tiltfile.xtest
           tilt ci
