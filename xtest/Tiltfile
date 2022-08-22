@@ -1,10 +1,7 @@
 include('../projects/backend/Tiltfile')
 
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
-k8s_resource("keycloak", port_forwards="8080:8080")
-
 local_resource(
     "test",
     "npm run test",
-    resource_deps=["keycloak", "opentdf-kas"]
+    resource_deps=["backend"]
 )
