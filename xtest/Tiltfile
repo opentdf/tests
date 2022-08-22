@@ -1,4 +1,4 @@
-include('../projects/backend/xtest.Tiltfile')
+include('../projects/backend/Tiltfile.xtest')
 
 local_resource(
     "test",
