@@ -1,4 +1,4 @@
-include('../projects/backend/Tiltfile.xtest')
+include('../projects/backend/xtest.Tiltfile')
 
 k8s_resource("kas", resource_deps=["attributes"], port_forwards="8000:8000")
 k8s_resource("keycloak", port_forwards="8080:8080")
