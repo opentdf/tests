@@ -1,10 +1,10 @@
 include('../projects/backend/xtest.Tiltfile')
 
-k8s_resource("kas", resource_deps=["attributes"], port_forwards="8000:8000")
-k8s_resource("keycloak", port_forwards="8080:8080")
+#k8s_resource("kas", resource_deps=["attributes"], port_forwards="8000:8000")
+#k8s_resource("keycloak", port_forwards="8080:8080")
 
 local_resource(
     "test",
     "npm run test",
-    resource_deps=["keycloak", "kas"]
+    resource_deps=["backend", "keycloak-bootstrap"]
 )
