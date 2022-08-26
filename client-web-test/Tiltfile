@@ -1,15 +1,22 @@
-include('../projects/backend/Tiltfile')
-include('../projects/backend/xtest.Tiltfile')
+load('../projects/backend/common.Tiltfile', "backend")
+
+backend()
+
+local_resource(
+    "test",
+    "npm run test",
+    resource_deps=["backend"]
+)
 
 local_resource(
     "test-client-web",
     "npm run test",
-    resource_deps=["xtest-keycloak-bootstrap"]
+    resource_deps=["test"]
 )
 
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["xtest-keycloak-bootstrap"]
+    resource_deps=["test-client-web"]
 )
