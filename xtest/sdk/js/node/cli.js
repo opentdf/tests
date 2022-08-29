@@ -8,7 +8,7 @@
  */
 const { Command } = require("commander");
 const { Readable } = require("stream");
-const { Client } = require("client-web");
+const { Client } = require("@opentdf/client");
 const fs = require("fs");
 
 const program = new Command();
@@ -29,9 +29,9 @@ const setSourceFor = (builder, source) => {
 const createClient = () => new Client.Client({
   clientId: "tdf-client",
   organizationName: 'tdf',
-  kasEndpoint: 'http://localhost:8000',
+  kasEndpoint: 'http://localhost:65432/api/kas',
   clientSecret: '123-456',
-  virtruOIDCEndpoint: 'http://localhost:8080/',
+  virtruOIDCEndpoint: 'http://localhost:65432',
 });
 
 const dstAsStream = (dstFile, encoding) => {
