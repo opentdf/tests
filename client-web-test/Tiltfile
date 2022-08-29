@@ -1,21 +1,24 @@
-include('../projects/backend/Tiltfile')
+load("../projects/backend/common.Tiltfile", "backend")
+
+ingress_enable = {
+    ("%s.ingress.enabled" % s): "true"
+    for s in ["attributes", "entitlements", "kas", "keycloak"]
+}
+
+backend(set=ingress_enable)
 
 k8s_resource(
     "opentdf-xtest",
     resource_deps=["backend"],
     auto_init=False,
-    trigger_mode=TRIGGER_MODE_MANUAL
+    trigger_mode=TRIGGER_MODE_MANUAL,
 )
 
-local_resource(
-    "test-client-web",
-    "npm run test",
-    resource_deps=["backend"]
-)
+local_resource("test-client-web", "npm run test", resource_deps=["backend"])
 
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["backend"]
+    resource_deps=["backend"],
 )
