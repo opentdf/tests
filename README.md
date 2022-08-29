@@ -1,12 +1,12 @@
 # tests
 Tests for OpenTDF
 
-[Vulnerability](vulnerability)
+## [Vulnerability](vulnerability)
 
 Place to run frontend and backend together locally.
 Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
 
-1) To pull latest repos run
+1) To update the 
    <br/>`git submodule update --init --recursive`
    <br/>`git submodule foreach --recursive git fetch`
    <br/>`git submodule foreach git merge origin main`
@@ -19,10 +19,16 @@ run it inside docker. Be careful not to push this changes, we won't need that to
 
 Then
 
-## For xtests local setup:
-0) `cd projects/client-web`
-1) `nvm use; make all`
-2) `cd ../../xtest`
-3) `npm ci && npm i <../projects/client-web/lib/opentdf-client-*.tgz`
-4) `pip3 install -r ./requirements.txt`
-5) `tilt up integration-test -- --to-edit opentdf-abacus`
+## Cross-client compatibiliy tests (xtests)
+1) `cd xtest`
+2) `npm ci && npm i @opentdf/client@CLIENT_VERSION`
+3) `pip3 install -r ./requirements.txt`
+4) `tilt up integration-test -- --to-edit opentdf-abacus`
+
+### To use a Github Package Manager Version
+
+Before doing theabove, [configure Github packages as the scope provider for opentdf](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages)
+
+```
+npm login --scope=@opentdf --registry=https://npm.pkg.github.com
+```
