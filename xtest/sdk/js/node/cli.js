@@ -8,7 +8,7 @@
  */
 const { Command } = require("commander");
 const { Readable } = require("stream");
-const { Client } = require("@opentdf/client");
+const { FileClient } = require("@opentdf/client");
 const fs = require("fs");
 
 const program = new Command();
@@ -26,12 +26,13 @@ const setSourceFor = (builder, source) => {
   return builder;
 };
 
-const createClient = () => new Client.Client({
+const createClient = () => new FileClient({
   clientId: "tdf-client",
   organizationName: 'tdf',
-  kasEndpoint: 'http://localhost:65432/api/kas',
   clientSecret: '123-456',
-  virtruOIDCEndpoint: 'http://localhost:65432',
+  exchange: "client",
+  oidcOrigin: 'http://localhost:65432',
+  kasEndpoint: 'http://localhost:65432/api/kas',
 });
 
 const dstAsStream = (dstFile, encoding) => {
@@ -45,42 +46,18 @@ const dstAsStream = (dstFile, encoding) => {
   return process.stdout;
 };
 
-const encrypt = ({ mimeType }) => {
+const encrypt = () => {
   const { srcFile, dstFile } = program.opts();
-
-  const encryptParamsBuilder = setSourceFor(
-    new Client.EncryptParamsBuilder(),
-    srcFile
-  );
-
-  if (mimeType) {
-    encryptParamsBuilder.setMimeType(mimeType);
-  }
-
   const client = createClient();
 
-  const encryptParams = encryptParamsBuilder.withOffline().build();
-
-  client.encrypt(encryptParams).then(ct => {
-    ct.pipe(dstAsStream(dstFile, "binary"));
-    ct.on("end", done);
-  });
+  client.encrypt(srcFile).then(ct => ct.toFile(dstFile)).then(done);
 };
 
 const decrypt = () => {
   const { srcFile, dstFile } = program.opts();
-
-  const decryptParams = setSourceFor(
-      new Client.DecryptParamsBuilder(),
-      srcFile
-  ).build();
-
   const client = createClient();
 
-  client.decrypt(decryptParams).then(pt => {
-    pt.pipe(dstAsStream(dstFile, "utf8"));
-    pt.on("end", done);
-  });
+  client.decrypt(srcFile).then(ct => ct.toFile(dstFile)).then(done);
 };
 
 const jsonToDst = (value, dstFile) => {
