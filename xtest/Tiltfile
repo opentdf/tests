@@ -1,7 +1,15 @@
-include('../projects/backend/Tiltfile')
+# Tiltfile for development of OpenTDF backend
+# reference https://docs.tilt.dev/api.html
+# extensions https://github.com/tilt-dev/tilt-extensions
+# helm remote usage https://github.com/tilt-dev/tilt-extensions/tree/master/helm_remote#additional-parameters
 
-local_resource(
-    "test",
-    "npm run test",
-    resource_deps=["backend"]
-)
+load("../projects/backend/common.Tiltfile", "backend")
+
+ingress_enable = {
+    ("%s.ingress.enabled" % s): "true"
+    for s in ["attributes", "entitlements", "kas", "keycloak"]
+}
+
+backend(set=ingress_enable)
+
+local_resource("test", "npm run test", resource_deps=["backend"])
