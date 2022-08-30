@@ -18,7 +18,7 @@ docker_build(
 k8s_yaml(
     helm(
         "../projects/frontend/charts/abacus",
-        "abcus",
+        "abacus",
         set=[
             "attributes.serverUrl=%s/api/attributes" % EXTERNAL_URL,
             "entitlements.serverUrl=%s/api/entitlements" % EXTERNAL_URL,
@@ -27,11 +27,11 @@ k8s_yaml(
         values=["../client-web-test/frontend-values.yaml"],
     )
 )
-k8s_resource("chart-abacus")
+k8s_resource("abacus")
 
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["backend", "chart-abacus"],
+    resource_deps=["backend", "abacus"],
 )

@@ -1,4 +1,5 @@
 basePath: ""
+fullnameOverride: abacus
 oidc:
   clientId: dcr-test
   queryRealms: tdf
