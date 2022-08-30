@@ -9,9 +9,29 @@ backend(set=ingress_enable)
 
 local_resource("test-client-web", "npm run test", resource_deps=["backend"])
 
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/abacus",
+    "../projects/frontend",
+    dockerfile="../projectsfrontend/DockerfileTests",
+)
+
+k8s_yaml(
+    helm(
+        "../projects/frontend/charts/abacus",
+        "abcus",
+        set=[
+            "attributes.serverUrl=%s/api/attributes" % EXTERNAL_URL,
+            "entitlements.serverUrl=%s/api/entitlements" % EXTERNAL_URL,
+            "oidc.serverUrl=%s/auth/" % EXTERNAL_URL,
+        ],
+        values=["../client-web-test/frontend-values.yaml"],
+    )
+)
+k8s_resource("chart-abacus")
+
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["backend"],
+    resource_deps=["backend", "chart-abacus"],
 )

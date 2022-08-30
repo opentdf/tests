@@ -12,4 +12,23 @@ ingress_enable = {
 
 backend(set=ingress_enable)
 
-local_resource("test", "npm run test", resource_deps=["backend"])
+docker_build(
+    CONTAINER_REGISTRY + "/opentdf/abacus",
+    "../projects/frontend",
+)
+
+k8s_yaml(
+    helm(
+        "../projects/frontend/charts/abacus",
+        "abcus",
+        set=[
+            "attributes.serverUrl=%s/api/attributes" % EXTERNAL_URL,
+            "entitlements.serverUrl=%s/api/entitlements" % EXTERNAL_URL,
+            "oidc.serverUrl=%s/auth/" % EXTERNAL_URL,
+        ],
+        values=["../client-web-test/frontend-values.yaml"],
+    )
+)
+k8s_resource("chart-abacus")
+
+local_resource("test", "npm run test", resource_deps=["backend", "chart-abacus"])
