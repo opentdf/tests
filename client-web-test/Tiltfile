@@ -12,7 +12,7 @@ CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 docker_build(
     CONTAINER_REGISTRY + "/opentdf/abacus",
     "../projects/frontend",
-    dockerfile="../projectsfrontend/DockerfileTests",
+    dockerfile="../projects/frontend/DockerfileTests",
 )
 EXTERNAL_URL = "http://localhost:65432"
 k8s_yaml(
