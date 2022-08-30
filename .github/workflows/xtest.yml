@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: "30 9,21 * * *"
 jobs:
-  xtest:
+  cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
