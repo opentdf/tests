@@ -37,9 +37,9 @@ jobs:
             helm
             tilt
           # This should be in sync with the minikube-deployed kube version below
-          kubectl: "1.23.9"
-          helm: "3.9.2"
-          tilt: "0.30.5"
+          kubectl: "1.24.1"
+          helm: "3.9.1"
+          tilt: "0.30.4"
       - run: |
           kubectl version --client
           kustomize version
@@ -48,9 +48,9 @@ jobs:
         id: minikube
         uses: medyagh/setup-minikube@master
         with:
-          minikube-version: 1.25.2
+          minikube-version: 1.26.0
           # This should be in sync with the setup-tools version above
-          kubernetes-version: 1.23.9
+          kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
           kubectl version
