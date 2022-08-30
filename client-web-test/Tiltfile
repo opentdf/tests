@@ -8,7 +8,7 @@ ingress_enable = {
 backend(set=ingress_enable)
 
 local_resource("test-client-web", "npm run test", resource_deps=["backend"])
-
+CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 docker_build(
     CONTAINER_REGISTRY + "/opentdf/abacus",
     "../projects/frontend",
