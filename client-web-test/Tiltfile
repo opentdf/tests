@@ -1,22 +1,17 @@
-load('../projects/backend/common.Tiltfile', "backend")
-
-backend()
-
-local_resource(
-    "test",
-    "npm run test",
-    resource_deps=["backend"]
+load(
+    "../opentdf.Tiltfile",
+    "opentdf_cluster_with_ingress",
 )
 
-local_resource(
-    "test-client-web",
-    "npm run test",
-    resource_deps=["test"]
-)
+opentdf_cluster_with_ingress()
+
+local_resource("test", "npm run test", resource_deps=["frontend"])
+
+local_resource("test-client-web", "npm run test", resource_deps=["test"])
 
 local_resource(
     "frontend-test",
     "CI=true npm run test:playwright",
     dir="../projects/frontend",
-    resource_deps=["test-client-web"]
+    resource_deps=["test-client-web"],
 )

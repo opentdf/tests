@@ -2,12 +2,12 @@
 # reference https://docs.tilt.dev/api.html
 # extensions https://github.com/tilt-dev/tilt-extensions
 
-load("../projects/backend/common.Tiltfile", "backend", "CONTAINER_REGISTRY", "OIDC_CLIENT_SECRET")
-
-backend()
-
-local_resource(
-    "test",
-    "npm run test",
-    resource_deps=["backend"]
+load(
+    "../opentdf.Tiltfile",
+    "opentdf_cluster_with_ingress",
 )
+
+# TODO remove abacus here since we don't use it for this test
+opentdf_cluster_with_ingress()
+
+local_resource("test", "npm run test", resource_deps=["backend"])

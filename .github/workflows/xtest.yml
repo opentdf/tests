@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: "30 9,21 * * *"
 jobs:
-  xtest:
+  cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
@@ -37,19 +37,20 @@ jobs:
             helm
             tilt
           # This should be in sync with the minikube-deployed kube version below
-          kubectl: "1.23.9"
+          kubectl: "1.24.1"
           helm: "3.9.2"
           tilt: "0.30.5"
       - run: |
           kubectl version --client
           kustomize version
           tilt version
-      - name: start minikubeg4d
+      - name: start minikube
+        id: minikube
         uses: medyagh/setup-minikube@master
         with:
-          minikube-version: 1.25.2
+          minikube-version: 1.26.0
           # This should be in sync with the setup-tools version above
-          kubernetes-version: 1.23.9
+          kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
           kubectl version
