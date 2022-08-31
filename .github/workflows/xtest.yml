@@ -21,13 +21,12 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: config ghpr with pat
         run: |-
-          ls -l
-          cd ../../xtest
+          cd xtest
           echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: update packages
         run: |-
-          cd ../../xtest
+          cd xtest
           npm uninstall @opentdf/cli @opentdf/client
           npm uninstall @opentdf/cli
           npm install @opentdf/cli@${{ github.event.client_payload.version }}
