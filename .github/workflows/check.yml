@@ -12,4 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: 🦪 ✔ 🧼🧼🧼
-        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always .github/scripts/*
+        run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always scripts/*
