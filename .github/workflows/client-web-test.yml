@@ -20,22 +20,19 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: config ghpr with pat
         run: |-
-          cd xtest
+          cd ../../client-web-test
           echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Install dependencies
         run: |-
+          cd ../../client-web-test
+          npm install
           npm ci
           npx playwright install
           npx playwright install-deps
           npm uninstall @opentdf/cli @opentdf/client
           npm uninstall @opentdf/cli
           npm install @opentdf/cli@${{ github.event.client_payload.version }}
-          npm install
-          cd ../../client-web-test
-          npm ci
-          npx playwright install
-          npx playwright install-deps
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
