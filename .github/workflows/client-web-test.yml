@@ -20,7 +20,7 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: config ghpr with pat
         run: |-
-          cd xtests
+          cd xtest
           echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Install dependencies
