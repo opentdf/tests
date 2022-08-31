@@ -6,4 +6,4 @@
 #
 
 env NODE_TLS_REJECT_UNAUTHORIZED=0 node --unhandled-rejections=strict \
-  $(dirname "${BASH_SOURCE[0]}")/cli.js "$1" -i "$2" -o "$3" "${@:4}"
+  "$(dirname "${BASH_SOURCE[0]}")"/cli.js "$1" -i "$2" -o "$3" "${@:4}"
