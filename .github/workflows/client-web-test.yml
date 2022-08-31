@@ -18,19 +18,20 @@ jobs:
         with:
           node-version: "16.x"
       # todo: install and activate virtual env for python?
-      - name: Build client-web
+      - name: config ghpr with pat
         run: |-
-          cd projects/client-web/lib
-          npm ci
-          npm pack
+          cd xtests
+          echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
+          echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Install dependencies
         run: |-
-          cd projects/frontend
-          cp ../client-web/lib/opentdf-client-*.tgz ./
           npm ci
           npx playwright install
           npx playwright install-deps
-          npm i opentdf-client-*.tgz
+          npm uninstall @opentdf/cli @opentdf/client
+          npm uninstall @opentdf/cli
+          npm install @opentdf/cli@${{ github.event.client_payload.version }}
+          npm install
           cd ../../client-web-test
           npm ci
           npx playwright install

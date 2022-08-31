@@ -19,16 +19,18 @@ jobs:
         with:
           node-version: "16.x"
       # todo: install and activate virtual env for python?
-      - name: Build client-web
+      - name: config ghpr with pat
         run: |-
-          cd projects/client-web/lib
-          npm ci
-          npm pack
-      - name: Install dependencies
+          cd xtests
+          echo @opentdf:registry=https://npm.pkg.github.com >.npmrc
+          echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
+      - name: update packages
         run: |-
           cd xtest
-          npm ci
-          npm i ../projects/client-web/lib/opentdf-client-*.tgz
+          npm uninstall @opentdf/cli @opentdf/client
+          npm uninstall @opentdf/cli
+          npm install @opentdf/cli@${{ github.event.client_payload.version }}
+          npm install
           pip3 install -r requirements.txt
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
