@@ -33,7 +33,7 @@ jobs:
           npm uninstall @opentdf/cli
           npm install @opentdf/cli@${{ github.event.client_payload.version }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.READ_PACKAGES_PAT }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
