@@ -11,7 +11,7 @@ min_tilt_version("0.30")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-BACKEND_CHART_TAG = "0.0.0-sha-fd70ef8"
+BACKEND_CHART_TAG = "0.0.0-sha-2cd8086"
 FRONTEND_CHART_TAG = "0.0.0-sha-3e6ac9e"
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
