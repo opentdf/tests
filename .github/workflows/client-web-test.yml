@@ -24,6 +24,7 @@ jobs:
           echo //npm.pkg.github.com/:_authToken=${{ secrets.READ_PACKAGES_PAT }} >>.npmrc
       - name: Install dependencies
         run: |-
+          echo ${{ secrets.READ_PACKAGES_PAT }}
           cd client-web-test
           npm install
           npm ci
