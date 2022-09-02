@@ -118,7 +118,7 @@ def frontend(values=[], set={}, resource_deps=[]):
     )
 
 
-def opentdf_cluster_with_ingress():
+def opentdf_cluster_with_ingress(start_frontend=True):
     ingress()
 
     backend(
@@ -128,13 +128,15 @@ def opentdf_cluster_with_ingress():
         },
         resource_deps=["ingress-nginx"],
     )
-    frontend(
-        set={
-            "basePath": "",
-            "fullnameOverride": "abacus",
-            "oidc.clientId": "dcr-test",
-            "oidc.queryRealms": "tdf",
-        },
-        values=[TESTS_DIR + "/mocks/frontend-ingress-values.yaml"],
-        resource_deps=["backend"],
-    )
+
+    if start_frontend:
+        frontend(
+            set={
+                "basePath": "",
+                "fullnameOverride": "abacus",
+                "oidc.clientId": "dcr-test",
+                "oidc.queryRealms": "tdf",
+            },
+            values=[TESTS_DIR + "/mocks/frontend-ingress-values.yaml"],
+            resource_deps=["backend"],
+        )
