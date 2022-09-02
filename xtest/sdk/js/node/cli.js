@@ -27,7 +27,7 @@ const setSourceFor = (builder, source) => {
 };
 
 const createClient = () =>
-  new Client.Client({
+  new FileClient({
     clientId: "tdf-client",
     clientSecret: "123-456",
     oidcOrigin: "http://localhost:8080/auth/realms/tdf",
