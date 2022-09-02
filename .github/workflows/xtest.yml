@@ -9,6 +9,9 @@ jobs:
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xtest
     permissions:
       contents: read
       packages: read
@@ -21,11 +24,8 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: update packages
         run: |-
-          cd xtest
-          npm uninstall @opentdf/cli @opentdf/client
-          npm uninstall @opentdf/cli
-          npm install @opentdf/cli@${{ github.event.client_payload.version }}
           npm install
+          npm install @opentdf/cli@${{ github.event.client_payload.version || latest }} @opentdf/client@${{ github.event.client_payload.version || latest }}
           pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,5 +53,4 @@ jobs:
       - name: Run tilt
         run: |-
           kubectl version
-          cd xtest
           tilt ci
