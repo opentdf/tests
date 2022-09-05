@@ -25,7 +25,7 @@ jobs:
       - name: update packages
         run: |-
           npm install
-          npm install @opentdf/cli@${{ github.event.client_payload.version || latest }} @opentdf/client@${{ github.event.client_payload.version || latest }}
+          npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
           pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

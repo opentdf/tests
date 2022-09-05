@@ -27,7 +27,7 @@ jobs:
           npm install
           npx playwright install
           npx playwright install-deps
-          npm install @opentdf/cli@${{ github.event.client_payload.version || latest }} @opentdf/client@${{ github.event.client_payload.version || latest }}
+          npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
