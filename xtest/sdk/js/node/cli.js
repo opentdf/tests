@@ -6,10 +6,10 @@
  *
  * Plaintext is written as UTF8, ciphertext is written as binary.
  */
-const { Command } = require("commander");
-const { Readable } = require("stream");
-const { FileClient } = require("@opentdf/client");
-const fs = require("fs");
+import { Command } from "commander";
+import { Readable } from "stream";
+import { FileClient } from "@opentdf/client";
+import * as fs from "fs";
 
 const program = new Command();
 
@@ -30,7 +30,7 @@ const createClient = () =>
   new FileClient({
     clientId: "tdf-client",
     clientSecret: "123-456",
-    oidcOrigin: "http://localhost:8080/auth/realms/tdf",
+    oidcOrigin: "http://localhost:65432/auth/realms/tdf",
     kasEndpoint: "http://localhost:65432/api/kas",
   });
 
