@@ -23,7 +23,7 @@ Then
 1) `cd xtest`
 2) `npm ci && npm i @opentdf/client@CLIENT_VERSION`
 3) `pip3 install -r ./requirements.txt`
-4) `tilt up integration-test -- --to-edit opentdf-abacus`
+4) `tilt up`
 
 ### To use a Github Package Manager Version
 
