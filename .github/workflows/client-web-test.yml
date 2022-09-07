@@ -27,7 +27,7 @@ jobs:
           npm install
           npx playwright install
           npx playwright install-deps
-          npm install @opentdf/cli@0.3.0-beta.357
+          npm install @opentdf/cli@0.3.0-beta.359
           npm list --depth=0
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
