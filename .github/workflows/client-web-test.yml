@@ -24,10 +24,10 @@ jobs:
           registry-url: https://npm.pkg.github.com
       - name: Install dependencies
         run: |-
-          npm install
+          npm ci
           npx playwright install
           npx playwright install-deps
-          npm install @opentdf/cli@0.3.0-beta.359
+          npm install @opentdf/cli@beta
           npm list --depth=0
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

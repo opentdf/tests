@@ -24,8 +24,8 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: update packages
         run: |-
-          npm install
-          npm install @opentdf/cli@0.3.0-beta.359
+          npm ci
+          npm install @opentdf/cli@beta
           npm list --depth=0
           pip3 install -r requirements.txt
         env:
