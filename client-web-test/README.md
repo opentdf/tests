@@ -1,7 +1,5 @@
-# Vulnerability
+# DEPRECATED: Move to @opentdf/client-web
 
-
-## Overview
 
 Automated checks for tdf3 encrypt/decrypt in special Abacus build:test mode
 

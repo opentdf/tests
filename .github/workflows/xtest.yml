@@ -6,30 +6,29 @@ on:
   schedule:
     - cron: "30 9,21 * * *"
 jobs:
-  xtest:
+  cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xtest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - run: git submodule update --remote --recursive
-        if: github.event.schedule
       - uses: actions/setup-node@v2
         with:
           node-version: "16.x"
+          registry-url: https://npm.pkg.github.com
       # todo: install and activate virtual env for python?
-      - name: Build client-web
+      - name: update packages
         run: |-
-          cd projects/client-web/lib
           npm ci
-          npm pack
-      - name: Install dependencies
-        run: |-
-          cd xtest
-          npm ci
-          npm i ../projects/client-web/lib/opentdf-client-*.tgz
+          npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
           pip3 install -r requirements.txt
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
@@ -37,7 +36,7 @@ jobs:
             helm
             tilt
           # This should be in sync with the minikube-deployed kube version below
-          kubectl: "1.23.9"
+          kubectl: "1.24.1"
           helm: "3.9.2"
           tilt: "0.30.5"
       - run: |
@@ -48,11 +47,10 @@ jobs:
         id: minikube
         uses: medyagh/setup-minikube@master
         with:
-          minikube-version: 1.25.2
+          minikube-version: 1.26.0
           # This should be in sync with the setup-tools version above
-          kubernetes-version: 1.23.9
+          kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
           kubectl version
-          cd xtest
-          tilt ci integration-test -- --to-edit opentdf-abacus
+          tilt ci

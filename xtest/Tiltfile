@@ -1,10 +1,13 @@
-include('../projects/backend/Tiltfile')
+# Tiltfile for development of OpenTDF backend
+# reference https://docs.tilt.dev/api.html
+# extensions https://github.com/tilt-dev/tilt-extensions
 
-k8s_resource("opentdf-kas", resource_deps=["opentdf-attributes"], port_forwards="8000:8000")
-k8s_resource("keycloak", port_forwards="8080:8080")
-
-local_resource(
-    "test",
-    "npm run test",
-    resource_deps=["keycloak", "opentdf-kas"]
+load(
+    "../opentdf.Tiltfile",
+    "opentdf_cluster_with_ingress",
 )
+
+# TODO remove abacus here since we don't use it for this test
+opentdf_cluster_with_ingress(start_frontend=False)
+
+local_resource("test", "npm run test", resource_deps=["backend"])
