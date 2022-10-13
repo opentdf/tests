@@ -55,8 +55,12 @@ jobs:
         with:
           timeout_minutes: 12
           max_attempts: 3
-          retry_on: timeout
+          retry_wait_seconds: 30
           command: |-
             cd xtest
             kubectl version
             tilt ci
+          on_retry_command: |-
+            cd vulnerability
+            kubectl version
+            tilt down
