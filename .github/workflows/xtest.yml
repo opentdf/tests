@@ -51,7 +51,7 @@ jobs:
           # This should be in sync with the setup-tools version above
           kubernetes-version: 1.24.1
       - name: Run tilt
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v2.8.1
         with:
           timeout_minutes: 12
           max_attempts: 3
