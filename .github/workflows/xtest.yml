@@ -57,5 +57,6 @@ jobs:
           max_attempts: 3
           retry_on: timeout
           command: |-
+            cd xtest
             kubectl version
             tilt ci
