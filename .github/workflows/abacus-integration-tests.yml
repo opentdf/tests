@@ -54,8 +54,10 @@ jobs:
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
-          npm start
-          cd tests/e2e
+          npm start & npx wait-on http://localhost:3000
+      - name: Run Playwright tests
+        run: |-
+          cd projects/frontend/tests/e2e
           npx playwright test
       - name: Upload test results
         if: always()
