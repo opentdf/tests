@@ -47,7 +47,7 @@ jobs:
           cd projects/backend
           ls -la
           kubectl version
-          tilt ci
+          tilt up
 
       - name: Run Frontend
         run: |-
