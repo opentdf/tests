@@ -20,44 +20,42 @@ jobs:
         with:
           node-version: "16.x"
 
-#      - uses: yokawasa/action-setup-kube-tools@v0.7.1
-#        with:
-#          setup-tools: |
-#            kubectl
-#            helm
-#            tilt
-#          # This should be in sync with the minikube-deployed kube version below
-#          kubectl: "1.23.1"
-#          helm: "3.8.0"
-#          tilt: "0.26.2"
-#      - run: |
-#          kubectl version --client
-#          kustomize version
-#          tilt version
-#      - name: start minikube
-#        id: minikube
-#        uses: medyagh/setup-minikube@master
-#        with:
-#          minikube-version: 1.25.1
-#          # This should be in sync with the setup-tools version above
-#          kubernetes-version: 1.23.1
-#      - name: Run tilt
-#        run: |-
-#          ls -la
-#          cd projects/backend
-#          ls -la
-#          kubectl version
-#          tilt ci
+      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+        with:
+          setup-tools: |
+            kubectl
+            helm
+            tilt
+          # This should be in sync with the minikube-deployed kube version below
+          kubectl: "1.23.1"
+          helm: "3.8.0"
+          tilt: "0.26.2"
+      - run: |
+          kubectl version --client
+          kustomize version
+          tilt version
+      - name: start minikube
+        id: minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          minikube-version: 1.25.1
+          # This should be in sync with the setup-tools version above
+          kubernetes-version: 1.23.1
+      - name: Run tilt
+        run: |-
+          ls -la
+          cd projects/backend
+          ls -la
+          kubectl version
+          tilt ci
 
-      - name: Run Frontend
+      - name: Start Frontend and run Playwright tests
         run: |-
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
           cd tests/e2e
           npx playwright test
-#      - name: Run Playwright tests
-#        run: xvfb-run npm run test:playwright
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
