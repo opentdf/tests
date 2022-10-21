@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-#      - run: git submodule update --remote --recursive
+      - run: git submodule update --remote --recursive
 #        if: github.event.schedule
 
       - uses: actions/setup-node@v2
