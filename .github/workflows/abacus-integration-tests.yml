@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-#      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 #        with:
 #          submodules: true
 #      - run: git submodule update --remote --recursive
@@ -43,6 +43,7 @@ jobs:
           kubernetes-version: 1.23.1
       - name: Run tilt
         run: |-
+          ls -la
           cd projects/backend
           kubectl version
           tilt ci
