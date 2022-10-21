@@ -10,11 +10,11 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - run: git submodule update --remote --recursive
-        if: github.event.schedule
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - run: git submodule update --remote --recursive
+#        if: github.event.schedule
 
       - uses: actions/setup-node@v2
         with:
@@ -45,7 +45,6 @@ jobs:
         run: |-
           cd projects/backend
           kubectl version
-          cd client-web-test
           tilt ci
 
       - name: Run Frontend
