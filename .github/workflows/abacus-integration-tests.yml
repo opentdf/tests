@@ -54,8 +54,10 @@ jobs:
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
-      - name: Run Playwright tests
-        run: xvfb-run npm run test:playwright
+          cd tests/e2e
+          npx playwright test
+#      - name: Run Playwright tests
+#        run: xvfb-run npm run test:playwright
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
