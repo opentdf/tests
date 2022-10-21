@@ -54,6 +54,7 @@ jobs:
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
+          npm start
           cd tests/e2e
           npx playwright test
       - name: Upload test results
