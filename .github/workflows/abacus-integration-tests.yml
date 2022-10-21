@@ -44,7 +44,7 @@ jobs:
       - name: Run tilt
         run: |-
           ls -la
-          cd ../projects/backend
+          cd projects/backend
           ls -la
           kubectl version
           tilt ci
