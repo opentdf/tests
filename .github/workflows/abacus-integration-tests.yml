@@ -20,44 +20,45 @@ jobs:
         with:
           node-version: "16.x"
 
-      - uses: yokawasa/action-setup-kube-tools@v0.7.1
-        with:
-          setup-tools: |
-            kubectl
-            helm
-            tilt
-          # This should be in sync with the minikube-deployed kube version below
-          kubectl: "1.24.1"
-          helm: "3.9.2"
-          tilt: "0.30.5"
-      - run: |
-          kubectl version --client
-          kustomize version
-          tilt version
-      - name: start minikube
-        id: minikube
-        uses: medyagh/setup-minikube@master
-        with:
-          minikube-version: 1.26.0
-          # This should be in sync with the setup-tools version above
-          kubernetes-version: 1.24.1
-      - name: Run tilt
-        run: |-
-          cd projects/backend
-          kubectl version
-          tilt ci
+#      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+#        with:
+#          setup-tools: |
+#            kubectl
+#            helm
+#            tilt
+#          # This should be in sync with the minikube-deployed kube version below
+#          kubectl: "1.24.1"
+#          helm: "3.9.2"
+#          tilt: "0.30.5"
+#      - run: |
+#          kubectl version --client
+#          kustomize version
+#          tilt version
+#      - name: start minikube
+#        id: minikube
+#        uses: medyagh/setup-minikube@master
+#        with:
+#          minikube-version: 1.26.0
+#          # This should be in sync with the setup-tools version above
+#          kubernetes-version: 1.24.1
+#      - name: Run tilt
+#        run: |-
+#          cd projects/backend
+#          kubectl version
+#          tilt ci
 
       - name: Start Frontend
         run: |-
           cd projects/frontend
           npm ci
-          npm i @playwright/test
           npx playwright install --with-deps
-          npm start & sleep 10 & npx wait-on 'http://localhost:3000'
+          npm build
+          npm start & npx wait-on 'http://localhost:3000'
       - name: Run Playwright tests
         run: |-
           cd projects/frontend/tests/e2e
-          npx playwright test
+          npm test:playwright
+#          npx playwright test
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
