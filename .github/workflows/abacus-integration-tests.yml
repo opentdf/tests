@@ -56,7 +56,7 @@ jobs:
 #          npx playwright install --with-deps
           npm start & npx wait-on http://localhost:3000
       - uses: microsoft/playwright-github-action@v1
-        run: |-
+      - run: |-
           cd projects/frontend/tests/e2e
           npm run test:playwright
 #      - name: Run Playwright tests
