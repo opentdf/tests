@@ -53,9 +53,9 @@ jobs:
           npm ci
           npm install wait-on
           npx playwright install --with-deps
+          npm start & npx wait-on http://localhost:3000
           npm run test:playwright
-#          npm start & npx wait-on http://localhost:3000
-#      - name: Run Playwright tests
+      #      - name: Run Playwright tests
 #        run: |-
 #          cd projects/frontend/tests/e2e
 #          npm run test:playwright
