@@ -54,7 +54,7 @@ jobs:
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
-          npm start & npx wait-on http://localhost:3000
+          npm start & npx wait-on 'http://localhost:3000'
       - name: Run Playwright tests
         run: |-
           cd projects/frontend/tests/e2e
@@ -64,4 +64,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: playwright-test-results
-          path: test-results
+          path: projects/frontend/tests/test-results
