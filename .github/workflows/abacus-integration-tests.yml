@@ -50,14 +50,19 @@ jobs:
       - name: Install dependecies and start Frontend
         run: |-
           cd projects/frontend
-          npm ci
+          npm install
+#          npm ci
           npm install wait-on
-          npx playwright install --with-deps
+#          npx playwright install --with-deps
           npm start & npx wait-on http://localhost:3000
-      - name: Run Playwright tests
+      - uses: microsoft/playwright-github-action@v1
         run: |-
           cd projects/frontend/tests/e2e
           npm run test:playwright
+#      - name: Run Playwright tests
+#        run: |-
+#          cd projects/frontend/tests/e2e
+#          npm run test:playwright
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
