@@ -43,9 +43,7 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
-          ls -la
           cd projects/backend
-          ls -la
           kubectl version
           tilt ci
 
@@ -54,6 +52,7 @@ jobs:
           cd projects/frontend
           npm ci
           npx playwright install --with-deps
+          npm i @playwright/test
           npm start & npx wait-on 'http://localhost:3000'
       - name: Run Playwright tests
         run: |-
@@ -64,4 +63,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: playwright-test-results
-          path: projects/frontend/tests/test-results
+          path: projects/frontend/tests/e2e/test-results
