@@ -7,7 +7,7 @@ on:
 #    - cron: "0 8 * * *"
 jobs:
   abacus-integration-tests:
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -45,7 +45,7 @@ jobs:
         run: |-
           cd projects/backend
           kubectl version
-          tilt ci
+          tilt up
       - name: Install dependencies and start Frontend
         run: |-
           cd projects/frontend
