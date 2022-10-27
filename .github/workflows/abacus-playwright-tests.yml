@@ -52,9 +52,4 @@ jobs:
       - name: Run tilt
         run: |-
           kubectl version
-          ls -la
-          cd ..
-          ls -la
-          cd projects/frontend
-          ls -la
           tilt ci
