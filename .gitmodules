@@ -1,0 +1,9 @@
+[submodule "projects/backend"]
+	path = projects/backend
+	url = git@github.com:/opentdf/backend
+[submodule "projects/client-web"]
+	path = projects/client-web
+	url = git@github.com:/opentdf/client-web
+[submodule "projects/frontend"]
+	path = projects/frontend
+	url = git@github.com:/opentdf/frontend

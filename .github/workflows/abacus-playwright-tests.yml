@@ -1,0 +1,55 @@
+name: Abacus-Playwright-Tests
+on:
+  push:
+    branches: 'PLAT-1967-2'
+  pull_request:
+  repository_dispatch:
+    types: [xtest]
+  schedule:
+    - cron: "0 8 * * 1,3,5"
+jobs:
+  vulnerability-test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: abacus-integration-test
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git submodule update --remote --recursive
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+          registry-url: https://npm.pkg.github.com
+      - name: Install dependencies
+        run: |-
+          npm ci
+      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+        with:
+          setup-tools: |
+            kubectl
+            helm
+            tilt
+          kubectl: "1.24.1"
+          helm: "3.9.2"
+          tilt: "0.30.5"
+      - run: |
+          kubectl version --client
+          kustomize version
+          tilt version
+      - name: start minikube
+        id: minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          minikube-version: 1.26.0
+          # This should be in sync with the setup-tools version above
+          kubernetes-version: 1.24.1
+      - name: Run tilt
+        run: |-
+          kubectl version
+          tilt ci

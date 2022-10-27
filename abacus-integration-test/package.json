@@ -1,0 +1,20 @@
+{
+  "name": "abacus-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test --config=../projects/frontend/tests/e2e/playwright.config.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^14.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.17.2",
+    "@types/node": "^17.0.8",
+    "typescript": "^4.5.4"
+  }
+}
