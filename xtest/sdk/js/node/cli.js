@@ -52,6 +52,19 @@ const encrypt = () => {
   client.encrypt(srcFile).then(ct => ct.toFile(dstFile)).then(done);
 };
 
+const offlineEncrypt = () => {
+  const { srcFile, dstFile } = program.opts();
+
+  const encryptParams = setSourceFor(
+    new Client.EncryptParamsBuilder(),
+    srcFile
+  ).withOffline().build();
+
+  const client = createClient();
+
+  client.encrypt(encryptParams).then(ct => ct.toFile(dstFile)).then(done);
+};
+
 const decrypt = () => {
   const { srcFile, dstFile } = program.opts();
   const client = createClient();
@@ -136,6 +149,11 @@ program
   .command("encrypt")
   .option(`-m, --mimeType <mimeType>`, "Content Type to apply to the file")
   .action(encrypt);
+
+program
+  .command("offlineEncrypt")
+  .option(`-m, --mimeType <mimeType>`, "Content Type to apply to the file")
+  .action(offlineEncrypt);
 
 program.command("decrypt").action(decrypt);
 

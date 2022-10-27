@@ -105,6 +105,39 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
         )
     logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
 
+# Test an offline roundtrip across the two referenced sdks.
+# Returns True if test succeeded, false otherwise.
+def test_offline_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
+    logger.info(
+        "--- Begin Test #%s: Roundtrip offline encrypt(%s) --> decrypt(%s)",
+        serial,
+        encrypt_sdk,
+        decrypt_sdk,
+    )
+
+    # Generate plaintext and files
+    ct_file, rt_file, mf_file = gen_files(serial)
+    logger.info(
+        "--- Gen Files %s, %s, %s",
+        ct_file,
+        rt_file,
+        mf_file
+    )
+
+    # Do the roundtrip.
+    logger.info("Offline Encrypt %s", encrypt_sdk)
+    offlineEncrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain")
+    logger.info("Decrypt %s", decrypt_sdk)
+    decrypt(decrypt_sdk, ct_file, rt_file)
+
+    # Verify the roundtripped result is the same as our initial plantext.
+    if not filecmp.cmp(pt_file, rt_file):
+        raise Exception(
+            "Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
+            % (serial, pt_file, rt_file)
+        )
+    logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
+
 
 def gen_pt(*, large):
     pt_file = "%stest-plain-%s.txt" % (tmp_dir, "large" if large else "small")
@@ -135,6 +168,12 @@ def gen_files(serial):
 
 def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream"):
     c = [sdk, "encrypt", pt_file, ct_file, "--mimeType", mime_type]
+    logger.info("Invoking subprocess: %s", " ".join(c))
+    subprocess.check_call(c)
+
+
+def offlineEncrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream"):
+    c = [sdk, "offlineEncrypt", pt_file, ct_file, "--mimeType", mime_type]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
