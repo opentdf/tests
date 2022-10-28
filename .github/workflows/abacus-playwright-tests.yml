@@ -52,4 +52,7 @@ jobs:
       - name: Run tilt
         run: |-
           kubectl version
+          ls -la 
+          cd node_modules
+          ls -la
           tilt ci
