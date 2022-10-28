@@ -51,9 +51,6 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
+          npx playwright install --with-deps
           kubectl version
-          ls -la 
-          cd node_modules/@playwright/test
-          ls -la
-          cd ../../..
           tilt ci
