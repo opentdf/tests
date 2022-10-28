@@ -53,5 +53,8 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
+          cd ../projects/frontend
+          npx playwright install --with-deps
+          cd ../../abacus-integration-test
           kubectl version
           tilt ci
