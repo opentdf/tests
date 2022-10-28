@@ -29,6 +29,7 @@ jobs:
       - name: Install dependencies
         run: |-
           npm ci
+          npx install playwright --with-deps
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
           setup-tools: |
