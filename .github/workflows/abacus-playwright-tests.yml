@@ -28,8 +28,6 @@ jobs:
           registry-url: https://npm.pkg.github.com
       - name: Install dependencies
         run: |-
-          npm i -D @playwright/test
-          npm install playwright --with-deps
           npm ci
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
