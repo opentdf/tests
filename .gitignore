@@ -17,6 +17,7 @@ vulnerability/tilt_modules/
 /xtest/.helm
 
 abacus-integration-test/node_modules/
+abacus-integration-test/tilt_modules/
 abacus-integration-test/test-results/
 abacus-integration-test/playwright-report/
 abacus-integration-test/.helm/
