@@ -51,5 +51,6 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
+          npm ci
           kubectl version
           tilt ci
