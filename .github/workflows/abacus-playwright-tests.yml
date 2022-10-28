@@ -28,6 +28,8 @@ jobs:
           registry-url: https://npm.pkg.github.com
       - name: Install dependencies
         run: |-
+          pwd
+          ls -al
           npm ci
       - uses: yokawasa/action-setup-kube-tools@v0.7.1
         with:
@@ -51,6 +53,5 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
-          npx playwright install --with-deps
           kubectl version
           tilt ci
