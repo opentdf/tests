@@ -21,3 +21,5 @@ abacus-integration-test/tilt_modules/
 abacus-integration-test/test-results/
 abacus-integration-test/playwright-report/
 abacus-integration-test/.helm/
+abacus-integration-test/e2e/test-results
+abacus-integration-test/e2e/playwright-report
