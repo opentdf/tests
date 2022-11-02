@@ -5,7 +5,7 @@
   "main": "runner.py",
   "type": "module",
   "scripts": {
-    "test": "python3 runner.py --sdks sdk/js/node/cli.sh"
+    "test": "python3 runner.py --sdks sdk/js/node/cli.sh sdk/py/cli.sh"
   },
   "keywords": [],
   "author": "",
