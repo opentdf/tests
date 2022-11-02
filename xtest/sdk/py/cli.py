@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from opentdf import TDFClient, OIDCCredentials, LogLevel
+from opentdf import TDFClient, OIDCCredentials, LogLevel, TDFStorageType
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
