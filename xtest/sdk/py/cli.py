@@ -27,7 +27,7 @@ def main():
 
     if function == "encrypt":
         encrypt_file(client, source, target)
-    else if function == "decrypt":
+    elif function == "decrypt":
         decrypt_file(client, source, target)
     else:
         logger.error("Python -- invalid function type provided")
