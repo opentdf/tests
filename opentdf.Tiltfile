@@ -91,8 +91,6 @@ def backend(values=[], set={}, resource_deps=[]):
         flags=[
             "--wait",
             "--dependency-update",
-            "--version",
-            BACKEND_CHART_TAG,
         ]
         + dict_to_helm_set_list(set_values)
         + prefix_list("-f", values),
@@ -104,12 +102,10 @@ def backend(values=[], set={}, resource_deps=[]):
 def frontend(values=[], set={}, resource_deps=[]):
     helm_resource(
         "frontend",
-        chart="oci://ghcr.io/opentdf/charts/abacus",
+        chart="oci://ghcr.io/opentdf/charts/abacus:latest",
         flags=[
             "--wait",
             "--dependency-update",
-            "--version",
-            FRONTEND_CHART_TAG,
         ]
         + dict_to_helm_set_list(set)
         + prefix_list("-f", values),
