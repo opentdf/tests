@@ -12,7 +12,7 @@ EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
 BACKEND_CHART_TAG = "0.0.0-sha-6eef861"
-FRONTEND_CHART_TAG = "0.0.0-sha-0699a6f"
+FRONTEND_CHART_TAG = "latest"
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
