@@ -102,7 +102,7 @@ def backend(values=[], set={}, resource_deps=[]):
 def frontend(values=[], set={}, resource_deps=[]):
     helm_resource(
         "frontend",
-        chart="oci://ghcr.io/opentdf/charts/abacus:latest",
+        chart="oci://ghcr.io/opentdf/charts/abacus",
         flags=[
             "--wait",
             "--dependency-update",
