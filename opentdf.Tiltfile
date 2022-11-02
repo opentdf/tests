@@ -12,7 +12,7 @@ EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
 BACKEND_CHART_TAG = "0.0.0-sha-6eef861"
-FRONTEND_CHART_TAG = "0.0.0-sha-f7c9fa0"
+FRONTEND_CHART_TAG = "0.0.0-sha-0699a6f"
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
@@ -104,7 +104,7 @@ def backend(values=[], set={}, resource_deps=[]):
 def frontend(values=[], set={}, resource_deps=[]):
     helm_resource(
         "frontend",
-        "oci://ghcr.io/opentdf/charts/abacus",
+        chart="oci://ghcr.io/opentdf/charts/abacus",
         flags=[
             "--wait",
             "--dependency-update",
