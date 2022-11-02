@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from opentdf import TDFClient, NanoTDFClient, OIDCCredentials, LogLevel
+from opentdf import TDFClient, OIDCCredentials, LogLevel
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -24,6 +24,7 @@ def main():
         oidc_endpoint=OIDC_ENDPOINT,
     )
     client = TDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
+    client.enable_console_logging(LogLevel.Info)
 
     if function == "encrypt":
         encrypt_file(client, source, target)
@@ -43,3 +44,6 @@ def decrypt_file(client, source, target):
     sampleTdfStorage = TDFStorageType()
     sampleTdfStorage.set_tdf_storage_file_type(source)
     client.decrypt_file(sampleTdfStorage, target)
+
+if __name__ == "__main__":
+    main()
