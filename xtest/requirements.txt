@@ -1,2 +1,2 @@
 requests
-opentdf==1.1.7
+opentdf==1.1.0a2057
