@@ -11,7 +11,7 @@ min_tilt_version("0.30")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-BACKEND_CHART_TAG = "0.0.0-sha-6eef861"
+BACKEND_CHART_TAG = "1.1.0"
 FRONTEND_CHART_TAG = "0.0.0-sha-f7c9fa0"
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
@@ -91,6 +91,8 @@ def backend(values=[], set={}, resource_deps=[]):
         flags=[
             "--wait",
             "--dependency-update",
+            "--version",
+            BACKEND_CHART_TAG,
         ]
         + dict_to_helm_set_list(set_values)
         + prefix_list("-f", values),
@@ -102,10 +104,12 @@ def backend(values=[], set={}, resource_deps=[]):
 def frontend(values=[], set={}, resource_deps=[]):
     helm_resource(
         "frontend",
-        chart="oci://ghcr.io/opentdf/charts/abacus",
+        "oci://ghcr.io/opentdf/charts/abacus",
         flags=[
             "--wait",
             "--dependency-update",
+            "--version",
+            FRONTEND_CHART_TAG,
         ]
         + dict_to_helm_set_list(set)
         + prefix_list("-f", values),

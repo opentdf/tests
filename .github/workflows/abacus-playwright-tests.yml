@@ -4,9 +4,8 @@ on:
     branches: 'PLAT-1967-2'
   pull_request:
   repository_dispatch:
-    types: [xtest]
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 7 * * 2,4,6"
 jobs:
   abacus-playwright-tests:
     timeout-minutes: 60
