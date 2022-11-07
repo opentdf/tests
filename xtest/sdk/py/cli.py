@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from opentdf import TDFClient, OIDCCredentials, LogLevel#, TDFStorageType
+from opentdf import TDFClient, OIDCCredentials, LogLevel, TDFStorageType
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -35,15 +35,15 @@ def main():
 
 def encrypt_file(client, source, target):
     logger.info(f"Python -- Encrypting file {source} to {target}")
-    # sampleTxtStorage = TDFStorageType()
-    # sampleTxtStorage.set_tdf_storage_file_type(source)
-    client.encrypt_file(source, target)
+    sampleTxtStorage = TDFStorageType()
+    sampleTxtStorage.set_tdf_storage_file_type(source)
+    client.encrypt_file(sampleTxtStorage, target)
 
 def decrypt_file(client, source, target):
     logger.info(f"Python -- Decrypting file {source} to {target}")
-    # sampleTdfStorage = TDFStorageType()
-    # sampleTdfStorage.set_tdf_storage_file_type(source)
-    client.decrypt_file(source, target)
+    sampleTdfStorage = TDFStorageType()
+    sampleTdfStorage.set_tdf_storage_file_type(source)
+    client.decrypt_file(sampleTdfStorage, target)
 
 if __name__ == "__main__":
     main()
