@@ -1,0 +1,12 @@
+# Tiltfile for development of OpenTDF backend
+# reference https://docs.tilt.dev/api.html
+# extensions https://github.com/tilt-dev/tilt-extensions
+
+load(
+    "../opentdf.Tiltfile",
+    "opentdf_cluster_with_ingress",
+)
+
+opentdf_cluster_with_ingress()
+
+local_resource("test", "npm run test", resource_deps=["backend", "frontend"])
