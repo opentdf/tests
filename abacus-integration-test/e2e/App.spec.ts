@@ -18,7 +18,7 @@ test.describe('<App/>', () => {
     expect(logoutButton).toBeTruthy();
   });
 
-  test.skip('should be able to log out', async ({ page }) => {
+  test('should be able to log out', async ({ page }) => {
     await page.goto('/attributes');
     await Promise.all([
       page.waitForNavigation(),
