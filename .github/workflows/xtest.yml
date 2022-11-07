@@ -24,8 +24,8 @@ jobs:
       # todo: install and activate virtual env for python?
       - name: update packages
         run: |-
-          npm install
-          # npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
+          npm ci
+          npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
           pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
