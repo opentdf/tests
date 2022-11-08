@@ -8,7 +8,7 @@ test.describe('<App/>', () => {
     await page.goto('/');
   });
 
-  test.only('renders initially', async ({ page }) => {
+  test('renders initially', async ({ page }) => {
     const header = page.locator('h2', { hasText: "Attributes" });
     await expect(header).toBeVisible();
   });
