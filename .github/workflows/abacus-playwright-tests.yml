@@ -2,8 +2,6 @@ name: Abacus-Playwright-Tests
 on:
   push:
     branches: 'logout_test_ci_failure'
-  pull_request:
-  repository_dispatch:
 #  schedule:
 #    - cron: "0 7 * * 2,4,6"
 jobs:
