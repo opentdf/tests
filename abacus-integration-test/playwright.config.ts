@@ -41,7 +41,7 @@ const config: PlaywrightTestConfig = {
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: process.env.CI ? 'github' : 'html',
   /* Configure projects for major browsers */
   // projects: [
   //   {
