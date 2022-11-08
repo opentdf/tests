@@ -32,6 +32,7 @@ def main():
         decrypt_file(client, source, target)
     else:
         logger.error("Python -- invalid function type provided")
+        sys.exit(1)
 
 def encrypt_file(client, source, target):
     logger.info(f"Python -- Encrypting file {source} to {target}")
