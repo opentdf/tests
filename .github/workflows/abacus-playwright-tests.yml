@@ -53,9 +53,10 @@ jobs:
           pwd
           ls -la
           cd test-results
+          ls -la
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: playwright-test-results
-          path: test-results
+          path: ./test-results
