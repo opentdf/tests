@@ -23,7 +23,8 @@ const config: PlaywrightTestConfig = {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: "http://localhost:65432/",
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'retain-on-failure',
+    trace: 'on',
+    // trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     browserName: "chromium",
     headless: !false,
