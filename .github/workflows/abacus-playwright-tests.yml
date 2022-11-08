@@ -53,6 +53,7 @@ jobs:
           pwd
           ls -la
           cd test-results
+          pwd
           ls -la
       - name: Upload test results
         if: always()
