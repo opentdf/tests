@@ -5,15 +5,15 @@
   "main": "runner.py",
   "type": "module",
   "scripts": {
-    "test": "python3 runner.py --sdks sdk/js/node/cli.sh"
+    "test": "python3 runner.py --sdks sdk/js/node/cli.sh sdk/py/cli.sh"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@babel/runtime-corejs3": "^7.17.2",
-    "@opentdf/cli": "^0.3.0-beta.336",
-    "@opentdf/client": "^0.3.0-beta.359",
+    "@opentdf/cli": "^0.4.0-beta.415",
+    "@opentdf/client": "^0.4.0-beta.415",
     "commander": "^9.0.0"
   }
 }
