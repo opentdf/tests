@@ -1,7 +1,5 @@
 name: Abacus-Playwright-Tests
 on:
-  push:
-    branches: 'logout_test_ci_failure'
   schedule:
     - cron: "0 7 * * 2,4,6"
 jobs:
@@ -48,13 +46,6 @@ jobs:
         run: |-
           kubectl version
           tilt ci
-#      - name: check folder
-#        run: |-
-#          pwd
-#          ls -la
-#          cd test-results
-#          pwd
-#          ls -la
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
