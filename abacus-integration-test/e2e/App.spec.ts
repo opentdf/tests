@@ -18,6 +18,7 @@ test.describe('<App/>', () => {
     expect(logoutButton).toBeTruthy();
   });
 
+  // TODO: enable back after switching to usage of the latest Frontend chart during CI test run (PLAT-2146 task) since issue appears in old hardcoded version (using Keycloak <v.18)
   test.skip('should be able to log out', async ({ page }) => {
     await page.goto('/attributes');
     await Promise.all([

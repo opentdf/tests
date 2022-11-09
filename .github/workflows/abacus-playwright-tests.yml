@@ -1,8 +1,5 @@
 name: Abacus-Playwright-Tests
 on:
-  push:
-  pull_request:
-  repository_dispatch:
   schedule:
     - cron: "0 7 * * 2,4,6"
 jobs:
@@ -49,3 +46,9 @@ jobs:
         run: |-
           kubectl version
           tilt ci
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: playwright-test-results
+          path: ./abacus-integration-test/test-results
