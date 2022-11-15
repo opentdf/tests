@@ -55,15 +55,16 @@ jobs:
           minikube-version: 1.26.0
           # This should be in sync with the setup-tools version above
           kubernetes-version: 1.24.1
-      - name: Set latest frontend and backend versions
+      - name: Run tilt
         run: |-
           export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
             | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
-          echo "latest Backend is:"
-          printenv BACKEND_LATEST_VERSION
-      - name: Run tilt
-        run: |-
-          echo "latest Backend is:"
-          printenv BACKEND_LATEST_VERSION
+          echo "${MESSAGE_COLOR}latest Backend is: $BACKEND_LATEST_VERSION"
+          export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
+            | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
+          echo "${MESSAGE_COLOR}latest Backend is: $BACKEND_LATEST_VERSION"
+          echo "${MESSAGE_COLOR}latest Frontend is: $FRONTEND_LATEST_VERSION"
           kubectl version
           tilt ci
+        env:
+          MESSAGE_COLOR: \033[0;36m
