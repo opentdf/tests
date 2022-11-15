@@ -60,10 +60,10 @@ jobs:
           export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
             | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
           echo "latest Backend is:"
-          printenv FOO_BACKWARDS
+          printenv BACKEND_LATEST_VERSION
       - name: Run tilt
         run: |-
           echo "latest Backend is:"
-          printenv FOO_BACKWARDS
+          printenv BACKEND_LATEST_VERSION
           kubectl version
           tilt ci
