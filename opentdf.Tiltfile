@@ -20,7 +20,8 @@ OIDC_CLIENT_SECRET = "myclientsecret"
 opaPolicyPullSecret = os.environ.get("CR_PAT")
 
 TESTS_DIR = os.getcwd()
-
+print('BACKEND_CHART_TAG')
+print(BACKEND_CHART_TAG)
 
 def from_dotenv(path, key):
     # Read a variable from a `.env` file
