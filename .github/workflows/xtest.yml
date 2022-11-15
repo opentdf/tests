@@ -58,5 +58,6 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
+          skopeo --version
           kubectl version
           tilt ci
