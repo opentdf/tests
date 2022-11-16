@@ -58,7 +58,7 @@ jobs:
       - name: Run tilt
         run: |-
           export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-            | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-18])")
+            | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-9])")
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
             | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
