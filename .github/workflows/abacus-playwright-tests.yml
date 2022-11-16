@@ -50,7 +50,7 @@ jobs:
 
           export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
           | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
-          echo "latest Frontend is: $FRONTEND_LATEST_VERSION"
+          echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
       - name: Upload test results
