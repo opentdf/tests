@@ -11,8 +11,8 @@ min_tilt_version("0.30")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-BACKEND_CHART_TAG = "1.1.0"
-FRONTEND_CHART_TAG = "0.0.0-sha-f7c9fa0"
+BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.1.0")
+FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.1.0")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
@@ -20,7 +20,6 @@ OIDC_CLIENT_SECRET = "myclientsecret"
 opaPolicyPullSecret = os.environ.get("CR_PAT")
 
 TESTS_DIR = os.getcwd()
-
 
 def from_dotenv(path, key):
     # Read a variable from a `.env` file
