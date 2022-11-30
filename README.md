@@ -3,7 +3,6 @@ Tests for OpenTDF
 
 ## [Vulnerability](vulnerability)
 
-
 Place to run frontend and backend together locally.
 Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
 
