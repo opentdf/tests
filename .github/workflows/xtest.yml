@@ -58,10 +58,10 @@ jobs:
       - name: Run tilt
         run: |-
           export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-            | python3 -c "import sys, json; sys.stdout.write([i for i in json.load(sys.stdin)['Tags'] if not i.endswith('.sig')][-1])")
+            | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])")
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
-            | python3 -c "import sys, json; sys.stdout.write([i for i in json.load(sys.stdin)['Tags'] if not i.endswith('.sig')][-1])")
+            | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])")
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
