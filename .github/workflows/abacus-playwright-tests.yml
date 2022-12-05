@@ -1,7 +1,13 @@
 name: Abacus-Playwright-Tests
 on:
+  push:
+    branches: [playwright-test-conditions]
+  pull_request:
+    branches: [main]
+  repository_dispatch:
+    types: [xtest]
   schedule:
-    - cron: "0 7 * * 2,4,6"
+    - cron: "0 7 * * *"
 jobs:
   abacus-playwright-tests:
     timeout-minutes: 60
