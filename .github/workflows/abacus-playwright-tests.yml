@@ -1,7 +1,7 @@
 name: Abacus-Playwright-Tests
 on:
-#  pull_request:
-#    branches: [main]
+  pull_request:
+    branches: [main]
 #  repository_dispatch:
 #    types: [xtest]
   schedule:
