@@ -105,11 +105,10 @@ def frontend(values=[], set={}, resource_deps=[]):
         "frontend",
         "oci://ghcr.io/opentdf/charts/abacus",
         flags=[
-            "--debug",
             "--wait",
             "--dependency-update",
             "--version",
-            "1.1.0",
+            FRONTEND_CHART_TAG,
         ]
         + dict_to_helm_set_list(set)
         + prefix_list("-f", values),
