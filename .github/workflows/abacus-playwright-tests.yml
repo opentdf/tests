@@ -1,11 +1,9 @@
 name: Abacus-Playwright-Tests
 on:
-  push:
-    branches: [playwright-test-conditions]
-  pull_request:
-    branches: [main]
-  repository_dispatch:
-    types: [xtest]
+#  pull_request:
+#    branches: [main]
+#  repository_dispatch:
+#    types: [xtest]
   schedule:
     - cron: "0 7 * * *"
 jobs:
