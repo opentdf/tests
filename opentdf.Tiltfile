@@ -109,7 +109,7 @@ def frontend(values=[], set={}, resource_deps=[]):
             "--wait",
             "--dependency-update",
             "--version",
-            FRONTEND_CHART_TAG,
+            "1.1.0",
         ]
         + dict_to_helm_set_list(set)
         + prefix_list("-f", values),
