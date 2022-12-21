@@ -1,5 +1,5 @@
 import { PlaywrightTestConfig, devices } from '@playwright/test';
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 // @ts-ignore
 dotenv.config({ multiline: true });
 
