@@ -105,6 +105,7 @@ def frontend(values=[], set={}, resource_deps=[]):
         "frontend",
         "oci://ghcr.io/opentdf/charts/abacus",
         flags=[
+            "--debug",
             "--wait",
             "--dependency-update",
             "--version",
