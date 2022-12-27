@@ -7,7 +7,7 @@ dotenv.config({ multiline: true });
 const config: PlaywrightTestConfig = {
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   testDir: './e2e',
-  forbidOnly: Boolean(process.env.CI),
+  forbidOnly: !Boolean(process.env.CI),
   /* Retry on CI only */
   retries: 1,
   /* Opt out of parallel tests on CI and Local env for now (due to test failures with multiple workers - PLAT-1774  */
@@ -21,7 +21,7 @@ const config: PlaywrightTestConfig = {
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
     // actionTimeout: 0,
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: "http://localhost:3000/abacus",
+    baseURL: "http://localhost:3000",
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
