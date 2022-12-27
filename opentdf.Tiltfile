@@ -88,6 +88,7 @@ def backend(values=[], set={}, resource_deps=[]):
         "backend",
         chart="oci://ghcr.io/opentdf/charts/backend",
         flags=[
+            "--debug",
             "--wait",
             "--dependency-update",
             "--version",
