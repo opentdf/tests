@@ -7,7 +7,7 @@ dotenv.config({ multiline: true });
 const config: PlaywrightTestConfig = {
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   testDir: './e2e',
-  forbidOnly: !Boolean(process.env.CI),
+  forbidOnly: Boolean(process.env.CI),
   /* Retry on CI only */
   retries: 1,
   /* Opt out of parallel tests on CI and Local env for now (due to test failures with multiple workers - PLAT-1774  */
