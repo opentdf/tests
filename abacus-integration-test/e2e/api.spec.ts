@@ -7,7 +7,7 @@ let apiContext: APIRequestContext;
 let pageContext;
 
 const getAccessTokenAfterLogin = async (page: Page) => {
-    await page.goto('http://localhost:3000/');
+    await page.goto('http://localhost:8080/');
     await page.locator(selectors.loginButton).click();
     await page.fill(selectors.loginScreen.usernameField, "user1");
     await page.fill(selectors.loginScreen.passwordField, "testuser123");
