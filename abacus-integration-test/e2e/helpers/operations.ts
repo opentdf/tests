@@ -70,6 +70,7 @@ export const deleteAttributeViaAPI = async (apiContext: APIRequestContext, autho
 };
 
 export const deleteAuthorityViaAPI = async (apiContext: APIRequestContext, authority: string) => {
+  //@ts-ignore
   const deleteAuthorityResponse = await apiContext.delete('http://localhost:65432/api/attributes/authorities',{
     data: {
       "authority": authority
