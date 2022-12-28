@@ -46,6 +46,8 @@ jobs:
           minikube-version: 1.26.0
           # This should be in sync with the setup-tools version above
           kubernetes-version: 1.24.1
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
       - name: Run tilt
         run: |-
           export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
@@ -57,8 +59,6 @@ jobs:
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v2
