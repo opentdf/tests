@@ -22,7 +22,7 @@ spec:
               service:
                 name: "abacus"
                 port:
-                  number: 3000
+                  number: 80
     - host: "opentdf.local"
       http:
         paths:
@@ -32,4 +32,4 @@ spec:
               service:
                 name: "abacus"
                 port:
-                  number: 3000
+                  number: 80
