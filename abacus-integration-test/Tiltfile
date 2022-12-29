@@ -9,5 +9,5 @@ load(
 
 opentdf_cluster_with_ingress()
 
-local_resource("test abacus", "curl http://localhost:8080", resource_deps=["backend", "frontend"])
+local_resource("test abacus", "curl http://localhost:8080", auto_init=False, resource_deps=["backend", "frontend"])
 # local_resource("test", "npm run test", resource_deps=["backend", "frontend"])
