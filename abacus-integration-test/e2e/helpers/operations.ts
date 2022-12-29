@@ -70,13 +70,12 @@ export const deleteAttributeViaAPI = async (apiContext: APIRequestContext, autho
 };
 
 export const deleteAuthorityViaAPI = async (apiContext: APIRequestContext, authority: string) => {
-  // //@ts-ignore
-  // const deleteAuthorityResponse = await apiContext.delete('http://localhost:65432/api/attributes/authorities',{
-  //   data: {
-  //     "authority": authority
-  //   },
-  // });
-  // await expect(deleteAuthorityResponse.status()).toBe(202)
-  // await expect(deleteAuthorityResponse.ok()).toBeTruthy()
+  const deleteAuthorityResponse = await apiContext?.delete('http://localhost:65432/api/attributes/authorities',{
+    data: {
+      "authority": authority
+    },
+  });
+  await expect(deleteAuthorityResponse.status()).toBe(202)
+  await expect(deleteAuthorityResponse.ok()).toBeTruthy()
   return Promise.resolve();
 };
