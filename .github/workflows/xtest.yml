@@ -31,6 +31,7 @@ jobs:
         run: |-
           npm ci
           npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
+          npm list
           pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
