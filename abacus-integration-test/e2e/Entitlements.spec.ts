@@ -4,6 +4,7 @@ import {
   firstTableRowClick,
   getLastPartOfUrl,
   authorize,
+  // authorizeFromFront,
   deleteAuthorityViaAPI,
   getAccessToken
 } from './helpers/operations';
@@ -16,7 +17,8 @@ let apiContext: APIRequestContext;
 test.describe('<Entitlements/>', () => {
   test.beforeEach(async ({ page , playwright, authority}) => {
     await authorize(page);
-    authToken = await getAccessToken(page)
+    authToken = await getAccessToken(page);
+    console.log('authToken', authToken);
 
     await page.goto('/attributes');
     // click the token message to close it and overcome potential overlapping problem
@@ -37,6 +39,7 @@ test.describe('<Entitlements/>', () => {
   });
 
   test.afterEach(async ({ authority}) => {
+    console.log('apiContext', apiContext);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
