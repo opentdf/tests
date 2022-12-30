@@ -75,7 +75,7 @@ export const deleteAuthorityViaAPI = async (apiContext: APIRequestContext, autho
       "authority": authority
     },
   });
-  await expect(deleteAuthorityResponse.status()).toBe(202)
+  await expect(deleteAuthorityResponse?.status()).toBe(202)
   await expect(deleteAuthorityResponse.ok()).toBeTruthy()
   return Promise.resolve();
 };
