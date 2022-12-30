@@ -9,10 +9,11 @@ load(
 
 opentdf_cluster_with_ingress()
 
-# local_resource("test", "npm run test", resource_deps=["backend", "frontend"])
-
 local_resource(
    "probe-abacus",
    cmd="curl http://localhost:8080",
-   resource_deps=["backend", "frontend"]
+   resource_deps=["opentdf_cluster_with_ingress"]
 )
+
+local_resource("test", "npm run test", resource_deps=["probe-abacus"])
+
