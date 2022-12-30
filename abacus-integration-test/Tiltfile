@@ -10,10 +10,16 @@ load(
 opentdf_cluster_with_ingress()
 
 local_resource(
-   "probe-abacus",
-   cmd="curl http://localhost:8080",
+   "probe-abacus 0",
+   cmd="lsof -i -P -n | grep LISTEN",
+   resource_deps=["frontend", "backend"]
+)
+
+local_resource(
+   "probe-abacus 1",
+   cmd="lsof -i -P -n | grep LISTEN",
    resource_deps=["opentdf_cluster_with_ingress"]
 )
 
-local_resource("test", "npm run test", resource_deps=["probe-abacus"])
+# local_resource("test", "npm run test", resource_deps=["probe-abacus"])
 
