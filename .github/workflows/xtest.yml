@@ -18,12 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Node 18
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: "18.x"
           registry-url: https://npm.pkg.github.com
       - name: Set up Python 3.10
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
       # todo: install and activate virtual env for python?
@@ -35,7 +35,7 @@ jobs:
           pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+      - uses: yokawasa/action-setup-kube-tools@v0.9.2
         with:
           setup-tools: |
             kubectl
