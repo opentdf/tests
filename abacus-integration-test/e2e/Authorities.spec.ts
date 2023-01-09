@@ -34,9 +34,9 @@ test.describe('<Authorities/>', () => {
         });
     });
 
-    test.afterAll(async ({ }) => {
-        await apiContext.dispose();
-    });
+    // test.afterAll(async ({ }) => {
+    //     await apiContext.dispose();
+    // });
 
     test('renders initially', async ({ page, authority}) => {
         await page.goto('/authorities');

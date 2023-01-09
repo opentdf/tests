@@ -41,9 +41,9 @@ test.describe('<Attributes/>', () => {
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
-  test.afterAll(async ({ }) => {
-    await apiContext.dispose();
-  });
+  // test.afterAll(async ({ }) => {
+  //   await apiContext.dispose();
+  // });
 
   test('renders initially', async ({ page }) => {
     const header = page.locator('h2', { hasText: "Attribute Rules" });

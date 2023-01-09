@@ -45,9 +45,9 @@ test.describe('API:', () => {
         await deleteAuthorityViaAPI(apiContext, authority)
     })
 
-    test.afterAll(async ({ }) => {
-        await apiContext.dispose();
-    });
+    // test.afterAll(async ({ }) => {
+    //     await apiContext.dispose();
+    // });
 
     test('Attributes: create, read, update, delete', async ({authority, attributeName}) => {
 

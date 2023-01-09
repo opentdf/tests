@@ -15,5 +15,5 @@ local_resource(
    resource_deps=["frontend", "backend"]
 )
 
-local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
+# local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
 

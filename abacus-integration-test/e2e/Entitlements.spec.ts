@@ -43,9 +43,9 @@ test.describe('<Entitlements/>', () => {
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
-  test.afterAll(async ({ }) => {
-    await apiContext.dispose();
-  });
+  // test.afterAll(async ({ }) => {
+  //   await apiContext.dispose();
+  // });
 
   test('has tables', async ({ page }) => {
     const clientTableHeader = page.locator('b', { hasText: "Clients table" });
