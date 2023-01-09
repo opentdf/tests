@@ -9,11 +9,5 @@ load(
 
 opentdf_cluster_with_ingress()
 
-local_resource(
-   "probe 1",
-   cmd="lsof -i -P -n | grep LISTEN",
-   resource_deps=["frontend", "backend"]
-)
-
-# local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
+local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
 
