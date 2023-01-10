@@ -2,6 +2,8 @@ name: Abacus-Playwright-Tests
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: 'tests_try_changed_port'
 #  repository_dispatch:
 #    types: [xtest]
   schedule:
