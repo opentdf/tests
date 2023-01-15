@@ -9,11 +9,5 @@ load(
 
 opentdf_cluster_with_ingress()
 
-# kubectl get services
-
-local_resource('kubectl-0', cmd='kubectl get services -o wide', deps=['frontend'])
-local_resource('kubectl-1', cmd='kubectl get pods -o wide', deps=['kubectl-0'])
-local_resource('kubectl-2', cmd='kubectl get deployments -o wide', deps=['kubectl-1'])
-
-local_resource("test", "npm run test", resource_deps=["kubectl-2"])
+local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
 

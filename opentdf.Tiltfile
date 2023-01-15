@@ -137,6 +137,7 @@ def opentdf_cluster_with_ingress(start_frontend=True):
                 "fullnameOverride": "abacus",
                 "oidc.clientId": "dcr-test",
                 "oidc.queryRealms": "tdf",
+                "oidc.serverUrl": "http://localhost:65432/auth/"
             },
             values=[TESTS_DIR + "/mocks/frontend-ingress-values.yaml"],
             resource_deps=["backend"],

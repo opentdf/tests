@@ -17,11 +17,11 @@ let apiContext: APIRequestContext;
 test.describe('<Authorities/>', () => {
     test.beforeEach(async ({ page , playwright, authority}) => {
         await authorize(page);
-        authToken = await getAccessToken(page)
+        authToken = await getAccessToken(page);
 
-        await page.goto('/attributes');
-        // click the token message to close it and overcome potential overlapping problem
-        await page.locator(selectors.tokenMessage).click()
+        await page.getByRole('link', { name: 'Attributes' }).click();
+        await page.waitForURL('http://localhost:65432/attributes');
+
         await createAuthority(page, authority);
         // click success message to close it and overcome potential overlapping problem
         const authorityCreatedMsg = page.locator(selectors.alertMessage, {hasText:'Authority was created'})
@@ -34,12 +34,14 @@ test.describe('<Authorities/>', () => {
         });
     });
 
-    // test.afterAll(async ({ }) => {
-    //     await apiContext.dispose();
-    // });
+    test.afterAll(async ({ }) => {
+        await apiContext.dispose();
+    });
 
     test('renders initially', async ({ page, authority}) => {
-        await page.goto('/authorities');
+        await page.getByRole('link', { name: 'Authorities' }).click();
+        await page.waitForURL('http://localhost:65432/authorities');
+
         const header = page.locator(selectors.authoritiesPage.header, { hasText: "Authorities" });
         await expect(header).toBeVisible();
 
@@ -49,21 +51,22 @@ test.describe('<Authorities/>', () => {
     });
 
     test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
-        await page.goto('/authorities');
-        // click the token message to close it and overcome potential overlapping problem
-        await page.locator(selectors.tokenMessage).click()
+        await page.getByRole('link', { name: 'Authorities' }).click();
+        await page.waitForURL('http://localhost:65432/authorities');
 
+        await page.waitForSelector(selectors.authoritiesPage.authoritiesTableRow);
         const originalTableRows = await page.$$(selectors.authoritiesPage.authoritiesTableRow)
         const originalTableSize = originalTableRows.length
 
-        const deleteAuthorityButtonForTheLastRowItem = await page.locator('#delete-authority-button >> nth=-1')
-        await deleteAuthorityButtonForTheLastRowItem.click()
+        const deleteButton = await page.getByRole('row', { name: `${authority} Delete` }).getByRole('button', { name: 'Delete' });
 
-        await test.step('Should be able to close the dialog and cancel authority removal', async() => {
+        await deleteButton.click();
+
+        await test.step('Should be able to close the dialog and cancel authority removal', async () => {
             await page.click(selectors.authoritiesPage.confirmDeletionModal.cancelDeletionBtn)
         })
 
-        await deleteAuthorityButtonForTheLastRowItem.click()
+        await deleteButton.click();
         await page.click(selectors.authoritiesPage.confirmDeletionModal.confirmDeletionBtn)
 
         await test.step('Assert success message', async() => {
@@ -81,9 +84,9 @@ test.describe('<Authorities/>', () => {
     test('Authority removal is failed when contains assigned attributes', async ({ page, authority, attributeName, attributeValue}) => {
         await createAttribute(page, attributeName, [attributeValue])
         await assertAttributeCreatedMsg(page)
-        await page.goto('/authorities');
-        // click the token message to close it and overcome potential overlapping problem
-        await page.locator(selectors.tokenMessage).click()
+
+        await page.getByRole('link', { name: 'Authorities' }).click();
+        await page.waitForURL('http://localhost:65432/authorities');
 
         const deleteAuthorityButtonForTheLastRowItem = await page.locator('#delete-authority-button >> nth=-1')
         await deleteAuthorityButtonForTheLastRowItem.click()

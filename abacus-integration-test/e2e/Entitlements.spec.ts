@@ -17,19 +17,18 @@ let apiContext: APIRequestContext;
 test.describe('<Entitlements/>', () => {
   test.beforeEach(async ({ page , playwright, authority}) => {
     await authorize(page);
-    authToken = await getAccessToken(page);
-    console.log('authToken', authToken);
+    authToken = await getAccessToken(page)
 
-    await page.goto('/attributes');
-    // click the token message to close it and overcome potential overlapping problem
-    await page.locator(selectors.tokenMessage).click()
+    await page.getByRole('link', { name: 'Attributes' }).click();
+    await page.waitForURL('http://localhost:65432/attributes');
+
     await createAuthority(page, authority);
     // click success message to close it and overcome potential overlapping problem
     const authorityCreatedMsg = page.locator(selectors.alertMessage, {hasText:'Authority was created'})
     await authorityCreatedMsg.click()
-    await page.goto('/entitlements');
-    // click the token message to close it and overcome potential overlapping problem
-    await page.locator(selectors.tokenMessage).click()
+
+    await page.getByRole('link', { name: 'Entitlements' }).click();
+    await page.waitForURL('http://localhost:65432/entitlements');
 
     apiContext = await playwright.request.newContext({
       extraHTTPHeaders: {
@@ -39,13 +38,12 @@ test.describe('<Entitlements/>', () => {
   });
 
   test.afterEach(async ({ authority}) => {
-    console.log('apiContext', apiContext);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
-  // test.afterAll(async ({ }) => {
-  //   await apiContext.dispose();
-  // });
+  test.afterAll(async ({ }) => {
+    await apiContext.dispose();
+  });
 
   test('has tables', async ({ page }) => {
     const clientTableHeader = page.locator('b', { hasText: "Clients table" });
