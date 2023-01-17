@@ -20,7 +20,7 @@ test.describe('<Authorities/>', () => {
         authToken = await getAccessToken(page);
 
         await page.getByRole('link', { name: 'Attributes' }).click();
-        await page.waitForURL('http://localhost:65432/attributes');
+        await page.waitForURL('**/attributes');
 
         await createAuthority(page, authority);
         // click success message to close it and overcome potential overlapping problem
@@ -40,7 +40,7 @@ test.describe('<Authorities/>', () => {
 
     test('renders initially', async ({ page, authority}) => {
         await page.getByRole('link', { name: 'Authorities' }).click();
-        await page.waitForURL('http://localhost:65432/authorities');
+        await page.waitForURL('**/authorities');
 
         const header = page.locator(selectors.authoritiesPage.header, { hasText: "Authorities" });
         await expect(header).toBeVisible();
@@ -52,7 +52,7 @@ test.describe('<Authorities/>', () => {
 
     test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
         await page.getByRole('link', { name: 'Authorities' }).click();
-        await page.waitForURL('http://localhost:65432/authorities');
+        await page.waitForURL('**/authorities');
 
         await page.waitForSelector(selectors.authoritiesPage.authoritiesTableRow);
         const originalTableRows = await page.$$(selectors.authoritiesPage.authoritiesTableRow)
@@ -86,7 +86,7 @@ test.describe('<Authorities/>', () => {
         await assertAttributeCreatedMsg(page)
 
         await page.getByRole('link', { name: 'Authorities' }).click();
-        await page.waitForURL('http://localhost:65432/authorities');
+        await page.waitForURL('**/authorities');
 
         const deleteAuthorityButtonForTheLastRowItem = await page.locator('#delete-authority-button >> nth=-1')
         await deleteAuthorityButtonForTheLastRowItem.click()

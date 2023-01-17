@@ -4,7 +4,6 @@ import {
   firstTableRowClick,
   getLastPartOfUrl,
   authorize,
-  // authorizeFromFront,
   deleteAuthorityViaAPI,
   getAccessToken
 } from './helpers/operations';
@@ -20,7 +19,7 @@ test.describe('<Entitlements/>', () => {
     authToken = await getAccessToken(page)
 
     await page.getByRole('link', { name: 'Attributes' }).click();
-    await page.waitForURL('http://localhost:65432/attributes');
+    await page.waitForURL('**/attributes');
 
     await createAuthority(page, authority);
     // click success message to close it and overcome potential overlapping problem
@@ -28,7 +27,7 @@ test.describe('<Entitlements/>', () => {
     await authorityCreatedMsg.click()
 
     await page.getByRole('link', { name: 'Entitlements' }).click();
-    await page.waitForURL('http://localhost:65432/entitlements');
+    await page.waitForURL('**/entitlements');
 
     apiContext = await playwright.request.newContext({
       extraHTTPHeaders: {

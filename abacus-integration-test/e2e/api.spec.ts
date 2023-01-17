@@ -9,7 +9,7 @@ let pageContext;
 const getAccessTokenAfterLogin = async (page: Page) => {
     const responsePromise = page.waitForResponse('**/token');
 
-    await page.goto('http://localhost:65432/');
+    await page.goto('/');
     await page.locator(selectors.loginButton).click()
     await page.fill(selectors.loginScreen.usernameField, "user1");
     await page.fill(selectors.loginScreen.passwordField, "testuser123");

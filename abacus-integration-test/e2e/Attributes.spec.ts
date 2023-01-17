@@ -1,4 +1,4 @@
-import { APIRequestContext, expect, Locator, request } from '@playwright/test';
+import { APIRequestContext, expect, Locator } from '@playwright/test';
 import {
   createAuthority,
   createAttribute,
@@ -23,7 +23,7 @@ test.describe('<Attributes/>', () => {
     authToken = await getAccessToken(page);
 
     await page.getByRole('link', { name: 'Attributes' }).click();
-    await page.waitForURL('http://localhost:65432/attributes');
+    await page.waitForURL('**/attributes');
 
     await createAuthority(page, authority);
     // click success message to close it and overcome potential overlapping problem
@@ -195,15 +195,15 @@ test.describe('<Attributes/>', () => {
     await test.step('Open page with correspondent data', async () => {
       // reload page to renew data
       await page.getByRole('link', { name: 'Entitlements' }).click();
-      await page.waitForURL('http://localhost:65432/entitlements');
+      await page.waitForURL('**/entitlements');
 
       await page.getByRole('link', { name: 'Attributes' }).click();
-      await page.waitForURL('http://localhost:65432/attributes');
+      await page.waitForURL('**/attributes');
 
       // select proper authority
       await page.click('[data-test="select-authorities-button"]', {force: true})
-
       await page.locator('.ant-select-item-option-content', { hasText: authority }).click();
+
       await expect(page.locator('.ant-select-selection-item >> nth=1')).toHaveText(authority)
       await expect(page.locator(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)).toHaveText('Total 3 items')
     })
@@ -273,7 +273,7 @@ test.describe('<Attributes/>', () => {
 
   test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue }) => {
     await page.getByRole('link', { name: 'Entitlements' }).click();
-    await page.waitForURL('http://localhost:65432/entitlements');
+    await page.waitForURL('**/entitlements');
 
     await Promise.all([
       page.waitForNavigation(),
@@ -281,6 +281,7 @@ test.describe('<Attributes/>', () => {
     ]);
 
     await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+    await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
     const originalTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
     const originalTableSize = originalTableRows.length
 
@@ -289,6 +290,7 @@ test.describe('<Attributes/>', () => {
     await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementModalBtn).click();
 
     await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+    await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
     const updatedTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
     const updatedTableSize = updatedTableRows.length
 
@@ -333,17 +335,19 @@ test.describe('<Attributes/>', () => {
     await test.step('Open the Details section', async() => {
       await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
       await page.locator(selectors.attributesPage.newSectionBtn).click();
-      await page.click(existedOrderValue)
-      await expect(page.locator(existedOrderValue)).toHaveAttribute('aria-selected', 'true')
+      await page.waitForSelector('.ant-tabs-tab-btn');
+      await page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` }).click();
+
+      await expect(page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` })).toHaveAttribute('aria-selected', 'true')
     })
 
     await test.step('Should be able to close the Details section', async() => {
       await page.click(selectors.attributesPage.attributeDetailsSection.closeDetailsSectionButton)
-      await expect(page.locator(existedOrderValue)).toHaveAttribute('aria-selected', 'false')
+      await expect(page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` })).toHaveAttribute('aria-selected', 'false')
     })
 
     await test.step('Reopen the Details section and enter editing mode', async() => {
-      await page.click(existedOrderValue)
+      await page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` }).click();
       await page.locator(selectors.attributesPage.attributeDetailsSection.editRuleButton).click()
     })
 
@@ -415,7 +419,7 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Switch to the Entitlements page', async() => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
-      await page.waitForURL('http://localhost:65432/entitlements');
+      await page.waitForURL('**/entitlements');
       await Promise.all([
         page.waitForNavigation(),
         firstTableRowClick('clients-table', page),
@@ -424,8 +428,10 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Entitle the attribute', async() => {
       await page.click(selectors.entitlementsPage.authorityNamespaceField)
-      await page.keyboard.press("ArrowUp")
-      await page.keyboard.press('Enter')
+
+      await page.waitForSelector('.ant-select-item-option-content')
+      await page.locator('.ant-select-item-option-content', { hasText: authority }).click({ force: true });
+
       await page.fill(selectors.entitlementsPage.attributeNameField, attributeName);
       await page.fill(selectors.entitlementsPage.attributeValueField, attributeValue);
       await page.click(selectors.entitlementsPage.submitAttributeButton);
@@ -433,7 +439,7 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Switch to the Attributes page and select proper authority', async() => {
       await page.getByRole('link', { name: 'Attributes' }).click();
-      await page.waitForURL('http://localhost:65432/attributes');
+      await page.waitForURL('**/attributes');
 
       await page.click(selectors.attributesPage.attributesHeader.authorityDropdownButton, { force:true })
 
