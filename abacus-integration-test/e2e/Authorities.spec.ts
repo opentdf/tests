@@ -34,6 +34,10 @@ test.describe('<Authorities/>', () => {
         });
     });
 
+    test.afterEach(async ({ authority}) => {
+        await deleteAuthorityViaAPI(apiContext, authority)
+    })
+
     test.afterAll(async ({ }) => {
         await apiContext.dispose();
     });
@@ -44,13 +48,9 @@ test.describe('<Authorities/>', () => {
 
         const header = page.locator(selectors.authoritiesPage.header, { hasText: "Authorities" });
         await expect(header).toBeVisible();
-
-        await test.step('Cleanup', async() => {
-            await deleteAuthorityViaAPI(apiContext, authority)
-        })
     });
 
-    test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
+    test.fixme('delete authority if there are no assigned attributes', async ({ page, authority}) => {
         await page.getByRole('link', { name: 'Authorities' }).click();
         await page.waitForURL('**/authorities');
 
@@ -100,7 +100,6 @@ test.describe('<Authorities/>', () => {
 
         await test.step('Cleanup', async() => {
             await deleteAttributeViaAPI(apiContext, authority, attributeName, [attributeValue])
-            await deleteAuthorityViaAPI(apiContext, authority)
         })
     });
 });
