@@ -1,5 +1,5 @@
 import { PlaywrightTestConfig, devices } from '@playwright/test';
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 // @ts-ignore
 dotenv.config({ multiline: true });
 
@@ -26,9 +26,9 @@ const config: PlaywrightTestConfig = {
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     browserName: "chromium",
-    headless: !false,
+    headless: Boolean(process.env.CI),
     launchOptions: {
-      slowMo: 50,
+      slowMo: 500,
     }
   },
   expect: {
