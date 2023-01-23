@@ -5,6 +5,14 @@ on:
     types: [xtest]
   schedule:
     - cron: "30 9,21 * * *"
+  workflow_dispatch:
+    inputs:
+      backendVersion:
+        required: true
+        type: string
+      frontendVersion:
+        required: true
+        type: string
 jobs:
   cross-client-test:
     timeout-minutes: 60
@@ -57,11 +65,11 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
-          export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-            | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
+          [[ -z "${inputs.backendVersion}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
+          | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])") || export BACKEND_LATEST_VERSION=inputs.backendVersion
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
-          export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
-            | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])")
+          [[ -z "${inputs.frontendVersion}" ]] && export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
+          | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])") || export BACKEND_LATEST_VERSION=inputs.frontendVersion
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
