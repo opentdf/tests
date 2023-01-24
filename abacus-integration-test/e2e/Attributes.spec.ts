@@ -37,7 +37,7 @@ test.describe('<Attributes/>', () => {
     });
   });
 
-  test.afterEach(async ({ authority, page}, testInfo) => {
+  test.afterEach(async ({ authority}) => {
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
@@ -155,7 +155,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should sort attributes by Name, rule', async ({ page, authority}) => {
+  test('should sort attributes by Name, rule, ID and Order values', async ({ page, authority}) => {
     const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton
     const firstAttributeName = '1st attribute'
     const secondAttributeName = 'Z 2nd attribute'
@@ -234,63 +234,6 @@ test.describe('<Attributes/>', () => {
       await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
       await page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'}).click()
       await assertItemsOrderAfterSorting(thirdAttributeName, firstAttributeName, secondAttributeName)
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, firstAttributeName,['A', 'G', 'H'], "anyOf")
-      await deleteAttributeViaAPI(apiContext, authority, secondAttributeName,['C', 'G', 'H'], "allOf")
-      await deleteAttributeViaAPI(apiContext, authority, thirdAttributeName,['B', 'G', 'H'], "hierarchy")
-    })
-  });
-
-  test('should sort attributes by rule, values_array', async ({ page, authority}) => {
-    const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton
-    const firstAttributeName = '1st attribute'
-    const secondAttributeName = 'Z 2nd attribute'
-    const thirdAttributeName = '3rd attribute'
-
-    const createAttributeViaAPI = async (attrName: string, attrRule: string, attrOrder: string[]) => {
-      const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
-        data: {
-          "authority": authority,
-          "name": attrName,
-          "rule": attrRule,
-          "state": "published",
-          "order": attrOrder
-        }
-      })
-      expect(createAttributeResponse.ok()).toBeTruthy()
-    }
-
-    const assertItemsOrderAfterSorting = async (expectedFirstItemName: string, expectedSecondItemName: string, expectedLastItemName: string) => {
-      const firstItemNameAfterSorting = await page.innerText(".ant-col h3 >> nth=0")
-      expect(firstItemNameAfterSorting == expectedFirstItemName).toBeTruthy()
-      const secondItemNameAfterSorting = await page.innerText(".ant-col h3 >> nth=1")
-      expect(secondItemNameAfterSorting == expectedSecondItemName).toBeTruthy()
-      const lastItemNameAfterSorting = await page.innerText('.ant-col h3 >> nth=-1')
-      expect(lastItemNameAfterSorting == expectedLastItemName).toBeTruthy()
-    }
-
-    await test.step('Data setup', async () => {
-      await createAttributeViaAPI(firstAttributeName, 'anyOf', ['A', 'G', 'H'])
-      await createAttributeViaAPI(secondAttributeName, 'allOf', ['C', 'G', 'H'])
-      await createAttributeViaAPI(thirdAttributeName, 'hierarchy', ['B', 'G', 'H'])
-    })
-
-    await test.step('Open page with correspondent data', async () => {
-      // reload page to renew data
-      await page.getByRole('link', { name: 'Entitlements' }).click();
-      await page.waitForURL('**/entitlements');
-
-      await page.getByRole('link', { name: 'Attributes' }).click();
-      await page.waitForURL('**/attributes');
-
-      // select proper authority
-      await page.click('[data-test="select-authorities-button"]', {force: true})
-      await page.locator('.ant-select-item-option-content', { hasText: authority }).click();
-
-      await expect(page.locator('.ant-select-selection-item >> nth=1')).toHaveText(authority)
-      await expect(page.locator(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)).toHaveText('Total 3 items')
     })
 
     await test.step('Sort by ID ASC', async () => {
