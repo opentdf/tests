@@ -34,8 +34,11 @@ test.describe('<Authorities/>', () => {
         });
     });
 
-    test.afterEach(async ({ authority}) => {
-        await deleteAuthorityViaAPI(apiContext, authority)
+    test.afterEach(async ({ authority}, testInfo) => {
+        // Because authority in this test already deleted
+        if (testInfo.title !== 'delete authority if there are no assigned attributes') {
+            await deleteAuthorityViaAPI(apiContext, authority);
+        }
     })
 
     test.afterAll(async ({ }) => {
@@ -50,24 +53,27 @@ test.describe('<Authorities/>', () => {
         await expect(header).toBeVisible();
     });
 
-    test.fixme('delete authority if there are no assigned attributes', async ({ page, authority}) => {
-        await page.getByRole('link', { name: 'Authorities' }).click();
-        await page.waitForURL('**/authorities');
+    test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
+        await test.step('Open authorities route', async () => {
+            await page.getByRole('link', { name: 'Authorities' }).click();
+            await page.waitForURL('**/authorities');
+        });
 
         await page.waitForSelector(selectors.authoritiesPage.authoritiesTableRow);
-        const originalTableRows = await page.$$(selectors.authoritiesPage.authoritiesTableRow)
+        const originalTableRows = await page.locator(selectors.authoritiesPage.authoritiesTableRow).all();
         const originalTableSize = originalTableRows.length
 
         const deleteButton = await page.getByRole('row', { name: `${authority} Delete` }).getByRole('button', { name: 'Delete' });
-
         await deleteButton.click();
 
         await test.step('Should be able to close the dialog and cancel authority removal', async () => {
             await page.click(selectors.authoritiesPage.confirmDeletionModal.cancelDeletionBtn)
         })
 
-        await deleteButton.click();
-        await page.click(selectors.authoritiesPage.confirmDeletionModal.confirmDeletionBtn)
+        await test.step('Confirm Deletion Modal', async () => {
+            await deleteButton.click();
+            await page.click(selectors.authoritiesPage.confirmDeletionModal.confirmDeletionBtn)
+        });
 
         await test.step('Assert success message', async() => {
             const successfulDeletionMsg = await page.locator(selectors.alertMessage, {hasText: `Authority ${authority} deleted`})
@@ -75,7 +81,7 @@ test.describe('<Authorities/>', () => {
             await successfulDeletionMsg.click()
         })
 
-        const updatedTableRows = await page.$$(selectors.authoritiesPage.authoritiesTableRow)
+        const updatedTableRows = await page.locator(selectors.authoritiesPage.authoritiesTableRow).all();
         const updatedTableSize = updatedTableRows.length
 
         expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
