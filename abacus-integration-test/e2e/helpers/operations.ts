@@ -19,6 +19,7 @@ export const authorize = async (page: Page) => {
 };
 
 export const createAuthority = async (page: Page, authority: any) => {
+  await page.waitForSelector(selectors.attributesPage.newSectionBtn);
   await page.locator(selectors.attributesPage.newSectionBtn).click();
   await page.fill(selectors.attributesPage.newSection.authorityField, authority);
   await page.locator(selectors.attributesPage.newSection.submitAuthorityBtn).click();

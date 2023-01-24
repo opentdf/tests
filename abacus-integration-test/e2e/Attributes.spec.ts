@@ -55,7 +55,7 @@ test.describe('<Attributes/>', () => {
     expect(newAuthority).toBeTruthy();
   });
 
-  test.fixme('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, authority, attributeValue }) => {
+  test('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, authority, attributeValue }) => {
     const attributesHeader = selectors.attributesPage.attributesHeader;
     const filterModal = attributesHeader.filterModal;
 
@@ -65,54 +65,44 @@ test.describe('<Attributes/>', () => {
     })
 
     await test.step('Filter by existed Name', async () => {
-      await Promise.all([
-        page.click(attributesHeader.filtersToolbarButton),
-        page.fill(filterModal.nameInputField, attributeName),
-      ])
-      await Promise.all([
-        page.click(filterModal.submitBtn),
-        page.click(attributesHeader.itemsQuantityIndicator),
-      ])
-      const filteredAttributesListByName = await page.$$(selectors.attributesPage.attributeItem)
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.fill(filterModal.nameInputField, attributeName);
+      await page.click(filterModal.submitBtn);
+      await page.click(attributesHeader.itemsQuantityIndicator);
+
+      const filteredAttributesListByName = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByName.length).toBe(1)
     })
 
     await test.step('Filter by non-existed Name', async () => {
-      await Promise.all([
-        page.click(attributesHeader.filtersToolbarButton),
-        page.click(filterModal.clearBtn),
-        page.fill(filterModal.nameInputField, 'invalidAttributeName'),
-        page.click(filterModal.submitBtn),
-      ])
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.click(filterModal.clearBtn);
+      await page.fill(filterModal.nameInputField, 'invalidAttributeName');
+      await page.click(filterModal.submitBtn);
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 0 items')
     })
 
     await test.step('Filter by Order', async () => {
-      await Promise.all([
-        page.click(attributesHeader.filtersToolbarButton),
-        page.click(filterModal.clearBtn),
-        page.fill(filterModal.orderInputField, attributeValue),
-        page.click(filterModal.submitBtn),
-        page.click(attributesHeader.itemsQuantityIndicator),
-      ])
+      await page.click(filterModal.clearBtn);
+      await page.fill(filterModal.orderInputField, attributeValue);
+      await page.click(filterModal.submitBtn);
+      await page.click(attributesHeader.itemsQuantityIndicator);
       await page.waitForSelector(selectors.attributesPage.attributeItem);
-      const filteredAttributesListByOrder = await page.$$(selectors.attributesPage.attributeItem)
+      const filteredAttributesListByOrder = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByOrder.length).toBe(1)
     })
 
     await test.step('Filter by Rule', async () => {
-      await Promise.all([
-        page.click(attributesHeader.filtersToolbarButton),
-        page.click(filterModal.clearBtn),
-        page.fill(filterModal.ruleInputField, 'allOf'),
-        page.click(filterModal.submitBtn),
-      ])
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.click(filterModal.clearBtn, { force: true });
+      await page.fill(filterModal.ruleInputField, 'allOf');
+      await page.click(filterModal.submitBtn);
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 0 items')
       await page.fill(filterModal.ruleInputField, 'hierarchy')
       await page.click(filterModal.submitBtn)
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 1 items')
       await page.click(attributesHeader.itemsQuantityIndicator)
-      const filteredAttributesListByRule = await page.$$(selectors.attributesPage.attributeItem)
+      const filteredAttributesListByRule = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByRule.length).toBe(1)
     })
 
@@ -141,7 +131,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test.fixme('should be able to create an attribute with already used name for another authority', async ({ page,authority,attributeName, attributeValue }) => {
+  test('should be able to create an attribute with already used name for another authority', async ({ page,authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -165,13 +155,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test.fixme('should sort attributes by Name, ID, rule, values_array', async ({ page, authority}) => {
-    const ascendingSortingOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'})
-    const descendingSortingOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'})
-    const nameSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'name'})
-    const ruleSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'})
-    const idSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'id'})
-    const valuesSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'})
+  test('should sort attributes by Name, rule, ID and Order values', async ({ page, authority}) => {
     const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton
     const firstAttributeName = '1st attribute'
     const secondAttributeName = 'Z 2nd attribute'
@@ -222,58 +206,66 @@ test.describe('<Attributes/>', () => {
     })
 
     await test.step('Sort by Name ASC', async () => {
-      await page.click(sortByToolbarButton)
-      await ascendingSortingOption.click()
-      await nameSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'name'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, thirdAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by Name DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await nameSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'name'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, thirdAttributeName, firstAttributeName)
     })
 
     await test.step('Sort by Rule ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await ruleSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, firstAttributeName, thirdAttributeName)
     })
 
     await test.step('Sort by Rule DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await ruleSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'}).click()
       await assertItemsOrderAfterSorting(thirdAttributeName, firstAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by ID ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await idSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'id'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, secondAttributeName, thirdAttributeName)
     })
 
     await test.step('Sort by ID DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await idSortingSubOption.click()
+      await page.waitForSelector('#sort-by-button')
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'id'}).click()
       await assertItemsOrderAfterSorting(thirdAttributeName, secondAttributeName, firstAttributeName)
     })
 
     await test.step('Sort by Order values ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await valuesSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, thirdAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by Order values DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await valuesSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, thirdAttributeName, firstAttributeName)
     })
 
@@ -285,32 +277,44 @@ test.describe('<Attributes/>', () => {
   });
 
   test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue }) => {
-    await page.getByRole('link', { name: 'Entitlements' }).click();
-    await page.waitForURL('**/entitlements');
+    await test.step('Open entitlements route', async () => {
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
+    });
 
-    await Promise.all([
-      page.waitForNavigation(),
-      firstTableRowClick('clients-table', page),
-    ]);
+    await test.step('Open table', async () => {
+      await Promise.all([
+        page.waitForNavigation(),
+        firstTableRowClick('clients-table', page),
+      ]);
+    });
 
-    await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
-    await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
-    const originalTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
+
+    const originalTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
     const originalTableSize = originalTableRows.length
 
-    // Delete single item
-    await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).click();
-    await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementModalBtn).click();
+    await test.step('Delete single item', async () => {
+      await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).click();
+      await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementModalBtn).click();
+    });
 
-    await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
-    await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
-    const updatedTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
-    const updatedTableSize = updatedTableRows.length
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
 
-    expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+    await test.step('Match table rows after deletion', async () => {
+      const updatedTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
+      const updatedTableSize = updatedTableRows.length;
+      expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+    });
   });
 
-  test.fixme('should edit attribute rule', async ({ page , authority, attributeName, attributeValue}) => {
+  test('should edit attribute rule', async ({ page , authority, attributeName, attributeValue}) => {
     const restrictiveAccessDropdownOption = page.locator('.ant-select-item-option', {hasText:'Restrictive Access'})
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
     const attributeDetailsSection = selectors.attributesPage.attributeDetailsSection
@@ -337,7 +341,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test.fixme('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , authority, attributeName, attributeValue}) => {
+  test('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , authority, attributeName, attributeValue}) => {
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
 
     await test.step('Create an attribute with multiple Order values and check result message', async() => {
@@ -430,7 +434,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test.fixme('should show existed entitlements in the Attribute Details section', async ({ page, authority,attributeName, attributeValue }) => {
+  test('should show existed entitlements in the Attribute Details section', async ({ page, authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -480,7 +484,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test.fixme('should be able to delete an attribute', async ({ page, authority,attributeName, attributeValue }) => {
+  test('should be able to delete an attribute', async ({ page, authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
