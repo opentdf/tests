@@ -7,7 +7,9 @@ import {
   authorize,
   getAccessToken,
   deleteAttributeViaAPI,
-  deleteAuthorityViaAPI
+  deleteAuthorityViaAPI,
+  createAttributeViaAPI,
+  removeAllAttributesOfAuthority,
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
@@ -38,6 +40,7 @@ test.describe('<Attributes/>', () => {
   });
 
   test.afterEach(async ({ authority}) => {
+    await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
@@ -105,10 +108,6 @@ test.describe('<Attributes/>', () => {
       const filteredAttributesListByRule = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByRule.length).toBe(1)
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
-    })
   });
 
   test('should not be able to create the attribute with already existed name for the same authority', async ({ page,authority,attributeName, attributeValue }) => {
@@ -124,10 +123,6 @@ test.describe('<Attributes/>', () => {
     await test.step('Assert failure message', async() => {
       const attributeCreationFailedMessage = await page.locator(selectors.alertMessage, {hasText: `Request failed`})
       await expect(attributeCreationFailedMessage).toBeVisible()
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
     })
   });
 
@@ -156,23 +151,10 @@ test.describe('<Attributes/>', () => {
   });
 
   test('should sort attributes by Name, rule, ID and Order values', async ({ page, authority}) => {
-    const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton
-    const firstAttributeName = '1st attribute'
-    const secondAttributeName = 'Z 2nd attribute'
-    const thirdAttributeName = '3rd attribute'
-
-    const createAttributeViaAPI = async (attrName: string, attrRule: string, attrOrder: string[]) => {
-      const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
-        data: {
-          "authority": authority,
-          "name": attrName,
-          "rule": attrRule,
-          "state": "published",
-          "order": attrOrder
-        }
-      })
-      expect(createAttributeResponse.ok()).toBeTruthy()
-    }
+    const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton;
+    const firstAttributeName = '1st attribute';
+    const secondAttributeName = 'Z 2nd attribute';
+    const thirdAttributeName = '3rd attribute';
 
     const assertItemsOrderAfterSorting = async (expectedFirstItemName: string, expectedSecondItemName: string, expectedLastItemName: string) => {
       const firstItemNameAfterSorting = await page.innerText(".ant-col h3 >> nth=0")
@@ -184,9 +166,9 @@ test.describe('<Attributes/>', () => {
     }
 
     await test.step('Data setup', async () => {
-      await createAttributeViaAPI(firstAttributeName, 'anyOf', ['A', 'G', 'H'])
-      await createAttributeViaAPI(secondAttributeName, 'allOf', ['C', 'G', 'H'])
-      await createAttributeViaAPI(thirdAttributeName, 'hierarchy', ['B', 'G', 'H'])
+      await createAttributeViaAPI(apiContext, authority, firstAttributeName, ['A', 'G', 'H'], 'anyOf');
+      await createAttributeViaAPI(apiContext, authority, secondAttributeName, ['C', 'G', 'H'], 'allOf');
+      await createAttributeViaAPI(apiContext, authority, thirdAttributeName, ['B', 'G', 'H'], 'hierarchy');
     })
 
     await test.step('Open page with correspondent data', async () => {
@@ -268,12 +250,6 @@ test.describe('<Attributes/>', () => {
       await page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, thirdAttributeName, firstAttributeName)
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, firstAttributeName,['A', 'G', 'H'], "anyOf")
-      await deleteAttributeViaAPI(apiContext, authority, secondAttributeName,['C', 'G', 'H'], "allOf")
-      await deleteAttributeViaAPI(apiContext, authority, thirdAttributeName,['B', 'G', 'H'], "hierarchy")
-    })
   });
 
   test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue }) => {
@@ -295,7 +271,7 @@ test.describe('<Attributes/>', () => {
     });
 
     const originalTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
-    const originalTableSize = originalTableRows.length
+    const originalTableSize = originalTableRows.length;
 
     await test.step('Delete single item', async () => {
       await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).click();
@@ -308,6 +284,7 @@ test.describe('<Attributes/>', () => {
     });
 
     await test.step('Match table rows after deletion', async () => {
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
       const updatedTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
       const updatedTableSize = updatedTableRows.length;
       expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
@@ -334,10 +311,6 @@ test.describe('<Attributes/>', () => {
       await restrictiveAccessDropdownOption.click()
       await page.click(attributeDetailsSection.saveRuleButton)
       await expect(ruleUpdatedMsg).toBeVisible()
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue], "allOf")
     })
   });
 
@@ -382,10 +355,6 @@ test.describe('<Attributes/>', () => {
       const updatedFirstOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await expect(updatedFirstOrderValue).toHaveText(`${attributeValue}4`)
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[`${attributeValue}4`, `${attributeValue}2`, `${attributeValue}3`, `${attributeValue}1`])
-    })
   });
 
   test('Should delete consequent Order field using the Minus icon', async ({ page , attributeName, attributeValue}) => {
@@ -427,10 +396,6 @@ test.describe('<Attributes/>', () => {
       const existedOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await existedOrderValue.click()
       await expect(page.locator('#entitlements-table .ant-empty-description')).toHaveText('No Data')
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
     })
   });
 
@@ -477,10 +442,6 @@ test.describe('<Attributes/>', () => {
       expect(tableEntitlements.length).toBe(1)
       const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
       await expect(page.locator('.ant-table-cell', {hasText: tableValue})).toBeVisible()
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
     })
   });
 
