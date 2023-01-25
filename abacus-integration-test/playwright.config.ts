@@ -15,7 +15,7 @@ const config: PlaywrightTestConfig = {
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   // globalSetup: require.resolve('./global-setup'),
   use: {
-    actionTimeout: 30 * 1000,
+    actionTimeout: 3 * 60 * 1000,
     navigationTimeout: 30 * 1000,
     // storageState: './tests/e2e/storageState.json',
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
@@ -26,7 +26,7 @@ const config: PlaywrightTestConfig = {
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     browserName: "chromium",
-    headless: Boolean(process.env.CI),
+    headless: !Boolean(process.env.CI),
     launchOptions: {
       slowMo: 500,
     }

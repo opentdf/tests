@@ -6,7 +6,7 @@ import {
     assertAttributeCreatedMsg,
     getAccessToken,
     deleteAuthorityViaAPI,
-    deleteAttributeViaAPI
+    removeAllAttributesOfAuthority,
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
@@ -36,6 +36,7 @@ test.describe('<Authorities/>', () => {
 
     test.afterEach(async ({ authority}, testInfo) => {
         // Because authority in this test already deleted
+        await removeAllAttributesOfAuthority(apiContext, authority);
         if (testInfo.title !== 'delete authority if there are no assigned attributes') {
             await deleteAuthorityViaAPI(apiContext, authority);
         }
@@ -102,10 +103,6 @@ test.describe('<Authorities/>', () => {
             const removalFailedMsg = await page.locator(selectors.alertMessage, {hasText: `Something went wrong`})
             await expect(removalFailedMsg).toBeVisible()
             await removalFailedMsg.click()
-        })
-
-        await test.step('Cleanup', async() => {
-            await deleteAttributeViaAPI(apiContext, authority, attributeName, [attributeValue])
         })
     });
 });
