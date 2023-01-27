@@ -22,7 +22,7 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
           node-version: "16.x"
           registry-url: https://npm.pkg.github.com
@@ -30,7 +30,7 @@ jobs:
         run: |-
           npm ci
           npx playwright install
-      - uses: yokawasa/action-setup-kube-tools@v0.7.1
+      - uses: yokawasa/action-setup-kube-tools@v0.9.2
         with:
           setup-tools: |
             kubectl
@@ -53,16 +53,16 @@ jobs:
       - name: Run tilt
         run: |-
           [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-          | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
+          | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           [[ -z "${{github.event.inputs.frontendVersion}}" ]] && export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
-          | python3 -c "import sys, json; sys.stdout.write(json.load(sys.stdin)['Tags'][-1])") || export FRONTEND_LATEST_VERSION="${{github.event.inputs.frontendVersion}}"
+          | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export FRONTEND_LATEST_VERSION="${{github.event.inputs.frontendVersion}}"
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: playwright-test-results
           path: ./abacus-integration-test/test-results
