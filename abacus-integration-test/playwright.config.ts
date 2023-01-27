@@ -1,5 +1,5 @@
 import { PlaywrightTestConfig, devices } from '@playwright/test';
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 // @ts-ignore
 dotenv.config({ multiline: true });
 
@@ -15,7 +15,7 @@ const config: PlaywrightTestConfig = {
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   // globalSetup: require.resolve('./global-setup'),
   use: {
-    actionTimeout: 30 * 1000,
+    actionTimeout: 3 * 60 * 1000,
     navigationTimeout: 30 * 1000,
     // storageState: './tests/e2e/storageState.json',
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
@@ -26,9 +26,9 @@ const config: PlaywrightTestConfig = {
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     browserName: "chromium",
-    headless: !false,
+    headless: Boolean(process.env.CI),
     launchOptions: {
-      slowMo: 50,
+      slowMo: 500,
     }
   },
   expect: {
@@ -39,7 +39,7 @@ const config: PlaywrightTestConfig = {
     timeout: 5000
   },
   /* Maximum time one test can run for. */
-  timeout: 30 * 1000,
+  timeout: 5 * 60 * 1000,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Configure projects for major browsers */

@@ -7,14 +7,18 @@ let apiContext: APIRequestContext;
 let pageContext;
 
 const getAccessTokenAfterLogin = async (page: Page) => {
-    await page.goto('http://localhost:65432/');
+    const responsePromise = page.waitForResponse('**/token');
+
+    await page.goto('/');
     await page.locator(selectors.loginButton).click()
     await page.fill(selectors.loginScreen.usernameField, "user1");
     await page.fill(selectors.loginScreen.passwordField, "testuser123");
     await page.click(selectors.loginScreen.submitButton);
 
-    await page.waitForResponse('**/token');
-    return await getAccessToken(page)
+    const response = await responsePromise;
+    const jsonResponse = await response.json();
+
+    return jsonResponse.access_token;
 };
 
 test.describe('API:', () => {

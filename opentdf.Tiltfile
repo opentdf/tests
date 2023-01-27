@@ -11,8 +11,8 @@ min_tilt_version("0.30")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.1.0")
-FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.1.0")
+BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.1.1")
+FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.1.1")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
@@ -88,6 +88,7 @@ def backend(values=[], set={}, resource_deps=[]):
         "backend",
         chart="oci://ghcr.io/opentdf/charts/backend",
         flags=[
+            "--debug",
             "--wait",
             "--dependency-update",
             "--version",
@@ -105,6 +106,7 @@ def frontend(values=[], set={}, resource_deps=[]):
         "frontend",
         "oci://ghcr.io/opentdf/charts/abacus",
         flags=[
+            "--debug",
             "--wait",
             "--dependency-update",
             "--version",
@@ -135,6 +137,7 @@ def opentdf_cluster_with_ingress(start_frontend=True):
                 "fullnameOverride": "abacus",
                 "oidc.clientId": "dcr-test",
                 "oidc.queryRealms": "tdf",
+                "oidc.serverUrl": "http://localhost:65432/auth/"
             },
             values=[TESTS_DIR + "/mocks/frontend-ingress-values.yaml"],
             resource_deps=["backend"],

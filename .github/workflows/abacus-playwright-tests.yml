@@ -1,7 +1,11 @@
 name: Abacus-Playwright-Tests
 on:
+  pull_request:
+    branches: [main]
+#  repository_dispatch:
+#    types: [xtest]
   schedule:
-    - cron: "0 7 * * 2,4,6"
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       backendVersion:
@@ -55,6 +59,7 @@ jobs:
           [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
           | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
+          
           [[ -z "${{github.event.inputs.frontendVersion}}" ]] && export FRONTEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/abacus \
           | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export FRONTEND_LATEST_VERSION="${{github.event.inputs.frontendVersion}}"
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY

@@ -18,16 +18,16 @@ test.describe('<Entitlements/>', () => {
     await authorize(page);
     authToken = await getAccessToken(page)
 
-    await page.goto('/attributes');
-    // click the token message to close it and overcome potential overlapping problem
-    await page.locator(selectors.tokenMessage).click()
+    await page.getByRole('link', { name: 'Attributes' }).click();
+    await page.waitForURL('**/attributes');
+
     await createAuthority(page, authority);
     // click success message to close it and overcome potential overlapping problem
     const authorityCreatedMsg = page.locator(selectors.alertMessage, {hasText:'Authority was created'})
     await authorityCreatedMsg.click()
-    await page.goto('/entitlements');
-    // click the token message to close it and overcome potential overlapping problem
-    await page.locator(selectors.tokenMessage).click()
+
+    await page.getByRole('link', { name: 'Entitlements' }).click();
+    await page.waitForURL('**/entitlements');
 
     apiContext = await playwright.request.newContext({
       extraHTTPHeaders: {

@@ -1,4 +1,4 @@
-import {APIRequestContext, expect, Locator} from '@playwright/test';
+import { APIRequestContext, expect, Locator } from '@playwright/test';
 import {
   createAuthority,
   createAttribute,
@@ -7,7 +7,9 @@ import {
   authorize,
   getAccessToken,
   deleteAttributeViaAPI,
-  deleteAuthorityViaAPI
+  deleteAuthorityViaAPI,
+  createAttributeViaAPI,
+  removeAllAttributesOfAuthority,
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
@@ -20,15 +22,15 @@ test.describe('<Attributes/>', () => {
 
   test.beforeEach(async ({ page, playwright, authority }) => {
     await authorize(page);
-    authToken = await getAccessToken(page)
-    await page.goto('/attributes');
-    // click the token message to close it and overcome potential overlapping problem
-    const notificationElement = await page.locator(selectors.tokenMessage);
-    await notificationElement.click();
+    authToken = await getAccessToken(page);
+
+    await page.getByRole('link', { name: 'Attributes' }).click();
+    await page.waitForURL('**/attributes');
+
     await createAuthority(page, authority);
     // click success message to close it and overcome potential overlapping problem
-    authorityCreatedMsg = page.locator(selectors.alertMessage, {hasText:'Authority was created'})
-    await authorityCreatedMsg.click()
+    authorityCreatedMsg = await page.locator(selectors.alertMessage, {hasText:'Authority was created'});
+    await authorityCreatedMsg.click();
 
     apiContext = await playwright.request.newContext({
       extraHTTPHeaders: {
@@ -38,6 +40,7 @@ test.describe('<Attributes/>', () => {
   });
 
   test.afterEach(async ({ authority}) => {
+    await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
@@ -56,54 +59,54 @@ test.describe('<Attributes/>', () => {
   });
 
   test('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, authority, attributeValue }) => {
-    await createAttribute(page, attributeName, [attributeValue])
-    await assertAttributeCreatedMsg(page)
-
     const attributesHeader = selectors.attributesPage.attributesHeader;
     const filterModal = attributesHeader.filterModal;
 
+    await test.step('Create attribute', async () => {
+      await createAttribute(page, attributeName, [attributeValue])
+      await assertAttributeCreatedMsg(page)
+    })
+
     await test.step('Filter by existed Name', async () => {
-      await page.click(attributesHeader.filtersToolbarButton)
-      await page.fill(filterModal.nameInputField, attributeName)
-      await page.click(filterModal.submitBtn)
-      await page.click(attributesHeader.itemsQuantityIndicator)
-      const filteredAttributesListByName = await page.$$(selectors.attributesPage.attributeItem)
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.fill(filterModal.nameInputField, attributeName);
+      await page.click(filterModal.submitBtn);
+      await page.click(attributesHeader.itemsQuantityIndicator);
+
+      const filteredAttributesListByName = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByName.length).toBe(1)
     })
 
     await test.step('Filter by non-existed Name', async () => {
-      await page.click(attributesHeader.filtersToolbarButton)
-      await page.click(filterModal.clearBtn)
-      await page.fill(filterModal.nameInputField, 'invalidAttributeName')
-      await page.click(filterModal.submitBtn)
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.click(filterModal.clearBtn);
+      await page.fill(filterModal.nameInputField, 'invalidAttributeName');
+      await page.click(filterModal.submitBtn);
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 0 items')
     })
 
     await test.step('Filter by Order', async () => {
-      await page.click(filterModal.clearBtn)
-      await page.fill(filterModal.orderInputField, attributeValue)
-      await page.click(filterModal.submitBtn)
-      await page.click(attributesHeader.itemsQuantityIndicator)
-      const filteredAttributesListByOrder = await page.$$(selectors.attributesPage.attributeItem)
+      await page.click(filterModal.clearBtn);
+      await page.fill(filterModal.orderInputField, attributeValue);
+      await page.click(filterModal.submitBtn);
+      await page.click(attributesHeader.itemsQuantityIndicator);
+      await page.waitForSelector(selectors.attributesPage.attributeItem);
+      const filteredAttributesListByOrder = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByOrder.length).toBe(1)
     })
 
     await test.step('Filter by Rule', async () => {
-      await page.click(attributesHeader.filtersToolbarButton)
-      await page.click(filterModal.clearBtn)
-      await page.fill(filterModal.ruleInputField, 'allOf')
-      await page.click(filterModal.submitBtn)
+      await page.click(attributesHeader.filtersToolbarButton);
+      await page.click(filterModal.clearBtn, { force: true });
+      await page.fill(filterModal.ruleInputField, 'allOf');
+      await page.click(filterModal.submitBtn);
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 0 items')
       await page.fill(filterModal.ruleInputField, 'hierarchy')
       await page.click(filterModal.submitBtn)
       await expect(page.locator(attributesHeader.itemsQuantityIndicator)).toHaveText('Total 1 items')
       await page.click(attributesHeader.itemsQuantityIndicator)
-      const filteredAttributesListByRule = await page.$$(selectors.attributesPage.attributeItem)
+      const filteredAttributesListByRule = await page.locator(selectors.attributesPage.attributeItem).all();
       expect(filteredAttributesListByRule.length).toBe(1)
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
     })
   });
 
@@ -121,10 +124,6 @@ test.describe('<Attributes/>', () => {
       const attributeCreationFailedMessage = await page.locator(selectors.alertMessage, {hasText: `Request failed`})
       await expect(attributeCreationFailedMessage).toBeVisible()
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
-    })
   });
 
   test('should be able to create an attribute with already used name for another authority', async ({ page,authority,attributeName, attributeValue }) => {
@@ -133,7 +132,7 @@ test.describe('<Attributes/>', () => {
       await assertAttributeCreatedMsg(page)
     })
 
-    await test.step('Create another authority', async() => {
+    await test.step('Create another authority', async () => {
       await page.fill(selectors.attributesPage.newSection.authorityField, `${authority}2`);
       await page.locator(selectors.attributesPage.newSection.submitAuthorityBtn).click();
       await authorityCreatedMsg.click()
@@ -151,30 +150,11 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should sort attributes by Name, ID, rule, values_array', async ({ page, authority}) => {
-    const ascendingSortingOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'})
-    const descendingSortingOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'})
-    const nameSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'name'})
-    const ruleSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'})
-    const idSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'id'})
-    const valuesSortingSubOption = page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'})
-    const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton
-    const firstAttributeName = '1st attribute'
-    const secondAttributeName = 'Z 2nd attribute'
-    const thirdAttributeName = '3rd attribute'
-
-    const createAttributeViaAPI = async (attrName: string, attrRule: string, attrOrder: string[]) => {
-      const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
-        data: {
-          "authority": authority,
-          "name": attrName,
-          "rule": attrRule,
-          "state": "published",
-          "order": attrOrder
-        }
-      })
-      expect(createAttributeResponse.ok()).toBeTruthy()
-    }
+  test('should sort attributes by Name, rule, ID and Order values', async ({ page, authority}) => {
+    const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton;
+    const firstAttributeName = '1st attribute';
+    const secondAttributeName = 'Z 2nd attribute';
+    const thirdAttributeName = '3rd attribute';
 
     const assertItemsOrderAfterSorting = async (expectedFirstItemName: string, expectedSecondItemName: string, expectedLastItemName: string) => {
       const firstItemNameAfterSorting = await page.innerText(".ant-col h3 >> nth=0")
@@ -186,107 +166,129 @@ test.describe('<Attributes/>', () => {
     }
 
     await test.step('Data setup', async () => {
-      await createAttributeViaAPI(firstAttributeName, 'anyOf', ['A', 'G', 'H'])
-      await createAttributeViaAPI(secondAttributeName, 'allOf', ['C', 'G', 'H'])
-      await createAttributeViaAPI(thirdAttributeName, 'hierarchy', ['B', 'G', 'H'])
+      await createAttributeViaAPI(apiContext, authority, firstAttributeName, ['A', 'G', 'H'], 'anyOf');
+      await createAttributeViaAPI(apiContext, authority, secondAttributeName, ['C', 'G', 'H'], 'allOf');
+      await createAttributeViaAPI(apiContext, authority, thirdAttributeName, ['B', 'G', 'H'], 'hierarchy');
     })
 
     await test.step('Open page with correspondent data', async () => {
       // reload page to renew data
-      await page.reload();
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
+
+      await page.getByRole('link', { name: 'Attributes' }).click();
+      await page.waitForURL('**/attributes');
 
       // select proper authority
       await page.click('[data-test="select-authorities-button"]', {force: true})
-      await page.keyboard.press("ArrowUp")
-      await page.keyboard.press("Enter")
+      await page.locator('.ant-select-item-option-content', { hasText: authority }).click();
 
       await expect(page.locator('.ant-select-selection-item >> nth=1')).toHaveText(authority)
       await expect(page.locator(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)).toHaveText('Total 3 items')
     })
 
     await test.step('Sort by Name ASC', async () => {
-      await page.click(sortByToolbarButton)
-      await ascendingSortingOption.click()
-      await nameSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'name'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, thirdAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by Name DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await nameSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'name'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, thirdAttributeName, firstAttributeName)
     })
 
     await test.step('Sort by Rule ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await ruleSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, firstAttributeName, thirdAttributeName)
     })
 
     await test.step('Sort by Rule DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await ruleSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'rule'}).click()
       await assertItemsOrderAfterSorting(thirdAttributeName, firstAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by ID ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await idSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true })
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'id'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, secondAttributeName, thirdAttributeName)
     })
 
     await test.step('Sort by ID DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await idSortingSubOption.click()
+      await page.waitForSelector('#sort-by-button')
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'id'}).click()
       await assertItemsOrderAfterSorting(thirdAttributeName, secondAttributeName, firstAttributeName)
     })
 
     await test.step('Sort by Order values ASC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await ascendingSortingOption.click()
-      await valuesSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'ASC'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'}).click()
       await assertItemsOrderAfterSorting(firstAttributeName, thirdAttributeName, secondAttributeName)
     })
 
     await test.step('Sort by Order values DESC', async () => {
-      await page.click(sortByToolbarButton, {force: true})
-      await descendingSortingOption.click()
-      await valuesSortingSubOption.click()
+      await page.locator(sortByToolbarButton).click({ force: true });
+      await page.waitForSelector('.ant-cascader-menu-item-content')
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'DES'}).click()
+      await page.locator('.ant-cascader-menu-item-content', {hasText: 'values_array'}).click()
       await assertItemsOrderAfterSorting(secondAttributeName, thirdAttributeName, firstAttributeName)
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, firstAttributeName,['A', 'G', 'H'], "anyOf")
-      await deleteAttributeViaAPI(apiContext, authority, secondAttributeName,['C', 'G', 'H'], "allOf")
-      await deleteAttributeViaAPI(apiContext, authority, thirdAttributeName,['B', 'G', 'H'], "hierarchy")
     })
   });
 
   test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue }) => {
-    await page.goto("/entitlements");
-    await Promise.all([
-      page.waitForNavigation(),
-      firstTableRowClick('clients-table', page),
-    ]);
+    await test.step('Open entitlements route', async () => {
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
+    });
 
-    await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
-    const originalTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
-    const originalTableSize = originalTableRows.length
+    await test.step('Open table', async () => {
+      await Promise.all([
+        page.waitForNavigation(),
+        firstTableRowClick('clients-table', page),
+      ]);
+    });
 
-    // Delete single item
-    await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).click();
-    await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementModalBtn).click();
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
 
-    await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
-    const updatedTableRows = await page.$$(selectors.entitlementsPage.entityDetailsPage.tableRow)
-    const updatedTableSize = updatedTableRows.length
+    const originalTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
+    const originalTableSize = originalTableRows.length;
 
-    expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+    await test.step('Delete single item', async () => {
+      await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).click();
+      await page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementModalBtn).click();
+    });
+
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
+
+    await test.step('Match table rows after deletion', async () => {
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+      const updatedTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
+      const updatedTableSize = updatedTableRows.length;
+      expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+    });
   });
 
   test('should edit attribute rule', async ({ page , authority, attributeName, attributeValue}) => {
@@ -310,10 +312,6 @@ test.describe('<Attributes/>', () => {
       await page.click(attributeDetailsSection.saveRuleButton)
       await expect(ruleUpdatedMsg).toBeVisible()
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue], "allOf")
-    })
   });
 
   test('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , authority, attributeName, attributeValue}) => {
@@ -327,17 +325,19 @@ test.describe('<Attributes/>', () => {
     await test.step('Open the Details section', async() => {
       await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
       await page.locator(selectors.attributesPage.newSectionBtn).click();
-      await page.click(existedOrderValue)
-      await expect(page.locator(existedOrderValue)).toHaveAttribute('aria-selected', 'true')
+      await page.waitForSelector('.ant-tabs-tab-btn');
+      await page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` }).click();
+
+      await expect(page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` })).toHaveAttribute('aria-selected', 'true')
     })
 
     await test.step('Should be able to close the Details section', async() => {
       await page.click(selectors.attributesPage.attributeDetailsSection.closeDetailsSectionButton)
-      await expect(page.locator(existedOrderValue)).toHaveAttribute('aria-selected', 'false')
+      await expect(page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` })).toHaveAttribute('aria-selected', 'false')
     })
 
     await test.step('Reopen the Details section and enter editing mode', async() => {
-      await page.click(existedOrderValue)
+      await page.locator('.ant-tabs-tab-btn', { hasText: `${attributeValue}1` }).click();
       await page.locator(selectors.attributesPage.attributeDetailsSection.editRuleButton).click()
     })
 
@@ -354,10 +354,6 @@ test.describe('<Attributes/>', () => {
       await expect(ruleUpdatedMsg).toBeVisible()
       const updatedFirstOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await expect(updatedFirstOrderValue).toHaveText(`${attributeValue}4`)
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[`${attributeValue}4`, `${attributeValue}2`, `${attributeValue}3`, `${attributeValue}1`])
     })
   });
 
@@ -388,27 +384,30 @@ test.describe('<Attributes/>', () => {
   });
 
   test('should show empty state of the Entitlements table in the Attribute Details section when there are no entitlements', async ({page, authority, attributeName,attributeValue}) => {
-    await createAttribute(page, attributeName, [attributeValue])
-    await assertAttributeCreatedMsg(page)
+    await test.step('Create an attributes', async () => {
+      await createAttribute(page, attributeName, [attributeValue])
+      await assertAttributeCreatedMsg(page)
+    })
+
     await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
     await page.locator(selectors.attributesPage.newSectionBtn).click();
-    const existedOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
-    await existedOrderValue.click()
-    await expect(page.locator('#entitlements-table .ant-empty-description')).toHaveText('No Data')
 
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
+    await test.step('Match description', async () => {
+      const existedOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
+      await existedOrderValue.click()
+      await expect(page.locator('#entitlements-table .ant-empty-description')).toHaveText('No Data')
     })
   });
 
-  test('should show existed entitlements in the Attribute Details section', async ({ page,authority,attributeName, attributeValue }) => {
+  test('should show existed entitlements in the Attribute Details section', async ({ page, authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
     })
 
     await test.step('Switch to the Entitlements page', async() => {
-      await page.goto("/entitlements");
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
       await Promise.all([
         page.waitForNavigation(),
         firstTableRowClick('clients-table', page),
@@ -417,18 +416,23 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Entitle the attribute', async() => {
       await page.click(selectors.entitlementsPage.authorityNamespaceField)
-      await page.keyboard.press("ArrowUp")
-      await page.keyboard.press('Enter')
+
+      await page.waitForSelector('.ant-select-item-option-content')
+      await page.locator('.ant-select-item-option-content', { hasText: authority }).click({ force: true });
+
       await page.fill(selectors.entitlementsPage.attributeNameField, attributeName);
       await page.fill(selectors.entitlementsPage.attributeValueField, attributeValue);
       await page.click(selectors.entitlementsPage.submitAttributeButton);
     })
 
     await test.step('Switch to the Attributes page and select proper authority', async() => {
-      await page.goto("/attributes")
-      await page.click(selectors.attributesPage.attributesHeader.authorityDropdownButton, {force:true})
-      await page.keyboard.press("ArrowUp")
-      await page.keyboard.press('Enter')
+      await page.getByRole('link', { name: 'Attributes' }).click();
+      await page.waitForURL('**/attributes');
+
+      await page.click(selectors.attributesPage.attributesHeader.authorityDropdownButton, { force:true })
+
+      await page.waitForSelector('.ant-select-item-option-content')
+      await page.locator('.ant-select-item-option-content', { hasText: authority }).click({ force: true });
     })
 
     await test.step('Open the Details section and verify presence of the entitled item in the table', async() => {
@@ -439,13 +443,9 @@ test.describe('<Attributes/>', () => {
       const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
       await expect(page.locator('.ant-table-cell', {hasText: tableValue})).toBeVisible()
     })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
-    })
   });
 
-  test('should be able to delete an attribute', async ({ page,authority,attributeName, attributeValue }) => {
+  test('should be able to delete an attribute', async ({ page, authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)

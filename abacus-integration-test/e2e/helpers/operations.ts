@@ -19,6 +19,7 @@ export const authorize = async (page: Page) => {
 };
 
 export const createAuthority = async (page: Page, authority: any) => {
+  await page.waitForSelector(selectors.attributesPage.newSectionBtn);
   await page.locator(selectors.attributesPage.newSectionBtn).click();
   await page.fill(selectors.attributesPage.newSection.authorityField, authority);
   await page.locator(selectors.attributesPage.newSection.submitAuthorityBtn).click();
@@ -56,6 +57,25 @@ export const getAccessToken = async (page: Page) => {
   });
 };
 
+export const createAttributeViaAPI = async (
+    apiContext: APIRequestContext,
+    authority: string,
+    attrName: string,
+    attrOrder: string[],
+    attrRule: string
+) => {
+  const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+    data: {
+      "authority": authority,
+      "name": attrName,
+      "rule": attrRule,
+      "state": "published",
+      "order": attrOrder
+    }
+  })
+  expect(createAttributeResponse.ok()).toBeTruthy()
+}
+
 export const deleteAttributeViaAPI = async (apiContext: APIRequestContext, authority: string, attrName: string, attrOrder: string[], attrRule = "hierarchy", attrState = "published") => {
   const deleteAttributeResponse = await apiContext.delete('http://localhost:65432/api/attributes/definitions/attributes', {
     data: {
@@ -69,8 +89,22 @@ export const deleteAttributeViaAPI = async (apiContext: APIRequestContext, autho
   expect(deleteAttributeResponse.ok()).toBeTruthy()
 };
 
+export const removeAllAttributesOfAuthority = async (apiContext: APIRequestContext, authority: string) => {
+  const response = await apiContext.get(`http://localhost:65432/api/attributes/definitions/attributes?authority=${authority}`);
+  const attributes = await response.json();
+
+  if (attributes.length > 0) {
+    return await Promise.all(attributes.map(async (item) => {
+      const mockExampleAuthority = 'https://example.com';
+      if (!item.name.includes(mockExampleAuthority)) {
+        await deleteAttributeViaAPI(apiContext, authority, item.name, item.order, item.rule, item.state);
+      }
+    }))
+  }
+};
+
 export const deleteAuthorityViaAPI = async (apiContext: APIRequestContext, authority: string) => {
-  const deleteAuthorityResponse = await apiContext.delete('http://localhost:65432/api/attributes/authorities',{
+  const deleteAuthorityResponse = await apiContext?.delete('http://localhost:65432/api/attributes/authorities',{
     data: {
       "authority": authority
     },
