@@ -2,6 +2,8 @@ name: Abacus-Playwright-Tests
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: "feature/PLAT-2270"
 #  repository_dispatch:
 #    types: [xtest]
   schedule:
