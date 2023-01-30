@@ -5,6 +5,11 @@ on:
     types: [xtest]
   schedule:
     - cron: "30 9,21 * * *"
+  workflow_dispatch:
+    inputs:
+      backendVersion:
+        required: true
+        type: string
 jobs:
   cross-client-test:
     timeout-minutes: 60
@@ -58,8 +63,8 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
-          export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-            | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])")
+          [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
+          | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
