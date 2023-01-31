@@ -19,9 +19,9 @@ test.describe('<App/>', () => {
   });
 
   // TODO: enable following logout-related tests after fixing PLAT-2299 (Logout operation is failed on CI with 'invalid redirect uri' error)
-  test('should be able to log out on the Attributes page', async ({ page }) => {
+  test.skip('should be able to log out on the Attributes page', async ({ page }) => {
     await test.step('Open Attributes route', async () => {
-      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.getByRole('link', { name: 'Attributes' }).click();
       await page.waitForURL('**/attributes');
     });
 
@@ -36,9 +36,9 @@ test.describe('<App/>', () => {
     await expect(page.locator('.ant-empty-description')).toHaveText('No Data')
   });
 
-  test('should be able to log out on the Authorities page', async ({ page }) => {
+  test.skip('should be able to log out on the Authorities page', async ({ page }) => {
     await test.step('Open Authorities route', async () => {
-      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.getByRole('link', { name: 'Authorities' }).click();
       await page.waitForURL('**/authorities');
     });
 
@@ -55,7 +55,7 @@ test.describe('<App/>', () => {
     await expect(noDataInfo).toBeVisible()
   });
 
-  test('should be able to log out on the Entitlements page', async ({ page }) => {
+  test.skip('should be able to log out on the Entitlements page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -74,7 +74,7 @@ test.describe('<App/>', () => {
     await expect(progressIndicator).toBeVisible()
   });
 
-  test('should be able to log out on the Entity Details page', async ({ page }) => {
+  test.skip('should be able to log out on the Entity Details page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -103,7 +103,7 @@ test.describe('<Login/>', () => {
     await authorize(page, "/authorities")
 
     await test.step('check that Authorities data is loaded', async () => {
-      const authorityItems = await page.$$(selectors.authoritiesPage.authoritiesTableRow)
+      const authorityItems = await page.locator(selectors.authoritiesPage.authoritiesTableRow).all()
       const itemsQuantity = authorityItems.length
       await expect(itemsQuantity>0).toBeTruthy()
     })
@@ -113,7 +113,7 @@ test.describe('<Login/>', () => {
     await authorize(page, "/attributes")
 
     await test.step('check that Attributes data is loaded', async () => {
-      const attributeItems = await page.$$(selectors.attributesPage.attributeListItems)
+      const attributeItems = await page.locator(selectors.attributesPage.attributeListItems).all()
       const itemsQuantity = attributeItems.length
       await expect(itemsQuantity>1).toBeTruthy()
     })
@@ -123,13 +123,13 @@ test.describe('<Login/>', () => {
     await authorize(page, "/entitlements")
 
     await test.step('check that Clients data is loaded', async () => {
-      const clientsTableItems = await page.$$(`[data-test-id='clients-table'] .ant-table-row`);
+      const clientsTableItems = await page.locator(`[data-test-id='clients-table'] .ant-table-row`).all();
       const clientsItemsQuantity = clientsTableItems.length
       await expect(clientsItemsQuantity>0).toBeTruthy()
     })
 
     await test.step('check that Users data is loaded', async () => {
-      const usersTableItems = await page.$$(`[data-test-id='users-table'] .ant-table-row`);
+      const usersTableItems = await page.locator(`[data-test-id='users-table'] .ant-table-row`).all();
       const usersItemsQuantity = usersTableItems.length
       await expect(usersItemsQuantity>0).toBeTruthy()
     })

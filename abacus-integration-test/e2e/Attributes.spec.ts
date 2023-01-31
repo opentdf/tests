@@ -432,13 +432,13 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Consequent Order field is properly added', async () => {
       await page.click(selectors.attributesPage.newSection.plusOrderButton)
-      const orderFieldsAfterAdding = await page.$$('label[title="Order"]')
+      const orderFieldsAfterAdding = await page.locator('label[title="Order"]').all()
       orderFieldsQuantityAfterAdding = orderFieldsAfterAdding.length
     })
 
     await test.step('Order field is properly removed', async () => {
       await page.click(selectors.attributesPage.newSection.minusOrderButton)
-      const orderFieldsAfterRemoval = await page.$$('label[title="Order"]')
+      const orderFieldsAfterRemoval = await page.locator('label[title="Order"]').all()
       const orderFieldsQuantityAfterRemoval = orderFieldsAfterRemoval.length
       expect(orderFieldsQuantityAfterRemoval === (orderFieldsQuantityAfterAdding - 1)).toBeTruthy()
     })
@@ -506,7 +506,7 @@ test.describe('<Attributes/>', () => {
     await test.step('Open the Details section and verify presence of the entitled item in the table', async() => {
       const existedOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await existedOrderValue.click()
-      const tableEntitlements = await page.$$("#entitlements-table .ant-table-tbody")
+      const tableEntitlements = await page.locator("#entitlements-table .ant-table-tbody").all()
       expect(tableEntitlements.length).toBe(1)
       const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
       await expect(page.locator('.ant-table-cell', {hasText: tableValue})).toBeVisible()
