@@ -6,7 +6,6 @@ import {
   firstTableRowClick,
   authorize,
   getAccessToken,
-  deleteAttributeViaAPI,
   deleteAuthorityViaAPI,
   createAttributeViaAPI,
   removeAllAttributesOfAuthority,
@@ -19,6 +18,7 @@ test.describe('<Attributes/>', () => {
   let authToken: string | null;
   let apiContext: APIRequestContext;
   let authorityCreatedMsg: Locator;
+  const attributeDetailsSection = selectors.attributesPage.attributeDetailsSection
 
   test.beforeEach(async ({ page, playwright, authority }) => {
     await authorize(page);
@@ -58,7 +58,22 @@ test.describe('<Attributes/>', () => {
     expect(newAuthority).toBeTruthy();
   });
 
-  test('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, authority, attributeValue }) => {
+  test('should not be able to create authority with empty name or name of non-url format', async ({ page }) => {
+    await test.step('creation is failed when using blank name', async () => {
+      await page.click(selectors.attributesPage.newSection.submitAuthorityBtn)
+      const authorityWarningMessage = page.locator('.ant-form-item-explain-error', {hasText: '\'authority\' is required'})
+      await expect(authorityWarningMessage).toBeVisible()
+    })
+
+    await test.step('creation is failed when using name of invalid non-url format', async () => {
+      await page.fill(selectors.attributesPage.newSection.authorityField, 'invalidAuthorityNameFormat');
+      await page.locator(selectors.attributesPage.newSection.submitAuthorityBtn).click();
+      const authorityCreationFailedMessage = await page.locator(selectors.alertMessage, {hasText: `Authority was not created`})
+      await expect(authorityCreationFailedMessage).toBeVisible()
+    })
+  });
+
+  test('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, attributeValue }) => {
     const attributesHeader = selectors.attributesPage.attributesHeader;
     const filterModal = attributesHeader.filterModal;
 
@@ -110,7 +125,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should not be able to create the attribute with already existed name for the same authority', async ({ page,authority,attributeName, attributeValue }) => {
+  test('should not be able to create the attribute with already existed name for the same authority', async ({ page,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -123,6 +138,23 @@ test.describe('<Attributes/>', () => {
     await test.step('Assert failure message', async() => {
       const attributeCreationFailedMessage = await page.locator(selectors.alertMessage, {hasText: `Request failed`})
       await expect(attributeCreationFailedMessage).toBeVisible()
+    })
+  });
+
+  test('attribute creation is blocked when not filling required Name and Order values', async ({ page}) => {
+    await test.step('creation is failed when using blank Name', async () => {
+      await page.fill(selectors.attributesPage.newSection.orderField1, 'fillOrder');
+      await page.click(selectors.attributesPage.newSection.submitAttributeBtn)
+      const emptyNameWarningMessage = page.locator('.ant-form-item-explain-error', {hasText: 'Please input name value!'})
+      await expect(emptyNameWarningMessage).toBeVisible()
+    })
+
+    await test.step('creation is failed when using blank Order value', async () => {
+      await page.fill(selectors.attributesPage.newSection.attributeNameField, 'fillName');
+      await page.fill(selectors.attributesPage.newSection.orderField1, '');
+      await page.click(selectors.attributesPage.newSection.submitAttributeBtn)
+      const emptyOrderWarningMessage = page.locator('.ant-form-item-explain-error', {hasText: 'Please input order value!'})
+      await expect(emptyOrderWarningMessage).toBeVisible()
     })
   });
 
@@ -141,12 +173,6 @@ test.describe('<Attributes/>', () => {
     await test.step('Create an attribute with the same name for another authority', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
-    })
-
-    await test.step('Cleanup', async () => {
-      await deleteAttributeViaAPI(apiContext, `${authority}2`, attributeName,[attributeValue])
-      await deleteAttributeViaAPI(apiContext, authority, attributeName,[attributeValue])
-      await deleteAuthorityViaAPI(apiContext, `${authority}2`)
     })
   });
 
@@ -252,7 +278,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue }) => {
+  test('should delete attribute entitlement', async ({ page}) => {
     await test.step('Open entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -291,7 +317,7 @@ test.describe('<Attributes/>', () => {
     });
   });
 
-  test('should edit attribute rule', async ({ page , authority, attributeName, attributeValue}) => {
+  test('should edit attribute rule, non applied changes are discarded after cancellation', async ({ page , attributeName, attributeValue}) => {
     const restrictiveAccessDropdownOption = page.locator('.ant-select-item-option', {hasText:'Restrictive Access'})
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
     const attributeDetailsSection = selectors.attributesPage.attributeDetailsSection
@@ -304,18 +330,58 @@ test.describe('<Attributes/>', () => {
     await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
     await page.click(selectors.attributesPage.newSectionBtn);
 
-    await test.step('Update rule and check result', async() => {
+    await test.step('able to cancel rule editing, non applied changes are discarded properly', async() => {
       await page.click(existedOrderValue)
       await page.click(attributeDetailsSection.editRuleButton)
       await page.click(attributeDetailsSection.ruleDropdown)
       await restrictiveAccessDropdownOption.click()
-      await page.click(attributeDetailsSection.saveRuleButton)
+      await page.click(attributeDetailsSection.cancelEditingButton)
+      // reenter editing mode and assert option state is returned to previous one
+      await page.click(attributeDetailsSection.editRuleButton)
+      await expect(page.locator(attributeDetailsSection.ruleDropdown)).toHaveText('Hierarchical Access')
+    })
+
+    await test.step('Update rule and assert saving result', async() => {
+      await page.click(attributeDetailsSection.ruleDropdown)
+      await restrictiveAccessDropdownOption.click()
+      await page.click(attributeDetailsSection.saveChangesButton)
       await expect(ruleUpdatedMsg).toBeVisible()
     })
   });
 
-  test('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , authority, attributeName, attributeValue}) => {
+  test('should edit order value, able to cancel editing', async ({ page, attributeName, attributeValue}) => {
+    const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`})
+
+    await test.step('Create an attribute and assert creation', async() => {
+      await createAttribute(page, attributeName, [attributeValue])
+      await assertAttributeCreatedMsg(page)
+    })
+
+    await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
+    await page.click(selectors.attributesPage.newSectionBtn);
+
+    await test.step('Able to cancel editing a value', async() => {
+      await page.click(existedOrderValue)
+      await page.click(attributeDetailsSection.editValueButton)
+      await page.click(attributeDetailsSection.cancelEditingButton)
+    })
+
+    await test.step('Update value and assert result', async() => {
+      await page.click(existedOrderValue)
+      await page.click(attributeDetailsSection.editValueButton)
+      const updatedOrderValue = 'Updated Value'
+      await page.fill(attributeDetailsSection.editValueInputField, updatedOrderValue)
+      await page.click(attributeDetailsSection.saveChangesButton)
+      await expect(orderValueUpdatedMsg).toBeVisible()
+      const updatedOrderValueInTheList = page.locator('.ant-tabs-tab-btn >> nth=0')
+      await expect(updatedOrderValueInTheList).toHaveText(updatedOrderValue)
+    })
+  });
+
+  test('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , attributeName, attributeValue}) => {
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
+    const firstOrderItemInEditableList = '.order-list__item >> nth=0'
+    const fourthOrderItemInEditableList = '.order-list__item >> nth=3'
 
     await test.step('Create an attribute with multiple Order values and check result message', async() => {
       await createAttribute(page, attributeName, [`${attributeValue}1`, `${attributeValue}2`, `${attributeValue}3`, `${attributeValue}4`])
@@ -341,16 +407,18 @@ test.describe('<Attributes/>', () => {
       await page.locator(selectors.attributesPage.attributeDetailsSection.editRuleButton).click()
     })
 
-    await test.step('Should be able to cancel attribute editing', async() => {
-      await page.click(selectors.attributesPage.attributeDetailsSection.cancelRuleSavingButton)
+    await test.step('Should be able to cancel editing of order, non-applied changes are discarded properly', async() => {
+      await page.dragAndDrop(fourthOrderItemInEditableList, firstOrderItemInEditableList)
+      await expect(page.locator(firstOrderItemInEditableList)).toHaveText(`${attributeValue}4`)
+      await page.click(selectors.attributesPage.attributeDetailsSection.cancelEditingButton)
+      // reenter editing state and check state
+      await page.locator(selectors.attributesPage.attributeDetailsSection.editRuleButton).click()
+      await expect(page.locator(firstOrderItemInEditableList)).toHaveText(`${attributeValue}1`)
     })
 
-    await test.step('Reenter editing mode and edit order of values items using drag-and-drop feature', async() => {
-      await page.locator(selectors.attributesPage.attributeDetailsSection.editRuleButton).click()
-      const firstOrderItemInEditableList = '.order-list__item >> nth=0'
-      const fourthOrderItemInEditableList = '.order-list__item >> nth=3'
-      await page.dragAndDrop(fourthOrderItemInEditableList, firstOrderItemInEditableList )
-      await page.click(selectors.attributesPage.attributeDetailsSection.saveRuleButton)
+    await test.step('Edit order of values items using drag-and-drop feature and assert proper saving', async() => {
+      await page.dragAndDrop(fourthOrderItemInEditableList, firstOrderItemInEditableList)
+      await page.click(selectors.attributesPage.attributeDetailsSection.saveChangesButton)
       await expect(ruleUpdatedMsg).toBeVisible()
       const updatedFirstOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await expect(updatedFirstOrderValue).toHaveText(`${attributeValue}4`)
@@ -364,13 +432,13 @@ test.describe('<Attributes/>', () => {
 
     await test.step('Consequent Order field is properly added', async () => {
       await page.click(selectors.attributesPage.newSection.plusOrderButton)
-      const orderFieldsAfterAdding = await page.$$('label[title="Order"]')
+      const orderFieldsAfterAdding = await page.locator('label[title="Order"]').all()
       orderFieldsQuantityAfterAdding = orderFieldsAfterAdding.length
     })
 
     await test.step('Order field is properly removed', async () => {
       await page.click(selectors.attributesPage.newSection.minusOrderButton)
-      const orderFieldsAfterRemoval = await page.$$('label[title="Order"]')
+      const orderFieldsAfterRemoval = await page.locator('label[title="Order"]').all()
       const orderFieldsQuantityAfterRemoval = orderFieldsAfterRemoval.length
       expect(orderFieldsQuantityAfterRemoval === (orderFieldsQuantityAfterAdding - 1)).toBeTruthy()
     })
@@ -383,7 +451,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should show empty state of the Entitlements table in the Attribute Details section when there are no entitlements', async ({page, authority, attributeName,attributeValue}) => {
+  test('should show empty state of the Entitlements table in the Attribute Details section when there are no entitlements', async ({page, attributeName,attributeValue}) => {
     await test.step('Create an attributes', async () => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -438,14 +506,14 @@ test.describe('<Attributes/>', () => {
     await test.step('Open the Details section and verify presence of the entitled item in the table', async() => {
       const existedOrderValue = page.locator('.ant-tabs-tab-btn >> nth=0')
       await existedOrderValue.click()
-      const tableEntitlements = await page.$$("#entitlements-table .ant-table-tbody")
+      const tableEntitlements = await page.locator("#entitlements-table .ant-table-tbody").all()
       expect(tableEntitlements.length).toBe(1)
       const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
       await expect(page.locator('.ant-table-cell', {hasText: tableValue})).toBeVisible()
     })
   });
 
-  test('should be able to delete an attribute', async ({ page, authority,attributeName, attributeValue }) => {
+  test('should be able to delete an attribute', async ({ page,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
