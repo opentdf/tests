@@ -1,7 +1,7 @@
 import { test } from './helpers/fixtures';
-import { APIRequestContext, chromium, expect, Page } from "@playwright/test";
+import { APIRequestContext, expect, Page } from "@playwright/test";
 import { selectors } from "./helpers/selectors";
-import {deleteAttributeViaAPI, deleteAuthorityViaAPI, getAccessToken} from "./helpers/operations";
+import { deleteAttributeViaAPI, deleteAuthorityViaAPI } from "./helpers/operations";
 
 let apiContext: APIRequestContext;
 let pageContext;

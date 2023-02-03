@@ -360,15 +360,16 @@ test.describe('<Attributes/>', () => {
     await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
     await page.click(selectors.attributesPage.newSectionBtn);
 
-    await test.step('Able to cancel editing a value', async() => {
+    await test.step('Able to cancel editing a value, non-applied changes are discarded properly', async() => {
       await page.click(existedOrderValue)
       await page.click(attributeDetailsSection.editValueButton)
+      await page.fill(attributeDetailsSection.editValueInputField, 'Updated value but not applied')
       await page.click(attributeDetailsSection.cancelEditingButton)
+      await page.click(attributeDetailsSection.editValueButton)
+      await expect(page.locator(attributeDetailsSection.editValueInputField)).toHaveValue(attributeValue)
     })
 
     await test.step('Update value and assert result', async() => {
-      await page.click(existedOrderValue)
-      await page.click(attributeDetailsSection.editValueButton)
       const updatedOrderValue = 'Updated Value'
       await page.fill(attributeDetailsSection.editValueInputField, updatedOrderValue)
       await page.click(attributeDetailsSection.saveChangesButton)

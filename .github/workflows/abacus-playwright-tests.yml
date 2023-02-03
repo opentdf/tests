@@ -2,8 +2,8 @@ name: Abacus-Playwright-Tests
 on:
   pull_request:
     branches: [main]
-#  repository_dispatch:
-#    types: [xtest]
+  repository_dispatch:
+    types: [xtest]
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
