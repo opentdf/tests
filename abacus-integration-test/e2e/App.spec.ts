@@ -18,7 +18,6 @@ test.describe('<App/>', () => {
     expect(logoutButton).toBeTruthy();
   });
 
-  // TODO: enable following logout-related tests after fixing PLAT-2299 (Logout operation is failed on CI with 'invalid redirect uri' error)
   test('should be able to log out on the Attributes page', async ({ page }) => {
     await test.step('Open Attributes route', async () => {
       await page.getByRole('link', { name: 'Attributes' }).click();
