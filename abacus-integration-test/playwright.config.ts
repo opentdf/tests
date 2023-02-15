@@ -11,7 +11,7 @@ const config: PlaywrightTestConfig = {
   /* Retry on CI only */
   retries: 1,
   /* Opt out of parallel tests on CI and Local env for now (due to test failures with multiple workers - PLAT-1774  */
-  workers: 1,
+  workers: 2,
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   // globalSetup: require.resolve('./global-setup'),
   use: {
