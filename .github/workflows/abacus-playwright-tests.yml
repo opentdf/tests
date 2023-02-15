@@ -1,7 +1,5 @@
 name: Abacus-Playwright-Tests
 on:
-  push:
-    branches: [plat_2299]
   pull_request:
     branches: [main]
   repository_dispatch:
