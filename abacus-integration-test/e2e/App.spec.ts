@@ -18,8 +18,7 @@ test.describe('<App/>', () => {
     expect(logoutButton).toBeTruthy();
   });
 
-  // TODO: enable following logout-related tests after fixing PLAT-2299 (Logout operation is failed on CI with 'invalid redirect uri' error)
-  test.skip('should be able to log out on the Attributes page', async ({ page }) => {
+  test('should be able to log out on the Attributes page', async ({ page }) => {
     await test.step('Open Attributes route', async () => {
       await page.getByRole('link', { name: 'Attributes' }).click();
       await page.waitForURL('**/attributes');
@@ -36,7 +35,7 @@ test.describe('<App/>', () => {
     await expect(page.locator('.ant-empty-description')).toHaveText('No Data')
   });
 
-  test.skip('should be able to log out on the Authorities page', async ({ page }) => {
+  test('should be able to log out on the Authorities page', async ({ page }) => {
     await test.step('Open Authorities route', async () => {
       await page.getByRole('link', { name: 'Authorities' }).click();
       await page.waitForURL('**/authorities');
@@ -55,7 +54,7 @@ test.describe('<App/>', () => {
     await expect(noDataInfo).toBeVisible()
   });
 
-  test.skip('should be able to log out on the Entitlements page', async ({ page }) => {
+  test('should be able to log out on the Entitlements page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -74,7 +73,7 @@ test.describe('<App/>', () => {
     await expect(progressIndicator).toBeVisible()
   });
 
-  test.skip('should be able to log out on the Entity Details page', async ({ page }) => {
+  test('should be able to log out on the Entity Details page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
