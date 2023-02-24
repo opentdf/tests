@@ -4,8 +4,7 @@ on:
   repository_dispatch:
     types: [xtest]
   schedule:
-#    - cron: "30 9,21 * * *"
-    - cron: "* * * * *"
+    - cron: "30 9,21 * * *"
   workflow_dispatch:
     inputs:
       backendVersion:
