@@ -10,4 +10,4 @@ load(
 # TODO remove abacus here since we don't use it for this test
 opentdf_cluster_with_ingress(start_frontend=False)
 
-local_resource("test", "npm run test", resource_deps=["backend"])
+local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
