@@ -7,7 +7,7 @@ load(
     "opentdf_cluster_with_ingress",
 )
 
-# TODO remove abacus here since we don't use it for this test #8
+# TODO remove abacus here since we don't use it for this test #9
 opentdf_cluster_with_ingress(start_frontend=False)
 
 local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
