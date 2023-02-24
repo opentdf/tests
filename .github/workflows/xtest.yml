@@ -5,7 +5,7 @@ on:
     types: [xtest]
   schedule:
 #    - cron: "30 9,21 * * *"
-    - cron: "*/3 * * * *"
+    - cron: "* * * * *"
   workflow_dispatch:
     inputs:
       backendVersion:
