@@ -6,7 +6,7 @@
 load("ext://helm_resource", "helm_resource", "helm_repo")
 load("ext://min_tilt_version", "min_tilt_version")
 
-min_tilt_version("0.30")
+min_tilt_version("0.31")
 
 EXTERNAL_URL = "http://localhost:65432"
 
