@@ -65,8 +65,11 @@ export const selectors = {
         entityDetailsPage: {
             tableCell: '.ant-table-cell',
             tableRow: '.ant-table-row',
-            deleteEntitlementBtn: '.ant-btn-link >> nth=0',
-            deleteEntitlementModalBtn: '#delete-attr',
+            deleteEntitlementBtn: '#delete-entitlement-button',
+            confirmDeletionModal: {
+                cancelDeletionBtn: '#cancel-deletion',
+                confirmDeletionBtn: '#delete-attr',
+            },
         }
     },
     authoritiesPage: {

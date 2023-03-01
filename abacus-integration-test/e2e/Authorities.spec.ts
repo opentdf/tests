@@ -82,10 +82,12 @@ test.describe('<Authorities/>', () => {
             await successfulDeletionMsg.click()
         })
 
-        const updatedTableRows = await page.locator(selectors.authoritiesPage.authoritiesTableRow).all();
-        const updatedTableSize = updatedTableRows.length
+        await test.step('Assert item is deleted from the table', async() => {
+            const updatedTableRows = await page.locator(selectors.authoritiesPage.authoritiesTableRow).all()
+            const updatedTableSize = updatedTableRows.length
 
-        expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+            expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+        })
     });
 
     test('Authority removal is failed when contains assigned attributes', async ({ page, authority, attributeName, attributeValue}) => {
