@@ -3,23 +3,32 @@ Tests for OpenTDF
 
 ## [Vulnerability](vulnerability)
 
+Automated checks for vulnerabilities identified during penetration testing
+
 Place to run frontend and backend together locally.
 Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
 
-1) To update the 
-   <br/>`git submodule update --init --recursive`
-   <br/>`git submodule foreach --recursive git fetch`
-   <br/>`git submodule foreach git merge origin main`
-2) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you runned integration tests locally from other folder
-3) run `ctlptl create cluster kind --registry=ctlptl-registry`
+1) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you've run integration tests locally from other folder
+2) run `ctlptl create cluster kind --registry=ctlptl-registry`
+3) `cd vulnerability`
+4) `tilt up`
 
 If you are running locally on mac frontend 'npm run build' step may take too long. Possible solution is run this
 command `npm run build` and change frontend/Dockerfile line `RUN npm run build` to `COPY build/ build/` so it won`t
 run it inside docker. Be careful not to push this changes, we won't need that to CI machines that runs on linux.
 
-Then
+## [Abacus integration tests](abacus-integration-test)
 
-## Cross-client compatibiliy tests (xtests)
+Automated Playwright tests for Abacus application run against the latest versions of frontend and backend together.
+
+Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
+
+1) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you've run integration tests locally from other folder
+2) run `ctlptl create cluster kind --registry=ctlptl-registry`
+3) `cd abacus-integration-test`
+4) `tilt up`
+
+## Cross-client compatibility tests (xtests)
 1) `cd xtest`
 2) `npm ci && npm i @opentdf/client@CLIENT_VERSION`
 3) `pip3 install -r ./requirements.txt`
