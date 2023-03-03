@@ -39,9 +39,13 @@ test.describe('<Attributes/>', () => {
     });
   });
 
-  test.afterEach(async ({ authority}) => {
+  test.afterEach(async ({ authority}, testInfo) => {
     await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
+    if (testInfo.title == 'should be able to create an attribute with already used name for another authority') {
+      await removeAllAttributesOfAuthority(apiContext, `${authority}2`);
+      await deleteAuthorityViaAPI(apiContext, `${authority}2`)
+    }
   })
 
   test.afterAll(async ({ }) => {
@@ -173,11 +177,6 @@ test.describe('<Attributes/>', () => {
     await test.step('Create an attribute with the same name for another authority', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
-    })
-
-    await test.step('Cleanup for the 2nd custom authority', async() => {
-      await removeAllAttributesOfAuthority(apiContext, `${authority}2`);
-      await deleteAuthorityViaAPI(apiContext, `${authority}2`)
     })
   });
 
