@@ -9,8 +9,6 @@ Automated checks for Abacus using Playwright tests
 
 [Playwright](https://playwright.dev/)
 
-[OWASP Zed Attack Proxy (ZAP)](https://www.zaproxy.org/)
-
 ## Execute
 
 `npx playwright test`
