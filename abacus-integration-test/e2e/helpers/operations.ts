@@ -21,7 +21,7 @@ export const authorize = async (page: Page, sectionUrl = "/") => {
   await page.locator(selectors.tokenMessage).click()
 };
 
-export const createAuthority = async (page: Page, authority: any) => {
+export const createAuthority = async (page: Page, authority: string) => {
   await page.waitForSelector(selectors.attributesPage.newSectionBtn);
   await page.locator(selectors.attributesPage.newSectionBtn).click();
   await page.fill(selectors.attributesPage.newSection.authorityField, authority);
