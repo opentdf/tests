@@ -42,7 +42,7 @@ test.describe('<App/>', () => {
     });
 
     // check that authority items are present when logged in
-    await expect(page.locator(selectors.authoritiesPage.deleteAuthorityButton)).toBeVisible()
+    await expect(page.locator(selectors.authoritiesPage.deleteAuthorityButton).first()).toBeVisible()
 
     await Promise.all([
       page.waitForNavigation(),
@@ -84,7 +84,7 @@ test.describe('<App/>', () => {
       firstTableRowClick('users-table', page),
     ]);
     // check that entitlement items are present when logged in
-    await expect(page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn)).toBeVisible()
+    await expect(page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn).first()).toBeVisible()
 
     await Promise.all([
       page.waitForNavigation(),

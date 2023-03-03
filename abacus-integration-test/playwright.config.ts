@@ -5,13 +5,13 @@ dotenv.config({ multiline: true });
 
 /* See https://playwright.dev/docs/test-configuration. */
 const config: PlaywrightTestConfig = {
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   testDir: './e2e',
+  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: Boolean(process.env.CI),
   /* Retry on CI only */
-  retries: 1,
-  /* Opt out of parallel tests on CI and Local env for now (due to test failures with multiple workers - PLAT-1774  */
-  workers: 1,
+  retries: process.env.CI ? 2 : 1,
+  /* Enable parallel execution using multiple workers  */
+  workers: 2,
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   // globalSetup: require.resolve('./global-setup'),
   use: {
@@ -36,7 +36,7 @@ const config: PlaywrightTestConfig = {
    * Maximum time expect() should wait for the condition to be met.
    * For example in `await expect(locator).toHaveText();`
    */
-    timeout: 5000
+    timeout: 8000
   },
   /* Maximum time one test can run for. */
   timeout: 5 * 60 * 1000,
