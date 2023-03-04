@@ -1,17 +1,28 @@
-import {APIRequestContext, expect} from '@playwright/test';
+import {APIRequestContext, expect, Page} from '@playwright/test';
 import {
   createAuthority,
   firstTableRowClick,
   getLastPartOfUrl,
   authorize,
   deleteAuthorityViaAPI,
-  getAccessToken
+  getAccessToken,
+  assertAttributeCreatedMsg,
+  createAttribute,
+  removeAllAttributesOfAuthority
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import {selectors} from "./helpers/selectors";
 
 let authToken: string | null;
 let apiContext: APIRequestContext;
+
+const createNewEntitlement = async (page: Page, authority: string, attributeName: string, attributeValue: string) => {
+  await page.type(selectors.entitlementsPage.authorityNamespaceField, authority);
+  await page.keyboard.press('Enter')
+  await page.fill(selectors.entitlementsPage.attributeNameField, attributeName);
+  await page.fill(selectors.entitlementsPage.attributeValueField, attributeValue);
+  await page.click(selectors.entitlementsPage.submitAttributeButton);
+}
 
 test.describe('<Entitlements/>', () => {
   test.beforeEach(async ({ page , playwright, authority}) => {
@@ -37,6 +48,7 @@ test.describe('<Entitlements/>', () => {
   });
 
   test.afterEach(async ({ authority}) => {
+    await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
 
@@ -75,17 +87,25 @@ test.describe('<Entitlements/>', () => {
   });
 
   test('Add Entitlements To Entity', async ({ page , authority, attributeName, attributeValue}) => {
+    await test.step('Create attribute', async () => {
+      await page.getByRole('link', { name: 'Attributes' }).click();
+      await page.waitForURL('**/attributes');
+      await createAttribute(page, attributeName, [attributeValue])
+      await assertAttributeCreatedMsg(page)
+    });
+
+    await test.step('Open Entitlements route', async () => {
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
+    });
+
     await Promise.all([
         page.waitForNavigation(),
         firstTableRowClick('clients-table', page),
     ]);
 
     await test.step('Entitle attribute', async() => {
-      await page.type(selectors.entitlementsPage.authorityNamespaceField, authority);
-      await page.keyboard.press('Enter')
-      await page.fill(selectors.entitlementsPage.attributeNameField, attributeName);
-      await page.fill(selectors.entitlementsPage.attributeValueField, attributeValue);
-      await page.click(selectors.entitlementsPage.submitAttributeButton);
+      await createNewEntitlement(page, authority, attributeName, attributeValue)
     })
 
     await test.step('Assert result message', async() => {
@@ -98,5 +118,75 @@ test.describe('<Entitlements/>', () => {
       await expect(page.locator(selectors.entitlementsPage.attributeNameField)).toHaveText("")
       await expect(page.locator(selectors.entitlementsPage.attributeValueField)).toHaveText("")
     })
+  });
+
+  test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue}) => {
+    const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
+
+    await test.step('Open Attributes route', async () => {
+      await page.getByRole('link', { name: 'Attributes' }).click();
+      await page.waitForURL('**/attributes');
+    });
+
+    await test.step('Create an attribute and assert creation', async() => {
+      await createAttribute(page, attributeName, [attributeValue])
+      await assertAttributeCreatedMsg(page)
+    })
+
+    await test.step('Open Entitlements route', async () => {
+      await page.getByRole('link', { name: 'Entitlements' }).click();
+      await page.waitForURL('**/entitlements');
+    });
+
+    await test.step('Open table', async () => {
+      await firstTableRowClick('clients-table', page)
+    });
+
+    await test.step('Create a new entitlement', async () => {
+      await createNewEntitlement(page, authority, attributeName, attributeValue)
+
+      const successfulEntitlementMsg = await page.locator(selectors.alertMessage, {hasText: "Entitlement updated!"})
+      await successfulEntitlementMsg.click()
+      await expect(page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow, {hasText: tableValue})).toBeVisible()
+    });
+
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
+
+    const originalTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all()
+    const originalTableSize = originalTableRows.length
+
+    const entityId = await getLastPartOfUrl(page)
+    const deleteButtonForAddedEntitlement = await page.getByRole('row', { name: `${tableValue} ${entityId} Delete` }).getByRole('button', { name: 'Delete' });
+
+    await test.step('Be able to cancel entitlement removal', async() => {
+      await deleteButtonForAddedEntitlement.click()
+      await page.click(selectors.entitlementsPage.entityDetailsPage.confirmDeletionModal.cancelDeletionBtn);
+    })
+
+    await test.step('Delete single item', async () => {
+      await deleteButtonForAddedEntitlement.click()
+      await page.click(selectors.entitlementsPage.entityDetailsPage.confirmDeletionModal.confirmDeletionBtn);
+    });
+
+    await test.step('Click on table cell', async () => {
+      await page.click(selectors.entitlementsPage.entityDetailsPage.tableCell)
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+    });
+
+    await test.step('Assert success message', async () => {
+      const entitlementDeletedMsg = await page.locator(selectors.alertMessage, {hasText: `Entitlement ${tableValue} deleted`})
+      await expect(entitlementDeletedMsg).toBeVisible()
+      await entitlementDeletedMsg.click()
+    });
+
+    await test.step('Match table rows after deletion', async () => {
+      await page.waitForSelector(selectors.entitlementsPage.entityDetailsPage.tableRow)
+      const updatedTableRows = await page.locator(selectors.entitlementsPage.entityDetailsPage.tableRow).all();
+      const updatedTableSize = updatedTableRows.length;
+      expect(updatedTableSize === (originalTableSize - 1)).toBeTruthy()
+    });
   });
 });
