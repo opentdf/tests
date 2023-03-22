@@ -154,7 +154,8 @@ test.describe('API:', () => {
         })
     })
 
-    test('Entitlement Store:', async () => {
+    // Entitlement Store endpoint isn't accessible from the tests CI for now. To investigate and expose properly and then enable test
+    test.skip('Entitlement Store:', async () => {
 
         const primaryEntityID = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
         const secondaryEntityIDs = "46a871f2-6d2a-4d27-b727-e619cfaf4e7b"
