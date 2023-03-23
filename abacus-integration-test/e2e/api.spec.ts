@@ -153,4 +153,50 @@ test.describe('API:', () => {
             expect(deleteEntitlementResponse.ok()).toBeTruthy()
         })
     })
+
+    // Entitlement Store endpoint isn't accessible from the tests CI for now. To investigate and expose properly and then enable test
+    test.skip('Entitlement Store:', async () => {
+
+        const primaryEntityID = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
+        const secondaryEntityIDs = "46a871f2-6d2a-4d27-b727-e619cfaf4e7b"
+
+        await test.step('Entitle request is fulfilled successfully when use valid data', async () => {
+            const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
+                data: {
+                    "primary_entity_id": primaryEntityID,
+                    "secondary_entity_ids": [secondaryEntityIDs]
+                }
+            })
+            expect(postEntitleResponse.status()).toBe(200)
+            expect(postEntitleResponse.ok()).toBeTruthy()
+        })
+
+        await test.step('Entitle request fails with 422 Unprocessable Entity if use wrong body params', async () => {
+            const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
+                data: {
+                    "invalid_parameter_name": primaryEntityID,
+                }
+            })
+            expect(postEntitleResponse.status()).toBe(422)
+        })
+    })
+
+    test('KAS App: Healthz request is fulfilled successfully', async () => {
+        const kasHealthzResponse = await apiContext.get('http://localhost:65432/api/kas/healthz')
+        expect(kasHealthzResponse.status()).toBe(204)
+        expect(kasHealthzResponse.ok()).toBeTruthy()
+    })
+
+    test('KAS App: Get Version request is fulfilled successful', async () => {
+        const kasVersionResponse = await apiContext.get('http://localhost:65432/api/kas')
+        expect(kasVersionResponse.status()).toBe(200)
+        expect(kasVersionResponse.ok()).toBeTruthy()
+    })
+
+    test('KAS App: Get Public Key is accessible and provides certificate key', async () => {
+        const getPublicKeyResponse = await apiContext.get('http://localhost:65432/api/kas/kas_public_key');
+        expect(getPublicKeyResponse.status()).toBe(200)
+        expect(getPublicKeyResponse.ok()).toBeTruthy()
+        expect(await getPublicKeyResponse.json()).toContain('BEGIN CERTIFICATE')
+    })
 })
