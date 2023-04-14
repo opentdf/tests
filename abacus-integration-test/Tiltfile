@@ -1,4 +1,4 @@
-# Tiltfile for development of OpenTDF backend
+# Tiltfile for Playwright tests of Abacus-related services
 # reference https://docs.tilt.dev/api.html
 # extensions https://github.com/tilt-dev/tilt-extensions
 
@@ -9,5 +9,14 @@ load(
 
 opentdf_cluster_with_ingress()
 
-local_resource("test", "npm run test", resource_deps=["frontend", "backend"])
+local_resource(
+  name='entitlement-pdp-3355',
+  serve_cmd='kubectl port-forward service/entitlement-pdp 3355',
+  resource_deps=["backend"])
 
+local_resource(
+  name='entity-resolution-7070',
+  serve_cmd='kubectl port-forward service/entity-resolution 7070',
+  resource_deps=["backend"])
+
+local_resource("test", "npm run test", resource_deps=["frontend", "backend", "entitlement-pdp-3355", "entity-resolution-7070"])

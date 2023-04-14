@@ -154,12 +154,12 @@ test.describe('API:', () => {
         })
     })
 
-    test('Entitlement Store:', async () => {
+    test('Entitlement Store: Entitle request ', async () => {
 
         const primaryEntityID = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
         const secondaryEntityIDs = "46a871f2-6d2a-4d27-b727-e619cfaf4e7b"
 
-        await test.step('Entitle request is fulfilled successfully when use valid data', async () => {
+        await test.step('is fulfilled successfully when use valid data', async () => {
             const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
                 data: {
                     "primary_entity_id": primaryEntityID,
@@ -170,7 +170,7 @@ test.describe('API:', () => {
             expect(postEntitleResponse.ok()).toBeTruthy()
         })
 
-        await test.step('Entitle request fails with 422 Unprocessable Entity if use wrong body params', async () => {
+        await test.step('fails with 422 Unprocessable Entity if use wrong body params', async () => {
             const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
                 data: {
                     "invalid_parameter_name": primaryEntityID,
@@ -197,5 +197,84 @@ test.describe('API:', () => {
         expect(getPublicKeyResponse.status()).toBe(200)
         expect(getPublicKeyResponse.ok()).toBeTruthy()
         expect(await getPublicKeyResponse.json()).toContain('BEGIN CERTIFICATE')
+    })
+
+    test('Entitlement PDP: Healthz request is fulfilled successfully', async () => {
+        const pdpHealthzResponse = await apiContext.get('http://localhost:3355/healthz')
+        expect(pdpHealthzResponse.status()).toBe(200)
+        expect(pdpHealthzResponse.ok()).toBeTruthy()
+    })
+
+    test('Entitlement PDP: Entitlements request ', async () => {
+
+        const primaryEntityID = "508d5145-c16b-4bc7-9b32-a79cbbb17532";
+        const secondaryEntityIDs = "46a871f2-6d2a-4d27-b727-e619cfaf4e7b"
+
+        await test.step('is fulfilled successfully when use valid data', async () => {
+            const entitlementsResponse = await apiContext.post('http://localhost:3355/entitlements', {
+                data: {
+                    "primary_entity_id": primaryEntityID,
+                    "secondary_entity_ids": [secondaryEntityIDs],
+                    "entitlement_context_obj": ""
+                }
+            })
+            expect(entitlementsResponse.status()).toBe(200)
+            expect(entitlementsResponse.ok()).toBeTruthy()
+        })
+
+        await test.step('fails with 400 Bad Request error if use wrong values for body params', async () => {
+            const valueOfWrongFormat = 1
+            const badRequestEntitlementsResponse = await apiContext.post('http://localhost:3355/entitlements', {
+                data: {
+                    "primary_entity_id": valueOfWrongFormat,
+                    "secondary_entity_ids": [""],
+                    "entitlement_context_obj": ""
+                }
+            })
+            expect(badRequestEntitlementsResponse.status()).toBe(400)
+        })
+
+        await test.step('fails with 500 Internal Server Error if use inconsistent body params', async () => {
+            const serverErrorEntitlementsResponse = await apiContext.post('http://localhost:3355/entitlements', {
+                data: {
+                    "primary_entity_id": primaryEntityID,
+                    "secondary_entity_ids1": [secondaryEntityIDs],
+                    "entitlement_context_obj": ""
+                }
+            })
+            expect(serverErrorEntitlementsResponse.status()).toBe(500)
+        })
+    })
+
+    test('Entity Resolution: Healthz request is fulfilled successfully', async () => {
+        const entityResolutionHealthzResponse = await apiContext.get('http://localhost:7070/healthz')
+        expect(entityResolutionHealthzResponse.status()).toBe(200)
+        expect(entityResolutionHealthzResponse.ok()).toBeTruthy()
+    })
+
+    test('Entity Resolution: Resolve request ', async () => {
+        await test.step('is fulfilled successfully when use valid data', async () => {
+            const resolveResponse = await apiContext.post('http://localhost:7070/resolve', {
+                data: {
+                    "entity_identifiers": [
+                        {"identifier": "bob@sample.org", "type": "username"},
+                        {"identifier": "alice@sample.org", "type": "email"}
+                    ]
+                }
+            })
+            expect(resolveResponse.status()).toBe(200)
+            expect(resolveResponse.ok()).toBeTruthy()
+        })
+
+        await test.step('fails with 400 Bad Request error if use wrong Type value', async () => {
+            const badRequestResolveResponse = await apiContext.post('http://localhost:7070/resolve', {
+                data: {
+                    "entity_identifiers": [
+                        {"identifier": "bob@sample.org", "type": "somewrongtype"}
+                    ]
+                }
+            })
+            expect(badRequestResolveResponse.status()).toBe(400)
+        })
     })
 })
