@@ -253,17 +253,34 @@ test.describe('API:', () => {
     })
 
     test('Entity Resolution: Resolve request ', async () => {
-        await test.step('is fulfilled successfully when use valid data', async () => {
+        await test.step('is fulfilled successfully when use valid data, matching entity is returned with ID', async () => {
             const resolveResponse = await apiContext.post('http://localhost:7070/resolve', {
                 data: {
                     "entity_identifiers": [
-                        {"identifier": "bob@sample.org", "type": "username"},
-                        {"identifier": "alice@sample.org", "type": "email"}
+                        {"identifier": "alice_1234", "type": "username"}
                     ]
                 }
             })
             expect(resolveResponse.status()).toBe(200)
             expect(resolveResponse.ok()).toBeTruthy()
+            const resolveResponseBody = await resolveResponse.json()
+            expect(resolveResponseBody[0].EntityRepresentations[0].id).toBeTruthy()
+        })
+
+        // cover PLAT-2439 case
+        await test.step('returns no entity when use partially matching non-existent identifier', async () => {
+            const nonExistentButPartiallyMatchingIdentifier = "alice_12@test.test"
+            const resolveResponseNoMatchCase = await apiContext.post('http://localhost:7070/resolve', {
+                data: {
+                    "entity_identifiers": [
+                        {"identifier": nonExistentButPartiallyMatchingIdentifier, "type": "email"}
+                    ]
+                }
+            })
+            expect(resolveResponseNoMatchCase.status()).toBe(200)
+            expect(resolveResponseNoMatchCase.ok()).toBeTruthy()
+            const resolveResponseBody = await resolveResponseNoMatchCase.json()
+            expect(resolveResponseBody[0].EntityRepresentations).toBe(null)
         })
 
         await test.step('fails with 400 Bad Request error if use wrong Type value', async () => {
