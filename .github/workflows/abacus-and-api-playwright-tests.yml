@@ -1,4 +1,4 @@
-name: Abacus-Playwright-Tests
+name: Abacus-and-API-Playwright-Tests
 on:
   pull_request:
     branches: [main]
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: abacus-integration-test
+        working-directory: abacus-and-api-integration-tests
     permissions:
       contents: read
       packages: read
@@ -70,4 +70,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: playwright-test-results
-          path: ./abacus-integration-test/test-results
+          path: ./abacus-and-api-integration-tests/test-results
