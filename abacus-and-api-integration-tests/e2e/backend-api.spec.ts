@@ -1,31 +1,31 @@
 import { test } from './helpers/fixtures';
 import { APIRequestContext, expect, Page } from "@playwright/test";
-import { selectors } from "./helpers/selectors";
 import { deleteAttributeViaAPI, deleteAuthorityViaAPI } from "./helpers/operations";
 
 let apiContext: APIRequestContext;
-let pageContext;
+let existedEntityId = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
 
-const getAccessTokenAfterLogin = async (page: Page) => {
-    const responsePromise = page.waitForResponse('**/token');
+const getAccessTokenViaAPI = async (playwright) => {
+    const apiContextForGetTokenCall = await playwright.request.newContext();
+    const urlencodedFormData = new URLSearchParams();
+    urlencodedFormData.append('grant_type', 'client_credentials');
+    urlencodedFormData.append('client_id', 'tdf-client');
+    urlencodedFormData.append('client_secret', '123-456');
 
-    await page.goto('/');
-    await page.locator(selectors.loginButton).click()
-    await page.fill(selectors.loginScreen.usernameField, "user1");
-    await page.fill(selectors.loginScreen.passwordField, "testuser123");
-    await page.click(selectors.loginScreen.submitButton);
+    const getAccessTokenResponse = await apiContextForGetTokenCall.post('http://localhost:65432/auth/realms/tdf/protocol/openid-connect/token', {
+        headers:{
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        data: urlencodedFormData.toString()
+    })
 
-    const response = await responsePromise;
-    const jsonResponse = await response.json();
-
-    return jsonResponse.access_token;
+    const responseBody = await getAccessTokenResponse.json()
+    return responseBody.access_token;
 };
 
 test.describe('API:', () => {
-    test.beforeEach(async ({ playwright, authority, browser }) => {
-        pageContext = await browser.newContext();
-        const page = await pageContext.newPage();
-        const authToken = await getAccessTokenAfterLogin(page)
+    test.beforeEach(async ({ playwright, authority }) => {
+        const authToken = await getAccessTokenViaAPI(playwright)
 
         apiContext = await playwright.request.newContext({
             // baseURL: 'http://localhost:65432/api',
@@ -111,9 +111,14 @@ test.describe('API:', () => {
         })
     })
 
-    test('Entitlements: create, read, delete', async ({ authority, attributeName, attributeValue}) => {
+    test('Get Attribute Authorities is fulfilled successfully', async ({authority}) => {
+        const getAuthoritiesResponse = await apiContext.get('http://localhost:65432/api/attributes/authorities')
+        expect(getAuthoritiesResponse.status()).toBe(200)
+        expect(getAuthoritiesResponse.ok()).toBeTruthy()
+        expect(await getAuthoritiesResponse.json()).toContain(authority)
+    })
 
-        let existedEntityId: string;
+    test('Entitlements: create, read, delete', async ({ authority, attributeName, attributeValue}) => {
         const entitlementPayload = `${authority}/attr/${attributeName}/value/${attributeValue}`;
 
         await test.step('GET Entitlements to parse existed entityID', async () => {
@@ -155,25 +160,28 @@ test.describe('API:', () => {
     })
 
     test('Entitlement Store: Entitle request ', async () => {
-
         const primaryEntityID = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
         const secondaryEntityIDs = "46a871f2-6d2a-4d27-b727-e619cfaf4e7b"
 
         await test.step('is fulfilled successfully when use valid data', async () => {
             const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
                 data: {
-                    "primary_entity_id": primaryEntityID,
+                    "primary_entity_id": existedEntityId,
                     "secondary_entity_ids": [secondaryEntityIDs]
                 }
             })
             expect(postEntitleResponse.status()).toBe(200)
             expect(postEntitleResponse.ok()).toBeTruthy()
+            if (existedEntityId !== primaryEntityID) {
+                const postEntitleResponseBody = await postEntitleResponse.json()
+                expect(postEntitleResponseBody[0].entity_attributes[0].attribute).not.toBe(null)
+            }
         })
 
         await test.step('fails with 422 Unprocessable Entity if use wrong body params', async () => {
             const postEntitleResponse = await apiContext.post('http://localhost:65432/api/entitlement-store/entitle', {
                 data: {
-                    "invalid_parameter_name": primaryEntityID,
+                    "invalid_parameter_name": existedEntityId,
                 }
             })
             expect(postEntitleResponse.status()).toBe(422)
