@@ -3,7 +3,7 @@
 
 ## Overview
 
-Automated checks for Abacus using Playwright tests
+Automated tests for Abacus and backend APIs using Playwright
 
 ## Resources
 

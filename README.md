@@ -17,15 +17,15 @@ If you are running locally on mac frontend 'npm run build' step may take too lon
 command `npm run build` and change frontend/Dockerfile line `RUN npm run build` to `COPY build/ build/` so it won`t
 run it inside docker. Be careful not to push this changes, we won't need that to CI machines that runs on linux.
 
-## [Abacus integration tests](abacus-integration-test)
+## [Abacus and API integration tests](abacus-and-api-integration-tests)
 
-Automated Playwright tests for Abacus application run against the latest versions of frontend and backend together.
+Automated Playwright tests for Abacus application run against the latest versions of frontend and backend together + API tests for OpenTDF backend services
 
 Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
 
 1) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you've run integration tests locally from other folder
 2) run `ctlptl create cluster kind --registry=ctlptl-registry`
-3) `cd abacus-integration-test`
+3) `cd abacus-and-api-integration-tests`
 4) `tilt up`
 
 ## Cross-client compatibility tests (xtests)

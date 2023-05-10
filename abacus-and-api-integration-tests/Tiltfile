@@ -1,4 +1,4 @@
-# Tiltfile for Playwright tests of Abacus-related services
+# Tiltfile for Playwright tests of Abacus and related backend services
 # reference https://docs.tilt.dev/api.html
 # extensions https://github.com/tilt-dev/tilt-extensions
 

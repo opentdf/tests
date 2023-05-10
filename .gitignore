@@ -16,10 +16,10 @@ vulnerability/tilt_modules/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
-abacus-integration-test/node_modules/
-abacus-integration-test/tilt_modules/
-abacus-integration-test/test-results/
-abacus-integration-test/playwright-report/
-abacus-integration-test/.helm/
-abacus-integration-test/e2e/test-results
-abacus-integration-test/e2e/playwright-report
+abacus-and-api-integration-tests/node_modules/
+abacus-and-api-integration-tests/tilt_modules/
+abacus-and-api-integration-tests/test-results/
+abacus-and-api-integration-tests/playwright-report/
+abacus-and-api-integration-tests/.helm/
+abacus-and-api-integration-tests/e2e/test-results
+abacus-and-api-integration-tests/e2e/playwright-report
