@@ -315,7 +315,7 @@ test.describe('<Attributes/>', () => {
   });
 
   test('should edit order value, able to cancel editing', async ({ page, attributeName, attributeValue}) => {
-    const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`})
+    const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
 
     await test.step('Create an attribute and assert creation', async() => {
       await createAttribute(page, attributeName, [attributeValue])

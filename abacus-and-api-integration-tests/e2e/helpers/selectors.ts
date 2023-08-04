@@ -28,7 +28,7 @@ export const selectors = {
         attributeDetailsSection: {
             editRuleButton: '#edit',
             editValueButton: '#edit-value',
-            editValueInputField: '#edit-value-input-field',
+            editValueInputField: '#edit-value-input-field-0',
             deleteAttributeButton: '#delete-attribute',
             confirmAttributeDeletionModal: {
                 cancelDeletionBtn: '#cancel-attribute-deletion',
