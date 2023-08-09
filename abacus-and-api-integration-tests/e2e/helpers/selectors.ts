@@ -28,14 +28,17 @@ export const selectors = {
         attributeDetailsSection: {
             editRuleButton: '#edit',
             editValueButton: '#edit-value',
-            editValueInputField: '#edit-value-input-field-0',
+            editValueInputField: '#edit-value-input-field',
+            deleteOrderValueIcon: '#delete-order-value',
             deleteAttributeButton: '#delete-attribute',
             confirmAttributeDeletionModal: {
                 cancelDeletionBtn: '#cancel-attribute-deletion',
                 confirmDeletionBtn: '#confirm-attribute-deletion',
             },
+            addNewOrderValueBtn: '#add-new-order-value-button',
             closeDetailsSectionButton: "#close-details-button",
             ruleDropdown: '.attribute-rule__select',
+            groupByDropdown: '#group-by-selector',
             saveChangesButton: '#save-rule',
             cancelEditingButton: '#cancel',
         },
