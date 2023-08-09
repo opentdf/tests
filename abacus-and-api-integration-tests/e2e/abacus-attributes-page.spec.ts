@@ -329,19 +329,77 @@ test.describe('<Attributes/>', () => {
       const orderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: attributeValue})
       await orderValueItem.click()
       await page.click(attributeDetailsSection.editValueButton)
-      await page.fill(attributeDetailsSection.editValueInputField, 'Updated value but not applied')
+      await page.locator(attributeDetailsSection.editValueInputField).first().fill('Updated value but not applied')
       await page.click(attributeDetailsSection.cancelEditingButton)
       await page.click(attributeDetailsSection.editValueButton)
-      await expect(page.locator(attributeDetailsSection.editValueInputField)).toHaveValue(attributeValue)
+      await expect(page.locator(attributeDetailsSection.editValueInputField).first()).toHaveValue(attributeValue)
     })
 
     await test.step('Update value and assert result', async() => {
       const updatedOrderValue = 'Updated Value'
-      await page.fill(attributeDetailsSection.editValueInputField, updatedOrderValue)
+      await page.locator(attributeDetailsSection.editValueInputField).first().fill(updatedOrderValue)
       await page.click(attributeDetailsSection.saveChangesButton)
       await expect(orderValueUpdatedMsg).toBeVisible()
       const updatedOrderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: updatedOrderValue})
       await expect(updatedOrderValueItem).toBeVisible()
+    })
+  });
+
+  test('able to add new/delete unnecessary order value for an existed attribute', async ({ page, attributeName, attributeValue}) => {
+    const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
+    const newOrderValue = 'New order value'
+    const newOrderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: newOrderValue})
+
+    await test.step('Create an attribute and assert creation', async() => {
+      await createAttribute(page, attributeName, [attributeValue])
+    })
+    await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
+    await page.click(selectors.attributesPage.newSectionBtn);
+
+    await test.step('Able to add new order value', async() => {
+      const orderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: attributeValue})
+      await orderValueItem.click()
+
+      await page.click(attributeDetailsSection.editValueButton)
+      await page.click(attributeDetailsSection.addNewOrderValueBtn)
+      await page.locator(attributeDetailsSection.editValueInputField).last().fill(newOrderValue)
+      await page.click(attributeDetailsSection.saveChangesButton)
+      await expect(orderValueUpdatedMsg).toBeVisible()
+      await expect(newOrderValueItem).toBeVisible()
+      const orderValues = await page.locator('.ant-tabs-nav-list .ant-tabs-tab').all()
+      await expect(orderValues.length).toBe(2)
+    })
+
+    await test.step('Able to delete an order value', async() => {
+      await newOrderValueItem.click()
+      await page.click(attributeDetailsSection.editValueButton)
+      await page.locator(attributeDetailsSection.deleteOrderValueIcon).last().click()
+      await page.click(attributeDetailsSection.saveChangesButton)
+      await expect(orderValueUpdatedMsg).toBeVisible()
+      const orderValues = await page.locator('.ant-tabs-nav-list .ant-tabs-tab').all()
+      await expect(orderValues.length).toBe(1)
+    })
+  });
+
+  test('able to set Group By order value', async ({ page, attributeName, attributeValue}) => {
+    const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
+
+    await test.step('Create an attribute and assert creation', async() => {
+      await createAttribute(page, attributeName, [attributeValue])
+    })
+    await page.click(selectors.attributesPage.attributesHeader.itemsQuantityIndicator)
+    await page.click(selectors.attributesPage.newSectionBtn);
+
+    await test.step('Able to set Group By value', async() => {
+      const orderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: attributeValue})
+      await orderValueItem.click()
+
+      await page.click(attributeDetailsSection.editValueButton)
+      await page.click(attributeDetailsSection.groupByDropdown, {force:true})
+      await page.waitForSelector('.ant-select-item-option-content')
+      await page.locator('.ant-select-item-option-content', { hasText: attributeValue }).click({ force: true });
+      await page.click(attributeDetailsSection.saveChangesButton)
+      await expect(orderValueUpdatedMsg).toBeVisible()
     })
   });
 
