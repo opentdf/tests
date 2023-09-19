@@ -53,7 +53,7 @@ def ingress():
         "k8s-in/ingress-nginx",
         flags=[
             "--version",
-            "4.2.1",
+            "4.0.16",
         ]
         + dict_to_helm_set_list(
             {
