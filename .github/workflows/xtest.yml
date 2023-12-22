@@ -1,19 +1,21 @@
 name: X-Test
 on:
-  pull_request:
-  repository_dispatch:
-    types: [xtest]
-  schedule:
-    - cron: "30 9,21 * * *"
-  workflow_dispatch:
-    inputs:
-      backendVersion:
-        required: true
-        type: string
+  push:
+    branches: deps_and_trigger_conditions_update
+#  pull_request:
+#  repository_dispatch:
+#    types: [xtest]
+#  schedule:
+#    - cron: "30 7 * * *"
+#  workflow_dispatch:
+#    inputs:
+#      backendVersion:
+#        required: true
+#        type: string
 jobs:
   cross-client-test:
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: virtru-scale-set-runner
     defaults:
       run:
         working-directory: xtest
