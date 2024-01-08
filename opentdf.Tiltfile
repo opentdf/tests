@@ -11,8 +11,8 @@ min_tilt_version("0.31")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.5.0") #1.4.2
-FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.5.0") #1.4.1
+BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.4.2")
+FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.4.1")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
@@ -86,7 +86,7 @@ def backend(values=[], set={}, resource_deps=[]):
     update_settings(k8s_upsert_timeout_secs=1200)
     helm_resource(
         "backend",
-        chart="oci://ghcr.io/opentdf/charts/backend",
+        chart="oci://ghcr.io/opentdf/gokas",
         flags=[
             "--debug",
             "--wait",
