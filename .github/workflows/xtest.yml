@@ -65,7 +65,7 @@ jobs:
           kubernetes-version: 1.24.1
       - name: Run tilt
         run: |-
-          [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
+          [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/gokas \
           | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
