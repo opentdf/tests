@@ -15,7 +15,7 @@ on:
 jobs:
   cross-client-test:
     timeout-minutes: 60
-    runs-on: virtru-scale-set-runner
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: xtest
