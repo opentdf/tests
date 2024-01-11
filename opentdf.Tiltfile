@@ -80,6 +80,8 @@ def backend(values=[], set={}, resource_deps=[]):
         "kas.envConfig.cert": all_secrets["KAS_CERTIFICATE"],
         "kas.envConfig.ecPrivKey": all_secrets["KAS_EC_SECP256R1_PRIVATE_KEY"],
         "kas.envConfig.privKey": all_secrets["KAS_PRIVATE_KEY"],
+        "kas.image.repo": "ghcr.io/opentdf/gokas",
+        "kas.image.tag": "latest",
     }
     set_values.update(set)
 
