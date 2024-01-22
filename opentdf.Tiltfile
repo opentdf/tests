@@ -14,6 +14,11 @@ EXTERNAL_URL = "http://localhost:65432"
 BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "0.0.0-sha-02d27b5")
 FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.5.0")
 
+# KAS_VERSION = "pythonkas"
+# if os.environ.get("KAS_VERSION"):
+#    KAS_VERSION = os.environ.get("KAS_VERSION", "pythonkas")
+#    CUSTOM_KAS = true
+
 KAS_VERSION = os.environ.get("KAS_VERSION", "pythonkas")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
@@ -73,7 +78,7 @@ def ingress():
 # set: dictionary of value_name: value pairs
 # extra_helm_parameters: only valid when devmode=False; passed to underlying `helm update` command
 def backend(values=[], set={}, resource_deps=[]):
-    if KAS_VERSION=='gokas':
+    if KAS_VERSION == 'gokas':
         echo 'gokas condition passed'
         set_values = {
             "entity-resolution.secret.keycloak.clientSecret": "123-456",
