@@ -79,7 +79,6 @@ def ingress():
 # extra_helm_parameters: only valid when devmode=False; passed to underlying `helm update` command
 def backend(values=[], set={}, resource_deps=[]):
     if KAS_VERSION == 'gokas':
-        echo 'gokas condition passed'
         set_values = {
             "entity-resolution.secret.keycloak.clientSecret": "123-456",
             "secrets.opaPolicyPullSecret": opaPolicyPullSecret,
