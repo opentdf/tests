@@ -14,11 +14,7 @@ EXTERNAL_URL = "http://localhost:65432"
 BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "0.0.0-sha-02d27b5")
 FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.5.0")
 
-# KAS_VERSION = "pythonkas"
-# if os.environ.get("KAS_VERSION"):
-#    KAS_VERSION = os.environ.get("KAS_VERSION", "pythonkas")
-#    CUSTOM_KAS = true
-
+# to be able to switch between Python and Go versions
 KAS_VERSION = os.environ.get("KAS_VERSION", "pythonkas")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
@@ -105,6 +101,9 @@ def backend(values=[], set={}, resource_deps=[]):
             "kas.envConfig.privKey": all_secrets["KAS_PRIVATE_KEY"],
         }
     set_values.update(set)
+
+    print("see the set_values")
+    print(set_values)
 
     update_settings(k8s_upsert_timeout_secs=1200)
     helm_resource(
