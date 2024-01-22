@@ -101,6 +101,9 @@ def backend(values=[], set={}, resource_deps=[]):
         }
     set_values.update(set)
 
+    echo "Checking set-values"
+    echo set_values
+
     update_settings(k8s_upsert_timeout_secs=1200)
     helm_resource(
         "backend",
