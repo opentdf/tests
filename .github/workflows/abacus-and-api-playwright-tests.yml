@@ -1,19 +1,21 @@
 name: Abacus-and-API-Playwright-Tests
 on:
-  pull_request:
-    branches: [main]
-  repository_dispatch:
-    types: [xtest]
-  schedule:
-    - cron: "0 7 * * *"
-  workflow_dispatch:
-    inputs:
-      backendVersion:
-        required: true
-        type: string
-      frontendVersion:
-        required: true
-        type: string
+  push:
+    branches: [ kas-matrix-tests ]
+#  pull_request:
+#    branches: [main]
+#  repository_dispatch:
+#    types: [xtest]
+#  schedule:
+#    - cron: "0 7 * * *"
+#  workflow_dispatch:
+#    inputs:
+#      backendVersion:
+#        required: true
+#        type: string
+#      frontendVersion:
+#        required: true
+#        type: string
 jobs:
   abacus-playwright-tests:
     timeout-minutes: 60
@@ -24,8 +26,14 @@ jobs:
     permissions:
       contents: read
       packages: read
+    strategy:
+      matrix:
+        kasversion: [ python-kas, go-kas ]
     steps:
       - uses: actions/checkout@v3
+      - name: Set kas-related environment variable
+        shell: bash
+        run: echo "KAS_VERSION=${{ matrix.kasversion }}" >> $GITHUB_ENV
       - uses: actions/setup-node@v3
         with:
           node-version: "16.x"

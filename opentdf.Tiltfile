@@ -11,12 +11,11 @@ min_tilt_version("0.31")
 EXTERNAL_URL = "http://localhost:65432"
 
 # Versions of things backend to pull (attributes, kas, etc)
-# BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "0.0.0-sha-02d27b5")
-BACKEND_CHART_TAG = "0.0.0-sha-02d27b5"
+BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "0.0.0-sha-02d27b5")
 FRONTEND_CHART_TAG = os.environ.get("FRONTEND_LATEST_VERSION", "1.5.0")
 
 # to be able to switch between Python and Go versions
-KAS_VERSION = os.environ.get("KAS_VERSION", "pythonkas")
+KAS_VERSION = os.environ.get("KAS_VERSION", "python-kas")
 
 CONTAINER_REGISTRY = os.environ.get("CONTAINER_REGISTRY", "ghcr.io")
 POSTGRES_PASSWORD = "myPostgresPassword"
@@ -75,7 +74,7 @@ def ingress():
 # set: dictionary of value_name: value pairs
 # extra_helm_parameters: only valid when devmode=False; passed to underlying `helm update` command
 def backend(values=[], set={}, resource_deps=[]):
-    if KAS_VERSION == 'gokas':
+    if KAS_VERSION == 'go-kas':
         set_values = {
             "entity-resolution.secret.keycloak.clientSecret": "123-456",
             "secrets.opaPolicyPullSecret": opaPolicyPullSecret,
