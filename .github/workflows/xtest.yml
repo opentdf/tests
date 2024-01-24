@@ -4,7 +4,7 @@ on:
   repository_dispatch:
     types: [xtest]
   schedule:
-    - cron: "30 9,21 * * *"
+    - cron: "30 6 * * *"
   workflow_dispatch:
     inputs:
       backendVersion:
@@ -20,8 +20,14 @@ jobs:
     permissions:
       contents: read
       packages: read
+    strategy:
+      matrix:
+        kasversion: [ python-kas, go-kas ]
     steps:
       - uses: actions/checkout@v3
+      - name: Set kas-related environment variable
+        shell: bash
+        run: echo "KAS_VERSION=${{ matrix.kasversion }}" >> $GITHUB_ENV
       - name: Set up Node 18
         uses: actions/setup-node@v3
         with:
