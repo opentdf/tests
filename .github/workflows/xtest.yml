@@ -6,7 +6,7 @@ on:
 #  repository_dispatch:
 #    types: [xtest]
 #  schedule:
-#    - cron: "30 9,21 * * *"
+#    - cron: "30 6 * * *"
 #  workflow_dispatch:
 #    inputs:
 #      backendVersion:
