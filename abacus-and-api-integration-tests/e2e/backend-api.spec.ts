@@ -189,6 +189,7 @@ test.describe('API:', () => {
     })
 
     const KAS_VERSION = process.env.KAS_VERSION || "python-kas"
+    // endpoint is available only for python KAS
     if (KAS_VERSION == "python-kas") {
         test('KAS App: Healthz request is fulfilled successfully', async () => {
             const kasHealthzResponse = await apiContext.get('http://localhost:65432/api/kas/healthz')
