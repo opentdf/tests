@@ -1,17 +1,15 @@
 name: X-Test
 on:
-  push:
-    branches: [fix-gokas-pod]
-#  pull_request:
-#  repository_dispatch:
-#    types: [xtest]
-#  schedule:
-#    - cron: "30 6 * * *"
-#  workflow_dispatch:
-#    inputs:
-#      backendVersion:
-#        required: true
-#        type: string
+  pull_request:
+  repository_dispatch:
+    types: [xtest]
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      backendVersion:
+        required: true
+        type: string
 jobs:
   cross-client-test:
     timeout-minutes: 60

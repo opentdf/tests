@@ -189,7 +189,6 @@ test.describe('API:', () => {
     })
 
     const KAS_VERSION = process.env.KAS_VERSION || "python-kas"
-    console.log(`KAS_VERSION appears ${KAS_VERSION}.`);
     if (KAS_VERSION == "python-kas") {
         test('KAS App: Healthz request is fulfilled successfully', async () => {
             const kasHealthzResponse = await apiContext.get('http://localhost:65432/api/kas/healthz')
