@@ -5,13 +5,9 @@ import filecmp
 import json
 import logging
 import os
-import random
-import re
-import requests
-import shutil
-import string
+import statistics
 import subprocess
-import base64
+import time
 
 SDK_PATHS = ["sdk/js/node/cli.sh", "sdk/py/cli.sh"]
 
@@ -61,7 +57,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
     for x in sdks_encrypt:
         for y in sdks_decrypt:
             try:
-                test_cross_roundtrip(x, y, serial, pt_file)
+                test_cross_roundtrip(x, y, serial, pt_file, iterations=8)
             except Exception as e:
                 logger.error("Exception with pass %s => %s", x, y, exc_info=True)
                 fail += [f"{x}=>{y}"]
@@ -74,7 +70,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
 
 # Test a roundtrip across the two referenced sdks.
 # Returns True if test succeeded, false otherwise.
-def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
+def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file, iterations=1):
     logger.info(
         "--- Begin Test #%s: Roundtrip encrypt(%s) --> decrypt(%s)",
         serial,
@@ -95,15 +91,19 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     logger.info("Encrypt %s", encrypt_sdk)
     encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain")
     logger.info("Decrypt %s", decrypt_sdk)
-    decrypt(decrypt_sdk, ct_file, rt_file)
-
+    t = []
+    for _ in range(iterations):
+        start = time.time()
+        decrypt(decrypt_sdk, ct_file, rt_file)
+        t += [time.time() - start]
     # Verify the roundtripped result is the same as our initial plantext.
     if not filecmp.cmp(pt_file, rt_file):
         raise Exception(
             "Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
             % (serial, pt_file, rt_file)
         )
-    logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
+    average, stddev = statistics.mean(t), statistics.stdev(t) if iterations > 1 else 0
+    logger.info("Test #%s, (%s->%s): Succeeded!! average decrypt time: [%s], stdev: [%s]", serial, encrypt_sdk, decrypt_sdk, f"{average:.3f}", f"{stddev:.3f}")
 
 
 def gen_pt(*, large):
