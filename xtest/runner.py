@@ -57,7 +57,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
     for x in sdks_encrypt:
         for y in sdks_decrypt:
             try:
-                test_cross_roundtrip(x, y, serial, pt_file, iterations=8)
+                test_cross_roundtrip(x, y, serial, pt_file, iterations=64)
             except Exception as e:
                 logger.error("Exception with pass %s => %s", x, y, exc_info=True)
                 fail += [f"{x}=>{y}"]
