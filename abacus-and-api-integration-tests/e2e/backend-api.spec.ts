@@ -188,11 +188,15 @@ test.describe('API:', () => {
         })
     })
 
-    test('KAS App: Healthz request is fulfilled successfully', async () => {
-        const kasHealthzResponse = await apiContext.get('http://localhost:65432/api/kas/healthz')
-        expect(kasHealthzResponse.status()).toBe(204)
-        expect(kasHealthzResponse.ok()).toBeTruthy()
-    })
+    const KAS_VERSION = process.env.KAS_VERSION || "python-kas"
+    // endpoint is available only for python KAS
+    if (KAS_VERSION == "python-kas") {
+        test('KAS App: Healthz request is fulfilled successfully', async () => {
+            const kasHealthzResponse = await apiContext.get('http://localhost:65432/api/kas/healthz')
+            expect(kasHealthzResponse.status()).toBe(204)
+            expect(kasHealthzResponse.ok()).toBeTruthy()
+        })
+    }
 
     test('KAS App: Get Version request is fulfilled successful', async () => {
         const kasVersionResponse = await apiContext.get('http://localhost:65432/api/kas')
