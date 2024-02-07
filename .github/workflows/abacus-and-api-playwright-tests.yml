@@ -78,19 +78,20 @@ jobs:
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
+      - name: Integrate results into TestRail
+        run: |
+          trcli -y \
+          --host https://virtru.testrail.com \
+          --project "Abacus Website" \
+          --username sergii.ievdokymov@virtru.com \
+          --password P \
+          parse_junit \
+          --title "Playwright Automated Test Run" \
+          --file "./abacus-and-api-integration-tests/test-results/junit-report.xml"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: playwright-test-results
           path: ./abacus-and-api-integration-tests/test-results
-      - name: Integrate results into TestRail
-        run: |
-          trcli -n \
-          --host https://virtru.testrail.com \
-          --project "Abacus Website" \
-          -u sergii.ievdokymov@virtru.com \
-          -p P \
-          parse_junit \
-          --title "Playwright Automated Test Run" \
-          --file "./abacus-and-api-integration-tests/test-results/junit-report.xml"
+
