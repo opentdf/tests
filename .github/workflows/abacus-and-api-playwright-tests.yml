@@ -80,7 +80,6 @@ jobs:
           tilt ci
       - name: Integrate results into TestRail
         run: |
-          pwd
           trcli -y \
           --host https://virtru.testrail.com \
           --project "Abacus Website" \
@@ -88,7 +87,7 @@ jobs:
           --password P \
           parse_junit \
           --title "Playwright Automated Test Run" \
-          --file "./abacus-and-api-integration-tests/test-results/junit-report.xml"
+          --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v3
