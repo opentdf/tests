@@ -86,7 +86,7 @@ jobs:
           path: ./abacus-and-api-integration-tests/test-results
       - name: Integrate results into TestRail
         run: |
-          trcli -n
+          trcli -n \
           --host https://virtru.testrail.com \
           --project "Abacus Website" \
           -u sergii.ievdokymov@virtru.com \
