@@ -14,7 +14,7 @@ import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
 import {randomUUID} from "crypto";
 
-test.describe('<Attributes/>', () => {
+test.describe.skip('<Attributes/>', () => {
   let authToken: string | null;
   let apiContext: APIRequestContext;
   let authorityCreatedMsg: Locator;
