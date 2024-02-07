@@ -78,13 +78,28 @@ jobs:
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
+      - name: 'Authenticate to Google Cloud'
+        id: 'gcp-auth'
+        uses: 'google-github-actions/auth@35b0e87d162680511bf346c299f71c9c5c379033'
+        with:
+          workload_identity_provider: 'projects/1053957112592/locations/global/workloadIdentityPools/github-actions-oidc-pool/providers/github-actions-oidc-provider'
+          service_account: 'qa-sa-for-gha@prj-infra-automation-ktbz.iam.gserviceaccount.com'
+
+      - name: 'Output team GCP secrets'
+        id: 'gcp-secrets'
+        uses: google-github-actions/get-secretmanager-secrets@4d6d3dfd94110800dda8d84109cb6da0f6a5919d
+        with:
+          secrets: |-
+            TESTRAIL_PASS:prj-infra-automation-ktbz/qa_TESTRAIL_PASS
       - name: Integrate results into TestRail
+        env:
+          TESTRAIL_PASS: ${{ steps.gcp-secrets.outputs.TESTRAIL_PASS }}
         run: |
           trcli -y \
           --host https://virtru.testrail.com \
           --project "Abacus Website" \
-          --username ${{ secrets.TESTRAIL_USER }} \
-          --password ${{ secrets.TESTRAIL_PASS }} \
+          --username testerfour@trusteddataformat.org \
+          --password $process.env.TESTRAIL_PASS \
           parse_junit \
           --title "Playwright Automated Test Run" \
           --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"
