@@ -80,6 +80,7 @@ jobs:
           tilt ci
       - name: Integrate results into TestRail
         run: |
+          pwd
           trcli -y \
           --host https://virtru.testrail.com \
           --project "Abacus Website" \
