@@ -83,8 +83,8 @@ jobs:
           trcli -y \
           --host https://virtru.testrail.com \
           --project "Abacus Website" \
-          --username sergii.ievdokymov@virtru.com \
-          --password P \
+          --username ${{ secrets.TESTRAIL_USER }} \
+          --password ${{ secrets.TESTRAIL_PASS }} \
           parse_junit \
           --title "Playwright Automated Test Run" \
           --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"

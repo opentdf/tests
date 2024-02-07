@@ -10,11 +10,12 @@ import {
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
+import {randomUUID} from "crypto";
 
 let authToken: string | null;
 let apiContext: APIRequestContext;
 
-test.describe.skip('<Authorities/>', () => {
+test.describe('<Authorities/>', () => {
     test.beforeEach(async ({ page , playwright, authority}) => {
         await authorize(page);
         authToken = await getAccessToken(page);
@@ -34,7 +35,13 @@ test.describe.skip('<Authorities/>', () => {
         });
     });
 
-    test.afterEach(async ({ authority}, testInfo) => {
+    test.afterEach(async ({ authority, page}, testInfo) => {
+        if (testInfo.status !== testInfo.expectedStatus) {
+            let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+        }
+
         // Because authority in this test already deleted
         await removeAllAttributesOfAuthority(apiContext, authority);
         if (testInfo.title !== 'delete authority if there are no assigned attributes') {

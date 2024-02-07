@@ -12,8 +12,9 @@ import {
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
+import {randomUUID} from "crypto";
 
-test.describe.skip('<Attributes/>', () => {
+test.describe('<Attributes/>', () => {
   let authToken: string | null;
   let apiContext: APIRequestContext;
   let authorityCreatedMsg: Locator;
@@ -38,7 +39,13 @@ test.describe.skip('<Attributes/>', () => {
     });
   });
 
-  test.afterEach(async ({ authority}, testInfo) => {
+  test.afterEach(async ({ authority, page}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+    }
+
     await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
     if (testInfo.title == 'should be able to create an attribute with already used name for another authority') {

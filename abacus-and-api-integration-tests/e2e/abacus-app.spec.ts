@@ -1,12 +1,26 @@
 import { test, expect } from '@playwright/test';
 import { selectors } from "./helpers/selectors";
-import { authorize, firstTableRowClick, getLastPartOfUrl, login } from "./helpers/operations";
+import {
+  authorize,
+  firstTableRowClick,
+  getLastPartOfUrl,
+  login,
+} from "./helpers/operations";
+import {randomUUID} from "crypto";
 
-test.describe.skip('<App/>', () => {
+test.describe('<App/>', () => {
   test.beforeEach(async ({ page }) => {
     await authorize(page);
     await page.goto('/');
   });
+
+  test.afterEach(async ({ page}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+    }
+  })
 
   test('Default page is rendered properly', async ({ page }) => {
     const header = page.locator('h2', { hasText: "Attributes" });
