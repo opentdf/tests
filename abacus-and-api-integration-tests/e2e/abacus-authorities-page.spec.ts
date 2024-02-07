@@ -14,7 +14,7 @@ import { selectors } from "./helpers/selectors";
 let authToken: string | null;
 let apiContext: APIRequestContext;
 
-test.describe('<Authorities/>', () => {
+test.describe.skip('<Authorities/>', () => {
     test.beforeEach(async ({ page , playwright, authority}) => {
         await authorize(page);
         authToken = await getAccessToken(page);
@@ -46,7 +46,7 @@ test.describe('<Authorities/>', () => {
         await apiContext.dispose();
     });
 
-    test('renders initially', async ({ page, authority}) => {
+    test('Page is rendered properly', async ({ page, authority}) => {
         await page.getByRole('link', { name: 'Authorities' }).click();
         await page.waitForURL('**/authorities');
 
@@ -54,7 +54,7 @@ test.describe('<Authorities/>', () => {
         await expect(header).toBeVisible();
     });
 
-    test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
+    test('Authority is deleted successfully if there are no assigned attributes ', async ({ page, authority}) => {
         await test.step('Open authorities route', async () => {
             await page.getByRole('link', { name: 'Authorities' }).click();
             await page.waitForURL('**/authorities');

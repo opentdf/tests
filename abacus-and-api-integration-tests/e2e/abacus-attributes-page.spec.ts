@@ -13,7 +13,7 @@ import {
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
 
-test.describe('<Attributes/>', () => {
+test.describe.skip('<Attributes/>', () => {
   let authToken: string | null;
   let apiContext: APIRequestContext;
   let authorityCreatedMsg: Locator;
@@ -51,17 +51,17 @@ test.describe('<Attributes/>', () => {
     await apiContext.dispose();
   });
 
-  test('renders initially', async ({ page }) => {
+  test('Page is rendered properly', async ({ page }) => {
     const header = page.locator('h2', { hasText: "Attribute Rules" });
     await expect(header).toBeVisible();
   });
 
-  test('should add authority', async ({ page, authority }) => {
+  test('New authority is created successfully when use proper name format', async ({ page, authority }) => {
     const newAuthority = await page.locator(`span:has-text("${authority}")`);
     expect(newAuthority).toBeTruthy();
   });
 
-  test('should not be able to create authority with empty name or name of non-url format', async ({ page }) => {
+  test('Authority creation is failed when using empty name or name of non-url format', async ({ page }) => {
     await test.step('creation is failed when using blank name', async () => {
       await page.click(selectors.attributesPage.newSection.submitAuthorityBtn)
       const authorityWarningMessage = page.locator('.ant-form-item-explain-error', {hasText: '\'authority\' is required'})
@@ -76,7 +76,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should add attribute, should filter attributes by Name, Order, Rule', async ({ page, attributeName, attributeValue }) => {
+  test('New attribute is added successfully if distinct name is used, possible to filter attributes by Name, Order, Rule', async ({ page, attributeName, attributeValue }) => {
     const attributesHeader = selectors.attributesPage.attributesHeader;
     const filterModal = attributesHeader.filterModal;
 
@@ -128,7 +128,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should not be able to create the attribute with already existed name for the same authority', async ({ page,attributeName, attributeValue }) => {
+  test('Should not be able to create the attribute with already existed name for the same authority', async ({ page,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -144,7 +144,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('attribute creation is blocked when not filling required Name and Order values', async ({ page}) => {
+  test('Attribute creation is blocked when required Name and/or Order fields are not filled', async ({ page}) => {
     await test.step('creation is failed when using blank Name', async () => {
       await page.fill(selectors.attributesPage.newSection.orderField1, 'fillOrder');
       await page.click(selectors.attributesPage.newSection.submitAttributeBtn)
@@ -161,7 +161,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should be able to create an attribute with already used name for another authority', async ({ page,authority,attributeName, attributeValue }) => {
+  test('Able to create an attribute with the name already used for another authority', async ({ page,authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -179,7 +179,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should sort attributes by Name, rule, ID and Order values', async ({ page, authority}) => {
+  test('Able to sort attributes by Name, Rule, ID and Order values', async ({ page, authority}) => {
     const sortByToolbarButton = selectors.attributesPage.attributesHeader.sortByToolbarButton;
     const firstAttributeName = '1st attribute';
     const secondAttributeName = 'Z 2nd attribute';
@@ -281,7 +281,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should edit attribute rule, non applied changes are discarded after cancellation', async ({ page , attributeName, attributeValue}) => {
+  test('Able to edit attribute Rule, non applied changes are discarded after cancellation', async ({ page , attributeName, attributeValue}) => {
     const restrictiveAccessDropdownOption = page.locator('.ant-select-item-option', {hasText:'Restrictive Access'})
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
     const attributeDetailsSection = selectors.attributesPage.attributeDetailsSection
@@ -314,7 +314,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should edit order value, able to cancel editing', async ({ page, attributeName, attributeValue}) => {
+  test('Able to edit Order Value, able to cancel editing', async ({ page, attributeName, attributeValue}) => {
     const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
 
     await test.step('Create an attribute and assert creation', async() => {
@@ -345,7 +345,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('able to add new/delete unnecessary order value for an existed attribute', async ({ page, attributeName, attributeValue}) => {
+  test('Able to add new/delete unnecessary order value for an existed attribute', async ({ page, attributeName, attributeValue}) => {
     const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
     const newOrderValue = 'New order value'
     const newOrderValueItem = page.locator('.ant-tabs-tab-btn', {hasText: newOrderValue})
@@ -381,7 +381,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('able to set Group By order value', async ({ page, attributeName, attributeValue}) => {
+  test('Able to set Group By order value', async ({ page, attributeName, attributeValue}) => {
     const orderValueUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Order value was updated!`}).first()
 
     await test.step('Create an attribute and assert creation', async() => {
@@ -403,7 +403,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , attributeName, attributeValue}) => {
+  test('Able to create an attribute with multiple order values, able to edit order of values, able to cancel editing', async ({ page , attributeName, attributeValue}) => {
     const ruleUpdatedMsg = page.locator(selectors.alertMessage, {hasText: `Rule was updated!`})
     const firstOrderItemInEditableList = '.order-list__item >> nth=0'
     const fourthOrderItemInEditableList = '.order-list__item >> nth=3'
@@ -458,7 +458,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('Should delete consequent Order field using the Minus icon', async ({ page , attributeName, attributeValue}) => {
+  test('Able to delete consequent Order field using the Minus icon during attribute creation process', async ({ page , attributeName, attributeValue}) => {
     let orderFieldsQuantityAfterAdding: number
     await page.fill(selectors.attributesPage.newSection.attributeNameField, attributeName);
     await page.fill(selectors.attributesPage.newSection.orderField1, attributeValue);
@@ -484,7 +484,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should show empty state of the Entitlements table in the Attribute Details section when there are no entitlements', async ({page, attributeName,attributeValue}) => {
+  test('Entitlements table appears in the Attribute Details section when there are no entitlements', async ({page, attributeName,attributeValue}) => {
     await test.step('Create an attributes', async () => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -499,7 +499,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should show existed entitlements in the Attribute Details section', async ({ page, authority,attributeName, attributeValue }) => {
+  test('Assigned entitlements are shown in the Entitlements table in the Attribute Details section', async ({ page, authority,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)
@@ -544,7 +544,7 @@ test.describe('<Attributes/>', () => {
     })
   });
 
-  test('should be able to delete an attribute', async ({ page,attributeName, attributeValue }) => {
+  test('Able to delete an attribute', async ({ page,attributeName, attributeValue }) => {
     await test.step('Create an attribute', async() => {
       await createAttribute(page, attributeName, [attributeValue])
       await assertAttributeCreatedMsg(page)

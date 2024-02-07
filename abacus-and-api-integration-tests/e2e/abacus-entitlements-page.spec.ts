@@ -15,9 +15,10 @@ import {selectors} from "./helpers/selectors";
 
 let authToken: string | null;
 let apiContext: APIRequestContext;
+const { randomUUID } = require('crypto');
 
 const createNewEntitlement = async (page: Page, authority: string, attributeName: string, attributeValue: string) => {
-  await page.type(selectors.entitlementsPage.authorityNamespaceField, authority);
+  await page.fill(selectors.entitlementsPage.authorityNamespaceField, authority);
   await page.keyboard.press('Enter')
   await page.fill(selectors.entitlementsPage.attributeNameField, attributeName);
   await page.fill(selectors.entitlementsPage.attributeValueField, attributeValue);
@@ -47,7 +48,13 @@ test.describe('<Entitlements/>', () => {
     });
   });
 
-  test.afterEach(async ({ authority}) => {
+  test.afterEach(async ({ authority, page}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+    }
+
     await removeAllAttributesOfAuthority(apiContext, authority);
     await deleteAuthorityViaAPI(apiContext, authority)
   })
@@ -56,7 +63,7 @@ test.describe('<Entitlements/>', () => {
     await apiContext.dispose();
   });
 
-  test('has tables', async ({ page }) => {
+  test('Page is rendered properly, entities tables are shown', async ({ page }) => {
     const clientTableHeader = page.locator('b', { hasText: "Clients table" });
     await expect(clientTableHeader).toBeVisible();
 
@@ -64,7 +71,7 @@ test.describe('<Entitlements/>', () => {
     await expect(tableHeader).toBeVisible();
   });
 
-  test('redirect to user/PE', async ({ page }) => {
+  test('User/PE Details page is opened by click on a user table row', async ({ page }, testInfo) => {
     await Promise.all([
         page.waitForNavigation(),
         firstTableRowClick('users-table', page),
@@ -75,7 +82,7 @@ test.describe('<Entitlements/>', () => {
     test.expect(header).toBeTruthy();
   });
 
-  test('redirect to client/NPE', async ({ page }) => {
+  test('Client/NPE Details page is opened by click on a client table row', async ({ page }) => {
     await Promise.all([
         page.waitForNavigation(),
         firstTableRowClick('clients-table', page),
@@ -86,7 +93,7 @@ test.describe('<Entitlements/>', () => {
     test.expect(header).toBeTruthy();
   });
 
-  test('Add Entitlements To Entity', async ({ page , authority, attributeName, attributeValue}) => {
+  test('Able to assign new entitlement to entity when using valid existing values', async ({ page , authority, attributeName, attributeValue}) => {
     await test.step('Create attribute', async () => {
       await page.getByRole('link', { name: 'Attributes' }).click();
       await page.waitForURL('**/attributes');
@@ -120,7 +127,7 @@ test.describe('<Entitlements/>', () => {
     })
   });
 
-  test('should delete attribute entitlement', async ({ page, authority, attributeName, attributeValue}) => {
+  test('Able to delete existed entity entitlement', async ({ page, authority, attributeName, attributeValue}) => {
     const tableValue = `${authority}/attr/${attributeName}/value/${attributeValue}`
 
     await test.step('Open Attributes route', async () => {

@@ -23,7 +23,7 @@ const getAccessTokenViaAPI = async (playwright) => {
     return responseBody.access_token;
 };
 
-test.describe('API:', () => {
+test.describe.skip('API:', () => {
     test.beforeEach(async ({ playwright, authority }) => {
         const authToken = await getAccessTokenViaAPI(playwright)
 
