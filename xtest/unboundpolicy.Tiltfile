@@ -7,7 +7,6 @@ load(
     "opentdf_cluster_with_ingress",
 )
 
-# TODO remove abacus here since we don't use it for this test
 opentdf_cluster_with_ingress(start_frontend=False)
 
 local_resource(
