@@ -74,3 +74,7 @@ jobs:
           echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
+      - name: tilt-ci unbound-test
+        run: |-
+          kubectl version
+          tilt ci -f xtest/unboundpolicy.Tiltfile
