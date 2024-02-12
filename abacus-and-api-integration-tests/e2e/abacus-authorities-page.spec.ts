@@ -15,7 +15,7 @@ import {randomUUID} from "crypto";
 let authToken: string | null;
 let apiContext: APIRequestContext;
 
-test.describe.skip('<Authorities/>', () => {
+test.describe('<Authorities/>', () => {
     test.beforeEach(async ({ page , playwright, authority}) => {
         await authorize(page);
         authToken = await getAccessToken(page);

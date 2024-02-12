@@ -25,7 +25,7 @@ const createNewEntitlement = async (page: Page, authority: string, attributeName
   await page.click(selectors.entitlementsPage.submitAttributeButton);
 }
 
-test.describe.skip('<Entitlements/>', () => {
+test.describe('<Entitlements/>', () => {
   test.beforeEach(async ({ page , playwright, authority}) => {
     await authorize(page);
     authToken = await getAccessToken(page)
