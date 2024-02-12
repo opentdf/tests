@@ -11,3 +11,4 @@ load(
 opentdf_cluster_with_ingress(start_frontend=False)
 
 local_resource("test", "npm run test", resource_deps=["backend"])
+local_resource("outbound-test", "python3 sdk/py/test_unbound_policy.py", resource_deps=["backend"])
