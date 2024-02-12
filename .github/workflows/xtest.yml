@@ -76,5 +76,7 @@ jobs:
           tilt ci
       - name: tilt-ci unbound-test
         run: |-
+          pwd
+          ls
           kubectl version
-          tilt ci -f xtest/unboundpolicy.Tiltfile
+          tilt ci -f unboundpolicy.Tiltfile
