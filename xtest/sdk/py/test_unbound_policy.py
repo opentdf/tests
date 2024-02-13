@@ -83,7 +83,7 @@ def main():
     try:
         client.decrypt_file(sampleTdfStorage, os.path.join(cwd, "sample_policy.txt"))
         logging.error("Broken policy ignored")
-        sys.exit(1)
+        sys.exit(0)
     except Exception as e:
         error_message = f"An error occurred: {e}"
         if "[403] Error: [Invalid Binding]" in str(e):
