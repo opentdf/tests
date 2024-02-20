@@ -80,6 +80,10 @@ def main():
 
     sampleTdfStorage = TDFStorageType()
     sampleTdfStorage.set_tdf_storage_file_type(os.path.join(cwd, updated_tdf_file))
+
+    if os.path.exists(os.path.join(cwd, "sample_policy.txt")):
+        os.remove(os.path.join(cwd, "sample_policy.txt"))
+
     try:
         client.decrypt_file(sampleTdfStorage, os.path.join(cwd, "sample_policy.txt"))
         if os.path.exists(os.path.join(cwd, "sample_policy.txt")):
