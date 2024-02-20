@@ -1,6 +1,6 @@
 import { test } from './helpers/fixtures';
 import { APIRequestContext, expect } from "@playwright/test";
-import { deleteAttributeViaAPI, deleteAuthorityViaAPI } from "./helpers/operations";
+import {deleteAttributeViaAPI, deleteAuthorityViaAPI, removeAllAttributesOfAuthority} from "./helpers/operations";
 
 let apiContext: APIRequestContext;
 let existedEntityId = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
@@ -55,6 +55,7 @@ test.describe('API:', () => {
     })
 
     test.afterEach(async ({ authority}) => {
+        await removeAllAttributesOfAuthority(apiContext, authority);
         const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
         await expect(deleteAuthorityResponse.status()).toBe(202)
     })
@@ -143,8 +144,8 @@ test.describe('API:', () => {
     })
 
     test('Attribute creation is failed when do not fill required authority parameter', async ({authority, attributeName}) => {
-        const attributeDataWithMissingName = {
-            "authority": "111",
+        const attributeDataWithMissingAuthority = {
+            "authority": "",
             "name": attributeName,
             "rule": "hierarchy",
             "state": "published",
@@ -153,20 +154,20 @@ test.describe('API:', () => {
             ]
         }
         const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
-            data: attributeDataWithMissingName
+            data: attributeDataWithMissingAuthority
         })
         expect(createAttributeResponse.status()).toBe(422)
     })
 
-    // TODO: backend validation of required parameters is absent, server returns 200 when it is not expected
-    test.skip('Attribute creation is failed when do not fill required Name, Order, Rule fields', async ({authority, attributeName}) => {
+    // TODO: backend validation of required parameters is absent, server returns 200 when request should fail
+    test.skip('Attribute creation is failed when do not fill required Name, Order, Rule fields', async ({authority}) => {
         const attributeDataWithMissingName = {
             "authority": authority,
             "name": "",
-            "rule": "hierarchy",
+            "rule": "",
             "state": "published",
             "order": [
-                "TradeSecret"
+                ""
             ]
         }
         const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
@@ -187,7 +188,7 @@ test.describe('API:', () => {
         }
         const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
             headers: {
-                'Content-Type': 'application/xml'
+                'Content-Type': 'application/html'
             },
             data: attributeData
         })
@@ -208,7 +209,7 @@ test.describe('API:', () => {
         expect(await getAuthoritiesResponse.json()).toContain(authority)
     })
 
-    test('Attributes-related request is failed when client does not have necessary audience access', async ({playwright,request}) => {
+    test('Attributes-related request is failed when client does not have necessary audience access', async ({playwright, request}) => {
         const authTokenWithEntitlementsOnlyAudience = await getAccessTokenViaAPI(playwright, 'tdf-test-entitlements', '123-456')
         const getEntitlementsResponse = await request.get('http://localhost:65432/api/entitlements/entitlements`', {
             headers: {
