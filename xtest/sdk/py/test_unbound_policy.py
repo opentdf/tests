@@ -82,8 +82,12 @@ def main():
     sampleTdfStorage.set_tdf_storage_file_type(os.path.join(cwd, updated_tdf_file))
     try:
         client.decrypt_file(sampleTdfStorage, os.path.join(cwd, "sample_policy.txt"))
-        logging.error("Broken policy ignored")
-        sys.exit(0)
+        if os.path.exists(os.path.join(cwd, "sample_policy.txt")):
+            logging.error("Decryption was successful, but it was not expected due to a broken policy.")
+            sys.exit(1)
+        else:
+            logging.error("Broken policy ignored")
+            sys.exit(0)
     except Exception as e:
         error_message = f"An error occurred: {e}"
         if "[403] Error: [Invalid Binding]" in str(e):
