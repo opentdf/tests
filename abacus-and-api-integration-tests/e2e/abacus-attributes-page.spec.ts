@@ -40,7 +40,8 @@ test.describe('<Attributes/>', () => {
 
   test.afterEach(async ({ authority}, testInfo) => {
     await removeAllAttributesOfAuthority(apiContext, authority);
-    await deleteAuthorityViaAPI(apiContext, authority)
+    const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
+    await expect(deleteAuthorityResponse.status()).toBe(202)
     if (testInfo.title == 'should be able to create an attribute with already used name for another authority') {
       await removeAllAttributesOfAuthority(apiContext, `${authority}2`);
       await deleteAuthorityViaAPI(apiContext, `${authority}2`)
