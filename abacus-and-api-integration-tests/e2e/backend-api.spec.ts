@@ -211,7 +211,6 @@ test.describe('API:', () => {
 
     test.only('Attributes-related request is failed when client does not have necessary audience access', async ({playwright, request}) => {
         const authTokenWithEntitlementsOnlyAudience = await getAccessTokenViaAPI(playwright, 'tdf-test-entitlements', '123-456')
-        console.log(authTokenWithEntitlementsOnlyAudience)
         const getEntitlementsResponse = await request.get('http://localhost:65432/api/entitlements/entitlements', {
             headers: {
                 'Authorization': `Bearer ${authTokenWithEntitlementsOnlyAudience}`
