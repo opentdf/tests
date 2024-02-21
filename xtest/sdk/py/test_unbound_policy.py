@@ -97,6 +97,9 @@ def main():
         if "[403] Error: [Invalid Binding]" in str(e):
             logging.warning("Expected - Invalid binding error occurred: %s", e)
             print("Invalid binding error occurred.")
+        elif "desc = bad request" in error_message:
+            logging.warning("Expected - Policy HMAC mismatch error occurred: %s", e)
+            print("Policy HMAC mismatch error occurred.")
         else:
             print("Unexpected error: %s" % sys.exc_info()[0])
             raise
