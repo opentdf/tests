@@ -49,7 +49,8 @@ test.describe('<Entitlements/>', () => {
 
   test.afterEach(async ({ authority}) => {
     await removeAllAttributesOfAuthority(apiContext, authority);
-    await deleteAuthorityViaAPI(apiContext, authority)
+    const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
+    await expect(deleteAuthorityResponse.status()).toBe(202)
   })
 
   test.afterAll(async ({ }) => {

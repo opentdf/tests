@@ -1,16 +1,25 @@
 import { test } from './helpers/fixtures';
-import { APIRequestContext, expect, Page } from "@playwright/test";
-import { deleteAttributeViaAPI, deleteAuthorityViaAPI } from "./helpers/operations";
+import { APIRequestContext, expect } from "@playwright/test";
+import {deleteAttributeViaAPI, deleteAuthorityViaAPI, removeAllAttributesOfAuthority} from "./helpers/operations";
 
 let apiContext: APIRequestContext;
 let existedEntityId = "31c871f2-6d2a-4d27-b727-e619cfaf4e7a";
 
-const getAccessTokenViaAPI = async (playwright) => {
+const createAuthority = async (authorityName) => {
+    const createAuthorityResponse = await apiContext.post('http://localhost:65432/api/attributes/authorities', {
+        data: {
+            "authority": authorityName
+        },
+    })
+    return createAuthorityResponse
+}
+
+const getAccessTokenViaAPI = async (playwright, client_id, client_secret) => {
     const apiContextForGetTokenCall = await playwright.request.newContext();
     const urlencodedFormData = new URLSearchParams();
     urlencodedFormData.append('grant_type', 'client_credentials');
-    urlencodedFormData.append('client_id', 'tdf-client');
-    urlencodedFormData.append('client_secret', '123-456');
+    urlencodedFormData.append('client_id', client_id);
+    urlencodedFormData.append('client_secret', client_secret);
 
     const getAccessTokenResponse = await apiContextForGetTokenCall.post('http://localhost:65432/auth/realms/tdf/protocol/openid-connect/token', {
         headers:{
@@ -25,7 +34,7 @@ const getAccessTokenViaAPI = async (playwright) => {
 
 test.describe('API:', () => {
     test.beforeEach(async ({ playwright, authority }) => {
-        const authToken = await getAccessTokenViaAPI(playwright)
+        const authToken = await getAccessTokenViaAPI(playwright, 'tdf-client', '123-456')
 
         apiContext = await playwright.request.newContext({
             // baseURL: 'http://localhost:65432/api',
@@ -46,7 +55,9 @@ test.describe('API:', () => {
     })
 
     test.afterEach(async ({ authority}) => {
-        await deleteAuthorityViaAPI(apiContext, authority)
+        await removeAllAttributesOfAuthority(apiContext, authority);
+        const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
+        await expect(deleteAuthorityResponse.status()).toBe(202)
     })
 
     test.afterAll(async ({ }) => {
@@ -111,11 +122,157 @@ test.describe('API:', () => {
         })
     })
 
+    test('Attribute with already existed name cannot be created for the same authority', async ({authority, attributeName}) => {
+        const attributeData = {
+            "authority": authority,
+            "name": attributeName,
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret"
+            ]
+        }
+        const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            data: attributeData
+        })
+        expect(createAttributeResponse.ok()).toBeTruthy()
+
+        const createDuplicatedAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            data: attributeData
+        })
+        expect(createDuplicatedAttributeResponse.status()).toBe(400)
+    })
+
+    test('Attribute creation is failed when do not fill required authority parameter', async ({authority, attributeName}) => {
+        const attributeDataWithMissingAuthority = {
+            "authority": "",
+            "name": attributeName,
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret"
+            ]
+        }
+        const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            data: attributeDataWithMissingAuthority
+        })
+        expect(createAttributeResponse.status()).toBe(422)
+    })
+
+    // TODO: backend validation of required parameters is absent, server returns 200 when request should fail
+    test.skip('Attribute creation is failed when do not fill required Name, Order, Rule fields', async ({authority}) => {
+        const attributeDataWithMissingName = {
+            "authority": authority,
+            "name": "",
+            "rule": "",
+            "state": "published",
+            "order": [
+                ""
+            ]
+        }
+        const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            data: attributeDataWithMissingName
+        })
+        expect(createAttributeResponse.status()).toBe(422)
+    })
+
+    test('Attribute creation is failed when use wrong body data type', async ({authority, attributeName}) => {
+        const attributeData = {
+            "authority": authority,
+            "name": attributeName,
+            "rule": "hierarchy",
+            "state": "published",
+            "order": [
+                "TradeSecret"
+            ]
+        }
+        const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            headers: {
+                'Content-Type': 'application/html'
+            },
+            data: attributeData
+        })
+        expect(createAttributeResponse.status()).toBe(422)
+    })
+
+    test('Attribute creation is failed when attribute data is empty', async () => {
+        const createAttributeResponse = await apiContext.post('http://localhost:65432/api/attributes/definitions/attributes', {
+            data: {}
+        })
+        expect(createAttributeResponse.status()).toBe(422)
+    })
+
     test('Get Attribute Authorities is fulfilled successfully', async ({authority}) => {
         const getAuthoritiesResponse = await apiContext.get('http://localhost:65432/api/attributes/authorities')
         expect(getAuthoritiesResponse.status()).toBe(200)
         expect(getAuthoritiesResponse.ok()).toBeTruthy()
         expect(await getAuthoritiesResponse.json()).toContain(authority)
+    })
+
+    test('Attributes-related request is failed when client does not have necessary audience access', async ({playwright, request}) => {
+        const authTokenWithEntitlementsOnlyAudience = await getAccessTokenViaAPI(playwright, 'tdf-test-entitlements', '123-456')
+        const getEntitlementsResponse = await request.get('http://localhost:65432/api/entitlements/entitlements', {
+            headers: {
+                'Authorization': `Bearer ${authTokenWithEntitlementsOnlyAudience}`
+            }
+        })
+        expect(getEntitlementsResponse.status()).toBe(200)
+
+        const getAuthoritiesResponse = await request.get('http://localhost:65432/api/attributes/definitions/attributes', {
+            headers: {
+                'Authorization': `Bearer ${authTokenWithEntitlementsOnlyAudience}`
+            }
+        })
+        expect(getAuthoritiesResponse.status()).toBe(401)
+    })
+
+    test('Create Attribute Authority is failed when use empty name, name of non-url or inconsistent format', async () => {
+        await test.step('Create Authority is failed when use blank name', async () => {
+            const blankAuthorityName = ""
+            const createAuthorityResponse = await createAuthority(blankAuthorityName)
+            expect(createAuthorityResponse.status()).toBe(422)
+
+            const createAuthorityResponse2 = await createAuthority(null)
+            expect(createAuthorityResponse2.status()).toBe(422)
+        })
+
+        await test.step('Create Attribute Authority is failed when use name of non-url format', async () => {
+            const authorityNameOfNonUrlFormat = "authorityName"
+            const createAuthorityResponse = await createAuthority(authorityNameOfNonUrlFormat)
+            expect(createAuthorityResponse.status()).toBe(422)
+        })
+
+        await test.step('Create Attribute Authority is failed when use name of inconsistent format', async () => {
+            const authorityNameOfWrongType = 0
+            const createAuthorityResponse = await createAuthority(authorityNameOfWrongType)
+            expect(createAuthorityResponse.status()).toBe(422)
+        })
+    })
+
+    test('Create Attribute Authority is failed when try to use name of already existed authority', async ({authority}) => {
+        const recreateAuthorityResponse = await createAuthority(authority)
+        expect(recreateAuthorityResponse.status()).toBe(400)
+    })
+
+    test('Delete Attribute Authority is failed when use non-existed authority name', async () => {
+        const nonExistedAuthority = "https://nonexisted.com"
+        const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, nonExistedAuthority)
+        expect(deleteAuthorityResponse.status()).toBe(404)
+    })
+
+    test('Delete Attribute request is failed when invalid auth token is used', async ({request}) => {
+        const validAuthorityName = "https://valid.com"
+        const invalidToken = "bnh5yzdirjinqaorq0ox1tf383nb3xr"
+        const deleteAuthorityResponse = await request.delete('http://localhost:65432/api/attributes/authorities',{
+            headers: {
+                'Authorization': `Bearer ${invalidToken}`
+            },
+            data: {
+                "authority": validAuthorityName
+            },
+        });
+
+        expect(deleteAuthorityResponse.status()).toBe(401)
     })
 
     test('Entitlements: create, read, delete', async ({ authority, attributeName, attributeValue}) => {
@@ -157,6 +314,50 @@ test.describe('API:', () => {
             expect(deleteEntitlementResponse.status()).toBe(202)
             expect(deleteEntitlementResponse.ok()).toBeTruthy()
         })
+    })
+
+    test('Entitlements request fails with Not Allowed error when using wrong HTTP method', async () => {
+        const entitlementsResponseWithWrongMethodUsed = await apiContext.post(`http://localhost:65432/api/entitlements/entitlements`)
+        expect(entitlementsResponseWithWrongMethodUsed.status()).toBe(405)
+    })
+
+    test('Create Entitlements request fails when using payload of inconsistent format', async ({ authority, attributeName, attributeValue}) => {
+        await test.step('Fails with 400 error when using wrong entitlement format', async () => {
+            const wrongFormatOfEntitlementValue = `${authority}/a/${attributeName}/v/${attributeValue}`;
+            const createAttributeResponse = await apiContext.post(`http://localhost:65432/api/entitlements/entitlements/${existedEntityId}`, {
+                data: [wrongFormatOfEntitlementValue]
+            })
+            expect(createAttributeResponse.status()).toBe(400)
+        })
+
+        await test.step('Fails with Unprocessable Entity error when using wrong payload format', async () => {
+            const singleEntitlement = `${authority}/attr/${attributeName}/value/${attributeValue}`;
+            const createAttributeResponse = await apiContext.post(`http://localhost:65432/api/entitlements/entitlements/${existedEntityId}`, {
+                data: `${singleEntitlement}`
+            })
+            expect(createAttributeResponse.status()).toBe(422)
+        })
+    })
+
+    // TODO: skipped till fixing PLAT-2100 (there is no entity existence validation for now, so 200 is returned)
+    test.skip('Entitlements request fails when use non-existed EntityID', async ({authority, attributeName,attributeValue}) => {
+        const entitlementPayload = `${authority}/attr/${attributeName}/value/${attributeValue}`;
+        const nonExistedEntityId = "x-x-x-x"
+        const createAttributeResponse = await apiContext.post(`http://localhost:65432/api/entitlements/entitlements/${nonExistedEntityId}`, {
+            data: `${entitlementPayload}`
+        })
+        expect(createAttributeResponse.status()).toBe(422)
+    })
+
+    test('Delete Entitlements request fails when using wrong payload media type', async ({ authority, attributeName, attributeValue}) => {
+        const entitlementValue = `${authority}/attr/${attributeName}/value/${attributeValue}`;
+        const deleteAttributeResponse = await apiContext.delete(`http://localhost:65432/api/entitlements/entitlements/${existedEntityId}`, {
+            headers: {
+                'Content-Type': 'application/xml'
+            },
+            data: [entitlementValue]
+        })
+        expect(deleteAttributeResponse.status()).toBe(422)
     })
 
     test('Entitlement Store: Entitle request ', async () => {

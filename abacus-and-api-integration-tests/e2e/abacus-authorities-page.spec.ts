@@ -38,7 +38,8 @@ test.describe('<Authorities/>', () => {
         // Because authority in this test already deleted
         await removeAllAttributesOfAuthority(apiContext, authority);
         if (testInfo.title !== 'delete authority if there are no assigned attributes') {
-            await deleteAuthorityViaAPI(apiContext, authority);
+            const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
+            await expect(deleteAuthorityResponse.status()).toBe(202)
         }
     })
 
