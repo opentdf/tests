@@ -87,7 +87,7 @@ jobs:
           --username ${{ secrets.TESTRAIL_USER }} \
           --password ${{ secrets.TESTRAIL_PASS }} \
           parse_junit \
-          --title "Playwright Automated Test Run" \
+          --title "Playwright Automated Test Run - Abacus and Backend API" \
           --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"
       - name: Upload test results
         if: always()
