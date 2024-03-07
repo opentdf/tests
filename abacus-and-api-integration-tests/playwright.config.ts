@@ -41,7 +41,10 @@ const config: PlaywrightTestConfig = {
   /* Maximum time one test can run for. */
   timeout: 5 * 60 * 1000,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: [
+      ['html'],
+      ['junit', {outputFile: './test-results/junit-report.xml', embedAnnotationsAsProperties: true }]
+    ],
   /* Configure projects for major browsers */
   // projects: [
   //   {
