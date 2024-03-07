@@ -44,7 +44,7 @@ test.describe('<Authorities/>', () => {
 
         // Because authority in this test already deleted
         await removeAllAttributesOfAuthority(apiContext, authority);
-        if (testInfo.title !== 'delete authority if there are no assigned attributes') {
+        if (testInfo.title !== 'Authority is deleted successfully if there are no assigned attributes') {
             await deleteAuthorityViaAPI(apiContext, authority);
         }
     })
@@ -61,7 +61,7 @@ test.describe('<Authorities/>', () => {
         await expect(header).toBeVisible();
     });
 
-    test('Authority is deleted successfully if there are no assigned attributes ', async ({ page, authority}) => {
+    test('Authority is deleted successfully if there are no assigned attributes', async ({ page, authority}) => {
         await test.step('Open authorities route', async () => {
             await page.getByRole('link', { name: 'Authorities' }).click();
             await page.waitForURL('**/authorities');
