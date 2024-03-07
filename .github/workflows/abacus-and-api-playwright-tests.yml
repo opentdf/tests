@@ -79,16 +79,19 @@ jobs:
           echo "Testing Frontend [$FRONTEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
           kubectl version
           tilt ci
-      - name: Integrate results into TestRail
-        run: |
-          trcli -y \
-          --host https://virtru.testrail.com \
-          --project "Abacus Website" \
-          --username ${{ secrets.TESTRAIL_USER }} \
-          --password ${{ secrets.TESTRAIL_PASS }} \
-          parse_junit \
-          --title "Playwright Automated Test Run - Abacus and Backend API" \
-          --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"
+
+      # TODO: enable after TestRail secrets setup for opentdf
+#      - name: Integrate results into TestRail
+#        run: |
+#          trcli -y \
+#          --host https://virtru.testrail.com \
+#          --project "Abacus Website" \
+#          --username ${{ secrets.TESTRAIL_USER }} \
+#          --password ${{ secrets.TESTRAIL_PASS }} \
+#          parse_junit \
+#          --title "Playwright Automated Test Run - Abacus and Backend API" \
+#          --file "/home/runner/work/tests/tests/abacus-and-api-integration-tests/test-results/junit-report.xml"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v3
