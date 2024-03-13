@@ -1,0 +1,12 @@
+
+.wrapper {
+    padding: 30px;
+}
+
+.input-group {
+    padding-top: 20px;
+}
+
+.input-group > button:first-child {
+    margin-right: 5px;
+}
