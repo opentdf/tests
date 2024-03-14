@@ -89,7 +89,7 @@ const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', header });
 test.describe.configure({ mode: 'serial' });
 
 test('Check invalidToken JWT', async ({ page }) => {
-  await page.goto('http://localhost:65432/');
+  await page.goto('http://localhost:65432/outbound-app');
   await page.waitForURL('/');
   await page.getByRole('button', { name: 'Login' }).click();
   await page.getByLabel('Username or email').fill('user1');
@@ -112,7 +112,7 @@ test('Check invalidToken JWT', async ({ page }) => {
 let user1HeaderAuth;
 
 test('Check valid JWT signed by unknown key', async ({ page }) => {
-  await page.goto('http://localhost:65432/');
+  await page.goto('http://localhost:65432/outbound-app');
   await page.waitForURL('/');
   await page.getByRole('button', { name: 'Login' }).click();
   await page.getByLabel('Username or email').fill('user1');
@@ -134,7 +134,7 @@ test('Check valid JWT signed by unknown key', async ({ page }) => {
 });
 
 test('Check valid and properly signed JWT and copied from previous session', async ({ page }) => {
-  await page.goto('http://localhost:65432/');
+  await page.goto('http://localhost:65432/outbound-app');
   await page.waitForURL('/');
   await page.getByRole('button', { name: 'Login' }).click();
   await page.getByLabel('Username or email').fill('user2');
