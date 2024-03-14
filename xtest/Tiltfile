@@ -40,7 +40,7 @@ k8s_resource(
 
 docker_build(
     "opentdf/outbound-app",
-    "./sdk/js/outbound-test-app/Dockerfile"
+    "./sdk/js/outbound-test-app/"
 )
 
 local_resource("test", "npm run test", resource_deps=["backend"])
