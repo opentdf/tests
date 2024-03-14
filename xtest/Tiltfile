@@ -2,6 +2,8 @@
 # reference https://docs.tilt.dev/api.html
 # extensions https://github.com/tilt-dev/tilt-extensions
 
+load("ext://helm_resource", "helm_resource", "helm_repo")
+
 load(
     "../opentdf.Tiltfile",
     "opentdf_cluster_with_ingress",
