@@ -8,7 +8,6 @@ import App from './App';
 const keycloak = new Keycloak({
     realm: 'tdf',
     url: 'http://localhost:65432/auth/',
-    // clientId: 'todo-react-client',
     clientId: 'dcr-test',
 });
 
