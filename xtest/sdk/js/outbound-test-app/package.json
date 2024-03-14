@@ -21,7 +21,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "sudo HTTPS=true PORT=443 HOST='local.virtru.com' react-scripts start",
+    "start": "PORT=65432 react-scripts start",
     "build": "react-scripts build",
     "test": "playwright test",
     "test-debug": "playwright test --debug",
