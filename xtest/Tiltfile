@@ -45,4 +45,4 @@ docker_build(
 
 local_resource("test", "npm run test", resource_deps=["backend"])
 local_resource("outbound-test", "python3 sdk/py/test_unbound_policy.py", resource_deps=["backend"])
-local_resource("outbound-jwt-test", "cd sdk/js/outbound-test-app && npm ci && npx playwright install && npm run test", resource_deps=["opentdf/outbound-app"])
+local_resource("outbound-jwt-test", "cd sdk/js/outbound-test-app && npm ci && npx playwright install && npm run test", resource_deps=["outbound-app", "opentdf-outbound-demo-react-app", "backend"])
