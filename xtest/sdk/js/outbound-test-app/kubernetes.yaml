@@ -3,8 +3,8 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/instance: opentdf
-    app.kubernetes.io/name: todo-react
-  name: opentdf-todo-react
+    app.kubernetes.io/name: outbound-app
+  name: opentdf-outbound-demo-react-app
 spec:
   ports:
     - name: http
@@ -12,13 +12,13 @@ spec:
       protocol: TCP
   selector:
     app.kubernetes.io/instance: opentdf
-    app.kubernetes.io/name: todo-react
+    app.kubernetes.io/name: outbound-app
   type: ClusterIP
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: opentdf-todo-react
+  name: opentdf-outbound-demo-react-app
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -26,7 +26,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/rewrite-target: /$2
-  name: opentdf-todo-react
+  name: opentdf-outbound-demo-react-app
 spec:
   rules:
     - host: localhost
@@ -34,32 +34,32 @@ spec:
         paths:
           - backend:
               service:
-                name: opentdf-todo-react
+                name: opentdf-outbound-demo-react-app
                 port:
                   number: 80
-            path: /todo-react(/|$)(.*)
+            path: /outbound-app(/|$)(.*)
             pathType: Prefix
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: opentdf-todo-react
+  name: opentdf-outbound-demo-react-app
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/instance: opentdf
-      app.kubernetes.io/name: todo-react
+      app.kubernetes.io/name: outbound-app
   template:
     metadata:
       labels:
         app.kubernetes.io/instance: opentdf
-        app.kubernetes.io/name: todo-react
+        app.kubernetes.io/name: outbound-app
     spec:
-      serviceAccountName: opentdf-todo-react
+      serviceAccountName: opentdf-outbound-demo-react-app
       containers:
-        - name: todo-react
-          image: opentdf/todo-react
+        - name: outbound-app
+          image: opentdf/outbound-app
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -67,9 +67,9 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /todo-react(/|$)(.*)
+              path: /outbound-app(/|$)(.*)
               port: http
           readinessProbe:
             httpGet:
-              path: /todo-react(/|$)(.*)
+              path: /outbound-app(/|$)(.*)
               port: http
