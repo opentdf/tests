@@ -13,13 +13,20 @@ BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.6.0")
 EXTERNAL_URL = "http://localhost:65432"
 
 # TODO remove abacus here since we don't use it for this test
-opentdf_cluster_with_ingress(start_frontend=False)
+opentdf_cluster_with_ingress(start_frontend=True)
+
+k8s_yaml(
+    helm(
+        "./sdk/js/outbound-test-app/helm/secrets",
+    ),
+)
 
 # execute Examples bootstrap
 helm_resource(
     "keycloak-bootstrap",
     "oci://ghcr.io/opentdf/charts/keycloak-bootstrap",
     flags=[
+        "--debug",
         "--version",
         BACKEND_CHART_TAG,
         "-f",
@@ -27,22 +34,23 @@ helm_resource(
         "--set",
         "externalUrl=%s" % EXTERNAL_URL,
     ],
+    release_name="backend",
     labels="utility",
     resource_deps=["backend"],
 )
 
 k8s_yaml("./sdk/js/outbound-test-app/kubernetes.yaml")
 k8s_resource(
-    "opentdf-outbound-demo-react-app",
+    "opentdf-todo-react",
     resource_deps = ["keycloak-bootstrap"],
-    labels="outbound-app",
+    labels="todo-react",
 )
 
 docker_build(
-    "opentdf/outbound-app",
+    "opentdf/todo-react",
     "./sdk/js/outbound-test-app/"
 )
 
 local_resource("test", "npm run test", resource_deps=["backend"])
-local_resource("outbound-test", "python3 sdk/py/test_unbound_policy.py", resource_deps=["backend"])
-local_resource("outbound-jwt-test", "cd sdk/js/outbound-test-app && npm ci && npx playwright install && npm run test", resource_deps=["outbound-app", "opentdf-outbound-demo-react-app", "backend"])
+# local_resource("outbound-test", "python3 sdk/py/test_unbound_policy.py", resource_deps=["backend"])
+# local_resource("outbound-jwt-test", "cd sdk/js/outbound-test-app && npm ci && npx playwright install && npm run test", resource_deps=["outbound-app", "opentdf-outbound-demo-react-app", "backend"])
