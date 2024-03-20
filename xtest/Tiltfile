@@ -4,16 +4,19 @@
 
 load("ext://helm_resource", "helm_resource", "helm_repo")
 
-load(
-    "../opentdf.Tiltfile",
-    "opentdf_cluster_with_ingress",
-)
+#load(
+#   "../opentdf.Tiltfile",
+#    "opentdf_cluster_with_ingress",
+#)
 
 BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.6.0")
 EXTERNAL_URL = "http://localhost:65432"
+os.putenv('QUICKSTART_BOOTSTRAP_DISABLED', 'True')
+
+include('../quickstart/Tiltfile')
 
 # TODO remove abacus here since we don't use it for this test
-opentdf_cluster_with_ingress(start_frontend=True)
+# opentdf_cluster_with_ingress(start_frontend=False)
 
 k8s_yaml(
     helm(

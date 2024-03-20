@@ -19,8 +19,6 @@ COPY package.json ./
 COPY package-lock.json ./
 RUN npm ci
 RUN npm run build
-RUN cd build/ && ls -l
-RUN cat build/index.html
 
 # server - nginx alpine
 FROM nginx:stable-alpine as server

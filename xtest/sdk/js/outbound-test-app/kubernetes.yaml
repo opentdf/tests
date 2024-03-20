@@ -37,7 +37,14 @@ spec:
                 name: opentdf-todo-react
                 port:
                   number: 80
-            path: /todo-react(/|$)(.*)
+            path: "/"
+            pathType: Prefix
+          - backend:
+              service:
+                name: opentdf-todo-react
+                port:
+                  number: 80
+            path: "/todo-react(/|$)(.*)"
             pathType: Prefix
 ---
 apiVersion: apps/v1
@@ -67,9 +74,9 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /todo-react(/|$)(.*)
+              path: "/"
               port: http
           readinessProbe:
             httpGet:
-              path: /todo-react(/|$)(.*)
+              path: "/"
               port: http
