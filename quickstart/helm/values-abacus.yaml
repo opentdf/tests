@@ -1,0 +1,32 @@
+attributes:
+  serverUrl: http://localhost:65432/api/attributes
+basePath: ""
+entitlements:
+  serverUrl: http://localhost:65432/api/entitlements
+oidc:
+  serverUrl: http://localhost:65432/auth/
+  clientId: dcr-test
+  queryRealms: tdf
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+  className: nginx
+  hosts:
+    - host: localhost
+      paths: &paths
+        - path: /(.*)
+          pathType: Prefix
+        - path: /authorities
+          pathType: Exact
+        - path: /attributes
+          pathType: Exact
+        - path: /entitlements
+          pathType: Exact
+    - host: host.docker.internal
+      paths: *paths
+    - host: offline.demo.internal
+      paths: *paths
+    - host: opentdf.local
+      paths: *paths
