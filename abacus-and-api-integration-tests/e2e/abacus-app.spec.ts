@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { selectors } from "./helpers/selectors";
-import { authorize, firstTableRowClick, getLastPartOfUrl, login } from "./helpers/operations";
+import {
+  authorize,
+  firstTableRowClick,
+  getLastPartOfUrl,
+  login,
+} from "./helpers/operations";
+import {randomUUID} from "crypto";
 
 test.describe('<App/>', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,17 +14,25 @@ test.describe('<App/>', () => {
     await page.goto('/');
   });
 
-  test('renders initially', async ({ page }) => {
+  test.afterEach(async ({ page}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+    }
+  })
+
+  test('Default page is rendered properly', async ({ page }) => {
     const header = page.locator('h2', { hasText: "Attributes" });
     await expect(header).toBeVisible();
   });
 
-  test('should get authorization token', async ({ page }) => {
+  test('Auth token is got successfully after login on a page', async ({ page }) => {
     const logoutButton = page.locator(selectors.logoutButton);
     expect(logoutButton).toBeTruthy();
   });
 
-  test('should be able to log out on the Attributes page', async ({ page }) => {
+  test('Logout is successful on the Attributes page', async ({ page }) => {
     await test.step('Open Attributes route', async () => {
       await page.getByRole('link', { name: 'Attributes' }).click();
       await page.waitForURL('**/attributes');
@@ -35,7 +49,7 @@ test.describe('<App/>', () => {
     await expect(page.locator('.ant-empty-description')).toHaveText('No Data')
   });
 
-  test('should be able to log out on the Authorities page', async ({ page }) => {
+  test('Logout is successful on the Authorities page', async ({ page }) => {
     await test.step('Open Authorities route', async () => {
       await page.getByRole('link', { name: 'Authorities' }).click();
       await page.waitForURL('**/authorities');
@@ -54,7 +68,7 @@ test.describe('<App/>', () => {
     await expect(noDataInfo).toBeVisible()
   });
 
-  test('should be able to log out on the Entitlements page', async ({ page }) => {
+  test('Logout is successful on the Entitlements page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -73,7 +87,7 @@ test.describe('<App/>', () => {
     await expect(progressIndicator).toBeVisible()
   });
 
-  test('should be able to log out on the Entity Details page', async ({ page }) => {
+  test('Logout is successful on the Entity Details page', async ({ page }) => {
     await test.step('Open Entitlements route', async () => {
       await page.getByRole('link', { name: 'Entitlements' }).click();
       await page.waitForURL('**/entitlements');
@@ -98,7 +112,7 @@ test.describe('<App/>', () => {
 });
 
 test.describe('<Login/>', () => {
-  test('succeeded on the Authorities page, actual data is loaded', async ({ page }) => {
+  test('Login succeeds on the Authorities page, actual data is loaded', async ({ page }) => {
     await authorize(page, "/authorities")
 
     await test.step('check that Authorities data is loaded', async () => {
@@ -108,7 +122,7 @@ test.describe('<Login/>', () => {
     })
   });
 
-  test('succeeded on the Attributes page, actual data is loaded', async ({ page }) => {
+  test('Login succeeds on the Attributes page, actual data is loaded', async ({ page }) => {
     await authorize(page, "/attributes")
 
     await test.step('check that Attributes data is loaded', async () => {
@@ -118,7 +132,7 @@ test.describe('<Login/>', () => {
     })
   });
 
-  test('succeeded on the Entitlements page, actual data is loaded', async ({ page }) => {
+  test('Login succeeds on the Entitlements page, actual data is loaded', async ({ page }) => {
     await authorize(page, "/entitlements")
 
     await test.step('check that Clients data is loaded', async () => {
@@ -135,7 +149,7 @@ test.describe('<Login/>', () => {
   });
 
   // TODO: Uncomment after fixing the PLAT-2209 bug which leads to assertion failure
-  test.skip('succeeded on the Entity Details page, actual data is loaded', async ({ page }) => {
+  test.skip('Login succeeds on the Entity Details page, actual data is loaded', async ({ page }) => {
     await authorize(page, "/entitlements")
 
     await Promise.all([
@@ -154,17 +168,17 @@ test.describe('<Login/>', () => {
     await expect(page.locator(selectors.entitlementsPage.entityDetailsPage.deleteEntitlementBtn)).toBeVisible()
   });
 
-  test('is failed when using blank values', async ({ page }) => {
+  test('Login fails when use blank values', async ({ page }) => {
     await login(page, "", "")
     await expect(page.locator(selectors.loginScreen.errorMessage)).toBeVisible();
   });
 
-  test('is failed when using wrong username', async ({ page }) => {
+  test('Login fails when use wrong username', async ({ page }) => {
     await login(page, "non-existed-username", "testuser123")
     await expect(page.locator(selectors.loginScreen.errorMessage)).toBeVisible();
   });
 
-  test('is failed when using wrong password', async ({ page }) => {
+  test('Login fails when use wrong password', async ({ page }) => {
     await login(page, "user1", "wrong-password")
     await expect(page.locator(selectors.loginScreen.errorMessage)).toBeVisible();
   });

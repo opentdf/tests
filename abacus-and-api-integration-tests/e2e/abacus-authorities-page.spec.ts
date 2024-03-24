@@ -10,6 +10,7 @@ import {
 } from './helpers/operations';
 import { test } from './helpers/fixtures';
 import { selectors } from "./helpers/selectors";
+import {randomUUID} from "crypto";
 
 let authToken: string | null;
 let apiContext: APIRequestContext;
@@ -34,10 +35,16 @@ test.describe('<Authorities/>', () => {
         });
     });
 
-    test.afterEach(async ({ authority}, testInfo) => {
+    test.afterEach(async ({ authority, page}, testInfo) => {
+        if (testInfo.status !== testInfo.expectedStatus) {
+            let screenshotPath = `test-results/screenshots/screenshot-${randomUUID()}.png`;
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            testInfo.annotations.push({ type: 'testrail_attachment', description: screenshotPath });
+        }
+
         // Because authority in this test already deleted
         await removeAllAttributesOfAuthority(apiContext, authority);
-        if (testInfo.title !== 'delete authority if there are no assigned attributes') {
+        if (testInfo.title !== 'Authority is deleted successfully if there are no assigned attributes') {
             const deleteAuthorityResponse = await deleteAuthorityViaAPI(apiContext, authority)
             await expect(deleteAuthorityResponse.status()).toBe(202)
         }
@@ -47,7 +54,7 @@ test.describe('<Authorities/>', () => {
         await apiContext.dispose();
     });
 
-    test('renders initially', async ({ page, authority}) => {
+    test('Page is rendered properly', async ({ page, authority}) => {
         await page.getByRole('link', { name: 'Authorities' }).click();
         await page.waitForURL('**/authorities');
 
@@ -55,7 +62,7 @@ test.describe('<Authorities/>', () => {
         await expect(header).toBeVisible();
     });
 
-    test('delete authority if there are no assigned attributes', async ({ page, authority}) => {
+    test('Authority is deleted successfully if there are no assigned attributes', async ({ page, authority}) => {
         await test.step('Open authorities route', async () => {
             await page.getByRole('link', { name: 'Authorities' }).click();
             await page.waitForURL('**/authorities');
