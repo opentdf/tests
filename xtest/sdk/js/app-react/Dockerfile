@@ -21,7 +21,7 @@ COPY --from=builder /build/build /usr/share/nginx/html
 COPY nginx-default.conf /etc/nginx/templates/default.conf.template
 ENV KEYCLOAK_HOST "http://localhost:65432/auth"
 ENV KAS_HOST "http://localhost:65432/api/kas"
-ENV KEYCLOAK_CLIENT_ID "todo-react-client"
+ENV KEYCLOAK_CLIENT_ID "app-react-client"
 ENV KEYCLOAK_REALM "tdf"
 
 EXPOSE 80

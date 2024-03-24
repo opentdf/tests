@@ -8,7 +8,7 @@ import "./index.css";
 const keycloak = new Keycloak({
   realm: 'tdf',
   url: 'http://localhost:65432/auth/',
-  clientId: 'todo-react-client',
+  clientId: 'app-react-client',
 });
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

@@ -294,7 +294,7 @@ keycloak:
               protocolMapper: virtru-oidc-protocolmapper
         #   client for todo-react-client
         - payload:
-            clientId: todo-react-client
+            clientId: app-react-client
             publicClient: "true"
             standardFlowEnabled: "true"
             serviceAccountsEnabled: "true"
@@ -568,7 +568,7 @@ entitlements:
         examples-webcam-app:
           - https://example.com/attr/AudienceGuidance/value/Restricted
           - https://example.com/attr/ContentExclusivity/value/Deluxe
-        todo-react-client:
+        app-react-client:
           - https://todo.com/attr/saas/value/developer
           - https://todo.com/attr/platform/value/developer
         tdf-client:

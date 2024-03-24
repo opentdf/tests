@@ -8,14 +8,14 @@ BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.6.0")
 EXTERNAL_URL = "http://localhost:65432"
 os.putenv('QUICKSTART_BOOTSTRAP_DISABLED', 'True')
 
-include('../quickstart/Tiltfile')
+include('../quickstart-config/Tiltfile')
 
 # TODO remove abacus here since we don't use it for this test
 # opentdf_cluster_with_ingress(start_frontend=False)
 
 k8s_yaml(
     helm(
-        "./sdk/js/todo-react/helm/secrets",
+        "./sdk/js/app-react/helm/secrets",
     ),
 )
 
@@ -37,16 +37,16 @@ helm_resource(
     resource_deps=["attributes", "entitlements", "keycloak"],
 )
 
-k8s_yaml("./sdk/js/todo-react/kubernetes.yaml")
+k8s_yaml("./sdk/js/app-react/kubernetes.yaml")
 k8s_resource(
-    "opentdf-todo-react",
+    "opentdf-app-react",
     resource_deps = ["keycloak-bootstrap"],
-    labels="todo-react",
+    labels="app-react",
 )
 
 docker_build(
-    "opentdf/todo-react",
-    "./sdk/js/todo-react/"
+    "opentdf/app-react",
+    "./sdk/js/app-react/"
 )
 
-local_resource("outbound-jwt-test", "cd sdk/js/todo-react && pwd && ls -l && npm ci && npx playwright install && npm run test", resource_deps=["opentdf-todo-react"])
+local_resource("unbound-jwt-test", "cd sdk/js/app-react && pwd && ls -l && npm ci && npx playwright install && npm run test", resource_deps=["opentdf-app-react"])
