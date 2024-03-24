@@ -2,7 +2,7 @@
   "name": "unbound-test-app",
   "version": "0.2.0",
   "private": true,
-  "homepage": "https://mdn.github.io/todo-react/",
+  "homepage": "https://mdn.github.io/app-react/",
   "dependencies": {
     "@opentdf/client": "^1.3.0",
     "@react-keycloak/web": "^3.4.0",
@@ -18,7 +18,7 @@
   "scripts": {
     "start": "PORT=65432 react-scripts start",
     "build": "react-scripts build",
-    "test": "CI=true playwright test",
+    "test": "playwright test",
     "test-debug": "playwright test --debug",
     "eject": "react-scripts eject"
   },
