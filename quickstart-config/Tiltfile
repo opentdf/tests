@@ -1,0 +1,215 @@
+load("ext://helm_resource", "helm_resource", "helm_repo")
+load("ext://min_tilt_version", "min_tilt_version")
+load(
+    "../version-tool/Tiltfile",
+    "min_helm_version",
+    "min_kind_version",
+    "min_ctlptl_version",
+    "min_k8s_version",
+)
+
+# The helm_resource extension uses the 'new extensions api' introduced in tilt 0.25
+min_tilt_version("0.25")
+min_k8s_version("1.23.0")
+min_helm_version("3.8.0")
+min_kind_version("0.12.0")
+min_ctlptl_version("0.7.4")
+
+
+# Versions of things backend to pull (attributes, kas, etc)
+BACKEND_CHART_TAG = read_json('../chartsVersions.json')['backendVersion']
+FRONTEND_CHART_TAG = read_json('../chartsVersions.json')['frontendVersion']
+
+# Where helm values for quickstart
+HELM_VALUES_PATH = os.getenv("OPENTDF_HELM_VALUES_PATH", "helm/")
+
+# Where the redirect URI should go to, for example
+EXTERNAL_URL = os.getenv("OPENTDF_EXTERNAL_URL", "http://localhost:65432")
+
+# Where the redirect URI should go to, for example
+LOAD_FRONTEND = os.getenv("OPENTDF_LOAD_FRONTEND", "1")
+LOAD_FRONTEND = (
+    LOAD_FRONTEND and LOAD_FRONTEND != "0" and LOAD_FRONTEND.lower() != "false"
+)
+
+# Ingress host port
+INGRESS_HOST_PORT = os.getenv("OPENTDF_INGRESS_HOST_PORT", "65432")
+
+k8s_yaml(
+    helm(
+        "./helm/secrets",
+    ),
+)
+
+helm_repo(
+    "bitnami-archive",
+    "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami",
+    labels="utility",
+)
+helm_repo(
+    "codecentric",
+    "https://codecentric.github.io/helm-charts",
+    labels="utility",
+)
+helm_repo(
+    "k8s-in",
+    "https://kubernetes.github.io/ingress-nginx",
+    labels="utility",
+)
+
+helm_resource(
+    "ingress-nginx",
+    "k8s-in/ingress-nginx",
+    flags=[
+        "--version",
+        "4.0.16",
+        "--set",
+        "controller.config.large-client-header-buffers=20 32k",
+        "--set",
+        "controller.admissionWebhooks.enabled=false",
+    ],
+    labels="third-party",
+    port_forwards=("{}:80".format(INGRESS_HOST_PORT) if INGRESS_HOST_PORT else None),
+    resource_deps=["k8s-in"],
+)
+
+helm_resource(
+    "postgresql",
+    "bitnami-archive/postgresql",
+    flags=["--version", "12.1.8", "-f", "helm/values-postgresql.yaml"],
+    labels="third-party",
+    resource_deps=["bitnami-archive"],
+)
+
+helm_resource(
+    "attributes",
+    "oci://ghcr.io/opentdf/charts/attributes",
+    flags=[
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "helm/values-attributes.yaml",
+        "--set",
+        "oidc.externalHost=%s/auth" % EXTERNAL_URL,
+    ],
+    labels="backend",
+    resource_deps=["postgresql"],
+)
+
+helm_resource(
+    "entitlement-store",
+    "oci://ghcr.io/opentdf/charts/entitlement-store",
+    flags=[
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "helm/values-entitlement-store.yaml",
+    ],
+    labels="backend",
+    resource_deps=["postgresql"],
+)
+
+helm_resource(
+    "entitlement-pdp",
+    "oci://ghcr.io/opentdf/charts/entitlement-pdp",
+    flags=[
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "helm/values-entitlement-pdp.yaml",
+    ],
+    labels="backend",
+    resource_deps=["entitlement-store"],
+)
+
+helm_resource(
+    "entitlements",
+    "oci://ghcr.io/opentdf/charts/entitlements",
+    flags=[
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "helm/values-entitlements.yaml",
+        "--set",
+        "oidc.authorizationUrl=%s/auth/realms/tdf/protocol/openid-connect/auth"
+        % EXTERNAL_URL,
+        "--set",
+        "oidc.tokenUrl=%s/auth/realms/tdf/protocol/openid-connect/token" % EXTERNAL_URL,
+    ],
+    labels="backend",
+    resource_deps=["postgresql"],
+)
+
+helm_resource(
+    "keycloak",
+    "codecentric/keycloakx",
+    flags=[
+        "--version",
+        "1.6.1",
+        "-f",
+        "helm/values-keycloak.yaml",
+    ],
+    labels="third-party",
+    resource_deps=["entitlement-pdp", "codecentric"],
+)
+
+helm_resource(
+    "kas",
+    "oci://ghcr.io/opentdf/charts/kas",
+    flags=[
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "helm/values-kas.yaml",
+    ],
+    labels="backend",
+    resource_deps=["attributes", "keycloak"],
+)
+
+# ability to disable the quickstart defaults
+if not os.environ.get("QUICKSTART_BOOTSTRAP_DISABLED"):
+    helm_resource(
+        "keycloak-bootstrap",
+        "oci://ghcr.io/opentdf/charts/keycloak-bootstrap",
+        flags=[
+            "--version",
+            BACKEND_CHART_TAG,
+            "-f",
+            "helm/values-keycloak-bootstrap.yaml",
+            "--set",
+            "externalUrl=%s" % EXTERNAL_URL,
+        ],
+        labels="utility",
+        resource_deps=["attributes", "entitlements", "keycloak"],
+    )
+
+
+if LOAD_FRONTEND:
+    helm_resource(
+        "abacus",
+        "oci://ghcr.io/opentdf/charts/abacus",
+        flags=[
+            "--version",
+            FRONTEND_CHART_TAG,
+            "-f",
+            "%s/values-abacus.yaml" % HELM_VALUES_PATH,
+            "--set",
+            "attributes.serverUrl=%s/api/attributes" % EXTERNAL_URL,
+            "--set",
+            "entitlements.serverUrl=%s/api/entitlements" % EXTERNAL_URL,
+            "--set",
+            "oidc.serverUrl=%s/auth/" % EXTERNAL_URL,
+        ],
+        labels="frontend",
+        resource_deps=["keycloak-bootstrap"],
+    )
+
+# ability to pass in custom test script with path to script as env var
+# e.g.: CI=1 TEST_SCRIPT=tests/wait-and-test.sh tilt up
+if "TEST_SCRIPT" in os.environ and os.environ.get("CI"):
+    local_resource(
+        "passed-in-test-script",
+        os.environ.get("TEST_SCRIPT"),
+        labels="tests",
+        resource_deps=["ingress-nginx", "kas", "keycloak-bootstrap"],
+    )

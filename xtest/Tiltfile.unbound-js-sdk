@@ -1,0 +1,52 @@
+# Tiltfile for development of OpenTDF backend
+# reference https://docs.tilt.dev/api.html
+# extensions https://github.com/tilt-dev/tilt-extensions
+
+load("ext://helm_resource", "helm_resource", "helm_repo")
+
+BACKEND_CHART_TAG = os.environ.get("BACKEND_LATEST_VERSION", "1.6.0")
+EXTERNAL_URL = "http://localhost:65432"
+os.putenv('QUICKSTART_BOOTSTRAP_DISABLED', 'True')
+
+include('../quickstart-config/Tiltfile')
+
+# TODO remove abacus here since we don't use it for this test
+# opentdf_cluster_with_ingress(start_frontend=False)
+
+k8s_yaml(
+    helm(
+        "./sdk/js/app-react/helm/secrets",
+    ),
+)
+
+# execute Examples bootstrap
+helm_resource(
+    "keycloak-bootstrap",
+    "oci://ghcr.io/opentdf/charts/keycloak-bootstrap",
+    flags=[
+        "--debug",
+        "--version",
+        BACKEND_CHART_TAG,
+        "-f",
+        "./sdk/js/helm/values-bootstrap.yaml",
+        "--set",
+        "externalUrl=%s" % EXTERNAL_URL,
+    ],
+    release_name="backend",
+    labels="utility",
+    resource_deps=["attributes", "entitlements", "keycloak"],
+)
+
+k8s_yaml("./sdk/js/app-react/kubernetes.yaml")
+k8s_resource(
+    "opentdf-app-react",
+    resource_deps = ["keycloak-bootstrap"],
+    labels="app-react",
+)
+
+docker_build(
+    "opentdf/app-react",
+    "./sdk/js/app-react/"
+)
+
+local_resource("unbound-jwt-test", "cd sdk/js/app-react && pwd && ls -l && npm ci && npx playwright install && npm run test", resource_deps=["opentdf-app-react"])
