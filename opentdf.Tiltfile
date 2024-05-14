@@ -89,6 +89,8 @@ def backend(values=[], set={}, resource_deps=[]):
             "kas.readinessProbeOverride.grpc.port": "5000",
             "kas.image.repo": "ghcr.io/opentdf/gokas",
             "kas.image.tag": "latest",
+            "kas.livenessProbeOverride.grpc.port": "5000",
+            "kas.readinessProbeOverride.grpc.port": "5000",
         }
     else:
         set_values = {
