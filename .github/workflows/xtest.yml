@@ -93,7 +93,7 @@ jobs:
       - name: get otdfctl
         run: |-
           curl -O -L https://github.com/opentdf/otdfctl/releases/download/latest/otdfctl-v0.8.0-linux-amd64.tar.gz
-          tar -xvzf otdfctl-v0.8.0-linux-amd64.tar.gz
+          tar -xf otdfctl-v0.8.0-linux-amd64.tar.gz
           cp target/otdfctl-v0.8.0-linux-amd64 sdk/go/otdfctl
       - name: Run xtests
         run: |-
