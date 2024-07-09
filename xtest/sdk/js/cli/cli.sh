@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2206,SC1091
 
 # Common shell wrapper used to interface to SDK implementation.
 #
