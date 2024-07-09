@@ -5,6 +5,8 @@
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
 #
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+# shellcheck source=./../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
 args=(
@@ -18,10 +20,10 @@ if [ "$4" == "True" ]; then
     args+=(--tdf-type nano)
 fi
 if [ "$1" == "encrypt" ]; then
-   echo $SCRIPT_DIR/otdfctl encrypt "${args[@]}" "$2"  
-   $SCRIPT_DIR/otdfctl encrypt "${args[@]}" "$2" 
+   echo "$SCRIPT_DIR"/otdfctl encrypt "${args[@]}" "$2"  
+   "$SCRIPT_DIR"/otdfctl encrypt "${args[@]}" "$2" 
 elif [ "$1" == "decrypt" ]; then
-    $SCRIPT_DIR/otdfctl decrypt "${args[@]}" "$2"
+    "$SCRIPT_DIR"/otdfctl decrypt "${args[@]}" "$2"
 else
     echo "Incorrect argument provided"
     exit 1
