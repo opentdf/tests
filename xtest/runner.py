@@ -13,7 +13,7 @@ import string
 import subprocess
 import base64
 
-SDK_PATHS = ["sdk/js/node/cli.sh", "sdk/py/cli.sh"]
+SDK_PATHS = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh", "sdk/py/cli.sh"]
 
 all_sdks = set(SDK_PATHS)
 
@@ -55,7 +55,8 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
     if not sdks_encrypt or not sdks_decrypt:
         return
     logger.info("--- run_cli_tests %s => %s", sdks_encrypt, sdks_decrypt)
-    fail = []
+    tdf3fail = []
+    nanofail = []
 
     serial = 0
     for x in sdks_encrypt:
@@ -63,11 +64,16 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
             try:
                 test_cross_roundtrip(x, y, serial, pt_file)
             except Exception as e:
-                logger.error("Exception with pass %s => %s", x, y, exc_info=True)
-                fail += [f"{x}=>{y}"]
+                logger.error("Exception with TDF3 pass %s => %s", x, y, exc_info=True)
+                tdf3fail += [f"{x}=>{y}"]
+            try:
+                nano_test_cross_roundtrip(x, y, serial, pt_file)
+            except Exception as e:
+                logger.error("Exception with NANO pass %s => %s", x, y, exc_info=True)
+                nanofail += [f"{x}=>{y}"]
             serial += 1
-    if fail:
-        raise Exception(f"TDF3 tests {fail} FAILED. See output for details.")
+    if tdf3fail or nanofail:
+        raise Exception(f"TESTS FAILED! TDF3: {tdf3fail}, NANO: {nanofail}. See output for details.")
     else:
         logger.info("All tests succeeded!")
 
@@ -76,7 +82,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
 # Returns True if test succeeded, false otherwise.
 def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     logger.info(
-        "--- Begin Test #%s: Roundtrip encrypt(%s) --> decrypt(%s)",
+        "--- Begin Test #%s: TDF3 Roundtrip encrypt(%s) --> decrypt(%s)",
         serial,
         encrypt_sdk,
         decrypt_sdk,
@@ -92,18 +98,49 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     )
 
     # Do the roundtrip.
-    logger.info("Encrypt %s", encrypt_sdk)
+    logger.info("TDF3 Encrypt %s", encrypt_sdk)
     encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain")
-    logger.info("Decrypt %s", decrypt_sdk)
+    logger.info("TDF3 Decrypt %s", decrypt_sdk)
     decrypt(decrypt_sdk, ct_file, rt_file)
 
     # Verify the roundtripped result is the same as our initial plantext.
     if not filecmp.cmp(pt_file, rt_file):
         raise Exception(
-            "Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
+            "TDF3 Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
             % (serial, pt_file, rt_file)
         )
     logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
+
+def nano_test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
+    logger.info(
+        "--- Begin Test #%s: NANO Roundtrip encrypt(%s) --> decrypt(%s)",
+        serial,
+        encrypt_sdk,
+        decrypt_sdk,
+    )
+
+    # Generate plaintext and files
+    ct_file, rt_file, mf_file = gen_files(serial)
+    logger.info(
+        "--- Gen Files %s, %s, %s",
+        ct_file,
+        rt_file,
+        mf_file
+    )
+
+    # Do the roundtrip.
+    logger.info("NANO Encrypt %s", encrypt_sdk)
+    encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain", nano=True)
+    logger.info("NANO Decrypt %s", decrypt_sdk)
+    decrypt(decrypt_sdk, ct_file, rt_file, nano=True)
+
+    # Verify the roundtripped result is the same as our initial plantext.
+    if not filecmp.cmp(pt_file, rt_file):
+        raise Exception(
+            "NANO Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
+            % (serial, pt_file, rt_file)
+        )
+    logger.info("NANO Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
 
 
 def gen_pt(*, large):
@@ -133,14 +170,14 @@ def gen_files(serial):
     return ct, rt, mf
 
 
-def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream"):
-    c = [sdk, "encrypt", pt_file, ct_file, "--mimeType", mime_type]
+def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", nano=False):
+    c = [sdk, "encrypt", pt_file, ct_file, str(nano), "--mimeType", mime_type]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
 
-def decrypt(sdk, ct_file, rt_file):
-    c = [sdk, "decrypt", ct_file, rt_file]
+def decrypt(sdk, ct_file, rt_file, nano=False):
+    c = [sdk, "decrypt", ct_file, rt_file, str(nano),]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
