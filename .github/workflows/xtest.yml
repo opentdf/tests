@@ -5,11 +5,6 @@ on:
     types: [xtest]
   schedule:
     - cron: "30 6 * * *"
-  # workflow_dispatch:
-  #   inputs:
-  #     backendVersion:
-  #       required: true
-  #       type: string
 jobs:
   cross-client-test:
     timeout-minutes: 60
@@ -20,14 +15,8 @@ jobs:
     permissions:
       contents: read
       packages: read
-    # strategy:
-    #   matrix:
-    #     kasversion: [ python-kas, go-kas ]
     steps:
       - uses: actions/checkout@v3
-      # - name: Set kas-related environment variable
-      #   shell: bash
-      #   run: echo "KAS_VERSION=${{ matrix.kasversion }}" >> $GITHUB_ENV
       - name: Set up Node 20
         uses: actions/setup-node@v3
         with:
