@@ -61,6 +61,7 @@ jobs:
             platform/protocol/go/go.sum
             platform/sdk/go.sum
       - run: |
+          cd platform
           .github/scripts/init-temp-keys.sh
           cp opentdf-dev.yaml opentdf.yaml
       - name: Added Trusted Certs
@@ -85,12 +86,13 @@ jobs:
     # TODO: parameterize the version so we can trigger this from the cli workflwos
       - name: get otdfctl
         run: |-
+          cd ..
           curl -O -L https://github.com/opentdf/otdfctl/releases/download/latest/otdfctl-v0.8.0-linux-amd64.tar.gz
           tar -xvzf otdfctl-v0.8.0-linux-amd64.tar.gz
           cp target/otdfctl-v0.8.0-linux-amd64 sdk/go/otdfctl
       - name: Run xtests
         run: |-
-          cd ../xtest
+          # cd ../xtest
           npm run test
 
   # unbound-test-js:

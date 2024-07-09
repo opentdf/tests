@@ -5,11 +5,11 @@
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
 #
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-source $SCRIPT_DIR/../../test.env
+source "$SCRIPT_DIR"/../../test.env
 
 args=(
   -o "$3"
-  --host $KASURL
+  --host "$KASURL"
   --tls-no-verify
   --log-level debug
   --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'

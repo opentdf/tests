@@ -5,12 +5,12 @@
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
 #
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-source $SCRIPT_DIR/../../../test.env
+source "$SCRIPT_DIR"/../../../test.env
 
 args=(
   --output "$3"
-  --kasEndpoint $KASURL
-  --oidcEndpoint $KCFULLURL
+  --kasEndpoint "$KASURL"
+  --oidcEndpoint "$KCFULLURL"
   --auth opentdf:secret
 )
 # default for js cli is nano
