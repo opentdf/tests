@@ -6,7 +6,7 @@
 #
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-# shellcheck source=./../../test.env
+# shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
 args=(
@@ -14,6 +14,7 @@ args=(
   --host "$KASURL"
   --tls-no-verify
   --log-level debug
+  # shellcheck disable=SC2206
   --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
 )
 if [ "$4" == "True" ]; then

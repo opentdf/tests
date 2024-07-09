@@ -6,7 +6,7 @@
 #
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-# shellcheck source=./../../test.env
+# shellcheck source=../../../test.env
 source "$SCRIPT_DIR"/../../../test.env
 
 args=(
