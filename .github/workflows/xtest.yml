@@ -62,7 +62,7 @@ jobs:
             platform/protocol/go/go.sum
             platform/sdk/go.sum
       - run: |
-          cd platform
+          cd ../platform
           .github/scripts/init-temp-keys.sh
           cp opentdf-dev.yaml opentdf.yaml
       - name: Added Trusted Certs
