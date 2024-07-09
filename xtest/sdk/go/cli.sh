@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2206,SC1091
 
 # Common shell wrapper used to interface to SDK implementation.
 #
@@ -14,7 +15,6 @@ args=(
   --host "$KASURL"
   --tls-no-verify
   --log-level debug
-  # shellcheck disable=SC2206
   --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
 )
 if [ "$4" == "True" ]; then
