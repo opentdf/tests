@@ -13,7 +13,7 @@ import string
 import subprocess
 import base64
 
-SDK_PATHS = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh", "sdk/py/cli.sh"]
+SDK_PATHS = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh"]#, "sdk/py/cli.sh"]
 
 all_sdks = set(SDK_PATHS)
 

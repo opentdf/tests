@@ -12,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@babel/runtime-corejs3": "^7.17.2",
-    "@opentdf/cli": "^2.0.0-beta.1379",
+    "@opentdf/cli": "^2.0.0-beta.1398",
     "@opentdf/client": "^0.4.0-beta.415",
     "commander": "^9.0.0"
   }
