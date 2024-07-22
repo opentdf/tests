@@ -23,7 +23,7 @@ fi
 args+=("$COMMAND")
 
 if [ "$1" == "encrypt" ]; then
-    args+=(--kas-url=$PLATFORMURL)
+    args+=(--kas-url=$KASURL)
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
