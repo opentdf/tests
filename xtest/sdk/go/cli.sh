@@ -24,7 +24,6 @@ if [ "$1" == "encrypt" ]; then
         args+=(--nano)
     fi
     FILE_INPUT=$(cat "$2")
-    echo "$SCRIPT_DIR"/examples encrypt "${args[@]}" --autoconfigure=false $FILE_INPUT
     "$SCRIPT_DIR"/examples encrypt "${args[@]}" --autoconfigure=false "$FILE_INPUT"
 elif [ "$1" == "decrypt" ]; then
     "$SCRIPT_DIR"/examples decrypt "${args[@]}" "$2"

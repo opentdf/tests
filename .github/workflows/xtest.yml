@@ -111,7 +111,9 @@ jobs:
       - name: update packages
         run: |-
           npm ci
-          npm install client-web/cli/opentdf-cli-*.tgz
+          echo $(ls)
+          echo $(ls ..)
+          npm install ../client-web/cli/opentdf-cli-*.tgz
           npm list
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -125,7 +127,7 @@ jobs:
           go build .
           echo $(pwd)
           echo $(ls ..)
-          cp ./examples ../sdk/go/examples
+          cp ./examples ../xtest/sdk/go/examples
         working-directory: platform
 
 
