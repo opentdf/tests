@@ -127,7 +127,8 @@ jobs:
           go build .
           echo $(pwd)
           echo $(ls ..)
-          cp ./examples ../xtest/sdk/go/examples
+          echo $(ls ../..)
+          cp ./examples ../../xtest/sdk/go/examples
         working-directory: platform
 
 
