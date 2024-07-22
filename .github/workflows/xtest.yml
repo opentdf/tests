@@ -130,7 +130,7 @@ jobs:
 
     ######## SETUP THE GO CLI #############
 
-      - name: prepare go sdk examples
+      - name: prepare go cli
         run: |-
           go get github.com/opentdf/platform/sdk@$PLATFORM_REF
           go build .
