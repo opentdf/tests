@@ -10,21 +10,24 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
+## USES THE PLATFORM/EXAMPLES CLI
+
 args=(
   -o "$3"
-  --host "$KASURL"
-  --tls-no-verify
-  --log-level debug
-  --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
+  --creds $CLIENTID:$CLIENTSECRET
+  --platformEndpoint $PLATFORMURL
+  --tokenEndpoint $TOKENENDPOINT
 )
-if [ "$4" == "True" ]; then
-    args+=(--tdf-type nano)
-fi
+
 if [ "$1" == "encrypt" ]; then
-   echo "$SCRIPT_DIR"/otdfctl encrypt "${args[@]}" "$2"  
-   "$SCRIPT_DIR"/otdfctl encrypt "${args[@]}" "$2" 
+    if [ "$4" == "True" ]; then
+        args+=(--nano)
+    fi
+    FILE_INPUT=$(cat "$2")
+    echo "$SCRIPT_DIR"/examples encrypt "${args[@]}" --autoconfigure=false $FILE_INPUT
+    "$SCRIPT_DIR"/examples encrypt "${args[@]}" --autoconfigure=false "$FILE_INPUT"
 elif [ "$1" == "decrypt" ]; then
-    "$SCRIPT_DIR"/otdfctl decrypt "${args[@]}" "$2"
+    "$SCRIPT_DIR"/examples decrypt "${args[@]}" "$2"
 else
     echo "Incorrect argument provided"
     exit 1
