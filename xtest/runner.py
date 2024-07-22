@@ -105,6 +105,10 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
 
     # Verify the roundtripped result is the same as our initial plantext.
     if not filecmp.cmp(pt_file, rt_file):
+        with open(pt_file, 'r') as f:
+            logger.info("pt_file: %s", f.read())
+        with open(rt_file, 'r') as f:
+            logger.info("rt_file: %s", f.read())
         raise Exception(
             "TDF3 Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
             % (serial, pt_file, rt_file)
