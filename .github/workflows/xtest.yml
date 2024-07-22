@@ -7,6 +7,10 @@ on:
         required: false
         type: string
         default: main
+      otdfctl-ref:
+        required: false
+        type: string
+        default: main
       js-ref:
         required: false
         type: string
@@ -24,9 +28,10 @@ jobs:
       contents: read
       packages: read
     env:
-      PLATFORM_REF: "${{ inputs.platform-ref || 'update-examples-encrypt-decrypt' }}"
+      PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
-      # JAVA_COMMIT: 
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
+      # JAVA_REF: 
     steps:
       - uses: actions/checkout@v3
         with:
@@ -113,8 +118,6 @@ jobs:
       - name: update packages
         run: |-
           npm ci
-          # echo $(ls)
-          # echo $(ls ..)
           npm install ../client-web/cli/opentdf-cli-*.tgz
           npm list
         env:
@@ -126,23 +129,18 @@ jobs:
         with:
           repository: opentdf/otdfctl
           path: otdfctl
-          ref: main
+          ref: ${{ env.OTDFCTL_REF }}
 
     ######## SETUP THE GO CLI #############
-
-      - name: prepare go cli
+      - name: Prepare go cli
         run: |-
           go get github.com/opentdf/platform/sdk@$PLATFORM_REF
           go build .
-          # echo $(pwd)
-          # echo $(ls ..)
-          # echo $(ls ../..)
           cp ./otdfctl ../xtest/sdk/go/otdfctl
         working-directory: otdfctl
 
-
-      ######## RUN THE TESTS #############
-      - name: install test dependencies
+    ######## RUN THE TESTS #############
+      - name: Install test dependencies
         run: |-
           pip3 install -r requirements.txt
       - name: Run xtests

@@ -17,7 +17,7 @@ args=(
   --auth opentdf:secret
 )
 # default for js cli is nano
-if [ "$4" == "False" ]; then 
+if [ "$4" == "ztdf" ]; then 
     args+=(--containerType tdf3)
 fi
 if [ "$1" == "encrypt" ]; then

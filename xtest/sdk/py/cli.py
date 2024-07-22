@@ -14,7 +14,7 @@ KAS_URL = os.getenv("KASHOST", "http://localhost:8080/kas")
 REALM = os.getenv("REALM", "opentdf")
 
 def main():
-    function, source, target, nano = sys.argv[1:5]
+    function, source, target, fileformat = sys.argv[1:5]
 
     oidc_creds = OIDCCredentials()
     oidc_creds.set_client_credentials_client_secret(
@@ -23,7 +23,7 @@ def main():
         organization_name=REALM,
         oidc_endpoint=OIDC_ENDPOINT,
     )
-    if nano.lower()=="true":
+    if fileformat.lower()=="nano":
         client = NanoTDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
     else:
         client = TDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)

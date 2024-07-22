@@ -10,4 +10,4 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
-python3 "$(dirname "${BASH_SOURCE[0]}")"/cli.py "$1" "$2" "$3" "$4" "${@:5}"
+python3 "$SCRIPT_DIR"/cli.py "$1" "$2" "$3" "$4" "${@:5}"

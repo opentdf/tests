@@ -64,7 +64,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
             try:
                 test_cross_roundtrip(x, y, serial, pt_file)
             except Exception as e:
-                logger.error("Exception with TDF3 pass %s => %s", x, y, exc_info=True)
+                logger.error("Exception with ZTDF pass %s => %s", x, y, exc_info=True)
                 tdf3fail += [f"{x}=>{y}"]
             try:
                 nano_test_cross_roundtrip(x, y, serial, pt_file)
@@ -73,7 +73,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
                 nanofail += [f"{x}=>{y}"]
             serial += 1
     if tdf3fail or nanofail:
-        raise Exception(f"TESTS FAILED! TDF3: {tdf3fail}, NANO: {nanofail}. See output for details.")
+        raise Exception(f"TESTS FAILED! ZTDF: {tdf3fail}, NANO: {nanofail}. See output for details.")
     else:
         logger.info("All tests succeeded!")
 
@@ -82,7 +82,7 @@ def run_cli_tests(sdks_encrypt, sdks_decrypt, pt_file):
 # Returns True if test succeeded, false otherwise.
 def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     logger.info(
-        "--- Begin Test #%s: TDF3 Roundtrip encrypt(%s) --> decrypt(%s)",
+        "--- Begin Test #%s: ZTDF Roundtrip encrypt(%s) --> decrypt(%s)",
         serial,
         encrypt_sdk,
         decrypt_sdk,
@@ -98,9 +98,9 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
     )
 
     # Do the roundtrip.
-    logger.info("TDF3 Encrypt %s", encrypt_sdk)
+    logger.info("ZTDF Encrypt %s", encrypt_sdk)
     encrypt(encrypt_sdk, pt_file, ct_file, mime_type="text/plain")
-    logger.info("TDF3 Decrypt %s", decrypt_sdk)
+    logger.info("ZTDF Decrypt %s", decrypt_sdk)
     decrypt(decrypt_sdk, ct_file, rt_file)
 
     # Verify the roundtripped result is the same as our initial plantext.
@@ -110,7 +110,7 @@ def test_cross_roundtrip(encrypt_sdk, decrypt_sdk, serial, pt_file):
         with open(rt_file, 'r') as f:
             logger.info("rt_file: %s", f.read())
         raise Exception(
-            "TDF3 Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
+            "ZTDF Test #%s: FAILED due to rt mismatch\n\texpected: %s\n\tactual: %s)"
             % (serial, pt_file, rt_file)
         )
     logger.info("Test #%s, (%s->%s): Succeeded!", serial, encrypt_sdk, decrypt_sdk)
@@ -175,13 +175,13 @@ def gen_files(serial):
 
 
 def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", nano=False):
-    c = [sdk, "encrypt", pt_file, ct_file, str(nano), "--mimeType", mime_type]
+    c = [sdk, "encrypt", pt_file, ct_file, "nano" if nano else "ztdf", "--mimeType", mime_type]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
 
 def decrypt(sdk, ct_file, rt_file, nano=False):
-    c = [sdk, "decrypt", ct_file, rt_file, str(nano),]
+    c = [sdk, "decrypt", ct_file, rt_file, "nano" if nano else "ztdf",]
     logger.info("Invoking subprocess: %s", " ".join(c))
     subprocess.check_call(c)
 
