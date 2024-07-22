@@ -15,6 +15,10 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      PLATFORM_REF: "${{ github.event.client_payload.platform_ref || 'main' }}"
+      JS_REF: "${{ github.event.client_payload.js_ref || 'main' }}"
+      # JAVA_COMMIT: 
     steps:
       - uses: actions/checkout@v3
       - name: Set up Node 20
@@ -27,19 +31,22 @@ jobs:
         with:
           python-version: "3.10"
       # todo: install and activate virtual env for python?
-      - name: update packages
-        run: |-
-          npm ci
-          npm install @opentdf/cli@${{ github.event.client_payload.version }} # @opentdf/client@${{ github.event.client_payload.version }}
-          npm list
-          pip3 install -r requirements.txt
+      # - name: update packages
+      #   run: |-
+      #     npm ci
+      #     npm install @opentdf/cli@${{ github.event.client_payload.version }} # @opentdf/client@${{ github.event.client_payload.version }}
+      #     npm list
+      #     pip3 install -r requirements.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    ######## CHECKOUT THE PLATFORM #############
       - name: Check out platform
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           repository: opentdf/platform
           path: platform
+          ref: ${{ env.PLATFORM_REF }}
       - name: Set up go
         uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7
         with:
@@ -50,6 +57,15 @@ jobs:
             platform/examples/go.sum
             platform/protocol/go/go.sum
             platform/sdk/go.sum
+
+
+      ######## SETUP THE GO CLI #############
+
+
+
+
+
+      ######## SPIN UP BACKEND #############
       - run: |
           .github/scripts/init-temp-keys.sh
           cp opentdf-dev.yaml opentdf.yaml
@@ -78,12 +94,36 @@ jobs:
           log-output-if: true
           wait-for: 90s
           working-directory: platform
-    # TODO: parameterize the version so we can trigger this from the cli workflwos
+
+    ######## CHECKOUT CLIENT-WEB #############
+      - name: Check out client-web
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: opentdf/client-web
+          path: client-web
+          ref: ${{ env.JS_REF }}
+
+    ######## SETUP THE JS CLI #############
+      - run: |
+          rm -f cli/opentdf-cli-*.tgz
+          make cli/opentdf-cli-*.tgz
+        working-directory: client-web
+      - name: update packages
+        run: |-
+          npm ci
+          npm install client-web/cli/opentdf-cli-*.tgz
+          npm list
+
+    
+
       - name: get otdfctl
         run: |-
           curl -O -L https://github.com/opentdf/otdfctl/releases/download/v0.8.0/otdfctl-v0.8.0-linux-amd64.tar.gz
           tar -xf otdfctl-v0.8.0-linux-amd64.tar.gz
           cp target/otdfctl-v0.8.0-linux-amd64 sdk/go/otdfctl
+
+
+      ######## RUN THE TESTS #############
       - name: Run xtests
         run: |-
           npm run test
