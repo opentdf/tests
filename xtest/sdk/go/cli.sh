@@ -12,7 +12,7 @@ source "$SCRIPT_DIR"/../../test.env
 
 args=(
   -o "$3"
-  --host "$KASURL"
+  --host "$PLATFORMURL"
   --tls-no-verify
   --log-level debug
   --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
