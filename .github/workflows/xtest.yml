@@ -137,8 +137,9 @@ jobs:
           go build .
           echo $(pwd)
           echo $(ls ..)
-          echo $(ls ../..)
-          cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
+          echo $(ls ../otdftests)
+          echo $(ls ../otdftests/xtest/sdk/go)
+          cp ./otdfctl ../otdftests/xtest/sdk/go/
         working-directory: otdfctl
 
     ######## RUN THE TESTS #############
