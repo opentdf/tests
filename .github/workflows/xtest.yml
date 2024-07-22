@@ -21,9 +21,6 @@ jobs:
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    # defaults:
-    #   run:
-    #     working-directory: xtest
     permissions:
       contents: read
       packages: read
@@ -66,34 +63,34 @@ jobs:
             platform/sdk/go.sum
 
       ######## SPIN UP BACKEND #############
-      - run: |
-          .github/scripts/init-temp-keys.sh
-          cp opentdf-dev.yaml opentdf.yaml
-        working-directory: platform
-      - name: Added Trusted Certs
-        run: |
-          sudo chmod -R 777 ./keys
-          sudo apt-get install -y ca-certificates
-          sudo cp ./keys/localhost.crt /usr/local/share/ca-certificates
-          sudo update-ca-certificates
-        working-directory: platform
-      - run: docker compose up -d --wait --wait-timeout 240
-        working-directory: platform
-      - run: go run ./service provision keycloak
-        working-directory: platform
-      - run: go run ./service provision fixtures
-        working-directory: platform
-      - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
-        name: start server in background
-        with:
-          run: >
-            go build -o opentdf -v service/main.go
-            && .github/scripts/watch.sh opentdf.yaml ./opentdf start
-          wait-on: |
-            tcp:localhost:8080
-          log-output-if: true
-          wait-for: 90s
-          working-directory: platform
+      # - run: |
+      #     .github/scripts/init-temp-keys.sh
+      #     cp opentdf-dev.yaml opentdf.yaml
+      #   working-directory: platform
+      # - name: Added Trusted Certs
+      #   run: |
+      #     sudo chmod -R 777 ./keys
+      #     sudo apt-get install -y ca-certificates
+      #     sudo cp ./keys/localhost.crt /usr/local/share/ca-certificates
+      #     sudo update-ca-certificates
+      #   working-directory: platform
+      # - run: docker compose up -d --wait --wait-timeout 240
+      #   working-directory: platform
+      # - run: go run ./service provision keycloak
+      #   working-directory: platform
+      # - run: go run ./service provision fixtures
+      #   working-directory: platform
+      # - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
+      #   name: start server in background
+      #   with:
+      #     run: >
+      #       go build -o opentdf -v service/main.go
+      #       && .github/scripts/watch.sh opentdf.yaml ./opentdf start
+      #     wait-on: |
+      #       tcp:localhost:8080
+      #     log-output-if: true
+      #     wait-for: 90s
+      #     working-directory: platform
 
     ######## CHECKOUT CLIENT-WEB #############
       - name: Check out client-web
@@ -138,6 +135,9 @@ jobs:
         run: |-
           go get github.com/opentdf/platform/sdk@$PLATFORM_REF
           go build .
+          echo $(pwd)
+          echo $(ls ..)
+          echo $(ls ../..)
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
 
