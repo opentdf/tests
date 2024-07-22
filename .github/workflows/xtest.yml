@@ -100,10 +100,14 @@ jobs:
       - name: build the js cli
         run: |
           make clean
-          cd cli
-          CLI_VERSION=$(npm pkg get version | tr -d \")
+          cd lib
+          CLIENT_VERSION=$(npm pkg get version | tr -d \")
           cd ..
-          make cli/opentdf-cli-$CLI_VERSION.tgz
+          make lib/opentdf-client-$CLIENT_VERSION.tgz
+          rm -rf */node_modules
+          cd cli
+          npm uninstall @opentdf/client && npm ci && npm i ../lib/opentdf-client-*.tgz
+          npm pack
         working-directory: client-web
       - name: update packages
         run: |-
