@@ -58,13 +58,6 @@ jobs:
             platform/protocol/go/go.sum
             platform/sdk/go.sum
 
-
-      ######## SETUP THE GO CLI #############
-
-
-
-
-
       ######## SPIN UP BACKEND #############
       - run: |
           .github/scripts/init-temp-keys.sh
@@ -104,7 +97,11 @@ jobs:
           ref: ${{ env.JS_REF }}
 
     ######## SETUP THE JS CLI #############
-      - run: |
+      - name: build the js cli
+        run: |
+          echo $(pwd)
+          echo $(ls)
+          echo $(cat Makefile)
           rm -f cli/opentdf-cli-*.tgz
           make cli/opentdf-cli-*.tgz
         working-directory: client-web
@@ -114,7 +111,7 @@ jobs:
           npm install client-web/cli/opentdf-cli-*.tgz
           npm list
 
-    
+    ######## SETUP THE GO CLI #############
 
       - name: get otdfctl
         run: |-
