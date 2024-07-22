@@ -118,18 +118,25 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    ######## SETUP THE GO EXAMPLES CLI #############
+  ######## CHECKOUT GO CLI #############
+      - name: Check out otdfctl
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: opentdf/otdfctl
+          path: otdfctl
+          ref: main
+
+    ######## SETUP THE GO CLI #############
 
       - name: prepare go sdk examples
         run: |-
-          cd examples
           go get github.com/opentdf/platform/sdk@$PLATFORM_REF
           go build .
           # echo $(pwd)
           # echo $(ls ..)
           # echo $(ls ../..)
-          cp ./examples ../../xtest/sdk/go/examples
-        working-directory: platform
+          cp ./otdfctl ../xtest/sdk/go/otdfctl
+        working-directory: otdfctl
 
 
       ######## RUN THE TESTS #############
