@@ -133,6 +133,9 @@ jobs:
 
 
       ######## RUN THE TESTS #############
+      - name: install test dependencies
+        run: |-
+          pip3 install -r requirements.txt
       - name: Run xtests
         run: |-
           npm run test
