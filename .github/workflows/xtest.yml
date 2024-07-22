@@ -36,11 +36,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           repository: opentdf/tests
-          path: otdftests
-      - run: |-
-          echo $(ls)
-          echo $(pwd)
-          echo $(ls ..)
+          path: otdftests # use different name bc other repos might have tests directories
       - name: Set up Node 20
         uses: actions/setup-node@v3
         with:
@@ -122,10 +118,10 @@ jobs:
         working-directory: client-web
       - name: update packages
         run: |-
-          cd otdftests/xtest
           npm ci
-          npm install ../client-web/cli/opentdf-cli-*.tgz
+          npm install ../../client-web/cli/opentdf-cli-*.tgz
           npm list
+        working-directory: otdftests/xtest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -142,18 +138,18 @@ jobs:
         run: |-
           go get github.com/opentdf/platform/sdk@$PLATFORM_REF
           go build .
-          cp ./otdfctl ../xtest/sdk/go/otdfctl
+          cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
 
     ######## RUN THE TESTS #############
       - name: Install test dependencies
         run: |-
-          cd otdftests/xtest
           pip3 install -r requirements.txt
+        working-directory: otdftests/xtest
       - name: Run xtests
         run: |-
-          cd otdftests/xtest
           npm run test
+        working-directory: otdftests/xtest
 
 
 ###### TODO: move these unbound tests to v2 platform
