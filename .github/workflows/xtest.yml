@@ -29,6 +29,8 @@ jobs:
       # JAVA_COMMIT: 
     steps:
       - uses: actions/checkout@v3
+        with:
+          repository: opentdf/tests
       - name: Set up Node 20
         uses: actions/setup-node@v3
         with:
