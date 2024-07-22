@@ -99,7 +99,7 @@ jobs:
     ######## SETUP THE JS CLI #############
       - name: build the js cli
         run: |
-          rm -f cli/opentdf-cli-*.tgz
+          make clean
           cd cli
           CLI_VERSION=$(npm pkg get version | tr -d \")
           cd ..
