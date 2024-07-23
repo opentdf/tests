@@ -29,7 +29,7 @@ jobs:
       contents: read
       packages: read
     env:
-      PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
+      PLATFORM_REF: "${{ inputs.platform-ref || 'f275e25e4f986455fc536d2c93f7e9535f8519ab' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
