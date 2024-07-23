@@ -32,7 +32,7 @@ jobs:
       PLATFORM_REF: "09995f6ea5f8a18d3c048235d381276e58456298"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
-      JAVA_REF: "dont-deserialize-null"
+      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
       - uses: actions/checkout@v3
         with:
