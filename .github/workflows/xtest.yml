@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: main
+      java-ref:
+        required: false
+        type: string
+        default: main
   schedule:
     - cron: "30 6 * * *"
 jobs:
@@ -28,7 +32,7 @@ jobs:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
-      # JAVA_REF: 
+      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
       - uses: actions/checkout@v3
         with:
@@ -43,6 +47,15 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+      - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
 
     ######## CHECKOUT THE PLATFORM #############
       - name: Check out platform
@@ -137,6 +150,30 @@ jobs:
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
+
+  ####### CHECKOUT JAVA SDK ##############
+
+      - name: Check out java-sdk
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: opentdf/java-sdk
+          path: java-sdk
+          ref: ${{ env.JAVA_REF }}
+
+  ####### SETUP JAVA CLI ##############
+
+      - name: Build java cli
+        run: |
+          mvn --batch-mode clean install -DskipTests
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+        working-directory: java-sdk
+
+      - name: Move java cli to xtest
+        run: |-
+          cp cmdline/target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
+        working-directory: java-sdk
 
     ######## RUN THE TESTS #############
       - name: Install test dependencies
