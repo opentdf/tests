@@ -1,20 +1,20 @@
 import os
 import sys
 import logging
-from opentdf import TDFClient, OIDCCredentials, LogLevel, TDFStorageType
+from opentdf import TDFClient, NanoTDFClient, OIDCCredentials, LogLevel, TDFStorageType
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLIENT_ID = "tdf-client"
-CLIENT_SECRET = "123-456"
-OIDC_ENDPOINT = "http://localhost:65432"
-KAS_URL = "http://localhost:65432/api/kas"
-REALM = "tdf"
+CLIENT_ID = os.getenv("CLIENTID", "opentdf")
+CLIENT_SECRET = os.getenv("CLIENTSECRET", "secret")
+OIDC_ENDPOINT = os.getenv("KCHOST", "http://localhost:8888")
+KAS_URL = os.getenv("KASHOST", "http://localhost:8080/kas")
+REALM = os.getenv("REALM", "opentdf")
 
 def main():
-    function, source, target = sys.argv[1:4]
+    function, source, target, fileformat = sys.argv[1:5]
 
     oidc_creds = OIDCCredentials()
     oidc_creds.set_client_credentials_client_secret(
@@ -23,7 +23,10 @@ def main():
         organization_name=REALM,
         oidc_endpoint=OIDC_ENDPOINT,
     )
-    client = TDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
+    if fileformat.lower()=="nano":
+        client = NanoTDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
+    else:
+        client = TDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
     client.enable_console_logging(LogLevel.Info)
 
     if function == "encrypt":
