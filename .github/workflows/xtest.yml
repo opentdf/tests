@@ -33,6 +33,7 @@ jobs:
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'fix-policy-binding' }}"
+      
     steps:
       - uses: actions/checkout@v3
         with:
