@@ -118,7 +118,7 @@ jobs:
         run: |
           make clean
           CLIENT_VERSION=$(cd lib && npm pkg get version | tr -d \")
-          make lib/opentdf-cli-$CLIENT_VERSION.tgz
+          make cli/opentdf-cli-$CLIENT_VERSION.tgz
         working-directory: client-web
       - name: update packages
         run: |-
