@@ -117,9 +117,7 @@ jobs:
       - name: build the js cli
         run: |
           make clean
-          cd lib
-          CLIENT_VERSION=$(npm pkg get version | tr -d \")
-          cd ..
+          CLIENT_VERSION=$(cd lib && npm pkg get version | tr -d \")
           make lib/opentdf-cli-$CLIENT_VERSION.tgz
         working-directory: client-web
       - name: update packages
