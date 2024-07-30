@@ -126,8 +126,6 @@ jobs:
           npm install ../../client-web/cli/opentdf-cli-*.tgz
           npm list
         working-directory: otdftests/xtest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
