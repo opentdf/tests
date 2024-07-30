@@ -13,6 +13,7 @@ def pytest_addoption(parser):
     )
     parser.addoption("--sdks-decrypt", help="select which sdks to run for decrypt only")
     parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
+    parser.addoption("--containers", help="which container formats to test")
 
 
 def pytest_generate_tests(metafunc):
@@ -34,6 +35,12 @@ def pytest_generate_tests(metafunc):
         else:
             decrypt_sdks = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh", "sdk/java/cli.sh"]
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
+    if "container" in metafunc.fixturenames:
+        if metafunc.config.getoption("--containers"):
+            containers = metafunc.config.getoption("--container").split()
+        else:
+            containers = ["nano", "ztdf"]
+        metafunc.parametrize("container", containers)
 
 
 @pytest.fixture
