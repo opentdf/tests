@@ -23,3 +23,4 @@ abacus-and-api-integration-tests/playwright-report/
 abacus-and-api-integration-tests/.helm/
 abacus-and-api-integration-tests/e2e/test-results
 abacus-and-api-integration-tests/e2e/playwright-report
+__pycache__/

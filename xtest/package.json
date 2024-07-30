@@ -2,18 +2,14 @@
   "name": "xtest",
   "version": "1.0.0",
   "description": "",
-  "main": "runner.py",
   "type": "module",
   "scripts": {
-    "test": "python3 runner.py --sdks sdk/js/cli/cli.sh sdk/go/cli.sh sdk/java/cli.sh"
+    "test": "pytest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@babel/runtime-corejs3": "^7.17.2",
-    "@opentdf/cli": "^2.0.0-beta.1398",
-    "@opentdf/client": "^0.4.0-beta.415",
-    "commander": "^9.0.0"
+    "@opentdf/cli": "^2.0.0-beta.1412"
   }
 }
