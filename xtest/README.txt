@@ -25,3 +25,6 @@ Requirements:
 
 ## Testing with Released Software
 
+```sh
+   pytest --sdks "js go" --container nano
+```
