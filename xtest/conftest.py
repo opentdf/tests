@@ -17,15 +17,15 @@ def pytest_addoption(parser):
 
 
 def pytest_generate_tests(metafunc):
-    if "large" in metafunc.fixturenames:
-        metafunc.parametrize("large", [metafunc.config.getoption("large")])
+    if "size" in metafunc.fixturenames:
+        metafunc.parametrize("size", ["large" if metafunc.config.getoption("large") else "small"])
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
             encrypt_sdks = metafunc.config.getoption("--sdks-encrypt").split()
         elif metafunc.config.getoption("--sdks"):
             encrypt_sdks = metafunc.config.getoption("--sdks").split()
         else:
-            encrypt_sdks = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh", "sdk/java/cli.sh"]
+            encrypt_sdks = ["js", "go", "java"]
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-decrypt"):
@@ -33,7 +33,7 @@ def pytest_generate_tests(metafunc):
         elif metafunc.config.getoption("--sdks"):
             decrypt_sdks = metafunc.config.getoption("--sdks").split()
         else:
-            decrypt_sdks = ["sdk/js/cli/cli.sh", "sdk/go/cli.sh", "sdk/java/cli.sh"]
+            decrypt_sdks = ["js", "go", "java"]
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
@@ -44,9 +44,9 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture
-def pt_file(tmp_dir, large):
-    pt_file = f"{tmp_dir}test-plain-{'large' if large else 'small'}.txt"
-    length = (5 * 2**30) if large else 128
+def pt_file(tmp_dir, size):
+    pt_file = f"{tmp_dir}test-plain-{size}.txt"
+    length = (5 * 2**30) if size == "large" else 128
     with open(pt_file, "w") as f:
         for i in range(0, length, 16):
             f.write("{:15,d}\n".format(i))
