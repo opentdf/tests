@@ -1,34 +1,7 @@
-# tests
-Tests for OpenTDF
+# Tests for OpenTDF
 
-## [Vulnerability](vulnerability)
+## [Cross-client compatibility tests](xtests)
 
-Automated checks for vulnerabilities identified during penetration testing
-
-Place to run frontend and backend together locally.
-Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
-
-1) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you've run integration tests locally from other folder
-2) run `ctlptl create cluster kind --registry=ctlptl-registry`
-3) `cd vulnerability`
-4) `tilt up`
-
-If you are running locally on mac frontend 'npm run build' step may take too long. Possible solution is run this
-command `npm run build` and change frontend/Dockerfile line `RUN npm run build` to `COPY build/ build/` so it won`t
-run it inside docker. Be careful not to push this changes, we won't need that to CI machines that runs on linux.
-
-## [Abacus and API integration tests](abacus-and-api-integration-tests)
-
-Automated Playwright tests for Abacus application run against the latest versions of frontend and backend together + API tests for OpenTDF backend services
-
-Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
-
-1) delete `ctlptl delete cluster kind-kind` and clear saved related images in docker if you've run integration tests locally from other folder
-2) run `ctlptl create cluster kind --registry=ctlptl-registry`
-3) `cd abacus-and-api-integration-tests`
-4) `tilt up`
-
-## Cross-client compatibility tests (xtests)
 1) `cd xtest`
 2) `npm ci && npm i @opentdf/client@CLIENT_VERSION`
 3) `pip3 install -r ./requirements.txt`
@@ -41,3 +14,40 @@ Before doing theabove, [configure Github packages as the scope provider for open
 ```
 npm login --scope=@opentdf --registry=https://npm.pkg.github.com
 ```
+
+## [Vulnerability](vulnerability)
+
+> Automated checks for vulnerabilities identified during penetration testing
+
+Place to run frontend and backend together locally.
+Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
+
+1) delete the cluster with `ctlptl delete cluster kind-kind`
+    and clear saved related images in docker
+    if you've run integration tests locally from other folder
+2) run `ctlptl create cluster kind --registry=ctlptl-registry`
+3) `cd vulnerability`
+4) `tilt up`
+
+If you are running locally on mac,
+frontend 'npm run build' step may take too long.
+A possible solution is to run `npm run build`
+and change `frontend/Dockerfile` line `RUN npm run build` to `COPY build/ build/`
+so it won't run it inside docker.
+Be careful not to push these changes,
+we won't need that to CI machines that runs on linux.
+
+## [Abacus and API integration tests](abacus-and-api-integration-tests)
+
+> Automated Playwright tests for the Abacus application
+> run against the latest versions of frontend and backend together
+> with API tests for OpenTDF backend services.
+
+Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
+
+1) delete `ctlptl delete cluster kind-kind`
+and clear saved related images in docker
+if you've run integration tests locally from another folder
+2) run `ctlptl create cluster kind --registry=ctlptl-registry`
+3) `cd abacus-and-api-integration-tests`
+4) `tilt up`

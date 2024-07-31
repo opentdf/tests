@@ -5,7 +5,7 @@
 #
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
 #
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
@@ -18,13 +18,13 @@ args=(
 )
 COMMAND="$1"
 if [ "$4" == "nano" ]; then
-    COMMAND="$1"nano
+  COMMAND="$1"nano
 fi
 args+=("$COMMAND")
 
 if [ "$1" == "encrypt" ]; then
-    args+=(--kas-url=$KASURL)
+  args+=(--kas-url=$KASURL)
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
-java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" > "$3"
+java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"

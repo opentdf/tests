@@ -117,9 +117,7 @@ jobs:
       - name: build the js cli
         run: |
           make clean
-          cd lib
-          CLIENT_VERSION=$(npm pkg get version | tr -d \")
-          cd ..
+          CLIENT_VERSION=$(cd lib && npm pkg get version | tr -d \")
           make lib/opentdf-client-$CLIENT_VERSION.tgz
           rm -rf */node_modules
           cd cli
@@ -132,8 +130,6 @@ jobs:
           npm install ../../client-web/cli/opentdf-cli-*.tgz
           npm list
         working-directory: otdftests/xtest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
