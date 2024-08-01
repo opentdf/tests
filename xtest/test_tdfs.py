@@ -25,6 +25,7 @@ def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", fmt="na
         "--mimeType",
         mime_type,
     ]
+    logger.info(f"enc [{' '.join(c)}]")
     subprocess.check_call(c)
 
 
@@ -36,6 +37,7 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano"):
         rt_file,
         fmt,
     ]
+    logger.info(f"dec [{' '.join(c)}]")
     subprocess.check_call(c)
 
 
