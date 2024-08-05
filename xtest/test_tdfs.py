@@ -13,6 +13,7 @@ sdk_paths = {
     "go": "sdk/go/cli.sh",
     "java": "sdk/java/cli.sh",
     "js": "sdk/js/cli/cli.sh",
+    "py": "sdk/py/cli.sh",
 }
 
 def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", fmt="nano"):
