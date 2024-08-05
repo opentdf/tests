@@ -142,7 +142,7 @@ jobs:
     ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          go get github.com/opentdf/platform/sdk@$PLATFORM_REF
+          echo 'github.com/opentdf/platform/sdk => ../platform/sdk' >> otdfctl/go.mod
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
