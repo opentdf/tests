@@ -143,6 +143,7 @@ jobs:
       - name: Prepare go cli
         run: |-
           echo 'replace github.com/opentdf/platform/sdk => ../platform/sdk' >> go.mod
+          go mod tidy
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
