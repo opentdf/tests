@@ -187,8 +187,7 @@ jobs:
         name: start another KAS server in background
         with:
           run: >
-            go build -o opentdf -v service/main.go
-            && <opentdf.yaml >opentdf-beta.yaml yq e '
+            <opentdf.yaml >opentdf-beta.yaml yq e '
               (.server.port = 8282)
               | (.services.authorization.ersurl = "http://localhost:8282/entityresolution/resolve")
             '
@@ -197,6 +196,7 @@ jobs:
             tcp:localhost:8282
           log-output-if: true
           wait-for: 90s
+          working-directory: platform
 
       - name: Run attribute based configuration tests
         run: |-
