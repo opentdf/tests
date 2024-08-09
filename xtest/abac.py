@@ -131,51 +131,6 @@ class SubjectMapping(BaseModel):
     actions: list[Action]
     metadata: Optional[Metadata] = None
 
-
-def kas_registry_list(otdfctl) -> list[KasEntry]:
-    cmd = otdfctl + "policy kas-registry list".split()
-    logger.info(f"kr-ls [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return [KasEntry(**n) for n in json.loads(out)]
-
-
-def kas_registry_create(otdfctl, url: str, key: str) -> KasEntry:
-    cmd = otdfctl + "policy kas-registry create".split()
-    cmd += [f"--uri={url}"]
-
-    if key.startswith("http"):
-        cmd += [f"--public-key-remote={key}"]
-    else:
-        with open(key, "r") as file:
-            keydata = file.read()
-            cmd += [f"--public-key-local={keydata}"]
-
-    logger.info(f"kr-create [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return KasEntry.model_validate_json(out)
-
-
-def kas_registry_create_if_not_present(otdfctl, uri: str, key: str) -> KasEntry:
-    for e in kas_registry_list(otdfctl):
-        if e.uri == uri:
-            return e
-    return kas_registry_create(otdfctl, uri, key)
-
-
 class KasGrantAttribute(BaseModel):
     attr_id: str
     kas_id: str
@@ -185,167 +140,215 @@ class KasGrantValue(BaseModel):
     value_id: str
     kas_id: Optional[str] = None
 
+class OpentdfCommandLineTool:
 
-def grant_assign_attr(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
-    cmd = otdfctl + "policy kas-grants update".split()
-    cmd += [
-        f"--kas-id={kas.id}",
-        f"--attribute-id={attr.id}",
-    ]
-    logger.info(f"grant-update [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return KasGrantAttribute.model_validate_json(out)
+    def __init__(self):
+        self.otdfctl = ["sdk/go/otdfctl.sh"]
 
-
-def grant_assign_value(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
-    cmd = otdfctl + "policy kas-grants update".split()
-    cmd += [
-        f"--kas-id={kas.id}",
-        f"--value-id={attr.id}",
-    ]
-    logger.info(f"grant-update [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return KasGrantValue.model_validate_json(out)
+    def kas_registry_list(self) -> list[KasEntry]:
+        cmd = self.otdfctl + "policy kas-registry list".split()
+        logger.info(f"kr-ls [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return [KasEntry(**n) for n in json.loads(out)]
 
 
-def grant_unassign_attr(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
-    cmd = otdfctl + "policy kas-grants remove".split()
-    cmd += [
-        f"--kas-id={kas.id}",
-        f"--attribute-id={attr.id}",
-    ]
-    logger.info(f"grant-update [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return KasGrantAttribute.model_validate_json(out)
+    def kas_registry_create(self, url: str, key: str) -> KasEntry:
+        cmd = self.otdfctl + "policy kas-registry create".split()
+        cmd += [f"--uri={url}"]
+
+        if key.startswith("http"):
+            cmd += [f"--public-key-remote={key}"]
+        else:
+            with open(key, "r") as file:
+                keydata = file.read()
+                cmd += [f"--public-key-local={keydata}"]
+
+        logger.info(f"kr-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasEntry.model_validate_json(out)
 
 
-def grant_unassign_value(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantValue:
-    cmd = otdfctl + "policy kas-grants remove".split()
-    cmd += [
-        f"--kas-id={kas.id}",
-        f"--value-id={attr.id}",
-    ]
-    logger.info(f"grant-update [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return KasGrantValue.model_validate_json(out)
+    def kas_registry_create_if_not_present(self, uri: str, key: str) -> KasEntry:
+        for e in kas_registry_list():
+            if e.uri == uri:
+                return e
+        return kas_registry_create(uri, key)
 
 
-def namespace_list(otdfctl) -> list[Namespace]:
-    cmd = otdfctl + "policy attributes namespaces list".split()
-    logger.info(f"ns-ls [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return [Namespace(**n) for n in json.loads(out)]
+    def grant_assign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
+        cmd = self.otdfctl + "policy kas-grants update".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--attribute-id={attr.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantAttribute.model_validate_json(out)
 
 
-def namespace_create(otdfctl, name: str) -> Namespace:
-    cmd = otdfctl + "policy attributes namespaces create".split()
-    cmd += [f"--name={name}"]
-    logger.info(f"ns-create [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return Namespace.model_validate_json(out)
+    def grant_assign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
+        cmd = self.otdfctl + "policy kas-grants update".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--value-id={attr.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantValue.model_validate_json(out)
 
 
-def attribute_create(
-    otdfctl, namespace: str | Namespace, name: str, t: AttributeRule, values: list[str]
-) -> Attribute:
-    cmd = otdfctl + "policy attributes create".split()
-
-    cmd += [
-        f"--namespace={namespace if isinstance(namespace, str) else namespace.id}",
-        f"--name={name}",
-        f"--rule={t.name}",
-    ]
-    if values:
-        cmd += [f"--value={','.join(values)}"]
-    logger.info(f"attr-create [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return Attribute.model_validate_json(out)
+    def grant_unassign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
+        cmd = self.otdfctl + "policy kas-grants remove".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--attribute-id={attr.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantAttribute.model_validate_json(out)
 
 
-def scs_create(otdfctl, scs: list[SubjectSet]) -> SubjectConditionSet:
-    cmd = otdfctl + "policy subject-condition-sets create".split()
+    def grant_unassign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantValue:
+        cmd = self.otdfctl + "policy kas-grants remove".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--value-id={attr.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantValue.model_validate_json(out)
 
-    cmd += [f"--subject-sets=[{','.join([s.model_dump_json() for s in scs])}]"]
 
-    logger.info(f"scs-create [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return SubjectConditionSet.model_validate_json(out)
+    def namespace_list(self) -> list[Namespace]:
+        cmd = self.otdfctl + "policy attributes namespaces list".split()
+        logger.info(f"ns-ls [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return [Namespace(**n) for n in json.loads(out)]
 
 
-def scs_map(
-    otdfctl, sc: str | SubjectConditionSet, value: str | AttributeValue
-) -> SubjectMapping:
-    cmd = otdfctl + "policy subject-mappings create".split()
+    def namespace_create(self, name: str) -> Namespace:
+        cmd = self.otdfctl + "policy attributes namespaces create".split()
+        cmd += [f"--name={name}"]
+        logger.info(f"ns-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return Namespace.model_validate_json(out)
 
-    cmd += [
-        "--action-standard=DECRYPT",
-        f"--attribute-value-id={value if isinstance(sc, str) else value.id}",
-        f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
-    ]
 
-    logger.info(f"sm-create [{' '.join(cmd)}]")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    code = process.wait()
-    out, err = process.communicate()
-    if err:
-        print(err, file=sys.stderr)
-    if out:
-        print(out)
-    assert code == 0
-    return SubjectMapping.model_validate_json(out)
+    def attribute_create(
+        self, namespace: str | Namespace, name: str, t: AttributeRule, values: list[str]
+    ) -> Attribute:
+        cmd = self.otdfctl + "policy attributes create".split()
+
+        cmd += [
+            f"--namespace={namespace if isinstance(namespace, str) else namespace.id}",
+            f"--name={name}",
+            f"--rule={t.name}",
+        ]
+        if values:
+            cmd += [f"--value={','.join(values)}"]
+        logger.info(f"attr-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return Attribute.model_validate_json(out)
+
+
+    def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
+        cmd = self.otdfctl + "policy subject-condition-sets create".split()
+
+        cmd += [f"--subject-sets=[{','.join([s.model_dump_json() for s in scs])}]"]
+
+        logger.info(f"scs-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return SubjectConditionSet.model_validate_json(out)
+
+
+    def scs_map(
+        self, sc: str | SubjectConditionSet, value: str | AttributeValue
+    ) -> SubjectMapping:
+        cmd = self.otdfctl + "policy subject-mappings create".split()
+
+        cmd += [
+            "--action-standard=DECRYPT",
+            f"--attribute-value-id={value if isinstance(sc, str) else value.id}",
+            f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
+        ]
+
+        logger.info(f"sm-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return SubjectMapping.model_validate_json(out)

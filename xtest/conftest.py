@@ -1,6 +1,7 @@
 import os
 import pytest
 
+import abac
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -62,19 +63,3 @@ def tmp_dir():
     if not isExist:
         os.makedirs(dname)
     return dname
-
-
-@pytest.fixture
-def otdfctl():
-    host = os.getenv("PLATFORMURL")
-    creds = f'{{"clientId":"{os.getenv("CLIENTID")}","clientSecret":"{os.getenv("CLIENTSECRET")}"}}'
-    return [
-        "go",
-        "run",
-        f"github.com/opentdf/otdfctl@{os.getenv('OTDFCTL_REF', 'latest')}",
-        "--json",
-        f"--host={host}",
-        "--tls-no-verify",
-        "--log-level=debug",
-        f"--with-client-creds={creds}",
-    ]
