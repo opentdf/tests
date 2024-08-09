@@ -3,7 +3,7 @@
 
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -21,6 +21,14 @@ if [ "$4" == "nano" ]; then
   args+=(--tdf-type "$4")
 fi
 
+if [ -n "$5" ]; then
+  args+=(--mime-type "$5")
+fi
+
+if [ -n "$6" ]; then
+  args+=(--attr "$6")
+fi
+
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
   cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
@@ -28,7 +36,9 @@ fi
 
 if [ "$1" == "encrypt" ]; then
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
-  "${cmd[@]}" encrypt "${args[@]}" "$2"
+  if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then
+    exit 1
+  fi
   if [ -f "${3}.tdf" ]; then
     # go helpfully adds a tdf extension to all files
     mv "${3}.tdf" "${3}"
