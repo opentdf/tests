@@ -12,7 +12,15 @@ sdk_paths = {
     "js": "sdk/js/cli/cli.sh",
 }
 
-def encrypt(sdk, pt_file, ct_file, mime_type="application/octet-stream", fmt="nano", attr_values=[]):
+
+def encrypt(
+    sdk,
+    pt_file,
+    ct_file,
+    mime_type="application/octet-stream",
+    fmt="nano",
+    attr_values=[],
+):
     c = [
         sdk_paths[sdk],
         "encrypt",

@@ -112,8 +112,10 @@ class PublicKey(BaseModel):
     Local: Optional[str] = None
     Remote: Optional[str] = None
 
+
 class PublicKeyChoice(BaseModel):
     PublicKey: PublicKey
+
 
 class KasEntry(BaseModel):
     id: str
@@ -144,7 +146,6 @@ def kas_registry_list(otdfctl) -> list[KasEntry]:
     return [KasEntry(**n) for n in json.loads(out)]
 
 
-
 def kas_registry_create(otdfctl, url: str, key: str) -> KasEntry:
     cmd = otdfctl + "policy kas-registry create".split()
     cmd += [f"--uri={url}"]
@@ -152,10 +153,9 @@ def kas_registry_create(otdfctl, url: str, key: str) -> KasEntry:
     if key.startswith("http"):
         cmd += [f"--public-key-remote={key}"]
     else:
-        with open(key, 'r') as file:
+        with open(key, "r") as file:
             keydata = file.read()
             cmd += [f"--public-key-local={keydata}"]
-
 
     logger.info(f"kr-create [{' '.join(cmd)}]")
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -180,9 +180,11 @@ class KasGrantAttribute(BaseModel):
     attr_id: str
     kas_id: str
 
+
 class KasGrantValue(BaseModel):
     value_id: str
     kas_id: Optional[str] = None
+
 
 def grant_assign_attr(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
     cmd = otdfctl + "policy kas-grants update".split()
@@ -200,6 +202,7 @@ def grant_assign_attr(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttrib
         print(out)
     assert code == 0
     return KasGrantAttribute.model_validate_json(out)
+
 
 def grant_assign_value(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
     cmd = otdfctl + "policy kas-grants update".split()
@@ -236,6 +239,7 @@ def grant_unassign_attr(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantAttr
     assert code == 0
     return KasGrantAttribute.model_validate_json(out)
 
+
 def grant_unassign_value(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantValue:
     cmd = otdfctl + "policy kas-grants remove".split()
     cmd += [
@@ -252,7 +256,6 @@ def grant_unassign_value(otdfctl, kas: KasEntry, attr: Attribute) -> KasGrantVal
         print(out)
     assert code == 0
     return KasGrantValue.model_validate_json(out)
-
 
 
 def namespace_list(otdfctl) -> list[Namespace]:
@@ -346,5 +349,3 @@ def scs_map(
         print(out)
     assert code == 0
     return SubjectMapping.model_validate_json(out)
-
-

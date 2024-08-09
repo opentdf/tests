@@ -18,7 +18,9 @@ def pytest_addoption(parser):
 
 def pytest_generate_tests(metafunc):
     if "size" in metafunc.fixturenames:
-        metafunc.parametrize("size", ["large" if metafunc.config.getoption("large") else "small"])
+        metafunc.parametrize(
+            "size", ["large" if metafunc.config.getoption("large") else "small"]
+        )
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
             encrypt_sdks = metafunc.config.getoption("--sdks-encrypt").split()
@@ -61,10 +63,11 @@ def tmp_dir():
         os.makedirs(dname)
     return dname
 
+
 @pytest.fixture
 def otdfctl():
-    host = os.getenv('PLATFORMURL')
-    creds= f'{{"clientId":"{os.getenv("CLIENTID")}","clientSecret":"{os.getenv("CLIENTSECRET")}"}}'
+    host = os.getenv("PLATFORMURL")
+    creds = f'{{"clientId":"{os.getenv("CLIENTID")}","clientSecret":"{os.getenv("CLIENTSECRET")}"}}'
     return [
         "go",
         "run",
