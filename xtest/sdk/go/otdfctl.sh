@@ -13,7 +13,10 @@ source "$SCRIPT_DIR"/../../test.env
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
   cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+  cmd+=(--json)
+  cmd+=(--host="$PLATFORMURL" --tls-no-verify --log-level=debug)
+  cmd+=(--with-client-creds='{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}')
 fi
 
-echo "${cmd[@]}" "$@"
+>&2 echo "${cmd[@]}" "$@"
 "${cmd[@]}" "$@"

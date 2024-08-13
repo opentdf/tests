@@ -131,6 +131,7 @@ class SubjectMapping(BaseModel):
     actions: list[Action]
     metadata: Optional[Metadata] = None
 
+
 class KasGrantAttribute(BaseModel):
     attr_id: str
     kas_id: str
@@ -139,6 +140,7 @@ class KasGrantAttribute(BaseModel):
 class KasGrantValue(BaseModel):
     value_id: str
     kas_id: Optional[str] = None
+
 
 class OpentdfCommandLineTool:
 
@@ -157,7 +159,6 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return [KasEntry(**n) for n in json.loads(out)]
-
 
     def kas_registry_create(self, url: str, key: str) -> KasEntry:
         cmd = self.otdfctl + "policy kas-registry create".split()
@@ -181,13 +182,11 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasEntry.model_validate_json(out)
 
-
     def kas_registry_create_if_not_present(self, uri: str, key: str) -> KasEntry:
-        for e in kas_registry_list():
+        for e in self.kas_registry_list():
             if e.uri == uri:
                 return e
-        return kas_registry_create(uri, key)
-
+        return self.kas_registry_create(uri, key)
 
     def grant_assign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants update".split()
@@ -206,7 +205,6 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-
     def grant_assign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants update".split()
         cmd += [
@@ -223,7 +221,6 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantValue.model_validate_json(out)
-
 
     def grant_unassign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants remove".split()
@@ -242,7 +239,6 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-
     def grant_unassign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantValue:
         cmd = self.otdfctl + "policy kas-grants remove".split()
         cmd += [
@@ -260,7 +256,6 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantValue.model_validate_json(out)
 
-
     def namespace_list(self) -> list[Namespace]:
         cmd = self.otdfctl + "policy attributes namespaces list".split()
         logger.info(f"ns-ls [{' '.join(cmd)}]")
@@ -273,7 +268,6 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return [Namespace(**n) for n in json.loads(out)]
-
 
     def namespace_create(self, name: str) -> Namespace:
         cmd = self.otdfctl + "policy attributes namespaces create".split()
@@ -288,7 +282,6 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return Namespace.model_validate_json(out)
-
 
     def attribute_create(
         self, namespace: str | Namespace, name: str, t: AttributeRule, values: list[str]
@@ -313,7 +306,6 @@ class OpentdfCommandLineTool:
         assert code == 0
         return Attribute.model_validate_json(out)
 
-
     def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
         cmd = self.otdfctl + "policy subject-condition-sets create".split()
 
@@ -329,7 +321,6 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return SubjectConditionSet.model_validate_json(out)
-
 
     def scs_map(
         self, sc: str | SubjectConditionSet, value: str | AttributeValue
