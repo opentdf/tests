@@ -190,6 +190,8 @@ jobs:
             <opentdf.yaml >opentdf-beta.yaml yq e '
               (.server.port = 8282)
               | (.services.authorization.ersurl = "http://localhost:8282/entityresolution/resolve")
+              | (.mode = ["kas"])
+              | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
             '
             && .github/scripts/watch.sh opentdf-beta.yaml ./opentdf --config-file ./opentdf-beta.yaml start
           wait-on: |
