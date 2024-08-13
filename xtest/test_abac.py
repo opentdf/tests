@@ -107,7 +107,7 @@ def test_autoconfigure_double_kas(tmp_dir, pt_file):
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
     allof = otdfctl.attribute_create(
-        ns, "ot", abac.AttributeRule.ANY_OF, ["alef", "bet", "gimmel"]
+        ns, "ot", abac.AttributeRule.ALL_OF, ["alef", "bet", "gimmel"]
     )
     alef, bet, gimmel = allof.values
     assert alef.value == "alef"
