@@ -77,12 +77,12 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080", "../platform/kas-cert.pem"
+        "http://localhost:8080", "../../platform/kas-cert.pem"
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8282", "../platform/kas-cert.pem"
+        "http://localhost:8282", "../../platform/kas-cert.pem"
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
