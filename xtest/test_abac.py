@@ -65,7 +65,7 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
                             abac.Condition(
                                 subject_external_selector_value=".clientId",
                                 operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf-sdk"],
+                                subject_external_values=["opentdf", "opentdf-sdk"],
                             )
                         ],
                     )
@@ -125,7 +125,7 @@ def test_autoconfigure_double_kas(tmp_dir, pt_file):
                             abac.Condition(
                                 subject_external_selector_value=".clientId",
                                 operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf-sdk"],
+                                subject_external_values=["opentdf", "opentdf-sdk"],
                             )
                         ],
                     )
