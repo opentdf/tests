@@ -20,6 +20,11 @@ args=(
 if [ "$4" == "ztdf" ]; then
   args+=(--containerType tdf3)
 fi
+
+if [ -n "$6" ]; then
+  args+=( --attributes "$6" )
+fi
+
 if [ "$1" == "encrypt" ]; then
   npx @opentdf/cli encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then

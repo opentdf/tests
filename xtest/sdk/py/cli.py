@@ -13,6 +13,7 @@ OIDC_ENDPOINT = os.getenv("KCHOST", "http://localhost:8888")
 KAS_URL = os.getenv("KASHOST", "http://localhost:8080/kas")
 REALM = os.getenv("REALM", "opentdf")
 
+
 def main():
     function, source, target, fileformat = sys.argv[1:5]
 
@@ -23,7 +24,7 @@ def main():
         organization_name=REALM,
         oidc_endpoint=OIDC_ENDPOINT,
     )
-    if fileformat.lower()=="nano":
+    if fileformat.lower() == "nano":
         client = NanoTDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
     else:
         client = TDFClient(oidc_credentials=oidc_creds, kas_url=KAS_URL)
@@ -37,17 +38,20 @@ def main():
         logger.error("Python -- invalid function type provided")
         sys.exit(1)
 
+
 def encrypt_file(client, source, target):
     logger.info(f"Python -- Encrypting file {source} to {target}")
     sampleTxtStorage = TDFStorageType()
     sampleTxtStorage.set_tdf_storage_file_type(source)
     client.encrypt_file(sampleTxtStorage, target)
 
+
 def decrypt_file(client, source, target):
     logger.info(f"Python -- Decrypting file {source} to {target}")
     sampleTdfStorage = TDFStorageType()
     sampleTdfStorage.set_tdf_storage_file_type(source)
     client.decrypt_file(sampleTdfStorage, target)
+
 
 if __name__ == "__main__":
     main()

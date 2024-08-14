@@ -1,6 +1,8 @@
 import os
 import pytest
 
+import abac
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -18,7 +20,9 @@ def pytest_addoption(parser):
 
 def pytest_generate_tests(metafunc):
     if "size" in metafunc.fixturenames:
-        metafunc.parametrize("size", ["large" if metafunc.config.getoption("large") else "small"])
+        metafunc.parametrize(
+            "size", ["large" if metafunc.config.getoption("large") else "small"]
+        )
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
             encrypt_sdks = metafunc.config.getoption("--sdks-encrypt").split()
