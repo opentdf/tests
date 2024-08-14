@@ -189,7 +189,6 @@ jobs:
           run: >
             <opentdf.yaml >opentdf-beta.yaml yq e '
               (.server.port = 8282)
-              | (.services.authorization.ersurl = "http://localhost:8080/entityresolution/resolve")
               | (.mode = ["kas"])
               | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
             '
