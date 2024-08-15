@@ -205,11 +205,13 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def grant_assign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
+    def grant_assign_value(
+        self, kas: KasEntry, val: AttributeValue
+    ) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants update".split()
         cmd += [
             f"--kas-id={kas.id}",
-            f"--value-id={attr.id}",
+            f"--value-id={val.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -239,11 +241,11 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def grant_unassign_value(self, kas: KasEntry, attr: Attribute) -> KasGrantValue:
+    def grant_unassign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
         cmd = self.otdfctl + "policy kas-grants remove".split()
         cmd += [
             f"--kas-id={kas.id}",
-            f"--value-id={attr.id}",
+            f"--value-id={val.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)

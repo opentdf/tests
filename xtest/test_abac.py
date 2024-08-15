@@ -46,13 +46,65 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
-    anyof = otdfctl.attribute_create(
-        ns, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta", "gamma"]
+    anyof = otdfctl.attribute_create(ns, "letra", abac.AttributeRule.ANY_OF, ["alpha"])
+    alpha = anyof.values
+    assert alpha.value == "alpha"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
     )
-    alpha, beta, gamma = anyof.values
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+        "http://localhost:8080", "../../platform/kas-cert.pem"
+    )
+    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+
+    # We have a grant for alpha to localhost kas. Now try to use it...
+    ct_file = f"{tmp_dir}test-abac-one.tdf"
+    tdfs.encrypt(
+        "go",
+        pt_file,
+        ct_file,
+        mime_type="text/plain",
+        fmt="ztdf",
+        attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
+    )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+
+    rt_file = f"{tmp_dir}test-abac-one.untdf"
+    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
+    # Create a new attribute in a random namespace
+    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
+    ns = otdfctl.namespace_create(random_ns)
+    anyof = otdfctl.attribute_create(
+        ns, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+    )
+    alpha, beta = anyof.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
-    assert gamma.value == "gamma"
 
     # Then assign it to all clientIds = opentdf-sdk
     sc = otdfctl.scs_create(
@@ -87,14 +139,17 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
     # We have a grant for alpha to localhost kas. Now try to use it...
-    ct_file = f"{tmp_dir}test-abac.tdf"
+    ct_file = f"{tmp_dir}test-abac-or.tdf"
     tdfs.encrypt(
         "go",
         pt_file,
         ct_file,
         mime_type="text/plain",
         fmt="ztdf",
-        attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
+        attr_values=[
+            f"https://{random_ns}/attr/letra/value/alpha",
+            f"https://{random_ns}/attr/letra/value/beta",
+        ],
     )
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
@@ -103,12 +158,12 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
         == manifest.encryptionInformation.keyAccess[1].sid
     )
 
-    rt_file = f"{tmp_dir}test-abac.untdf"
+    rt_file = f"{tmp_dir}test-abac-or.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_autoconfigure_double_kas(tmp_dir, pt_file):
+def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
