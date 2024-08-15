@@ -157,6 +157,9 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
+    assert set(["http://localhost:8080", "http://localhost:8282"]) == set(
+        [kao.url for kao in manifest.encryptionInformation.keyAccess]
+    )
 
     rt_file = f"{tmp_dir}test-abac-or.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
