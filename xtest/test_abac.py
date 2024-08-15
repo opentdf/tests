@@ -47,7 +47,7 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
     anyof = otdfctl.attribute_create(ns, "letra", abac.AttributeRule.ANY_OF, ["alpha"])
-    alpha = anyof.values
+    (alpha,) = anyof.values
     assert alpha.value == "alpha"
 
     # Then assign it to all clientIds = opentdf-sdk
