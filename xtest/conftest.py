@@ -41,7 +41,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
-            containers = metafunc.config.getoption("--container").split()
+            containers = metafunc.config.getoption("--containers").split()
         else:
             containers = ["nano", "ztdf"]
         metafunc.parametrize("container", containers)

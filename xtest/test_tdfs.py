@@ -17,6 +17,9 @@ def test_ztdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
         tdfs.encrypt(
             encrypt_sdk, pt_file, ct_file, mime_type="text/plain", fmt=container
         )
+        if container == "ztdf":
+            manifest = tdfs.manifest(ct_file)
+            assert manifest.payload.isEncrypted
         cipherTexts[container_id] = ct_file
     ct_file = cipherTexts[container_id]
     assert os.path.isfile(ct_file)

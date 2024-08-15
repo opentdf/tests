@@ -96,6 +96,12 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
         fmt="ztdf",
         attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
     )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        == manifest.encryptionInformation.keyAccess[1].sid
+    )
 
     rt_file = f"{tmp_dir}test-abac.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
@@ -160,6 +166,12 @@ def test_autoconfigure_double_kas(tmp_dir, pt_file):
             f"https://{random_ns}/attr/ot/value/alef",
             f"https://{random_ns}/attr/ot/value/bet",
         ],
+    )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        != manifest.encryptionInformation.keyAccess[1].sid
     )
 
     rt_file = f"{tmp_dir}test-abac-double.untdf"
