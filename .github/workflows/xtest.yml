@@ -142,7 +142,7 @@ jobs:
     ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          for x in (protocol/go sdk); do
+          for x in protocol/go sdk; do
             echo "replace github.com/opentdf/platform/${x} => ../platform/sdk" >> go.mod
           done
           go mod tidy
