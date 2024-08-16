@@ -1,7 +1,9 @@
 import filecmp
 import os
 
+import nano
 import tdfs
+
 
 cipherTexts = {}
 counter = 0
@@ -20,6 +22,10 @@ def test_ztdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
         if container == "ztdf":
             manifest = tdfs.manifest(ct_file)
             assert manifest.payload.isEncrypted
+        elif container == "nano":
+            with open(ct_file, 'rb') as f:
+                envelope = nano.parse(f.read())
+                assert envelope.header.version.version == 12
         cipherTexts[container_id] = ct_file
     ct_file = cipherTexts[container_id]
     assert os.path.isfile(ct_file)

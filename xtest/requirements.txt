@@ -1,3 +1,6 @@
+construct 
+construct-typing
+cryptography
 opentdf
 pydantic
 pytest
