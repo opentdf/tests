@@ -93,6 +93,8 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     rt_file = f"{tmp_dir}test-abac-one.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+    tdfs.decrypt("java", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
 
 
 def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
@@ -163,6 +165,8 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-or.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    tdfs.decrypt("java", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
