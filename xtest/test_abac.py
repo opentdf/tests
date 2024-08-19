@@ -78,9 +78,31 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
     # We have a grant for alpha to localhost kas. Now try to use it...
+
+    # Encrypt go
     ct_file = f"{tmp_dir}test-abac-one.tdf"
     tdfs.encrypt(
         "go",
+        pt_file,
+        ct_file,
+        mime_type="text/plain",
+        fmt="ztdf",
+        attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
+    )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+
+    rt_file = f"{tmp_dir}test-abac-one-3.untdf"
+    rt_file_2 = f"{tmp_dir}test-abac-one-4.untdf"
+    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_2)
+
+    # Encrypt java
+    ct_file = f"{tmp_dir}test-abac-one-2.tdf"
+    tdfs.encrypt(
+        "java",
         pt_file,
         ct_file,
         mime_type="text/plain",
@@ -142,6 +164,7 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
     # We have a grant for alpha to localhost kas. Now try to use it...
+    # encrypt go
     ct_file = f"{tmp_dir}test-abac-or.tdf"
     tdfs.encrypt(
         "go",
@@ -166,6 +189,36 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-or.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-or-2.untdf"
+    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_2)
+
+    # encrypt java
+    ct_file = f"{tmp_dir}test-abac-or-2.tdf"
+    tdfs.encrypt(
+        "java",
+        pt_file,
+        ct_file,
+        mime_type="text/plain",
+        fmt="ztdf",
+        attr_values=[
+            f"https://{random_ns}/attr/letra/value/alpha",
+            f"https://{random_ns}/attr/letra/value/beta",
+        ],
+    )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        == manifest.encryptionInformation.keyAccess[1].sid
+    )
+    assert set(["http://localhost:8080", "http://localhost:8282"]) == set(
+        [kao.url for kao in manifest.encryptionInformation.keyAccess]
+    )
+
+    rt_file = f"{tmp_dir}test-abac-or-3.untdf"
+    rt_file_2 = f"{tmp_dir}test-abac-or-4.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
@@ -219,6 +272,7 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
     otdfctl.grant_assign_value(kas_entry_beta, bet)
 
     # We have a grant for alpha to localhost kas. Now try to use it...
+    # encrypt go
     ct_file = f"{tmp_dir}test-abac-double.tdf"
     tdfs.encrypt(
         "go",
@@ -243,6 +297,36 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-double.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-double-2.untdf"
+    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_2)
+
+    # encrypt java
+    ct_file = f"{tmp_dir}test-abac-double-2.tdf"
+    tdfs.encrypt(
+        "java",
+        pt_file,
+        ct_file,
+        mime_type="text/plain",
+        fmt="ztdf",
+        attr_values=[
+            f"https://{random_ns}/attr/ot/value/alef",
+            f"https://{random_ns}/attr/ot/value/bet",
+        ],
+    )
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        != manifest.encryptionInformation.keyAccess[1].sid
+    )
+    assert set(["http://localhost:8080", "http://localhost:8282"]) == set(
+        [kao.url for kao in manifest.encryptionInformation.keyAccess]
+    )
+
+    rt_file = f"{tmp_dir}test-abac-double-3.untdf"
+    rt_file_2 = f"{tmp_dir}test-abac-double-4.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")

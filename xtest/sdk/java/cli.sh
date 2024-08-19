@@ -26,5 +26,13 @@ if [ "$1" == "encrypt" ]; then
   args+=(--kas-url=$KASURL)
 fi
 
+if [ -n "$5" ] && [ "$4" != "nano" ]; then
+  args+=(--mime-type "$5")
+fi
+
+if [ -n "$6" ]; then
+  args+=(--attr "$6")
+fi
+
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
