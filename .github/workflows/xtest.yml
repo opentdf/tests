@@ -21,7 +21,6 @@ on:
         default: main
   schedule:
     - cron: "30 6 * * *"
-    
 jobs:
   cross-client-test:
     timeout-minutes: 60
