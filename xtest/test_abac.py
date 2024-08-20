@@ -92,8 +92,8 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
 
-    rt_file = f"{tmp_dir}test-abac-one-3.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-one-4.untdf"
+    rt_file = f"{tmp_dir}test-abac-one.untdf"
+    rt_file_2 = f"{tmp_dir}test-abac-one-2.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
@@ -112,8 +112,8 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
 
-    rt_file = f"{tmp_dir}test-abac-one.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-one-2.untdf"
+    rt_file = f"{tmp_dir}test-abac-one-3.untdf"
+    rt_file_2 = f"{tmp_dir}test-abac-one-4.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
