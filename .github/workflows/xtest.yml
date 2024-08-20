@@ -32,7 +32,7 @@ jobs:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
-      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
+      JAVA_REF: "${{ inputs.java-ref || 'add-multikas-autoconfigure' }}"
     steps:
       - uses: actions/checkout@v3
         with:
