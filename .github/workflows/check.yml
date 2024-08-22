@@ -15,3 +15,11 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always \
               $(find . -type f -exec grep -m1 -l -E '^#!.*sh.*' {} \; | grep -v '/.git/')
+      - name: 🧽 🐍 
+        run: |-
+          pip install -r requirements.txt
+          pip install ruff
+          pip install black
+          ruff check
+          black --check .
+        working-directory: xtest

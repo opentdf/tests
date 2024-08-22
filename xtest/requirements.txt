@@ -1,4 +1,4 @@
 opentdf
-pydantic
+pydantic>=2
 pytest
 requests
