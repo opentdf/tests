@@ -30,7 +30,7 @@ jobs:
       packages: read
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
-      JS_REF: "${{ inputs.js-ref || 'main' }}"
+      JS_REF: "${{ inputs.js-ref || 'feature/ignoreAllowList' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
@@ -121,7 +121,7 @@ jobs:
           make lib/opentdf-client-$CLIENT_VERSION.tgz
           rm -rf */node_modules
           cd cli
-          npm uninstall @opentdf/client && npm ci && npm i ../lib/opentdf-client-*.tgz
+          npm uninstall @opentdf/client && npm ci && npm i ../lib/opentdf-client-*.tgz && npm i
           npm pack
         working-directory: client-web
       - name: update packages
