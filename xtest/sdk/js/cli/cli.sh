@@ -13,6 +13,7 @@ source "$SCRIPT_DIR"/../../../test.env
 args=(
   --output "$3"
   --kasEndpoint "$KASURL"
+  --ignoreAllowList
   --oidcEndpoint "$KCFULLURL"
   --auth opentdf:secret
 )

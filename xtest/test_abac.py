@@ -94,10 +94,13 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-one.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-one-2.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-one-3.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
 
     # Encrypt java
     ct_file = f"{tmp_dir}test-abac-one-2.tdf"
@@ -114,10 +117,13 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-one-3.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-one-4.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-one-5.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
 
 
 def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
@@ -189,10 +195,13 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-or.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-or-2.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-or-3.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
 
     # encrypt java
     ct_file = f"{tmp_dir}test-abac-or-2.tdf"
@@ -219,10 +228,13 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-or-3.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-or-4.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-or-5.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
 
 
 def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
@@ -297,10 +309,13 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-double.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-double-2.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-double-3.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
 
     # encrypt java
     ct_file = f"{tmp_dir}test-abac-double-2.tdf"
@@ -327,7 +342,10 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
 
     rt_file = f"{tmp_dir}test-abac-double-3.untdf"
     rt_file_2 = f"{tmp_dir}test-abac-double-4.untdf"
+    rt_file_3 = f"{tmp_dir}test-abac-double-5.untdf"
     tdfs.decrypt("go", ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
     tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
     assert filecmp.cmp(pt_file, rt_file_2)
+    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file_3)
