@@ -19,6 +19,7 @@ on:
         required: false
         type: string
         default: main
+        
   schedule:
     - cron: "30 6 * * *"
 jobs:
