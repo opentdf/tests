@@ -3,7 +3,6 @@ import json
 import logging
 import subprocess
 import sys
-import base64
 
 from pydantic import BaseModel
 from typing import Optional
@@ -142,10 +141,6 @@ class KasGrantValue(BaseModel):
     value_id: str
     kas_id: Optional[str] = None
 
-class KasPublicKeys(BaseModel):
-    pem: str
-    kid: str
-    alg: int
 
 class OpentdfCommandLineTool:
 
