@@ -3,6 +3,7 @@ import json
 import logging
 import subprocess
 import sys
+import base64
 
 from pydantic import BaseModel
 from typing import Optional
@@ -141,6 +142,10 @@ class KasGrantValue(BaseModel):
     value_id: str
     kas_id: Optional[str] = None
 
+class KasPublicKeys(BaseModel):
+    pem: str
+    kid: str
+    alg: int
 
 class OpentdfCommandLineTool:
 
@@ -169,8 +174,8 @@ class OpentdfCommandLineTool:
         else:
             with open(key, "r") as file:
                 keydata = file.read()
-                cmd += [f"--public-key-local={keydata}"]
-
+                keydatab64 = base64.b64encode(keydata.encode()).decode('utf-8')               
+                cmd += [f'--public-keys={{"cached": {{"keys": [{{"pem": "{keydatab64}", "kid": "1", "alg": 1}}]}}}}']
         logger.info(f"kr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         code = process.wait()
