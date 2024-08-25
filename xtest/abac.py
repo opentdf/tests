@@ -175,7 +175,7 @@ class OpentdfCommandLineTool:
             with open(key, "r") as file:
                 keydata = file.read()
                 keydatab64 = base64.b64encode(keydata.encode()).decode('utf-8')               
-                cmd += [f'--public-keys={{"cached": {{"keys": [{{"pem": "{keydatab64}", "kid": "1", "alg": 1}}]}}}}']
+                cmd += [f'--public-keys={{"cached": {{"keys": [{{"pem": "{keydatab64}", "kid": "r1", "alg": 1}}]}}}}']
         logger.info(f"kr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         code = process.wait()
