@@ -172,7 +172,10 @@ class OpentdfCommandLineTool:
         if out:
             print(out)
         assert code == 0
-        return [KasEntry(**n) for n in json.loads(out)]
+        o = json.loads(out)
+        if not o:
+            return []
+        return [KasEntry(**n) for n in o]
 
     def kas_registry_create(
         self,
@@ -278,7 +281,10 @@ class OpentdfCommandLineTool:
         if out:
             print(out)
         assert code == 0
-        return [Namespace(**n) for n in json.loads(out)]
+        o = json.loads(out)
+        if not o:
+            return []
+        return [Namespace(**n) for n in o]
 
     def namespace_create(self, name: str) -> Namespace:
         cmd = self.otdfctl + "policy attributes namespaces create".split()
