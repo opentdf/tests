@@ -169,8 +169,7 @@ class OpentdfCommandLineTool:
         else:
             with open(key, "r") as file:
                 keydata = file.read()
-                cmd += [f"--public-key-local={keydata}"]
-
+                cmd += [f'--public-keys={{"cached": {{"keys": [{{"pem":{json.dumps(keydata)}, "kid": "r1", "alg": 1}}]}}}}']
         logger.info(f"kr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         code = process.wait()

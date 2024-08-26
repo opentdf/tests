@@ -38,6 +38,7 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
+          ref: kas-registry-fix
       - name: Set up Node 20
         uses: actions/setup-node@v3
         with:
