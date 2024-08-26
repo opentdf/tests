@@ -67,6 +67,13 @@ def load_cached_kas_keys() -> abac.PublicKey:
     )
 
 
+def load_local_kas_key() -> abac.PublicKey:
+    with open("../../platform/kas-cert.pem", "r") as rsaFile:
+        return abac.PublicKey(
+            local=rsaFile.read(),
+        )
+
+
 def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
@@ -100,7 +107,7 @@ def test_autoconfigure_one_attribute(tmp_dir, pt_file):
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
@@ -189,13 +196,13 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
@@ -306,13 +313,13 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alef)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, bet)
 
