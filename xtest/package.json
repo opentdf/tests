@@ -10,6 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@opentdf/cli": "^2.0.0-beta.1412"
+    "@opentdf/cli": "^2.0.0-beta.1488"
   }
 }
