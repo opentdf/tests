@@ -19,6 +19,10 @@ on:
         required: false
         type: string
         default: main
+      feature-flags:
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "30 6 * * *"
 jobs:
@@ -202,7 +206,7 @@ jobs:
 
       - name: Run attribute based configuration tests
         run: |-
-          pytest test_abac.py
+          pytest test_abac.py --feature-flags ${{ toJSON(inputs.feature-flags || 'standard') }}
         working-directory: otdftests/xtest
 
 ###### TODO: move these unbound tests to v2 platform
