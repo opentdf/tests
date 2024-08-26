@@ -5,7 +5,6 @@ import subprocess
 import sys
 
 from pydantic import BaseModel
-from typing import Optional
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -20,7 +19,7 @@ class Timestamp(BaseModel):
 class Metadata(BaseModel):
     created_at: Timestamp
     updated_at: Timestamp
-    labels: Optional[list[str]] = None
+    labels: list[str] | None = None
 
 
 class BoolValue(BaseModel):
@@ -31,8 +30,8 @@ class Namespace(BaseModel):
     id: str
     name: str
     fqn: str
-    active: Optional[BoolValue] = None
-    metadata: Optional[Metadata] = None
+    active: BoolValue | None = None
+    metadata: Metadata | None = None
 
 
 class AttributeRule(enum.IntEnum):
@@ -44,9 +43,9 @@ class AttributeRule(enum.IntEnum):
 class AttributeValue(BaseModel):
     id: str
     value: str
-    fqn: Optional[str] = None
-    active: Optional[BoolValue] = None
-    metadata: Optional[Metadata] = None
+    fqn: str | None = None
+    active: BoolValue | None = None
+    metadata: Metadata | None = None
 
 
 class Attribute(BaseModel):
@@ -54,10 +53,10 @@ class Attribute(BaseModel):
     namespace: Namespace
     name: str
     rule: AttributeRule
-    values: Optional[list[AttributeValue]] = None
-    fqn: Optional[str]
-    active: Optional[BoolValue] = None
-    metadata: Optional[Metadata] = None
+    values: list[AttributeValue] | None = None
+    fqn: str | None
+    active: BoolValue | None = None
+    metadata: Metadata | None = None
 
 
 class SubjectMappingOperatorEnum(enum.IntEnum):
@@ -89,8 +88,8 @@ class SubjectSet(BaseModel):
 class SubjectConditionSet(BaseModel):
     id: str
     subject_sets: list[SubjectSet]
-    active: Optional[BoolValue] = None
-    metadata: Optional[Metadata] = None
+    active: BoolValue | None = None
+    metadata: Metadata | None = None
 
 
 class StandardAction(enum.IntEnum):
@@ -99,8 +98,8 @@ class StandardAction(enum.IntEnum):
 
 
 class SubjectAction(BaseModel):
-    Standard: Optional[StandardAction] = None
-    Custom: Optional[str] = None
+    Standard: StandardAction | None = None
+    Custom: str | None = None
 
 
 # Huh? Is this a side effect of the oneof value field?
@@ -108,28 +107,12 @@ class Action(BaseModel):
     Value: SubjectAction
 
 
-class PublicKey(BaseModel):
-    Local: Optional[str] = None
-    Remote: Optional[str] = None
-
-
-class PublicKeyChoice(BaseModel):
-    PublicKey: PublicKey
-
-
-class KasEntry(BaseModel):
-    id: str
-    uri: str
-    public_key: Optional[PublicKeyChoice]
-    metadata: Optional[Metadata] = None
-
-
 class SubjectMapping(BaseModel):
     id: str
     attribute_value: AttributeValue
     subject_condition_set: SubjectConditionSet
     actions: list[Action]
-    metadata: Optional[Metadata] = None
+    metadata: Metadata | None = None
 
 
 class KasGrantAttribute(BaseModel):
@@ -139,7 +122,38 @@ class KasGrantAttribute(BaseModel):
 
 class KasGrantValue(BaseModel):
     value_id: str
-    kas_id: Optional[str] = None
+    kas_id: str | None = None
+
+
+KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
+KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1 = 5
+
+
+class KasPublicKey(BaseModel):
+    pem: str
+    kid: str
+    alg: int
+
+
+class KasPublicKeySet(BaseModel):
+    keys: list[KasPublicKey]
+
+
+class PublicKey(BaseModel):
+    local: str | None = None
+    remote: str | None = None
+    cached: KasPublicKeySet | None = None
+
+
+class PublicKeyChoice(BaseModel):
+    PublicKey: PublicKey
+
+
+class KasEntry(BaseModel):
+    id: str
+    uri: str
+    public_key: PublicKeyChoice | None
+    metadata: Metadata | None = None
 
 
 class OpentdfCommandLineTool:
@@ -158,19 +172,19 @@ class OpentdfCommandLineTool:
         if out:
             print(out)
         assert code == 0
-        return [KasEntry(**n) for n in json.loads(out)]
+        o = json.loads(out)
+        if not o:
+            return []
+        return [KasEntry(**n) for n in o]
 
-    def kas_registry_create(self, url: str, key: str) -> KasEntry:
+    def kas_registry_create(
+        self,
+        url: str,
+        public_key: PublicKey,
+    ) -> KasEntry:
         cmd = self.otdfctl + "policy kas-registry create".split()
         cmd += [f"--uri={url}"]
-
-        if key.startswith("http"):
-            cmd += [f"--public-key-remote={key}"]
-        else:
-            with open(key, "r") as file:
-                keydata = file.read()
-                cmd += [f"--public-key-local={keydata}"]
-
+        cmd += [f"--public-keys={public_key.model_dump_json()}"]
         logger.info(f"kr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         code = process.wait()
@@ -182,7 +196,7 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasEntry.model_validate_json(out)
 
-    def kas_registry_create_if_not_present(self, uri: str, key: str) -> KasEntry:
+    def kas_registry_create_if_not_present(self, uri: str, key: PublicKey) -> KasEntry:
         for e in self.kas_registry_list():
             if e.uri == uri:
                 return e
@@ -205,9 +219,7 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def grant_assign_value(
-        self, kas: KasEntry, val: AttributeValue
-    ) -> KasGrantAttribute:
+    def grant_assign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
         cmd = self.otdfctl + "policy kas-grants update".split()
         cmd += [
             f"--kas-id={kas.id}",
@@ -269,7 +281,10 @@ class OpentdfCommandLineTool:
         if out:
             print(out)
         assert code == 0
-        return [Namespace(**n) for n in json.loads(out)]
+        o = json.loads(out)
+        if not o:
+            return []
+        return [Namespace(**n) for n in o]
 
     def namespace_create(self, name: str) -> Namespace:
         cmd = self.otdfctl + "policy attributes namespaces create".split()
@@ -331,7 +346,7 @@ class OpentdfCommandLineTool:
 
         cmd += [
             "--action-standard=DECRYPT",
-            f"--attribute-value-id={value if isinstance(sc, str) else value.id}",
+            f"--attribute-value-id={value if isinstance(value, str) else value.id}",
             f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
         ]
 
