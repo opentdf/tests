@@ -190,13 +190,13 @@ def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
@@ -301,13 +301,13 @@ def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alef)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
-        load_cached_kas_keys(),
+        load_local_kas_key(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, bet)
 
