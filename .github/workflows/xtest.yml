@@ -80,7 +80,7 @@ jobs:
       - run: >-
           <opentdf-dev.yaml >opentdf.yaml yq e '
               (.services.kas.keyring = [{"kid":"ec1","alg":"ec:secp256r1"},{"kid":"r1","alg":"rsa:2048"}])
-              | (.server.cryptoProvider.keys = [{"kid":"ec1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"r1","alg":"rsa:2048","private":"kas-private.pem","cert":"kas-cert.pem"}])
+              | (.server.cryptoProvider.standard.keys = [{"kid":"ec1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"r1","alg":"rsa:2048","private":"kas-private.pem","cert":"kas-cert.pem"}])
             '
         working-directory: platform
       - name: Added Trusted Certs
