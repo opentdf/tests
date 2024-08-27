@@ -77,6 +77,7 @@ jobs:
 
       ######## SPIN UP BACKEND #############
       - run: .github/scripts/init-temp-keys.sh
+        working-directory: platform
       - run: >-
           <opentdf-dev.yaml >opentdf.yaml yq e '
               (.services.kas.keyring = [{"kid":"ec1","alg":"ec:secp256r1"},{"kid":"r1","alg":"rsa:2048"}])
