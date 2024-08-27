@@ -22,4 +22,5 @@ jobs:
           pip install black
           ruff check
           black --check .
+          pytest test_nano.py
         working-directory: xtest

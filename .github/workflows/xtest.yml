@@ -178,6 +178,11 @@ jobs:
         run: |-
           pip install -r requirements.txt
         working-directory: otdftests/xtest
+      - name: Validate xtests
+        if: ${{ !inputs }}
+        run: |-
+          pytest test_nano.py test_self.py
+        working-directory: otdftests/xtest
       - name: Run xtests
         run: |-
           pytest test_tdfs.py
