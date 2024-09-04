@@ -242,6 +242,11 @@ class EcdsaBinding(ct.DataclassMixin):
     length_s: int = ct.csfield(cs.Int8ub)
     s: bytes = ct.csfield(cs.Bytes(cs.this.length_s))
 
+    def __bytes__(self) -> bytes:
+        return ecdsa_binding_format.build(self)
+
+ecdsa_binding_format = ct.DataclassStruct(EcdsaBinding)
+
 
 @dataclasses.dataclass
 class Policy(ct.DataclassMixin):
@@ -325,7 +330,7 @@ class Header(ct.DataclassMixin):
 
     ecdsa_binding: EcdsaBinding | None = ct.csfield(
         cs.If(
-            cs.this.binding_mode.use_ecdsa_binding, ct.DataclassBitStruct(EcdsaBinding)
+            cs.this.binding_mode.use_ecdsa_binding, ct.DataclassStruct(EcdsaBinding)
         )
     )
     gmac_binding: bytes | None = ct.csfield(
@@ -346,8 +351,6 @@ class Header(ct.DataclassMixin):
             "symmetric_and_payload_config",
             "policy",
         ]
-        if self.binding_mode.use_ecdsa_binding:
-            raise ValueError("unsupported binding mode")
         if self.ecdsa_binding:
             keys += ["ecdsa_binding"]
             if self.gmac_binding:
