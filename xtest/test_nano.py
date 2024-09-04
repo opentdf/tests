@@ -206,6 +206,7 @@ def test_whole_go():
     e1 = nano.parse(nano.dec_hex_w_comments(whole_go_ecdsa))
     assert e1.pretty() == whole_go_ecdsa
 
+
 whole_js = """## header
 4c 31 4c # version
 00 12 6c 6f 63 61 6c 68 6f 73 74 3a 38 30 38 30 2f 6b 61 73 # kas
@@ -267,6 +268,7 @@ f6 16 97 a1 88 eb ce dc 6e b2 5f ea 17
 00 00 01 # iv
 02 9a ea cb 1f 7d 4d 31 1c 20 12 9c 36 81 a8 af f6 fb # ciphertext
 77 55 19 d5 02 2e a9 25 ae 77 ec 9e # mac"""
+
 
 def test_whole_js():
     e0 = nano.parse(nano.dec_hex_w_comments(whole_js))

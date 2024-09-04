@@ -245,6 +245,7 @@ class EcdsaBinding(ct.DataclassMixin):
     def __bytes__(self) -> bytes:
         return ecdsa_binding_format.build(self)
 
+
 ecdsa_binding_format = ct.DataclassStruct(EcdsaBinding)
 
 
@@ -329,9 +330,7 @@ class Header(ct.DataclassMixin):
     policy: Policy = ct.csfield(ct.DataclassStruct(Policy))
 
     ecdsa_binding: EcdsaBinding | None = ct.csfield(
-        cs.If(
-            cs.this.binding_mode.use_ecdsa_binding, ct.DataclassStruct(EcdsaBinding)
-        )
+        cs.If(cs.this.binding_mode.use_ecdsa_binding, ct.DataclassStruct(EcdsaBinding))
     )
     gmac_binding: bytes | None = ct.csfield(
         cs.IfThenElse(cs.this.binding_mode.use_ecdsa_binding, cs.Pass, cs.Bytes(8))
