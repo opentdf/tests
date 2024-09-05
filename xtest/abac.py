@@ -114,6 +114,9 @@ class SubjectMapping(BaseModel):
     actions: list[Action]
     metadata: Metadata | None = None
 
+class KasGrantNamespace(BaseModel):
+    ns_id: str
+    kas_id: str
 
 class KasGrantAttribute(BaseModel):
     attr_id: str
@@ -201,9 +204,26 @@ class OpentdfCommandLineTool:
             if e.uri == uri:
                 return e
         return self.kas_registry_create(uri, key)
+    
+    def grant_assign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
+        cmd = self.otdfctl + "policy kas-grants assign".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--namespace-id={ns.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantNamespace.model_validate_json(out)
 
     def grant_assign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
-        cmd = self.otdfctl + "policy kas-grants update".split()
+        cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
             f"--kas-id={kas.id}",
             f"--attribute-id={attr.id}",
@@ -220,7 +240,7 @@ class OpentdfCommandLineTool:
         return KasGrantAttribute.model_validate_json(out)
 
     def grant_assign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
-        cmd = self.otdfctl + "policy kas-grants update".split()
+        cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
             f"--kas-id={kas.id}",
             f"--value-id={val.id}",
@@ -235,9 +255,26 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantValue.model_validate_json(out)
+    
+    def grant_unassign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
+        cmd = self.otdfctl + "policy kas-grants unassign".split()
+        cmd += [
+            f"--kas-id={kas.id}",
+            f"--namespace-id={ns.id}",
+        ]
+        logger.info(f"grant-update [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasGrantNamespace.model_validate_json(out)
 
     def grant_unassign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
-        cmd = self.otdfctl + "policy kas-grants remove".split()
+        cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
             f"--kas-id={kas.id}",
             f"--attribute-id={attr.id}",
@@ -254,7 +291,7 @@ class OpentdfCommandLineTool:
         return KasGrantAttribute.model_validate_json(out)
 
     def grant_unassign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
-        cmd = self.otdfctl + "policy kas-grants remove".split()
+        cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
             f"--kas-id={kas.id}",
             f"--value-id={val.id}",
