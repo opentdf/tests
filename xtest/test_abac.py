@@ -280,7 +280,7 @@ def test_autoconfigure_one_attribute_attr_grant(tmp_dir, pt_file):
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
+        "http://localhost:8282/kas",
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
@@ -300,6 +300,7 @@ def test_autoconfigure_one_attribute_attr_grant(tmp_dir, pt_file):
         )
         manifest = tdfs.manifest(ct_file)
         assert len(manifest.encryptionInformation.keyAccess) == 1
+        assert manifest.encryptionInformation.keyAccess[0].url == "http://localhost:8282/kas"
 
         for decrypt_sdk in ["go", "java", "js"]:
             rt_file = f"{tmp_dir}test-abac-one-{decrypt_sdk}.untdf"
@@ -421,17 +422,18 @@ def test_autoconfigure_double_kas_and_attr_and_value_grant(tmp_dir, pt_file):
     sm2 = otdfctl.scs_map(sc, bet)
     assert sm2.attribute_value.value == "bet"
     # Now assign it to the current KAS
-    kas_entry_ot = otdfctl.kas_registry_create_if_not_present(
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_attr(kas_entry_ot, allof)
-
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+    otdfctl.grant_assign_value(kas_entry_beta, bet)
+    
+    kas_entry_ot = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_value(kas_entry_beta, bet)
+    otdfctl.grant_assign_attr(kas_entry_ot, allof)
+    
 
     for encrypt_sdk in ["go", "java"]:
         ct_file = f"{tmp_dir}test-abac-double-{encrypt_sdk}.tdf"
@@ -494,7 +496,7 @@ def test_autoconfigure_one_attribute_ns_grant(tmp_dir, pt_file):
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
+        "http://localhost:8282/kas",
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_ns(kas_entry_ns, ns)
@@ -502,7 +504,8 @@ def test_autoconfigure_one_attribute_ns_grant(tmp_dir, pt_file):
     # We have a grant for ns to localhost kas. Now try to use it...
 
     # Encrypt
-    for encrypt_sdk in ["go", "java"]:
+    ## TODO: add java to encrypt sdks after feature implementation
+    for encrypt_sdk in ["go"]:
         ct_file = f"{tmp_dir}test-abac-one-{encrypt_sdk}.tdf"
         tdfs.encrypt(
             encrypt_sdk,
@@ -514,6 +517,7 @@ def test_autoconfigure_one_attribute_ns_grant(tmp_dir, pt_file):
         )
         manifest = tdfs.manifest(ct_file)
         assert len(manifest.encryptionInformation.keyAccess) == 1
+        assert manifest.encryptionInformation.keyAccess[0].url == "http://localhost:8282/kas"
 
         for decrypt_sdk in ["go", "java", "js"]:
             rt_file = f"{tmp_dir}test-abac-one-{decrypt_sdk}.untdf"
@@ -556,19 +560,21 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(tmp_dir, pt_file):
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_ns(kas_entry_ns, ns)
-
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8282/kas",
+        "http://localhost:8080/kas",
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
-    for encrypt_sdk in ["go", "java"]:
+    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+        "http://localhost:8282/kas",
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_ns(kas_entry_ns, ns)
+    
+
+    ## TODO: add java to encrypt sdks after feature implementation
+    for encrypt_sdk in ["go"]:
         ct_file = f"{tmp_dir}test-abac-or-{encrypt_sdk}.tdf"
         tdfs.encrypt(
             encrypt_sdk,
@@ -635,19 +641,21 @@ def test_autoconfigure_double_kas_and_ns_and_value_grant(tmp_dir, pt_file):
     sm2 = otdfctl.scs_map(sc, bet)
     assert sm2.attribute_value.value == "bet"
     # Now assign it to the current KAS
-    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8080/kas",
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, ns)
+    otdfctl.grant_assign_value(kas_entry_beta, bet)
+    
 
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
         "http://localhost:8282/kas",
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_value(kas_entry_beta, bet)
-
-    for encrypt_sdk in ["go", "java"]:
+    otdfctl.grant_assign_ns(kas_entry_ns, ns)
+    
+    ## TODO: add java to encrypt sdks after feature implementation
+    for encrypt_sdk in ["go"]:
         ct_file = f"{tmp_dir}test-abac-double-{encrypt_sdk}.tdf"
         tdfs.encrypt(
             encrypt_sdk,
@@ -673,4 +681,4 @@ def test_autoconfigure_double_kas_and_ns_and_value_grant(tmp_dir, pt_file):
         for decrypt_sdk in ["go", "java", "js"]:
             rt_file = f"{tmp_dir}test-abac-double-{decrypt_sdk}.untdf"
             tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
-            assert filecmp.cmp(pt_file, rt_file)     
+            assert filecmp.cmp(pt_file, rt_file)
