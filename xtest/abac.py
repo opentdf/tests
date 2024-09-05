@@ -117,17 +117,17 @@ class SubjectMapping(BaseModel):
 
 class KasGrantNamespace(BaseModel):
     namespace_id: str
-    kas_id: str | None = None
+    key_access_server_id: str | None = None
 
 
 class KasGrantAttribute(BaseModel):
     attribute_id: str
-    kas_id: str | None = None
+    key_access_server_id: str | None = None
 
 
 class KasGrantValue(BaseModel):
     value_id: str
-    kas_id: str | None = None
+    key_access_server_id: str | None = None
 
 
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
