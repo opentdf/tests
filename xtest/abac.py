@@ -114,13 +114,15 @@ class SubjectMapping(BaseModel):
     actions: list[Action]
     metadata: Metadata | None = None
 
+
 class KasGrantNamespace(BaseModel):
-    ns_id: str
-    kas_id: str
+    namespace_id: str
+    kas_id: str | None = None
+
 
 class KasGrantAttribute(BaseModel):
-    attr_id: str
-    kas_id: str
+    attribute_id: str
+    kas_id: str | None = None
 
 
 class KasGrantValue(BaseModel):
@@ -160,7 +162,6 @@ class KasEntry(BaseModel):
 
 
 class OpentdfCommandLineTool:
-
     def __init__(self):
         self.otdfctl = ["sdk/go/otdfctl.sh"]
 
@@ -204,7 +205,7 @@ class OpentdfCommandLineTool:
             if e.uri == uri:
                 return e
         return self.kas_registry_create(uri, key)
-    
+
     def grant_assign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
         cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
@@ -255,7 +256,7 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantValue.model_validate_json(out)
-    
+
     def grant_unassign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
