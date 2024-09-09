@@ -1,7 +1,7 @@
+import os
 import filecmp
 import random
 import string
-import os
 
 import abac
 import tdfs
@@ -9,33 +9,30 @@ import tdfs
 
 otdfctl = abac.OpentdfCommandLineTool()
 
-# reusable action stores keys in 'otdf-test-platform' [https://github.com/opentdf/platform/blob/main/test/start-up-with-containers/action.yaml]
+
+def load_kas_key(filepath: str, alg: str, kid: str) -> abac.KasPublicKey:
+    """Helper function to load a KAS public key from a file."""
+    try:
+        with open(filepath, "r") as file:
+            pem_data = file.read()
+            return abac.KasPublicKey(alg=alg, kid=kid, pem=pem_data)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {filepath}")
+    except Exception as e:
+        raise RuntimeError(f"Error loading KAS key from {filepath}: {e}")
+
 
 def load_cached_kas_keys() -> abac.PublicKey:
-    keyset: list[abac.KasPublicKey] = []
-    # Read in KEY_STORE_DIR from environment variable with default value
-    key_store_dir = os.getenv("KEY_STORE_DIR", "../../otdf-test-platform")
-    with open(f"{key_store_dir}/kas-cert.pem", "r") as rsaFile:
-        keyset.append(
-            abac.KasPublicKey(
-                alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048,
-                kid="r1",
-                pem=rsaFile.read(),
-            )
-        )
-    with open(f"{key_store_dir}/kas-ec-cert.pem", "r") as ecFile:
-        keyset.append(
-            abac.KasPublicKey(
-                alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1,
-                kid="e1",
-                pem=ecFile.read(),
-            )
-        )
-    return abac.PublicKey(
-        cached=abac.KasPublicKeySet(
-            keys=keyset,
-        )
-    )
+    key_store_dir = os.getenv("KEY_STORE_DIR", "../../platform")
+    kas_rsa_path = os.path.join(key_store_dir, "kas-cert.pem")
+    kas_ec_path = os.path.join(key_store_dir, "kas-ec-cert.pem")
+    
+    keyset = [
+        load_kas_key(kas_rsa_path, abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048, "r1"),
+        load_kas_key(kas_ec_path, abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1, "e1")
+    ]
+    
+    return abac.PublicKey(cached=abac.KasPublicKeySet(keys=keyset))
 
 
 def test_autoconfigure_one_attribute(tmp_dir, pt_file):
