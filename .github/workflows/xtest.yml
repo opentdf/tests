@@ -59,7 +59,7 @@ jobs:
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
-        id: start-platform
+        id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
@@ -101,8 +101,8 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          go mod edit -replace github.com/opentdf/platform/protocol/go=../${{ steps.start-platform.outputs.platform-working-dir }}/protocol/go
-          go mod edit -replace github.com/opentdf/platform/sdk=../${{ steps.start-platform.outputs.platform-working-dir }}/sdk
+          go mod edit -replace github.com/opentdf/platform/protocol/go=../${{ steps.run-platform.outputs.platform-working-dir }}/protocol/go
+          go mod edit -replace github.com/opentdf/platform/sdk=../${{ steps.run-platform.outputs.platform-working-dir }}/sdk
           go mod tidy
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
@@ -147,7 +147,7 @@ jobs:
           pytest test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Check out and start up platform with deps/containers
@@ -161,7 +161,7 @@ jobs:
           pytest test_abac.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 ###### TODO: move these unbound tests to v2 platform
 # unbound-test-js:
 #   timeout-minutes: 60
