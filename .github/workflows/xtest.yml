@@ -76,9 +76,13 @@ jobs:
             platform/sdk/go.sum
 
       ######## SPIN UP BACKEND #############
-      - run: |
-          .github/scripts/init-temp-keys.sh
-          cp opentdf-dev.yaml opentdf.yaml
+      - run: .github/scripts/init-temp-keys.sh
+        working-directory: platform
+      - run: >-
+          <opentdf-dev.yaml >opentdf.yaml yq e '
+              (.services.kas.keyring = [{"kid":"ec1","alg":"ec:secp256r1"},{"kid":"r1","alg":"rsa:2048"}])
+              | (.server.cryptoProvider.standard.keys = [{"kid":"ec1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"r1","alg":"rsa:2048","private":"kas-private.pem","cert":"kas-cert.pem"}])
+            '
         working-directory: platform
       - name: Added Trusted Certs
         run: |
@@ -193,7 +197,7 @@ jobs:
         name: start another KAS server in background
         with:
           run: >
-            <opentdf.yaml >opentdf-beta.yaml yq e '
+            <opentdf-dev.yaml >opentdf-beta.yaml yq e '
               (.server.port = 8282)
               | (.mode = ["kas"])
               | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
