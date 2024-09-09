@@ -23,7 +23,9 @@ def pytest_addoption(parser):
 def pytest_generate_tests(metafunc):
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
-            "size", ["large" if metafunc.config.getoption("large") else "small"]
+            "size",
+            ["large" if metafunc.config.getoption("large") else "small"],
+            scope="session",
         )
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
