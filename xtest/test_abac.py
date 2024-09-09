@@ -1,6 +1,7 @@
 import filecmp
 import random
 import string
+import os
 
 import abac
 import tdfs
@@ -8,10 +9,13 @@ import tdfs
 
 otdfctl = abac.OpentdfCommandLineTool()
 
+# reusable action stores keys in 'otdf-test-platform' [https://github.com/opentdf/platform/blob/main/test/start-up-with-containers/action.yaml]
 
 def load_cached_kas_keys() -> abac.PublicKey:
     keyset: list[abac.KasPublicKey] = []
-    with open("../../otdf-test-platform/kas-cert.pem", "r") as rsaFile:
+    # Read in KEY_STORE_DIR from environment variable with default value
+    key_store_dir = os.getenv("KEY_STORE_DIR", "../../otdf-test-platform")
+    with open(f"{key_store_dir}/kas-cert.pem", "r") as rsaFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048,
@@ -19,7 +23,7 @@ def load_cached_kas_keys() -> abac.PublicKey:
                 pem=rsaFile.read(),
             )
         )
-    with open("../../otdf-test-platform/kas-ec-cert.pem", "r") as ecFile:
+    with open(f"{key_store_dir}/kas-ec-cert.pem", "r") as ecFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1,
