@@ -49,7 +49,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("container", containers)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def pt_file(tmp_dir, size):
     pt_file = f"{tmp_dir}test-plain-{size}.txt"
     length = (5 * 2**30) if size == "large" else 128
@@ -59,7 +59,7 @@ def pt_file(tmp_dir, size):
     return pt_file
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def tmp_dir():
     dname = "tmp/"
     isExist = os.path.exists(dname)
@@ -71,12 +71,12 @@ def tmp_dir():
 _otdfctl = abac.OpentdfCommandLineTool()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def otdfctl():
     return _otdfctl
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
@@ -112,17 +112,17 @@ def load_cached_kas_keys() -> abac.PublicKey:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def kas_url1():
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def kas_url2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -165,7 +165,7 @@ def attribute_single_kas_grant(
     return anyof
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def attribute_two_kas_grant_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -216,7 +216,7 @@ def attribute_two_kas_grant_or(
     return anyof
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def attribute_two_kas_grant_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
