@@ -131,11 +131,11 @@ def attribute_single_kas_grant(
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha"]
+        temporary_namespace, "letter", abac.AttributeRule.ANY_OF, ["a"]
     )
     assert anyof.values
     (alpha,) = anyof.values
-    assert alpha.value == "alpha"
+    assert alpha.value == "a"
 
     # Then assign it to all clientIds = opentdf-sdk
     sc = otdfctl.scs_create(
@@ -157,7 +157,7 @@ def attribute_single_kas_grant(
         ],
     )
     sm = otdfctl.scs_map(sc, alpha)
-    assert sm.attribute_value.value == "alpha"
+    assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         kas_url1,
