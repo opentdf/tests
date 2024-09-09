@@ -20,7 +20,7 @@ on:
         type: string
         default: main
   schedule:
-    - cron: '30 6 * * *'
+    - cron: "30 6 * * *"
 jobs:
   cross-client-test:
     timeout-minutes: 60
@@ -41,20 +41,20 @@ jobs:
       - name: Set up Node 20
         uses: actions/setup-node@v3
         with:
-          node-version: '20.x'
+          node-version: "20.x"
           registry-url: https://npm.pkg.github.com
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
-          java-version: '11'
-          distribution: 'adopt'
+          java-version: "11"
+          distribution: "adopt"
           server-id: github
 
       ######## SPIN UP PLATFORM BACKEND #############
