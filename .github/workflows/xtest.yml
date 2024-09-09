@@ -101,8 +101,8 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          go mod edit -replace github.com/opentdf/platform/protocol/go=../otdf-test-platform/protocol/go
-          go mod edit -replace github.com/opentdf/platform/sdk=../otdf-test-platform/sdk
+          go mod edit -replace github.com/opentdf/platform/protocol/go=../${{ steps.start-platform.outputs.platform-working-dir }}/protocol/go
+          go mod edit -replace github.com/opentdf/platform/sdk=../${{ steps.start-platform.outputs.platform-working-dir }}/sdk
           go mod tidy
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
@@ -147,7 +147,7 @@ jobs:
           pytest test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          KEY_STORE_DIR: '../../${{ steps.start-platform.outputs.key-store-dir }}'
+          KEY_STORE_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Check out and start up platform with deps/containers
