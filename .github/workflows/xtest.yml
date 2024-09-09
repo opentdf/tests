@@ -60,7 +60,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: start-platform
-        uses: opentdf/platform/test/start-up-with-containers@fix/reusable-ci
+        uses: opentdf/platform/test/start-up-with-containers@main
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
 
@@ -151,7 +151,7 @@ jobs:
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Check out and start up platform with deps/containers
-        uses: opentdf/platform/test/start-additional-kas@fix/reusable-ci
+        uses: opentdf/platform/test/start-additional-kas@main
         with:
           kas-port: 8282
           kas-name: beta
