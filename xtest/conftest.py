@@ -86,7 +86,7 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     return ns
 
 
-PLATFORM_DIR = "../../platform"
+PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
 
 def load_cached_kas_keys() -> abac.PublicKey:
