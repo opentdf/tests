@@ -59,7 +59,7 @@ jobs:
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
-        id: start-platform  
+        id: start-platform
         uses: opentdf/platform/test/start-up-with-containers@fix/reusable-ci
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
@@ -147,7 +147,7 @@ jobs:
           pytest test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          KEY_STORE_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Check out and start up platform with deps/containers

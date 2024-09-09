@@ -1,352 +1,128 @@
 import os
 import filecmp
-import random
-import string
+import pytest
 
-import abac
 import tdfs
 
 
-otdfctl = abac.OpentdfCommandLineTool()
+cipherTexts = {}
 
 
-def load_kas_key(filepath: str, alg: str, kid: str) -> abac.KasPublicKey:
-    """Helper function to load a KAS public key from a file."""
-    try:
-        with open(filepath, "r") as file:
-            pem_data = file.read()
-            return abac.KasPublicKey(alg=alg, kid=kid, pem=pem_data)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {filepath}")
-    except Exception as e:
-        raise RuntimeError(f"Error loading KAS key from {filepath}: {e}")
-
-
-def load_cached_kas_keys() -> abac.PublicKey:
-    key_store_dir = os.getenv("KEY_STORE_DIR", "../../platform")
-    kas_rsa_path = os.path.join(key_store_dir, "kas-cert.pem")
-    kas_ec_path = os.path.join(key_store_dir, "kas-ec-cert.pem")
-    
-    keyset = [
-        load_kas_key(kas_rsa_path, abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048, "r1"),
-        load_kas_key(kas_ec_path, abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1, "e1")
-    ]
-    
-    return abac.PublicKey(cached=abac.KasPublicKeySet(keys=keyset))
-
-
-def test_autoconfigure_one_attribute(tmp_dir, pt_file):
-    # Create a new attribute in a random namespace
-    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
-    ns = otdfctl.namespace_create(random_ns)
-    anyof = otdfctl.attribute_create(ns, "letra", abac.AttributeRule.ANY_OF, ["alpha"])
-    assert anyof.values
-    (alpha,) = anyof.values
-    assert alpha.value == "alpha"
-
-    # Then assign it to all clientIds = opentdf-sdk
-    sc = otdfctl.scs_create(
-        [
-            abac.SubjectSet(
-                condition_groups=[
-                    abac.ConditionGroup(
-                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
-                        conditions=[
-                            abac.Condition(
-                                subject_external_selector_value=".clientId",
-                                operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf", "opentdf-sdk"],
-                            )
-                        ],
-                    )
-                ]
-            )
-        ],
-    )
-    sm = otdfctl.scs_map(sc, alpha)
-    assert sm.attribute_value.value == "alpha"
-    # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
-
+def test_autoconfigure_one_attribute(
+    attribute_single_kas_grant, encrypt_sdk, decrypt_sdk, tmp_dir, pt_file
+):
+    global counter
     # We have a grant for alpha to localhost kas. Now try to use it...
 
-    # Encrypt go
-    ct_file = f"{tmp_dir}test-abac-one.tdf"
-    tdfs.encrypt(
-        "go",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
-    )
+    if encrypt_sdk not in ["go", "java"]:
+        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+
+    sample_name = f"test-abac-one-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = f"{tmp_dir}{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        tdfs.encrypt(
+            encrypt_sdk,
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            fmt="ztdf",
+            attr_values=[attribute_single_kas_grant.values[0].fqn],
+        )
+        cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
 
-    rt_file = f"{tmp_dir}test-abac-one.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-one-2.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-one-3.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    rt_file = f"{tmp_dir}test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
-
-    # Encrypt java
-    ct_file = f"{tmp_dir}test-abac-one-2.tdf"
-    tdfs.encrypt(
-        "java",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[f"https://{random_ns}/attr/letra/value/alpha"],
-    )
-    manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 1
-
-    rt_file = f"{tmp_dir}test-abac-one-3.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-one-4.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-one-5.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
 
 
-def test_autoconfigure_two_kas_or(tmp_dir, pt_file):
-    # Create a new attribute in a random namespace
-    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
-    ns = otdfctl.namespace_create(random_ns)
-    anyof = otdfctl.attribute_create(
-        ns, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
-    )
-    assert anyof.values
-    alpha, beta = anyof.values
-    assert alpha.value == "alpha"
-    assert beta.value == "beta"
+def test_autoconfigure_two_kas_or(
+    attribute_two_kas_grant_or,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url1: str,
+    kas_url2: str,
+):
+    if encrypt_sdk not in ["go", "java"]:
+        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
-    # Then assign it to all clientIds = opentdf-sdk
-    sc = otdfctl.scs_create(
-        [
-            abac.SubjectSet(
-                condition_groups=[
-                    abac.ConditionGroup(
-                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
-                        conditions=[
-                            abac.Condition(
-                                subject_external_selector_value=".clientId",
-                                operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf", "opentdf-sdk"],
-                            )
-                        ],
-                    )
-                ]
-            )
-        ],
-    )
-    sm = otdfctl.scs_map(sc, alpha)
-    assert sm.attribute_value.value == "alpha"
-    # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
-
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8282/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
-
-    # We have a grant for alpha to localhost kas. Now try to use it...
-    # encrypt go
-    ct_file = f"{tmp_dir}test-abac-or.tdf"
-    tdfs.encrypt(
-        "go",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[
-            f"https://{random_ns}/attr/letra/value/alpha",
-            f"https://{random_ns}/attr/letra/value/beta",
-        ],
-    )
+    sample_name = f"test-abac-two-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = f"{tmp_dir}/{sample_name}.tdf"
+        tdfs.encrypt(
+            encrypt_sdk,
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            fmt="ztdf",
+            attr_values=[
+                attribute_two_kas_grant_or.values[0].fqn,
+                attribute_two_kas_grant_or.values[1].fqn,
+            ],
+        )
+        cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set(["http://localhost:8080/kas", "http://localhost:8282/kas"]) == set(
+    assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
 
-    rt_file = f"{tmp_dir}test-abac-or.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-or-2.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-or-3.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    rt_file = f"{tmp_dir}test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
-
-    # encrypt java
-    ct_file = f"{tmp_dir}test-abac-or-2.tdf"
-    tdfs.encrypt(
-        "java",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[
-            f"https://{random_ns}/attr/letra/value/alpha",
-            f"https://{random_ns}/attr/letra/value/beta",
-        ],
-    )
-    manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 2
-    assert (
-        manifest.encryptionInformation.keyAccess[0].sid
-        == manifest.encryptionInformation.keyAccess[1].sid
-    )
-    assert set(["http://localhost:8080/kas", "http://localhost:8282/kas"]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
-
-    rt_file = f"{tmp_dir}test-abac-or-3.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-or-4.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-or-5.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
 
 
-def test_autoconfigure_double_kas_and(tmp_dir, pt_file):
-    # Create a new attribute in a random namespace
-    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
-    ns = otdfctl.namespace_create(random_ns)
-    allof = otdfctl.attribute_create(
-        ns, "ot", abac.AttributeRule.ALL_OF, ["alef", "bet", "gimmel"]
-    )
-    assert allof.values
-    alef, bet, gimmel = allof.values
-    assert alef.value == "alef"
-    assert bet.value == "bet"
-    assert gimmel.value == "gimmel"
+def test_autoconfigure_double_kas_and(
+    attribute_two_kas_grant_and,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url1: str,
+    kas_url2: str,
+):
+    if encrypt_sdk not in ["go", "java"]:
+        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
-    # Then assign it to all clientIds = opentdf-sdk
-    sc = otdfctl.scs_create(
-        [
-            abac.SubjectSet(
-                condition_groups=[
-                    abac.ConditionGroup(
-                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
-                        conditions=[
-                            abac.Condition(
-                                subject_external_selector_value=".clientId",
-                                operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf", "opentdf-sdk"],
-                            )
-                        ],
-                    )
-                ]
-            )
-        ],
-    )
-    sm1 = otdfctl.scs_map(sc, alef)
-    assert sm1.attribute_value.value == "alef"
-    sm2 = otdfctl.scs_map(sc, bet)
-    assert sm2.attribute_value.value == "bet"
-    # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8080/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alef)
+    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = f"{tmp_dir}/{sample_name}.tdf"
+        tdfs.encrypt(
+            encrypt_sdk,
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            fmt="ztdf",
+            attr_values=[
+                attribute_two_kas_grant_and.values[0].fqn,
+                attribute_two_kas_grant_and.values[1].fqn,
+            ],
+        )
+        cipherTexts[sample_name] = ct_file
 
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        "http://localhost:8282/kas",
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, bet)
-
-    # We have a grant for alpha to localhost kas. Now try to use it...
-    # encrypt go
-    ct_file = f"{tmp_dir}test-abac-double.tdf"
-    tdfs.encrypt(
-        "go",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[
-            f"https://{random_ns}/attr/ot/value/alef",
-            f"https://{random_ns}/attr/ot/value/bet",
-        ],
-    )
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set(["http://localhost:8080/kas", "http://localhost:8282/kas"]) == set(
+    assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-
-    rt_file = f"{tmp_dir}test-abac-double.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-double-2.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-double-3.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
+    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
-
-    # encrypt java
-    ct_file = f"{tmp_dir}test-abac-double-2.tdf"
-    tdfs.encrypt(
-        "java",
-        pt_file,
-        ct_file,
-        mime_type="text/plain",
-        fmt="ztdf",
-        attr_values=[
-            f"https://{random_ns}/attr/ot/value/alef",
-            f"https://{random_ns}/attr/ot/value/bet",
-        ],
-    )
-    manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 2
-    assert (
-        manifest.encryptionInformation.keyAccess[0].sid
-        != manifest.encryptionInformation.keyAccess[1].sid
-    )
-    assert set(["http://localhost:8080/kas", "http://localhost:8282/kas"]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
-
-    rt_file = f"{tmp_dir}test-abac-double-3.untdf"
-    rt_file_2 = f"{tmp_dir}test-abac-double-4.untdf"
-    rt_file_3 = f"{tmp_dir}test-abac-double-5.untdf"
-    tdfs.decrypt("go", ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
-    tdfs.decrypt("java", ct_file, rt_file_2, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_2)
-    tdfs.decrypt("js", ct_file, rt_file_3, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file_3)
