@@ -160,6 +160,8 @@ jobs:
         run: |-
           pytest test_abac.py
         working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.start-platform.outputs.platform-working-dir }}'
 ###### TODO: move these unbound tests to v2 platform
 # unbound-test-js:
 #   timeout-minutes: 60
