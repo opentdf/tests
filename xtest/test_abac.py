@@ -11,7 +11,7 @@ otdfctl = abac.OpentdfCommandLineTool()
 
 def load_cached_kas_keys() -> abac.PublicKey:
     keyset: list[abac.KasPublicKey] = []
-    with open("../../platform/kas-cert.pem", "r") as rsaFile:
+    with open("../../otdf-test-platform/kas-cert.pem", "r") as rsaFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048,
@@ -19,7 +19,7 @@ def load_cached_kas_keys() -> abac.PublicKey:
                 pem=rsaFile.read(),
             )
         )
-    with open("../../platform/kas-ec-cert.pem", "r") as ecFile:
+    with open("../../otdf-test-platform/kas-ec-cert.pem", "r") as ecFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1,
