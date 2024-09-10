@@ -25,3 +25,4 @@ abacus-and-api-integration-tests/e2e/test-results
 abacus-and-api-integration-tests/e2e/playwright-report
 __pycache__/
 xtest/sdk/java/cmdline.jar
+/xtest/platform/
