@@ -124,7 +124,7 @@ def kas_url2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -167,7 +167,7 @@ def attribute_single_kas_grant(
     return anyof
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def attribute_two_kas_grant_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -218,7 +218,7 @@ def attribute_two_kas_grant_or(
     return anyof
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def attribute_two_kas_grant_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -363,7 +363,7 @@ def attr_and_value_kas_grants_or(
     
     return anyof
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def attr_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
