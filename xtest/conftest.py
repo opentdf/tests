@@ -85,6 +85,7 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     ns = otdfctl.namespace_create(random_ns)
     return ns
 
+
 @pytest.fixture(scope="function")
 def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     # Create a new attribute in a random namespace
@@ -280,14 +281,15 @@ def attribute_two_kas_grant_and(
     return allof
 
 
-
 @pytest.fixture(scope="module")
 def one_attribute_attr_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"])
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+    )
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -319,8 +321,9 @@ def one_attribute_attr_kas_grant(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
-    
+
     return anyof
+
 
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
@@ -329,9 +332,14 @@ def attr_and_value_kas_grants_or(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "attrorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    anyof = otdfctl.attribute_create(
+        temporary_namespace,
+        "attrorvalgrant",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
+    )
     assert anyof.values
-    (alpha,beta) = anyof.values
+    (alpha, beta) = anyof.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
 
@@ -367,8 +375,9 @@ def attr_and_value_kas_grants_or(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
-    
+
     return anyof
+
 
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_and(
@@ -377,9 +386,14 @@ def attr_and_value_kas_grants_and(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(temporary_namespace, "attrandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "attrandvalgrant",
+        abac.AttributeRule.ALL_OF,
+        ["alpha", "beta"],
+    )
     assert allof.values
-    (alpha,beta) = allof.values
+    (alpha, beta) = allof.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
 
@@ -417,8 +431,9 @@ def attr_and_value_kas_grants_and(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
-    
+
     return allof
+
 
 @pytest.fixture(scope="function")
 def one_attribute_ns_kas_grant(
@@ -426,7 +441,9 @@ def one_attribute_ns_kas_grant(
     kas_url2: str,
     more_temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
+    anyof = otdfctl.attribute_create(
+        more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+    )
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -458,8 +475,9 @@ def one_attribute_ns_kas_grant(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
-    
+
     return anyof
+
 
 @pytest.fixture(scope="function")
 def ns_and_value_kas_grants_or(
@@ -468,9 +486,14 @@ def ns_and_value_kas_grants_or(
     kas_url2: str,
     more_temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(more_temporary_namespace, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    anyof = otdfctl.attribute_create(
+        more_temporary_namespace,
+        "nsorvalgrant",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
+    )
     assert anyof.values
-    (alpha,beta) = anyof.values
+    (alpha, beta) = anyof.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
 
@@ -506,8 +529,9 @@ def ns_and_value_kas_grants_or(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
-    
+
     return anyof
+
 
 @pytest.fixture(scope="function")
 def ns_and_value_kas_grants_and(
@@ -516,9 +540,14 @@ def ns_and_value_kas_grants_and(
     kas_url2: str,
     more_temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(more_temporary_namespace, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    allof = otdfctl.attribute_create(
+        more_temporary_namespace,
+        "nsandvalgrant",
+        abac.AttributeRule.ALL_OF,
+        ["alpha", "beta"],
+    )
     assert allof.values
-    (alpha,beta) = allof.values
+    (alpha, beta) = allof.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
 
@@ -556,5 +585,5 @@ def ns_and_value_kas_grants_and(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
-    
+
     return allof

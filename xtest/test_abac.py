@@ -133,12 +133,14 @@ def test_autoconfigure_one_attribute_attr_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
     # We have a grant for letra to localhost kas. Now try to use it...
+
+    print(one_attribute_attr_kas_grant.values)
 
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -160,10 +162,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     manifest = tdfs.manifest(ct_file)
     print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert (
-            manifest.encryptionInformation.keyAccess[0].url
-            == kas_url2
-        )
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
     rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -176,8 +175,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     tmp_dir,
     pt_file,
     kas_url1: str,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
@@ -225,8 +224,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     tmp_dir,
     pt_file,
     kas_url1: str,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
@@ -270,10 +269,12 @@ def test_autoconfigure_one_attribute_ns_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure or namespace grants [{encrypt_sdk}]")
+        pytest.skip(
+            f"sdk doesn't yet support autoconfigure or namespace grants [{encrypt_sdk}]"
+        )
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
@@ -296,10 +297,7 @@ def test_autoconfigure_one_attribute_ns_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert (
-            manifest.encryptionInformation.keyAccess[0].url
-            == kas_url2
-        )
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
     rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -312,8 +310,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     tmp_dir,
     pt_file,
     kas_url1: str,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
@@ -358,8 +356,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     tmp_dir,
     pt_file,
     kas_url1: str,
-    kas_url2: str,):
-
+    kas_url2: str,
+):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
@@ -395,5 +393,3 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
-
-
