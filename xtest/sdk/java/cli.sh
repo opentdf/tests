@@ -14,7 +14,7 @@ args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"
   "--platform-endpoint=$PLATFORMENDPOINT"
-  -i
+  -h
 )
 COMMAND="$1"
 if [ "$4" == "nano" ]; then
