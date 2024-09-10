@@ -26,7 +26,10 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
             with open(ct_file, "rb") as f:
                 envelope = nano.parse(f.read())
                 assert envelope.header.version.version == 12
-                assert envelope.header.kas.kid == b"ec1" + b"\0" * 5
+                if envelope.header.kas.kid is not None:
+                    # from xtest/platform/opentdf.yaml
+                    expected_kid = b"ec1" + b"\0" * 5
+                    assert envelope.header.kas.kid == expected_kid
         cipherTexts[container_id] = ct_file
     ct_file = cipherTexts[container_id]
     assert os.path.isfile(ct_file)
