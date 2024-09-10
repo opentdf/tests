@@ -10,9 +10,9 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
-cmd=("LOGLEVEL=debug" "$SCRIPT_DIR"/otdfctl)
+cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=("LOGLEVEL=debug" go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
 fi
 
 cmd+=(--json)
