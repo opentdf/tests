@@ -57,55 +57,14 @@ jobs:
           distribution: "adopt"
           server-id: github
 
-    ######## CHECKOUT THE PLATFORM #############
-      - name: Check out platform
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      ######## SPIN UP PLATFORM BACKEND #############
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@main
         with:
-          repository: opentdf/platform
-          path: platform
-          ref: ${{ env.PLATFORM_REF }}
-      - name: Set up go
-        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7
-        with:
-          go-version: "1.22.3"
-          check-latest: false
-          cache-dependency-path: |
-            platform/service/go.sum
-            platform/examples/go.sum
-            platform/protocol/go/go.sum
-            platform/sdk/go.sum
+          platform-ref: ${{ env.PLATFORM_REF }}
 
-      ######## SPIN UP BACKEND #############
-      - run: |
-          .github/scripts/init-temp-keys.sh
-          cp opentdf-dev.yaml opentdf.yaml
-        working-directory: platform
-      - name: Added Trusted Certs
-        run: |
-          sudo chmod -R 777 ./keys
-          sudo apt-get install -y ca-certificates
-          sudo cp ./keys/localhost.crt /usr/local/share/ca-certificates
-          sudo update-ca-certificates
-        working-directory: platform
-      - run: docker compose up -d --wait --wait-timeout 240
-        working-directory: platform
-      - run: go run ./service provision keycloak
-        working-directory: platform
-      - run: go run ./service provision fixtures
-        working-directory: platform
-      - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
-        name: start server in background
-        with:
-          run: >
-            go build -o opentdf -v service/main.go
-            && .github/scripts/watch.sh opentdf.yaml ./opentdf start
-          wait-on: |
-            tcp:localhost:8080
-          log-output-if: true
-          wait-for: 90s
-          working-directory: platform
-
-    ######## CHECKOUT CLIENT-WEB #############
+      ######## CHECKOUT CLIENT-WEB #############
       - name: Check out client-web
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -113,7 +72,7 @@ jobs:
           path: client-web
           ref: ${{ env.JS_REF }}
 
-    ######## SETUP THE JS CLI #############
+      ######## SETUP THE JS CLI #############
       - name: build the js cli
         run: |
           make clean
@@ -131,7 +90,7 @@ jobs:
           npm list
         working-directory: otdftests/xtest
 
-  ######## CHECKOUT GO CLI #############
+      ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -139,17 +98,17 @@ jobs:
           path: otdfctl
           ref: ${{ env.OTDFCTL_REF }}
 
-    ######## SETUP THE GO CLI #############
+      ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          go mod edit -replace github.com/opentdf/platform/protocol/go=../platform/protocol/go
-          go mod edit -replace github.com/opentdf/platform/sdk=../platform/sdk
+          go mod edit -replace github.com/opentdf/platform/protocol/go=../${{ steps.run-platform.outputs.platform-working-dir }}/protocol/go
+          go mod edit -replace github.com/opentdf/platform/sdk=../${{ steps.run-platform.outputs.platform-working-dir }}/sdk
           go mod tidy
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
         working-directory: otdfctl
 
-  ####### CHECKOUT JAVA SDK ##############
+      ####### CHECKOUT JAVA SDK ##############
 
       - name: Check out java-sdk
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -158,7 +117,7 @@ jobs:
           path: java-sdk
           ref: ${{ env.JAVA_REF }}
 
-  ####### SETUP JAVA CLI ##############
+      ####### SETUP JAVA CLI ##############
 
       - name: Build java cli
         run: |
@@ -173,7 +132,7 @@ jobs:
           cp cmdline/target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
         working-directory: java-sdk
 
-    ######## RUN THE TESTS #############
+      ######## RUN THE TESTS #############
       - name: Install test dependencies
         run: |-
           pip install -r requirements.txt
@@ -187,91 +146,83 @@ jobs:
         run: |-
           pytest test_tdfs.py
         working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
-    ######## ATTRIBUTE BASED CONFIGURATION #############
-      - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
-        name: start another KAS server in background
+      ######## ATTRIBUTE BASED CONFIGURATION #############
+      - name: Check out and start up platform with deps/containers
+        uses: opentdf/platform/test/start-additional-kas@main
         with:
-          run: >
-            <opentdf.yaml >opentdf-beta.yaml yq e '
-              (.server.port = 8282)
-              | (.mode = ["kas"])
-              | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
-            '
-            && .github/scripts/watch.sh opentdf-beta.yaml ./opentdf --config-file ./opentdf-beta.yaml start
-          wait-on: |
-            tcp:localhost:8282
-          log-output-if: true
-          wait-for: 90s
-          working-directory: platform
+          kas-port: 8282
+          kas-name: beta
 
       - name: Run attribute based configuration tests
         run: |-
           pytest test_abac.py
         working-directory: otdftests/xtest
-
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 ###### TODO: move these unbound tests to v2 platform
-  # unbound-test-js:
-  #   timeout-minutes: 60
-  #   runs-on: ubuntu-latest
-  #   defaults:
-  #     run:
-  #       working-directory: xtest
-  #   permissions:
-  #     contents: read
-  #     packages: read
-  #   strategy:
-  #     matrix:
-  #       kasversion: [ python-kas, go-kas ]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Set kas-related environment variable
-  #       shell: bash
-  #       run: echo "KAS_VERSION=${{ matrix.kasversion }}" >> $GITHUB_ENV
-  #     - name: Set up Node 18
-  #       uses: actions/setup-node@v3
-  #       with:
-  #         node-version: "18.x"
-  #         registry-url: https://npm.pkg.github.com
-  #     - name: Set up Python 3.10
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.10"
-  #     # todo: install and activate virtual env for python?
-  #     - name: update packages
-  #       run: |-
-  #         npm ci
-  #         npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
-  #         npm list
-  #         pip3 install -r requirements.txt
-  #       env:
-  #         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     - uses: yokawasa/action-setup-kube-tools@v0.9.2
-  #       with:
-  #         setup-tools: |
-  #           kubectl
-  #           helm
-  #           tilt
-  #         # This should be in sync with the minikube-deployed kube version below
-  #         kubectl: "1.24.1"
-  #         helm: "3.9.2"
-  #         tilt: "0.31.2"
-  #     - run: |
-  #         kubectl version --client
-  #         kustomize version
-  #         tilt version
-  #     - name: start minikube
-  #       id: minikube
-  #       uses: medyagh/setup-minikube@master
-  #       with:
-  #         minikube-version: 1.26.0
-  #         # This should be in sync with the setup-tools version above
-  #         kubernetes-version: 1.24.1
-  #     - name: Run tilt
-  #       run: |-
-  #         [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
-  #         | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
-  #         echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
-  #         kubectl version
-  #         tilt ci -f Tiltfile.unbound-js-sdk
-  
+# unbound-test-js:
+#   timeout-minutes: 60
+#   runs-on: ubuntu-latest
+#   defaults:
+#     run:
+#       working-directory: xtest
+#   permissions:
+#     contents: read
+#     packages: read
+#   strategy:
+#     matrix:
+#       kasversion: [ python-kas, go-kas ]
+#   steps:
+#     - uses: actions/checkout@v3
+#     - name: Set kas-related environment variable
+#       shell: bash
+#       run: echo "KAS_VERSION=${{ matrix.kasversion }}" >> $GITHUB_ENV
+#     - name: Set up Node 18
+#       uses: actions/setup-node@v3
+#       with:
+#         node-version: "18.x"
+#         registry-url: https://npm.pkg.github.com
+#     - name: Set up Python 3.10
+#       uses: actions/setup-python@v4
+#       with:
+#         python-version: "3.10"
+#     # todo: install and activate virtual env for python?
+#     - name: update packages
+#       run: |-
+#         npm ci
+#         npm install @opentdf/cli@${{ github.event.client_payload.version }} @opentdf/client@${{ github.event.client_payload.version }}
+#         npm list
+#         pip3 install -r requirements.txt
+#       env:
+#         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#     - uses: yokawasa/action-setup-kube-tools@v0.9.2
+#       with:
+#         setup-tools: |
+#           kubectl
+#           helm
+#           tilt
+#         # This should be in sync with the minikube-deployed kube version below
+#         kubectl: "1.24.1"
+#         helm: "3.9.2"
+#         tilt: "0.31.2"
+#     - run: |
+#         kubectl version --client
+#         kustomize version
+#         tilt version
+#     - name: start minikube
+#       id: minikube
+#       uses: medyagh/setup-minikube@master
+#       with:
+#         minikube-version: 1.26.0
+#         # This should be in sync with the setup-tools version above
+#         kubernetes-version: 1.24.1
+#     - name: Run tilt
+#       run: |-
+#         [[ -z "${{github.event.inputs.backendVersion}}" ]] && export BACKEND_LATEST_VERSION=$(skopeo list-tags docker://ghcr.io/opentdf/charts/backend \
+#         | python3 -c "import sys, json; sys.stdout.write([tag for tag in json.load(sys.stdin)['Tags'] if not tag.endswith('.sig')][-1])") || export BACKEND_LATEST_VERSION="${{github.event.inputs.backendVersion}}"
+#         echo "Testing Backend [$BACKEND_LATEST_VERSION]">>$GITHUB_STEP_SUMMARY
+#         kubectl version
+#         tilt ci -f Tiltfile.unbound-js-sdk

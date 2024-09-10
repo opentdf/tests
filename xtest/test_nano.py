@@ -156,6 +156,45 @@ f3 ce ec c2 68 7d fd 38 4d 49 ef 57 9a c7 45 81 e4 6f ab 4b
 50 a2 43 08 71 78 43 a2
 66 8e 2b fd 64 c3 ed 09 1f a6 e8 a2 # mac"""
 
+whole_go_ecdsa = """## header
+4c 31 4c # version
+
+# kas
+10 12 6c 6f 63 61 6c 68 6f 73 74 3a 38 30 38 30 2f 6b 61 73
+65 31
+80 # binding_mode
+01 # symmetric_and_payload_config
+
+# policy
+02 00 da d4 c0 1d 5c b9 0a 9f 57 ef 3a cf 3c fe 60 16 1e 7d
+f6 f2 91 4f c9 dc 13 58 55 3b 8b 4b a7 ae a2 be d0 cc 6c d2
+3a a2 1d c7 c6 08 d8 2f 67 55 60 1f 2a 46 bc e3 48 3d ea c2
+63 96 6a ea 50 8e 3e 0c 30 21 f9 a7 b5 5e db 2d 1a cc 86 c3
+7b e7 92 52 f5 07 24 a5 7d 6c ff 2a 41 64 99 c9 2c 96 18 51
+23 b6 7e 79 d2 b0 c6 dd 1d 72 95 d0 77 6e a6 f6 f0 93 93 1c
+fb 76 c4 35 28 32 17 4f 12 7f 4e 23 06 6b 81 fc a2 48 00 e7
+3e 8c 7d b5 17 b9 63 d2 4a a2 4c ff 5a 65 45 4a 22 17 19 58
+2c aa 69 f0 b8 a4 a4 73 5e 45 a0 d0 83 11 99 25 e9 9a ff 75
+8e 96 1c 67 7c a3 52 10 3d 2b 12 db d6 bc 07 0a 80 97 60 32
+9e 4e ab bc bb d2 fd b3 ea 36 a6 b1 3d 5b ce 5e 07 ac e7 de
+c2
+
+# ecdsa_binding
+20 d9 ea 6d 36 2c b6 9d 3f 98 03 2a 44 b7 dc 72 c1 d1 da 2b
+c7 72 fd 16 13 a5 89 7d 64 11 f4 64 86 20 cf dc e3 15 ca be
+f7 6b 9f 6b 28 99 21 a9 92 cb e1 28 2a 81 eb 28 0a 49 a4 50
+ac 76 28 2c 3f bc
+
+# ephemeral_key
+03 0f 0e f2 86 90 92 61 21 86 14 84 80 c5 73 a1 3c a0 23 9b
+e3 02 c4 71 6d b4 ee 6f 57 b3 01 95 16
+
+## payload
+00 00 20 # length
+f8 7d cc # iv
+d4 3e 71 76 35 27 8d bd 62 af 42 04 9e af c6 5f c0 # ciphertext
+df d4 f2 2e 5f fe 14 49 79 a3 e5 5a # mac"""
+
 
 def test_whole_go():
     h0 = nano.header_format.parse(nano.dec_hex_w_comments(whole_go))
@@ -163,6 +202,9 @@ def test_whole_go():
 
     e0 = nano.parse(nano.dec_hex_w_comments(whole_go))
     assert e0.pretty() == whole_go
+
+    e1 = nano.parse(nano.dec_hex_w_comments(whole_go_ecdsa))
+    assert e1.pretty() == whole_go_ecdsa
 
 
 whole_js = """## header
@@ -199,6 +241,38 @@ f4 0a bc 2f a7 76 46 83
 21 28 13 90 09 89 cd b5 a4 26 3a 36 # mac"""
 
 
+whole_js_ecdsa = """## header
+4c 31 4c # version
+
+# kas
+10 12 6c 6f 63 61 6c 68 6f 73 74 3a 38 30 38 30 2f 6b 61 73
+65 31
+80 # binding_mode
+01 # symmetric_and_payload_config
+
+# policy
+02 00 64 e5 2f 49 3a 2b 25 84 13 a5 b6 b5 eb c9 de ff 7a 50
+46 12 b5 e6 df 03 85 ba 8f 76 36 22 24 fe 2c ed c6 55 9e 12
+b6 4e 75 20 0f 51 ac fa 20 f5 19 5c c8 6d 0b 82 3f d1 e3 2d
+90 b6 f1 d6 d6 ec 80 33 2b 98 e1 71 d2 73 9b 5c 00 1f 1f 5e
+d3 88 e4 e4 55 25 f0 89 8c 15 55 30 2b d4 5e 3c 3f 54 c4 8f
+6c cb 31
+00 00 # ecdsa_binding
+
+# ephemeral_key
+02 3f 53 a6 1d 06 8c a4 9a 2a a5 eb d1 3c dd cc e5 64 1b 8a
+f6 16 97 a1 88 eb ce dc 6e b2 5f ea 17
+
+## payload
+00 00 21 # length
+00 00 01 # iv
+02 9a ea cb 1f 7d 4d 31 1c 20 12 9c 36 81 a8 af f6 fb # ciphertext
+77 55 19 d5 02 2e a9 25 ae 77 ec 9e # mac"""
+
+
 def test_whole_js():
     e0 = nano.parse(nano.dec_hex_w_comments(whole_js))
     assert e0.pretty() == whole_js
+
+    e1 = nano.parse(nano.dec_hex_w_comments(whole_js_ecdsa))
+    assert e1.pretty() == whole_js_ecdsa
