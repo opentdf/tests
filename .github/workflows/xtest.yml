@@ -32,7 +32,7 @@ jobs:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
-      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
+      JAVA_REF: "${{ inputs.java-ref || 'single-module' }}"
     steps:
       - uses: actions/checkout@v3
         with:
@@ -129,7 +129,7 @@ jobs:
 
       - name: Move java cli to xtest
         run: |-
-          cp cmdline/target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
+          cp target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
         working-directory: java-sdk
 
       ######## RUN THE TESTS #############
