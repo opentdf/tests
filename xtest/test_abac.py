@@ -310,7 +310,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     kas_url1: str,
     kas_url2: str,):
 
-    if encrypt_sdk not in ["go", "java"]:
+    if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
     # We have a grant for letra to localhost kas. Now try to use it...
@@ -356,7 +356,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     kas_url1: str,
     kas_url2: str,):
 
-    if encrypt_sdk not in ["go", "java"]:
+    if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
     # We have a grant for letra to localhost kas. Now try to use it...
