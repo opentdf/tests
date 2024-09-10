@@ -158,6 +158,7 @@ def test_autoconfigure_one_attribute_attr_grant(
         cipherTexts[sample_name] = ct_file
 
     manifest = tdfs.manifest(ct_file)
+    print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert (
             manifest.encryptionInformation.keyAccess[0].url
@@ -182,6 +183,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
+    print(attr_and_value_kas_grants_or.values)
+
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
@@ -201,6 +204,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         cipherTexts[sample_name] = ct_file
 
     manifest = tdfs.manifest(ct_file)
+    print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid

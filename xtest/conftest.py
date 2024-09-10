@@ -78,8 +78,15 @@ def otdfctl():
     return _otdfctl
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+    # Create a new attribute in a random namespace
+    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
+    ns = otdfctl.namespace_create(random_ns)
+    return ns
+
+@pytest.fixture(scope="function")
+def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
@@ -124,7 +131,7 @@ def kas_url2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -167,7 +174,7 @@ def attribute_single_kas_grant(
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def attribute_two_kas_grant_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -218,7 +225,7 @@ def attribute_two_kas_grant_or(
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def attribute_two_kas_grant_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -274,7 +281,7 @@ def attribute_two_kas_grant_and(
 
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def one_attribute_attr_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url2: str,
@@ -315,7 +322,7 @@ def one_attribute_attr_kas_grant(
     
     return anyof
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
@@ -417,9 +424,9 @@ def attr_and_value_kas_grants_and(
 def one_attribute_ns_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
+    more_temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
+    anyof = otdfctl.attribute_create(more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -450,7 +457,7 @@ def one_attribute_ns_kas_grant(
         kas_url2,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
     
     return anyof
 
@@ -459,9 +466,9 @@ def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
+    more_temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    anyof = otdfctl.attribute_create(more_temporary_namespace, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
     assert anyof.values
     (alpha,beta) = anyof.values
     assert alpha.value == "alpha"
@@ -498,7 +505,7 @@ def ns_and_value_kas_grants_or(
         kas_url2,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
     
     return anyof
 
@@ -507,9 +514,9 @@ def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
+    more_temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(temporary_namespace, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    allof = otdfctl.attribute_create(more_temporary_namespace, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
     assert allof.values
     (alpha,beta) = allof.values
     assert alpha.value == "alpha"
@@ -548,6 +555,6 @@ def ns_and_value_kas_grants_and(
         kas_url2,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
     
     return allof
