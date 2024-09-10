@@ -280,7 +280,7 @@ def one_attribute_attr_kas_grant(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha"])
+    anyof = otdfctl.attribute_create(temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"])
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -322,7 +322,7 @@ def attr_and_value_kas_grants_or(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    anyof = otdfctl.attribute_create(temporary_namespace, "attrorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
     assert anyof.values
     (alpha,beta) = anyof.values
     assert alpha.value == "alpha"
@@ -370,7 +370,7 @@ def attr_and_value_kas_grants_and(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    allof = otdfctl.attribute_create(temporary_namespace, "attrandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
     assert allof.values
     (alpha,beta) = allof.values
     assert alpha.value == "alpha"
@@ -419,7 +419,7 @@ def one_attribute_ns_kas_grant(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha"])
+    anyof = otdfctl.attribute_create(temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -461,7 +461,7 @@ def ns_and_value_kas_grants_or(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    anyof = otdfctl.attribute_create(temporary_namespace, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
     assert anyof.values
     (alpha,beta) = anyof.values
     assert alpha.value == "alpha"
@@ -509,7 +509,7 @@ def ns_and_value_kas_grants_and(
     kas_url2: str,
     temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(temporary_namespace, "letra", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    allof = otdfctl.attribute_create(temporary_namespace, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
     assert allof.values
     (alpha,beta) = allof.values
     assert alpha.value == "alpha"
