@@ -14,7 +14,7 @@
 brew install maven
 ```
 
-## Platform Setup (macOS)
+## Platform Setup
 
 ### Install SDKs
 
@@ -24,20 +24,28 @@ brew install maven
 git clone https://github.com/opentdf/java-sdk.git
 cd java-sdk
 mvn --batch-mode clean install -DskipTests
-mv java-sdk/cmdline/target/cmdline.jar sdk/java/cmdline.jar
+mv cmdline/target/cmdline.jar ../sdk/java/cmdline.jar
 ```
 
-### Bringing up the Platform Backend
+#### Go SDK wrapped by otdfctl
 
-1. **Checkout Platform Repository**
-   ```shell
-   git clone https://github.com/opentdf/platform
-   cd platform
-   ```
-2. **Initialize Platform Configuration**
+```shell
+git clone https://github.com/opentdf/platform
+git clone https://github.com/opentdf/otdfctl.git
+cd otdfctl
+go mod edit -replace github.com/opentdf/platform/protocol/go=../platform/protocol/go
+go mod edit -replace github.com/opentdf/platform/sdk=../platform/sdk
+go mod tidy
+go build .
+mv otdfctl ../sdk/go/otdfctl
+```
+
+### Platform Backend
+
+1. **Initialize Platform Configuration**
    ```shell
    cp opentdf-dev.yaml opentdf.yaml
-   sed 's/e1/ec1/g' opentdf.yaml
+   sed -i '' 's/e1/ec1/g' opentdf.yaml
    .github/scripts/init-temp-keys.sh
    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./keys/localhost.crt
    ```
@@ -45,19 +53,19 @@ mv java-sdk/cmdline/target/cmdline.jar sdk/java/cmdline.jar
      ```shell
      sudo security delete-certificate -c "localhost"
      ```
-3. **Start Background Services**
+2. **Start Background Services**
    ```shell
    docker compose up
    ```
-4. **Provision Keycloak**
+3. **Provision Keycloak**
    ```shell
    go run ./service provision keycloak
    ```
-5. **Add Sample Attributes and Metadata**
+4. **Add Sample Attributes and Metadata**
    ```shell
    go run ./service provision fixtures
    ```
-6. **Start Server in Background**
+5. **Start Server in Background**
    ```shell
    go run ./service start
    ```
