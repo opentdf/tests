@@ -417,9 +417,9 @@ def attr_and_value_kas_grants_and(
 def one_attribute_ns_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
+    ns = temporary_namespace(otdfctl)
+    anyof = otdfctl.attribute_create(ns, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"])
     assert anyof.values
     (alpha,) = anyof.values
     assert alpha.value == "alpha"
@@ -459,9 +459,9 @@ def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
 ):
-    anyof = otdfctl.attribute_create(temporary_namespace, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
+    ns = temporary_namespace(otdfctl)
+    anyof = otdfctl.attribute_create(ns, "nsorvalgrant", abac.AttributeRule.ANY_OF, ["alpha", "beta"])
     assert anyof.values
     (alpha,beta) = anyof.values
     assert alpha.value == "alpha"
@@ -507,9 +507,9 @@ def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url1: str,
     kas_url2: str,
-    temporary_namespace: abac.Namespace,
 ):
-    allof = otdfctl.attribute_create(temporary_namespace, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
+    ns = temporary_namespace(otdfctl)
+    allof = otdfctl.attribute_create(ns, "nsandvalgrant", abac.AttributeRule.ALL_OF, ["alpha", "beta"])
     assert allof.values
     (alpha,beta) = allof.values
     assert alpha.value == "alpha"
