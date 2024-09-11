@@ -80,14 +80,11 @@ def otdfctl():
 
 @pytest.fixture(scope="module")
 def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+    return create_temp_namesapce(otdfctl)
+
+
+def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
     # Create a new attribute in a random namespace
-    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
-    ns = otdfctl.namespace_create(random_ns)
-    return ns
-
-
-@pytest.fixture(scope="function")
-def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
     return ns
@@ -122,19 +119,34 @@ def load_cached_kas_keys() -> abac.PublicKey:
 
 
 @pytest.fixture(scope="session")
-def kas_url1():
+def kas_url_default():
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
 @pytest.fixture(scope="session")
-def kas_url2():
+def kas_url_value1():
+    return os.getenv("KASURL1", "http://localhost:8181/kas")
+
+
+@pytest.fixture(scope="session")
+def kas_url_value2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
+
+
+@pytest.fixture(scope="session")
+def kas_url_attr():
+    return os.getenv("KASURL3", "http://localhost:8383/kas")
+
+
+@pytest.fixture(scope="session")
+def kas_url_ns():
+    return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
 @pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
+    kas_url_value1: str,
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
@@ -167,7 +179,7 @@ def attribute_single_kas_grant(
     assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
@@ -177,8 +189,8 @@ def attribute_single_kas_grant(
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_or(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_value1: str,
+    kas_url_value2: str,
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
@@ -212,13 +224,13 @@ def attribute_two_kas_grant_or(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_value2,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
@@ -228,8 +240,8 @@ def attribute_two_kas_grant_or(
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_and(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_value1: str,
+    kas_url_value2: str,
     temporary_namespace: abac.Namespace,
 ):
     allof = otdfctl.attribute_create(
@@ -266,13 +278,13 @@ def attribute_two_kas_grant_and(
     assert sm2.attribute_value.value == "bet"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alef)
 
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_value2,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, bet)
@@ -283,7 +295,7 @@ def attribute_two_kas_grant_and(
 @pytest.fixture(scope="module")
 def one_attribute_attr_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url2: str,
+    kas_url_attr: str,
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
@@ -316,7 +328,7 @@ def one_attribute_attr_kas_grant(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_attr,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
@@ -327,8 +339,8 @@ def one_attribute_attr_kas_grant(
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_attr: str,
+    kas_url_value1: str,
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
@@ -365,12 +377,12 @@ def attr_and_value_kas_grants_or(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_attr,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_attr(kas_entry_attr, anyof)
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
@@ -381,8 +393,8 @@ def attr_and_value_kas_grants_or(
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_attr: str,
+    kas_url_value1: str,
     temporary_namespace: abac.Namespace,
 ):
     allof = otdfctl.attribute_create(
@@ -421,12 +433,12 @@ def attr_and_value_kas_grants_and(
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
     kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_attr,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_attr(kas_entry_attr, allof)
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
@@ -434,14 +446,14 @@ def attr_and_value_kas_grants_and(
     return allof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def one_attribute_ns_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url2: str,
-    more_temporary_namespace: abac.Namespace,
+    kas_url_ns: str,
+    temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+        temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
     assert anyof.values
     (alpha,) = anyof.values
@@ -470,23 +482,23 @@ def one_attribute_ns_kas_grant(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
 
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
-    more_temporary_namespace: abac.Namespace,
+    kas_url_value1: str,
+    kas_url_ns: str,
 ):
+    temp_namespace = create_temp_namesapce(otdfctl)
     anyof = otdfctl.attribute_create(
-        more_temporary_namespace,
+        temp_namespace,
         "nsorvalgrant",
         abac.AttributeRule.ANY_OF,
         ["alpha", "beta"],
@@ -519,28 +531,28 @@ def ns_and_value_kas_grants_or(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
     kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
 
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_url1: str,
-    kas_url2: str,
-    more_temporary_namespace: abac.Namespace,
+    kas_url_value1: str,
+    kas_url_ns: str,
 ):
+    temp_namespace = create_temp_namesapce(otdfctl)
     allof = otdfctl.attribute_create(
-        more_temporary_namespace,
+        temp_namespace,
         "nsandvalgrant",
         abac.AttributeRule.ALL_OF,
         ["alpha", "beta"],
@@ -575,14 +587,14 @@ def ns_and_value_kas_grants_and(
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
     kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url1,
+        kas_url_value1,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, beta)
     kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url2,
+        kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
 
     return allof

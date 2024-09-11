@@ -150,11 +150,29 @@ jobs:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
-      - name: Check out and start up platform with deps/containers
+      - name: Start additional kas
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
+          kas-port: 8181
+          kas-name: alpha
+
+      - name: Start additional kas
         uses: opentdf/platform/test/start-additional-kas@main
         with:
           kas-port: 8282
           kas-name: beta
+      
+      - name: Start additional kas
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
+          kas-port: 8383
+          kas-name: gamma
+
+      - name: Start additional kas
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
+          kas-port: 8484
+          kas-name: delta
 
       - name: Run attribute based configuration tests
         run: |-

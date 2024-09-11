@@ -8,7 +8,12 @@ cipherTexts = {}
 
 
 def test_autoconfigure_one_attribute(
-    attribute_single_kas_grant, encrypt_sdk, decrypt_sdk, tmp_dir, pt_file
+    attribute_single_kas_grant,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url_value1: str,
 ):
     global counter
     # We have a grant for alpha to localhost kas. Now try to use it...
@@ -33,6 +38,7 @@ def test_autoconfigure_one_attribute(
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
 
     rt_file = f"{tmp_dir}test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
@@ -45,8 +51,8 @@ def test_autoconfigure_two_kas_or(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_value1: str,
+    kas_url_value2: str,
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -74,7 +80,7 @@ def test_autoconfigure_two_kas_or(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_value1, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
 
@@ -89,8 +95,8 @@ def test_autoconfigure_double_kas_and(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_value1: str,
+    kas_url_value2: str,
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -119,7 +125,7 @@ def test_autoconfigure_double_kas_and(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_value1, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
     rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
@@ -133,7 +139,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url2: str,
+    kas_url_attr: str,
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -157,7 +163,7 @@ def test_autoconfigure_one_attribute_attr_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_attr
     rt_file = f"{tmp_dir}test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -169,8 +175,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_attr: str,
+    kas_url_value1: str,
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -199,7 +205,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_attr, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
     rt_file = f"{tmp_dir}test-abac-attr-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
@@ -213,8 +219,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_attr: str,
+    kas_url_value1: str,
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -243,7 +249,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_attr, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
     rt_file = f"{tmp_dir}test-abac-attr-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
@@ -257,7 +263,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url2: str,
+    kas_url_ns: str,
 ):
     if encrypt_sdk not in ["go"]:
         pytest.skip(
@@ -283,7 +289,7 @@ def test_autoconfigure_one_attribute_ns_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_ns
     rt_file = f"{tmp_dir}test-abac-one-ns-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -295,8 +301,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_ns: str,
+    kas_url_value1: str,
 ):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -325,7 +331,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_ns, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
     rt_file = f"{tmp_dir}test-abac-ns-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
@@ -339,8 +345,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url1: str,
-    kas_url2: str,
+    kas_url_ns: str,
+    kas_url_value1: str,
 ):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
@@ -369,7 +375,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url1, kas_url2]) == set(
+    assert set([kas_url_ns, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
     rt_file = f"{tmp_dir}test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
