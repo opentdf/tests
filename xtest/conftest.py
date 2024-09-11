@@ -86,13 +86,6 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     return ns
 
 
-@pytest.fixture(scope="function")
-def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
-    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
-    ns = otdfctl.namespace_create(random_ns)
-    return ns
-
-
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
 
@@ -449,14 +442,14 @@ def attr_and_value_kas_grants_and(
     return allof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def one_attribute_ns_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_ns: str,
-    more_temporary_namespace: abac.Namespace,
+    temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+        temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
     assert anyof.values
     (alpha,) = anyof.values
@@ -488,20 +481,20 @@ def one_attribute_ns_kas_grant(
         kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
 
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-    more_temporary_namespace: abac.Namespace,
+    temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        more_temporary_namespace,
+        temporary_namespace,
         "nsorvalgrant",
         abac.AttributeRule.ANY_OF,
         ["alpha", "beta"],
@@ -542,20 +535,20 @@ def ns_and_value_kas_grants_or(
         kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
 
     return anyof
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-    more_temporary_namespace: abac.Namespace,
+    temporary_namespace: abac.Namespace,
 ):
     allof = otdfctl.attribute_create(
-        more_temporary_namespace,
+        temporary_namespace,
         "nsandvalgrant",
         abac.AttributeRule.ALL_OF,
         ["alpha", "beta"],
@@ -598,6 +591,6 @@ def ns_and_value_kas_grants_and(
         kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
 
     return allof
