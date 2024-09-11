@@ -88,7 +88,6 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
 
 @pytest.fixture(scope="function")
 def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
-    # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
     return ns

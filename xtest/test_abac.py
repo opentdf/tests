@@ -138,10 +138,6 @@ def test_autoconfigure_one_attribute_attr_grant(
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
 
-    # We have a grant for letra to localhost kas. Now try to use it...
-
-    print(one_attribute_attr_kas_grant.values)
-
     sample_name = f"test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
@@ -160,7 +156,6 @@ def test_autoconfigure_one_attribute_attr_grant(
         cipherTexts[sample_name] = ct_file
 
     manifest = tdfs.manifest(ct_file)
-    print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
     rt_file = f"{tmp_dir}test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
@@ -179,10 +174,6 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
-
-    # We have a grant for letra to localhost kas. Now try to use it...
-
-    print(attr_and_value_kas_grants_or.values)
 
     sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -203,7 +194,6 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         cipherTexts[sample_name] = ct_file
 
     manifest = tdfs.manifest(ct_file)
-    print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid
@@ -228,8 +218,6 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
 ):
     if encrypt_sdk not in ["go", "java"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
-
-    # We have a grant for letra to localhost kas. Now try to use it...
 
     sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -276,8 +264,6 @@ def test_autoconfigure_one_attribute_ns_grant(
             f"sdk doesn't yet support autoconfigure or namespace grants [{encrypt_sdk}]"
         )
 
-    # We have a grant for letra to localhost kas. Now try to use it...
-
     sample_name = f"test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
@@ -314,8 +300,6 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
 ):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
-
-    # We have a grant for letra to localhost kas. Now try to use it...
 
     sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -360,8 +344,6 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
 ):
     if encrypt_sdk not in ["go"]:
         pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
-
-    # We have a grant for letra to localhost kas. Now try to use it...
 
     sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
