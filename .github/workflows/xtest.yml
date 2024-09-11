@@ -129,7 +129,7 @@ jobs:
 
       - name: Move java cli to xtest
         run: |-
-          cp target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
+          cp target/sdk-cli.jar ../otdftests/xtest/sdk/java/sdk-cli.jar
         working-directory: java-sdk
 
       ######## RUN THE TESTS #############

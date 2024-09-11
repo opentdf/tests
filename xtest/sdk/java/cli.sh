@@ -34,5 +34,5 @@ if [ -n "$6" ]; then
   args+=(--attr "$6")
 fi
 
-echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
-java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
+echo java -jar "$SCRIPT_DIR"/sdk-cli.jar "${args[@]}" -f "$2" ">" "$3"
+java -jar "$SCRIPT_DIR"/sdk-cli.jar "${args[@]}" -f "$2" >"$3"
