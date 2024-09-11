@@ -125,17 +125,21 @@ def load_cached_kas_keys() -> abac.PublicKey:
 def kas_url_default():
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
+
 @pytest.fixture(scope="session")
 def kas_url_value1():
     return os.getenv("KASURL1", "http://localhost:8181/kas")
+
 
 @pytest.fixture(scope="session")
 def kas_url_value2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
+
 @pytest.fixture(scope="session")
 def kas_url_attr():
     return os.getenv("KASURL3", "http://localhost:8383/kas")
+
 
 @pytest.fixture(scope="session")
 def kas_url_ns():

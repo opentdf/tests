@@ -8,7 +8,12 @@ cipherTexts = {}
 
 
 def test_autoconfigure_one_attribute(
-    attribute_single_kas_grant, encrypt_sdk, decrypt_sdk, tmp_dir, pt_file, kas_url_value1: str,
+    attribute_single_kas_grant,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url_value1: str,
 ):
     global counter
     # We have a grant for alpha to localhost kas. Now try to use it...
