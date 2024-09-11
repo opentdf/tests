@@ -80,11 +80,13 @@ def otdfctl():
 
 @pytest.fixture(scope="module")
 def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+    return create_namesapce(otdfctl)
+
+def create_namesapce(otdfctl: abac.OpentdfCommandLineTool):
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
     return ns
-
 
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
@@ -491,10 +493,10 @@ def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-    temporary_namespace: abac.Namespace,
 ):
+    temp_namespace = create_namesapce(otdfctl)
     anyof = otdfctl.attribute_create(
-        temporary_namespace,
+        temp_namespace,
         "nsorvalgrant",
         abac.AttributeRule.ANY_OF,
         ["alpha", "beta"],
@@ -535,7 +537,7 @@ def ns_and_value_kas_grants_or(
         kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
 
     return anyof
 
@@ -545,10 +547,10 @@ def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-    temporary_namespace: abac.Namespace,
 ):
+    temp_namespace = create_namesapce(otdfctl)
     allof = otdfctl.attribute_create(
-        temporary_namespace,
+        temp_namespace,
         "nsandvalgrant",
         abac.AttributeRule.ALL_OF,
         ["alpha", "beta"],
@@ -591,6 +593,6 @@ def ns_and_value_kas_grants_and(
         kas_url_ns,
         load_cached_kas_keys(),
     )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
 
     return allof
