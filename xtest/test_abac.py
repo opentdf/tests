@@ -142,7 +142,7 @@ def test_autoconfigure_one_attribute_attr_grant(
 
     print(one_attribute_attr_kas_grant.values)
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -163,7 +163,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     print(manifest.encryptionInformation.keyAccess)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -184,7 +184,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
 
     print(attr_and_value_kas_grants_or.values)
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -212,7 +212,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-attr-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -231,7 +231,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -258,7 +258,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-attr-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -278,7 +278,7 @@ def test_autoconfigure_one_attribute_ns_grant(
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -298,7 +298,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url2
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-one-ns-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -317,7 +317,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -344,7 +344,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-ns-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -363,7 +363,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
 
     # We have a grant for letra to localhost kas. Now try to use it...
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -390,6 +390,6 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     assert set([kas_url1, kas_url2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = f"{tmp_dir}test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
