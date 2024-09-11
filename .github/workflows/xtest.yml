@@ -153,8 +153,26 @@ jobs:
       - name: Check out and start up platform with deps/containers
         uses: opentdf/platform/test/start-additional-kas@main
         with:
+          kas-port: 8181
+          kas-name: alpha
+
+      - name: Check out and start up platform with deps/containers
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
           kas-port: 8282
           kas-name: beta
+      
+      - name: Check out and start up platform with deps/containers
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
+          kas-port: 8383
+          kas-name: gamma
+
+      - name: Check out and start up platform with deps/containers
+        uses: opentdf/platform/test/start-additional-kas@main
+        with:
+          kas-port: 8484
+          kas-name: delta
 
       - name: Run attribute based configuration tests
         run: |-
