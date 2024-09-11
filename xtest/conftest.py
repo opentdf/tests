@@ -86,6 +86,13 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
     return ns
 
 
+@pytest.fixture(scope="function")
+def more_temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+    random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
+    ns = otdfctl.namespace_create(random_ns)
+    return ns
+
+
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
 
@@ -269,5 +276,313 @@ def attribute_two_kas_grant_and(
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_beta, bet)
+
+    return allof
+
+
+@pytest.fixture(scope="module")
+def one_attribute_attr_kas_grant(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url2: str,
+    temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+    )
+    assert anyof.values
+    (alpha,) = anyof.values
+    assert alpha.value == "alpha"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
+
+    return anyof
+
+
+@pytest.fixture(scope="module")
+def attr_and_value_kas_grants_or(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url1: str,
+    kas_url2: str,
+    temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        temporary_namespace,
+        "attrorvalgrant",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
+    )
+    assert anyof.values
+    (alpha, beta) = anyof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+        kas_url1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_attr(kas_entry_attr, anyof)
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+
+    return anyof
+
+
+@pytest.fixture(scope="module")
+def attr_and_value_kas_grants_and(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url1: str,
+    kas_url2: str,
+    temporary_namespace: abac.Namespace,
+):
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "attrandvalgrant",
+        abac.AttributeRule.ALL_OF,
+        ["alpha", "beta"],
+    )
+    assert allof.values
+    (alpha, beta) = allof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    sm2 = otdfctl.scs_map(sc, beta)
+    assert sm2.attribute_value.value == "beta"
+    # Now assign it to the current KAS
+    kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+        kas_url1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_attr(kas_entry_attr, allof)
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+
+    return allof
+
+
+@pytest.fixture(scope="function")
+def one_attribute_ns_kas_grant(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url2: str,
+    more_temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        more_temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
+    )
+    assert anyof.values
+    (alpha,) = anyof.values
+    assert alpha.value == "alpha"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+
+    return anyof
+
+
+@pytest.fixture(scope="function")
+def ns_and_value_kas_grants_or(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url1: str,
+    kas_url2: str,
+    more_temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        more_temporary_namespace,
+        "nsorvalgrant",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
+    )
+    assert anyof.values
+    (alpha, beta) = anyof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
+
+    return anyof
+
+
+@pytest.fixture(scope="function")
+def ns_and_value_kas_grants_and(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url1: str,
+    kas_url2: str,
+    more_temporary_namespace: abac.Namespace,
+):
+    allof = otdfctl.attribute_create(
+        more_temporary_namespace,
+        "nsandvalgrant",
+        abac.AttributeRule.ALL_OF,
+        ["alpha", "beta"],
+    )
+    assert allof.values
+    (alpha, beta) = allof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    sm2 = otdfctl.scs_map(sc, beta)
+    assert sm2.attribute_value.value == "beta"
+    # Now assign it to the current KAS
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+        kas_url2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_ns(kas_entry_ns, more_temporary_namespace)
 
     return allof
