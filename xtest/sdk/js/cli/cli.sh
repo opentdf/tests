@@ -12,7 +12,7 @@ source "$SCRIPT_DIR"/../../../test.env
 
 if [ "$1" == "supports" ]; then
   case "$2" in
-    autoconfigure)
+    autoconfigure | ns_grants)
       npx @opentdf/cli help | grep autoconfigure
       exit $?
       ;;
