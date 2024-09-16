@@ -3,13 +3,18 @@ import subprocess
 import zipfile
 
 from pydantic import BaseModel
+from typing import Literal
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-sdk_paths = {
+sdk_type = Literal["go", "java", "js"]
+
+feature_type = Literal["autoconfigure", "ns_grants"]
+
+sdk_paths: dict[sdk_type, str] = {
     "go": "sdk/go/cli.sh",
     "java": "sdk/java/cli.sh",
     "js": "sdk/js/cli/cli.sh",
@@ -118,3 +123,31 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano"):
     ]
     logger.info(f"dec [{' '.join(c)}]")
     subprocess.check_call(c)
+
+
+def supports(sdk: sdk_type, feature: feature_type) -> bool:
+    do_check = False
+    if feature == "autoconfigure":
+        if sdk in ["go", "java"]:
+            return True
+        do_check = sdk == "js"
+
+    elif feature == "ns_grants":
+        if sdk in ["go"]:
+            return True
+    else:
+        raise ValueError(f"unknown feature {feature}")
+    if not do_check:
+        return False
+
+    c = [
+        sdk_paths[sdk],
+        "supports",
+        feature,
+    ]
+    logger.info(f"sup [{' '.join(c)}]")
+    try:
+        subprocess.check_call(c)
+    except:
+        return False
+    return True

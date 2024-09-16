@@ -9,8 +9,8 @@ cipherTexts = {}
 
 def test_autoconfigure_one_attribute(
     attribute_single_kas_grant,
-    encrypt_sdk,
-    decrypt_sdk,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
     tmp_dir,
     pt_file,
     kas_url_value1: str,
@@ -18,8 +18,7 @@ def test_autoconfigure_one_attribute(
     global counter
     # We have a grant for alpha to localhost kas. Now try to use it...
 
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-one-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -54,8 +53,7 @@ def test_autoconfigure_two_kas_or(
     kas_url_value1: str,
     kas_url_value2: str,
 ):
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-two-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -89,6 +87,12 @@ def test_autoconfigure_two_kas_or(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def skip_if_unsupported(sdk: tdfs.sdk_type, *features: tdfs.feature_type):
+    for feature in features:
+        if not tdfs.supports(sdk, feature):
+            pytest.skip(f"{sdk} sdk doesn't yet support [{feature}]")
+
+
 def test_autoconfigure_double_kas_and(
     attribute_two_kas_grant_and,
     encrypt_sdk,
@@ -98,8 +102,7 @@ def test_autoconfigure_double_kas_and(
     kas_url_value1: str,
     kas_url_value2: str,
 ):
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -141,8 +144,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     pt_file,
     kas_url_attr: str,
 ):
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -178,8 +180,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
 ):
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -222,8 +223,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
 ):
-    if encrypt_sdk not in ["go", "java"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
     sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -265,10 +265,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     pt_file,
     kas_url_ns: str,
 ):
-    if encrypt_sdk not in ["go"]:
-        pytest.skip(
-            f"sdk doesn't yet support autoconfigure or namespace grants [{encrypt_sdk}]"
-        )
+    skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
 
     sample_name = f"test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -304,8 +301,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
 ):
-    if encrypt_sdk not in ["go"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
 
     sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -348,8 +344,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
 ):
-    if encrypt_sdk not in ["go"]:
-        pytest.skip(f"sdk doesn't yet support autoconfigure [{encrypt_sdk}]")
+    skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
 
     sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
