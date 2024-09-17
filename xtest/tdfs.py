@@ -149,6 +149,6 @@ def supports(sdk: sdk_type, feature: feature_type) -> bool:
     logger.info(f"sup [{' '.join(c)}]")
     try:
         subprocess.check_call(c)
-    except:
+    except subprocess.CalledProcessError:
         return False
     return True
