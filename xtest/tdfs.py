@@ -117,9 +117,9 @@ def encrypt(
     env = dict(os.environ)
     if fmt == "nano":
         if use_ecdsa_binding:
-           env |= {"USE_ECDSA_BINDING": "true"}
+            env |= {"USE_ECDSA_BINDING": "true"}
         else:
-           env |= {"USE_ECDSA_BINDING": "false"}
+            env |= {"USE_ECDSA_BINDING": "false"}
     subprocess.check_call(c, env=env)
 
 
