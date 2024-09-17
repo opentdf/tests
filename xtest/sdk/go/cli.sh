@@ -10,6 +10,18 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
+if [ "$1" == "supports" ]; then
+  case "$2" in
+    autoconfigure | nano_ecdsa | ns_grants)
+      exit 0
+      ;;
+    *)
+      echo "Unknown feature: $2"
+      exit 2
+      ;;
+  esac
+fi
+
 args=(
   -o "$3"
   --host "$PLATFORMURL"
@@ -35,6 +47,9 @@ if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
 fi
 
 if [ "$1" == "encrypt" ]; then
+  if [ "$USE_ECDSA_BINDING" == "true" ]; then
+    args+=(--ecdsa-binding)
+  fi
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then
     exit 1

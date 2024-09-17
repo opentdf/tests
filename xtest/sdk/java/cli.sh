@@ -10,6 +10,22 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
+if [ "$1" == "supports" ]; then
+  case "$2" in
+    autoconfigure | ns_grants)
+      exit 0
+      ;;
+    nano_ecdsa)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding
+      exit $?
+      ;;
+    *)
+      echo "Unknown feature: $2"
+      exit 2
+      ;;
+  esac
+fi
+
 args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"

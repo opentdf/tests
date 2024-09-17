@@ -44,6 +44,14 @@ if [ "$1" == "encrypt" ]; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
 
+  if [ -n "$USE_ECDSA_BINDING" ]; then
+    if [ "$USE_ECDSA_BINDING" == "true" ]; then
+      args+=(--policyBinding ecdsa)
+    else
+      args+=(--policyBinding gmac)
+    fi
+  fi
+
   npx @opentdf/cli encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
   npx @opentdf/cli decrypt "$2" "${args[@]}"

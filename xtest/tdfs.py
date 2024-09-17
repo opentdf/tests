@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 import zipfile
 
@@ -12,7 +13,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 sdk_type = Literal["go", "java", "js"]
 
-feature_type = Literal["autoconfigure", "ns_grants"]
+feature_type = Literal["autoconfigure", "nano_ecdsa", "ns_grants"]
 
 sdk_paths: dict[sdk_type, str] = {
     "go": "sdk/go/cli.sh",
@@ -98,6 +99,7 @@ def encrypt(
     mime_type="application/octet-stream",
     fmt="nano",
     attr_values=[],
+    use_ecdsa_binding=False,
 ):
     c = [
         sdk_paths[sdk],
@@ -110,7 +112,10 @@ def encrypt(
     if attr_values:
         c += [",".join(attr_values)]
     logger.debug(f"enc [{' '.join(c)}]")
-    subprocess.check_call(c)
+    env = dict(os.environ)
+    if fmt == "nano" and use_ecdsa_binding:
+        env |= {"USE_ECDSA_BINDING": "true"}
+    subprocess.check_call(c, env=env)
 
 
 def decrypt(sdk, ct_file, rt_file, fmt="nano"):
@@ -131,7 +136,10 @@ def supports(sdk: sdk_type, feature: feature_type) -> bool:
         if sdk in ["go", "java"]:
             return True
         do_check = sdk == "js"
-
+    elif feature == "nano_ecdsa":
+        if sdk in ["go"]:
+            return True
+        do_check = True
     elif feature == "ns_grants":
         if sdk in ["go"]:
             return True

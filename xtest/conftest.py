@@ -47,7 +47,7 @@ def pytest_generate_tests(metafunc):
         if metafunc.config.getoption("--containers"):
             containers = metafunc.config.getoption("--containers").split()
         else:
-            containers = ["nano", "ztdf"]
+            containers = ["nano", "ztdf", "nano-with-ecdsa"]
         metafunc.parametrize("container", containers)
 
 
