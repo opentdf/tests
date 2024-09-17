@@ -40,6 +40,10 @@ args+=("$COMMAND")
 
 if [ "$1" == "encrypt" ]; then
   args+=(--kas-url=$KASURL)
+
+  if [ "$USE_ECDSA_BINDING" == "true" ]; then
+    args+=(--ecdsa-binding "true")
+  fi
 fi
 
 if [ -n "$5" ] && [ "$4" != "nano" ]; then

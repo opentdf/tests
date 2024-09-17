@@ -112,9 +112,14 @@ def encrypt(
     if attr_values:
         c += [",".join(attr_values)]
     logger.debug(f"enc [{' '.join(c)}]")
+
+    # Copy the current environment
     env = dict(os.environ)
-    if fmt == "nano" and use_ecdsa_binding:
-        env |= {"USE_ECDSA_BINDING": "true"}
+    if fmt == "nano":
+        if use_ecdsa_binding:
+           env |= {"USE_ECDSA_BINDING": "true"}
+        else:
+           env |= {"USE_ECDSA_BINDING": "false"}
     subprocess.check_call(c, env=env)
 
 
