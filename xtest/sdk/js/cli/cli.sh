@@ -16,6 +16,10 @@ if [ "$1" == "supports" ]; then
       npx @opentdf/cli help | grep autoconfigure
       exit $?
       ;;
+    nano_ecdsa)
+      npx @opentdf/cli help | grep policyBinding
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -42,6 +46,12 @@ fi
 if [ "$1" == "encrypt" ]; then
   if npx @opentdf/cli help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
+  fi
+
+  if [ -n "$USE_ECDSA_BINDING" ]; then
+    if [ "$USE_ECDSA_BINDING" == "true" ]; then
+      args+=(--policyBinding ecdsa)
+    fi
   fi
 
   npx @opentdf/cli encrypt "$2" "${args[@]}"
