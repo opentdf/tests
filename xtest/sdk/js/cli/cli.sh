@@ -16,6 +16,10 @@ if [ "$1" == "supports" ]; then
       npx @opentdf/cli help | grep autoconfigure
       exit $?
       ;;
+    nano_ecdsa)
+      npx @opentdf/cli help | grep policyBinding
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
