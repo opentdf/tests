@@ -51,8 +51,6 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$USE_ECDSA_BINDING" ]; then
     if [ "$USE_ECDSA_BINDING" == "true" ]; then
       args+=(--policyBinding ecdsa)
-    else
-      args+=(--policyBinding gmac)
     fi
   fi
 
