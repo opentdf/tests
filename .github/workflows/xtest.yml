@@ -101,8 +101,9 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          go mod edit -replace github.com/opentdf/platform/protocol/go=../${{ steps.run-platform.outputs.platform-working-dir }}/protocol/go
-          go mod edit -replace github.com/opentdf/platform/sdk=../${{ steps.run-platform.outputs.platform-working-dir }}/sdk
+          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+            go mod edit -replace github.com/opentdf/platform/${m}=../${{ steps.run-platform.outputs.platform-working-dir }}/${m}
+          done
           go mod tidy
           go build .
           cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
