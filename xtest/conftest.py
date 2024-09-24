@@ -4,6 +4,7 @@ import random
 import string
 
 import abac
+from xtest.tdfs import SUPPORTED_SDKS
 
 
 def pytest_addoption(parser):
@@ -33,7 +34,7 @@ def pytest_generate_tests(metafunc):
         elif metafunc.config.getoption("--sdks"):
             encrypt_sdks = metafunc.config.getoption("--sdks").split()
         else:
-            encrypt_sdks = ["js", "go", "java"]
+            encrypt_sdks = SUPPORTED_SDKS
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-decrypt"):
@@ -41,7 +42,7 @@ def pytest_generate_tests(metafunc):
         elif metafunc.config.getoption("--sdks"):
             decrypt_sdks = metafunc.config.getoption("--sdks").split()
         else:
-            decrypt_sdks = ["js", "go", "java"]
+            decrypt_sdks = SUPPORTED_SDKS
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):

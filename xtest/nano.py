@@ -20,10 +20,10 @@ def enc_hex(B: bytes) -> str:
 
 
 def enc_hex_w_comment(B: bytes, c: str) -> str:
-    hex = enc_hex(B)
-    if len(hex) < 60:
-        return f"{hex} # {c}"
-    return f"\n# {c}\n{hex}"
+    hexes = enc_hex(B)
+    if len(hexes) < 60:
+        return f"{hexes} # {c}"
+    return f"\n# {c}\n{hexes}"
 
 
 def dec_hex(hexes: str) -> bytes:
@@ -64,12 +64,10 @@ class EccMode(ct.EnumBase):
 
     @property
     def byte_length(self) -> int:
-        # return int(math.ceil(self.bit_length / 8.0))
         return (self.bit_length + 7) >> 3
 
     @property
     def signature_length(self) -> int:
-        # return self.byte_length * 2
         return self.byte_length << 1
 
     @property
@@ -301,7 +299,7 @@ def embedded_policy(embedded: str) -> Policy:
 
 def encrypted_policy(encrypted: bytes) -> Policy:
     return Policy(
-        policy_type=(PolicyType.ENCRYPTED),
+        policy_type=PolicyType.ENCRYPTED,
         encrypted_length=len(encrypted),
         encrypted=encrypted,
         embedded=None,
