@@ -146,7 +146,7 @@ def supports(sdk: sdk_type, feature: feature_type) -> bool:
             return True
         do_check = True
     elif feature == "ns_grants":
-        if sdk in ["go"]:
+        if sdk in ["go", "java"]:
             return True
         do_check = sdk == "js"
     else:
