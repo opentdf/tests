@@ -29,3 +29,7 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
+/xtest/OpenTDFKit/
+/xtest/sdk/swift/Package.resolved
+/xtest/sdk/swift/.build/
+/xtest/OpenTDFKit/

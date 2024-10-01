@@ -4,14 +4,14 @@ import subprocess
 import zipfile
 
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, get_args
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
-
-sdk_type = Literal["go", "java", "js"]
+sdk_type = Literal["js", "go", "java", "swift"]
+SUPPORTED_SDKS = list(get_args(sdk_type))
 
 feature_type = Literal["autoconfigure", "nano_ecdsa", "ns_grants"]
 
@@ -19,6 +19,7 @@ sdk_paths: dict[sdk_type, str] = {
     "go": "sdk/go/cli.sh",
     "java": "sdk/java/cli.sh",
     "js": "sdk/js/cli/cli.sh",
+    "swift": "sdk/swift/cli.sh",
 }
 
 
@@ -98,9 +99,11 @@ def encrypt(
     ct_file,
     mime_type="application/octet-stream",
     fmt="nano",
-    attr_values=[],
+        attr_values=None,
     use_ecdsa_binding=False,
 ):
+    if attr_values is None:
+        attr_values = []
     c = [
         sdk_paths[sdk],
         "encrypt",

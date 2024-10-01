@@ -30,7 +30,7 @@ mv cmdline/target/cmdline.jar ../sdk/java/cmdline.jar
 #### Go SDK wrapped by otdfctl
 
 ```shell
-git clone https://github.com/opentdf/platform
+git clone https://github.com/opentdf/platform.git
 git clone https://github.com/opentdf/otdfctl.git
 cd otdfctl
 go mod edit -replace github.com/opentdf/platform/protocol/go=../platform/protocol/go
@@ -38,6 +38,35 @@ go mod edit -replace github.com/opentdf/platform/sdk=../platform/sdk
 go mod tidy
 go build .
 mv otdfctl ../sdk/go/otdfctl
+```
+
+#### (External) Swift SDK - OpenTDFKit
+
+##### Prerequisite
+
+Xcode 16
+
+##### Clone
+
+```shell
+git clone https://github.com/arkavo-org/OpenTDFKit.git
+```
+
+##### Build
+
+```shell
+cd sdk/swift
+swift build --configuration release
+```
+
+##### Development
+
+```shell
+brew install swiftformat
+```
+
+```shell
+swiftformat --swiftversion 6.0 .
 ```
 
 ### Platform Backend
@@ -61,13 +90,13 @@ mv otdfctl ../sdk/go/otdfctl
    ```shell
    go run ./service provision keycloak
    ```
-4. **Add Sample Attributes and Metadata**
-   ```shell
-   go run ./service provision fixtures
-   ```
-5. **Start Server in Background**
+4.  **Start Server in Background**
    ```shell
    go run ./service start
+   ```
+5. **Add Sample Attributes and Metadata**
+   ```shell
+   go run ./service provision fixtures
    ```
 
 ## Testing with Released Software
@@ -89,4 +118,11 @@ pytest
 ```shell
 rm -rf tmp
 pytest test_tdfs.py
+```
+
+#### Run NanoTDF Tests
+
+```shell
+rm -rf tmp
+pytest test_tdfs.py --containers nano
 ```
