@@ -62,7 +62,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
-          platform-ref: ${{ env.PLATFORM_REF }}
+          platform-ref: feature/deprecate-public-key-local
 
       ######## CHECKOUT CLIENT-WEB #############
       - name: Check out client-web
