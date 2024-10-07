@@ -145,7 +145,6 @@ class KasPublicKeySet(BaseModel):
 
 
 class PublicKey(BaseModel):
-    local: str | None = None
     remote: str | None = None
     cached: KasPublicKeySet | None = None
 
