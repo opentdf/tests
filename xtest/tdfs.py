@@ -1,3 +1,4 @@
+import assertions as tdfassertions
 import base64
 from collections.abc import Callable
 import logging
@@ -15,7 +16,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 sdk_type = Literal["go", "java", "js"]
 
-feature_type = Literal["autoconfigure", "nano_ecdsa", "ns_grants"]
+feature_type = Literal["assertions", "autoconfigure", "nano_ecdsa", "ns_grants"]
 
 sdk_paths: dict[sdk_type, str] = {
     "go": "sdk/go/cli.sh",
@@ -115,6 +116,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
+    assertions: list[tdfassertions.Assertion] | None = None
 
 
 def manifest(tdf_file: str) -> Manifest:
@@ -153,7 +155,8 @@ def encrypt(
     ct_file,
     mime_type="application/octet-stream",
     fmt="nano",
-    attr_values=[],
+    attr_values: list[str] | None = None,
+    assert_value: list[tdfassertions.Assertion] | None = None,
     use_ecdsa_binding=False,
 ):
     c = [
@@ -191,23 +194,13 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano"):
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:
-    do_check = False
-    if feature == "autoconfigure":
-        if sdk in ["go", "java"]:
+    match (feature, sdk):
+        case ("autoconfigure", ("go" | "java")):
             return True
-        do_check = sdk == "js"
-    elif feature == "nano_ecdsa":
-        if sdk in ["go"]:
+        case ("nano_ecdsa", "go"):
             return True
-        do_check = True
-    elif feature == "ns_grants":
-        if sdk in ["go", "java"]:
+        case ("ns_grants", ("go" | "java")):
             return True
-        do_check = sdk == "js"
-    else:
-        raise ValueError(f"unknown feature {feature}")
-    if not do_check:
-        return False
 
     c = [
         sdk_paths[sdk],
