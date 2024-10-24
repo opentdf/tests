@@ -12,6 +12,10 @@ source "$SCRIPT_DIR"/../../../test.env
 
 if [ "$1" == "supports" ]; then
   case "$2" in
+    assertions)
+      npx @opentdf/cli help | grep assertions
+      exit $?
+      ;;
     autoconfigure | ns_grants)
       npx @opentdf/cli help | grep autoconfigure
       exit $?
@@ -41,6 +45,10 @@ fi
 
 if [ -n "$6" ]; then
   args+=(--attributes "$6")
+fi
+
+if [ -n "$7" ]; then
+  args+=(--assertions "$7")
 fi
 
 if [ "$1" == "encrypt" ]; then
