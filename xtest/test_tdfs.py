@@ -11,7 +11,10 @@ import tdfs
 cipherTexts = {}
 counter = 0
 
-def doEncryptWith(pt_file: str,encrypt_sdk:str, container:str, tmp_dir: str, use_ecdsa: bool) -> str:
+
+def doEncryptWith(
+    pt_file: str, encrypt_sdk: str, container: str, tmp_dir: str, use_ecdsa: bool
+) -> str:
     global counter
     counter = (counter or 0) + 1
     c = counter
@@ -42,6 +45,7 @@ def doEncryptWith(pt_file: str,encrypt_sdk:str, container:str, tmp_dir: str, use
     cipherTexts[container_id] = ct_file
     return ct_file
 
+
 def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
     use_ecdsa = False
     if container == "nano-with-ecdsa":
@@ -58,6 +62,7 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
+
 def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     #  base64 decode policy from manifest.encryptionInformation.policy
     p = manifest.encryptionInformation.policy_object
@@ -65,6 +70,7 @@ def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     p.body.dissem = ["yves@dropp.er"]
     manifest.encryptionInformation.policy_object = p
     return manifest
+
 
 def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir, False)

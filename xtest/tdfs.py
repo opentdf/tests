@@ -23,17 +23,20 @@ sdk_paths: dict[sdk_type, str] = {
     "js": "sdk/js/cli/cli.sh",
 }
 
+
 class DataAttribute(BaseModel):
-  attribute: str
-  isDefault: bool | None = None
-  displayName: str | None = None
-  pubKey: str
-  kasUrl: str
-  schemaVersion: str| None = None
+    attribute: str
+    isDefault: bool | None = None
+    displayName: str | None = None
+    pubKey: str
+    kasUrl: str
+    schemaVersion: str | None = None
+
 
 class PolicyBody(BaseModel):
     dataAttributes: list[DataAttribute] | None = None
     dissem: list[str] | None = None
+
 
 class Policy(BaseModel):
     uuid: str
@@ -96,11 +99,11 @@ class EncryptionInformation(BaseModel):
     policy: str
     keyAccess: list[KeyAccessObject]
     method: EncryptionMethod
-    integrityInformation: Integrity 
+    integrityInformation: Integrity
 
     @property
     def policy_object(self) -> Policy:
-        b    = base64.b64decode(self.policy)
+        b = base64.b64decode(self.policy)
         return Policy.model_validate_json(b)
 
     @policy_object.setter
@@ -119,8 +122,11 @@ def manifest(tdf_file: str) -> Manifest:
         with tdfz.open("0.manifest.json") as manifestEntry:
             return Manifest.model_validate_json(manifestEntry.read())
 
+
 # Create a modified variant of a TDF by manipulating its manifest
-def update_manifest(scenario_name: str, tdf_file: str, manifest_change: Callable[[Manifest], Manifest]) -> str:
+def update_manifest(
+    scenario_name: str, tdf_file: str, manifest_change: Callable[[Manifest], Manifest]
+) -> str:
     # get the parent directory of the tdf file
     tmp_dir = os.path.dirname(tdf_file)
     fname = os.path.basename(tdf_file).split(".")[0]
@@ -137,10 +143,9 @@ def update_manifest(scenario_name: str, tdf_file: str, manifest_change: Callable
         for folder_name, _, filenames in os.walk(unzipped_dir):
             for filename in filenames:
                 file_path = os.path.join(folder_name, filename)
-                zipped.write(
-                    file_path, os.path.relpath(file_path, unzipped_dir)
-                )
+                zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
     return outfile
+
 
 def encrypt(
     sdk,
@@ -215,4 +220,3 @@ def supports(sdk: sdk_type, feature: feature_type) -> bool:
     except subprocess.CalledProcessError:
         return False
     return True
-
