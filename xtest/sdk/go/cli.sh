@@ -10,10 +10,19 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck source=../../test.env
 source "$SCRIPT_DIR"/../../test.env
 
+cmd=("$SCRIPT_DIR"/otdfctl)
+if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
+  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+fi
+
 if [ "$1" == "supports" ]; then
   case "$2" in
     autoconfigure | nano_ecdsa | ns_grants)
       exit 0
+      ;;
+    assertions)
+      "${cmd[@]}" help encrypt | grep with-assertions
+      exit $?
       ;;
     *)
       echo "Unknown feature: $2"
@@ -41,9 +50,8 @@ if [ -n "$6" ]; then
   args+=(--attr "$6")
 fi
 
-cmd=("$SCRIPT_DIR"/otdfctl)
-if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+if [ -n "$7" ]; then
+  args+=(--with-assertions "$7")
 fi
 
 if [ "$1" == "encrypt" ]; then
