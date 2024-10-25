@@ -1,3 +1,4 @@
+import json
 import assertions as tdfassertions
 import base64
 from collections.abc import Callable
@@ -7,6 +8,7 @@ import subprocess
 import zipfile
 
 from pydantic import BaseModel
+from pydantic.json import pydantic_encoder
 from typing import Literal
 
 logger = logging.getLogger("xtest")
@@ -169,6 +171,10 @@ def encrypt(
     ]
     if attr_values:
         c += [",".join(attr_values)]
+    if assert_value:
+        if not attr_values:
+            c += [""]
+        c += json.dumps(assert_value, default=pydantic_encoder)
     logger.debug(f"enc [{' '.join(c)}]")
 
     # Copy the current environment
