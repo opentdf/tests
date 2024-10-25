@@ -39,18 +39,18 @@ jobs:
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
           ref: ${{ env.TESTS_REF }}
       - name: Set up Node 20
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
           node-version: "20.x"
           registry-url: https://npm.pkg.github.com
       - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.10"
       - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
@@ -72,7 +72,7 @@ jobs:
 
       ######## CHECKOUT CLIENT-WEB #############
       - name: Check out client-web
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/client-web
           path: client-web
@@ -98,7 +98,7 @@ jobs:
 
       ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/otdfctl
           path: otdfctl
@@ -118,7 +118,7 @@ jobs:
       ####### CHECKOUT JAVA SDK ##############
 
       - name: Check out java-sdk
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/java-sdk
           path: java-sdk
