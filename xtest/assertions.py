@@ -2,11 +2,10 @@ from pydantic import BaseModel
 from typing import Literal
 
 
-AssertionAlgorithm = Literal["HS256", "RS256"]
 Type = Literal["handling", "other"]
 Scope = Literal["payload", "tdo"]
 AppliesTo = Literal["encrypted", "unencrypted"]
-AssertionBindingMethod = Literal["jws"]
+BindingMethod = Literal["jws"]
 
 
 class Statement(BaseModel):
@@ -16,7 +15,7 @@ class Statement(BaseModel):
 
 
 class Binding(BaseModel):
-    method: str
+    method: BindingMethod
     signature: str
 
 
