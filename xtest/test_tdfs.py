@@ -96,10 +96,10 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
 
 
 def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
-    if not tdfs.supports(encrypt_sdk, "assertions") or not tdfs.supports(
-        decrypt_sdk, "assertions"
-    ):
-        pytest.skip(f"sdk doesn't yet support assertions")
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertions"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
     ct_file = doEncryptWith(
         pt_file,
         encrypt_sdk,
