@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 
 from pydantic import BaseModel
-from pydantic.json import pydantic_encoder
+from pydantic_core import to_jsonable_python
 from typing import Literal
 
 logger = logging.getLogger("xtest")
@@ -174,7 +174,7 @@ def encrypt(
     if assert_value:
         if not attr_values:
             c += [""]
-        c += json.dumps(assert_value, default=pydantic_encoder)
+        c += [json.dumps(to_jsonable_python(assert_value, exclude_none=True))]
     logger.debug(f"enc [{' '.join(c)}]")
 
     # Copy the current environment
