@@ -108,15 +108,15 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         scenario="assertions",
         az=[
             assertions.Assertion(
-                id="assertion-1",
-                type="handling",
-                scope="payload",
                 appliesToState="encrypted",
+                id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
+                scope="tdo",
                 statement=assertions.Statement(
-                    format="json",
-                    schema="https://schema.org/Person",
-                    value='{"name":"Alice"}',
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
                 ),
+                type="handling",
             ),
         ],
     )
