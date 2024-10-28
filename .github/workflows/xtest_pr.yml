@@ -8,6 +8,6 @@ jobs:
       contents: read
       packages: read
     needs: platform-integration
-    uses: opentdf/tests/.github/workflows/xtest.yml@{{ github.ref }}
+    uses: opentdf/tests/.github/workflows/xtest.yml@${{ github.ref }}
     with:
       tests-ref: ${{ github.ref }}
