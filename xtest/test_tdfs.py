@@ -1,3 +1,4 @@
+import assertions
 import filecmp
 import os
 import subprocess
@@ -13,15 +14,23 @@ counter = 0
 
 
 def doEncryptWith(
-    pt_file: str, encrypt_sdk: str, container: str, tmp_dir: str, use_ecdsa: bool
+    pt_file: str,
+    encrypt_sdk: str,
+    container: str,
+    tmp_dir: str,
+    use_ecdsa: bool = False,
+    az: list[assertions.Assertion] = [],
+    scenario: str = "",
 ) -> str:
     global counter
     counter = (counter or 0) + 1
     c = counter
     container_id = f"{encrypt_sdk}-{container}"
+    if scenario != "":
+        container_id += f"-{scenario}"
     if container_id in cipherTexts:
         return cipherTexts[container_id]
-    ct_file = f"{tmp_dir}test-{encrypt_sdk}-{c}.{container}"
+    ct_file = f"{tmp_dir}test-{encrypt_sdk}-{scenario}{c}.{container}"
     tdfs.encrypt(
         encrypt_sdk,
         pt_file,
@@ -29,6 +38,7 @@ def doEncryptWith(
         mime_type="text/plain",
         fmt=container,
         use_ecdsa_binding=use_ecdsa,
+        assert_value=az,
     )
     if container == "ztdf":
         manifest = tdfs.manifest(ct_file)
@@ -73,7 +83,7 @@ def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 
 def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
-    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir, False)
+    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("unbound_policy", ct_file, breakBinding)
     fname = os.path.basename(b_file).split(".")[0]
@@ -83,3 +93,35 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
+
+
+def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertions"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
+    ct_file = doEncryptWith(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions",
+        az=[
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+            ),
+        ],
+    )
+    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
