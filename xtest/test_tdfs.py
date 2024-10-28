@@ -2,6 +2,9 @@ import assertions
 import filecmp
 import os
 import subprocess
+import base64
+import string
+import random
 
 import pytest
 
@@ -81,11 +84,37 @@ def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     manifest.encryptionInformation.policy_object = p
     return manifest
 
+def changeLastThree(byt: bytes) -> bytes:
+    new_three = ''.join(random.choices(string.ascii_lowercase + string.digits, k=3))
+    if new_three == byt[-3:]:
+        # catch the case where the random string is the same (v unlikely)
+        return changeLastThree(byt)
+    return byt[:-3] + new_three.encode()
+
+
+def breakRootSignature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    rootSig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
+    alteredSig = base64.b64encode(changeLastThree(base64.b64decode(rootSig)))
+    manifest.encryptionInformation.integrityInformation.rootSignature.sig = alteredSig
+    return manifest
+
 
 def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("unbound_policy", ct_file, breakBinding)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"wrap" in exc.output
+
+def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("broken_root_sig", ct_file, breakRootSignature)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
