@@ -19,6 +19,10 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding
       exit $?
       ;;
+    assertions)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
