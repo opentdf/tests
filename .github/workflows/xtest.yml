@@ -1,5 +1,6 @@
 name: X-Test
 on:
+  pull_request:
   workflow_call:
     inputs:
       platform-ref:
@@ -18,10 +19,6 @@ on:
         required: false
         type: string
         default: main
-      tests-ref:
-        required: false
-        type: string
-        default: main
   schedule:
     - cron: "30 6 * * *"
 jobs:
@@ -32,7 +29,6 @@ jobs:
       contents: read
       packages: read
     env:
-      TESTS_REF: "${{ inputs.tests-ref || 'main' }}"
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
@@ -42,7 +38,6 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-          ref: ${{ env.TESTS_REF }}
       - name: Set up Node 20
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
