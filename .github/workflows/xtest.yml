@@ -151,7 +151,7 @@ jobs:
         working-directory: otdftests/xtest
       - name: Run xtests
         run: |-
-          pytest test_tdfs.py
+          pytest -v test_tdfs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
