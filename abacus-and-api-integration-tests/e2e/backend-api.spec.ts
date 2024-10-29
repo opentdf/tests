@@ -339,8 +339,7 @@ test.describe('API:', () => {
         })
     })
 
-    // TODO: skipped till fixing PLAT-2100 (there is no entity existence validation for now, so 200 is returned)
-    test.skip('Entitlements request fails when use non-existed EntityID', async ({authority, attributeName,attributeValue}) => {
+    test('Entitlements request fails when use non-existed EntityID', async ({authority, attributeName,attributeValue}) => {
         const entitlementPayload = `${authority}/attr/${attributeName}/value/${attributeValue}`;
         const nonExistedEntityId = "x-x-x-x"
         const createAttributeResponse = await apiContext.post(`http://localhost:65432/api/entitlements/entitlements/${nonExistedEntityId}`, {

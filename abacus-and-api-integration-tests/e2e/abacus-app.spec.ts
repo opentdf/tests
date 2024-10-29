@@ -148,8 +148,7 @@ test.describe('<Login/>', () => {
     })
   });
 
-  // TODO: Uncomment after fixing the PLAT-2209 bug which leads to assertion failure
-  test.skip('Login succeeds on the Entity Details page, actual data is loaded', async ({ page }) => {
+  test('Login succeeds on the Entity Details page, actual data is loaded', async ({ page }) => {
     await authorize(page, "/entitlements")
 
     await Promise.all([
