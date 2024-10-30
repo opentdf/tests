@@ -41,16 +41,16 @@ def main():
 
 def encrypt_file(client, source, target):
     logger.info(f"Python -- Encrypting file {source} to {target}")
-    sampleTxtStorage = TDFStorageType()
-    sampleTxtStorage.set_tdf_storage_file_type(source)
-    client.encrypt_file(sampleTxtStorage, target)
+    sample_txt_storage = TDFStorageType()
+    sample_txt_storage.set_tdf_storage_file_type(source)
+    client.encrypt_file(sample_txt_storage, target)
 
 
 def decrypt_file(client, source, target):
     logger.info(f"Python -- Decrypting file {source} to {target}")
-    sampleTdfStorage = TDFStorageType()
-    sampleTdfStorage.set_tdf_storage_file_type(source)
-    client.decrypt_file(sampleTdfStorage, target)
+    sample_tdf_storage = TDFStorageType()
+    sample_tdf_storage.set_tdf_storage_file_type(source)
+    client.decrypt_file(sample_tdf_storage, target)
 
 
 if __name__ == "__main__":

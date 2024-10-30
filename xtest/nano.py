@@ -9,9 +9,9 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-def enc_hex(B: bytes) -> str:
+def enc_hex(b: bytes) -> str:
     """Pretty print bytes as a block of hex bytes, suitable for formatting."""
-    strides = [B[i * 20 : (i + 1) * 20] for i in range((len(B) + 19) // 20)]
+    strides = [b[i * 20 : (i + 1) * 20] for i in range((len(b) + 19) // 20)]
 
     def to_s(n: int) -> str:
         return hex(n)[2:].zfill(2)
@@ -19,8 +19,8 @@ def enc_hex(B: bytes) -> str:
     return "\n".join([" ".join(to_s(n) for n in stride) for stride in strides])
 
 
-def enc_hex_w_comment(B: bytes, c: str) -> str:
-    hex = enc_hex(B)
+def enc_hex_w_comment(b: bytes, c: str) -> str:
+    hex = enc_hex(b)
     if len(hex) < 60:
         return f"{hex} # {c}"
     return f"\n# {c}\n{hex}"
@@ -64,12 +64,10 @@ class EccMode(ct.EnumBase):
 
     @property
     def byte_length(self) -> int:
-        # return int(math.ceil(self.bit_length / 8.0))
         return (self.bit_length + 7) >> 3
 
     @property
     def signature_length(self) -> int:
-        # return self.byte_length * 2
         return self.byte_length << 1
 
     @property

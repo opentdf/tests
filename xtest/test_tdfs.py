@@ -16,7 +16,7 @@ cipherTexts = {}
 counter = 0
 
 
-def doEncryptWith(
+def do_encrypt_with(
     pt_file: str,
     encrypt_sdk: str,
     container: str,
@@ -68,7 +68,7 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
             )
         container = "nano"
         use_ecdsa = True
-    ct_file = doEncryptWith(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa)
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -76,7 +76,7 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+def break_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     #  base64 decode policy from manifest.encryptionInformation.policy
     p = manifest.encryptionInformation.policy_object
     p.body.dataAttributes = []
@@ -85,36 +85,36 @@ def breakBinding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
-def changeLastThree(byt: bytes) -> bytes:
+def change_last_three(byt: bytes) -> bytes:
     new_three = "".join(random.choices(string.ascii_lowercase + string.digits, k=3))
     if new_three == byt[-3:]:
         # catch the case where the random string is the same (v unlikely)
-        return changeLastThree(byt)
+        return change_last_three(byt)
     return byt[:-3] + new_three.encode()
 
 
-def breakRootSignature(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    rootSig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
-    alteredSig = base64.b64encode(changeLastThree(base64.b64decode(rootSig)))
-    manifest.encryptionInformation.integrityInformation.rootSignature.sig = alteredSig
+def break_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    root_sig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
+    altered_sig = base64.b64encode(change_last_three(base64.b64decode(root_sig)))
+    manifest.encryptionInformation.integrityInformation.rootSignature.sig = altered_sig
     return manifest
 
 
-def breakSegmentSignature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+def break_segment_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
     segments = manifest.encryptionInformation.integrityInformation.segments
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    alteredHash = base64.b64encode(changeLastThree(base64.b64decode(segment.hash)))
-    segment.hash = alteredHash
+    altered_hash = base64.b64encode(change_last_three(base64.b64decode(segment.hash)))
+    segment.hash = altered_hash
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
 
 def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
-    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("unbound_policy", ct_file, breakBinding)
+    b_file = tdfs.update_manifest("unbound_policy", ct_file, break_binding)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
@@ -125,9 +125,9 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
 
 
 def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
-    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("broken_root_sig", ct_file, breakRootSignature)
+    b_file = tdfs.update_manifest("broken_root_sig", ct_file, break_root_signature)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
@@ -138,9 +138,9 @@ def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
 
 
 def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
-    ct_file = doEncryptWith(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("broken_seg_sig", ct_file, breakSegmentSignature)
+    b_file = tdfs.update_manifest("broken_seg_sig", ct_file, break_segment_signature)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
@@ -155,7 +155,7 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertions"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
-    ct_file = doEncryptWith(
+    ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
         "ztdf",
