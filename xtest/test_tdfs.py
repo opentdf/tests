@@ -122,7 +122,7 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
-        # assert b"tamper" in exc.output
+        assert (b"tamper" in exc.output or b"InvalidFileError" in exc.output)
 
 
 def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
