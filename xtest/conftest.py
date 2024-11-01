@@ -64,8 +64,7 @@ def pt_file(tmp_dir, size):
 @pytest.fixture(scope="module")
 def tmp_dir():
     dname = "tmp/"
-    isExist = os.path.exists(dname)
-    if not isExist:
+    if not os.path.exists(dname):
         os.makedirs(dname)
     return dname
 

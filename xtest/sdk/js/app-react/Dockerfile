@@ -2,21 +2,21 @@ ARG NODE_VERSION=lts
 # multi-stage build
 
 # depender - get production dependencies
-FROM node:${NODE_VERSION} as depender
+FROM node:${NODE_VERSION} AS depender
 WORKDIR /build/
 COPY package.json ./
 RUN npm i
 
 
 # builder - create-react-app build
-FROM depender as builder
+FROM depender AS builder
 WORKDIR /build/
 COPY public/ public/
 COPY src/ src/
 RUN npm run build
 
 # server - nginx alpine
-FROM nginx:stable-alpine as server
+FROM nginx:stable-alpine AS server
 COPY --from=builder /build/build /usr/share/nginx/html
 COPY nginx-default.conf /etc/nginx/templates/default.conf.template
 ENV KEYCLOAK_HOST "http://localhost:65432/auth"
