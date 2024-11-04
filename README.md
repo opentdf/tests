@@ -36,18 +36,3 @@ and change `frontend/Dockerfile` line `RUN npm run build` to `COPY build/ build/
 so it won't run it inside docker.
 Be careful not to push these changes,
 we won't need that to CI machines that runs on linux.
-
-## [Abacus and API integration tests](abacus-and-api-integration-tests)
-
-> Automated Playwright tests for the Abacus application
-> run against the latest versions of frontend and backend together
-> with API tests for OpenTDF backend services.
-
-Check Backend "Quick Start and Development" for [Prerequisites](https://github.com/opentdf/backend#prerequisites)
-
-1) delete `ctlptl delete cluster kind-kind`
-and clear saved related images in docker
-if you've run integration tests locally from another folder
-2) run `ctlptl create cluster kind --registry=ctlptl-registry`
-3) `cd abacus-and-api-integration-tests`
-4) `tilt up`
