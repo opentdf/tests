@@ -3,8 +3,8 @@
 ## [Cross-client compatibility tests](xtests)
 
 1) `cd xtest`
-2) `npm ci && npm i @opentdf/client@CLIENT_VERSION`
-3) `pip3 install -r ./requirements.txt`
+2) `npm ci && npm i @opentdf/sdk@CLIENT_VERSION`
+3) `pip install -r ./requirements.txt`
 4) `tilt up`
 
 ### To use a Github Package Manager Version

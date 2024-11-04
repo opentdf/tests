@@ -6,22 +6,28 @@
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+XTEST_DIR=$(cd -- "$SCRIPT_DIR"/../../../ &>/dev/null && pwd)
 
 # shellcheck source=../../../test.env
-source "$SCRIPT_DIR"/../../../test.env
+source "$XTEST_DIR"/test.env
+
+CTL=@opentdf/ctl
+if grep opentdf/cli "$XTEST_DIR"/package.json; then
+  CTL=@opentdf/cli
+fi
 
 if [ "$1" == "supports" ]; then
   case "$2" in
     assertions)
-      npx @opentdf/cli help | grep assertions
+      npx $CTL help | grep assertions
       exit $?
       ;;
     autoconfigure | ns_grants)
-      npx @opentdf/cli help | grep autoconfigure
+      npx $CTL help | grep autoconfigure
       exit $?
       ;;
     nano_ecdsa)
-      npx @opentdf/cli help | grep policyBinding
+      npx $CTL help | grep policyBinding
       exit $?
       ;;
     *)
@@ -52,7 +58,7 @@ if [ -n "$7" ]; then
 fi
 
 if [ "$1" == "encrypt" ]; then
-  if npx @opentdf/cli help | grep autoconfigure; then
+  if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
 
@@ -62,9 +68,9 @@ if [ "$1" == "encrypt" ]; then
     fi
   fi
 
-  npx @opentdf/cli encrypt "$2" "${args[@]}"
+  npx $CTL encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
-  npx @opentdf/cli decrypt "$2" "${args[@]}"
+  npx $CTL decrypt "$2" "${args[@]}"
 else
   echo "Incorrect argument provided"
   exit 1
