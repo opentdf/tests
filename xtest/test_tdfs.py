@@ -122,6 +122,7 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
+        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
 
 
 def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
@@ -135,6 +136,7 @@ def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"root" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
 def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
@@ -148,6 +150,7 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"signature" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
 def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
