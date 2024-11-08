@@ -124,7 +124,7 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert (
             b"tamper" in exc.output
             or b"InvalidFileError" in exc.output
-            or "invalid TDF" in exc.output
+            or b"invalid TDF" in exc.output
         )
 
 
@@ -141,7 +141,7 @@ def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert (
             b"tamper" in exc.output
             or b"IntegrityError" in exc.output
-            or "invalid TDF" in exc.output
+            or b"invalid TDF" in exc.output
         )
 
 
@@ -158,7 +158,7 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert (
             b"tamper" in exc.output
             or b"IntegrityError" in exc.output
-            or "invalid TDF" in exc.output
+            or b"invalid TDF" in exc.output
         )
 
 
