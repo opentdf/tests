@@ -34,6 +34,13 @@ jobs:
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
+      - name: Install jq
+        run: sudo apt-get install -y jq
+      - name: Get OTDFCTL Latest Tag
+        id: otdfctl-tag
+        run: |
+          latest_tag=$(curl -s https://api.github.com/repos/${GITHUB_REPOSITORY}/tags | jq -r '.[0].name')
+          echo "tag=$latest_tag" >> $GITHUB_OUTPUT
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/tests
@@ -96,7 +103,7 @@ jobs:
         with:
           repository: opentdf/otdfctl
           path: otdfctl
-          ref: ${{ env.OTDFCTL_REF }}
+          ref: ${{ steps.otdfctl-tag.outputs.tag }}
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
