@@ -141,6 +141,7 @@ def kas_url_attr():
 def kas_url_ns():
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
+
 @pytest.fixture(scope="session")
 def kas_url_not_running():
     return os.getenv("KASURL5", "http://localhost:8989/kas")
@@ -248,7 +249,10 @@ def attribute_two_kas_grant_or_non_running_second_kas(
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        temporary_namespace, "notrunningbeta", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+        temporary_namespace,
+        "notrunningbeta",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
     )
     assert anyof.values
     alpha, beta = anyof.values
@@ -290,6 +294,7 @@ def attribute_two_kas_grant_or_non_running_second_kas(
     otdfctl.grant_assign_value(kas_entry_beta, beta)
     return anyof
 
+
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_or_non_running_first_kas(
     otdfctl: abac.OpentdfCommandLineTool,
@@ -298,7 +303,10 @@ def attribute_two_kas_grant_or_non_running_first_kas(
     temporary_namespace: abac.Namespace,
 ):
     anyof = otdfctl.attribute_create(
-        temporary_namespace, "notrunningalpha", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+        temporary_namespace,
+        "notrunningalpha",
+        abac.AttributeRule.ANY_OF,
+        ["alpha", "beta"],
     )
     assert anyof.values
     alpha, beta = anyof.values
@@ -492,7 +500,6 @@ def attr_and_value_kas_grants_or(
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
     return anyof
-
 
 
 @pytest.fixture(scope="module")

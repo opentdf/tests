@@ -86,6 +86,7 @@ def test_autoconfigure_two_kas_or(
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
+
 def test_autoconfigure_two_kas_or_second_kas_not_running(
     attribute_two_kas_grant_or_non_running_second_kas,
     encrypt_sdk,
@@ -128,6 +129,7 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
+
 def test_autoconfigure_two_kas_or_first_kas_not_running(
     attribute_two_kas_grant_or_non_running_first_kas,
     encrypt_sdk,
@@ -166,7 +168,9 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
 
-    rt_file = f"{tmp_dir}test-abac-or-first-kas-non-running-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = (
+        f"{tmp_dir}test-abac-or-first-kas-non-running-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    )
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
