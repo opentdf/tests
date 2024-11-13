@@ -30,7 +30,7 @@ jobs:
       packages: read
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
-      JS_REF: "${{ inputs.js-ref || 'main' }}"
+      JS_REF: "${{ inputs.js-ref || 'fix/split-unwrap' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
