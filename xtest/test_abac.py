@@ -86,6 +86,90 @@ def test_autoconfigure_two_kas_or(
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
+def test_autoconfigure_two_kas_or_second_kas_not_running(
+    attribute_two_kas_grant_or_non_running_second_kas,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url_value1: str,
+    kas_url_value2: str,
+):
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
+
+    sample_name = f"test-abac-two-second-kas-non-running-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = f"{tmp_dir}/{sample_name}.tdf"
+        tdfs.encrypt(
+            encrypt_sdk,
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            fmt="ztdf",
+            attr_values=[
+                attribute_two_kas_grant_or_non_running_second_kas.values[0].fqn,
+                attribute_two_kas_grant_or_non_running_second_kas.values[1].fqn,
+            ],
+        )
+        cipherTexts[sample_name] = ct_file
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        == manifest.encryptionInformation.keyAccess[1].sid
+    )
+    assert set([kas_url_value1, kas_url_value2]) == set(
+        [kao.url for kao in manifest.encryptionInformation.keyAccess]
+    )
+
+    rt_file = f"{tmp_dir}test-abac-or-second-kas-non-running-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+def test_autoconfigure_two_kas_or_first_kas_not_running(
+    attribute_two_kas_grant_or_non_running_first_kas,
+    encrypt_sdk,
+    decrypt_sdk,
+    tmp_dir,
+    pt_file,
+    kas_url_value1: str,
+    kas_url_value2: str,
+):
+    skip_if_unsupported(encrypt_sdk, "autoconfigure")
+
+    sample_name = f"test-abac-two-first-kas-non-running-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = f"{tmp_dir}/{sample_name}.tdf"
+        tdfs.encrypt(
+            encrypt_sdk,
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            fmt="ztdf",
+            attr_values=[
+                attribute_two_kas_grant_or_non_running_first_kas.values[0].fqn,
+                attribute_two_kas_grant_or_non_running_first_kas.values[1].fqn,
+            ],
+        )
+        cipherTexts[sample_name] = ct_file
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert (
+        manifest.encryptionInformation.keyAccess[0].sid
+        == manifest.encryptionInformation.keyAccess[1].sid
+    )
+    assert set([kas_url_value1, kas_url_value2]) == set(
+        [kao.url for kao in manifest.encryptionInformation.keyAccess]
+    )
+
+    rt_file = f"{tmp_dir}test-abac-or-first-kas-non-running-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
 
 def skip_if_unsupported(sdk: tdfs.sdk_type, *features: tdfs.feature_type):
     for feature in features:

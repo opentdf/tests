@@ -141,6 +141,10 @@ def kas_url_attr():
 def kas_url_ns():
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
+@pytest.fixture(scope="session")
+def kas_url_not_running():
+    return os.getenv("KASURL5", "http://localhost:8989/kas")
+
 
 @pytest.fixture(scope="module")
 def attribute_single_kas_grant(
@@ -224,6 +228,107 @@ def attribute_two_kas_grant_or(
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
         kas_url_value1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url_value2,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    return anyof
+
+
+@pytest.fixture(scope="module")
+def attribute_two_kas_grant_or_non_running_second_kas(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url_value1: str,
+    kas_url_not_running: str,
+    temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "notrunningbeta", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+    )
+    assert anyof.values
+    alpha, beta = anyof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+        kas_url_value1,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+
+    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+        kas_url_not_running,
+        load_cached_kas_keys(),
+    )
+    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    return anyof
+
+@pytest.fixture(scope="module")
+def attribute_two_kas_grant_or_non_running_first_kas(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url_not_running: str,
+    kas_url_value2: str,
+    temporary_namespace: abac.Namespace,
+):
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "notrunningalpha", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+    )
+    assert anyof.values
+    alpha, beta = anyof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Then assign it to all clientIds = opentdf-sdk
+    sc = otdfctl.scs_create(
+        [
+            abac.SubjectSet(
+                condition_groups=[
+                    abac.ConditionGroup(
+                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                        conditions=[
+                            abac.Condition(
+                                subject_external_selector_value=".clientId",
+                                operator=abac.SubjectMappingOperatorEnum.IN,
+                                subject_external_values=["opentdf", "opentdf-sdk"],
+                            )
+                        ],
+                    )
+                ]
+            )
+        ],
+    )
+    sm = otdfctl.scs_map(sc, alpha)
+    assert sm.attribute_value.value == "alpha"
+    # Now assign it to the current KAS
+    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+        kas_url_not_running,
         load_cached_kas_keys(),
     )
     otdfctl.grant_assign_value(kas_entry_alpha, alpha)
@@ -387,6 +492,7 @@ def attr_and_value_kas_grants_or(
     otdfctl.grant_assign_value(kas_entry_beta, beta)
 
     return anyof
+
 
 
 @pytest.fixture(scope="module")
