@@ -93,7 +93,7 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
     tmp_dir,
     pt_file,
     kas_url_value1: str,
-    kas_url_value2: str,
+    kas_url_not_running: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
@@ -120,7 +120,7 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_value1, kas_url_value2]) == set(
+    assert set([kas_url_value1, kas_url_not_running]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
 
@@ -134,7 +134,7 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
     decrypt_sdk,
     tmp_dir,
     pt_file,
-    kas_url_value1: str,
+    kas_url_not_running: str,
     kas_url_value2: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
@@ -162,7 +162,7 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_value1, kas_url_value2]) == set(
+    assert set([kas_url_not_running, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
 
