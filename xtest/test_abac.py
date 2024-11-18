@@ -121,6 +121,7 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
+    assert manifest.encryptionInformation.keyAccess[1].url == kas_url_not_running
     assert set([kas_url_value1, kas_url_not_running]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
@@ -164,6 +165,7 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_not_running
     assert set([kas_url_not_running, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
