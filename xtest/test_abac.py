@@ -87,6 +87,21 @@ def test_autoconfigure_two_kas_or(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def move_item(lst, current_index, desired_index):
+    # Validate indices
+    if current_index < 0 or current_index >= len(lst):
+        raise IndexError("Current index is out of range.")
+    if desired_index < 0 or desired_index >= len(lst):
+        raise IndexError("Desired index is out of range.")
+
+    # Remove the item from the current index
+    item = lst.pop(current_index)
+    
+    # Insert the item at the desired index
+    lst.insert(desired_index, item)
+
+    return lst
+
 def test_autoconfigure_two_kas_or_second_kas_not_running(
     attribute_two_kas_grant_or_non_running_second_kas,
     encrypt_sdk,
@@ -116,12 +131,23 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
         )
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
+
+    if manifest.encryptionInformation.keyAccess[1].url != kas_url_not_running:
+        def move_last(manifest: tdfs.Manifest) -> tdfs.Manifest:
+            manifest.encryptionInformation.keyAccess = move_item(
+                manifest.encryptionInformation.keyAccess, 0, 1)
+            return manifest
+        ct_file = tdfs.update_manifest("kao_not_running_last", ct_file, move_last)
+
+    
+    manifest = tdfs.manifest(ct_file)
+    assert manifest.encryptionInformation.keyAccess[1].url == kas_url_not_running
+
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert manifest.encryptionInformation.keyAccess[1].url == kas_url_not_running
     assert set([kas_url_value1, kas_url_not_running]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
@@ -160,12 +186,22 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
         )
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
+    if manifest.encryptionInformation.keyAccess[0].url != kas_url_not_running:
+        def move_first(manifest: tdfs.Manifest) -> tdfs.Manifest:
+            manifest.encryptionInformation.keyAccess = move_item(
+                manifest.encryptionInformation.keyAccess, 1, 0)
+            return manifest
+        ct_file = tdfs.update_manifest("kao_not_running_first", ct_file, move_first)
+
+    
+    manifest = tdfs.manifest(ct_file)
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_not_running
+
     assert len(manifest.encryptionInformation.keyAccess) == 2
     assert (
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_not_running
     assert set([kas_url_not_running, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
