@@ -96,11 +96,12 @@ def move_item(lst, current_index, desired_index):
 
     # Remove the item from the current index
     item = lst.pop(current_index)
-    
+
     # Insert the item at the desired index
     lst.insert(desired_index, item)
 
     return lst
+
 
 def test_autoconfigure_two_kas_or_second_kas_not_running(
     attribute_two_kas_grant_or_non_running_second_kas,
@@ -133,13 +134,15 @@ def test_autoconfigure_two_kas_or_second_kas_not_running(
     manifest = tdfs.manifest(ct_file)
 
     if manifest.encryptionInformation.keyAccess[1].url != kas_url_not_running:
+
         def move_last(manifest: tdfs.Manifest) -> tdfs.Manifest:
             manifest.encryptionInformation.keyAccess = move_item(
-                manifest.encryptionInformation.keyAccess, 0, 1)
+                manifest.encryptionInformation.keyAccess, 0, 1
+            )
             return manifest
+
         ct_file = tdfs.update_manifest("kao_not_running_last", ct_file, move_last)
 
-    
     manifest = tdfs.manifest(ct_file)
     assert manifest.encryptionInformation.keyAccess[1].url == kas_url_not_running
 
@@ -187,13 +190,15 @@ def test_autoconfigure_two_kas_or_first_kas_not_running(
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     if manifest.encryptionInformation.keyAccess[0].url != kas_url_not_running:
+
         def move_first(manifest: tdfs.Manifest) -> tdfs.Manifest:
             manifest.encryptionInformation.keyAccess = move_item(
-                manifest.encryptionInformation.keyAccess, 1, 0)
+                manifest.encryptionInformation.keyAccess, 1, 0
+            )
             return manifest
+
         ct_file = tdfs.update_manifest("kao_not_running_first", ct_file, move_first)
 
-    
     manifest = tdfs.manifest(ct_file)
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_not_running
 
