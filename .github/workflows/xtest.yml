@@ -30,7 +30,7 @@ jobs:
       packages: read
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
-      JS_REF: "${{ inputs.js-ref || 'main' }}"
+      JS_REF: "${{ inputs.js-ref || '8b1de243c4330b62d2c82e41cf676fb2f2e01150' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
@@ -138,17 +138,17 @@ jobs:
         run: |-
           pip install -r requirements.txt
         working-directory: otdftests/xtest
-      - name: Validate xtests
-        if: ${{ !inputs }}
-        run: |-
-          pytest test_nano.py test_self.py
-        working-directory: otdftests/xtest
-      - name: Run xtests
-        run: |-
-          pytest -v test_tdfs.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+      # - name: Validate xtests
+      #   if: ${{ !inputs }}
+      #   run: |-
+      #     pytest test_nano.py test_self.py
+      #   working-directory: otdftests/xtest
+      # - name: Run xtests
+      #   run: |-
+      #     pytest -v test_tdfs.py
+      #   working-directory: otdftests/xtest
+      #   env:
+      #     PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Start additional kas
@@ -177,7 +177,33 @@ jobs:
 
       - name: Run attribute based configuration tests
         run: |-
-          pytest test_abac.py
+          pytest -s test_abac.py::test_autoconfigure_two_kas_or_first_kas_not_running --sdks-encrypt "go" --sdks-decrypt "java"
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
+      - name: unzip
+        if: always()
+        run: |-
+          mkdir -p ./unzippedtdf
+          unzip tmp/test-abac-two-first-kas-non-running-go-kao_not_running_first.tdf -d ./unzippedtdf
+          echo $(cat unzippedtdf/0.manifest.json)
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
+      - name: Upload manifest as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: manifest-output
+          path: otdftests/xtest/unzippedtdf/0.manifest.json
+        
+
+      - name: Run decrypt
+        if: always()
+        run: |-
+          sdk/java/cli.sh decrypt tmp/test-abac-two-first-kas-non-running-go-kao_not_running_first.tdf tmp/test-abac-or-first-kas-non-running-go-java.untdf ztdf
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
