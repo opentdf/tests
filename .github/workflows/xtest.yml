@@ -187,10 +187,17 @@ jobs:
         run: |-
           mkdir -p ./unzippedtdf
           unzip tmp/test-abac-two-first-kas-non-running-go-kao_not_running_first.tdf -d ./unzippedtdf
-          cat unzippedtdf/0.manifest.json
+          echo $(cat unzippedtdf/0.manifest.json)
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
+      - name: Upload manifest as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: manifest-output
+          path: otdftests/xtest/unzippedtdf/0.manifest.json
+        
 
       - name: Run decrypt
         if: always()
