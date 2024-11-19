@@ -42,7 +42,7 @@ args=(
   --kasEndpoint "$KASURL"
   --ignoreAllowList
   --oidcEndpoint "$KCFULLURL"
-  --auth opentdf:secret
+  --auth $CLIENTID:$CLIENTSECRET
 )
 # default for js cli is nano
 if [ "$4" == "ztdf" ]; then
