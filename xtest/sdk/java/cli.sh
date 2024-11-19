@@ -59,4 +59,4 @@ if [ -n "$6" ]; then
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
-java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
+java -Dlog4j.debug -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
