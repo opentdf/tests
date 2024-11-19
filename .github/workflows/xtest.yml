@@ -182,6 +182,16 @@ jobs:
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
+      - name: unzip
+        if: always()
+        run: |-
+          mkdir -p ./unzippedtdf
+          unzip tmp/test-abac-two-first-kas-non-running-go-kao_not_running_first.tdf -d ./unzippedtdf
+          cat unzippedtdf/0.manifest.json
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
       - name: Run decrypt
         if: always()
         run: |-
