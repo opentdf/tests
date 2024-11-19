@@ -177,7 +177,7 @@ jobs:
 
       - name: Run attribute based configuration tests
         run: |-
-          pytest test_abac.py::test_autoconfigure_two_kas_or_first_kas_not_running --sdks-encrypt "go" --sdks-decrypt "java"
+          pytest -s test_abac.py::test_autoconfigure_two_kas_or_first_kas_not_running --sdks-encrypt "go" --sdks-decrypt "java"
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
