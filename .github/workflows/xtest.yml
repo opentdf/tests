@@ -182,3 +182,11 @@ jobs:
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
+      - name: Run decrypt
+        if: always()
+        run: |-
+          sdk/java/cli.sh decrypt tmp/test-abac-two-first-kas-non-running-go-kao_not_running_first.tdf tmp/test-abac-or-first-kas-non-running-go-java.untdf ztdf
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
