@@ -15,6 +15,8 @@ import tdfs
 cipherTexts = {}
 counter = 0
 
+#### HELPERS
+
 
 def do_encrypt_with(
     pt_file: str,
@@ -59,6 +61,9 @@ def do_encrypt_with(
     return ct_file
 
 
+#### BASIC ROUNDTRIP TESTS
+
+
 def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
     use_ecdsa = False
     if container == "nano-with-ecdsa":
@@ -74,6 +79,47 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
+
+
+#### MANIFEST VALIDITY TESTS
+
+
+def test_manifest_validity(encrypt_sdk, pt_file, tmp_dir):
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    validate_manifest_schema(ct_file)
+
+
+def test_manifest_validity_with_assertions(encrypt_sdk, pt_file, tmp_dir):
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions",
+        az=[
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+            ),
+        ],
+    )
+    assert os.path.isfile(ct_file)
+    validate_manifest_schema(ct_file)
+
+
+#### TAMPER
+
+## TAMPER FUNCTIONS
 
 
 def break_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
@@ -109,6 +155,9 @@ def break_segment_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
     segment.hash = altered_hash
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
+
+
+## TAMPER TESTS
 
 
 def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):

@@ -56,7 +56,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: str | PolicyBinding
+    policyBinding: PolicyBinding
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -70,7 +70,7 @@ class EncryptionMethod(BaseModel):
 
 
 class IntegritySignature(BaseModel):
-    alg: str | None = "HS256"
+    alg: str
     sig: str
 
 
@@ -118,7 +118,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
-    assertions: list[tdfassertions.Assertion] | None = None
+    assertions: list[tdfassertions.Assertion] | None = []
 
 
 def manifest(tdf_file: str) -> Manifest:
@@ -149,6 +149,29 @@ def update_manifest(
                 file_path = os.path.join(folder_name, filename)
                 zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
     return outfile
+
+
+def validate_manifest_schema(tdf_file: str):
+    ## Unzip the tdf
+    unzipped_dir = os.path.join(tmp_dir, f"{fname}-manifest-validation-unzipped")
+    with zipfile.ZipFile(tdf_file, "r") as zipped:
+        zipped.extractall(unzipped_dir)
+
+    ## Get the schema file
+    schema_file_path = os.getenv("SCHEMA_FILE")
+    if not schema_file_path:
+        raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
+    elif not os.path.isfile(schema_file_path):
+        raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
+    with open("manifest.schema.json", "r") as schema_file:
+        schema = json.load(schema_file)
+
+    ## Get the manifest file
+    with open(os.path.join(unzipped_dir, "0.manifest.json"), "r") as manifest_file:
+        manifest = json.load(json_file)
+
+    ## Validate
+    validate(instance=manifest, schema=schema)
 
 
 def encrypt(
