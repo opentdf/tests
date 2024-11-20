@@ -87,7 +87,7 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
 def test_manifest_validity(encrypt_sdk, pt_file, tmp_dir):
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
-    validate_manifest_schema(ct_file)
+    tdfs.validate_manifest_schema(ct_file)
 
 
 def test_manifest_validity_with_assertions(encrypt_sdk, pt_file, tmp_dir):
@@ -114,7 +114,7 @@ def test_manifest_validity_with_assertions(encrypt_sdk, pt_file, tmp_dir):
         ],
     )
     assert os.path.isfile(ct_file)
-    validate_manifest_schema(ct_file)
+    tdfs.validate_manifest_schema(ct_file)
 
 
 #### TAMPER
