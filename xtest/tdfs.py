@@ -56,7 +56,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: PolicyBinding
+    policyBinding: str | PolicyBinding
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -70,7 +70,7 @@ class EncryptionMethod(BaseModel):
 
 
 class IntegritySignature(BaseModel):
-    alg: str
+    alg: str | None = "HS256"
     sig: str
 
 
@@ -118,7 +118,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
-    assertions: list[tdfassertions.Assertion] | None = []
+    assertions: Optional[List[tdfassertions.Assertion]] = []
 
 
 def manifest(tdf_file: str) -> Manifest:
