@@ -6,10 +6,11 @@ import logging
 import os
 import subprocess
 import zipfile
+import jsonschema
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
-from typing import Literal
+from typing import Literal, Optional, List
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -56,7 +57,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: str | PolicyBinding
+    policyBinding: Union[str, PolicyBinding]
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -168,10 +169,10 @@ def validate_manifest_schema(tdf_file: str):
 
     ## Get the manifest file
     with open(os.path.join(unzipped_dir, "0.manifest.json"), "r") as manifest_file:
-        manifest = json.load(json_file)
+        manifest = json.load(manifest_file)
 
     ## Validate
-    validate(instance=manifest, schema=schema)
+    jsonschema.validate(instance=manifest, schema=schema)
 
 
 def encrypt(
