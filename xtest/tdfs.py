@@ -10,7 +10,7 @@ import jsonschema
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List, Union
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -154,6 +154,8 @@ def update_manifest(
 
 def validate_manifest_schema(tdf_file: str):
     ## Unzip the tdf
+    tmp_dir = os.path.dirname(tdf_file)
+    fname = os.path.basename(tdf_file).split(".")[0]
     unzipped_dir = os.path.join(tmp_dir, f"{fname}-manifest-validation-unzipped")
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
