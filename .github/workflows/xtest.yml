@@ -154,7 +154,7 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-          SCHEMA_FILE: 'manifest.schema.json'
+          SCHEMA_FILE: 'manifest-mimetype.schema.json'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Start additional kas
