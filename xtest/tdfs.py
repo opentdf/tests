@@ -166,7 +166,7 @@ def validate_manifest_schema(tdf_file: str):
         raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
     elif not os.path.isfile(schema_file_path):
         raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
-    with open("manifest.schema.json", "r") as schema_file:
+    with open(schema_file_path, "r") as schema_file:
         schema = json.load(schema_file)
 
     ## Get the manifest file
