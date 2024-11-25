@@ -6,10 +6,11 @@ import logging
 import os
 import subprocess
 import zipfile
+import jsonschema
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
-from typing import Literal
+from typing import Literal, Optional, List, Union
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -56,7 +57,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: str | PolicyBinding
+    policyBinding: Union[str, PolicyBinding]
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -118,7 +119,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
-    assertions: list[tdfassertions.Assertion] | None = None
+    assertions: Optional[List[tdfassertions.Assertion]] = []
 
 
 def manifest(tdf_file: str) -> Manifest:
@@ -149,6 +150,31 @@ def update_manifest(
                 file_path = os.path.join(folder_name, filename)
                 zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
     return outfile
+
+
+def validate_manifest_schema(tdf_file: str):
+    ## Unzip the tdf
+    tmp_dir = os.path.dirname(tdf_file)
+    fname = os.path.basename(tdf_file).split(".")[0]
+    unzipped_dir = os.path.join(tmp_dir, f"{fname}-manifest-validation-unzipped")
+    with zipfile.ZipFile(tdf_file, "r") as zipped:
+        zipped.extractall(unzipped_dir)
+
+    ## Get the schema file
+    schema_file_path = os.getenv("SCHEMA_FILE")
+    if not schema_file_path:
+        raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
+    elif not os.path.isfile(schema_file_path):
+        raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
+    with open(schema_file_path, "r") as schema_file:
+        schema = json.load(schema_file)
+
+    ## Get the manifest file
+    with open(os.path.join(unzipped_dir, "0.manifest.json"), "r") as manifest_file:
+        manifest = json.load(manifest_file)
+
+    ## Validate
+    jsonschema.validate(instance=manifest, schema=schema)
 
 
 def encrypt(
