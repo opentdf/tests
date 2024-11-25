@@ -158,25 +158,25 @@ jobs:
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
       - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@remote-ers-connection
         with:
           kas-port: 8181
           kas-name: alpha
 
       - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@remote-ers-connection
         with:
           kas-port: 8282
           kas-name: beta
       
       - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@remote-ers-connection
         with:
           kas-port: 8383
           kas-name: gamma
 
       - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@remote-ers-connection
         with:
           kas-port: 8484
           kas-name: delta
