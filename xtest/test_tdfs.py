@@ -262,8 +262,8 @@ def generate_rs256_keys() -> Tuple[str, str]:
     )
 
     # Convert to string with escaped newlines
-    private_pem_str = private_pem.decode("utf-8")#.replace("\n", "\\n")
-    public_pem_str = public_pem.decode("utf-8")#.replace("\n", "\\n")
+    private_pem_str = private_pem.decode("utf-8")
+    public_pem_str = public_pem.decode("utf-8")
 
     return private_pem_str, public_pem_str
 
@@ -273,7 +273,7 @@ def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertion_verification"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    hs256_key = base64.b64encode(secrets.token_bytes(32)).decode('ascii')
+    hs256_key = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
     rs256_private, rs256_public = generate_rs256_keys()
     ct_file = do_encrypt_with(
         pt_file,
