@@ -5,7 +5,7 @@ from typing import Literal, Union, Dict
 Type = Literal["handling", "other"]
 Scope = Literal["payload", "tdo"]
 AppliesTo = Literal["encrypted", "unencrypted"]
-BindingMethod = Literal["jws"]
+BindingMethod = Literal["jws", "JWS"]
 
 
 class Statement(BaseModel):

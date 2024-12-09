@@ -3,7 +3,7 @@
 
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
