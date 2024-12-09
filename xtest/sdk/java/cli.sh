@@ -62,5 +62,9 @@ if [ -n "$6" ]; then
   args+=(--attr "$6")
 fi
 
+if [ -n "$7" ]; then
+  args+=(--with-assertions "$7")
+fi
+
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
