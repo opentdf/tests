@@ -23,6 +23,10 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
       exit $?
       ;;
+    assertion_verification)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

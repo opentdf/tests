@@ -5,6 +5,9 @@ import subprocess
 import base64
 import string
 import random
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from typing import Tuple
 
 import pytest
 
@@ -202,6 +205,8 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
+## ASSERTION TESTS
+
 def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -231,4 +236,98 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+def generate_rs256_keys() -> Tuple[str, str]:
+    # Generate an RSA private key
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048
+    )
+
+    # Generate the public key from the private key
+    public_key = private_key.public_key()
+
+    # Serialize the private key to PEM format
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    # Serialize the public key to PEM format
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    # Convert to string with escaped newlines
+    private_pem_str = private_pem.decode('utf-8').replace('\n', '\\n')
+    public_pem_str = public_pem.decode('utf-8').replace('\n', '\\n')
+
+    return private_pem_str, public_pem_str
+
+
+def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
+    hs256_key = os.urandom(32)
+    rs256_private, rs256_public = generate_rs256_keys()
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions",
+        az=[
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="assertion1",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+                signingKey=assertions.AssertionKey(
+                    alg="HS256",
+                    key=hs256_key,
+                ),
+            ),
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="assertion2",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+                signingKey=assertions.AssertionKey(
+                    alg="RS256",
+                    key=rs256_private,
+                ),
+            ),
+        ],
+    )
+    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    assertion_verification_keys = assertions.AssertionVerificationKeys(
+        keys={
+            "assertion1":assertions.AssertionKey(
+                    alg="HS256",
+                    key=hs256_key,
+                ),
+            "assertion2": assertions.AssertionKey(
+                    alg="RS256",
+                    key=rs256_public,
+                ),
+            }
+    )
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf", assertion_verification_keys)
     assert filecmp.cmp(pt_file, rt_file)

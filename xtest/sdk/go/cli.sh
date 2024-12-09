@@ -3,7 +3,7 @@
 
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -24,6 +24,10 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep with-assertions
       exit $?
       ;;
+    assertion_verification)
+      "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -42,19 +46,18 @@ if [ "$4" == "nano" ]; then
   args+=(--tdf-type "$4")
 fi
 
-if [ -n "$5" ]; then
-  args+=(--mime-type "$5")
-fi
-
-if [ -n "$6" ]; then
-  args+=(--attr "$6")
-fi
-
-if [ -n "$7" ]; then
-  args+=(--with-assertions "$7")
-fi
-
 if [ "$1" == "encrypt" ]; then
+  if [ -n "$5" ]; then
+    args+=(--mime-type "$5")
+  fi
+
+  if [ -n "$6" ]; then
+    args+=(--attr "$6")
+  fi
+
+  if [ -n "$7" ]; then
+    args+=(--with-assertions "$7")
+  fi
   if [ "$USE_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
@@ -67,6 +70,9 @@ if [ "$1" == "encrypt" ]; then
     mv "${3}.tdf" "${3}"
   fi
 elif [ "$1" == "decrypt" ]; then
+  if [ -n "$8" ]; then
+    args+=(--with-assertion-verification-keys "$5")
+  fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
 else
