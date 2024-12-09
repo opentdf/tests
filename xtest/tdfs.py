@@ -213,8 +213,13 @@ def encrypt(
     subprocess.check_call(c, env=env)
 
 
-def decrypt(sdk, ct_file, rt_file, fmt="nano", 
-            assert_keys: tdfassertions.AssertionVerificationKeys | None = None):
+def decrypt(
+    sdk,
+    ct_file,
+    rt_file,
+    fmt="nano",
+    assert_keys: tdfassertions.AssertionVerificationKeys | None = None,
+):
     c = [
         sdk_paths[sdk],
         "decrypt",
@@ -224,7 +229,12 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano",
     ]
     if assert_keys:
         # empty args for mimetype, attrs, and assertions
-        c += ["", "", "", json.dumps(to_jsonable_python(assert_keys, exclude_none=True))]
+        c += [
+            "",
+            "",
+            "",
+            json.dumps(to_jsonable_python(assert_keys, exclude_none=True)),
+        ]
     logger.info(f"dec [{' '.join(c)}]")
     subprocess.check_output(c, stderr=subprocess.STDOUT)
 

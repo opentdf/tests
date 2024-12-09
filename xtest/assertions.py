@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal, Union, Optional, Dict
+from typing import Literal, Union, Dict
 
 
 Type = Literal["handling", "other"]
@@ -18,6 +18,7 @@ class Binding(BaseModel):
     method: BindingMethod
     signature: str
 
+
 class AssertionKey(BaseModel):
     alg: str
     key: str
@@ -31,6 +32,7 @@ class Assertion(BaseModel):
     statement: Statement
     binding: Binding | None = None
     signingKey: AssertionKey | None = None
+
 
 class AssertionVerificationKeys(BaseModel):
     keys: Dict[str, AssertionKey]

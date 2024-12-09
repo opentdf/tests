@@ -207,6 +207,7 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
 
 ## ASSERTION TESTS
 
+
 def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -238,12 +239,10 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
+
 def generate_rs256_keys() -> Tuple[str, str]:
     # Generate an RSA private key
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048
-    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     # Generate the public key from the private key
     public_key = private_key.public_key()
@@ -252,18 +251,18 @@ def generate_rs256_keys() -> Tuple[str, str]:
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
 
     # Serialize the public key to PEM format
     public_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
     # Convert to string with escaped newlines
-    private_pem_str = private_pem.decode('utf-8').replace('\n', '\\n')
-    public_pem_str = public_pem.decode('utf-8').replace('\n', '\\n')
+    private_pem_str = private_pem.decode("utf-8").replace("\n", "\\n")
+    public_pem_str = public_pem.decode("utf-8").replace("\n", "\\n")
 
     return private_pem_str, public_pem_str
 
@@ -319,15 +318,15 @@ def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     assertion_verification_keys = assertions.AssertionVerificationKeys(
         keys={
-            "assertion1":assertions.AssertionKey(
-                    alg="HS256",
-                    key=hs256_key,
-                ),
+            "assertion1": assertions.AssertionKey(
+                alg="HS256",
+                key=hs256_key,
+            ),
             "assertion2": assertions.AssertionKey(
-                    alg="RS256",
-                    key=rs256_public,
-                ),
-            }
+                alg="RS256",
+                key=rs256_public,
+            ),
+        }
     )
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf", assertion_verification_keys)
     assert filecmp.cmp(pt_file, rt_file)
