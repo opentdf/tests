@@ -1,6 +1,24 @@
 name: X-Test
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      platform-ref:
+        required: false
+        type: string
+        default: main
+      otdfctl-ref:
+        required: false
+        type: string
+        default: main
+      js-ref:
+        required: false
+        type: string
+        default: main
+      java-ref:
+        required: false
+        type: string
+        default: main
   workflow_call:
     inputs:
       platform-ref:
@@ -21,6 +39,23 @@ on:
         default: main
   schedule:
     - cron: "30 6 * * *"
+    inputs:
+      platform-ref:
+        required: false
+        type: string
+        default: main
+      otdfctl-ref:
+        required: false
+        type: string
+        default: main
+      js-ref:
+        required: false
+        type: string
+        default: main
+      java-ref:
+        required: false
+        type: string
+        default: main
 jobs:
   cross-client-test:
     timeout-minutes: 60
