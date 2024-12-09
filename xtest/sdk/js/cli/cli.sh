@@ -69,7 +69,6 @@ if [ "$1" == "encrypt" ]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-
   if [ -n "$USE_ECDSA_BINDING" ]; then
     if [ "$USE_ECDSA_BINDING" == "true" ]; then
       args+=(--policyBinding ecdsa)
