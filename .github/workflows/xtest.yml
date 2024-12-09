@@ -39,23 +39,6 @@ on:
         default: main
   schedule:
     - cron: "30 6 * * *"
-    inputs:
-      platform-ref:
-        required: false
-        type: string
-        default: main
-      otdfctl-ref:
-        required: false
-        type: string
-        default: main
-      js-ref:
-        required: false
-        type: string
-        default: main
-      java-ref:
-        required: false
-        type: string
-        default: main
 jobs:
   cross-client-test:
     timeout-minutes: 60
