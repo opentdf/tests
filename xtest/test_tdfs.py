@@ -218,7 +218,7 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions",
+        scenario="assertions-roundtrip",
         az=[
             assertions.Assertion(
                 appliesToState="encrypted",
@@ -279,7 +279,7 @@ def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions",
+        scenario="assertions-keys-roundtrip",
         az=[
             assertions.Assertion(
                 appliesToState="encrypted",
