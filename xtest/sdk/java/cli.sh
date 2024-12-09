@@ -24,7 +24,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     assertion_verification)
-      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
+      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep nopeeee
       exit $?
       ;;
     *)

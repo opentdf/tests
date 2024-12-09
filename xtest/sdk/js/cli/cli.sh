@@ -23,7 +23,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     assertion_verification)
-      npx $CTL help | grep assertionVerificationKeys
+      npx $CTL help | grep nopeeee
       exit $?
       ;;
     autoconfigure | ns_grants)
