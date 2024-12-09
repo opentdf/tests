@@ -71,7 +71,7 @@ if [ "$1" == "encrypt" ]; then
   fi
 elif [ "$1" == "decrypt" ]; then
   if [ -n "$8" ]; then
-    args+=(--with-assertion-verification-keys "$5")
+    args+=(--with-assertion-verification-keys "$8")
   fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
