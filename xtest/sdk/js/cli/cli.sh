@@ -23,7 +23,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     assertion_verification)
-      npx $CTL help | grep assertion-verification
+      npx $CTL help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
@@ -59,6 +59,10 @@ fi
 
 if [ -n "$7" ]; then
   args+=(--assertions "$7")
+fi
+
+if [ -n "$8" ]; then
+  args+=(--assertionVerificationKeys "$8")
 fi
 
 if [ "$1" == "encrypt" ]; then
