@@ -272,7 +272,7 @@ def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertion_verification"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    hs256_key = base64.b64encode(os.urandom(32)).decode('utf-8')
+    hs256_key = base64.b64encode(os.urandom(32)).decode("utf-8")
     rs256_private, rs256_public = generate_rs256_keys()
     ct_file = do_encrypt_with(
         pt_file,
