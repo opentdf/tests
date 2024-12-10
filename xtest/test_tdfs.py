@@ -5,7 +5,6 @@ import subprocess
 import base64
 import string
 import random
-from typing import Tuple
 
 import pytest
 
