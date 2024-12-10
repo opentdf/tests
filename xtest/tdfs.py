@@ -236,7 +236,7 @@ def decrypt(
             json.dumps(to_jsonable_python(assert_keys, exclude_none=True)),
         ]
     logger.info(f"dec [{' '.join(c)}]")
-    subprocess.check_output(c , stderr=subprocess.STDOUT)
+    subprocess.check_output(c, stderr=subprocess.STDOUT)
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:

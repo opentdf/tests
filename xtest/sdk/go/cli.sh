@@ -25,7 +25,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     assertion_verification)
-      "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
+      "${cmd[@]}" help decrypt | grep nooopppee
       exit $?
       ;;
     *)
