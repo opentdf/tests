@@ -603,9 +603,11 @@ def ns_and_value_kas_grants_and(
 
     return allof
 
+
 @pytest.fixture(scope="module")
 def hs256_key():
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+
 
 @pytest.fixture(scope="module")
 def rs256_keys():

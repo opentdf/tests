@@ -238,7 +238,9 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, hs256_key, rs256_keys):
+def test_tdf_assertions_with_keys(
+    encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, hs256_key, rs256_keys
+):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertion_verification"):
