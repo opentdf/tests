@@ -3,7 +3,7 @@
 
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -21,6 +21,10 @@ if [ "$1" == "supports" ]; then
       ;;
     assertions)
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
+      exit $?
+      ;;
+    assertion_verification)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
     *)
@@ -56,6 +60,14 @@ fi
 
 if [ -n "$6" ]; then
   args+=(--attr "$6")
+fi
+
+if [ -n "$7" ]; then
+  args+=(--with-assertions "$7")
+fi
+
+if [ -n "$8" ]; then
+  args+=(--with-assertion-verification-keys "$8")
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"

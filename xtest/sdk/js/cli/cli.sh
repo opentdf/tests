@@ -3,7 +3,7 @@
 
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <nano>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 XTEST_DIR=$(cd -- "$SCRIPT_DIR"/../../../ &>/dev/null && pwd)
@@ -20,6 +20,10 @@ if [ "$1" == "supports" ]; then
   case "$2" in
     assertions)
       npx $CTL help | grep assertions
+      exit $?
+      ;;
+    assertion_verification)
+      npx $CTL help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
@@ -57,11 +61,14 @@ if [ -n "$7" ]; then
   args+=(--assertions "$7")
 fi
 
+if [ -n "$8" ]; then
+  args+=(--assertionVerificationKeys "$8")
+fi
+
 if [ "$1" == "encrypt" ]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-
   if [ -n "$USE_ECDSA_BINDING" ]; then
     if [ "$USE_ECDSA_BINDING" == "true" ]; then
       args+=(--policyBinding ecdsa)

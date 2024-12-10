@@ -202,6 +202,9 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
+## ASSERTION TESTS
+
+
 def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -231,4 +234,70 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_tdf_assertions_with_keys(
+    encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, hs256_key, rs256_keys
+):
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
+    rs256_private, rs256_public = rs256_keys
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions-keys-roundtrip",
+        az=[
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="assertion1",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+                signingKey=assertions.AssertionKey(
+                    alg="HS256",
+                    key=hs256_key,
+                ),
+            ),
+            assertions.Assertion(
+                appliesToState="encrypted",
+                id="assertion2",
+                scope="tdo",
+                statement=assertions.Statement(
+                    format="json+stanag5636",
+                    schema="urn:nato:stanag:5636:A:1:elements:json",
+                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                ),
+                type="handling",
+                signingKey=assertions.AssertionKey(
+                    alg="RS256",
+                    key=rs256_private,
+                ),
+            ),
+        ],
+    )
+    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    assertion_verification_keys = assertions.AssertionVerificationKeys(
+        keys={
+            "assertion1": assertions.AssertionKey(
+                alg="HS256",
+                key=hs256_key,
+            ),
+            "assertion2": assertions.AssertionKey(
+                alg="RS256",
+                key=rs256_public,
+            ),
+        }
+    )
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf", assertion_verification_keys)
     assert filecmp.cmp(pt_file, rt_file)
