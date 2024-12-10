@@ -2,6 +2,11 @@ import os
 import pytest
 import random
 import string
+import base64
+import secrets
+
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
 import abac
 
@@ -597,3 +602,34 @@ def ns_and_value_kas_grants_and(
     otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
 
     return allof
+
+@pytest.fixture(scope="module")
+def hs256_key():
+    return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+
+@pytest.fixture(scope="module")
+def rs256_keys():
+    # Generate an RSA private key
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    # Generate the public key from the private key
+    public_key = private_key.public_key()
+
+    # Serialize the private key to PEM format
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    # Serialize the public key to PEM format
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    # Convert to string with escaped newlines
+    private_pem_str = private_pem.decode("utf-8")
+    public_pem_str = public_pem.decode("utf-8")
+
+    return private_pem_str, public_pem_str

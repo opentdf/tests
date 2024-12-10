@@ -5,9 +5,6 @@ import subprocess
 import base64
 import string
 import random
-import secrets
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 from typing import Tuple
 
 import pytest
@@ -241,40 +238,12 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def generate_rs256_keys() -> Tuple[str, str]:
-    # Generate an RSA private key
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-    # Generate the public key from the private key
-    public_key = private_key.public_key()
-
-    # Serialize the private key to PEM format
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-
-    # Serialize the public key to PEM format
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-
-    # Convert to string with escaped newlines
-    private_pem_str = private_pem.decode("utf-8")
-    public_pem_str = public_pem.decode("utf-8")
-
-    return private_pem_str, public_pem_str
-
-
-def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+def test_tdf_assertions_with_keys(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, hs256_key, rs256_keys):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertion_verification"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    hs256_key = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
-    rs256_private, rs256_public = generate_rs256_keys()
+    rs256_private, rs256_public = rs256_keys
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
