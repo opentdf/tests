@@ -4,6 +4,10 @@ import random
 import string
 import base64
 import secrets
+import assertions
+import json
+
+from pydantic_core import to_jsonable_python
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -635,3 +639,102 @@ def rs256_keys():
     public_pem_str = public_pem.decode("utf-8")
 
     return private_pem_str, public_pem_str
+
+
+def write_assertion_to_file(
+    file_name: str, assertion_list: list[assertions.Assertion] = []
+):
+    as_file = f"{tmp_dir}test-assertion-{file_name}.json"
+    assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
+    with open(as_file, "w") as f:
+        f.write(assertion_json)
+    return as_file
+
+
+@pytest.fixture(scope="module")
+def assertion_file_no_keys():
+    assertion_list = [
+        assertions.Assertion(
+            appliesToState="encrypted",
+            id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
+            scope="tdo",
+            statement=assertions.Statement(
+                format="json+stanag5636",
+                schema="urn:nato:stanag:5636:A:1:elements:json",
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+            ),
+            type="handling",
+        )
+    ]
+    return write_assertion_to_file("assertion_1_no_signing_key", assertion_list)
+
+
+@pytest.fixture(scope="module")
+def assertion_file_rs_and_hs_keys(hs256_key, rs256_keys):
+    rs256_private, _ = rs256_keys
+    assertion_list = [
+        assertions.Assertion(
+            appliesToState="encrypted",
+            id="assertion1",
+            scope="tdo",
+            statement=assertions.Statement(
+                format="json+stanag5636",
+                schema="urn:nato:stanag:5636:A:1:elements:json",
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+            ),
+            type="handling",
+            signingKey=assertions.AssertionKey(
+                alg="HS256",
+                key=hs256_key,
+            ),
+        ),
+        assertions.Assertion(
+            appliesToState="encrypted",
+            id="assertion2",
+            scope="tdo",
+            statement=assertions.Statement(
+                format="json+stanag5636",
+                schema="urn:nato:stanag:5636:A:1:elements:json",
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+            ),
+            type="handling",
+            signingKey=assertions.AssertionKey(
+                alg="RS256",
+                key=rs256_private,
+            ),
+        ),
+    ]
+    return write_assertion_to_file("assertion1_hs_assertion2_rs", assertion_list)
+
+
+def write_assertion_verification_keys_to_file(
+    file_name: str,
+    assertion_verificaiton_keys: assertions.AssertionVerificationKeys = None,
+):
+    as_file = f"{tmp_dir}test-assertion-verification-{file_name}.json"
+    assertion_verification_json = json.dumps(
+        to_jsonable_python(assertion_verificaiton_keys, exclude_none=True)
+    )
+    with open(as_file, "w") as f:
+        f.write(assertion_verification_json)
+    return as_file
+
+
+@pytest.fixture(scope="module")
+def assertion_verification_file_rs_and_hs_keys(hs256_key, rs256_keys):
+    _, rs256_public = rs256_keys
+    assertion_verification = assertions.AssertionVerificationKeys(
+        keys={
+            "assertion1": assertions.AssertionKey(
+                alg="HS256",
+                key=hs256_key,
+            ),
+            "assertion2": assertions.AssertionKey(
+                alg="RS256",
+                key=rs256_public,
+            ),
+        }
+    )
+    return write_assertion_verification_keys_to_file(
+        "assertion1_hs_assertion2_rs", assertion_verification
+    )

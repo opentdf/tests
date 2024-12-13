@@ -184,7 +184,7 @@ def encrypt(
     mime_type="application/octet-stream",
     fmt="nano",
     attr_values: list[str] | None = None,
-    assert_value: list[tdfassertions.Assertion] | None = None,
+    assert_value="",
     use_ecdsa_binding=False,
 ):
     c = [
@@ -200,7 +200,7 @@ def encrypt(
     if assert_value:
         if not attr_values:
             c += [""]
-        c += [json.dumps(to_jsonable_python(assert_value, exclude_none=True))]
+        c += [assert_value]
     logger.debug(f"enc [{' '.join(c)}]")
 
     # Copy the current environment
@@ -218,7 +218,7 @@ def decrypt(
     ct_file,
     rt_file,
     fmt="nano",
-    assert_keys: tdfassertions.AssertionVerificationKeys | None = None,
+    assert_keys: str = "",
 ):
     c = [
         sdk_paths[sdk],
@@ -233,7 +233,7 @@ def decrypt(
             "",
             "",
             "",
-            json.dumps(to_jsonable_python(assert_keys, exclude_none=True)),
+            assert_keys,
         ]
     logger.info(f"dec [{' '.join(c)}]")
     subprocess.check_output(c, stderr=subprocess.STDOUT)
