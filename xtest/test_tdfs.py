@@ -1,4 +1,3 @@
-import assertions
 import filecmp
 import os
 import subprocess
