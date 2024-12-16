@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal, Union
+from typing import Literal
 
 
 Type = Literal["handling", "other"]
@@ -11,7 +11,7 @@ BindingMethod = Literal["jws"]
 class Statement(BaseModel):
     format: str
     schema: str
-    value: Union[str, dict]
+    value: dict | str
 
 
 class Binding(BaseModel):

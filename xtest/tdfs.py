@@ -10,7 +10,7 @@ import jsonschema
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
-from typing import Literal, Optional, List, Union
+from typing import Literal
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -57,7 +57,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: Union[str, PolicyBinding]
+    policyBinding: PolicyBinding | str
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -119,7 +119,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
-    assertions: Optional[List[tdfassertions.Assertion]] = []
+    assertions: list[tdfassertions.Assertion] | None = None
 
 
 def manifest(tdf_file: str) -> Manifest:
