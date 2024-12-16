@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal, Union, Dict
+from typing import Literal
 
 
 Type = Literal["handling", "other"]
@@ -11,7 +11,7 @@ BindingMethod = Literal["jws", "JWS"]
 class Statement(BaseModel):
     format: str
     schema: str
-    value: Union[str, dict]
+    value: dict | str
 
 
 class Binding(BaseModel):
@@ -35,4 +35,4 @@ class Assertion(BaseModel):
 
 
 class AssertionVerificationKeys(BaseModel):
-    keys: Dict[str, AssertionKey]
+    keys: dict[str, AssertionKey]
