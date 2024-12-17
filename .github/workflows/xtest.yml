@@ -38,10 +38,10 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
-          node-version: "20.x"
+          node-version: "22.x"
           registry-url: https://npm.pkg.github.com
       - name: Set up Python 3.10
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
