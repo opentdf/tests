@@ -30,9 +30,9 @@ jobs:
       packages: read
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
-      JS_REF: "${{ inputs.js-ref || 'assertion-verification-cli' }}"
-      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'add-assertion-verification-key' }}"
-      JAVA_REF: "${{ inputs.java-ref || 'add-assertion-verification' }}"
+      JS_REF: "${{ inputs.js-ref || 'main' }}"
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
+      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
