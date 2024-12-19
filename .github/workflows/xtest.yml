@@ -7,18 +7,22 @@ on:
         required: false
         type: string
         default: main
+        description: "The branch or commit to use for the platform"
       otdfctl-ref:
         required: false
         type: string
         default: main
+        description: "The branch or commit to use for otdfctl"
       js-ref:
         required: false
         type: string
         default: main
+        description: "The branch or commit to use for the web-sdk"
       java-ref:
         required: false
         type: string
         default: main
+        description: "The branch or commit to use for the java-sdk"
   workflow_call:
     inputs:
       platform-ref:
