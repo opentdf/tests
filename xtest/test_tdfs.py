@@ -1,4 +1,3 @@
-import assertions
 import filecmp
 import os
 import subprocess
@@ -24,7 +23,7 @@ def do_encrypt_with(
     container: str,
     tmp_dir: str,
     use_ecdsa: bool = False,
-    az: list[assertions.Assertion] = [],
+    az: str = "",
     scenario: str = "",
 ) -> str:
     global counter
@@ -90,7 +89,9 @@ def test_manifest_validity(encrypt_sdk, pt_file, tmp_dir):
     tdfs.validate_manifest_schema(ct_file)
 
 
-def test_manifest_validity_with_assertions(encrypt_sdk, pt_file, tmp_dir):
+def test_manifest_validity_with_assertions(
+    encrypt_sdk, pt_file, tmp_dir, assertion_file_no_keys
+):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     ct_file = do_encrypt_with(
@@ -99,19 +100,7 @@ def test_manifest_validity_with_assertions(encrypt_sdk, pt_file, tmp_dir):
         "ztdf",
         tmp_dir,
         scenario="assertions",
-        az=[
-            assertions.Assertion(
-                appliesToState="encrypted",
-                id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
-                scope="tdo",
-                statement=assertions.Statement(
-                    format="json+stanag5636",
-                    schema="urn:nato:stanag:5636:A:1:elements:json",
-                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
-                ),
-                type="handling",
-            ),
-        ],
+        az=assertion_file_no_keys,
     )
     assert os.path.isfile(ct_file)
     tdfs.validate_manifest_schema(ct_file)
@@ -202,7 +191,12 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+## ASSERTION TESTS
+
+
+def test_tdf_assertions(
+    encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, assertion_file_no_keys
+):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertions"):
@@ -213,22 +207,44 @@ def test_tdf_assertions(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         "ztdf",
         tmp_dir,
         scenario="assertions",
-        az=[
-            assertions.Assertion(
-                appliesToState="encrypted",
-                id="424ff3a3-50ca-4f01-a2ae-ef851cd3cac0",
-                scope="tdo",
-                statement=assertions.Statement(
-                    format="json+stanag5636",
-                    schema="urn:nato:stanag:5636:A:1:elements:json",
-                    value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
-                ),
-                type="handling",
-            ),
-        ],
+        az=assertion_file_no_keys,
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_tdf_assertions_with_keys(
+    encrypt_sdk,
+    decrypt_sdk,
+    pt_file,
+    tmp_dir,
+    assertion_file_rs_and_hs_keys,
+    assertion_verification_file_rs_and_hs_keys,
+):
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions-keys-roundtrip",
+        az=assertion_file_rs_and_hs_keys,
+    )
+    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+
+    tdfs.decrypt(
+        decrypt_sdk,
+        ct_file,
+        rt_file,
+        "ztdf",
+        assertion_verification_file_rs_and_hs_keys,
+    )
     assert filecmp.cmp(pt_file, rt_file)

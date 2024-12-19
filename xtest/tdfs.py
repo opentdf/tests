@@ -9,7 +9,6 @@ import zipfile
 import jsonschema
 
 from pydantic import BaseModel
-from pydantic_core import to_jsonable_python
 from typing import Literal, Optional, List, Union
 
 logger = logging.getLogger("xtest")
@@ -184,7 +183,7 @@ def encrypt(
     mime_type="application/octet-stream",
     fmt="nano",
     attr_values: list[str] | None = None,
-    assert_value: list[tdfassertions.Assertion] | None = None,
+    assert_value="",
     use_ecdsa_binding=False,
 ):
     c = [
@@ -200,7 +199,7 @@ def encrypt(
     if assert_value:
         if not attr_values:
             c += [""]
-        c += [json.dumps(to_jsonable_python(assert_value, exclude_none=True))]
+        c += [assert_value]
     logger.debug(f"enc [{' '.join(c)}]")
 
     # Copy the current environment
@@ -213,7 +212,13 @@ def encrypt(
     subprocess.check_call(c, env=env)
 
 
-def decrypt(sdk, ct_file, rt_file, fmt="nano"):
+def decrypt(
+    sdk,
+    ct_file,
+    rt_file,
+    fmt="nano",
+    assert_keys: str = "",
+):
     c = [
         sdk_paths[sdk],
         "decrypt",
@@ -221,6 +226,14 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano"):
         rt_file,
         fmt,
     ]
+    if assert_keys:
+        # empty args for mimetype, attrs, and assertions
+        c += [
+            "",
+            "",
+            "",
+            assert_keys,
+        ]
     logger.info(f"dec [{' '.join(c)}]")
     subprocess.check_output(c, stderr=subprocess.STDOUT)
 
