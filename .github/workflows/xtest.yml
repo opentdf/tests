@@ -168,17 +168,17 @@ jobs:
         run: |-
           curl -L -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
         working-directory: otdftests/xtest
-      # - name: Run legacy decryption tests
-      #   run: |-
-      #     pytest -v test_legacy.py
-      #   working-directory: otdftests/xtest
-      #   env:
-      #     PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
       - name: Validate xtests
         if: ${{ !inputs }}
         run: |-
           pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
+      - name: Run legacy decryption tests
+        run: |-
+          pytest -v test_legacy.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
       - name: Run xtests
         run: |-
           pytest -v test_tdfs.py
