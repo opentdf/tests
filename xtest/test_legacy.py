@@ -18,7 +18,7 @@ def test_decrypt_small(
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
-    assert file_stats.st_size == 10 * 2**10
+    assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
     with open(rt_file, "rb") as f:
         while (b := f.read(1024)):
