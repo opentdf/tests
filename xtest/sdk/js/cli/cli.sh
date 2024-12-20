@@ -70,7 +70,7 @@ if [ "$1" == "encrypt" ]; then
 
   npx $CTL encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
-  printf 'performing decryption with [%s] [%s] [%s]\n' $CTL "$2" "${args[@]}"
+  printf 'decrypt [%s]\n' "${args[@]}"
   npx $CTL decrypt "$2" "${args[@]}"
 else
   echo "Incorrect argument provided"
