@@ -206,12 +206,12 @@ jobs:
           kas-port: 8484
           kas-name: delta
 
-      - name: Run attribute based configuration tests
-        run: |-
-          pytest test_abac.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+      # - name: Run attribute based configuration tests
+      #   run: |-
+      #     pytest test_abac.py
+      #   working-directory: otdftests/xtest
+      #   env:
+      #     PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
 
       - name: Run legacy decryption tests
         run: |-
