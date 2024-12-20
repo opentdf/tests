@@ -212,3 +212,10 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+
+       - name: Run legacy decryption tests
+        run: |-
+          pytest -v test_legacy.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
