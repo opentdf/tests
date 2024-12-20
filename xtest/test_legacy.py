@@ -5,7 +5,7 @@ import tdfs
 
 def get_golden_file(golden_file_name: str) -> str:
     dir = os.path.dirname(os.path.realpath(__file__))
-    filename = os.path.join(dir, '..', 'golden', f"{golden_file_name}")
+    filename = os.path.join(dir, 'golden', f"{golden_file_name}")
     if os.path.isfile(dir):
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
