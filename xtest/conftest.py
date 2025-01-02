@@ -41,7 +41,7 @@ def pytest_generate_tests(metafunc):
         elif metafunc.config.getoption("--sdks"):
             decrypt_sdks = metafunc.config.getoption("--sdks").split()
         else:
-            decrypt_sdks = ["go", "java", "js"]
+            decrypt_sdks = ["js", "go", "java"]
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
