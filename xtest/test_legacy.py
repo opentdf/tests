@@ -5,10 +5,11 @@ import tdfs
 
 def get_golden_file(golden_file_name: str) -> str:
     dir = os.path.dirname(os.path.realpath(__file__))
-    filename = os.path.join(dir, 'golden', f"{golden_file_name}")
+    filename = os.path.join(dir, "golden", f"{golden_file_name}")
     if os.path.isfile(filename):
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
+
 
 def test_decrypt_small(
     decrypt_sdk: tdfs.sdk_type,
@@ -21,8 +22,9 @@ def test_decrypt_small(
     assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
     with open(rt_file, "rb") as f:
-        while (b := f.read(1024)):
-          assert b == expected_bytes
+        while b := f.read(1024):
+            assert b == expected_bytes
+
 
 def test_decrypt_big(
     decrypt_sdk: tdfs.sdk_type,
@@ -35,5 +37,5 @@ def test_decrypt_big(
     assert file_stats.st_size == 10 * 2**20
     expected_bytes = bytes([0] * 1024)
     with open(rt_file, "rb") as f:
-        while (b := f.read(1024)):
-          assert b == expected_bytes
+        while b := f.read(1024):
+            assert b == expected_bytes
