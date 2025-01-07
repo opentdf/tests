@@ -19,6 +19,7 @@ def test_autoconfigure_one_attribute(
     # We have a grant for alpha to localhost kas. Now try to use it...
 
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -54,6 +55,7 @@ def test_autoconfigure_two_kas_or(
     kas_url_value2: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-two-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -93,6 +95,15 @@ def skip_if_unsupported(sdk: tdfs.sdk_type, *features: tdfs.feature_type):
             pytest.skip(f"{sdk} sdk doesn't yet support [{feature}]")
 
 
+def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
+    if tdfs.supports(encrypt_sdk, "hexless") and not tdfs.supports(
+        decrypt_sdk, "hexless"
+    ):
+        pytest.skip(
+            f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
+        )
+
+
 def test_autoconfigure_double_kas_and(
     attribute_two_kas_grant_and,
     encrypt_sdk,
@@ -103,6 +114,7 @@ def test_autoconfigure_double_kas_and(
     kas_url_value2: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -145,6 +157,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     kas_url_attr: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -181,6 +194,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     kas_url_value1: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -224,6 +238,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     kas_url_value1: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -266,6 +281,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     kas_url_ns: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -302,6 +318,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     kas_url_value1: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -345,6 +362,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     kas_url_value1: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:

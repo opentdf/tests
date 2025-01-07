@@ -63,7 +63,9 @@ def do_encrypt_with(
 #### BASIC ROUNDTRIP TESTS
 
 
-def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
+def test_tdf(
+    encrypt_sdk: str, decrypt_sdk: str, pt_file: str, tmp_dir: str, container: str
+):
     use_ecdsa = False
     if container == "nano-with-ecdsa":
         if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
@@ -72,6 +74,10 @@ def test_tdf(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, container):
             )
         container = "nano"
         use_ecdsa = True
+    if tdfs.supports(encrypt_sdk, "hexless") and not tdfs.supports(
+        decrypt_sdk, "hexless"
+    ):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support hexless")
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa)
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
