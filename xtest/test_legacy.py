@@ -4,8 +4,8 @@ import tdfs
 
 
 def get_golden_file(golden_file_name: str) -> str:
-    dir = os.path.dirname(os.path.realpath(__file__))
-    filename = os.path.join(dir, "golden", f"{golden_file_name}")
+    xtest_dir = os.path.dirname(os.path.realpath(__file__))
+    filename = os.path.join(xtest_dir, "golden", f"{golden_file_name}")
     if os.path.isfile(filename):
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
@@ -15,7 +15,7 @@ def test_decrypt_small(
     decrypt_sdk: tdfs.sdk_type,
     tmp_dir,
 ):
-    ct_file = get_golden_file("small-java.tdf")
+    ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
@@ -30,7 +30,7 @@ def test_decrypt_big(
     decrypt_sdk: tdfs.sdk_type,
     tmp_dir,
 ):
-    ct_file = get_golden_file("big-java.tdf")
+    ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "big-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
