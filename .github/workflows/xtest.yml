@@ -55,7 +55,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@main
+        uses: opentdf/platform/test/start-up-with-containers@mkleene-patch-2
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
           extra-keys: >- 
