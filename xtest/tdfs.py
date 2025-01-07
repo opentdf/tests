@@ -222,7 +222,11 @@ def decrypt(sdk, ct_file, rt_file, fmt="nano"):
         fmt,
     ]
     logger.info(f"dec [{' '.join(c)}]")
-    subprocess.check_output(c, stderr=subprocess.STDOUT)
+    try:
+        subprocess.check_output(c, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        logger.info("error calling subprocess %s", str(e.output))
+        raise e
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:
