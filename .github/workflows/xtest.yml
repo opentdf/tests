@@ -55,7 +55,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@DSP-344-add-custom-keys-to-kas
+        uses: opentdf/platform/test/start-up-with-containers@main
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
           extra-keys: >- 
