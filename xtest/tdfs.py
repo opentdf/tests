@@ -18,7 +18,9 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 sdk_type = Literal["go", "java", "js"]
 
-feature_type = Literal["assertions", "autoconfigure", "nano_ecdsa", "ns_grants"]
+feature_type = Literal[
+    "assertions", "autoconfigure", "nano_ecdsa", "ns_grants", "hexless"
+]
 
 sdk_paths: dict[sdk_type, str] = {
     "go": "sdk/go/cli.sh",
@@ -246,6 +248,8 @@ def supports(sdk: sdk_type, feature: feature_type) -> bool:
             return True
         case ("ns_grants", ("go" | "java")):
             return True
+        case _:
+            pass
 
     c = [
         sdk_paths[sdk],

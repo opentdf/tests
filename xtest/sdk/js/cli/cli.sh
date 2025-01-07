@@ -30,6 +30,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep autoconfigure
       exit $?
       ;;
+    hexless)
+      npx $CTL --version | jq -r .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     nano_ecdsa)
       npx $CTL help | grep policyBinding
       exit $?
