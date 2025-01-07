@@ -31,7 +31,8 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     hexless)
-      npx $CTL --version | jq -r .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      set -o pipefail
+      npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;
     nano_ecdsa)
