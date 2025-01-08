@@ -70,11 +70,6 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-      - name: Set up Node 22
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
-        with:
-          node-version: "22.x"
-          registry-url: https://npm.pkg.github.com
       - name: Set up Python 3.10
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
@@ -96,6 +91,11 @@ jobs:
           repository: opentdf/web-sdk
           path: web-sdk
           ref: ${{ env.JS_REF }}
+      - name: Set up Node 22
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: "22.x"
+          cache-dependency-path: web-sdk/lib/package-lock.json web-sdk/cli/package-lock.json
 
       ######## SETUP THE JS CLI #############
       - name: build the js cli
