@@ -721,7 +721,9 @@ def write_assertion_verification_keys_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_verification_file_rs_and_hs_keys(hs256_key, rs256_keys):
+def assertion_verification_file_rs_and_hs_keys(
+    hs256_key: str, rs256_keys: tuple[str, str]
+):
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
         keys={
