@@ -155,14 +155,14 @@ def break_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 
 def break_segment_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.encryptionInformation.integrityInformation.segments
     segments = manifest.encryptionInformation.integrityInformation.segments
-    assert segments
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
     altered_hash = base64.b64encode(change_last_three(base64.b64decode(segment.hash)))
     segment.hash = altered_hash
-    segments[index] = segment
+    manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
 
