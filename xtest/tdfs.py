@@ -9,7 +9,7 @@ import zipfile
 import jsonschema
 
 from pydantic import BaseModel
-from typing import Literal, Optional, List, Union
+from typing import Literal
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -17,9 +17,15 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
+format_type = Literal["nano", "ztdf", "nano-with-ecdsa"]
 
 feature_type = Literal[
-    "assertions", "autoconfigure", "nano_ecdsa", "ns_grants", "hexless"
+    "assertions",
+    "assertion_verification",
+    "autoconfigure",
+    "nano_ecdsa",
+    "ns_grants",
+    "hexless",
 ]
 
 sdk_paths: dict[sdk_type, str] = {
@@ -58,7 +64,7 @@ class KeyAccessObject(BaseModel):
     url: str
     protocol: str
     wrappedKey: str
-    policyBinding: Union[str, PolicyBinding]
+    policyBinding: str | PolicyBinding
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
@@ -73,11 +79,11 @@ class EncryptionMethod(BaseModel):
 
 class IntegritySignature(BaseModel):
     alg: str | None = "HS256"
-    sig: str
+    sig: bytes
 
 
 class IntegritySegment(BaseModel):
-    hash: str
+    hash: bytes
     segmentSize: int | None = None
     encryptedSegmentSize: int | None = None
 
@@ -120,7 +126,7 @@ class EncryptionInformation(BaseModel):
 class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
-    assertions: Optional[List[tdfassertions.Assertion]] = []
+    assertions: list[tdfassertions.Assertion] | None = []
 
 
 def manifest(tdf_file: str) -> Manifest:
@@ -179,14 +185,14 @@ def validate_manifest_schema(tdf_file: str):
 
 
 def encrypt(
-    sdk,
-    pt_file,
-    ct_file,
-    mime_type="application/octet-stream",
-    fmt="nano",
+    sdk: sdk_type,
+    pt_file: str,
+    ct_file: str,
+    mime_type: str = "application/octet-stream",
+    fmt: format_type = "nano",
     attr_values: list[str] | None = None,
-    assert_value="",
-    use_ecdsa_binding=False,
+    assert_value: str = "",
+    use_ecdsa_binding: bool = False,
 ):
     c = [
         sdk_paths[sdk],
@@ -215,10 +221,10 @@ def encrypt(
 
 
 def decrypt(
-    sdk,
-    ct_file,
-    rt_file,
-    fmt="nano",
+    sdk: sdk_type,
+    ct_file: str,
+    rt_file: str,
+    fmt: format_type = "nano",
     assert_keys: str = "",
 ):
     c = [

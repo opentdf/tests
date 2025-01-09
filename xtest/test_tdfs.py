@@ -11,16 +11,25 @@ import nano
 import tdfs
 
 
-cipherTexts = {}
+cipherTexts: dict[str, str] = {}
 counter = 0
 
 #### HELPERS
 
 
+def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
+    if tdfs.supports(encrypt_sdk, "hexless") and not tdfs.supports(
+        decrypt_sdk, "hexless"
+    ):
+        pytest.skip(
+            f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
+        )
+
+
 def do_encrypt_with(
     pt_file: str,
-    encrypt_sdk: str,
-    container: str,
+    encrypt_sdk: tdfs.sdk_type,
+    container: tdfs.format_type,
     tmp_dir: str,
     use_ecdsa: bool = False,
     az: str = "",
@@ -64,8 +73,13 @@ def do_encrypt_with(
 
 
 def test_tdf(
-    encrypt_sdk: str, decrypt_sdk: str, pt_file: str, tmp_dir: str, container: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    container: tdfs.format_type,
 ):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     use_ecdsa = False
     if container == "nano-with-ecdsa":
         if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
@@ -74,10 +88,7 @@ def test_tdf(
             )
         container = "nano"
         use_ecdsa = True
-    if tdfs.supports(encrypt_sdk, "hexless") and not tdfs.supports(
-        decrypt_sdk, "hexless"
-    ):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support hexless")
+
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa)
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -89,14 +100,14 @@ def test_tdf(
 #### MANIFEST VALIDITY TESTS
 
 
-def test_manifest_validity(encrypt_sdk, pt_file, tmp_dir):
+def test_manifest_validity(encrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str):
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     tdfs.validate_manifest_schema(ct_file)
 
 
 def test_manifest_validity_with_assertions(
-    encrypt_sdk, pt_file, tmp_dir, assertion_file_no_keys
+    encrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str, assertion_file_no_keys: str
 ):
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -127,11 +138,13 @@ def break_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 
 def change_last_three(byt: bytes) -> bytes:
-    new_three = "".join(random.choices(string.ascii_lowercase + string.digits, k=3))
+    new_three = "".join(
+        random.choices(string.ascii_lowercase + string.digits, k=3)
+    ).encode()
     if new_three == byt[-3:]:
         # catch the case where the random string is the same (v unlikely)
         return change_last_three(byt)
-    return byt[:-3] + new_three.encode()
+    return byt[:-3] + new_three
 
 
 def break_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
@@ -142,6 +155,7 @@ def break_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 
 def break_segment_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.encryptionInformation.integrityInformation.segments
     segments = manifest.encryptionInformation.integrityInformation.segments
     # choose a random segment
     index = random.randrange(len(segments))
@@ -155,7 +169,10 @@ def break_segment_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
 ## TAMPER TESTS
 
 
-def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+def test_tdf_with_unbound_policy(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+) -> None:
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("unbound_policy", ct_file, break_binding)
@@ -169,7 +186,10 @@ def test_tdf_with_unbound_policy(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
 
 
-def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+def test_tdf_with_altered_root_sig(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, break_root_signature)
@@ -183,7 +203,10 @@ def test_tdf_with_altered_root_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
+def test_tdf_with_altered_seg_sig(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, break_segment_signature)
@@ -201,8 +224,13 @@ def test_tdf_with_altered_seg_sig(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir):
 
 
 def test_tdf_assertions(
-    encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, assertion_file_no_keys
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_no_keys: str,
 ):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertions"):
@@ -223,13 +251,14 @@ def test_tdf_assertions(
 
 
 def test_tdf_assertions_with_keys(
-    encrypt_sdk,
-    decrypt_sdk,
-    pt_file,
-    tmp_dir,
-    assertion_file_rs_and_hs_keys,
-    assertion_verification_file_rs_and_hs_keys,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_rs_and_hs_keys: str,
+    assertion_verification_file_rs_and_hs_keys: str,
 ):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not tdfs.supports(decrypt_sdk, "assertion_verification"):
