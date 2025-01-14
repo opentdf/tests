@@ -149,8 +149,16 @@ def change_policy(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     pb = manifest.encryptionInformation.keyAccess[0].policyBinding
-    altered_pb = base64.b64encode(change_last_three(base64.b64decode(pb)))
-    manifest.encryptionInformation.keyAccess[0].policyBinding = altered_pb
+    ## if the pb is str then json decode to tdfs.PolicyBinding
+    if isinstance(pb, tdfs.PolicyBinding):
+        hash = pb.hash
+        altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
+        pb.hash = altered_hash
+        manifest.encryptionInformation.keyAccess[0].policyBinding = pb
+    else:
+        altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
+        manifest.encryptionInformation.keyAccess[0].policyBinding = altered_hash
+    
     return manifest
 
 
@@ -179,7 +187,7 @@ def change_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    segment.segmentSize = segment.segmentSize + 1
+    segment.segmentSize = segment.segmentSize + 5
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
@@ -190,9 +198,24 @@ def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    segment.encryptedSegmentSize = segment.encryptedSegmentSize + 1
+    segment.encryptedSegmentSize = segment.encryptedSegmentSize + 5
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
+
+# def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
+#     assert manifest.assertions
+#     assertion = manifest.assertions[0]
+#     assertion.statement.value = "tampered"
+#     manifest.assertions[0] = assertion
+#     return manifest
+
+# def change_assertion_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+#     assert manifest.assertions
+#     assertion = manifest.assertions[0]
+#     altered_binding = base64.b64encode(change_last_three(base64.b64decode(assertion.binding.signature)))
+#     assertion.binding.signature = altered_binding
+#     manifest.assertions[0] = assertion
+#     return manifest
 
 
 ## TAMPER TESTS
@@ -268,18 +291,30 @@ def test_tdf_with_altered_seg_sig(
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-#### JS currently passes this on decrypt -- it does not throw an error when it should
 def test_tdf_with_altered_seg_size(
     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
 ):
-    # if decrypt_sdk == "js":
-    #     pytest.skip(
-    #         f"{decrypt_sdk} sdk has a bug that allows it to decrypt files with tapmered segment sizes"
-    #     )
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("broken_seg_size", ct_file, change_segment_size)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"segment" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+def test_tdf_with_altered_enc_seg_size(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("broken_enc_seg_sig", ct_file, change_encrypted_segment_size)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
@@ -353,3 +388,5 @@ def test_tdf_assertions_with_keys(
         assertion_verification_file_rs_and_hs_keys,
     )
     assert filecmp.cmp(pt_file, rt_file)
+
+
