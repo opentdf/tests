@@ -123,204 +123,7 @@ def test_manifest_validity_with_assertions(
     tdfs.validate_manifest_schema(ct_file)
 
 
-#### TAMPER
-
-## TAMPER FUNCTIONS
-
-
-def change_last_three(byt: bytes) -> bytes:
-    new_three = "".join(
-        random.choices(string.ascii_lowercase + string.digits, k=3)
-    ).encode()
-    if new_three == byt[-3:]:
-        # catch the case where the random string is the same (v unlikely)
-        return change_last_three(byt)
-    return byt[:-3] + new_three
-
-
-def change_policy(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    #  base64 decode policy from manifest.encryptionInformation.policy
-    p = manifest.encryptionInformation.policy_object
-    p.body.dataAttributes = []
-    p.body.dissem = ["yves@dropp.er"]
-    manifest.encryptionInformation.policy_object = p
-    return manifest
-
-
-def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    pb = manifest.encryptionInformation.keyAccess[0].policyBinding
-    ## if the pb is str then json decode to tdfs.PolicyBinding
-    if isinstance(pb, tdfs.PolicyBinding):
-        hash = pb.hash
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
-        pb.hash = altered_hash
-        manifest.encryptionInformation.keyAccess[0].policyBinding = pb
-    else:
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
-        manifest.encryptionInformation.keyAccess[0].policyBinding = altered_hash
-
-    return manifest
-
-
-def change_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    root_sig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
-    altered_sig = base64.b64encode(change_last_three(base64.b64decode(root_sig)))
-    manifest.encryptionInformation.integrityInformation.rootSignature.sig = altered_sig
-    return manifest
-
-
-def change_segment_hash(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.encryptionInformation.integrityInformation.segments
-    segments = manifest.encryptionInformation.integrityInformation.segments
-    # choose a random segment
-    index = random.randrange(len(segments))
-    segment = segments[index]
-    altered_hash = base64.b64encode(change_last_three(base64.b64decode(segment.hash)))
-    segment.hash = altered_hash
-    manifest.encryptionInformation.integrityInformation.segments[index] = segment
-    return manifest
-
-
-def change_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.encryptionInformation.integrityInformation.segments
-    segments = manifest.encryptionInformation.integrityInformation.segments
-    # choose a random segment
-    index = random.randrange(len(segments))
-    segment = segments[index]
-    segment.segmentSize = segment.segmentSize - 1
-    manifest.encryptionInformation.integrityInformation.segments[index] = segment
-    return manifest
-
-
-def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.encryptionInformation.integrityInformation.segments
-    segments = manifest.encryptionInformation.integrityInformation.segments
-    # choose a random segment
-    index = random.randrange(len(segments))
-    segment = segments[index]
-    segment.encryptedSegmentSize = segment.encryptedSegmentSize - 1
-    manifest.encryptionInformation.integrityInformation.segments[index] = segment
-    return manifest
-
-
-def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.assertions
-    assertion = manifest.assertions[0]
-    assertion.statement.value = "tampered"
-    manifest.assertions[0] = assertion
-    return manifest
-
-
-## TAMPER TESTS
-
-
-def test_tdf_with_unbound_policy(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-) -> None:
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"wrap" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
-
-
-def test_tdf_with_altered_policy_binding(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-) -> None:
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest(
-        "altered_policy_binding", ct_file, change_policy_binding
-    )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"wrap" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
-
-
-def test_tdf_with_altered_root_sig(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-):
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"root" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
-
-
-def test_tdf_with_altered_seg_sig(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-):
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"signature" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
-
-
-def test_tdf_with_altered_seg_size(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-):
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("broken_seg_size", ct_file, change_segment_size)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"segment" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
-
-
-def test_tdf_with_altered_enc_seg_size(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-):
-    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest(
-        "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
-    )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
-    try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert b"segment" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
-
-
-## ASSERTION TESTS
+#### ASSERTION TESTS
 
 
 def test_tdf_assertions(
@@ -383,6 +186,218 @@ def test_tdf_assertions_with_keys(
         assertion_verification_file_rs_and_hs_keys,
     )
     assert filecmp.cmp(pt_file, rt_file)
+
+
+#### TAMPER
+
+## TAMPER FUNCTIONS
+
+
+def change_last_three(byt: bytes) -> bytes:
+    new_three = "".join(
+        random.choices(string.ascii_lowercase + string.digits, k=3)
+    ).encode()
+    if new_three == byt[-3:]:
+        # catch the case where the random string is the same (v unlikely)
+        return change_last_three(byt)
+    return byt[:-3] + new_three
+
+
+def change_policy(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    #  base64 decode policy from manifest.encryptionInformation.policy
+    p = manifest.encryptionInformation.policy_object
+    p.body.dataAttributes = []
+    p.body.dissem = ["yves@dropp.er"]
+    manifest.encryptionInformation.policy_object = p
+    return manifest
+
+
+def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    pb = manifest.encryptionInformation.keyAccess[0].policyBinding
+    ## if the pb is str then json decode to tdfs.PolicyBinding
+    if isinstance(pb, tdfs.PolicyBinding):
+        hash = pb.hash
+        altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
+        pb.hash = altered_hash
+        manifest.encryptionInformation.keyAccess[0].policyBinding = pb
+    else:
+        altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
+        manifest.encryptionInformation.keyAccess[0].policyBinding = altered_hash
+
+    return manifest
+
+
+def change_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    root_sig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
+    altered_sig = base64.b64encode(change_last_three(base64.b64decode(root_sig)))
+    manifest.encryptionInformation.integrityInformation.rootSignature.sig = altered_sig
+    return manifest
+
+
+def change_segment_hash(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.encryptionInformation.integrityInformation.segments
+    segments = manifest.encryptionInformation.integrityInformation.segments
+    # choose a random segment
+    index = random.randrange(len(segments))
+    segment = segments[index]
+    altered_hash = base64.b64encode(change_last_three(base64.b64decode(segment.hash)))
+    segment.hash = altered_hash
+    manifest.encryptionInformation.integrityInformation.segments[index] = segment
+    return manifest
+
+
+# def change_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
+#     assert manifest.encryptionInformation.integrityInformation.segments
+#     segments = manifest.encryptionInformation.integrityInformation.segments
+#     # choose a random segment
+#     index = random.randrange(len(segments))
+#     segment = segments[index]
+#     segment.segmentSize = segment.segmentSize - 1
+#     manifest.encryptionInformation.integrityInformation.segments[index] = segment
+#     return manifest
+
+
+def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.encryptionInformation.integrityInformation.segments
+    segments = manifest.encryptionInformation.integrityInformation.segments
+    # choose a random segment
+    index = random.randrange(len(segments))
+    segment = segments[index]
+    segment.encryptedSegmentSize = segment.encryptedSegmentSize - 1
+    manifest.encryptionInformation.integrityInformation.segments[index] = segment
+    return manifest
+
+
+def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.assertions
+    assertion = manifest.assertions[0]
+    assertion.statement.value = "tampered"
+    manifest.assertions[0] = assertion
+    return manifest
+
+
+def change_payload_end(payload_bytes: bytes) -> bytes:
+    return change_last_three(payload_bytes)
+
+
+### TAMPER TESTS
+
+## POLICY TAMPER TESTS
+
+
+def test_tdf_with_unbound_policy(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+) -> None:
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"wrap" in exc.output
+        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
+
+
+def test_tdf_with_altered_policy_binding(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+) -> None:
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest(
+        "altered_policy_binding", ct_file, change_policy_binding
+    )
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"wrap" in exc.output
+        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
+
+
+## INTEGRITY TAMPER TESTS
+
+
+def test_tdf_with_altered_root_sig(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"root" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+def test_tdf_with_altered_seg_sig(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"signature" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+## SEGMENT SIZE TAMPER TESTS
+
+
+# def test_tdf_with_altered_seg_size(
+#     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+# ):
+#     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+#     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+#     assert os.path.isfile(ct_file)
+#     b_file = tdfs.update_manifest("broken_seg_size", ct_file, change_segment_size)
+#     fname = os.path.basename(b_file).split(".")[0]
+#     rt_file = f"{tmp_dir}test-{fname}.untdf"
+#     try:
+#         tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+#         assert False, "decrypt succeeded unexpectedly"
+#     except subprocess.CalledProcessError as exc:
+#         assert b"segment" in exc.output
+#         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+def test_tdf_with_altered_enc_seg_size(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest(
+        "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
+    )
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"segment" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+## ASSERTION TAMPER TESTS
 
 
 def test_tdf_with_altered_assertion_statement(
@@ -448,13 +463,33 @@ def test_tdf_with_altered_assertion_with_keys(
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
         tdfs.decrypt(
-        decrypt_sdk,
-        b_file,
-        rt_file,
-        "ztdf",
-        assertion_verification_file_rs_and_hs_keys,
-    )
+            decrypt_sdk,
+            b_file,
+            rt_file,
+            "ztdf",
+            assertion_verification_file_rs_and_hs_keys,
+        )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+## PAYLOAD TAMPER TESTS
+
+
+def test_tdf_altered_payload_end(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+) -> None:
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("altered_payload_end", ct_file, change_payload_end)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"signature" in exc.output
+        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
