@@ -211,15 +211,6 @@ def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
-def change_assertion_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.assertions
-    assertion = manifest.assertions[0]
-    altered_binding = base64.b64encode(change_last_three(base64.b64decode(assertion.binding.signature)))
-    assertion.binding.signature = altered_binding
-    manifest.assertions[0] = assertion
-    return manifest
-
-
 ## TAMPER TESTS
 
 
@@ -293,21 +284,21 @@ def test_tdf_with_altered_seg_sig(
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-# def test_tdf_with_altered_seg_size(
-#     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
-# ):
-#     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-#     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-#     assert os.path.isfile(ct_file)
-#     b_file = tdfs.update_manifest("broken_seg_size", ct_file, change_segment_size)
-#     fname = os.path.basename(b_file).split(".")[0]
-#     rt_file = f"{tmp_dir}test-{fname}.untdf"
-#     try:
-#         tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
-#         assert False, "decrypt succeeded unexpectedly"
-#     except subprocess.CalledProcessError as exc:
-#         assert b"segment" in exc.output
-#         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+def test_tdf_with_altered_seg_size(
+    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest("broken_seg_size", ct_file, change_segment_size)
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"segment" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
 def test_tdf_with_altered_enc_seg_size(
@@ -428,12 +419,13 @@ def test_tdf_with_altered_assertion_statement(
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-def test_tdf_with_altered_assertion_sig(
+def test_tdf_with_altered_assertion_with_keys(
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,
     pt_file: str,
     tmp_dir: str,
-    assertion_file_no_keys: str,
+    assertion_file_rs_and_hs_keys: str,
+    assertion_verification_file_rs_and_hs_keys: str,
 ):
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
@@ -445,17 +437,23 @@ def test_tdf_with_altered_assertion_sig(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions",
-        az=assertion_file_no_keys,
+        scenario="assertions-keys-roundtrip",
+        az=assertion_file_rs_and_hs_keys,
     )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
-        "altered_assertion_binding", ct_file, change_assertion_binding
+        "altered_assertion_statement", ct_file, change_assertion_statement
     )
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(
+        decrypt_sdk,
+        b_file,
+        rt_file,
+        "ztdf",
+        assertion_verification_file_rs_and_hs_keys,
+    )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
