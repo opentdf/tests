@@ -187,7 +187,7 @@ def change_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    segment.segmentSize = segment.segmentSize + 1
+    segment.segmentSize = segment.segmentSize - 1
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
@@ -198,7 +198,7 @@ def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    segment.encryptedSegmentSize = segment.encryptedSegmentSize + 1
+    segment.encryptedSegmentSize = segment.encryptedSegmentSize - 1
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
@@ -211,13 +211,13 @@ def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
-# def change_assertion_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
-#     assert manifest.assertions
-#     assertion = manifest.assertions[0]
-#     altered_binding = base64.b64encode(change_last_three(base64.b64decode(assertion.binding.signature)))
-#     assertion.binding.signature = altered_binding
-#     manifest.assertions[0] = assertion
-#     return manifest
+def change_assertion_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.assertions
+    assertion = manifest.assertions[0]
+    altered_binding = base64.b64encode(change_last_three(base64.b64decode(assertion.binding.signature)))
+    assertion.binding.signature = altered_binding
+    manifest.assertions[0] = assertion
+    return manifest
 
 
 ## TAMPER TESTS
@@ -417,6 +417,40 @@ def test_tdf_with_altered_assertion_statement(
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
+    )
+    fname = os.path.basename(b_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    try:
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert b"assertion" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+
+
+def test_tdf_with_altered_assertion_sig(
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_no_keys: str,
+):
+    skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    if not tdfs.supports(encrypt_sdk, "assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertions"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions",
+        az=assertion_file_no_keys,
+    )
+    assert os.path.isfile(ct_file)
+    b_file = tdfs.update_manifest(
+        "altered_assertion_binding", ct_file, change_assertion_binding
     )
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
