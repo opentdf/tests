@@ -491,5 +491,5 @@ def test_tdf_altered_payload_end(
         tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"signature" in exc.output
+        assert b"segment" in exc.output
         assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
