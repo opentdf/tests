@@ -484,7 +484,7 @@ def test_tdf_altered_payload_end(
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
-    b_file = tdfs.update_manifest("altered_payload_end", ct_file, change_payload_end)
+    b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
