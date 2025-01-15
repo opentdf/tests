@@ -102,22 +102,12 @@ jobs:
           cache-dependency-path: web-sdk/lib/package-lock.json web-sdk/cli/package-lock.json
 
       ######## SETUP THE JS CLI #############
-      - name: build the js cli
+      - name: build and setup the web-sdk cli
         id: build-web-sdk
         run: |
-          make clean
-          make cli
-          CLI_NAME=$(cd cli && npm pkg get name | tr -d \")
-          CLI_VERSION=$(cd cli && npm pkg get version | tr -d \")
-          echo "CLI_PATH=cli/$(echo "$CLI_NAME" | tr -d @ | sed s1/1-1)-$CLI_VERSION.tgz" >>$GITHUB_OUTPUT
-        working-directory: web-sdk
-      - name: update packages
-        run: |-
-          npm un @opentdf/cli || true
-          npm ci
-          npm i ../../web-sdk/${{ steps.build-web-sdk.outputs.CLI_PATH }}
-          npm list
-        working-directory: otdftests/xtest
+          JS_DIR=../../../web-sdk
+          make js
+        working-directory: otdftests/xtest/sdk
 
       ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
