@@ -120,13 +120,10 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-            go mod edit -replace github.com/opentdf/platform/${m}=../${{ steps.run-platform.outputs.platform-working-dir }}/${m}
-          done
-          go mod tidy
-          go build .
-          cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
-        working-directory: otdfctl
+          OTDFCTL_DIR=../../../otdfctl
+          PLATFORM_DIR=../../../${{ steps.run-platform.outputs.platform-working-dir }}
+          make go
+        working-directory: otdftests/xtest/sdk
 
       ####### CHECKOUT JAVA SDK ##############
 
@@ -139,18 +136,14 @@ jobs:
 
       ####### SETUP JAVA CLI ##############
 
-      - name: Build java cli
+      - name: Prepare java cli
         run: |
-          mvn --batch-mode clean install -DskipTests
+          JAVA_DIR=../../../java-sdk
+          make java
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        working-directory: java-sdk
-
-      - name: Move java cli to xtest
-        run: |-
-          cp cmdline/target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
-        working-directory: java-sdk
+        working-directory: otdftests/xtest/sdk
 
       ######## RUN THE TESTS #############
       - name: Install test dependencies
