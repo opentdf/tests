@@ -105,8 +105,9 @@ jobs:
       - name: build and setup the web-sdk cli
         id: build-web-sdk
         run: |
-          JS_DIR=../../../web-sdk
           make js
+        env:
+          JS_DIR: ../../../web-sdk
         working-directory: otdftests/xtest/sdk
 
       ######## CHECKOUT GO CLI #############
@@ -120,9 +121,10 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          OTDFCTL_DIR=../../../otdfctl
-          PLATFORM_DIR=../../../${{ steps.run-platform.outputs.platform-working-dir }}
           make go
+        env:
+          OTDFCTL_DIR: ../../../otdfctl
+          PLATFORM_DIR: ../../../${{ steps.run-platform.outputs.platform-working-dir }}
         working-directory: otdftests/xtest/sdk
 
       ####### CHECKOUT JAVA SDK ##############
@@ -138,9 +140,9 @@ jobs:
 
       - name: Prepare java cli
         run: |
-          JAVA_DIR=../../../java-sdk
           make java
         env:
+          JAVA_DIR: ../../../java-sdk
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         working-directory: otdftests/xtest/sdk
