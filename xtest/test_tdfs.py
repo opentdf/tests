@@ -349,11 +349,14 @@ def test_tdf_with_altered_seg_sig(
 
 ## SEGMENT SIZE TAMPER TEST
 
+
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
 ):
     if decrypt_sdk == "js":
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support encrypted segment tamper protection")
+        pytest.skip(
+            f"{decrypt_sdk} sdk doesn't yet support encrypted segment tamper protection"
+        )
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
