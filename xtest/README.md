@@ -70,7 +70,19 @@ mv otdfctl ../sdk/go/otdfctl
    go run ./service start
    ```
 
-## Testing with Released Software
+### Setup SDK CLIs
+Set the paths to the local repos in env variables
+```shell
+JS_DIR=../../../web-sdk
+PLATFORM_DIR=../../../platform
+OTDFCTL_DIR=../../../otdfctl
+JAVA_DIR=../../../java-sdk
+```
+Build all the clis and setup within xtest
+```shell
+cd sdk
+make all
+```
 
 ### Install requirements
 
