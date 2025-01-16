@@ -418,8 +418,8 @@ def test_tdf_with_altered_assertion_with_keys(
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not tdfs.supports(decrypt_sdk, "assertions"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
+    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
