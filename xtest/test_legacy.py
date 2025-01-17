@@ -25,6 +25,7 @@ def test_decrypt_small(
         while b := f.read(1024):
             assert b == expected_bytes
 
+
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.sdk_type,
     tmp_dir,
