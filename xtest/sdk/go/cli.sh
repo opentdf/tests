@@ -28,6 +28,11 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
+    hexless)
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
