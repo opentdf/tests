@@ -365,7 +365,11 @@ def test_tdf_with_altered_enc_seg_size(
         tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output or b"integrity check" in exc.output
+        assert (
+            b"tamper" in exc.output
+            or b"IntegrityError" in exc.output
+            or b"integrity check" in exc.output
+        )
 
 
 ## ASSERTION TAMPER TESTS
@@ -443,7 +447,11 @@ def test_tdf_with_altered_assertion_with_keys(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output or b"integrity check" in exc.output
+        assert (
+            b"tamper" in exc.output
+            or b"IntegrityError" in exc.output
+            or b"integrity check" in exc.output
+        )
 
 
 ## PAYLOAD TAMPER TESTS
@@ -463,4 +471,8 @@ def test_tdf_altered_payload_end(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"segment" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output or b"integrity check" in exc.output
+        assert (
+            b"tamper" in exc.output
+            or b"InvalidFileError" in exc.output
+            or b"integrity check" in exc.output
+        )
