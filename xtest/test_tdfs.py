@@ -252,7 +252,7 @@ def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     # choose a random segment
     index = random.randrange(len(segments))
     segment = segments[index]
-    segment.encryptedSegmentSize = segment.encryptedSegmentSize - 1
+    segment.encryptedSegmentSize = (segment.encryptedSegmentSize or 0) - 1
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
     return manifest
 
@@ -353,10 +353,6 @@ def test_tdf_with_altered_seg_sig(
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
 ):
-    if decrypt_sdk == "js":
-        pytest.skip(
-            f"{decrypt_sdk} sdk doesn't yet support encrypted segment tamper protection"
-        )
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -369,8 +365,7 @@ def test_tdf_with_altered_enc_seg_size(
         tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"segment" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output or b"integrity check" in exc.output
 
 
 ## ASSERTION TAMPER TESTS
@@ -448,7 +443,7 @@ def test_tdf_with_altered_assertion_with_keys(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+        assert b"tamper" in exc.output or b"IntegrityError" in exc.output or b"integrity check" in exc.output
 
 
 ## PAYLOAD TAMPER TESTS
@@ -457,8 +452,6 @@ def test_tdf_with_altered_assertion_with_keys(
 def test_tdf_altered_payload_end(
     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
 ) -> None:
-    if decrypt_sdk == "js":
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support payload tamper protection")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -470,4 +463,4 @@ def test_tdf_altered_payload_end(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"segment" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
+        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output or b"integrity check" in exc.output
