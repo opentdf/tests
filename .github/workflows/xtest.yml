@@ -16,7 +16,7 @@ on:
       js-ref:
         required: false
         type: string
-        default: feature/simpler-decrypt
+        default: main
         description: "The branch or commit to use for the web-sdk"
       java-ref:
         required: false
