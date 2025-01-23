@@ -159,6 +159,29 @@ def update_manifest(
     return outfile
 
 
+# Create a modified variant of a TDF by manipulating its payload
+def update_payload(
+    scenario_name: str, tdf_file: str, payload_change: Callable[[bytes], bytes]
+) -> str:
+    tmp_dir = os.path.dirname(tdf_file)
+    fname = os.path.basename(tdf_file).split(".")[0]
+    unzipped_dir = os.path.join(tmp_dir, f"{fname}-{scenario_name}-unzipped")
+    with zipfile.ZipFile(tdf_file, "r") as zipped:
+        zipped.extractall(unzipped_dir)
+    with open(os.path.join(unzipped_dir, "0.payload"), "rb") as payload_file:
+        payload_data = payload_file.read()
+    new_payload_data = payload_change(payload_data)
+    with open(os.path.join(unzipped_dir, "0.payload"), "wb") as payload_file:
+        payload_file.write(new_payload_data)
+    outfile = os.path.join(tmp_dir, f"{fname}-{scenario_name}.tdf")
+    with zipfile.ZipFile(outfile, "w") as zipped:
+        for folder_name, _, filenames in os.walk(unzipped_dir):
+            for filename in filenames:
+                file_path = os.path.join(folder_name, filename)
+                zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
+    return outfile
+
+
 def validate_manifest_schema(tdf_file: str):
     ## Unzip the tdf
     tmp_dir = os.path.dirname(tdf_file)
