@@ -56,7 +56,7 @@ def test_decrypt_no_splitid(
             assert b == expected_bytes
 
 
-def test_decrypt_object_json(
+def test_decrypt_object_statement_value_json(
     decrypt_sdk: tdfs.sdk_type,
     tmp_dir,
 ):
