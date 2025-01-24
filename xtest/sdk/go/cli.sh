@@ -78,6 +78,9 @@ elif [ "$1" == "decrypt" ]; then
   if [ -n "$8" ]; then
     args+=(--with-assertion-verification-keys "$8")
   fi
+  if [ "$NO_VERIFY_ASSERTIONS" == 'true' ]; then
+    args+=(--no-verify-assertions)
+  fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
 else

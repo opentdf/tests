@@ -26,6 +26,7 @@ feature_type = Literal[
     "nano_ecdsa",
     "ns_grants",
     "hexless",
+    "assertion_verification_disable",
 ]
 
 sdk_paths: dict[sdk_type, str] = {
@@ -249,6 +250,7 @@ def decrypt(
     rt_file: str,
     fmt: format_type = "nano",
     assert_keys: str = "",
+    no_verify_assertions: bool = False,
 ):
     c = [
         sdk_paths[sdk],
@@ -265,8 +267,13 @@ def decrypt(
             "",
             assert_keys,
         ]
+    env = dict(os.environ)
+    if no_verify_assertions:
+        env |= {"NO_VERIFY_ASSERTIONS": "true"}
+    else:
+        env |= {"NO_VERIFY_ASSERTIONS": "false"}
     logger.info(f"dec [{' '.join(c)}]")
-    subprocess.check_output(c, stderr=subprocess.STDOUT)
+    subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:

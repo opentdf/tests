@@ -82,6 +82,9 @@ if [ "$1" == "encrypt" ]; then
 
   npx $CTL encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
+  if [ "$NO_VERIFY_ASSERTIONS" == 'true' ]; then
+    args+=(--noVerifyAssertions)
+  fi
   npx $CTL decrypt "$2" "${args[@]}"
 else
   echo "Incorrect argument provided"
