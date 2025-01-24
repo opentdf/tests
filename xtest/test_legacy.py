@@ -65,4 +65,4 @@ def test_decrypt_object_json(
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
     with open(rt_file, "rb") as f:
-        assert f.read() == "text"
+        assert str(f.read()) == "text"
