@@ -58,6 +58,14 @@ class Attribute(BaseModel):
     active: BoolValue | None = None
     metadata: Metadata | None = None
 
+    @property
+    def value_fqns(self) -> list[str]:
+        if not self.values:
+            return []
+        v = [v.fqn for v in self.values if v.fqn]
+        assert len(v) == len(self.values)
+        return v
+
 
 class SubjectMappingOperatorEnum(enum.IntEnum):
     IN = 1

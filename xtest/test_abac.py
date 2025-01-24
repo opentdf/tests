@@ -2,17 +2,18 @@ import filecmp
 import pytest
 
 import tdfs
+from xtest.abac import Attribute
 
 
-cipherTexts = {}
+cipherTexts: dict[str, str] = {}
 
 
 def test_autoconfigure_one_attribute(
-    attribute_single_kas_grant,
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,
-    tmp_dir,
-    pt_file,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_value1: str,
 ):
     global counter
@@ -33,7 +34,7 @@ def test_autoconfigure_one_attribute(
             ct_file,
             mime_type="text/plain",
             fmt="ztdf",
-            attr_values=[attribute_single_kas_grant.values[0].fqn],
+            attr_values=attribute_single_kas_grant.value_fqns,
         )
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
@@ -46,11 +47,11 @@ def test_autoconfigure_one_attribute(
 
 
 def test_autoconfigure_two_kas_or(
-    attribute_two_kas_grant_or,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    attribute_two_kas_grant_or: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_value1: str,
     kas_url_value2: str,
 ):
@@ -69,8 +70,8 @@ def test_autoconfigure_two_kas_or(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                attribute_two_kas_grant_or.values[0].fqn,
-                attribute_two_kas_grant_or.values[1].fqn,
+                attribute_two_kas_grant_or.value_fqns[0],
+                attribute_two_kas_grant_or.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -105,11 +106,11 @@ def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
 
 
 def test_autoconfigure_double_kas_and(
-    attribute_two_kas_grant_and,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    attribute_two_kas_grant_and: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_value1: str,
     kas_url_value2: str,
 ):
@@ -128,8 +129,8 @@ def test_autoconfigure_double_kas_and(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                attribute_two_kas_grant_and.values[0].fqn,
-                attribute_two_kas_grant_and.values[1].fqn,
+                attribute_two_kas_grant_and.value_fqns[0],
+                attribute_two_kas_grant_and.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -149,11 +150,11 @@ def test_autoconfigure_double_kas_and(
 
 
 def test_autoconfigure_one_attribute_attr_grant(
-    one_attribute_attr_kas_grant,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    one_attribute_attr_kas_grant: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_attr: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
@@ -171,7 +172,7 @@ def test_autoconfigure_one_attribute_attr_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                one_attribute_attr_kas_grant.values[0].fqn,
+                one_attribute_attr_kas_grant.value_fqns[0],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -185,11 +186,11 @@ def test_autoconfigure_one_attribute_attr_grant(
 
 
 def test_autoconfigure_two_kas_or_attr_and_value_grant(
-    attr_and_value_kas_grants_or,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    attr_and_value_kas_grants_or: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_attr: str,
     kas_url_value1: str,
 ):
@@ -208,8 +209,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                attr_and_value_kas_grants_or.values[0].fqn,
-                attr_and_value_kas_grants_or.values[1].fqn,
+                attr_and_value_kas_grants_or.value_fqns[0],
+                attr_and_value_kas_grants_or.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -229,11 +230,11 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
 
 
 def test_autoconfigure_two_kas_and_attr_and_value_grant(
-    attr_and_value_kas_grants_and,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    attr_and_value_kas_grants_and: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_attr: str,
     kas_url_value1: str,
 ):
@@ -252,8 +253,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                attr_and_value_kas_grants_and.values[0].fqn,
-                attr_and_value_kas_grants_and.values[1].fqn,
+                attr_and_value_kas_grants_and.value_fqns[0],
+                attr_and_value_kas_grants_and.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -273,11 +274,11 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
 
 
 def test_autoconfigure_one_attribute_ns_grant(
-    one_attribute_ns_kas_grant,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    one_attribute_ns_kas_grant: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_ns: str,
 ):
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
@@ -295,7 +296,7 @@ def test_autoconfigure_one_attribute_ns_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                one_attribute_ns_kas_grant.values[0].fqn,
+                one_attribute_ns_kas_grant.value_fqns[0],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -309,11 +310,11 @@ def test_autoconfigure_one_attribute_ns_grant(
 
 
 def test_autoconfigure_two_kas_or_ns_and_value_grant(
-    ns_and_value_kas_grants_or,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    ns_and_value_kas_grants_or: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_ns: str,
     kas_url_value1: str,
 ):
@@ -332,8 +333,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                ns_and_value_kas_grants_or.values[0].fqn,
-                ns_and_value_kas_grants_or.values[1].fqn,
+                ns_and_value_kas_grants_or.value_fqns[0],
+                ns_and_value_kas_grants_or.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
@@ -353,11 +354,11 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
 
 
 def test_autoconfigure_two_kas_and_ns_and_value_grant(
-    ns_and_value_kas_grants_and,
-    encrypt_sdk,
-    decrypt_sdk,
-    tmp_dir,
-    pt_file,
+    ns_and_value_kas_grants_and: Attribute,
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    pt_file: str,
     kas_url_ns: str,
     kas_url_value1: str,
 ):
@@ -376,8 +377,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
             mime_type="text/plain",
             fmt="ztdf",
             attr_values=[
-                ns_and_value_kas_grants_and.values[0].fqn,
-                ns_and_value_kas_grants_and.values[1].fqn,
+                ns_and_value_kas_grants_and.value_fqns[0],
+                ns_and_value_kas_grants_and.value_fqns[1],
             ],
         )
         cipherTexts[sample_name] = ct_file
