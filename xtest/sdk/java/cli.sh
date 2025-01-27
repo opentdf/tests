@@ -77,5 +77,9 @@ if [ -n "$8" ]; then
   args+=(--with-assertion-verification-keys "$8")
 fi
 
+if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
+  args+=(--with-assertion-verification-disabled)
+fi
+
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
