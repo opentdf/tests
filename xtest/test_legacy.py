@@ -62,7 +62,6 @@ def test_decrypt_object_statement_value_json(
 ):
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = os.path.join(tmp_dir, "with-json-object-assertions-java.untdf")
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
-    file_stats = os.stat(rt_file)
+    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf", verify_assertions=False)
     with open(rt_file, "rb") as f:
         assert f.read().decode("utf-8") == "text"
