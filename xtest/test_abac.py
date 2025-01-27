@@ -2,7 +2,7 @@ import filecmp
 import pytest
 
 import tdfs
-from xtest.abac import Attribute
+from abac import Attribute
 
 
 cipherTexts: dict[str, str] = {}
