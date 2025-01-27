@@ -26,7 +26,6 @@ feature_type = Literal[
     "nano_ecdsa",
     "ns_grants",
     "hexless",
-    "assertion_verification_disable",
 ]
 
 sdk_paths: dict[sdk_type, str] = {
