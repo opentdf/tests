@@ -249,6 +249,7 @@ def decrypt(
     rt_file: str,
     fmt: format_type = "nano",
     assert_keys: str = "",
+    verify_assertions: bool = True,
 ):
     c = [
         sdk_paths[sdk],
@@ -265,8 +266,11 @@ def decrypt(
             "",
             assert_keys,
         ]
+    env = dict(os.environ)
+    if not verify_assertions:
+        env |= {"VERIFY_ASSERTIONS": "false"}
     logger.info(f"dec [{' '.join(c)}]")
-    subprocess.check_output(c, stderr=subprocess.STDOUT)
+    subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:
