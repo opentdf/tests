@@ -53,7 +53,7 @@ class EccMode(ct.EnumBase):
     secp256k1 = 3
 
     @property
-    def bit_length(self) -> int:
+    def mode_bit_length(self) -> int:
         if self in (EccMode.secp256r1, EccMode.secp256k1):
             return 256
         if self == EccMode.secp384r1:
@@ -64,7 +64,7 @@ class EccMode(ct.EnumBase):
 
     @property
     def byte_length(self) -> int:
-        return (self.bit_length + 7) >> 3
+        return (self.mode_bit_length + 7) >> 3
 
     @property
     def signature_length(self) -> int:
@@ -74,7 +74,7 @@ class EccMode(ct.EnumBase):
     def public_key_length(self) -> int:
         return self.byte_length + 1
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return getattr(self, key)
 
 
@@ -103,7 +103,7 @@ class SymmetricCipherMode(ct.EnumBase):
             return 16
         raise ValueError("invalid EC cipher mode")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return getattr(self, key)
 
 
@@ -142,7 +142,7 @@ class KeyIdType(ct.EnumBase):
             return 32
         return 0
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return getattr(self, key)
 
 

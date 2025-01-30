@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import serialization
 import abac
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--large",
         action="store_true",
@@ -29,39 +29,48 @@ def pytest_addoption(parser):
     parser.addoption("--containers", help="which container formats to test")
 
 
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc: pytest.Metafunc):
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
             "size",
             ["large" if metafunc.config.getoption("large") else "small"],
             scope="session",
         )
+
+    def list_opt(name: str) -> list[str]:
+        v = metafunc.config.getoption(name)
+        if not v:
+            return []
+        if type(v) is not str:
+            raise ValueError(f"Invalid value for {name}: {v}")
+        return v.split()
+
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
-            encrypt_sdks = metafunc.config.getoption("--sdks-encrypt").split()
+            encrypt_sdks = list_opt("--sdks-encrypt")
         elif metafunc.config.getoption("--sdks"):
-            encrypt_sdks = metafunc.config.getoption("--sdks").split()
+            encrypt_sdks = list_opt("--sdks")
         else:
             encrypt_sdks = ["js", "go", "java"]
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-decrypt"):
-            decrypt_sdks = metafunc.config.getoption("--sdks-decrypt").split()
+            decrypt_sdks = list_opt("--sdks-decrypt")
         elif metafunc.config.getoption("--sdks"):
-            decrypt_sdks = metafunc.config.getoption("--sdks").split()
+            decrypt_sdks = list_opt("--sdks")
         else:
             decrypt_sdks = ["js", "go", "java"]
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
-            containers = metafunc.config.getoption("--containers").split()
+            containers = list_opt("--containers")
         else:
             containers = ["nano", "ztdf", "nano-with-ecdsa"]
         metafunc.parametrize("container", containers)
 
 
 @pytest.fixture(scope="module")
-def pt_file(tmp_dir, size):
+def pt_file(tmp_dir: str, size: str):
     pt_file = f"{tmp_dir}test-plain-{size}.txt"
     length = (5 * 2**30) if size == "large" else 128
     with open(pt_file, "w") as f:
@@ -305,7 +314,7 @@ def one_attribute_attr_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_attr: str,
     temporary_namespace: abac.Namespace,
-):
+) -> abac.Attribute:
     anyof = otdfctl.attribute_create(
         temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
@@ -350,7 +359,7 @@ def attr_and_value_kas_grants_or(
     kas_url_attr: str,
     kas_url_value1: str,
     temporary_namespace: abac.Namespace,
-):
+) -> abac.Attribute:
     anyof = otdfctl.attribute_create(
         temporary_namespace,
         "attrorvalgrant",
@@ -404,7 +413,7 @@ def attr_and_value_kas_grants_and(
     kas_url_attr: str,
     kas_url_value1: str,
     temporary_namespace: abac.Namespace,
-):
+) -> abac.Attribute:
     allof = otdfctl.attribute_create(
         temporary_namespace,
         "attrandvalgrant",
@@ -459,7 +468,7 @@ def one_attribute_ns_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_ns: str,
     temporary_namespace: abac.Namespace,
-):
+) -> abac.Attribute:
     anyof = otdfctl.attribute_create(
         temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
@@ -503,7 +512,7 @@ def ns_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-):
+) -> abac.Attribute:
     temp_namespace = create_temp_namesapce(otdfctl)
     anyof = otdfctl.attribute_create(
         temp_namespace,
@@ -557,7 +566,7 @@ def ns_and_value_kas_grants_and(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     kas_url_ns: str,
-):
+) -> abac.Attribute:
     temp_namespace = create_temp_namesapce(otdfctl)
     allof = otdfctl.attribute_create(
         temp_namespace,
@@ -609,12 +618,12 @@ def ns_and_value_kas_grants_and(
 
 
 @pytest.fixture(scope="module")
-def hs256_key():
+def hs256_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
 
 
 @pytest.fixture(scope="module")
-def rs256_keys():
+def rs256_keys() -> tuple[str, str]:
     # Generate an RSA private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -670,7 +679,7 @@ def assertion_file_no_keys():
 
 
 @pytest.fixture(scope="module")
-def assertion_file_rs_and_hs_keys(hs256_key, rs256_keys):
+def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]):
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -709,11 +718,11 @@ def assertion_file_rs_and_hs_keys(hs256_key, rs256_keys):
 
 def write_assertion_verification_keys_to_file(
     file_name: str,
-    assertion_verificaiton_keys: assertions.AssertionVerificationKeys = None,
+    assertion_verification_keys: assertions.AssertionVerificationKeys,
 ):
     as_file = f"{tmp_dir}test-assertion-verification-{file_name}.json"
     assertion_verification_json = json.dumps(
-        to_jsonable_python(assertion_verificaiton_keys, exclude_none=True)
+        to_jsonable_python(assertion_verification_keys, exclude_none=True)
     )
     with open(as_file, "w") as f:
         f.write(assertion_verification_json)

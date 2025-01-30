@@ -13,7 +13,7 @@ def get_golden_file(golden_file_name: str) -> str:
 
 def test_decrypt_small(
     decrypt_sdk: tdfs.sdk_type,
-    tmp_dir,
+    tmp_dir: str,
 ):
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
@@ -43,7 +43,7 @@ def test_decrypt_big(
 
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.sdk_type,
-    tmp_dir,
+    tmp_dir: str,
 ):
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = os.path.join(tmp_dir, "no-splitids-java.untdf")
@@ -58,7 +58,7 @@ def test_decrypt_no_splitid(
 
 def test_decrypt_object_statement_value_json(
     decrypt_sdk: tdfs.sdk_type,
-    tmp_dir,
+    tmp_dir: str,
 ):
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = os.path.join(tmp_dir, "with-json-object-assertions-java.untdf")

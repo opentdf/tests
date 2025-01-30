@@ -218,11 +218,11 @@ def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     if isinstance(pb, tdfs.PolicyBinding):
         hash = pb.hash
         altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
-        pb.hash = altered_hash
+        pb.hash = str(altered_hash)
         manifest.encryptionInformation.keyAccess[0].policyBinding = pb
     else:
         altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
-        manifest.encryptionInformation.keyAccess[0].policyBinding = altered_hash
+        manifest.encryptionInformation.keyAccess[0].policyBinding = str(altered_hash)
 
     return manifest
 

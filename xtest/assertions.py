@@ -11,7 +11,7 @@ BindingMethod = Literal["jws", "JWS"]
 class Statement(BaseModel):
     format: str
     schema: str
-    value: str | dict
+    value: str | dict[str, str]
 
 
 class Binding(BaseModel):
