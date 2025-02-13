@@ -17,15 +17,21 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
-format_type = Literal["nano", "ztdf", "nano-with-ecdsa"]
+format_type = Literal[
+    "nano",
+    "nano-with-ecdsa",
+    "ztdf",
+    "ztdf-ecwrap",
+]
 
 feature_type = Literal[
     "assertions",
     "assertion_verification",
     "autoconfigure",
+    "ecwrap",
+    "hexless",
     "nano_ecdsa",
     "ns_grants",
-    "hexless",
 ]
 
 sdk_paths: dict[sdk_type, str] = {
@@ -250,6 +256,7 @@ def decrypt(
     fmt: format_type = "nano",
     assert_keys: str = "",
     verify_assertions: bool = True,
+    ecwrap: bool = False,
 ):
     c = [
         sdk_paths[sdk],
@@ -267,6 +274,8 @@ def decrypt(
             assert_keys,
         ]
     env = dict(os.environ)
+    if ecwrap:
+        env |= {"ECWRAP": "true"}
     if not verify_assertions:
         env |= {"VERIFY_ASSERTIONS": "false"}
     logger.info(f"dec [{' '.join(c)}]")
