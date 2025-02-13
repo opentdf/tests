@@ -96,7 +96,9 @@ def test_tdf(
         container = "ztdf"
         use_ecwrap = True
 
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa, use_ecwrap)
+    ct_file = do_encrypt_with(
+        pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa, use_ecwrap
+    )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
