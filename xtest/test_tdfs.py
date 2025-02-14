@@ -58,6 +58,10 @@ def do_encrypt_with(
     if container == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
+        if use_ecwrap:
+            assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
+        else:
+            assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
     elif container == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
