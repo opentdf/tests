@@ -4,7 +4,7 @@ cffi==1.17.1
 charset-normalizer==3.3.2
 construct==2.10.68
 construct-typing==0.6.2
-cryptography==43.0.1
+cryptography==44.0.1
 idna==3.8
 iniconfig==2.0.0
 jsonschema==4.23.0
