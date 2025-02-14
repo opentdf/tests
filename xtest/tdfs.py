@@ -17,7 +17,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
-format_type = Literal[
+container_type = Literal[
     "nano",
     "nano-with-ecdsa",
     "ztdf",
@@ -218,10 +218,11 @@ def encrypt(
     pt_file: str,
     ct_file: str,
     mime_type: str = "application/octet-stream",
-    fmt: format_type = "nano",
+    fmt: container_type = "nano",
     attr_values: list[str] | None = None,
     assert_value: str = "",
     use_ecdsa_binding: bool = False,
+    ecwrap: bool = False,
 ):
     c = [
         sdk_paths[sdk],
@@ -237,23 +238,33 @@ def encrypt(
         if not attr_values:
             c += [""]
         c += [assert_value]
-    logger.debug(f"enc [{' '.join(c)}]")
 
-    # Copy the current environment
-    env = dict(os.environ)
+    local_env: dict[str, str] = {}
     if fmt == "nano":
         if use_ecdsa_binding:
-            env |= {"USE_ECDSA_BINDING": "true"}
+            local_env |= {"USE_ECDSA_BINDING": "true"}
         else:
-            env |= {"USE_ECDSA_BINDING": "false"}
+            local_env |= {"USE_ECDSA_BINDING": "false"}
+    if ecwrap:
+        local_env |= {"ECWRAP": "true"}
+    logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
+    env = dict(os.environ)
+    env |= local_env
     subprocess.check_call(c, env=env)
+
+
+def fmt_env(env: dict[str, str]) -> str:
+    a: list[str] = []
+    for k, v in env.items():
+        a.append(f"{k}='{v}'")
+    return " ".join(a)
 
 
 def decrypt(
     sdk: sdk_type,
     ct_file: str,
     rt_file: str,
-    fmt: format_type = "nano",
+    fmt: container_type = "nano",
     assert_keys: str = "",
     verify_assertions: bool = True,
     ecwrap: bool = False,
@@ -273,12 +284,14 @@ def decrypt(
             "",
             assert_keys,
         ]
-    env = dict(os.environ)
+    local_env: dict[str, str] = {}
     if ecwrap:
-        env |= {"ECWRAP": "true"}
+        local_env |= {"ECWRAP": "true"}
     if not verify_assertions:
-        env |= {"VERIFY_ASSERTIONS": "false"}
-    logger.info(f"dec [{' '.join(c)}]")
+        local_env |= {"VERIFY_ASSERTIONS": "false"}
+    logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
+    env = dict(os.environ)
+    env |= local_env
     subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
 
 
