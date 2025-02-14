@@ -1,4 +1,5 @@
 import os
+import typing
 import pytest
 import random
 import string
@@ -13,6 +14,15 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
 import abac
+import tdfs
+
+
+def englist(s: tuple[str]) -> str:
+    if len(s) > 1:
+        return ", ".join(s[:-1]) + ", or " + s[-1]
+    elif s:
+        return s[0]
+    return ""
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -22,11 +32,15 @@ def pytest_addoption(parser: pytest.Parser):
         help="generate a large (greater than 4 GiB) file for testing",
     )
     parser.addoption(
-        "--sdks", help="select which sdks to run by default, unless overridden"
+        "--sdks",
+        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
     )
     parser.addoption("--sdks-decrypt", help="select which sdks to run for decrypt only")
     parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
-    parser.addoption("--containers", help="which container formats to test")
+    parser.addoption(
+        "--containers",
+        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.format_type))}",
+    )
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -59,13 +73,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         elif metafunc.config.getoption("--sdks"):
             decrypt_sdks = list_opt("--sdks")
         else:
-            decrypt_sdks = ["js", "go", "java"]
+            decrypt_sdks = typing.get_args(tdfs.sdk_type)
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
             containers = list_opt("--containers")
         else:
-            containers = ["nano", "ztdf", "nano-with-ecdsa"]
+            containers = typing.get_args(tdfs.format_type)
         metafunc.parametrize("container", containers)
 
 

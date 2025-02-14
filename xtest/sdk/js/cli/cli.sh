@@ -30,6 +30,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep autoconfigure
       exit $?
       ;;
+    ecwrap)
+      npx $CTL help | grep encapsulation-algorithm
+      exit $?
+      ;;
     hexless)
       set -o pipefail
       npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
@@ -79,11 +83,17 @@ if [ "$1" == "encrypt" ]; then
       args+=(--policyBinding ecdsa)
     fi
   fi
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--encapKeyType "ec:secp256r1")
+  fi
 
   npx $CTL encrypt "$2" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
   if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--noVerifyAssertions)
+  fi
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--rewrapKeyType "ec:secp256r1")
   fi
   npx $CTL decrypt "$2" "${args[@]}"
 else

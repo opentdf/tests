@@ -32,6 +32,7 @@ def do_encrypt_with(
     container: tdfs.format_type,
     tmp_dir: str,
     use_ecdsa: bool = False,
+    use_ecwrap: bool = False,
     az: str = "",
     scenario: str = "",
 ) -> str:
@@ -81,6 +82,7 @@ def test_tdf(
 ):
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     use_ecdsa = False
+    use_ecwrap = False
     if container == "nano-with-ecdsa":
         if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
             pytest.skip(
@@ -88,13 +90,25 @@ def test_tdf(
             )
         container = "nano"
         use_ecdsa = True
+    if container == "ztdf-ecwrap":
+        if not tdfs.supports(encrypt_sdk, "ecwrap"):
+            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
+        container = "ztdf"
+        use_ecwrap = True
 
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa)
+    ct_file = do_encrypt_with(
+        pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa, use_ecwrap
+    )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
+
+    if container == "ztdf" and tdfs.supports(decrypt_sdk, "ecwrap"):
+        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+        tdfs.decrypt(decrypt_sdk, ct_file, ert_file, container, ecwrap=True)
+        assert filecmp.cmp(pt_file, ert_file)
 
 
 #### MANIFEST VALIDITY TESTS

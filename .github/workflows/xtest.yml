@@ -62,6 +62,7 @@ jobs:
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
           platform-ref: ${{ env.PLATFORM_REF }}
+          ec-wrapped-enabled: true
           extra-keys: >- 
             [{
               "kid": "golden-r1",
