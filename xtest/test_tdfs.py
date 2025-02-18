@@ -29,7 +29,7 @@ def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
 def do_encrypt_with(
     pt_file: str,
     encrypt_sdk: tdfs.sdk_type,
-    container: tdfs.format_type,
+    container: tdfs.container_type,
     tmp_dir: str,
     use_ecdsa: bool = False,
     use_ecwrap: bool = False,
@@ -53,10 +53,15 @@ def do_encrypt_with(
         fmt=container,
         use_ecdsa_binding=use_ecdsa,
         assert_value=az,
+        ecwrap=use_ecwrap,
     )
     if container == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
+        if use_ecwrap:
+            assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
+        else:
+            assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
     elif container == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
@@ -73,12 +78,12 @@ def do_encrypt_with(
 #### BASIC ROUNDTRIP TESTS
 
 
-def test_tdf(
+def test_tdf_roundtrip(
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,
     pt_file: str,
     tmp_dir: str,
-    container: tdfs.format_type,
+    container: tdfs.container_type,
 ):
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     use_ecdsa = False

@@ -39,7 +39,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
     parser.addoption(
         "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.format_type))}",
+        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
     )
 
 
@@ -79,7 +79,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         if metafunc.config.getoption("--containers"):
             containers = list_opt("--containers")
         else:
-            containers = typing.get_args(tdfs.format_type)
+            containers = typing.get_args(tdfs.container_type)
         metafunc.parametrize("container", containers)
 
 

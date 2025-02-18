@@ -31,7 +31,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     ecwrap)
-      npx $CTL help | grep encapsulation-algorithm
+      npx $CTL help | grep encapKeyType
       exit $?
       ;;
     hexless)
