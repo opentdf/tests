@@ -268,6 +268,7 @@ def decrypt(
     assert_keys: str = "",
     verify_assertions: bool = True,
     ecwrap: bool = False,
+    expect_error: bool = False,
 ):
     c = [
         sdk_paths[sdk],
@@ -292,7 +293,10 @@ def decrypt(
     logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
     env = dict(os.environ)
     env |= local_env
-    subprocess.check_call(c, env=env)
+    if expect_error:
+        subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+    else:
+        subprocess.check_call(c, env=env)
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:
