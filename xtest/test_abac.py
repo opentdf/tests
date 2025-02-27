@@ -8,7 +8,7 @@ from abac import Attribute
 cipherTexts: dict[str, str] = {}
 
 
-def test_autoconfigure_one_attribute(
+def test_autoconfigure_one_attribute_standard(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,
@@ -46,7 +46,7 @@ def test_autoconfigure_one_attribute(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_autoconfigure_two_kas_or(
+def test_autoconfigure_two_kas_or_standard(
     attribute_two_kas_grant_or: Attribute,
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,

@@ -292,7 +292,7 @@ def decrypt(
     logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
     env = dict(os.environ)
     env |= local_env
-    subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+    subprocess.check_call(c, env=env)
 
 
 def supports(sdk: sdk_type, feature: feature_type) -> bool:
