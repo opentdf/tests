@@ -102,7 +102,12 @@ def test_tdf_roundtrip(
         use_ecwrap = True
 
     ct_file = do_encrypt_with(
-        pt_file, encrypt_sdk, container, tmp_dir, use_ecdsa, use_ecwrap
+        pt_file,
+        encrypt_sdk,
+        container,
+        tmp_dir,
+        use_ecdsa=use_ecdsa,
+        use_ecwrap=use_ecwrap,
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -145,7 +150,7 @@ def test_manifest_validity_with_assertions(
 #### ASSERTION TESTS
 
 
-def test_tdf_assertions(
+def test_tdf_assertions_unkeyed(
     encrypt_sdk: tdfs.sdk_type,
     decrypt_sdk: tdfs.sdk_type,
     pt_file: str,
@@ -303,7 +308,7 @@ def test_tdf_with_unbound_policy(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
@@ -322,7 +327,7 @@ def test_tdf_with_altered_policy_binding(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
@@ -342,14 +347,14 @@ def test_tdf_with_altered_root_sig(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"root" in exc.output
         assert b"tamper" in exc.output or b"IntegrityError" in exc.output
 
 
-def test_tdf_with_altered_seg_sig(
+def test_tdf_with_altered_seg_sig_wrong(
     encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
 ):
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -359,7 +364,7 @@ def test_tdf_with_altered_seg_sig(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"signature" in exc.output
@@ -381,7 +386,7 @@ def test_tdf_with_altered_enc_seg_size(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert (
@@ -421,7 +426,7 @@ def test_tdf_with_altered_assertion_statement(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
@@ -462,6 +467,7 @@ def test_tdf_with_altered_assertion_with_keys(
             rt_file,
             "ztdf",
             assertion_verification_file_rs_and_hs_keys,
+            expect_error=True,
         )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
@@ -486,7 +492,7 @@ def test_tdf_altered_payload_end(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf")
+        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"segment" in exc.output
