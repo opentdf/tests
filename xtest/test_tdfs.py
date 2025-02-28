@@ -119,7 +119,7 @@ def test_tdf_roundtrip(
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
-    if container == "ztdf" and tdfs.supports(decrypt_sdk, "ecwrap"):
+    if container.startswith("ztdf") and tdfs.supports(decrypt_sdk, "ecwrap"):
         ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
         tdfs.decrypt(decrypt_sdk, ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
