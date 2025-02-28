@@ -48,7 +48,7 @@ args=(
   "--plaintext"
 )
 COMMAND="$1"
-if [[ "$4" == nano* ]]; then
+if [[ $4 == nano* ]]; then
   COMMAND="$1"nano
 fi
 args+=("$COMMAND")
