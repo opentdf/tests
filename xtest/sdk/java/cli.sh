@@ -45,7 +45,6 @@ args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"
   "--platform-endpoint=$PLATFORMENDPOINT"
-  -h
 )
 COMMAND="$1"
 if [ "$4" == "nano" ]; then
@@ -57,7 +56,7 @@ if [ "$1" == "encrypt" ]; then
   args+=(--kas-url=$KASURL)
 
   if [ "$USE_ECDSA_BINDING" == "true" ]; then
-    args+=(--ecdsa-binding "true")
+    args+=(--ecdsa-binding)
   fi
 fi
 
@@ -81,5 +80,5 @@ if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
   args+=(--with-assertion-verification-disabled)
 fi
 
-echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" ">" "$3"
-java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" -f "$2" >"$3"
+echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
+java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" >"$3"
