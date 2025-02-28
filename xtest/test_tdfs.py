@@ -79,8 +79,8 @@ def do_encrypt_with(
             assert envelope.header.binding_mode.use_ecdsa_binding == use_ecdsa
             if envelope.header.kas.kid is not None:
                 # from xtest/platform/opentdf.yaml
-                # expected_kid = b"ec1" + b"\0" * 5
-                assert envelope.header.kas.kid == b"e1"
+                expected_kid = b"ec1" + b"\0" * 5
+                assert envelope.header.kas.kid == expected_kid
     else:
         assert False, f"Unknown container type: {container}"
     cipherTexts[container_id] = ct_file
