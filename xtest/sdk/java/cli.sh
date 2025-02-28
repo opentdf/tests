@@ -45,6 +45,7 @@ args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"
   "--platform-endpoint=$PLATFORMENDPOINT"
+  "--plaintext"
 )
 COMMAND="$1"
 if [[ "$4" == nano* ]]; then
