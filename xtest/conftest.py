@@ -35,6 +35,7 @@ def pytest_addoption(parser: pytest.Parser):
         "--sdks",
         help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
     )
+    parser.addoption("--focus", help="skips tests which don't use the requested sdk")
     parser.addoption("--sdks-decrypt", help="select which sdks to run for decrypt only")
     parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
     parser.addoption(
@@ -59,6 +60,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             raise ValueError(f"Invalid value for {name}: {v}")
         return v.split()
 
+
+    focus = "all"
+    directional_focus: list[bool] = []
+    if metafunc.config.getoption("--focus"):
+        focus = metafunc.config.getoption("--focus")
+
     if "encrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-encrypt"):
             encrypt_sdks = list_opt("--sdks-encrypt")
@@ -66,6 +73,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             encrypt_sdks = list_opt("--sdks")
         else:
             encrypt_sdks = ["js", "go", "java"]
+        directional_focus.append(focus == "all" or any([sdk == focus for sdk in encrypt_sdks]))
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         if metafunc.config.getoption("--sdks-decrypt"):
@@ -74,7 +82,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             decrypt_sdks = list_opt("--sdks")
         else:
             decrypt_sdks = typing.get_args(tdfs.sdk_type)
+        directional_focus.append(focus == "all" or any([sdk == focus for sdk in decrypt_sdks]))
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
+    if not not directional_focus or not all(directional_focus):
+        pytest.skip(reason="Not focusing not on this test")
+
     if "container" in metafunc.fixturenames:
         if metafunc.config.getoption("--containers"):
             containers = list_opt("--containers")

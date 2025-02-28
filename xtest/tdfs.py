@@ -17,6 +17,9 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
+
+focus_type = Literal[sdk_type, "all"]
+
 container_type = Literal[
     "nano",
     "nano-with-ecdsa",
