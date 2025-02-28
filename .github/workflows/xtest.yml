@@ -23,6 +23,11 @@ on:
         type: string
         default: main
         description: "The branch or commit to use for the java-sdk"
+      focus-sdk:
+        required: false
+        type: string
+        default: all
+        description: "The SDK to focus on (go, js, java, all)"
   workflow_call:
     inputs:
       platform-ref:
@@ -41,6 +46,10 @@ on:
         required: false
         type: string
         default: main
+      focus-sdk:
+        required: false
+        type: string
+        default: all
   schedule:
     - cron: "30 6 * * *"
 jobs:
@@ -55,6 +64,7 @@ jobs:
       JS_REF: "${{ inputs.js-ref || 'main' }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
+      FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     steps:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -165,13 +175,22 @@ jobs:
         working-directory: otdftests/xtest
       - name: Run legacy decryption tests
         run: |-
-          pytest -v test_legacy.py
+          pytest -v  --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-      - name: Run xtests
+      - name: Run all standard xtests
+        if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           pytest -v test_tdfs.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+          SCHEMA_FILE: 'manifest.schema.json'
+      - name: Run xtests focusing on a specific SDK
+        if: ${{ env.FOCUS_SDK != 'all' }}
+        run: |-
+          pytest -v --focus "$FOCUS_SDK" test_tdfs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
