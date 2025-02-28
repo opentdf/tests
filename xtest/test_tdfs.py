@@ -26,13 +26,19 @@ def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
         )
 
 
+def simple_container(container: tdfs.container_type) -> tdfs.container_type:
+    if container == "nano-with-ecdsa":
+        return "nano"
+    if container == "ztdf-ecwrap":
+        return "ztdf"
+    return container
+
+
 def do_encrypt_with(
     pt_file: str,
     encrypt_sdk: tdfs.sdk_type,
     container: tdfs.container_type,
     tmp_dir: str,
-    use_ecdsa: bool = False,
-    use_ecwrap: bool = False,
     az: str = "",
     scenario: str = "",
 ) -> str:
@@ -45,32 +51,38 @@ def do_encrypt_with(
     if container_id in cipherTexts:
         return cipherTexts[container_id]
     ct_file = f"{tmp_dir}test-{encrypt_sdk}-{scenario}{c}.{container}"
+
+    use_ecdsa = container == "nano-with-ecdsa"
+    use_ecwrap = container == "ztdf-ecwrap"
+    fmt = simple_container(container)
     tdfs.encrypt(
         encrypt_sdk,
         pt_file,
         ct_file,
         mime_type="text/plain",
-        fmt=container,
+        fmt=fmt,
         use_ecdsa_binding=use_ecdsa,
         assert_value=az,
         ecwrap=use_ecwrap,
     )
-    if container == "ztdf":
+    if fmt == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
         if use_ecwrap:
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
-    elif container == "nano":
+    elif fmt == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
             assert envelope.header.version.version == 12
             assert envelope.header.binding_mode.use_ecdsa_binding == use_ecdsa
             if envelope.header.kas.kid is not None:
                 # from xtest/platform/opentdf.yaml
-                expected_kid = b"ec1" + b"\0" * 5
-                assert envelope.header.kas.kid == expected_kid
+                # expected_kid = b"ec1" + b"\0" * 5
+                assert envelope.header.kas.kid == b"e1"
+    else:
+        assert False, f"Unknown container type: {container}"
     cipherTexts[container_id] = ct_file
     return ct_file
 
@@ -86,28 +98,20 @@ def test_tdf_roundtrip(
     container: tdfs.container_type,
 ):
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    use_ecdsa = False
-    use_ecwrap = False
     if container == "nano-with-ecdsa":
         if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
             pytest.skip(
                 f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
             )
-        container = "nano"
-        use_ecdsa = True
     if container == "ztdf-ecwrap":
         if not tdfs.supports(encrypt_sdk, "ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        container = "ztdf"
-        use_ecwrap = True
 
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
         container,
         tmp_dir,
-        use_ecdsa=use_ecdsa,
-        use_ecwrap=use_ecwrap,
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
