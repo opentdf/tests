@@ -13,7 +13,9 @@ def get_golden_file(golden_file_name: str) -> str:
 
 
 def test_decrypt_small(
-    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    in_focus: set[tdfs.sdk_type],
 ):
     if not in_focus:
         pytest.skip("Not in focus")
@@ -29,7 +31,9 @@ def test_decrypt_small(
 
 
 def test_decrypt_big(
-    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    in_focus: set[tdfs.sdk_type],
 ):
     if not in_focus:
         pytest.skip("Not in focus")
@@ -45,7 +49,9 @@ def test_decrypt_big(
 
 
 def test_decrypt_no_splitid(
-    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    in_focus: set[tdfs.sdk_type],
 ):
     if not in_focus:
         pytest.skip("Not in focus")
@@ -61,7 +67,9 @@ def test_decrypt_no_splitid(
 
 
 def test_decrypt_object_statement_value_json(
-    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
+    decrypt_sdk: tdfs.sdk_type,
+    tmp_dir: str,
+    in_focus: set[tdfs.sdk_type],
 ):
     if not in_focus:
         pytest.skip("Not in focus")
