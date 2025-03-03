@@ -1,3 +1,4 @@
+import pytest
 import os
 
 import tdfs
@@ -12,9 +13,10 @@ def get_golden_file(golden_file_name: str) -> str:
 
 
 def test_decrypt_small(
-    decrypt_sdk: tdfs.sdk_type,
-    tmp_dir: str,
+    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
@@ -27,9 +29,10 @@ def test_decrypt_small(
 
 
 def test_decrypt_big(
-    decrypt_sdk: tdfs.sdk_type,
-    tmp_dir,
+    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "big-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
@@ -42,9 +45,10 @@ def test_decrypt_big(
 
 
 def test_decrypt_no_splitid(
-    decrypt_sdk: tdfs.sdk_type,
-    tmp_dir: str,
+    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = os.path.join(tmp_dir, "no-splitids-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
@@ -57,9 +61,10 @@ def test_decrypt_no_splitid(
 
 
 def test_decrypt_object_statement_value_json(
-    decrypt_sdk: tdfs.sdk_type,
-    tmp_dir: str,
+    decrypt_sdk: tdfs.sdk_type, tmp_dir: str, in_focus: set[tdfs.sdk_type]
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = os.path.join(tmp_dir, "with-json-object-assertions-java.untdf")
     tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf", verify_assertions=False)

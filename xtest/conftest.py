@@ -25,6 +25,16 @@ def englist(s: tuple[str]) -> str:
     return ""
 
 
+def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any]:
+    def is_a(v: str) -> typing.Any:
+        for i in v.split():
+            if i not in typing.get_args(t):
+                raise ValueError(f"Invalid value for {t}: {i}")
+        return v
+
+    return is_a
+
+
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--large",
@@ -34,13 +44,27 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--sdks",
         help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
+        type=is_type_or_list_of_types(tdfs.sdk_type),
     )
-    parser.addoption("--focus", help="skips tests which don't use the requested sdk")
-    parser.addoption("--sdks-decrypt", help="select which sdks to run for decrypt only")
-    parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
+    parser.addoption(
+        "--focus",
+        help="skips tests which don't use the requested sdk",
+        type=is_type_or_list_of_types(tdfs.focus_type),
+    )
+    parser.addoption(
+        "--sdks-decrypt",
+        help="select which sdks to run for decrypt only",
+        type=is_type_or_list_of_types(tdfs.sdk_type),
+    )
+    parser.addoption(
+        "--sdks-encrypt",
+        help="select which sdks to run for encrypt only",
+        type=is_type_or_list_of_types(tdfs.sdk_type),
+    )
     parser.addoption(
         "--containers",
         help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
+        type=is_type_or_list_of_types(tdfs.container_type),
     )
 
 
@@ -52,46 +76,58 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             scope="session",
         )
 
-    def list_opt(name: str) -> list[str]:
+    def list_opt[T](name: str, t: typing.Any) -> list[T]:
+        ttt = typing.get_args(t)
         v = metafunc.config.getoption(name)
         if not v:
             return []
         if type(v) is not str:
             raise ValueError(f"Invalid value for {name}: {v}")
-        return v.split()
+        for i in v.split():
+            if i not in ttt:
+                raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
+        return [typing.cast(T, i) for i in v.split()]
 
-
-    focus = "all"
-    directional_focus: list[bool] = []
-    if metafunc.config.getoption("--focus"):
-        focus = metafunc.config.getoption("--focus")
+    subject_sdks: set[tdfs.sdk_type] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
+        encrypt_sdks: list[tdfs.sdk_type] = []
         if metafunc.config.getoption("--sdks-encrypt"):
-            encrypt_sdks = list_opt("--sdks-encrypt")
+            encrypt_sdks = list_opt("--sdks-encrypt", tdfs.sdk_type)
         elif metafunc.config.getoption("--sdks"):
-            encrypt_sdks = list_opt("--sdks")
+            encrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
         else:
-            encrypt_sdks = ["js", "go", "java"]
-        directional_focus.append(focus == "all" or any([sdk == focus for sdk in encrypt_sdks]))
+            encrypt_sdks = list(typing.get_args(tdfs.sdk_type))
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
+        subject_sdks |= set(encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
+        decrypt_sdks: list[tdfs.sdk_type] = []
         if metafunc.config.getoption("--sdks-decrypt"):
-            decrypt_sdks = list_opt("--sdks-decrypt")
+            decrypt_sdks = list_opt("--sdks-decrypt", tdfs.sdk_type)
         elif metafunc.config.getoption("--sdks"):
-            decrypt_sdks = list_opt("--sdks")
+            decrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
         else:
-            decrypt_sdks = typing.get_args(tdfs.sdk_type)
-        directional_focus.append(focus == "all" or any([sdk == focus for sdk in decrypt_sdks]))
+            decrypt_sdks = list(typing.get_args(tdfs.sdk_type))
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
-    if not not directional_focus or not all(directional_focus):
-        pytest.skip(reason="Not focusing not on this test")
+        subject_sdks |= set(decrypt_sdks)
+
+    if "in_focus" in metafunc.fixturenames:
+        focus_opt = "all"
+        if metafunc.config.getoption("--focus"):
+            focus_opt = metafunc.config.getoption("--focus")
+        focus: set[tdfs.sdk_type] = set()
+        if focus_opt == "all":
+            focus = set(typing.get_args(tdfs.sdk_type))
+        else:
+            focus = set(list_opt("--focus", tdfs.focus_type))
+        metafunc.parametrize("in_focus", focus & subject_sdks)
 
     if "container" in metafunc.fixturenames:
+        containers: list[tdfs.container_type] = []
         if metafunc.config.getoption("--containers"):
-            containers = list_opt("--containers")
+            containers = list_opt("--containers", tdfs.container_type)
         else:
-            containers = typing.get_args(tdfs.container_type)
+            containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
 
 

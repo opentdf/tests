@@ -6,7 +6,7 @@
 
 - `go 1.22.3`
 - `node 20`
-- `python 3.10`
+- `python 3.12`
 - `jdk 11`
 - `maven`
 

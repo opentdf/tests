@@ -85,10 +85,10 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-      - name: Set up Python 3.10
+      - name: Set up Python 3.12
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
-          python-version: "3.10"
+          python-version: "3.12"
       - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

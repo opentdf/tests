@@ -15,10 +15,12 @@ def test_autoconfigure_one_attribute_standard(
     tmp_dir: str,
     pt_file: str,
     kas_url_value1: str,
+    in_focus: set[tdfs.sdk_type],
 ):
     global counter
-    # We have a grant for alpha to localhost kas. Now try to use it...
 
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -54,7 +56,10 @@ def test_autoconfigure_two_kas_or_standard(
     pt_file: str,
     kas_url_value1: str,
     kas_url_value2: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -113,7 +118,10 @@ def test_autoconfigure_double_kas_and(
     pt_file: str,
     kas_url_value1: str,
     kas_url_value2: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -156,7 +164,10 @@ def test_autoconfigure_one_attribute_attr_grant(
     tmp_dir: str,
     pt_file: str,
     kas_url_attr: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -193,7 +204,10 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     pt_file: str,
     kas_url_attr: str,
     kas_url_value1: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -237,7 +251,10 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     pt_file: str,
     kas_url_attr: str,
     kas_url_value1: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -280,7 +297,10 @@ def test_autoconfigure_one_attribute_ns_grant(
     tmp_dir: str,
     pt_file: str,
     kas_url_ns: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -317,7 +337,10 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     pt_file: str,
     kas_url_ns: str,
     kas_url_value1: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -361,7 +384,10 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     pt_file: str,
     kas_url_ns: str,
     kas_url_value1: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
