@@ -120,7 +120,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             focus = set(typing.get_args(tdfs.sdk_type))
         else:
             focus = set(list_opt("--focus", tdfs.focus_type))
-        metafunc.parametrize("in_focus", focus & subject_sdks)
+        metafunc.parametrize("in_focus", [focus & subject_sdks])
 
     if "container" in metafunc.fixturenames:
         containers: list[tdfs.container_type] = []
