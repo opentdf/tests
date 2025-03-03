@@ -96,7 +96,10 @@ def test_tdf_roundtrip(
     pt_file: str,
     tmp_dir: str,
     container: tdfs.container_type,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if container == "nano-with-ecdsa":
         if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
@@ -128,15 +131,25 @@ def test_tdf_roundtrip(
 #### MANIFEST VALIDITY TESTS
 
 
-def test_manifest_validity(encrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str):
+def test_manifest_validity(
+    encrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str, in_focus: bool
+):
+    if not in_focus:
+        pytest.skip("Not in focus")
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
     tdfs.validate_manifest_schema(ct_file)
 
 
 def test_manifest_validity_with_assertions(
-    encrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str, assertion_file_no_keys: str
+    encrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_no_keys: str,
+    in_focus: bool,
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     ct_file = do_encrypt_with(
@@ -160,7 +173,10 @@ def test_tdf_assertions_unkeyed(
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -188,7 +204,10 @@ def test_tdf_assertions_with_keys(
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -303,8 +322,14 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 
 def test_tdf_with_unbound_policy(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ) -> None:
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -320,8 +345,14 @@ def test_tdf_with_unbound_policy(
 
 
 def test_tdf_with_altered_policy_binding(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ) -> None:
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -342,8 +373,14 @@ def test_tdf_with_altered_policy_binding(
 
 
 def test_tdf_with_altered_root_sig(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -359,8 +396,14 @@ def test_tdf_with_altered_root_sig(
 
 
 def test_tdf_with_altered_seg_sig_wrong(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -379,8 +422,14 @@ def test_tdf_with_altered_seg_sig_wrong(
 
 
 def test_tdf_with_altered_enc_seg_size(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
@@ -409,7 +458,10 @@ def test_tdf_with_altered_assertion_statement(
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -444,7 +496,10 @@ def test_tdf_with_altered_assertion_with_keys(
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
+    in_focus: set[tdfs.sdk_type],
 ):
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not tdfs.supports(encrypt_sdk, "assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -487,8 +542,14 @@ def test_tdf_with_altered_assertion_with_keys(
 
 
 def test_tdf_altered_payload_end(
-    encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type, pt_file: str, tmp_dir: str
+    encrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.sdk_type,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: bool,
 ) -> None:
+    if not in_focus:
+        pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     assert os.path.isfile(ct_file)
