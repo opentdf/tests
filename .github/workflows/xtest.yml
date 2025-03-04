@@ -221,6 +221,7 @@ jobs:
       - name: Start additional kas
         uses: opentdf/platform/test/start-additional-kas@main
         with:
+          ec-tdf-enabled: true
           kas-port: 8484
           kas-name: delta
 
