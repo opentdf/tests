@@ -28,6 +28,11 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
 
+    ecwrap)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key
+      exit $?
+      ;;
+
     hexless)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
