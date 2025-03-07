@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@opentdf/cli": "beta"
+    "@opentdf/ctl": "file:../../client-web/cli/opentdf-ctl-0.3.0.tgz",
+    "@opentdf/sdk": "file:../../client-web/lib/opentdf-sdk-0.3.0.tgz"
   }
 }
