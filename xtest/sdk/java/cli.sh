@@ -64,6 +64,14 @@ if [ "$1" == "encrypt" ]; then
   if [ "$USE_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
+
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--encap-key-type="ec:secp256r1")
+  fi
+else
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--rewrap-key-type="ec:secp256r1")
+  fi
 fi
 
 if [ -n "$5" ] && [ "$4" != "nano" ]; then
