@@ -28,6 +28,10 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
+    ecwrap)
+      "${cmd[@]}" help encrypt | grep wrapping-key
+      exit $?
+      ;;
     hexless)
       set -o pipefail
       "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
@@ -63,6 +67,9 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$7" ]; then
     args+=(--with-assertions "$7")
   fi
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--wrapping-key-algorithm "ec:secp256r1")
+  fi
   if [ "$USE_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
@@ -77,6 +84,9 @@ if [ "$1" == "encrypt" ]; then
 elif [ "$1" == "decrypt" ]; then
   if [ -n "$8" ]; then
     args+=(--with-assertion-verification-keys "$8")
+  fi
+  if [ "$ECWRAP" == 'true' ]; then
+    args+=(--session-key-algorithm "ec:secp256r1")
   fi
   if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)
