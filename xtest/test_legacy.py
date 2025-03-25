@@ -13,7 +13,7 @@ def get_golden_file(golden_file_name: str) -> str:
 
 
 def test_decrypt_small(
-    decrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: str,
     in_focus: set[tdfs.sdk_type],
 ):
@@ -21,7 +21,7 @@ def test_decrypt_small(
         pytest.skip("Not in focus")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
@@ -31,7 +31,7 @@ def test_decrypt_small(
 
 
 def test_decrypt_big(
-    decrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: str,
     in_focus: set[tdfs.sdk_type],
 ):
@@ -39,7 +39,7 @@ def test_decrypt_big(
         pytest.skip("Not in focus")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "big-java.untdf")
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 10 * 2**20
     expected_bytes = bytes([0] * 1024)
@@ -49,7 +49,7 @@ def test_decrypt_big(
 
 
 def test_decrypt_no_splitid(
-    decrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: str,
     in_focus: set[tdfs.sdk_type],
 ):
@@ -57,7 +57,7 @@ def test_decrypt_no_splitid(
         pytest.skip("Not in focus")
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = os.path.join(tmp_dir, "no-splitids-java.untdf")
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, fmt="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
@@ -67,7 +67,7 @@ def test_decrypt_no_splitid(
 
 
 def test_decrypt_object_statement_value_json(
-    decrypt_sdk: tdfs.sdk_type,
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: str,
     in_focus: set[tdfs.sdk_type],
 ):
@@ -75,6 +75,6 @@ def test_decrypt_object_statement_value_json(
         pytest.skip("Not in focus")
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = os.path.join(tmp_dir, "with-json-object-assertions-java.untdf")
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, fmt="ztdf", verify_assertions=False)
+    decrypt_sdk.decrypt(ct_file, rt_file, fmt="ztdf", verify_assertions=False)
     with open(rt_file, "rb") as f:
         assert f.read().decode("utf-8") == "text"

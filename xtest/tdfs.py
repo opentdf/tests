@@ -216,46 +216,6 @@ def validate_manifest_schema(tdf_file: str):
     jsonschema.validate(instance=manifest, schema=schema)
 
 
-def encrypt(
-    sdk: sdk_type,
-    pt_file: str,
-    ct_file: str,
-    mime_type: str = "application/octet-stream",
-    fmt: container_type = "nano",
-    attr_values: list[str] | None = None,
-    assert_value: str = "",
-    use_ecdsa_binding: bool = False,
-    ecwrap: bool = False,
-):
-    c = [
-        sdk_paths[sdk],
-        "encrypt",
-        pt_file,
-        ct_file,
-        fmt,
-        mime_type,
-    ]
-    if attr_values:
-        c += [",".join(attr_values)]
-    if assert_value:
-        if not attr_values:
-            c += [""]
-        c += [assert_value]
-
-    local_env: dict[str, str] = {}
-    if fmt == "nano":
-        if use_ecdsa_binding:
-            local_env |= {"USE_ECDSA_BINDING": "true"}
-        else:
-            local_env |= {"USE_ECDSA_BINDING": "false"}
-    if ecwrap:
-        local_env |= {"ECWRAP": "true"}
-    logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
-    env = dict(os.environ)
-    env |= local_env
-    subprocess.check_call(c, env=env)
-
-
 def fmt_env(env: dict[str, str]) -> str:
     a: list[str] = []
     for k, v in env.items():
@@ -263,64 +223,107 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
-def decrypt(
-    sdk: sdk_type,
-    ct_file: str,
-    rt_file: str,
-    fmt: container_type = "nano",
-    assert_keys: str = "",
-    verify_assertions: bool = True,
-    ecwrap: bool = False,
-    expect_error: bool = False,
-):
-    c = [
-        sdk_paths[sdk],
-        "decrypt",
-        ct_file,
-        rt_file,
-        fmt,
-    ]
-    if assert_keys:
-        # empty args for mimetype, attrs, and assertions
-        c += [
-            "",
-            "",
-            "",
-            assert_keys,
+class SDK:
+    def __init__(self, sdk: sdk_type):
+        self.sdk = sdk
+        self.path = sdk_paths[sdk]
+
+    def encrypt(
+        self,
+        pt_file: str,
+        ct_file: str,
+        mime_type: str = "application/octet-stream",
+        fmt: container_type = "nano",
+        attr_values: list[str] | None = None,
+        assert_value: str = "",
+        use_ecdsa_binding: bool = False,
+        ecwrap: bool = False,
+    ):
+        c = [
+            self.path,
+            "encrypt",
+            pt_file,
+            ct_file,
+            fmt,
+            mime_type,
         ]
-    local_env: dict[str, str] = {}
-    if ecwrap:
-        local_env |= {"ECWRAP": "true"}
-    if not verify_assertions:
-        local_env |= {"VERIFY_ASSERTIONS": "false"}
-    logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
-    env = dict(os.environ)
-    env |= local_env
-    if expect_error:
-        subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
-    else:
+        if attr_values:
+            c += [",".join(attr_values)]
+        if assert_value:
+            if not attr_values:
+                c += [""]
+            c += [assert_value]
+
+        local_env: dict[str, str] = {}
+        if fmt == "nano":
+            if use_ecdsa_binding:
+                local_env |= {"USE_ECDSA_BINDING": "true"}
+            else:
+                local_env |= {"USE_ECDSA_BINDING": "false"}
+        if ecwrap:
+            local_env |= {"ECWRAP": "true"}
+        logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
+        env = dict(os.environ)
+        env |= local_env
         subprocess.check_call(c, env=env)
 
+    def decrypt(
+        self,
+        ct_file: str,
+        rt_file: str,
+        fmt: container_type = "nano",
+        assert_keys: str = "",
+        verify_assertions: bool = True,
+        ecwrap: bool = False,
+        expect_error: bool = False,
+    ):
+        c = [
+            self.path,
+            "decrypt",
+            ct_file,
+            rt_file,
+            fmt,
+        ]
+        if assert_keys:
+            # empty args for mimetype, attrs, and assertions
+            c += [
+                "",
+                "",
+                "",
+                assert_keys,
+            ]
+        local_env: dict[str, str] = {}
+        if ecwrap:
+            local_env |= {"ECWRAP": "true"}
+        if not verify_assertions:
+            local_env |= {"VERIFY_ASSERTIONS": "false"}
+        logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
+        env = dict(os.environ)
+        env |= local_env
+        if expect_error:
+            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+        else:
+            subprocess.check_call(c, env=env)
 
-def supports(sdk: sdk_type, feature: feature_type) -> bool:
-    match (feature, sdk):
-        case ("autoconfigure", ("go" | "java")):
-            return True
-        case ("nano_ecdsa", "go"):
-            return True
-        case ("ns_grants", ("go" | "java")):
-            return True
-        case _:
-            pass
+    def supports(self, feature: feature_type) -> bool:
+        match (feature, self.sdk):
+            case ("autoconfigure", ("go" | "java")):
+                return True
+            case ("nano_ecdsa", "go"):
+                return True
+            case ("ns_grants", ("go" | "java")):
+                return True
+            case _:
+                pass
 
-    c = [
-        sdk_paths[sdk],
-        "supports",
-        feature,
-    ]
-    logger.info(f"sup [{' '.join(c)}]")
-    try:
-        subprocess.check_call(c)
-    except subprocess.CalledProcessError:
-        return False
-    return True
+        c = [
+            self.path,
+            "supports",
+            feature,
+        ]
+        logger.info(f"sup [{' '.join(c)}]")
+        try:
+            subprocess.check_call(c)
+        except subprocess.CalledProcessError:
+            return False
+        return True
