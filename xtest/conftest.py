@@ -88,28 +88,38 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return [typing.cast(T, i) for i in v.split()]
 
-    subject_sdks: set[tdfs.sdk_type] = set()
+    def defaulted_list_opt[T](
+        names: list[str], t: typing.Any, default: list[T]
+    ) -> list[T]:
+        for name in names:
+            v = metafunc.config.getoption(name)
+            if v:
+                return list_opt(name, t)
+        return default
+
+    subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
         encrypt_sdks: list[tdfs.sdk_type] = []
-        if metafunc.config.getoption("--sdks-encrypt"):
-            encrypt_sdks = list_opt("--sdks-encrypt", tdfs.sdk_type)
-        elif metafunc.config.getoption("--sdks"):
-            encrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
-        else:
-            encrypt_sdks = list(typing.get_args(tdfs.sdk_type))
-        metafunc.parametrize("encrypt_sdk", encrypt_sdks)
-        subject_sdks |= set(encrypt_sdks)
+        encrypt_sdks = defaulted_list_opt(
+            ["--sdks-encrypt", "--sdks"],
+            tdfs.sdk_type,
+            list(typing.get_args(tdfs.sdk_type)),
+        )
+        # convert list of sdk_type to list of SDK objects
+        e_sdks = [tdfs.SDK(sdk) for sdk in encrypt_sdks]
+        metafunc.parametrize("encrypt_sdk", e_sdks)
+        subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         decrypt_sdks: list[tdfs.sdk_type] = []
-        if metafunc.config.getoption("--sdks-decrypt"):
-            decrypt_sdks = list_opt("--sdks-decrypt", tdfs.sdk_type)
-        elif metafunc.config.getoption("--sdks"):
-            decrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
-        else:
-            decrypt_sdks = list(typing.get_args(tdfs.sdk_type))
-        metafunc.parametrize("decrypt_sdk", decrypt_sdks)
-        subject_sdks |= set(decrypt_sdks)
+        decrypt_sdks = defaulted_list_opt(
+            ["--sdks-decrypt", "--sdks"],
+            tdfs.sdk_type,
+            list(typing.get_args(tdfs.sdk_type)),
+        )
+        d_sdks = [tdfs.SDK(sdk) for sdk in decrypt_sdks]
+        metafunc.parametrize("decrypt_sdk", d_sdks)
+        subject_sdks |= set(d_sdks)
 
     if "in_focus" in metafunc.fixturenames:
         focus_opt = "all"
