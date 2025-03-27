@@ -21,7 +21,7 @@ build:
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
 		cd ./src/$$version && \
-		mvn --batch-mode clean install -DskipTests || { \
+		mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true || { \
 			echo "Error: Maven build failed for $$version"; \
 			exit 1; \
 		}; \

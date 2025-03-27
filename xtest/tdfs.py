@@ -229,7 +229,7 @@ class SDK:
 
     def __str__(self) -> str:
         return f"{self.sdk}@{self.version}"
-    
+
     def __repr__(self) -> str:
         return f"SDK(sdk={self.sdk!r}, version={self.version!r})"
 
