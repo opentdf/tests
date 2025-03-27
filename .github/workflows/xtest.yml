@@ -134,7 +134,7 @@ jobs:
           OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/main"
           echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
           echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
-          cd "${PLATFORM_DIR_ABS}"
+          cd "${OTDFCTL_DIR_ABS}"
           for m in lib/fixtures lib/ocrypto protocol/go sdk; do
             go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
           done
