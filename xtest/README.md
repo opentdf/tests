@@ -18,37 +18,36 @@ brew install maven
 
 ### Install SDKs
 
+#### Download the main branch of each SDK
+
 First, download the latest head version of each test repo by running the helper script, 
 This works by aliasing or checking out the source code for the different client libraries in the xtest/sdk folder.
 To check out the current head versions of the sdks under test, run:
 
 ```sh
-  ./sdk/scripts/
+  ./sdk/scripts/checkout-all.sh
 ```
 
+#### Using locally checked out SDKs
 
-#### Java SDK
+If you are developing a new feature or fix for a local SDK
+and have one or more them checked out as peers to the test working directory,
+use a symbolic link to pull in your working tree:
 
 ```shell
-git clone --bare https://github.com/opentdf/java-sdk.git sdk/java/src/java-sdk.git
-cd sdk/java/src/java-sdk.git
-git worktree add ../main main
-cd ../main
-mvn --batch-mode clean install -DskipTests
+mkdir -p sdk/{go,java,js}/src
+ln -s ../../../otcfctl  sdk/go/src/local
+ln -s ../../../java-sdk sdk/java/src/local
+ln -s ../../../web-sdk  sdk/js/src/local
 ```
 
-#### Go SDK wrapped by otdfctl
+#### Using the latest `platform` (go SDK code) in `otdfctl`
 
-```shell
-git clone https://github.com/opentdf/platform sdk/go/src/platform
-git clone https://github.com/opentdf/otdfctl.git sdk/go/src/otdfctl
-cd otdfctl
-go mod edit -replace github.com/opentdf/platform/protocol/go=../platform/protocol/go
-go mod edit -replace github.com/opentdf/platform/sdk=../platform/sdk
-go mod tidy
-go build .
-mv otdfctl ../sdk/go/otdfctl
-```
+Use replace directives in the `otdfctl/go.mod` to point to the version of the SDK (or other libraries) you wish to test.
+
+#### Build the SDKs
+
+To build all the checked out SDKs, run `make` from the `sdk` folder.
 
 ### Platform Backend
 
@@ -80,21 +79,7 @@ mv otdfctl ../sdk/go/otdfctl
    go run ./service start
    ```
 
-### Setup SDK CLIs
-Set the paths to the local repos in env variables
-```shell
-JS_DIR=../../../web-sdk
-PLATFORM_DIR=../../../platform
-OTDFCTL_DIR=../../../otdfctl
-JAVA_DIR=../../../java-sdk
-```
-Build all the clis and setup within xtest
-```shell
-cd sdk
-make all
-```
-
-### Install requirements
+### Install test harness requirements
 
 ```shell
 pip install -r requirements.txt
