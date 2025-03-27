@@ -37,6 +37,7 @@ feature_type = Literal[
     "ns_grants",
 ]
 
+
 class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
@@ -218,16 +219,17 @@ def fmt_env(env: dict[str, str]) -> str:
 
 class SDK:
     sdk: sdk_type
+
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = f"sdk/{sdk}/dist/{version}/cli.sh" 
+        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
         self.version = version
         if not os.path.isfile(self.path):
             raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
 
     def __str__(self) -> str:
         return f"{self.sdk}@{self.version}"
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, SDK):
             return NotImplemented
