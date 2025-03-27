@@ -53,6 +53,33 @@ on:
   schedule:
     - cron: "30 6 * * *"
 jobs:
+  configure-xtest:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.get-versions.outputs.versions }}
+    steps:
+      - name: xtest checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: xtest
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.12"
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+      - name: Check out web-sdk
+        uses: actions/checkout@v2
+        with:
+          repository: opentdf/web-sdk
+
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
