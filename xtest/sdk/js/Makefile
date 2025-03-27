@@ -20,15 +20,24 @@ build:
 	@echo "Building binaries for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
-		cd $(MAKEFILE_DIR)/src/$$version && make cli; \
+		cd $(MAKEFILE_DIR)/src/$$version && make cli || { \
+			echo "Error: Failed to build CLI for $$version"; \
+			exit 1; \
+		}; \
 		echo "Copying cli.sh to dist/$$version"; \
 		CLI_NAME=$$(cd $(MAKEFILE_DIR)/src/$$version/cli && npm pkg get name | tr -d \"); \
 		CLI_VERSION=$$(cd $(MAKEFILE_DIR)/src/$$version/cli && npm pkg get version | tr -d \"); \
 		CLI_PATH=$(MAKEFILE_DIR)/src/$$version/cli/$$(echo "$$CLI_NAME" | tr -d @ | sed s1/1-1)-$$CLI_VERSION.tgz; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
-		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/; \
+		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/ || { \
+			echo "Error: Failed to copy cli.sh for $$version"; \
+			exit 2; \
+		}; \
 		echo "Installing $$CLI_PATH into dist/$$version"; \
-		cd $(MAKEFILE_DIR)/dist/$$version && npm i $$CLI_PATH; \
+		cd $(MAKEFILE_DIR)/dist/$$version && npm i $$CLI_PATH || { \
+			echo "Error: Failed to install CLI package for $$version"; \
+			exit 3; \
+		}; \
 	done
 	@echo "All binaries built successfully"
 
