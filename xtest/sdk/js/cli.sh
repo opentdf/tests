@@ -6,7 +6,6 @@
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-
 CTL=@opentdf/ctl
 if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
   CTL=@opentdf/cli
@@ -59,7 +58,7 @@ while [ "$XTEST_DIR" != "/" ]; do
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
 
-# shellcheck source=../../test.env
+# shellcheck disable=SC1091
 source "$XTEST_DIR"/test.env
 
 src_file=$(realpath "$2")
