@@ -37,13 +37,6 @@ feature_type = Literal[
     "ns_grants",
 ]
 
-sdk_paths: dict[sdk_type, str] = {
-    "go": "sdk/go/cli.sh",
-    "java": "sdk/java/cli.sh",
-    "js": "sdk/js/cli/cli.sh",
-}
-
-
 class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
@@ -224,9 +217,24 @@ def fmt_env(env: dict[str, str]) -> str:
 
 
 class SDK:
-    def __init__(self, sdk: sdk_type):
+    sdk: sdk_type
+    def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = sdk_paths[sdk]
+        self.path = f"sdk/{sdk}/dist/{version}/cli.sh" 
+        self.version = version
+        if not os.path.isfile(self.path):
+            raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
+
+    def __str__(self) -> str:
+        return f"{self.sdk}@{self.version}"
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SDK):
+            return NotImplemented
+        return self.sdk == other.sdk and self.version == other.version
+
+    def __hash__(self) -> int:
+        return hash((self.sdk, self.version))
 
     def encrypt(
         self,

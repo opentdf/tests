@@ -108,7 +108,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         )
         # convert list of sdk_type to list of SDK objects
         e_sdks = [tdfs.SDK(sdk) for sdk in encrypt_sdks]
-        metafunc.parametrize("encrypt_sdk", e_sdks)
+        metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         decrypt_sdks: list[tdfs.sdk_type] = []
@@ -118,7 +118,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             list(typing.get_args(tdfs.sdk_type)),
         )
         d_sdks = [tdfs.SDK(sdk) for sdk in decrypt_sdks]
-        metafunc.parametrize("decrypt_sdk", d_sdks)
+        metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
     if "in_focus" in metafunc.fixturenames:
@@ -130,7 +130,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             focus = set(typing.get_args(tdfs.sdk_type))
         else:
             focus = set(list_opt("--focus", tdfs.focus_type))
-        metafunc.parametrize("in_focus", [focus & subject_sdks])
+        focused_sdks = set(s for s in subject_sdks if s.sdk in focus)
+        metafunc.parametrize("in_focus", [focused_sdks])
 
     if "container" in metafunc.fixturenames:
         containers: list[tdfs.container_type] = []

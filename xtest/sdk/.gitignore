@@ -1,0 +1,9 @@
+# .gitignore for the xtest/sdk directory
+
+# All checked out projects with checkout-*.sh scripts.
+*/src
+*/dist
+
+# generated binaries
+otdfctl-*
+otdfctl

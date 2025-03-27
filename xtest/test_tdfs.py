@@ -93,7 +93,7 @@ def test_tdf_roundtrip(
     pt_file: str,
     tmp_dir: str,
     container: tdfs.container_type,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -132,7 +132,7 @@ def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
@@ -146,7 +146,7 @@ def test_manifest_validity_with_assertions(
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
@@ -173,7 +173,7 @@ def test_tdf_assertions_unkeyed(
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -204,7 +204,7 @@ def test_tdf_assertions_with_keys(
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -325,7 +325,7 @@ def test_tdf_with_unbound_policy(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -348,7 +348,7 @@ def test_tdf_with_altered_policy_binding(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -376,7 +376,7 @@ def test_tdf_with_altered_root_sig(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -399,7 +399,7 @@ def test_tdf_with_altered_seg_sig_wrong(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -425,7 +425,7 @@ def test_tdf_with_altered_enc_seg_size(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -457,7 +457,7 @@ def test_tdf_with_altered_assertion_statement(
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -495,7 +495,7 @@ def test_tdf_with_altered_assertion_with_keys(
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -544,7 +544,7 @@ def test_tdf_altered_payload_end(
     decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")

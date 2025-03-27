@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2206,SC1091
-
+#
 # Common shell wrapper used to interface to SDK implementation.
 #
 # Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
 #
+# Extended Utilities:
+#
+# ./cli.sh supports <feature>
+#   Check if the SDK supports a specific feature.
+#
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-
-# shellcheck source=../../test.env
-source "$SCRIPT_DIR"/../../test.env
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+  cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_REF-latest}")
 fi
 
 if [ "$1" == "supports" ]; then
@@ -44,12 +45,25 @@ if [ "$1" == "supports" ]; then
   esac
 fi
 
+XTEST_DIR="$SCRIPT_DIR"
+while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
+  XTEST_DIR=$(dirname "$XTEST_DIR")
+done
+
+if [ -f "$XTEST_DIR/test.env" ]; then
+  # shellcheck disable=SC1091
+  source "$XTEST_DIR/test.env"
+else
+  echo "test.env not found, stopping at xtest directory."
+  exit 1
+fi
+
 args=(
   -o "$3"
   --host "$PLATFORMURL"
   --tls-no-verify
   --log-level debug
-  --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
+  --with-client-creds '{"clientId":"'"$CLIENTID"'","clientSecret":"'"$CLIENTSECRET"'"}'
 )
 if [ "$4" == "nano" ]; then
   args+=(--tdf-type "$4")

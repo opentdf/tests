@@ -18,20 +18,30 @@ brew install maven
 
 ### Install SDKs
 
+First, download the latest head version of each test repo by running the helper script, 
+This works by aliasing or checking out the source code for the different client libraries in the xtest/sdk folder.
+To check out the current head versions of the sdks under test, run:
+
+```sh
+  ./sdk/scripts/
+```
+
+
 #### Java SDK
 
 ```shell
-git clone https://github.com/opentdf/java-sdk.git
-cd java-sdk
+git clone --bare https://github.com/opentdf/java-sdk.git sdk/java/src/java-sdk.git
+cd sdk/java/src/java-sdk.git
+git worktree add ../main main
+cd ../main
 mvn --batch-mode clean install -DskipTests
-mv cmdline/target/cmdline.jar ../sdk/java/cmdline.jar
 ```
 
 #### Go SDK wrapped by otdfctl
 
 ```shell
-git clone https://github.com/opentdf/platform
-git clone https://github.com/opentdf/otdfctl.git
+git clone https://github.com/opentdf/platform sdk/go/src/platform
+git clone https://github.com/opentdf/otdfctl.git sdk/go/src/otdfctl
 cd otdfctl
 go mod edit -replace github.com/opentdf/platform/protocol/go=../platform/protocol/go
 go mod edit -replace github.com/opentdf/platform/sdk=../platform/sdk
