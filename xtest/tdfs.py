@@ -225,8 +225,22 @@ def fmt_env(env: dict[str, str]) -> str:
 
 class SDK:
     def __init__(self, sdk: sdk_type):
+    sdk: sdk_type
         self.sdk = sdk
         self.path = sdk_paths[sdk]
+        if not os.path.isfile(self.path):
+            raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
+
+    def __str__(self) -> str:
+        return f"{self.sdk}@{self.version}"
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SDK):
+            return NotImplemented
+        return self.sdk == other.sdk and self.version == other.version
+
+    def __hash__(self) -> int:
+        return hash((self.sdk, self.version))
 
     def encrypt(
         self,
