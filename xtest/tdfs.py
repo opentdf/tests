@@ -37,7 +37,6 @@ feature_type = Literal[
     "ns_grants",
 ]
 
-
 class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
