@@ -130,7 +130,7 @@ jobs:
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          make go
+          make
         working-directory: otdftests/xtest/sdk/go
 
       ####### CHECKOUT JAVA SDK ##############
