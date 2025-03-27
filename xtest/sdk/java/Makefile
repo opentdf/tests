@@ -20,11 +20,11 @@ build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
-		cd ./src/$$version && mvn --batch-mode clean install -DskipTests; \
+		cd ./src/$$version && mvn --batch-mode clean install -DskipTests || exit 1; \
 		echo "Copying cmdline.jar and cli.sh to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
-		cp ./src/$$version/target/cmdline.jar $(MAKEFILE_DIR)/dist/$$version/cmdline.jar; \
-		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/; \
+		cp $(MAKEFILE_DIR)/src/$$version/cmdline/target/cmdline.jar $(MAKEFILE_DIR)/dist/$$version/cmdline.jar || exit 2; \
+		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/ || exit 3; \
 	done
 	@echo "All binaries built successfully"
 
