@@ -128,7 +128,6 @@ jobs:
           ref: ${{ env.OTDFCTL_REF }}
 
       - name: Replace otdfctl go.mod packages
-        if: env.FOCUS_SDK == 'go'
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
