@@ -64,6 +64,11 @@ source "$XTEST_DIR"/test.env
 src_file=$(realpath "$2")
 dst_file=$(realpath "$3")
 
+if ! cd "$SCRIPT_DIR"; then
+  echo "failed: [cd $SCRIPT_DIR]"
+  exit 1
+fi
+
 args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
