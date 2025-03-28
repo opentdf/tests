@@ -37,15 +37,15 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       js-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       java-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       focus-sdk:
         required: false
         type: string
@@ -53,33 +53,6 @@ on:
   schedule:
     - cron: "30 6 * * *"
 jobs:
-  configure-xtest:
-    runs-on: ubuntu-latest
-    outputs:
-      versions: ${{ steps.get-versions.outputs.versions }}
-    steps:
-      - name: xtest checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          sparse-checkout: xtest
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v2
-        with:
-          python-version: "3.12"
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up JDK
-        uses: actions/setup-java@v2
-        with:
-          java-version: "11"
-          distribution: "adopt"
-          server-id: github
-      - name: Check out web-sdk
-        uses: actions/checkout@v2
-        with:
-          repository: opentdf/web-sdk
-
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -127,17 +100,17 @@ jobs:
           server-id: github
 
       ######## CHECKOUT WEB SDK #############
-      - name: Check out web-sdk
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure web SDK tools
+        uses: ./xtest/setup-cli-tool
         with:
-          repository: opentdf/web-sdk
-          path: otdftests/xtest/sdk/js/src/main
-          ref: ${{ env.JS_REF }}
+          path: otdftests/xtest/sdk
+          sdk: js
+          version: ${{ env.JS_REF }}
+
       - name: Set up Node 22
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
           node-version: "22.x"
-          cache-dependency-path: web-sdk/lib/package-lock.json web-sdk/cli/package-lock.json
 
       ######## SETUP THE JS CLI #############
       - name: build and setup the web-sdk cli
@@ -147,12 +120,12 @@ jobs:
         working-directory: otdftests/xtest/sdk/js
 
       ######## CHECKOUT GO CLI #############
-      - name: Check out otdfctl
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure otdfctl
+        uses: ./xtest/setup-cli-tool
         with:
-          repository: opentdf/otdfctl
-          path: otdftests/xtest/sdk/go/src/main
-          ref: ${{ env.OTDFCTL_REF }}
+          path: otdftests/xtest/sdk
+          sdk: go
+          version: ${{ env.OTDFCTL_REF }}
 
       - name: Replace otdfctl go.mod packages
         if: env.FOCUS_SDK == 'go'
@@ -176,15 +149,14 @@ jobs:
 
       ####### CHECKOUT JAVA SDK ##############
 
-      - name: Check out java-sdk
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure java-sdk
+        uses: ./xtest/setup-cli-tool
         with:
-          repository: opentdf/java-sdk
-          path: otdftests/xtest/sdk/java/src/main
-          ref: ${{ env.JAVA_REF }}
+          path: otdftests/xtest/sdk
+          sdk: java
+          version: ${{ env.JAVA_REF }}
 
       ####### SETUP JAVA CLI ##############
-
       - name: Prepare java cli
         run: |
           make

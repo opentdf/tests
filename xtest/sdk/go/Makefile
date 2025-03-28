@@ -27,7 +27,7 @@ build:
 		}; \
 		echo "Copying binary and cli.sh to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
-		cp $(MAKEFILE_DIR)/binary-$$version $(MAKEFILE_DIR)/dist/$$version/otdfctl || { \
+		mv $(MAKEFILE_DIR)/binary-$$version $(MAKEFILE_DIR)/dist/$$version/otdfctl || { \
 			echo "Error: Failed to copy binary for $$version"; \
 			exit 2; \
 		}; \

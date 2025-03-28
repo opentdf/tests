@@ -1,6 +1,9 @@
 name: configure-sdks
 description: Check out and build one or more SDK and its CLI tool for use by xtest
 inputs:
+  path:
+    description: The path to checkout the the SDK source code to; concatenated with branch or tag name.
+    type: string
   sdk:
     description: The SDK to configure; one of go, java, js
     default: go
@@ -41,13 +44,19 @@ runs:
     - name: validate versions string
       run: |
         if [[ ! ${{ inputs.version }} =~ ^[0-9a-zA-Z\.\ ]+$ ]]; then
-          echo "Invalid version string: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "Error: Invalid version string: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
         if [[ $(echo "${{ inputs.version }}" | wc -w) -gt 4 ]]; then
-          echo "Too many versions specified: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "Error: Too many versions specified: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
+        for version in ${{ inputs.version }}; do
+          if [[ ! $version =~ ^[0-9a-fA-F]{7,40}$ && ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version format: $version" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        done
     - name: checkout xtest/sdk folder
       uses: actions/checkout@v4
       with:
@@ -78,7 +87,7 @@ runs:
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-a != ''
       with:
-        path: otdf-sdk/${{ steps.configure.output.sdk }}-src-${{ fromJson(steps.resolve.outputs.version-a).tag }}
+        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-a).sha }}
         repository: ${{ steps.configure.output.sdk-repo }}
 
@@ -86,7 +95,7 @@ runs:
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-b != ''
       with:
-        path: otdf-sdk/${{ steps.configure.output.sdk }}-src-${{ fromJson(steps.resolve.outputs.version-b).tag }}
+        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-b).sha }}
         repository: ${{ steps.configure.output.sdk-repo }}
 
@@ -94,7 +103,7 @@ runs:
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-c != ''
       with:
-        path: otdf-sdk/${{ steps.configure.output.sdk }}-src-${{ fromJson(steps.resolve.outputs.version-c).tag }}
+        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-c).sha }}
         repository: ${{ steps.configure.output.sdk-repo }}
 
@@ -102,42 +111,6 @@ runs:
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-d != ''
       with:
-        path: otdf-sdk/${{ steps.configure.output.sdk }}-src-${{ fromJson(steps.resolve.outputs.version-d).tag }}
+        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
         repository: ${{ steps.configure.output.sdk-repo }}
-
-    - name: set up JDK
-      if: inputs.sdk == 'java'
-      uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
-      with:
-        java-version: "11"
-        distribution: "adopt"
-
-    - name: Set up Node 22
-      if: inputs.sdk == 'js'
-      uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
-      with:
-        node-version: "22.x"
-        cache-dependency-path: web-sdk/lib/package-lock.json web-sdk/cli/package-lock.json
-
-    - name: build all checked out versions
-      run: |
-        for sdk_dir in $(find . -maxdepth 1 -type d -name "${{ steps.configure.output.sdk }}-src-*"); do
-          case "${{ steps.configure.output.sdk }}" in
-            "go")
-              make -C "$sdk_dir" PLATFORM_DIR="$sdk_dir"
-              ;;
-            "java")
-              make -C "$sdk_dir"
-              ;;
-            "js")
-              ./scripts/build-js.sh "$sdk_dir"
-              cp ./js/cli/cli.sh "$sdk_dir"/cli/
-              ;;
-            *)
-              echo "Unknown SDK: ${{ steps.configure.output.sdk }}" >> $GITHUB_STEP_SUMMARY
-              exit 1
-              ;;
-          esac
-        done
-      working-directory: otdf-sdk
