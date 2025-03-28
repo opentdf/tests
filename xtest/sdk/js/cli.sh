@@ -96,13 +96,10 @@ if [ -n "$XT_WITH_ATTRIBUTES" ]; then
     attributes=$(realpath "$attributes")
     echo "Attributes are a file: $attributes"
     args+=(--attributes "$attributes")
-  elif [ "$(echo "$attributes" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
-    # Attributes are plain json
-    echo "Attributes are plain json: $attributes"
-    args+=(--attributes "$attributes")
   else
-    echo "Invalid or missing attributes file: $attributes"
-    exit 1
+    # Attributes are a comma separated list
+    echo "Attributes are: $attributes"
+    args+=(--attributes "$attributes")
   fi
 fi
 
