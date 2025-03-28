@@ -14,7 +14,7 @@ endif
 .PHONY: all build clean
 
 all: build
-	@echo "Setup all go sdk clis for versions: $(VERSIONS)"
+	@echo "Setup go sdk clis for versions: $(VERSIONS)"
 
 build:
 	@echo "Building binaries for versions: $(VERSIONS)"

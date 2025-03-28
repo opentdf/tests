@@ -14,7 +14,7 @@ endif
 .PHONY: all build clean
 
 all: build
-	@echo "Setup java js sdk clis for versions: $(VERSIONS)"
+	@echo "Setup java sdk cli for versions: $(VERSIONS)"
 
 build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
