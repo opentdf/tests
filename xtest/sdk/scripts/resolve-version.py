@@ -104,7 +104,7 @@ def main():
             shas.add(v["sha"])
         results.append(v)
 
-    print(json.dumps(results, indent=2))
+    print(json.dumps(results))
     if any("err" in r for r in results):
         sys.exit(3)
 
