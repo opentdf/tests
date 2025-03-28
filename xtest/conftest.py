@@ -724,7 +724,7 @@ def rs256_keys() -> tuple[str, str]:
 
 
 def write_assertion_to_file(
-    file_name: str, assertion_list: list[assertions.Assertion] = []
+    tmp_dir: str, file_name: str, assertion_list: list[assertions.Assertion] = []
 ):
     as_file = f"{tmp_dir}test-assertion-{file_name}.json"
     assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
@@ -734,7 +734,7 @@ def write_assertion_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_file_no_keys():
+def assertion_file_no_keys(tmp_dir: str):
     assertion_list = [
         assertions.Assertion(
             appliesToState="encrypted",
@@ -748,11 +748,11 @@ def assertion_file_no_keys():
             type="handling",
         )
     ]
-    return write_assertion_to_file("assertion_1_no_signing_key", assertion_list)
+    return write_assertion_to_file(tmp_dir, "assertion_1_no_signing_key", assertion_list)
 
 
 @pytest.fixture(scope="module")
-def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]):
+def assertion_file_rs_and_hs_keys(tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]):
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -786,10 +786,11 @@ def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]):
             ),
         ),
     ]
-    return write_assertion_to_file("assertion1_hs_assertion2_rs", assertion_list)
+    return write_assertion_to_file(tmp_dir, "assertion1_hs_assertion2_rs", assertion_list)
 
 
 def write_assertion_verification_keys_to_file(
+    tmp_dir: str,
     file_name: str,
     assertion_verification_keys: assertions.AssertionVerificationKeys,
 ):
@@ -804,6 +805,7 @@ def write_assertion_verification_keys_to_file(
 
 @pytest.fixture(scope="module")
 def assertion_verification_file_rs_and_hs_keys(
+    tmp_dir: str,
     hs256_key: str, rs256_keys: tuple[str, str]
 ):
     _, rs256_public = rs256_keys
@@ -820,5 +822,5 @@ def assertion_verification_file_rs_and_hs_keys(
         }
     )
     return write_assertion_verification_keys_to_file(
-        "assertion1_hs_assertion2_rs", assertion_verification
+        tmp_dir, "assertion1_hs_assertion2_rs", assertion_verification
     )

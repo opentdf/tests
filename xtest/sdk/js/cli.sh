@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
+#
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt>
 #
-
+# Extended Utilities:
+#
+# ./cli.sh supports <feature>
+#   Check if the SDK supports a specific feature.
+#
+# Extended Configuration:
+#  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
+#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
+#  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
+#  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
+#  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
+#  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
+#  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 CTL=@opentdf/ctl
@@ -62,12 +76,7 @@ done
 source "$XTEST_DIR"/test.env
 
 src_file=$(realpath "$2")
-dst_file=$(realpath "$3")
-
-if ! cd "$SCRIPT_DIR"; then
-  echo "failed: [cd $SCRIPT_DIR]"
-  exit 1
-fi
+dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 
 args=(
   --output "$dst_file"
@@ -81,39 +90,78 @@ if [ "$4" == "ztdf" ]; then
   args+=(--containerType tdf3)
 fi
 
-if [ -n "$6" ]; then
-  args+=(--attributes "$6")
+if [ -n "$XT_WITH_ATTRIBUTES" ]; then
+  attributes="$XT_WITH_ATTRIBUTES"
+  if [ -f "$attributes" ]; then
+    attributes=$(realpath "$attributes")
+    echo "Attributes are a file: $attributes"
+    args+=(--attributes "$attributes")
+  elif [ "$(echo "$attributes" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+    # Attributes are plain json
+    echo "Attributes are plain json: $attributes"
+    args+=(--attributes "$attributes")
+  else
+    echo "Invalid or missing attributes file: $attributes"
+    exit 1
+  fi
 fi
 
-if [ -n "$7" ]; then
-  args+=(--assertions "$7")
+if [ -n "$XT_WITH_ASSERTIONS" ]; then
+  assertions="$XT_WITH_ASSERTIONS"
+  if [ -f "$assertions" ]; then
+    assertions=$(realpath "$assertions")
+    echo "Assertions are a file: $assertions"
+    args+=(--assertions "$assertions")
+  elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+    # Assertions are plain json
+    echo "Assertions are plain json: $assertions"
+    args+=(--assertions "$assertions")
+  else
+    echo "Invalid or missing assertion file: $assertions"
+    exit 1
+  fi
 fi
 
-if [ -n "$8" ]; then
-  args+=(--assertionVerificationKeys "$8")
+if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
+  verification_keys="$XT_WITH_ASSERTION_VERIFICATION_KEYS"
+  if [ -f "$verification_keys" ]; then
+    verification_keys=$(realpath "$verification_keys")
+    echo "Verification keys are a file: $verification_keys"
+    args+=(--assertionVerificationKeys "$verification_keys")
+  else
+    echo "Invalid or missing verification keys file: $verification_keys"
+    exit 1
+  fi
+fi
+
+if ! cd "$SCRIPT_DIR"; then
+  echo "failed: [cd $SCRIPT_DIR]"
+  exit 1
 fi
 
 if [ "$1" == "encrypt" ]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-  if [ -n "$USE_ECDSA_BINDING" ]; then
-    if [ "$USE_ECDSA_BINDING" == "true" ]; then
+  if [ -n "$XT_WITH_ECDSA_BINDING" ]; then
+    if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
       args+=(--policyBinding ecdsa)
     fi
   fi
-  if [ "$ECWRAP" == 'true' ]; then
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--encapKeyType "ec:secp256r1")
   fi
 
+  echo npx $CTL encrypt "$src_file" "${args[@]}"
   npx $CTL encrypt "$src_file" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
-  if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
+  if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--noVerifyAssertions)
   fi
-  if [ "$ECWRAP" == 'true' ]; then
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--rewrapKeyType "ec:secp256r1")
   fi
+  echo npx $CTL decrypt "$src_file" "${args[@]}"
   npx $CTL decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"

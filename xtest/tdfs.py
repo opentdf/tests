@@ -258,23 +258,25 @@ class SDK:
             pt_file,
             ct_file,
             fmt,
-            mime_type,
         ]
-        if attr_values:
-            c += [",".join(attr_values)]
-        if assert_value:
-            if not attr_values:
-                c += [""]
-            c += [assert_value]
 
         local_env: dict[str, str] = {}
+        if mime_type:
+            local_env |= {"XT_WITH_MIME_TYPE": mime_type}
+
+        if attr_values:
+            local_env |= {"XT_WITH_ATTRIBUTES": ",".join(attr_values)}
+
+        if assert_value:
+            local_env |= {"XT_WITH_ASSERTIONS": assert_value}
+
         if fmt == "nano":
             if use_ecdsa_binding:
-                local_env |= {"USE_ECDSA_BINDING": "true"}
+                local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
             else:
-                local_env |= {"USE_ECDSA_BINDING": "false"}
+                local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
         if ecwrap:
-            local_env |= {"ECWRAP": "true"}
+            local_env |= {"XT_WITH_ECWRAP": "true"}
         logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
         env = dict(os.environ)
         env |= local_env
@@ -297,19 +299,14 @@ class SDK:
             rt_file,
             fmt,
         ]
-        if assert_keys:
-            # empty args for mimetype, attrs, and assertions
-            c += [
-                "",
-                "",
-                "",
-                assert_keys,
-            ]
+
         local_env: dict[str, str] = {}
+        if assert_keys:
+            local_env |= {"XT_WITH_ASSERTION_KEYS": assert_keys}
         if ecwrap:
-            local_env |= {"ECWRAP": "true"}
+            local_env |= {"XT_WITH_ECWRAP": "true"}
         if not verify_assertions:
-            local_env |= {"VERIFY_ASSERTIONS": "false"}
+            local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
