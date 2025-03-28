@@ -302,7 +302,7 @@ class SDK:
 
         local_env: dict[str, str] = {}
         if assert_keys:
-            local_env |= {"XT_WITH_ASSERTION_KEYS": assert_keys}
+            local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
         if ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
         if not verify_assertions:
