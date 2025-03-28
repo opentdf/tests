@@ -748,11 +748,15 @@ def assertion_file_no_keys(tmp_dir: str):
             type="handling",
         )
     ]
-    return write_assertion_to_file(tmp_dir, "assertion_1_no_signing_key", assertion_list)
+    return write_assertion_to_file(
+        tmp_dir, "assertion_1_no_signing_key", assertion_list
+    )
 
 
 @pytest.fixture(scope="module")
-def assertion_file_rs_and_hs_keys(tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]):
+def assertion_file_rs_and_hs_keys(
+    tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]
+):
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -786,7 +790,9 @@ def assertion_file_rs_and_hs_keys(tmp_dir: str, hs256_key: str, rs256_keys: tupl
             ),
         ),
     ]
-    return write_assertion_to_file(tmp_dir, "assertion1_hs_assertion2_rs", assertion_list)
+    return write_assertion_to_file(
+        tmp_dir, "assertion1_hs_assertion2_rs", assertion_list
+    )
 
 
 def write_assertion_verification_keys_to_file(
@@ -805,8 +811,7 @@ def write_assertion_verification_keys_to_file(
 
 @pytest.fixture(scope="module")
 def assertion_verification_file_rs_and_hs_keys(
-    tmp_dir: str,
-    hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]
 ):
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
