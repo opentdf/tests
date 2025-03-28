@@ -107,7 +107,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             list(typing.get_args(tdfs.sdk_type)),
         )
         # convert list of sdk_type to list of SDK objects
-        e_sdks = [tdfs.SDK(sdk) for sdk in encrypt_sdks]
+        e_sdks = [
+            v
+            for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
+            for v in sdks
+        ]
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
@@ -117,7 +121,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             tdfs.sdk_type,
             list(typing.get_args(tdfs.sdk_type)),
         )
-        d_sdks = [tdfs.SDK(sdk) for sdk in decrypt_sdks]
+        d_sdks = [
+            v
+            for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
+            for v in sdks
+        ]
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 

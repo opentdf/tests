@@ -346,3 +346,12 @@ class SDK:
         except subprocess.CalledProcessError:
             return False
         return True
+
+
+def all_versions_of(sdk: sdk_type) -> list[SDK]:
+    versions: list[SDK] = []
+    sdk_path = os.path.join("sdk", sdk, "dist")
+    for version in os.listdir(sdk_path):
+        if os.path.isdir(os.path.join(sdk_path, version)):
+            versions.append(SDK(sdk, version))
+    return versions
