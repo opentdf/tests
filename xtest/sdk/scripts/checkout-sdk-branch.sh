@@ -15,6 +15,11 @@ BRANCH=${2:-main}
 # Replace slashes in branch name with double dashes for local naming
 LOCAL_NAME=${BRANCH//\//--}
 
+# Strip well known prefixes for monorepo output
+if [[ $LOCAL_NAME == sdk--* ]]; then
+  LOCAL_NAME=${LOCAL_NAME#sdk--}
+fi
+
 case "$LANGUAGE" in
   js)
     BARE_REPO_PATH="$XTEST_DIR/sdk/js/src/web-sdk.git"
