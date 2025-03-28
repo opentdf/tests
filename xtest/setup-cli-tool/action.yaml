@@ -84,10 +84,10 @@ runs:
       shell: bash
       run: |
         version_info=$(./scripts/resolve-version.py ${{ inputs.sdk }} ${{ inputs.version }})
-        version_a=$(echo "$version_info" | jq -r '.[0] // empty')
-        version_b=$(echo "$version_info" | jq -r '.[1] // empty')
-        version_c=$(echo "$version_info" | jq -r '.[2] // empty')
-        version_d=$(echo "$version_info" | jq -r '.[3] // empty')
+        version_a=$(echo "$version_info" | jq -rc '.[0] // empty')
+        version_b=$(echo "$version_info" | jq -rc '.[1] // empty')
+        version_c=$(echo "$version_info" | jq -rc '.[2] // empty')
+        version_d=$(echo "$version_info" | jq -rc '.[3] // empty')
         echo "version-a=$version_a" >> $GITHUB_OUTPUT
         echo "version-b=$version_b" >> $GITHUB_OUTPUT
         echo "version-c=$version_c" >> $GITHUB_OUTPUT
