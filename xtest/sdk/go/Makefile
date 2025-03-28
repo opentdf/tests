@@ -20,7 +20,7 @@ build:
 	@echo "Building binaries for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
-		cd ./src/$$version && \
+		cd $(MAKEFILE_DIR)/src/$$version && \
 		go build -o $(MAKEFILE_DIR)/binary-$$version . || { \
 			echo "Error: Go build failed for $$version"; \
 			exit 1; \

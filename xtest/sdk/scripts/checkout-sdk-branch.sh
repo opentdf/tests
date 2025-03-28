@@ -12,20 +12,23 @@ XTEST_DIR=$(cd -- "$SCRIPT_DIR/../../" &>/dev/null && pwd)
 LANGUAGE=${1:-js}
 BRANCH=${2:-main}
 
+# Replace slashes in branch name with double dashes for local naming
+LOCAL_NAME=${BRANCH//\//--}
+
 case "$LANGUAGE" in
   js)
     BARE_REPO_PATH="$XTEST_DIR/sdk/js/src/web-sdk.git"
-    WORKTREE_PATH="$XTEST_DIR/sdk/js/src/$BRANCH"
+    WORKTREE_PATH="$XTEST_DIR/sdk/js/src/$LOCAL_NAME"
     REPO_URL="https://github.com/opentdf/web-sdk"
     ;;
   java)
     BARE_REPO_PATH="$XTEST_DIR/sdk/java/src/web-sdk.git"
-    WORKTREE_PATH="$XTEST_DIR/sdk/java/src/$BRANCH"
+    WORKTREE_PATH="$XTEST_DIR/sdk/java/src/$LOCAL_NAME"
     REPO_URL="https://github.com/opentdf/java-sdk"
     ;;
   go)
     BARE_REPO_PATH="$XTEST_DIR/sdk/go/src/web-sdk.git"
-    WORKTREE_PATH="$XTEST_DIR/sdk/go/src/$BRANCH"
+    WORKTREE_PATH="$XTEST_DIR/sdk/go/src/$LOCAL_NAME"
     REPO_URL="https://github.com/opentdf/otdfctl"
     ;;
   *)
