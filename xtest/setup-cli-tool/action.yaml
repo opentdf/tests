@@ -12,6 +12,19 @@ inputs:
     description: A space separated list of versions of the SDK to configure. Accepts SHA, branches, and semver tags
     default: latest
     type: string
+outputs:
+  version-a:
+    description: "Object containing tag, sha, and name of a version checked out"
+    value: ${{ steps.resolve.outputs.version-a }}
+  version-b:
+    description: "Object containing tag, sha, and name of a version checked out, if two or more were specified"
+    value: ${{ steps.resolve.outputs.version-b }}
+  version-c:
+    description: "Object containing tag, sha, and name of a version checked out, if three or more were specified"
+    value: ${{ steps.resolve.outputs.version-c }}
+  version-d:
+    description: "Object containing tag, sha, and name of a version checked out, if four were specified"
+    value: ${{ steps.resolve.outputs.version-d }}
 
 runs:
   using: composite
@@ -21,16 +34,13 @@ runs:
       run: |
         case "${{ inputs.sdk }}" in
           "go")
-            echo "sdk=go" >> $GITHUB_OUTPUT
-            echo "sdk-repo=opentdf/otdfctl" >> $GITHUB_OUTPUT
+            echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
             ;;
           "java")
-            echo "sdk=java" >> $GITHUB_OUTPUT
-            echo "sdk-repo=opentdf/java-sdk" >> $GITHUB_OUTPUT
+            echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
             ;;
           "js")
-            echo "sdk=js" >> $GITHUB_OUTPUT
-            echo "sdk-repo=opentdf/web-sdk" >> $GITHUB_OUTPUT
+            echo "sdk_repo=opentdf/web-sdk" >> $GITHUB_ENV
             ;;
           *)
             echo "Invalid SDK specified: ${{ inputs.sdk }}" >> $GITHUB_STEP_SUMMARY
@@ -70,9 +80,10 @@ runs:
       working-directory: otdf-sdk/xtest/sdk
 
     - name: resolve versions
+      id: resolve
       shell: bash
       run: |
-        version_info=$(./scripts/resolve-version.py ${{ steps.configure.output.sdk }} ${{ inputs.version }})
+        version_info=$(./scripts/resolve-version.py ${{ inputs.sdk }} ${{ inputs.version }})
         version_a=$(echo "$version_info" | jq -r '.[0] // empty')
         version_b=$(echo "$version_info" | jq -r '.[1] // empty')
         version_c=$(echo "$version_info" | jq -r '.[2] // empty')
@@ -87,30 +98,30 @@ runs:
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-a != ''
       with:
-        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-a).sha }}
-        repository: ${{ steps.configure.output.sdk-repo }}
+        repository: ${{ env.sdk_repo }}
 
     - name: checkout version b
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-b != ''
       with:
-        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-b).sha }}
-        repository: ${{ steps.configure.output.sdk-repo }}
+        repository: ${{ env.sdk_repo }}
 
     - name: checkout version c
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-c != ''
       with:
-        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-c).sha }}
-        repository: ${{ steps.configure.output.sdk-repo }}
+        repository: ${{ env.sdk_repo }}
 
     - name: checkout version d
       uses: actions/checkout@v4
       if: steps.resolve.outputs.version-d != ''
       with:
-        path: ${{ inputs.path }}/${{ steps.configure.output.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
-        repository: ${{ steps.configure.output.sdk-repo }}
+        repository: ${{ env.sdk_repo }}
