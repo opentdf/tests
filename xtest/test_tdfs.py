@@ -24,14 +24,6 @@ def skip_hexless_skew(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
         )
 
 
-def simple_container(container: tdfs.container_type) -> tdfs.container_type:
-    if container == "nano-with-ecdsa":
-        return "nano"
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
-
-
 def do_encrypt_with(
     pt_file: str,
     encrypt_sdk: tdfs.SDK,
@@ -52,24 +44,21 @@ def do_encrypt_with(
 
     use_ecdsa = container == "nano-with-ecdsa"
     use_ecwrap = container == "ztdf-ecwrap"
-    fmt = simple_container(container)
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
         mime_type="text/plain",
-        fmt=fmt,
-        use_ecdsa_binding=use_ecdsa,
+        fmt=container,
         assert_value=az,
-        ecwrap=use_ecwrap,
     )
-    if fmt == "ztdf":
+    if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
         if use_ecwrap:
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
-    elif fmt == "nano":
+    elif tdfs.simple_container(container) == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
             assert envelope.header.version.version == 12

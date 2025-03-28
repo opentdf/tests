@@ -217,6 +217,14 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
+def simple_container(container: container_type) -> container_type:
+    if container == "nano-with-ecdsa":
+        return "nano"
+    if container == "ztdf-ecwrap":
+        return "ztdf"
+    return container
+
+
 class SDK:
     sdk: sdk_type
 
@@ -249,9 +257,10 @@ class SDK:
         fmt: container_type = "nano",
         attr_values: list[str] | None = None,
         assert_value: str = "",
-        use_ecdsa_binding: bool = False,
-        ecwrap: bool = False,
     ):
+        use_ecdsa = fmt == "nano-with-ecdsa"
+        use_ecwrap = fmt == "ztdf-ecwrap"
+        fmt = simple_container(fmt)
         c = [
             self.path,
             "encrypt",
@@ -271,11 +280,11 @@ class SDK:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
         if fmt == "nano":
-            if use_ecdsa_binding:
+            if use_ecdsa:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
             else:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
-        if ecwrap:
+        if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
         logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
         env = dict(os.environ)
