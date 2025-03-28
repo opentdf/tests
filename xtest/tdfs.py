@@ -37,12 +37,6 @@ feature_type = Literal[
     "ns_grants",
 ]
 
-sdk_paths: dict[sdk_type, str] = {
-    "go": "sdk/go/cli.sh",
-    "java": "sdk/java/cli.sh",
-    "js": "sdk/js/cli/cli.sh",
-}
-
 
 class DataAttribute(BaseModel):
     attribute: str
@@ -216,46 +210,6 @@ def validate_manifest_schema(tdf_file: str):
     jsonschema.validate(instance=manifest, schema=schema)
 
 
-def encrypt(
-    sdk: sdk_type,
-    pt_file: str,
-    ct_file: str,
-    mime_type: str = "application/octet-stream",
-    fmt: container_type = "nano",
-    attr_values: list[str] | None = None,
-    assert_value: str = "",
-    use_ecdsa_binding: bool = False,
-    ecwrap: bool = False,
-):
-    c = [
-        sdk_paths[sdk],
-        "encrypt",
-        pt_file,
-        ct_file,
-        fmt,
-        mime_type,
-    ]
-    if attr_values:
-        c += [",".join(attr_values)]
-    if assert_value:
-        if not attr_values:
-            c += [""]
-        c += [assert_value]
-
-    local_env: dict[str, str] = {}
-    if fmt == "nano":
-        if use_ecdsa_binding:
-            local_env |= {"USE_ECDSA_BINDING": "true"}
-        else:
-            local_env |= {"USE_ECDSA_BINDING": "false"}
-    if ecwrap:
-        local_env |= {"ECWRAP": "true"}
-    logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
-    env = dict(os.environ)
-    env |= local_env
-    subprocess.check_call(c, env=env)
-
-
 def fmt_env(env: dict[str, str]) -> str:
     a: list[str] = []
     for k, v in env.items():
@@ -263,64 +217,132 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
-def decrypt(
-    sdk: sdk_type,
-    ct_file: str,
-    rt_file: str,
-    fmt: container_type = "nano",
-    assert_keys: str = "",
-    verify_assertions: bool = True,
-    ecwrap: bool = False,
-    expect_error: bool = False,
-):
-    c = [
-        sdk_paths[sdk],
-        "decrypt",
-        ct_file,
-        rt_file,
-        fmt,
-    ]
-    if assert_keys:
-        # empty args for mimetype, attrs, and assertions
-        c += [
-            "",
-            "",
-            "",
-            assert_keys,
+def simple_container(container: container_type) -> container_type:
+    if container == "nano-with-ecdsa":
+        return "nano"
+    if container == "ztdf-ecwrap":
+        return "ztdf"
+    return container
+
+
+class SDK:
+    sdk: sdk_type
+
+    def __init__(self, sdk: sdk_type, version: str = "main"):
+        self.sdk = sdk
+        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        self.version = version
+        if not os.path.isfile(self.path):
+            raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
+
+    def __str__(self) -> str:
+        return f"{self.sdk}@{self.version}"
+
+    def __repr__(self) -> str:
+        return f"SDK(sdk={self.sdk!r}, version={self.version!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SDK):
+            return NotImplemented
+        return self.sdk == other.sdk and self.version == other.version
+
+    def __hash__(self) -> int:
+        return hash((self.sdk, self.version))
+
+    def encrypt(
+        self,
+        pt_file: str,
+        ct_file: str,
+        mime_type: str = "application/octet-stream",
+        fmt: container_type = "nano",
+        attr_values: list[str] | None = None,
+        assert_value: str = "",
+    ):
+        use_ecdsa = fmt == "nano-with-ecdsa"
+        use_ecwrap = fmt == "ztdf-ecwrap"
+        fmt = simple_container(fmt)
+        c = [
+            self.path,
+            "encrypt",
+            pt_file,
+            ct_file,
+            fmt,
         ]
-    local_env: dict[str, str] = {}
-    if ecwrap:
-        local_env |= {"ECWRAP": "true"}
-    if not verify_assertions:
-        local_env |= {"VERIFY_ASSERTIONS": "false"}
-    logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
-    env = dict(os.environ)
-    env |= local_env
-    if expect_error:
-        subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
-    else:
+
+        local_env: dict[str, str] = {}
+        if mime_type:
+            local_env |= {"XT_WITH_MIME_TYPE": mime_type}
+
+        if attr_values:
+            local_env |= {"XT_WITH_ATTRIBUTES": ",".join(attr_values)}
+
+        if assert_value:
+            local_env |= {"XT_WITH_ASSERTIONS": assert_value}
+
+        if fmt == "nano":
+            if use_ecdsa:
+                local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
+            else:
+                local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
+        if use_ecwrap:
+            local_env |= {"XT_WITH_ECWRAP": "true"}
+        logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
+        env = dict(os.environ)
+        env |= local_env
         subprocess.check_call(c, env=env)
 
+    def decrypt(
+        self,
+        ct_file: str,
+        rt_file: str,
+        fmt: container_type = "nano",
+        assert_keys: str = "",
+        verify_assertions: bool = True,
+        ecwrap: bool = False,
+        expect_error: bool = False,
+    ):
+        c = [
+            self.path,
+            "decrypt",
+            ct_file,
+            rt_file,
+            fmt,
+        ]
 
-def supports(sdk: sdk_type, feature: feature_type) -> bool:
-    match (feature, sdk):
-        case ("autoconfigure", ("go" | "java")):
-            return True
-        case ("nano_ecdsa", "go"):
-            return True
-        case ("ns_grants", ("go" | "java")):
-            return True
-        case _:
-            pass
+        local_env: dict[str, str] = {}
+        if assert_keys:
+            local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
+        if ecwrap:
+            local_env |= {"XT_WITH_ECWRAP": "true"}
+        if not verify_assertions:
+            local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
+        logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
+        env = dict(os.environ)
+        env |= local_env
+        if expect_error:
+            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+        else:
+            subprocess.check_call(c, env=env)
 
-    c = [
-        sdk_paths[sdk],
-        "supports",
-        feature,
-    ]
-    logger.info(f"sup [{' '.join(c)}]")
-    try:
-        subprocess.check_call(c)
-    except subprocess.CalledProcessError:
-        return False
-    return True
+    def supports(self, feature: feature_type) -> bool:
+        match (feature, self.sdk):
+            case ("autoconfigure", ("go" | "java")):
+                return True
+            case ("nano_ecdsa", "go"):
+                return True
+            case ("ns_grants", ("go" | "java")):
+                return True
+            case _:
+                pass
+
+        c = [
+            self.path,
+            "supports",
+            feature,
+        ]
+        logger.info(f"sup [{' '.join(c)}]")
+        try:
+            subprocess.check_call(c)
+        except subprocess.CalledProcessError:
+            return False
+        return True

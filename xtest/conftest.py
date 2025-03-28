@@ -88,28 +88,38 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return [typing.cast(T, i) for i in v.split()]
 
-    subject_sdks: set[tdfs.sdk_type] = set()
+    def defaulted_list_opt[T](
+        names: list[str], t: typing.Any, default: list[T]
+    ) -> list[T]:
+        for name in names:
+            v = metafunc.config.getoption(name)
+            if v:
+                return list_opt(name, t)
+        return default
+
+    subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
         encrypt_sdks: list[tdfs.sdk_type] = []
-        if metafunc.config.getoption("--sdks-encrypt"):
-            encrypt_sdks = list_opt("--sdks-encrypt", tdfs.sdk_type)
-        elif metafunc.config.getoption("--sdks"):
-            encrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
-        else:
-            encrypt_sdks = list(typing.get_args(tdfs.sdk_type))
-        metafunc.parametrize("encrypt_sdk", encrypt_sdks)
-        subject_sdks |= set(encrypt_sdks)
+        encrypt_sdks = defaulted_list_opt(
+            ["--sdks-encrypt", "--sdks"],
+            tdfs.sdk_type,
+            list(typing.get_args(tdfs.sdk_type)),
+        )
+        # convert list of sdk_type to list of SDK objects
+        e_sdks = [tdfs.SDK(sdk) for sdk in encrypt_sdks]
+        metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
+        subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
         decrypt_sdks: list[tdfs.sdk_type] = []
-        if metafunc.config.getoption("--sdks-decrypt"):
-            decrypt_sdks = list_opt("--sdks-decrypt", tdfs.sdk_type)
-        elif metafunc.config.getoption("--sdks"):
-            decrypt_sdks = list_opt("--sdks", tdfs.sdk_type)
-        else:
-            decrypt_sdks = list(typing.get_args(tdfs.sdk_type))
-        metafunc.parametrize("decrypt_sdk", decrypt_sdks)
-        subject_sdks |= set(decrypt_sdks)
+        decrypt_sdks = defaulted_list_opt(
+            ["--sdks-decrypt", "--sdks"],
+            tdfs.sdk_type,
+            list(typing.get_args(tdfs.sdk_type)),
+        )
+        d_sdks = [tdfs.SDK(sdk) for sdk in decrypt_sdks]
+        metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
+        subject_sdks |= set(d_sdks)
 
     if "in_focus" in metafunc.fixturenames:
         focus_opt = "all"
@@ -120,7 +130,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             focus = set(typing.get_args(tdfs.sdk_type))
         else:
             focus = set(list_opt("--focus", tdfs.focus_type))
-        metafunc.parametrize("in_focus", [focus & subject_sdks])
+        focused_sdks = set(s for s in subject_sdks if s.sdk in focus)
+        metafunc.parametrize("in_focus", [focused_sdks])
 
     if "container" in metafunc.fixturenames:
         containers: list[tdfs.container_type] = []
@@ -713,7 +724,7 @@ def rs256_keys() -> tuple[str, str]:
 
 
 def write_assertion_to_file(
-    file_name: str, assertion_list: list[assertions.Assertion] = []
+    tmp_dir: str, file_name: str, assertion_list: list[assertions.Assertion] = []
 ):
     as_file = f"{tmp_dir}test-assertion-{file_name}.json"
     assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
@@ -723,7 +734,7 @@ def write_assertion_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_file_no_keys():
+def assertion_file_no_keys(tmp_dir: str):
     assertion_list = [
         assertions.Assertion(
             appliesToState="encrypted",
@@ -737,11 +748,15 @@ def assertion_file_no_keys():
             type="handling",
         )
     ]
-    return write_assertion_to_file("assertion_1_no_signing_key", assertion_list)
+    return write_assertion_to_file(
+        tmp_dir, "assertion_1_no_signing_key", assertion_list
+    )
 
 
 @pytest.fixture(scope="module")
-def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]):
+def assertion_file_rs_and_hs_keys(
+    tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]
+):
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -775,10 +790,13 @@ def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]):
             ),
         ),
     ]
-    return write_assertion_to_file("assertion1_hs_assertion2_rs", assertion_list)
+    return write_assertion_to_file(
+        tmp_dir, "assertion1_hs_assertion2_rs", assertion_list
+    )
 
 
 def write_assertion_verification_keys_to_file(
+    tmp_dir: str,
     file_name: str,
     assertion_verification_keys: assertions.AssertionVerificationKeys,
 ):
@@ -793,7 +811,7 @@ def write_assertion_verification_keys_to_file(
 
 @pytest.fixture(scope="module")
 def assertion_verification_file_rs_and_hs_keys(
-    hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_dir: str, hs256_key: str, rs256_keys: tuple[str, str]
 ):
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
@@ -809,5 +827,5 @@ def assertion_verification_file_rs_and_hs_keys(
         }
     )
     return write_assertion_verification_keys_to_file(
-        "assertion1_hs_assertion2_rs", assertion_verification
+        tmp_dir, "assertion1_hs_assertion2_rs", assertion_verification
     )

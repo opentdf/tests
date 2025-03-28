@@ -17,26 +17,16 @@ counter = 0
 #### HELPERS
 
 
-def skip_hexless_skew(encrypt_sdk: tdfs.sdk_type, decrypt_sdk: tdfs.sdk_type):
-    if tdfs.supports(encrypt_sdk, "hexless") and not tdfs.supports(
-        decrypt_sdk, "hexless"
-    ):
+def skip_hexless_skew(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
+    if encrypt_sdk.supports("hexless") and not decrypt_sdk.supports("hexless"):
         pytest.skip(
             f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
         )
 
 
-def simple_container(container: tdfs.container_type) -> tdfs.container_type:
-    if container == "nano-with-ecdsa":
-        return "nano"
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
-
-
 def do_encrypt_with(
     pt_file: str,
-    encrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
     container: tdfs.container_type,
     tmp_dir: str,
     az: str = "",
@@ -54,25 +44,21 @@ def do_encrypt_with(
 
     use_ecdsa = container == "nano-with-ecdsa"
     use_ecwrap = container == "ztdf-ecwrap"
-    fmt = simple_container(container)
-    tdfs.encrypt(
-        encrypt_sdk,
+    encrypt_sdk.encrypt(
         pt_file,
         ct_file,
         mime_type="text/plain",
-        fmt=fmt,
-        use_ecdsa_binding=use_ecdsa,
+        fmt=container,
         assert_value=az,
-        ecwrap=use_ecwrap,
     )
-    if fmt == "ztdf":
+    if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
         if use_ecwrap:
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
-    elif fmt == "nano":
+    elif tdfs.simple_container(container) == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
             assert envelope.header.version.version == 12
@@ -91,23 +77,23 @@ def do_encrypt_with(
 
 
 def test_tdf_roundtrip(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     container: tdfs.container_type,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if container == "nano-with-ecdsa":
-        if not tdfs.supports(encrypt_sdk, "nano_ecdsa"):
+        if not encrypt_sdk.supports("nano_ecdsa"):
             pytest.skip(
                 f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
             )
     if container == "ztdf-ecwrap":
-        if not tdfs.supports(encrypt_sdk, "ecwrap"):
+        if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
 
     ct_file = do_encrypt_with(
@@ -119,12 +105,12 @@ def test_tdf_roundtrip(
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, container)
+    decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
-    if container.startswith("ztdf") and tdfs.supports(decrypt_sdk, "ecwrap"):
+    if container.startswith("ztdf") and decrypt_sdk.supports("ecwrap"):
         ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
-        tdfs.decrypt(decrypt_sdk, ct_file, ert_file, container, ecwrap=True)
+        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
 
 
@@ -132,10 +118,10 @@ def test_tdf_roundtrip(
 
 
 def test_manifest_validity(
-    encrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
@@ -145,15 +131,15 @@ def test_manifest_validity(
 
 
 def test_manifest_validity_with_assertions(
-    encrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
-    if not tdfs.supports(encrypt_sdk, "assertions"):
+    if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     ct_file = do_encrypt_with(
         pt_file,
@@ -171,19 +157,19 @@ def test_manifest_validity_with_assertions(
 
 
 def test_tdf_assertions_unkeyed(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not tdfs.supports(encrypt_sdk, "assertions"):
+    if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not tdfs.supports(decrypt_sdk, "assertions"):
+    if not decrypt_sdk.supports("assertions"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
     ct_file = do_encrypt_with(
         pt_file,
@@ -196,25 +182,25 @@ def test_tdf_assertions_unkeyed(
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
-    tdfs.decrypt(decrypt_sdk, ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
 def test_tdf_assertions_with_keys(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not tdfs.supports(encrypt_sdk, "assertions"):
+    if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+    if not decrypt_sdk.supports("assertion_verification"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
     ct_file = do_encrypt_with(
         pt_file,
@@ -228,8 +214,7 @@ def test_tdf_assertions_with_keys(
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
 
-    tdfs.decrypt(
-        decrypt_sdk,
+    decrypt_sdk.decrypt(
         ct_file,
         rt_file,
         "ztdf",
@@ -325,11 +310,11 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 
 def test_tdf_with_unbound_policy(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -340,7 +325,7 @@ def test_tdf_with_unbound_policy(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
@@ -348,11 +333,11 @@ def test_tdf_with_unbound_policy(
 
 
 def test_tdf_with_altered_policy_binding(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -365,7 +350,7 @@ def test_tdf_with_altered_policy_binding(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
@@ -376,11 +361,11 @@ def test_tdf_with_altered_policy_binding(
 
 
 def test_tdf_with_altered_root_sig(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -391,7 +376,7 @@ def test_tdf_with_altered_root_sig(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"root" in exc.output
@@ -399,11 +384,11 @@ def test_tdf_with_altered_root_sig(
 
 
 def test_tdf_with_altered_seg_sig_wrong(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -414,7 +399,7 @@ def test_tdf_with_altered_seg_sig_wrong(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"signature" in exc.output
@@ -425,11 +410,11 @@ def test_tdf_with_altered_seg_sig_wrong(
 
 
 def test_tdf_with_altered_enc_seg_size(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -442,7 +427,7 @@ def test_tdf_with_altered_enc_seg_size(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert (
@@ -456,19 +441,19 @@ def test_tdf_with_altered_enc_seg_size(
 
 
 def test_tdf_with_altered_assertion_statement(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     assertion_file_no_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not tdfs.supports(encrypt_sdk, "assertions"):
+    if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not tdfs.supports(decrypt_sdk, "assertions"):
+    if not decrypt_sdk.supports("assertions"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
     ct_file = do_encrypt_with(
         pt_file,
@@ -485,7 +470,7 @@ def test_tdf_with_altered_assertion_statement(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"assertion" in exc.output
@@ -493,20 +478,20 @@ def test_tdf_with_altered_assertion_statement(
 
 
 def test_tdf_with_altered_assertion_with_keys(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not tdfs.supports(encrypt_sdk, "assertions"):
+    if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not tdfs.supports(decrypt_sdk, "assertion_verification"):
+    if not decrypt_sdk.supports("assertion_verification"):
         pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
     ct_file = do_encrypt_with(
         pt_file,
@@ -523,8 +508,7 @@ def test_tdf_with_altered_assertion_with_keys(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(
-            decrypt_sdk,
+        decrypt_sdk.decrypt(
             b_file,
             rt_file,
             "ztdf",
@@ -545,11 +529,11 @@ def test_tdf_with_altered_assertion_with_keys(
 
 
 def test_tdf_altered_payload_end(
-    encrypt_sdk: tdfs.sdk_type,
-    decrypt_sdk: tdfs.sdk_type,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     pt_file: str,
     tmp_dir: str,
-    in_focus: set[tdfs.sdk_type],
+    in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -560,7 +544,7 @@ def test_tdf_altered_payload_end(
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     try:
-        tdfs.decrypt(decrypt_sdk, b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"segment" in exc.output

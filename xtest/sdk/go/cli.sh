@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2206,SC1091
-
+#
 # Common shell wrapper used to interface to SDK implementation.
 #
-# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt> <mimeType> <attrs> <assertions> <assertionverificationkeys>
+# Usage: ./cli.sh <encrypt | decrypt> <src-file> <dst-file> <fmt>
+#
+# Extended Utilities:
+#
+# ./cli.sh supports <feature>
+#   Check if the SDK supports a specific feature.
+#
+# Extended Configuration:
+#  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
+#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
+#  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
+#  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
+#  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
+#  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
+#  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-# shellcheck source=../../test.env
-source "$SCRIPT_DIR"/../../test.env
-
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+  cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_REF-latest}")
 fi
 
 if [ "$1" == "supports" ]; then
@@ -44,33 +54,46 @@ if [ "$1" == "supports" ]; then
   esac
 fi
 
+XTEST_DIR="$SCRIPT_DIR"
+while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
+  XTEST_DIR=$(dirname "$XTEST_DIR")
+done
+
+if [ -f "$XTEST_DIR/test.env" ]; then
+  # shellcheck disable=SC1091
+  source "$XTEST_DIR/test.env"
+else
+  echo "test.env not found, stopping at xtest directory."
+  exit 1
+fi
+
 args=(
   -o "$3"
   --host "$PLATFORMURL"
   --tls-no-verify
   --log-level debug
-  --with-client-creds '{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}'
+  --with-client-creds '{"clientId":"'"$CLIENTID"'","clientSecret":"'"$CLIENTSECRET"'"}'
 )
 if [ "$4" == "nano" ]; then
   args+=(--tdf-type "$4")
 fi
 
 if [ "$1" == "encrypt" ]; then
-  if [ -n "$5" ]; then
-    args+=(--mime-type "$5")
+  if [ -n "$XT_WITH_MIME_TYPE" ]; then
+    args+=(--mime-type "$XT_WITH_MIME_TYPE")
   fi
 
-  if [ -n "$6" ]; then
-    args+=(--attr "$6")
+  if [ -n "$XT_WITH_ATTRIBUTES" ]; then
+    args+=(--attr "$XT_WITH_ATTRIBUTES")
   fi
 
-  if [ -n "$7" ]; then
-    args+=(--with-assertions "$7")
+  if [ -n "$XT_WITH_ASSERTIONS" ]; then
+    args+=(--with-assertions "$XT_WITH_ASSERTIONS")
   fi
-  if [ "$ECWRAP" == 'true' ]; then
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--wrapping-key-algorithm "ec:secp256r1")
   fi
-  if [ "$USE_ECDSA_BINDING" == "true" ]; then
+  if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
@@ -82,13 +105,13 @@ if [ "$1" == "encrypt" ]; then
     mv "${3}.tdf" "${3}"
   fi
 elif [ "$1" == "decrypt" ]; then
-  if [ -n "$8" ]; then
-    args+=(--with-assertion-verification-keys "$8")
+  if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
+    args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
   fi
-  if [ "$ECWRAP" == 'true' ]; then
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--session-key-algorithm "ec:secp256r1")
   fi
-  if [ "$VERIFY_ASSERTIONS" == 'false' ]; then
+  if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)
   fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"

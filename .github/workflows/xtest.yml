@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/web-sdk
-          path: web-sdk
+          path: otdftests/xtest/sdk/js/src/main
           ref: ${{ env.JS_REF }}
       - name: Set up Node 22
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
@@ -116,27 +116,35 @@ jobs:
       - name: build and setup the web-sdk cli
         id: build-web-sdk
         run: |
-          make js
-        env:
-          JS_DIR: ../../../web-sdk
-        working-directory: otdftests/xtest/sdk
+          make
+        working-directory: otdftests/xtest/sdk/js
 
       ######## CHECKOUT GO CLI #############
       - name: Check out otdfctl
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/otdfctl
-          path: otdfctl
+          path: otdftests/xtest/sdk/go/src/main
           ref: ${{ env.OTDFCTL_REF }}
+
+      - name: Replace otdfctl go.mod packages
+        run: |-
+          echo "Replacing go.mod packages..."
+          PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
+          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/main"
+          echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
+          echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
+          cd "${OTDFCTL_DIR_ABS}"
+          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+            go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+          done
+          go mod tidy
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
         run: |-
-          make go
-        env:
-          OTDFCTL_DIR: ../../../otdfctl
-          PLATFORM_DIR: ../../../${{ steps.run-platform.outputs.platform-working-dir }}
-        working-directory: otdftests/xtest/sdk
+          make
+        working-directory: otdftests/xtest/sdk/go
 
       ####### CHECKOUT JAVA SDK ##############
 
@@ -144,19 +152,18 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/java-sdk
-          path: java-sdk
+          path: otdftests/xtest/sdk/java/src/main
           ref: ${{ env.JAVA_REF }}
 
       ####### SETUP JAVA CLI ##############
 
       - name: Prepare java cli
         run: |
-          make java
+          make
         env:
-          JAVA_DIR: ../../../java-sdk
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        working-directory: otdftests/xtest/sdk
+        working-directory: otdftests/xtest/sdk/java
 
       ######## RUN THE TESTS #############
       - name: Install test dependencies
