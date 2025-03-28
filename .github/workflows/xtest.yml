@@ -82,6 +82,13 @@ jobs:
           echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
           echo "platform-tag-to-sha=$(echo $version_info | jq -rc 'map({(.tag): .sha}) | add')" >> $GITHUB_OUTPUT
 
+          # Add information to the step summary
+          echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | SHA |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "$version_info" | jq -rc '.[] | "| \(.tag) | \(.sha) |"' >> $GITHUB_STEP_SUMMARY
+
         working-directory: otdf-sdk/xtest/sdk
     
       
