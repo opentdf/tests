@@ -13,15 +13,11 @@ inputs:
     default: latest
     type: string
 
-outputs:
-  cli-paths:
-    description: The paths to the CLI tool as space separated list. May be a different length than the input versions array, in the event two version specifiers resolve to the same git sha
-    type: string
-
 runs:
   using: composite
   steps:
     - name: configure
+      shell: bash
       run: |
         case "${{ inputs.sdk }}" in
           "go")
@@ -41,7 +37,9 @@ runs:
             exit 1
             ;;
         esac
+
     - name: validate versions string
+      shell: bash
       run: |
         if [[ ! ${{ inputs.version }} =~ ^[0-9a-zA-Z\.\ ]+$ ]]; then
           echo "Error: Invalid version string: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
@@ -57,19 +55,26 @@ runs:
             exit 1
           fi
         done
+
     - name: checkout xtest/sdk folder
       uses: actions/checkout@v4
       with:
         path: otdf-sdk
         sparse-checkout: xtest/sdk
+
     - name: Set up Python 3.12
       uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
       with:
         python-version: "3.12"
+
     - name: 🐍 
+      shell: bash
       run: |-
         pip install -r requirements.txt
+      working-directory: otdf-sdk
+
     - name: resolve versions
+      shell: bash
       run: |
         version_info=$(./scripts/resolve-version.py ${{ steps.configure.output.sdk }} ${{ inputs.version }})
         version_a=$(echo "$version_info" | jq -r '.[0] // empty')
@@ -80,8 +85,7 @@ runs:
         echo "version-b=$version_b" >> $GITHUB_OUTPUT
         echo "version-c=$version_c" >> $GITHUB_OUTPUT
         echo "version-d=$version_d" >> $GITHUB_OUTPUT
-      with:
-        working-directory: otdf-sdk
+      working-directory: otdf-sdk
 
     - name: checkout version a
       uses: actions/checkout@v4
