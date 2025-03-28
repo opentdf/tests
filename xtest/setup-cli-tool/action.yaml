@@ -67,7 +67,7 @@ runs:
       shell: bash
       run: |-
         pip install -r scripts/requirements.txt
-      working-directory: otdf-sdk
+      working-directory: otdf-sdk/xtest/sdk
 
     - name: resolve versions
       shell: bash
@@ -81,7 +81,7 @@ runs:
         echo "version-b=$version_b" >> $GITHUB_OUTPUT
         echo "version-c=$version_c" >> $GITHUB_OUTPUT
         echo "version-d=$version_d" >> $GITHUB_OUTPUT
-      working-directory: otdf-sdk
+      working-directory: otdf-sdk/xtest/sdk/
 
     - name: checkout version a
       uses: actions/checkout@v4
