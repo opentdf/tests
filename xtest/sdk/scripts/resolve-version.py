@@ -25,6 +25,7 @@ sdk_urls = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
     "js": "https://github.com/opentdf/web-sdk.git",
+    "platform": "https://github.com/opentdf/platform.git",
 }
 
 
@@ -93,6 +94,8 @@ def main():
     infix: None | str = None
     if sdk == "js":
         infix = "sdk"
+    if sdk == "platform":
+        infix = "service"
 
     results: list[ResolveResult] = []
     shas: set[str] = set()
