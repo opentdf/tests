@@ -28,6 +28,13 @@ To check out the current head versions of the sdks under test, run:
   ./sdk/scripts/checkout-all.sh
 ```
 
+#### Download another tag of a specific sdk
+
+```sh
+  ./sdk/scripts/checkout-sdk-branch.sh go v0.19.0
+```
+
+
 #### Using locally checked out SDKs
 
 If you are developing a new feature or fix for a local SDK

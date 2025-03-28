@@ -101,7 +101,7 @@ jobs:
 
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
-        uses: ./xtest/setup-cli-tool
+        uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: js
@@ -121,7 +121,7 @@ jobs:
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl
-        uses: ./xtest/setup-cli-tool
+        uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: go
@@ -150,7 +150,7 @@ jobs:
       ####### CHECKOUT JAVA SDK ##############
 
       - name: Configure java-sdk
-        uses: ./xtest/setup-cli-tool
+        uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: java
