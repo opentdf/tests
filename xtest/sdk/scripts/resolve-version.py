@@ -28,6 +28,13 @@ sdk_urls = {
     "platform": "https://github.com/opentdf/platform.git",
 }
 
+lts_versions = {
+    "go": "0.15.0",
+    "java": "0.7.5",
+    "js": "0.2.0",
+    "platform": "0.4.26",
+}
+
 
 def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
     sdk_url = sdk_urls[sdk]
@@ -64,6 +71,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             sha, tag = listed_tags[-1]
             return {"sdk": sdk, "tag": tag, "sha": sha}
         else:
+            if version == "lts":
+                version = lts_versions[sdk]
             matching_tags = [
                 (sha, tag)
                 for (sha, tag) in listed_tags
