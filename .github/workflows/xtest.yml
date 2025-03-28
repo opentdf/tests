@@ -79,6 +79,8 @@ jobs:
           - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
           run: |-
             echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
+      - run: |-
+          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
       - id: platform-version
         run: |-
           version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
