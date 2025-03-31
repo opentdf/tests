@@ -12,7 +12,7 @@ source "$SCRIPT_DIR"/../../test.env
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run github.com/opentdf/otdfctl@${OTDFCTL_REF-latest})
+  cmd=(go run github.com/opentdf/otdfctl@latest)
 fi
 
 cmd+=(--json)

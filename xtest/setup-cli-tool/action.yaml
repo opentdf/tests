@@ -84,6 +84,19 @@ runs:
       shell: bash
       run: |
         version_info=$(./scripts/resolve-version.py ${{ inputs.sdk }} ${{ inputs.version }})
+
+        if [[ $(echo "$version_info" | jq 'length') -gt 4 ]]; then
+          echo "Error: Too many versions resolved in version_info: $(echo "$version_info" | jq 'length')" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+        if echo "$version_info" | jq -e '.[] | select(.error != null)' > /dev/null; then
+          echo "| Alias | Error Message |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "$version_info" | jq -r '.[] | select(.error != null) | "| \(.alias) | \(.error) |"' >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
         version_a=$(echo "$version_info" | jq -rc '.[0] // empty')
         version_b=$(echo "$version_info" | jq -rc '.[1] // empty')
         version_c=$(echo "$version_info" | jq -rc '.[2] // empty')

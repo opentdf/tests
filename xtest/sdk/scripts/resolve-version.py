@@ -1,4 +1,28 @@
 #!/usr/bin/env python3
+# Use: python3 resolve-version.py <sdk> <tag...>
+# Example: python3 resolve-version.py go 0.15.0 latest unreleased-name
+# Sample Output:
+# ```json
+# [
+#   {
+#     "sdk": "go",
+#     "alias": "0.15.0",
+#     "tag": "v0.15.0",
+#     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
+#   },
+#   {
+#     "sdk": "go",
+#     "alias": "latest",
+#     "tag": "v0.15.1",
+#     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
+#   },
+#   {
+#     "sdk": "go",
+#     "tag": "unreleased-name",
+#     "err": "not found"
+#   }
+# ]
+# ```
 
 import sys
 import json
@@ -9,14 +33,16 @@ from typing import TypedDict
 
 
 class ResolveSuccess(TypedDict):
-    sdk: str
-    tag: str
-    sha: str
+    sdk: str  # The SDK name
+    alias: str  # The tag that was requested
+    tag: str  # The resolved tag name
+    sha: str  # The current git SHA of the tag
 
 
 class ResolveError(TypedDict):
-    sdk_name: str
-    err: str
+    sdk: str  # The SDK name
+    alias: str  # The tag that was requested
+    err: str  # The error message
 
 
 ResolveResult = ResolveSuccess | ResolveError
@@ -45,7 +71,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
-            return {"sdk": sdk, "tag": "main", "sha": sha}
+            return {"sdk": sdk, "alias": "main", "tag": "main", "sha": sha}
 
         remote_tags = [
             r.split("\t") for r in repo.ls_remote(sdk_url, tags=True).split("\n")
@@ -67,9 +93,10 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             (sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)
         ]
         listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
+        alias = version
         if version == "latest":
             sha, tag = listed_tags[-1]
-            return {"sdk": sdk, "tag": tag, "sha": sha}
+            return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
         else:
             if version == "lts":
                 version = lts_versions[sdk]
@@ -81,10 +108,11 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             if not matching_tags:
                 raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
             sha, tag = matching_tags[0]
-            return {"sdk": sdk, "tag": tag, "sha": sha}
+            return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
     except Exception as e:
         return {
-            "sdk_name": sdk,
+            "sdk": sdk,
+            "alias": version,
             "err": f"Error resolving version {version} for {sdk}: {e}",
         }
 

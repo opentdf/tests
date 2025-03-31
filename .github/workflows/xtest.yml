@@ -63,6 +63,13 @@ jobs:
       platform-tag-to-sha: ${{ steps.platform-version.outputs.platform-tag-to-sha }}
       tag-list: ${{ steps.platform-version.outputs.tag-list }}
     steps:
+      - name: Validate focus-sdk input
+        if : ${{ inputs.focus-sdk != '' }}
+        run: |-
+          if [[ ! "all go java js" =~ (^|[[:space:]])${{ inputs.focus-sdk }}($|[[:space:]]) ]]; then
+            echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           path: otdf-sdk
@@ -76,9 +83,9 @@ jobs:
       - if: github.event_name != 'cron' || github.event.schedule != '0 18 * * 0'
         run: |-
           echo "PLATFORM_REF=${{ inputs.platform-ref || 'main' }}" >> $GITHUB_ENV
-          - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
-          run: |-
-            echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
+      - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
+        run: |-
+          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
       - run: |-
           echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
       - id: platform-version
@@ -89,10 +96,16 @@ jobs:
 
           echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Tag | SHA |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "$version_info" | jq -rc '.[] | "| \(.tag) | \(.sha) |"' >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | SHA | Alias | Error |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- | ----- | ----- |" >> $GITHUB_STEP_SUMMARY
+          echo "$version_info" | jq -rc '.[] | "| \(.tag) | \(.sha) | \(.alias // "N/A") | \(.err // "N/A") |"' >> $GITHUB_STEP_SUMMARY
 
+          # Check for errors in the version_info
+          error_count=$(echo "$version_info" | jq '[.[] | select(.err != null)] | length')
+          if [ "$error_count" -gt 0 ]; then
+            echo "Errors detected in version resolution. Failing the run." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
         working-directory: otdf-sdk/xtest/sdk
     
       
@@ -104,9 +117,6 @@ jobs:
       contents: read
       packages: read
     env:
-      JS_REF: "${{ inputs.js-ref || 'main' }}"
-      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
-      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
       FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     strategy:
       matrix:
@@ -123,7 +133,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: ${{ env.JS_REF }}
+          version: "${{ inputs.js-ref || 'main' }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -172,7 +182,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: ${{ env.OTDFCTL_REF }}
+          version: "${{ inputs.otdfctl-ref || 'main' }}"
 
       - name: Replace otdfctl go.mod packages
         if: env.FOCUS_SDK == 'go'
@@ -201,7 +211,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: ${{ env.JAVA_REF }}
+          version: "${{ inputs.java-ref || 'main' }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli

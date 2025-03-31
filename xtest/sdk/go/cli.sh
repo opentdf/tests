@@ -22,7 +22,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_REF-latest}")
+  cmd=(go run "github.com/opentdf/otdfctl@latest")
 fi
 
 if [ "$1" == "supports" ]; then
