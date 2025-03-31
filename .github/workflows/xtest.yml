@@ -237,6 +237,15 @@ jobs:
         run: |-
           curl -L -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
         working-directory: otdftests/xtest
+
+      - name: Run a test I expect to fail
+        run: |-
+          pytest -v -k test_tdf_with_unbound_policy --sdks-encrypt js --sdks-decrypt go test_tdfs.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+          SCHEMA_FILE: 'manifest.schema.json'
+
       - name: Validate xtests
         if: ${{ !inputs }}
         run: |-
