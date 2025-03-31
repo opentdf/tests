@@ -327,7 +327,15 @@ def test_tdf_with_unbound_policy(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert b"wrap" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
+
+        expected_error_oneof = [
+            b"tamper",
+            b"InvalidFileError",  # Rough java equivalent of tamper
+            b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
+        ]
+        assert any(
+            err in exc.output for err in expected_error_oneof
+        ), f"Unexpected error output: {exc.output}"
 
 
 def test_tdf_with_altered_policy_binding(

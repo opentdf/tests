@@ -44,13 +44,14 @@ feature_type = Literal[
 
 
 class PlatformFeatureSet(BaseModel):
-    version: str
-    semver: tuple[int, int, int]
+    version: str | None = None
+    semver: tuple[int, int, int] | None = None
     features: set[feature_type] = set(
         ["assertions", "assertion_verification", "autoconfigure"]
     )
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
             print("PLATFORM_VERSION environment variable is not set or is empty.")
