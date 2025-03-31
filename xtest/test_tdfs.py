@@ -102,9 +102,14 @@ def test_tdf_roundtrip(
     assert filecmp.cmp(pt_file, rt_file)
 
     if container.startswith("ztdf") and decrypt_sdk.supports("ecwrap"):
-        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
-        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-        assert filecmp.cmp(pt_file, ert_file)
+        pfs = tdfs.PlatformFeatureSet()
+        if "ecwrap" not in pfs.features:
+            # ecwrap is not supported in older platforms, so we can't test it
+            pass
+        else:
+            ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+            decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
+            assert filecmp.cmp(pt_file, ert_file)
 
 
 #### MANIFEST VALIDITY TESTS
