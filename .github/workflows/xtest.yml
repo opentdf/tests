@@ -150,6 +150,11 @@ jobs:
               "cert": "-----BEGIN CERTIFICATE-----\nMIIC/TCCAeWgAwIBAgIUDiCm76cjcg4Wd862cEzTzLqSzFswDQYJKoZIhvcNAQEL\nBQAwDjEMMAoGA1UEAwwDa2FzMB4XDTI0MTIxODIwMzUxNFoXDTI1MTIxODIwMzUx\nNFowDjEMMAoGA1UEAwwDa2FzMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\nAQEA8QF4D9ko0T4SnjtTnS3KO87FPrjJ70BZ063NFvHkP71Boz/BzQAQN5ClHiWV\nBm+JchObutrAag/lWjlodLSEQiBD0Qv7Rd4UxOU3gySyYmPTd0eT/To1rhXsJ0BV\nyH0z6pq58taWKMH5HZ28QUs2/8U6ZOivss5Mq2XVtSb2HVv9QgRqaO6rX8X5Udws\ntd1deWA7lUw9qx1EozNnmFFPm+By6B7ymfO8tfJ8GjjDjDKm76eMRaMXJKBP15Lm\nh8h9VFiPR6gshQa4fn9uDjzD9Dd6jArHlyXNgkwRkl+IynQdFhqjqWXQcSlpSsSx\npSgHvSqNXmM1B3YYTaQUZlOB8wIDAQABo1MwUTAdBgNVHQ4EFgQUVl6EWRsZE5kf\nXR6EC9LDStsR1howHwYDVR0jBBgwFoAUVl6EWRsZE5kfXR6EC9LDStsR1howDwYD\nVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAJysUw1bQkm+UdIWubPVo\nh/h1YoSHMEmwtphLflMDiJvm1GIjFM5zVgnpmkiI9DVCAs8vyhHe+UVCgiCAMqU9\nuu1jYxXY54v8nx+Ps3X1snylIs82JHKXT1AJaXECSi0DwIuF3hIyPUJpK9AJ/PqC\nOvhq3sMX5p0D3bmk8518rRwkSZ2a7jn5qvLa6P0g4Ph32j5UdRmgvsgh/jJk7PkK\nHuf86yZ4KbkgU6kMs4rTOLNIBmMJlm7R9xrGMVwK8X/NPZWV4fBNQZPIJw7svNzo\npe60OK4cT0G0/LHEOGxCLpmxjq2+xedKkrmq6PrRZquL386RyjkCZh6F5AWJCqB9\n4g==\n-----END CERTIFICATE-----\n"
             }]
 
+      - name: Lookup current platform version
+        run: |-
+          echo "PLATFORM_VERSION=$(go run "$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}" version)">> $GITHUB_ENV
+          echo "## Testing with primary platform version $PLATFORM_VERSION" >> $GITHUB_STEP_SUMMARY
+
       - name: Set up Python 3.12
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
