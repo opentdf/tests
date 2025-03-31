@@ -152,8 +152,9 @@ jobs:
 
       - name: Lookup current platform version
         run: |-
-          echo "PLATFORM_VERSION=$(go run "$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}" version)">> $GITHUB_ENV
+          echo "PLATFORM_VERSION=$(go run ./service version)">> $GITHUB_ENV
           echo "## Testing with primary platform version $PLATFORM_VERSION" >> $GITHUB_STEP_SUMMARY
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
