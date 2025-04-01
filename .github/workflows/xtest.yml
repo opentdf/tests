@@ -227,6 +227,12 @@ jobs:
       - name: Lookup current platform version
         id: platform-version
         run: |-
+          if ! go run ./service version; then
+            # NOTE: the version command was added in 0.4.37
+            echo "Error: Unable to get platform version; defaulting to tag: [$PLATFORM_TAG]"
+            echo "PLATFORM_VERSION=$PLATFORM_TAG" >> $GITHUB_ENV
+            exit
+          fi
           # Older version commands output version to stderr; newer versions output to stdout
           PLATFORM_VERSION=$(go run ./service version 2>&1)
           echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> $GITHUB_ENV
