@@ -455,7 +455,7 @@ def test_tdf_with_altered_enc_seg_size(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "integrity")
+        assert_tamper_error(exc, "signature")
 
 
 ## ASSERTION TAMPER TESTS
