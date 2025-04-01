@@ -82,7 +82,7 @@ jobs:
         working-directory: otdf-sdk/xtest/sdk
       - if: github.event_name != 'cron' || github.event.schedule != '0 18 * * 0'
         run: |-
-          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main' }}" >> $GITHUB_ENV
+          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main lts' }}" >> $GITHUB_ENV
       - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
         # Only run the full platform matrix on sundays at 6pm UTC
         run: |-
