@@ -77,6 +77,7 @@ def test_tdf_roundtrip(
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ):
+    pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -88,6 +89,10 @@ def test_tdf_roundtrip(
     if container == "ztdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
+        if "ecwrap" not in pfs.features:
+            pytest.skip(
+                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
+            )
 
     ct_file = do_encrypt_with(
         pt_file,
@@ -102,7 +107,6 @@ def test_tdf_roundtrip(
     assert filecmp.cmp(pt_file, rt_file)
 
     if container.startswith("ztdf") and decrypt_sdk.supports("ecwrap"):
-        pfs = tdfs.PlatformFeatureSet()
         if "ecwrap" not in pfs.features:
             # ecwrap is not supported in older platforms, so we can't test it
             pass
@@ -304,6 +308,32 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 ### TAMPER TESTS
 
+
+def assert_tamper_error(exc: subprocess.CalledProcessError, type: str) -> None:
+    assert type.encode() in exc.output
+    expected_error_oneof = [
+        b"tamper",
+        b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
+    ]
+    match type:
+        case "wrap":
+            expected_error_oneof += [
+                b"InvalidFileError",
+            ]
+        case "root" | "signature":
+            expected_error_oneof += [
+                b"IntegrityError",
+            ]
+        case _:
+            expected_error_oneof += [
+                b"IntegrityError",
+                b"integrity check",
+            ]
+    assert any(
+        err in exc.output for err in expected_error_oneof
+    ), f"Unexpected error output: {exc.output}"
+
+
 ## POLICY TAMPER TESTS
 
 
@@ -326,16 +356,7 @@ def test_tdf_with_unbound_policy(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"wrap" in exc.output
-
-        expected_error_oneof = [
-            b"tamper",
-            b"InvalidFileError",  # Rough java equivalent of tamper
-            b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
-        ]
-        assert any(
-            err in exc.output for err in expected_error_oneof
-        ), f"Unexpected error output: {exc.output}"
+        assert_tamper_error(exc, "wrap")
 
 
 def test_tdf_with_altered_policy_binding(
@@ -359,8 +380,7 @@ def test_tdf_with_altered_policy_binding(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"wrap" in exc.output
-        assert b"tamper" in exc.output or b"InvalidFileError" in exc.output
+        assert_tamper_error(exc, "wrap")
 
 
 ## INTEGRITY TAMPER TESTS
@@ -385,8 +405,7 @@ def test_tdf_with_altered_root_sig(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"root" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+        assert_tamper_error(exc, "root")
 
 
 def test_tdf_with_altered_seg_sig_wrong(
@@ -408,8 +427,7 @@ def test_tdf_with_altered_seg_sig_wrong(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"signature" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+        assert_tamper_error(exc, "signature")
 
 
 ## SEGMENT SIZE TAMPER TEST
@@ -436,11 +454,7 @@ def test_tdf_with_altered_enc_seg_size(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert (
-            b"tamper" in exc.output
-            or b"IntegrityError" in exc.output
-            or b"integrity check" in exc.output
-        )
+        assert_tamper_error(exc, "segment")
 
 
 ## ASSERTION TAMPER TESTS
@@ -479,8 +493,7 @@ def test_tdf_with_altered_assertion_statement(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"assertion" in exc.output
-        assert b"tamper" in exc.output or b"IntegrityError" in exc.output
+        assert_tamper_error(exc, "assertion")
 
 
 def test_tdf_with_altered_assertion_with_keys(
@@ -523,12 +536,7 @@ def test_tdf_with_altered_assertion_with_keys(
         )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"assertion" in exc.output
-        assert (
-            b"tamper" in exc.output
-            or b"IntegrityError" in exc.output
-            or b"integrity check" in exc.output
-        )
+        assert_tamper_error(exc, "assertion")
 
 
 ## PAYLOAD TAMPER TESTS
@@ -553,9 +561,4 @@ def test_tdf_altered_payload_end(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert b"segment" in exc.output
-        assert (
-            b"tamper" in exc.output
-            or b"InvalidFileError" in exc.output
-            or b"integrity check" in exc.output
-        )
+        assert_tamper_error(exc, "segment")
