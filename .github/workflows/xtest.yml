@@ -134,7 +134,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "${{ inputs.js-ref || 'main' }}"
+          version: "${{ inputs.js-ref || 'main refs/pull/517/merge' }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
