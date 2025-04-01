@@ -119,6 +119,7 @@ jobs:
     env:
       FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     strategy:
+      fail-fast: false
       matrix:
         platform-version: ${{ fromJSON(needs.resolve-versions.outputs.tag-list) }}
     steps:
