@@ -73,6 +73,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: otdf-sdk
+          repository: opentdf/tests
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
