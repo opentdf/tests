@@ -1,13 +1,18 @@
 import json
-import assertions as tdfassertions
+import jsonschema
 import base64
-from collections.abc import Callable
 import logging
 import os
+import re
 import subprocess
 import zipfile
-import jsonschema
 
+import pytest
+
+import assertions as tdfassertions
+
+
+from collections.abc import Callable
 from pydantic import BaseModel
 from typing import Literal
 
@@ -36,6 +41,47 @@ feature_type = Literal[
     "nano_ecdsa",
     "ns_grants",
 ]
+
+
+class PlatformFeatureSet(BaseModel):
+    version: str | None = None
+    semver: tuple[int, int, int] | None = None
+    features: set[feature_type] = set(
+        ["assertions", "assertion_verification", "autoconfigure"]
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        v = os.getenv("PLATFORM_VERSION")
+        if not v:
+            print("PLATFORM_VERSION environment variable is not set or is empty.")
+            return
+
+        ver_match = _version_re.match(v)
+        if not ver_match:
+            print(f"PLATFORM_VERSION '{v}' does not match the expected format.")
+            return
+        major, minor, patch, _, _ = ver_match.groups()
+
+        self.semver = (int(major), int(minor), int(patch))
+
+        # TODO: Test bulk rewrap
+        # if self.semver >= (0, 4, 40):
+        #     self.features.add("bulk_rewrap")
+
+        # While announced in 0.4.39, that version had the wrong salt
+        if self.semver >= (0, 4, 40):
+            self.features.add("ecwrap")
+
+        # Included in SDK 0.3.27, service 0.4.39
+        if self.semver >= (0, 4, 39):
+            self.features.add("hexless")
+
+        if self.semver >= (0, 4, 23):
+            self.features.add("nano_ecdsa")
+
+        if self.semver >= (0, 4, 19):
+            self.features.add("ns_grants")
 
 
 class DataAttribute(BaseModel):
@@ -130,6 +176,14 @@ class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
     assertions: list[tdfassertions.Assertion] | None = []
+
+
+_version_re = re.compile(
+    r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-zA-Z.-]+))?(?:\+([0-9a-zA-Z.-]+))?$"
+)
+_partial_version_re = re.compile(
+    r"^(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-([0-9a-zA-Z.-]*))?(?:\+([0-9a-zA-Z.-]*))?$"
+)
 
 
 def manifest(tdf_file: str) -> Manifest:
@@ -346,3 +400,30 @@ class SDK:
         except subprocess.CalledProcessError:
             return False
         return True
+
+
+def all_versions_of(sdk: sdk_type) -> list[SDK]:
+    versions: list[SDK] = []
+    sdk_path = os.path.join("sdk", sdk, "dist")
+    for version in os.listdir(sdk_path):
+        if os.path.isdir(os.path.join(sdk_path, version)):
+            versions.append(SDK(sdk, version))
+    return versions
+
+
+def skip_if_unsupported(sdk: SDK, *features: feature_type):
+    pfs = PlatformFeatureSet()
+    for feature in features:
+        if not sdk.supports(feature):
+            pytest.skip(f"{sdk} sdk doesn't yet support [{feature}]")
+        if feature not in pfs.features:
+            pytest.skip(
+                f"platform service {pfs.version} doesn't yet support [{feature}]"
+            )
+
+
+def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
+    if encrypt_sdk.supports("hexless") and not decrypt_sdk.supports("hexless"):
+        pytest.skip(
+            f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
+        )

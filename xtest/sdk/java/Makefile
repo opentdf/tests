@@ -20,7 +20,7 @@ build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
-		cd ./src/$$version && \
+		cd $(MAKEFILE_DIR)/src/$$version && \
 		mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true || { \
 			echo "Error: Maven build failed for $$version"; \
 			exit 1; \

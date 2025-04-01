@@ -1,0 +1,140 @@
+name: configure-sdks
+description: Check out and build one or more SDK and its CLI tool for use by xtest
+inputs:
+  path:
+    description: The path to checkout the the SDK source code to; concatenated with branch or tag name.
+    type: string
+  sdk:
+    description: The SDK to configure; one of go, java, js
+    default: go
+    type: string
+  version:
+    description: A space separated list of versions of the SDK to configure. Accepts SHA, branches, and semver tags
+    default: latest
+    type: string
+outputs:
+  version-a:
+    description: "Object containing tag, sha, and name of a version checked out"
+    value: ${{ steps.resolve.outputs.version-a }}
+  version-b:
+    description: "Object containing tag, sha, and name of a version checked out, if two or more were specified"
+    value: ${{ steps.resolve.outputs.version-b }}
+  version-c:
+    description: "Object containing tag, sha, and name of a version checked out, if three or more were specified"
+    value: ${{ steps.resolve.outputs.version-c }}
+  version-d:
+    description: "Object containing tag, sha, and name of a version checked out, if four were specified"
+    value: ${{ steps.resolve.outputs.version-d }}
+
+runs:
+  using: composite
+  steps:
+    - name: configure
+      shell: bash
+      run: |
+        case "${{ inputs.sdk }}" in
+          "go")
+            echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
+            ;;
+          "java")
+            echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
+            ;;
+          "js")
+            echo "sdk_repo=opentdf/web-sdk" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "Invalid SDK specified: ${{ inputs.sdk }}" >> $GITHUB_STEP_SUMMARY
+            exit 1
+            ;;
+        esac
+
+    - name: validate versions string
+      shell: bash
+      env:
+        VERSIONS: "${{ inputs.version }}"
+      run: |
+        if [[ ! $VERSIONS =~ ^[0-9a-zA-Z\.\ ]+$ ]]; then
+          echo "Error: Invalid version string: $VERSIONS" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+        if [[ $(echo "$VERSIONS" | wc -w) -gt 4 ]]; then
+          echo "Error: Too many versions specified: $VERSIONS" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: checkout xtest/sdk folder
+      uses: actions/checkout@v4
+      with:
+        path: otdf-sdk
+        sparse-checkout: xtest/sdk
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+      with:
+        python-version: "3.12"
+
+    - name: 🐍 
+      shell: bash
+      run: |-
+        pip install -r scripts/requirements.txt
+      working-directory: otdf-sdk/xtest/sdk
+
+    - name: resolve versions
+      id: resolve
+      shell: bash
+      run: |
+        version_info=$(./scripts/resolve-version.py ${{ inputs.sdk }} ${{ inputs.version }})
+
+        if [[ $(echo "$version_info" | jq 'length') -gt 4 ]]; then
+          echo "Error: Too many versions resolved in version_info: $(echo "$version_info" | jq 'length')" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+        if echo "$version_info" | jq -e '.[] | select(.error != null)' > /dev/null; then
+          echo "| Alias | Error Message |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "$version_info" | jq -r '.[] | select(.error != null) | "| \(.alias) | \(.error) |"' >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+        version_a=$(echo "$version_info" | jq -rc '.[0] // empty')
+        version_b=$(echo "$version_info" | jq -rc '.[1] // empty')
+        version_c=$(echo "$version_info" | jq -rc '.[2] // empty')
+        version_d=$(echo "$version_info" | jq -rc '.[3] // empty')
+        echo "version-a=$version_a" >> $GITHUB_OUTPUT
+        echo "version-b=$version_b" >> $GITHUB_OUTPUT
+        echo "version-c=$version_c" >> $GITHUB_OUTPUT
+        echo "version-d=$version_d" >> $GITHUB_OUTPUT
+      working-directory: otdf-sdk/xtest/sdk/
+
+    - name: checkout version a
+      uses: actions/checkout@v4
+      if: steps.resolve.outputs.version-a != ''
+      with:
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-a).sha }}
+        repository: ${{ env.sdk_repo }}
+
+    - name: checkout version b
+      uses: actions/checkout@v4
+      if: steps.resolve.outputs.version-b != ''
+      with:
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-b).sha }}
+        repository: ${{ env.sdk_repo }}
+
+    - name: checkout version c
+      uses: actions/checkout@v4
+      if: steps.resolve.outputs.version-c != ''
+      with:
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-c).sha }}
+        repository: ${{ env.sdk_repo }}
+
+    - name: checkout version d
+      uses: actions/checkout@v4
+      if: steps.resolve.outputs.version-d != ''
+      with:
+        path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
+        repository: ${{ env.sdk_repo }}
