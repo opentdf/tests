@@ -53,12 +53,9 @@ runs:
       env:
         VERSIONS: "${{ inputs.version }}"
       run: |
-        if [[ ! $VERSIONS =~ ^[0-9a-zA-Z\.\ \\]+$ ]]; then
-          echo "Error: Invalid version string: $VERSIONS" >> $GITHUB_STEP_SUMMARY
-          exit 1
-        fi
         if [[ $(echo "$VERSIONS" | wc -w) -gt 4 ]]; then
-          echo "Error: Too many versions specified: $VERSIONS" >> $GITHUB_STEP_SUMMARY
+          echo "Error: Too many versions specified: [$VERSIONS]"
+          echo "Error: Too many versions specified: [$VERSIONS]" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
 
