@@ -53,7 +53,7 @@ runs:
       env:
         VERSIONS: "${{ inputs.version }}"
       run: |
-        if [[ ! $VERSIONS =~ ^[0-9a-zA-Z\.\ ]+$ ]]; then
+        if [[ ! $VERSIONS =~ ^[0-9a-zA-Z\.\ \\]+$ ]]; then
           echo "Error: Invalid version string: $VERSIONS" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
@@ -66,6 +66,7 @@ runs:
       uses: actions/checkout@v4
       with:
         path: otdf-sdk
+        repository: opentdf/tests
         sparse-checkout: xtest/sdk
 
     - name: Set up Python 3.12

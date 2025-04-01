@@ -72,6 +72,16 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
             return {"sdk": sdk, "alias": "main", "tag": "main", "sha": sha}
+        
+        if version.startswith("refs/pull/"):
+            merge_heads = [
+                r.split("\t") for r in repo.ls_remote(sdk_url).split("\n") if r.endswith(version)
+            ]
+            pr_number = version.split("/")[-2]
+            if not merge_heads:
+                return {"sdk": sdk, "alias": version, "err": f"pull request {pr_number} not found in {sdk_url}"}
+            sha, _ = merge_heads[0]
+            return {"sdk": sdk, "alias": version, "tag": f"pull-{pr_number}", "sha": sha}
 
         remote_tags = [
             r.split("\t") for r in repo.ls_remote(sdk_url, tags=True).split("\n")
