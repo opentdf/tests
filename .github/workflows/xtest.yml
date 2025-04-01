@@ -87,8 +87,6 @@ jobs:
         # Only run the full platform matrix on sundays at 6pm UTC
         run: |-
           echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
-      - run: |-
-          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main lts' }}" >> $GITHUB_ENV
       - id: platform-version-info
         run: |-
           version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
