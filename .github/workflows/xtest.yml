@@ -60,8 +60,8 @@ jobs:
     permissions: 
       contents: read
     outputs:
-      platform-tag-to-sha: ${{ steps.platform-version.outputs.platform-tag-to-sha }}
-      tag-list: ${{ steps.platform-version.outputs.tag-list }}
+      platform-tag-to-sha: ${{ steps.platform-version-info.outputs.platform-tag-to-sha }}
+      tag-list: ${{ steps.platform-version-info.outputs.tag-list }}
     steps:
       - name: Validate focus-sdk input
         if : ${{ inputs.focus-sdk != '' }}
@@ -88,7 +88,7 @@ jobs:
           echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
       - run: |-
           echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
-      - id: platform-version
+      - id: platform-version-info
         run: |-
           version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
           echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform-version: ${{ fromJSON(needs.resolve-versions.outputs.tag-list) }}
+        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.tag-list) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -141,7 +141,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-version] }}
+          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: >- 
             [{
@@ -150,24 +150,6 @@ jobs:
               "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDxAXgP2SjRPhKe\nO1OdLco7zsU+uMnvQFnTrc0W8eQ/vUGjP8HNABA3kKUeJZUGb4lyE5u62sBqD+Va\nOWh0tIRCIEPRC/tF3hTE5TeDJLJiY9N3R5P9OjWuFewnQFXIfTPqmrny1pYowfkd\nnbxBSzb/xTpk6K+yzkyrZdW1JvYdW/1CBGpo7qtfxflR3Cy13V15YDuVTD2rHUSj\nM2eYUU+b4HLoHvKZ87y18nwaOMOMMqbvp4xFoxckoE/XkuaHyH1UWI9HqCyFBrh+\nf24OPMP0N3qMCseXJc2CTBGSX4jKdB0WGqOpZdBxKWlKxLGlKAe9Ko1eYzUHdhhN\npBRmU4HzAgMBAAECggEAHRHhSoAWJU8Ibd+YEVBxoU8qiYs+iEZJz3eaUlcxAeMx\nJKDPHowQaLNgx0cfN5yChqkI0rwKE4EBWCWujM0tWtCLfY6la2MDPFCtpnrprWZ/\nHlca6aN40BvC1WU0M6+ucHDjVwA9MoNbKhBZocKRyr4ecgeDEd1CcDYjVetyKk4v\nTKIa7mvoNfRMT5dsmvUdRgtkvIaomLYoCVc7nK2d7C0WP/RaUWpJUUpZE+8lP3ze\no44HMMpeq+yyeXJhq6+PIErJfOChYJVjwOWCVJ99NRJ2RFU4kNu4gY2YcL6IRCV5\n6rfwsJwdKlLxTKVEZPCWVEa0TS+G4yQV8gu1LtvAwQKBgQD6Z5Hxw2R+bTFFyeOx\nMlDno8PvBlw4B3QrrWppk3f+m4261eSFdCMkZTZw81QjdGCJ/BTtMASaNWIWVyc1\nkslSg+ARPF5XEBEGpUmINRUotV9B7Wtq5Nid9xTlUoUPiuVVVU+eEvwTw8F/tgOu\nITwUM/uOYJdI16XfL4qtGxab0wKBgQD2ZCIbXK4BO5+8YC23YWymspTK/YShfoYA\nM8Ktxdp+xHGZoNzbx+mSd6vvvtWPhiayje2ppc82OsB+q6BYQOYTRowwdidWBETd\nM7/Q/QKg9Zn3kM+WA71KDtK3VIQBqZfYjevpTEqGjG9XN1apWZh80YeU3uhBuaSZ\nKns62AxNYQKBgAj8jpBOotymro4CoNlLJPwrNGzvnX+lRNYMczU2xaetjXiXFIx1\njo1P1JRZJzvegVhyY43fm0qtf8eteQrDKdZ8RR5ZPEmDmhjS9cCdpxS+7ZxAGQrN\nC7kflPBl9cCJC5H0bdcOd11+OQOMVLV7G9zdwLlrXgKPOrS30BJGVplhAoGAU+YM\n5xxL9AeFgPOPHZ6DDNBKckSZYRRgNLlrVRjGKdxiglmQWxZbppAxb9Wfitu3WZ2S\ni+31/RVMbtWqJ+MRdQbUvbu98UBK4re4XUWKG50F7JLW3NIxJoKdpeeVe6twFUFe\nT3a2+dHgJ+akD85+aiI+9KZil97K+YzJoWPn7IECgYB9O3ZiTlT3N3iuML+CCrv/\nEttS+1sWf1fdwq1Roosw3JWxuXC45KNn/lUsk0jvVJkMM/XDxG19E3NyltMWr2de\nj0o4TgFsOvXh6k1k7ftMwauFooAdIgkn9HPU7zwv7eAwWfOOxz57RvVnKKvcUq9F\nrELh+ivyqdpAYiJ1z4+0LA==\n-----END PRIVATE KEY-----\n",
               "cert": "-----BEGIN CERTIFICATE-----\nMIIC/TCCAeWgAwIBAgIUDiCm76cjcg4Wd862cEzTzLqSzFswDQYJKoZIhvcNAQEL\nBQAwDjEMMAoGA1UEAwwDa2FzMB4XDTI0MTIxODIwMzUxNFoXDTI1MTIxODIwMzUx\nNFowDjEMMAoGA1UEAwwDa2FzMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\nAQEA8QF4D9ko0T4SnjtTnS3KO87FPrjJ70BZ063NFvHkP71Boz/BzQAQN5ClHiWV\nBm+JchObutrAag/lWjlodLSEQiBD0Qv7Rd4UxOU3gySyYmPTd0eT/To1rhXsJ0BV\nyH0z6pq58taWKMH5HZ28QUs2/8U6ZOivss5Mq2XVtSb2HVv9QgRqaO6rX8X5Udws\ntd1deWA7lUw9qx1EozNnmFFPm+By6B7ymfO8tfJ8GjjDjDKm76eMRaMXJKBP15Lm\nh8h9VFiPR6gshQa4fn9uDjzD9Dd6jArHlyXNgkwRkl+IynQdFhqjqWXQcSlpSsSx\npSgHvSqNXmM1B3YYTaQUZlOB8wIDAQABo1MwUTAdBgNVHQ4EFgQUVl6EWRsZE5kf\nXR6EC9LDStsR1howHwYDVR0jBBgwFoAUVl6EWRsZE5kfXR6EC9LDStsR1howDwYD\nVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAJysUw1bQkm+UdIWubPVo\nh/h1YoSHMEmwtphLflMDiJvm1GIjFM5zVgnpmkiI9DVCAs8vyhHe+UVCgiCAMqU9\nuu1jYxXY54v8nx+Ps3X1snylIs82JHKXT1AJaXECSi0DwIuF3hIyPUJpK9AJ/PqC\nOvhq3sMX5p0D3bmk8518rRwkSZ2a7jn5qvLa6P0g4Ph32j5UdRmgvsgh/jJk7PkK\nHuf86yZ4KbkgU6kMs4rTOLNIBmMJlm7R9xrGMVwK8X/NPZWV4fBNQZPIJw7svNzo\npe60OK4cT0G0/LHEOGxCLpmxjq2+xedKkrmq6PrRZquL386RyjkCZh6F5AWJCqB9\n4g==\n-----END CERTIFICATE-----\n"
             }]
-
-      - name: Does platform support multikas?
-        id: multikas
-        run: |-
-          if [[ $PLATFORM_TAG == main ]]; then
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif [[ $PLATFORM_TAG =~ ^0\.[5-9]\.[0-9]+$ ]]; then
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-version }}
-      - name: Lookup current platform version
-        run: |-
-          echo "PLATFORM_VERSION=$(go run ./service version)">> $GITHUB_ENV
-          echo "## Testing with primary platform version $PLATFORM_VERSION" >> $GITHUB_STEP_SUMMARY
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
@@ -241,7 +223,16 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         working-directory: otdftests/xtest/sdk/java
 
-      ######## RUN THE TESTS #############
+      ######## Configure test environment #############
+      - name: Lookup current platform version
+        id: platform-version
+        run: |-
+          # Older version commands output version to stderr; newer versions output to stdout
+          PLATFORM_VERSION=$(go run ./service version 2>&1)
+          echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> $GITHUB_ENV
+          echo "## Platform version output: [$PLATFORM_VERSION]"
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+
       - name: Install test dependencies
         run: |-
           pip install -r requirements.txt
@@ -251,11 +242,13 @@ jobs:
         run: |-
           curl -L -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
         working-directory: otdftests/xtest
-      - name: Validate xtests
+      - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
           pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
+
+      ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
           pytest -v  --focus "$FOCUS_SDK" test_legacy.py
@@ -280,6 +273,23 @@ jobs:
           SCHEMA_FILE: 'manifest.schema.json'
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
+
+      - name: Does platform support multikas?
+        id: multikas
+        run: |-
+          if [[ $PLATFORM_TAG == main ]]; then
+            echo "Main supports multikas"
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+          elif [[ $PLATFORM_VERSION =~ ^0\.[5-9]\.[0-9]+$ ]]; then
+            echo "Selected version [$PLATFORM_VERSION] supports multikas"
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
+
       - name: Start additional kas
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         uses: opentdf/platform/test/start-additional-kas@main
