@@ -310,7 +310,8 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 
 def assert_tamper_error(exc: subprocess.CalledProcessError, type: str) -> None:
-    assert type.encode() in exc.output
+    btype = type.encode()
+    assert btype in exc.output
     expected_error_oneof = [
         b"tamper",
         b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
@@ -454,7 +455,7 @@ def test_tdf_with_altered_enc_seg_size(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "segment")
+        assert_tamper_error(exc, "integrity")
 
 
 ## ASSERTION TAMPER TESTS
