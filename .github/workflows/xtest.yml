@@ -238,6 +238,8 @@ jobs:
           echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> $GITHUB_ENV
           echo "## Platform version output: [$PLATFORM_VERSION]"
         working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        env:
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
 
       - name: Install test dependencies
         run: |-
