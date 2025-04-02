@@ -39,8 +39,14 @@ if [ "$1" == "supports" ]; then
       exit 0
       ;;
     nano_ecdsa)
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding
-      exit $?
+      if java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding; then
+        # Java version 0.7.7 fixwa a bug in the ECDSA parsing for nano
+        java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }' 
+        exit $?
+      else
+        echo "ecdsa-binding not supported"
+        exit 1
+      fi
       ;;
     assertions)
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
