@@ -82,6 +82,7 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 19):
             self.features.add("ns_grants")
+        print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
 
 class DataAttribute(BaseModel):

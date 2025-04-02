@@ -52,8 +52,14 @@ if [ "$1" == "supports" ]; then
       ;;
 
     ecwrap)
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key
-      exit $?
+      if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
+        # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later
+        java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }'
+        exit $?
+      else
+        echo "ecwrap not supported"
+        exit 1
+      fi
       ;;
 
     hexless)
