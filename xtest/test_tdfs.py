@@ -94,7 +94,7 @@ def test_tdf_roundtrip(
                 f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
             )
         # Unlike javascript, Java uses an open box KAO so it doesn't support ecwrap if on older versions
-        if decrypt_sdk.sdk == "java" and not encrypt_sdk.supports("ecwrap"):
+        if decrypt_sdk.sdk == "java" and not decrypt_sdk.supports("ecwrap"):
             pytest.skip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
