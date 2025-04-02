@@ -309,13 +309,13 @@ class SDK:
         pt_file: str,
         ct_file: str,
         mime_type: str = "application/octet-stream",
-        fmt: container_type = "nano",
+        container: container_type = "nano",
         attr_values: list[str] | None = None,
         assert_value: str = "",
     ):
-        use_ecdsa = fmt == "nano-with-ecdsa"
-        use_ecwrap = fmt == "ztdf-ecwrap"
-        fmt = simple_container(fmt)
+        use_ecdsa = container == "nano-with-ecdsa"
+        use_ecwrap = container == "ztdf-ecwrap"
+        fmt = simple_container(container)
         c = [
             self.path,
             "encrypt",
@@ -350,12 +350,14 @@ class SDK:
         self,
         ct_file: str,
         rt_file: str,
-        fmt: container_type = "nano",
+        container: container_type = "nano",
         assert_keys: str = "",
         verify_assertions: bool = True,
         ecwrap: bool = False,
         expect_error: bool = False,
     ):
+        fmt = simple_container(container)
+
         c = [
             self.path,
             "decrypt",

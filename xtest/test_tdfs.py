@@ -41,7 +41,7 @@ def do_encrypt_with(
         pt_file,
         ct_file,
         mime_type="text/plain",
-        fmt=container,
+        container=container,
         assert_value=az,
     )
     if tdfs.simple_container(container) == "ztdf":
@@ -92,6 +92,11 @@ def test_tdf_roundtrip(
         if "ecwrap" not in pfs.features:
             pytest.skip(
                 f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
+            )
+        # Unlike javascript, Java uses an open box KAO so it doesn't support ecwrap if on older versions
+        if decrypt_sdk.sdk == "java" and not decrypt_sdk.supports("ecwrap"):
+            pytest.skip(
+                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
 
     ct_file = do_encrypt_with(
