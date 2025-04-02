@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # Use: python3 resolve-version.py <sdk> <tag...>
-# Example: python3 resolve-version.py go 0.15.0 latest unreleased-name
+#
+#    Tag can be:
+#       main: the main branch
+#       latest: the latest release of the app (last tag)
+#       lts: one of a list of hard-coded 'supported' versions
+#       <sha>: a git SHA
+#       v0.1.2: a git tag that is a semantic version
+#       refs/pull/1234: a pull request ref
+#
+# Example: python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
 # Sample Output:
 # ```json
 # [
@@ -15,6 +24,12 @@
 #     "alias": "latest",
 #     "tag": "v0.15.1",
 #     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
+#   },
+#   {
+#     "sdk": "go",
+#     "alias": "decaf01",
+#     "tag": "refs/pull/1234/head",
+#     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
 #   },
 #   {
 #     "sdk": "go",
