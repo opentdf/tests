@@ -82,10 +82,12 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 (sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)
             ]
             if not matching_tags:
+                # Not a head; maybe another commit has pushed to this branch since the job started
                 return {
                     "sdk": sdk,
-                    "alias": version,
-                    "err": f"No tags found pointing to SHA {version}",
+                    "alias": version[:7],
+                    "tag": version,
+                    "sha": version,
                 }
             if len(matching_tags) > 1:
                 # If multiple tags point to the same SHA, check for pull requests
