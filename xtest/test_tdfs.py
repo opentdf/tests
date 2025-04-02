@@ -41,7 +41,7 @@ def do_encrypt_with(
         pt_file,
         ct_file,
         mime_type="text/plain",
-        fmt=container,
+        container=container,
         assert_value=az,
     )
     if tdfs.simple_container(container) == "ztdf":

@@ -34,7 +34,7 @@ def test_autoconfigure_one_attribute_standard(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=attribute_single_kas_grant.value_fqns,
         )
         cipherTexts[sample_name] = ct_file
@@ -71,7 +71,7 @@ def test_autoconfigure_two_kas_or_standard(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 attribute_two_kas_grant_or.value_fqns[0],
                 attribute_two_kas_grant_or.value_fqns[1],
@@ -117,7 +117,7 @@ def test_autoconfigure_double_kas_and(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 attribute_two_kas_grant_and.value_fqns[0],
                 attribute_two_kas_grant_and.value_fqns[1],
@@ -162,7 +162,7 @@ def test_autoconfigure_one_attribute_attr_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 one_attribute_attr_kas_grant.value_fqns[0],
             ],
@@ -201,7 +201,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 attr_and_value_kas_grants_or.value_fqns[0],
                 attr_and_value_kas_grants_or.value_fqns[1],
@@ -247,7 +247,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 attr_and_value_kas_grants_and.value_fqns[0],
                 attr_and_value_kas_grants_and.value_fqns[1],
@@ -292,7 +292,7 @@ def test_autoconfigure_one_attribute_ns_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 one_attribute_ns_kas_grant.value_fqns[0],
             ],
@@ -331,7 +331,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 ns_and_value_kas_grants_or.value_fqns[0],
                 ns_and_value_kas_grants_or.value_fqns[1],
@@ -377,7 +377,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
             pt_file,
             ct_file,
             mime_type="text/plain",
-            fmt="ztdf",
+            container="ztdf",
             attr_values=[
                 ns_and_value_kas_grants_and.value_fqns[0],
                 ns_and_value_kas_grants_and.value_fqns[1],
