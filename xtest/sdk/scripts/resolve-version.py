@@ -9,7 +9,10 @@
 #       v0.1.2: a git tag that is a semantic version
 #       refs/pull/1234: a pull request ref
 #
-# Example: python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
+# Sample Input:
+#
+#    python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
+#
 # Sample Output:
 # ```json
 # [
