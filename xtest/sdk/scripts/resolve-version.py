@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 # Use: python3 resolve-version.py <sdk> <tag...>
-# Example: python3 resolve-version.py go 0.15.0 latest unreleased-name
+#
+#    Tag can be:
+#       main: the main branch
+#       latest: the latest release of the app (last tag)
+#       lts: one of a list of hard-coded 'supported' versions
+#       <sha>: a git SHA
+#       v0.1.2: a git tag that is a semantic version
+#       refs/pull/1234: a pull request ref
+#
+# Sample Input:
+#
+#    python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
+#
 # Sample Output:
 # ```json
 # [
@@ -15,6 +27,12 @@
 #     "alias": "latest",
 #     "tag": "v0.15.1",
 #     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
+#   },
+#   {
+#     "sdk": "go",
+#     "alias": "decaf01",
+#     "tag": "refs/pull/1234/head",
+#     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
 #   },
 #   {
 #     "sdk": "go",
@@ -62,6 +80,9 @@ lts_versions = {
 }
 
 
+sha_regex = r"^[a-f0-9]{7,40}$"
+
+
 def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
     sdk_url = sdk_urls[sdk]
     try:
@@ -72,6 +93,57 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
             return {"sdk": sdk, "alias": "main", "tag": "main", "sha": sha}
+
+        if re.match(sha_regex, version):
+            ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
+            matching_tags = [
+                (sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)
+            ]
+            if not matching_tags:
+                # Not a head; maybe another commit has pushed to this branch since the job started
+                return {
+                    "sdk": sdk,
+                    "alias": version[:7],
+                    "tag": version,
+                    "sha": version,
+                }
+            if len(matching_tags) > 1:
+                # If multiple tags point to the same SHA, check for pull requests
+                # and return the first one.
+                for sha, tag in matching_tags:
+                    if tag.startswith("refs/pull/"):
+                        return {
+                            "sdk": sdk,
+                            "alias": version,
+                            "tag": tag,
+                            "sha": sha,
+                        }
+                # No pull request, probably a feature branch or release branch
+                for sha, tag in matching_tags:
+                    if tag.startswith("refs/heads/"):
+                        return {
+                            "sdk": sdk,
+                            "alias": version,
+                            "tag": tag.split("refs/heads/")[-1],
+                            "sha": sha,
+                        }
+
+                return {
+                    "sdk": sdk,
+                    "alias": version,
+                    "err": f"SHA {version} points to multiple tags, unable to differentiate: {', '.join(tag for _, tag in matching_tags)}",
+                }
+            (sha, tag) = matching_tags[0]
+            if tag.startswith("refs/tags/"):
+                tag = tag.split("refs/tags/")[-1]
+            if infix:
+                tag = tag.split(f"{infix}/")[-1]
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "tag": tag,
+                "sha": sha,
+            }
 
         if version.startswith("refs/pull/"):
             merge_heads = [
