@@ -44,8 +44,14 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     ecwrap)
-      npx $CTL help | grep encapKeyType
-      exit $?
+      if npx $CTL help | grep encapKeyType; then
+        # Claims to support ecwrap, but maybe with old salt? Look up version
+        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 2) exit 0; else exit 1; }'
+        exit $?
+      else
+        echo "ecwrap not supported"
+        exit 1
+      fi
       ;;
     hexless)
       set -o pipefail

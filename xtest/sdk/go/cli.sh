@@ -39,8 +39,14 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     ecwrap)
-      "${cmd[@]}" help encrypt | grep wrapping-key
-      exit $?
+      if "${cmd[@]}" help encrypt | grep wrapping-key; then
+        # while the otdfctl app may support ecwrap, but sdk versions 0.3.28 and earlier uses the old salt
+        "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 29)) exit 0; else exit 1; }'
+        exit $?
+      else
+        echo "ecwrap not supported"
+        exit 1
+      fi
       ;;
     hexless)
       set -o pipefail
