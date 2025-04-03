@@ -37,15 +37,15 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main latest
+        default: main
       js-ref:
         required: false
         type: string
-        default: main latest
+        default: main
       java-ref:
         required: false
         type: string
-        default: main latest
+        default: main
       focus-sdk:
         required: false
         type: string
@@ -81,9 +81,13 @@ jobs:
       - run: |-
           pip install -r scripts/requirements.txt
         working-directory: otdf-sdk/xtest/sdk
-      - if: github.event_name != 'cron' || github.event.schedule != '0 18 * * 0'
+      - if: github.event_name != 'cron'
         run: |-
-          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main lts' }}" >> $GITHUB_ENV
+          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main' }}" >> $GITHUB_ENV
+      - if: github.event_name == 'cron' && github.event.schedule == '30 6 * * *'
+        # Run standard main v. latest nightly
+        run: |-
+          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest' }}" >> $GITHUB_ENV
       - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
         # Only run the full platform matrix on sundays at 6pm UTC
         run: |-
@@ -128,13 +132,30 @@ jobs:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
 
+      - name: Default Versions depend on context
+        id: default-tags
+        run: |-
+          if [[ $CRON_NIGHTLY == 'true' ]]; then
+            echo "Running nightly tests"
+            echo "values=main latest" >> "$GITHUB_OUTPUT"
+          elif [[ $CRON_WEEKLY == 'true' ]]; then
+            echo "Running weekly tests"
+            echo "values=main latest lts" >> "$GITHUB_OUTPUT"
+          else
+            echo "Running PR, Workflow Dispatch, or manual trigger"
+            echo "values=main" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
+          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
+
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "${{ inputs.js-ref || 'main' }}"
+          version: "${{ inputs.js-ref || steps.default-tags.outputs.values }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -183,7 +204,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || 'main' }}"
+          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages
         if: env.FOCUS_SDK == 'go'
@@ -212,7 +233,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: "${{ inputs.java-ref || 'main' }}"
+          version: "${{ inputs.java-ref || steps.default-tags.outputs.values }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
@@ -333,7 +354,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          pytest test_abac.py
+          pytest -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
