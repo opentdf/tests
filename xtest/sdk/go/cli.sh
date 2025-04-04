@@ -30,11 +30,7 @@ if [ "$1" == "supports" ]; then
     autoconfigure | nano_ecdsa | ns_grants)
       exit 0
       ;;
-    assertions)
-      "${cmd[@]}" help encrypt | grep with-assertions
-      exit $?
-      ;;
-    assertion_verification)
+    assertions | assertion_verification)
       "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
@@ -50,7 +46,8 @@ if [ "$1" == "supports" ]; then
       ;;
     hexless)
       set -o pipefail
-      "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      # Schema version 4.3.0 introduced hexless
+      "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 >= 2)) exit 0; else exit 1; }'
       exit $?
       ;;
     *)

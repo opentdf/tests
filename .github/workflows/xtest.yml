@@ -62,6 +62,7 @@ jobs:
     outputs:
       platform-tag-to-sha: ${{ steps.platform-version-info.outputs.platform-tag-to-sha }}
       tag-list: ${{ steps.platform-version-info.outputs.tag-list }}
+      heads: ${{ steps.platform-version-info.outputs.heads }}
     steps:
       - name: Validate focus-sdk input
         if : ${{ inputs.focus-sdk != '' }}
@@ -97,6 +98,9 @@ jobs:
           version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
           echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
           echo "platform-tag-to-sha=$(echo $version_info | jq -rc 'map({(.tag): .sha}) | add')" >> $GITHUB_OUTPUT
+          head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
+          echo "head_tags=$head_tags"
+          echo "heads=$head_tags" >> $GITHUB_OUTPUT
 
           echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -111,8 +115,7 @@ jobs:
             exit 1
           fi
         working-directory: otdf-sdk/xtest/sdk
-    
-      
+
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -200,6 +203,7 @@ jobs:
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl
+        id: configure-go
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
@@ -207,18 +211,23 @@ jobs:
           version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages, but only at heaad version of platform
-        if: env.FOCUS_SDK == 'go' && matrix.platform-tag == 'main'
+        if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
-          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/main"
+          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
           echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
           echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
-          cd "${OTDFCTL_DIR_ABS}"
-          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-            go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+          for head in $(echo "${OTDFCTL_HEADS}" | jq -r '.[]'); do
+            echo "Processing head: $head"
+            cd "${OTDFCTL_DIR_ABS}/$head"
+            for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+              go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+            done
+            go mod tidy
           done
-          go mod tidy
+        env:
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
@@ -265,11 +274,6 @@ jobs:
       - name: Install test dependencies
         run: |-
           pip install -r requirements.txt
-        working-directory: otdftests/xtest
-      # When the schema gets merged into the spec repo, we can just rely on that as a source of truth
-      - name: Get manifest schema from platform repo
-        run: |-
-          curl -L -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
         working-directory: otdftests/xtest
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
