@@ -87,7 +87,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
     sdk_url = sdk_urls[sdk]
     try:
         repo = Git()
-        if version == "main":
+        if version == "main" or version == "refs/heads/main":
             all_heads = [
                 r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
             ]
