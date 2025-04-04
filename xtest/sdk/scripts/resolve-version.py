@@ -87,12 +87,12 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
     sdk_url = sdk_urls[sdk]
     try:
         repo = Git()
-        if version == "main":
+        if version == "main" or version == "refs/heads/main":
             all_heads = [
                 r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
-            return {"sdk": sdk, "alias": "main", "tag": "main", "sha": sha}
+            return {"sdk": sdk, "alias": version, "tag": "main", "sha": sha}
 
         if re.match(sha_regex, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
