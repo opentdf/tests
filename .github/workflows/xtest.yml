@@ -275,11 +275,6 @@ jobs:
         run: |-
           pip install -r requirements.txt
         working-directory: otdftests/xtest
-      # When the schema gets merged into the spec repo, we can just rely on that as a source of truth
-      - name: Get manifest schema from platform repo
-        run: |-
-          curl -L -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
-        working-directory: otdftests/xtest
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
