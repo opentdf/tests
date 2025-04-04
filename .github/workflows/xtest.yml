@@ -206,8 +206,8 @@ jobs:
           sdk: go
           version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
 
-      - name: Replace otdfctl go.mod packages
-        if: env.FOCUS_SDK == 'go'
+      - name: Replace otdfctl go.mod packages, but only at heaad version of platform
+        if: env.FOCUS_SDK == 'go' && matrix.platform-tag == 'main'
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
