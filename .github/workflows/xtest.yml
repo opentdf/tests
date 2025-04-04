@@ -11,17 +11,14 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main
         description: "The branch or commit to use for otdfctl"
       js-ref:
         required: false
         type: string
-        default: main
         description: "The branch or commit to use for the web-sdk"
       java-ref:
         required: false
         type: string
-        default: main
         description: "The branch or commit to use for the java-sdk"
       focus-sdk:
         required: false
@@ -37,15 +34,12 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main
       js-ref:
         required: false
         type: string
-        default: main
       java-ref:
         required: false
         type: string
-        default: main
       focus-sdk:
         required: false
         type: string
@@ -199,15 +193,36 @@ jobs:
         working-directory: otdftests/xtest/sdk/js
 
       ######## CHECKOUT GO CLI #############
+      - name: Determine otdfctl version that best matched the platform version
+        id: resolve-otdfctl
+        run: |-
+          PLATFORM_SDK_VERSION=$(jq -r '.sdk' <${PLATFORM_DIR_ABS}/.release-please-manifest.json)
+          echo "Platform SDK version: [$PLATFORM_SDK_VERSION]"
+          echo "PLATFORM_SDK_VERSION=$PLATFORM_SDK_VERSION" >> $GITHUB_ENV
+            if [[ "${{ inputs.otdfctl-ref }}" == "" ]]; then
+            echo "No otdfctl version requested in dispatch; using latest supporting version"
+            otdfctl_version_info=$(otdftests/xtest/sdk/scripts/resolve-version.py go "still-supports-v$PLATFORM_SDK_VERSION")
+            echo "otdfctl_version_info: [$otdfctl_version_info]"
+            otdfctl_tag=$(echo "$otdfctl_version_info" | jq -r '.[0].tag')
+            otdfctl_tag=${otdfctl_tag:-main} # Default to 'main' if otdfctl_tag is empty
+            echo "Using otdfctl version: [$otdfctl_tag]"
+            echo "version=$otdfctl_tag" >> $GITHUB_OUTPUT
+          else
+            echo "Using otdfctl version: [${{ inputs.otdfctl-ref }}]"
+            echo "version=${{ inputs.otdfctl-ref }}" >> $GITHUB_OUTPUT
+          fi
+        env:
+          PLATFORM_DIR: "${{ steps.run-platform.outputs.platform-working-dir }}"
+
       - name: Configure otdfctl
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
+          version: "${{ inputs.otdfctl-ref || steps.resolve-otdfctl.outputs.version || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages
-        if: env.FOCUS_SDK == 'go'
+        if: env.FOCUS_SDK == 'go' && ! inputs.otdfctl-ref
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"

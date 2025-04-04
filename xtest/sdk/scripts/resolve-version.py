@@ -8,6 +8,9 @@
 #       <sha>: a git SHA
 #       v0.1.2: a git tag that is a semantic version
 #       refs/pull/1234: a pull request ref
+#       still-supports-<go sdk semver>: For go, get the most recent otdfctl tag that still supports a specific version of the sdk
+#
+#
 #
 # Sample Input:
 #
@@ -42,12 +45,16 @@
 # ]
 # ```
 
-import sys
 import json
 import re
+import sys
+import urllib.request
 
+from bisect import bisect_left
 from git import Git
 from typing import TypedDict
+from urllib.parse import quote
+from urllib.error import HTTPError, URLError
 
 
 class ResolveSuccess(TypedDict):
@@ -65,11 +72,15 @@ class ResolveError(TypedDict):
 
 ResolveResult = ResolveSuccess | ResolveError
 
-sdk_urls = {
-    "go": "https://github.com/opentdf/otdfctl.git",
-    "java": "https://github.com/opentdf/java-sdk.git",
-    "js": "https://github.com/opentdf/web-sdk.git",
-    "platform": "https://github.com/opentdf/platform.git",
+sdk_repositories = {
+    "go": "opentdf/otdfctl",
+    "java": "opentdf/java-sdk",
+    "js": "opentdf/web-sdk",
+    "platform": "opentdf/platform",
+}
+
+sdk_git_urls = {
+    sdk: f"https://github.com/{repo}.git" for sdk, repo in sdk_repositories.items()
 }
 
 lts_versions = {
@@ -81,10 +92,52 @@ lts_versions = {
 
 
 sha_regex = r"^[a-f0-9]{7,40}$"
+semver_tag_regex = r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$"
+
+
+def semver_tag_sortkey(semver_tag: str) -> list[int]:
+    """
+    Convert a semantic version string to a list of integers for sorting.
+    """
+    return list(map(int, semver_tag.lstrip("v").split(".")))
+
+
+def get_file_at_tag(sdk: str, branch_or_sha: str, path: str) -> str | None:
+    """
+    Get the contents of a file at a specific tag in a git repository.
+    """
+    url = f"https://raw.githubusercontent.com/{sdk_repositories[sdk]}/{quote(branch_or_sha)}/{quote(path)}"
+    request = urllib.request.Request(url)
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.read().decode("utf-8")
+    except HTTPError as e:
+        raise ValueError(f"Error fetching URL {url}: {e.code} {e.reason}", e)
+    except URLError as e:
+        raise ValueError(f"Error fetching URL {url}: {e.reason}", e)
+
+
+def extract_required_version(go_mod_content: str, dependency: str) -> str | None:
+    """
+    Extract the required version for a specific dependency from a go.mod file.
+
+    Args:
+        go_mod_content (str): The contents of the go.mod file.
+        dependency (str): The dependency to search for.
+
+    Returns:
+        str | None: The required version if found, otherwise None.
+    """
+    pattern = rf"^\s*{re.escape(dependency)}\s+([\w\.\-]+)"
+    for line in go_mod_content.splitlines():
+        match = re.match(pattern, line)
+        if match:
+            return match.group(1)
+    return None
 
 
 def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
-    sdk_url = sdk_urls[sdk]
+    sdk_url = sdk_git_urls[sdk]
     try:
         repo = Git()
         if version == "main":
@@ -181,14 +234,45 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 for (sha, tag) in listed_tags
                 if f"{infix}/" in tag
             ]
-        semver_regex = r"v?\d+\.\d+\.\d+$"
+        # Strip all tags that are not semver tags (requires a v prefix, must be 3 parts, no build or prerelease info)
         listed_tags = [
-            (sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)
+            (sha, tag) for (sha, tag) in listed_tags if re.search(semver_tag_regex, tag)
         ]
-        listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
+        listed_tags.sort(key=lambda item: semver_tag_sortkey(item[1]))
         alias = version
         if version == "latest":
             sha, tag = listed_tags[-1]
+            return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
+        if version.startswith("still-supports-"):
+            target_version = version.split("-")[-1]
+            if not re.match(semver_tag_regex, target_version):
+                raise ValueError(f"Invalid still-supports version: [{target_version}]")
+
+            # Find the most recent tag that is less than or equal to the given SHA
+            def tagpair_to_depversion(tagpair: tuple[str, str]) -> list[int]:
+                sha, tag = tagpair
+                gomod_file = get_file_at_tag("go", sha, "go.mod")
+                if not gomod_file:
+                    raise ValueError(
+                        f"Error fetching go.mod for SHA {sha}, at tag [{tag}]"
+                    )
+                vsdk = extract_required_version(
+                    gomod_file, "github.com/opentdf/platform/sdk"
+                )
+                if not vsdk:
+                    raise ValueError(
+                        f"Error extracting version for SHA {sha}, at tag [{tag}]"
+                    )
+                return semver_tag_sortkey(vsdk)
+
+            index = bisect_left(
+                listed_tags,
+                semver_tag_sortkey(target_version),
+                key=tagpair_to_depversion,
+            )
+            if index == 0:
+                raise ValueError(f"No tags found before SHA {version}")
+            sha, tag = listed_tags[index - 1]
             return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
         else:
             if version == "lts":
@@ -218,7 +302,7 @@ def main():
     sdk = sys.argv[1]
     versions = sys.argv[2:]
 
-    if sdk not in sdk_urls:
+    if sdk not in sdk_git_urls:
         print(f"Unknown SDK: {sdk}", file=sys.stderr)
         sys.exit(2)
     infix: None | str = None
