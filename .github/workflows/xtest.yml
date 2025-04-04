@@ -62,6 +62,7 @@ jobs:
     outputs:
       platform-tag-to-sha: ${{ steps.platform-version-info.outputs.platform-tag-to-sha }}
       tag-list: ${{ steps.platform-version-info.outputs.tag-list }}
+      heads: ${{ steps.platform-version-info.outputs.heads }}
     steps:
       - name: Validate focus-sdk input
         if : ${{ inputs.focus-sdk != '' }}
@@ -97,6 +98,9 @@ jobs:
           version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
           echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
           echo "platform-tag-to-sha=$(echo $version_info | jq -rc 'map({(.tag): .sha}) | add')" >> $GITHUB_OUTPUT
+          head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
+          echo "head_tags=$head_tags"
+          echo "heads=$head_tags" >> $GITHUB_OUTPUT
 
           echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -111,8 +115,7 @@ jobs:
             exit 1
           fi
         working-directory: otdf-sdk/xtest/sdk
-    
-      
+
   cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -208,7 +211,7 @@ jobs:
           version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages, but only at heaad version of platform
-        if: env.FOCUS_SDK == 'go' && matrix.platform-tag == 'main'
+        if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"

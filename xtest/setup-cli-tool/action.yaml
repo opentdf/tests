@@ -107,7 +107,8 @@ runs:
         echo "version-c=$version_c" >> $GITHUB_OUTPUT
         echo "version-d=$version_d" >> $GITHUB_OUTPUT
         head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
-        echo "head=$head_tags" >> $GITHUB_OUTPUT
+        echo "head_tags=$head_tags"
+        echo "heads=$head_tags" >> $GITHUB_OUTPUT
       working-directory: otdf-sdk/xtest/sdk/
 
     - name: checkout version a

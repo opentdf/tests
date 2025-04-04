@@ -94,7 +94,13 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
-            return {"sdk": sdk, "alias": version, "head": True, "tag": "main", "sha": sha}
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "tag": "main",
+                "sha": sha,
+            }
 
         if re.match(sha_regex, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
