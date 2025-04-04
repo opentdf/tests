@@ -31,6 +31,7 @@
 #   {
 #     "sdk": "go",
 #     "alias": "decaf01",
+#     "head": true,
 #     "tag": "refs/pull/1234/head",
 #     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
 #   },
@@ -47,12 +48,13 @@ import json
 import re
 
 from git import Git
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class ResolveSuccess(TypedDict):
     sdk: str  # The SDK name
     alias: str  # The tag that was requested
+    head: NotRequired[bool]  # True if the tag is a head of a live branch
     tag: str  # The resolved tag name
     sha: str  # The current git SHA of the tag
 
@@ -92,7 +94,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
             ]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
-            return {"sdk": sdk, "alias": version, "tag": "main", "sha": sha}
+            return {"sdk": sdk, "alias": version, "head": True, "tag": "main", "sha": sha}
 
         if re.match(sha_regex, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
@@ -112,10 +114,12 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 # and return the first one.
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
+                        pr_number = version.split("/")[-2]
                         return {
                             "sdk": sdk,
                             "alias": version,
-                            "tag": tag,
+                            "head": True,
+                            "tag": f"pull-{pr_number}",
                             "sha": sha,
                         }
                 # No pull request, probably a feature branch or release branch
@@ -124,6 +128,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                         return {
                             "sdk": sdk,
                             "alias": version,
+                            "head": True,
                             "tag": tag.split("refs/heads/")[-1],
                             "sha": sha,
                         }
@@ -162,6 +167,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             return {
                 "sdk": sdk,
                 "alias": version,
+                "head": True,
                 "tag": f"pull-{pr_number}",
                 "sha": sha,
             }

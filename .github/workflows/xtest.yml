@@ -200,6 +200,7 @@ jobs:
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl
+        id: configure-go
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
@@ -211,14 +212,19 @@ jobs:
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
-          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/main"
+          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
           echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
           echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
-          cd "${OTDFCTL_DIR_ABS}"
-          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-            go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+          for head in $(echo "${OTDFCTL_HEADS}" | jq -r '.[]'); do
+            echo "Processing head: $head"
+            cd "${OTDFCTL_DIR_ABS}/$head"
+            for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+              go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+            done
+            go mod tidy
           done
-          go mod tidy
+        env:
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
