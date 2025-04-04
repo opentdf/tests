@@ -130,14 +130,37 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                         }
                 # No pull request, probably a feature branch or release branch
                 for sha, tag in matching_tags:
-                    if tag.startswith("refs/heads/"):
+                    if tag.startswith("refs/heads/gh-readonly-queue/"):
+                        to_branch, from_pr = tag.split("/")[-2:]
+                        if to_branch and from_pr:
+                            return {
+                                "sdk": sdk,
+                                "alias": version,
+                                "head": True,
+                                "tag": f"mq-{to_branch}-{from_pr}",
+                                "sha": sha,
+                            }
+                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
+                        flattag = "mq--" + suffix.replace("/", "--")
                         return {
                             "sdk": sdk,
                             "alias": version,
                             "head": True,
-                            "tag": tag.split("refs/heads/")[-1],
+                            "tag": flattag,
                             "sha": sha,
                         }
+                    head = False
+                    if tag.startswith("refs/heads/"):
+                        head = True
+                        tag = tag.split("refs/heads/")[-1]
+                    flattag = tag.replace("/", "--")
+                    return {
+                        "sdk": sdk,
+                        "alias": version,
+                        "head": head,
+                        "tag": flattag,
+                        "sha": sha,
+                    }
 
                 return {
                     "sdk": sdk,
