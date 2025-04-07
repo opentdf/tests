@@ -124,6 +124,37 @@ def test_tdf_roundtrip(
             assert filecmp.cmp(pt_file, ert_file)
 
 
+def test_tdf_spec_target_422(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: set[tdfs.SDK],
+):
+    pfs = tdfs.PlatformFeatureSet()
+    if "hexaflexible" not in pfs.features:
+        pytest.skip(f"Hexaflexible is not supported in platform {pfs.version}")
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not encrypt_sdk.supports("hexaflexible"):
+        pytest.skip(
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
+        )
+
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode="4.2.2",
+    )
+    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 #### MANIFEST VALIDITY TESTS
 
 
