@@ -38,9 +38,13 @@ feature_type = Literal[
     "autoconfigure",
     "ecwrap",
     "hexless",
+    "hexaflexible",
     "nano_ecdsa",
     "ns_grants",
 ]
+
+
+container_version = Literal["4.2.2", "4.3.0"]
 
 
 class PlatformFeatureSet(BaseModel):
@@ -76,6 +80,7 @@ class PlatformFeatureSet(BaseModel):
         # Included in SDK 0.3.27, service 0.4.39
         if self.semver >= (0, 4, 39):
             self.features.add("hexless")
+            self.features.add("hexaflexible")
 
         if self.semver >= (0, 4, 23):
             self.features.add("nano_ecdsa")
@@ -282,10 +287,12 @@ def simple_container(container: container_type) -> container_type:
 
 class SDK:
     sdk: sdk_type
+    _supports: dict[feature_type, bool]
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
         self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        self._supports = {}
         self.version = version
         if not os.path.isfile(self.path):
             raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
@@ -312,6 +319,7 @@ class SDK:
         container: container_type = "nano",
         attr_values: list[str] | None = None,
         assert_value: str = "",
+        target_mode: container_version | None = None,
     ):
         use_ecdsa = container == "nano-with-ecdsa"
         use_ecwrap = container == "ztdf-ecwrap"
@@ -333,6 +341,9 @@ class SDK:
 
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
+
+        if target_mode:
+            local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
         if fmt == "nano":
             if use_ecdsa:
@@ -382,6 +393,14 @@ class SDK:
             subprocess.check_call(c, env=env)
 
     def supports(self, feature: feature_type) -> bool:
+        if feature in self._supports:
+            return self._supports[feature]
+        if feature not in PlatformFeatureSet().features:
+            raise ValueError(f"Unsupported feature: {feature}")
+        self._supports[feature] = self._uncached_supports(feature)
+        return self._supports[feature]
+
+    def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
             case ("autoconfigure", ("go" | "java")):
                 return True
@@ -426,7 +445,19 @@ def skip_if_unsupported(sdk: SDK, *features: feature_type):
 
 
 def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
+    if encrypt_sdk.supports("hexaflexible"):
+        return
     if encrypt_sdk.supports("hexless") and not decrypt_sdk.supports("hexless"):
         pytest.skip(
             f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
         )
+
+
+def select_target_version(
+    encrypt_sdk: SDK, decrypt_sdk: SDK
+) -> container_version | None:
+    if encrypt_sdk.supports("hexaflexible") and not decrypt_sdk.supports("hexless"):
+        return "4.2.2"
+    if encrypt_sdk.supports("hexaflexible") and decrypt_sdk.supports("hexless"):
+        return "4.3.0"
+    return None

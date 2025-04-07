@@ -76,6 +76,7 @@ def test_autoconfigure_two_kas_or_standard(
                 attribute_two_kas_grant_or.value_fqns[0],
                 attribute_two_kas_grant_or.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
@@ -122,6 +123,7 @@ def test_autoconfigure_double_kas_and(
                 attribute_two_kas_grant_and.value_fqns[0],
                 attribute_two_kas_grant_and.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -166,6 +168,7 @@ def test_autoconfigure_one_attribute_attr_grant(
             attr_values=[
                 one_attribute_attr_kas_grant.value_fqns[0],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -206,6 +209,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
                 attr_and_value_kas_grants_or.value_fqns[0],
                 attr_and_value_kas_grants_or.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -252,6 +256,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
                 attr_and_value_kas_grants_and.value_fqns[0],
                 attr_and_value_kas_grants_and.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -296,6 +301,7 @@ def test_autoconfigure_one_attribute_ns_grant(
             attr_values=[
                 one_attribute_ns_kas_grant.value_fqns[0],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -336,6 +342,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
                 ns_and_value_kas_grants_or.value_fqns[0],
                 ns_and_value_kas_grants_or.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
@@ -382,6 +389,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
                 ns_and_value_kas_grants_and.value_fqns[0],
                 ns_and_value_kas_grants_and.value_fqns[1],
             ],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 

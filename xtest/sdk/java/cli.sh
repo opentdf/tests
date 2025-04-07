@@ -17,6 +17,7 @@
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -41,7 +42,7 @@ if [ "$1" == "supports" ]; then
     nano_ecdsa)
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding; then
         # Java version 0.7.7 fixwa a bug in the ECDSA parsing for nano
-        java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }' 
+        java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }'
         exit $?
       else
         echo "ecdsa-binding not supported"
@@ -71,6 +72,11 @@ if [ "$1" == "supports" ]; then
     hexless)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+
+    hexaflexible)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
 
@@ -127,6 +133,10 @@ fi
 
 if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
   args+=(--with-assertion-verification-disabled)
+fi
+
+if [ -n "$XT_WITH_TARGET_MODE" ]; then
+  args+=(--with-target-mode "$XT_WITH_TARGET_MODE")
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
