@@ -120,7 +120,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 # and return the first one.
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
-                        pr_number = version.split("/")[-2]
+                        pr_number = tag.split("/")[-2]
                         return {
                             "sdk": sdk,
                             "alias": version,
@@ -273,8 +273,6 @@ def main():
         results.append(v)
 
     print(json.dumps(results))
-    if any("err" in r for r in results):
-        sys.exit(3)
 
 
 if __name__ == "__main__":
