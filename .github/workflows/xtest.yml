@@ -145,9 +145,6 @@ jobs:
       - name: Workflow message
         if : ${{ inputs.message != '' }}
         run: |-
-          echo "## Workflow message" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "${{ inputs.message }}" >> $GITHUB_STEP_SUMMARY
           echo "${{ inputs.message }}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
