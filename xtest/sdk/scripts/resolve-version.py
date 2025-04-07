@@ -241,7 +241,6 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
         return {
             "sdk": sdk,
             "alias": version,
-
             "err": f"Error resolving version {version} for {sdk}: {e}",
         }
 
