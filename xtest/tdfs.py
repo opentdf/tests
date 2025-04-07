@@ -342,14 +342,15 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if target_mode:
-            local_env |= {"XT_WITH_TARGET_MODE": target_mode}
-
         if fmt == "nano":
             if use_ecdsa:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
             else:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
+
+        if fmt == "ztdf" and target_mode:
+            local_env |= {"XT_WITH_TARGET_MODE": target_mode}
+
         if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
         logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
@@ -395,8 +396,6 @@ class SDK:
     def supports(self, feature: feature_type) -> bool:
         if feature in self._supports:
             return self._supports[feature]
-        if feature not in PlatformFeatureSet().features:
-            raise ValueError(f"Unsupported feature: {feature}")
         self._supports[feature] = self._uncached_supports(feature)
         return self._supports[feature]
 
