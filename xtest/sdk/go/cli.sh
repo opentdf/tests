@@ -50,6 +50,10 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 >= 2)) exit 0; else exit 1; }'
       exit $?
       ;;
+    hexaflexible)
+       "${cmd[@]}" help encrypt | grep target-mode
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -98,6 +102,9 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
+  fi
+  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+    args+=(--target-mode "$XT_WITH_TARGET_MODE")
   fi
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then
