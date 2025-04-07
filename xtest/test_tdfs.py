@@ -24,6 +24,7 @@ def do_encrypt_with(
     tmp_dir: str,
     az: str = "",
     scenario: str = "",
+    target_mode: tdfs.container_version | None = None,
 ) -> str:
     global counter
     counter = (counter or 0) + 1
@@ -43,6 +44,7 @@ def do_encrypt_with(
         mime_type="text/plain",
         container=container,
         assert_value=az,
+        target_mode=target_mode,
     )
     if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
@@ -104,6 +106,7 @@ def test_tdf_roundtrip(
         encrypt_sdk,
         container,
         tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -185,6 +188,7 @@ def test_tdf_assertions_unkeyed(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -216,6 +220,7 @@ def test_tdf_assertions_with_keys(
         tmp_dir,
         scenario="assertions-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -353,7 +358,13 @@ def test_tdf_with_unbound_policy(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
     fname = os.path.basename(b_file).split(".")[0]
@@ -402,7 +413,13 @@ def test_tdf_with_altered_root_sig(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
     fname = os.path.basename(b_file).split(".")[0]
@@ -424,7 +441,13 @@ def test_tdf_with_altered_seg_sig_wrong(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
     fname = os.path.basename(b_file).split(".")[0]
@@ -449,7 +472,13 @@ def test_tdf_with_altered_enc_seg_size(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
@@ -488,6 +517,7 @@ def test_tdf_with_altered_assertion_statement(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
@@ -525,6 +555,7 @@ def test_tdf_with_altered_assertion_with_keys(
         tmp_dir,
         scenario="assertions-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
@@ -558,7 +589,13 @@ def test_tdf_altered_payload_end(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     assert os.path.isfile(ct_file)
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
     fname = os.path.basename(b_file).split(".")[0]

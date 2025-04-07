@@ -17,6 +17,7 @@
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -56,6 +57,10 @@ if [ "$1" == "supports" ]; then
     hexless)
       set -o pipefail
       npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    hexaflexible)
+      npx $CTL help | grep tdfSpecVersion
       exit $?
       ;;
     nano_ecdsa)
@@ -153,6 +158,9 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--encapKeyType "ec:secp256r1")
+  fi
+  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+    args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
   echo npx $CTL encrypt "$src_file" "${args[@]}"
