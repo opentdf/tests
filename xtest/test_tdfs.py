@@ -169,6 +169,11 @@ def test_tdf_spec_target_422(
         target_mode="4.2.2",
     )
 
+    manifest = tdfs.manifest(ct_file)
+    assert manifest.payload.isEncrypted
+
+    looks_like_422(manifest)
+
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
