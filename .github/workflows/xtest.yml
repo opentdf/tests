@@ -11,17 +11,17 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: dspx-877-target-mode-option
+        default: main
         description: "The branch or commit to use for otdfctl"
       js-ref:
         required: false
         type: string
-        default: 6ca50e6f3b2d945c98993190784a78e960438d8f
+        default: main
         description: "The branch or commit to use for the web-sdk"
       java-ref:
         required: false
         type: string
-        default: e0f8caf34055a829a5f40dc3608b7573bfbd5f71
+        default: main
         description: "The branch or commit to use for the java-sdk"
       focus-sdk:
         required: false
@@ -158,7 +158,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "6ca50e6f3b2d945c98993190784a78e960438d8f"
+          version: "${{ inputs.js-ref || steps.default-tags.outputs.values }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -208,7 +208,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "dspx-877-target-mode-option"
+          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages, but only at heaad version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
@@ -242,7 +242,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: "e0f8caf34055a829a5f40dc3608b7573bfbd5f71"
+          version: "${{ inputs.java-ref || steps.default-tags.outputs.values }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
