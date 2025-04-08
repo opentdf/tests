@@ -182,7 +182,6 @@ class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
     assertions: list[tdfassertions.Assertion] | None = []
-    schemaVersion: str | None = None
 
 
 _version_re = re.compile(
@@ -354,7 +353,7 @@ class SDK:
 
         if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
-        logger.info(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
+        logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
         env = dict(os.environ)
         env |= local_env
         subprocess.check_call(c, env=env)
