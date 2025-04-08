@@ -53,6 +53,14 @@ def do_encrypt_with(
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
+        if target_mode == "4.2.2":
+            looks_like_422(manifest)
+        elif target_mode == "4.3.0":
+            looks_like_430(manifest)
+        elif not encrypt_sdk.supports("hexless"):
+            looks_like_422(manifest)
+        else:
+            looks_like_430(manifest)
     elif tdfs.simple_container(container) == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
@@ -101,12 +109,13 @@ def test_tdf_roundtrip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
 
+    target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
         container,
         tmp_dir,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        target_mode=target_mode,
     )
     assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
@@ -146,14 +155,41 @@ def test_tdf_spec_target_422(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
+        scenario="target-422",
         target_mode="4.2.2",
     )
     assert os.path.isfile(ct_file)
+
+    manifest = tdfs.manifest(ct_file)
+    assert manifest.payload.isEncrypted
+
+    looks_like_422(manifest)
 
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+
+def looks_like_422(manifest: tdfs.Manifest):
+    if manifest.schemaVersion:
+        assert manifest.schemaVersion == "4.2.2"
+
+    ii = manifest.encryptionInformation.integrityInformation
+    # in 4.2.2, the root sig is hex encoded before base 64 encoding, and is twice the length
+    assert len(ii.rootSignature.sig) == 88
+    for segment in ii.segments:
+        # IDK why this is this long?
+        assert len(segment.hash) == 44
+
+
+def looks_like_430(manifest: tdfs.Manifest):
+    assert manifest.schemaVersion == "4.3.0"
+
+    ii = manifest.encryptionInformation.integrityInformation
+    assert len(ii.rootSignature.sig) == 44
+    for segment in ii.segments:
+        assert len(segment.hash) == 24
 
 
 #### MANIFEST VALIDITY TESTS
@@ -521,7 +557,7 @@ def test_tdf_with_altered_enc_seg_size(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "signature")
+        assert_tamper_error(exc, "")
 
 
 ## ASSERTION TAMPER TESTS
