@@ -208,7 +208,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
+          version: "${{ inputs.otdfctl-ref || 'main lts' || steps.default-tags.outputs.values }}"
 
       - name: Replace otdfctl go.mod packages, but only at heaad version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
