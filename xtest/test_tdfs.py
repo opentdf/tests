@@ -172,7 +172,7 @@ def test_tdf_spec_target_422(
 
 
 def looks_like_422(manifest: tdfs.Manifest):
-    assert manifest.schemaVersion == None
+    assert manifest.schemaVersion is None
 
     ii = manifest.encryptionInformation.integrityInformation
     # in 4.2.2, the root sig is hex encoded before base 64 encoding, and is twice the length
