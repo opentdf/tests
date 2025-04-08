@@ -146,7 +146,7 @@ def test_tdf_spec_target_422(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        target_mode="4.2.2",
+        target_mode='4.2.2',
     )
     assert os.path.isfile(ct_file)
 
