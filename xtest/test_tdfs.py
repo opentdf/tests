@@ -149,6 +149,7 @@ def test_tdf_spec_target_422(
         target_mode="4.2.2",
     )
     assert os.path.isfile(ct_file)
+
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
