@@ -92,11 +92,13 @@ runs:
         fi
 
         if echo "$version_info" | jq -e '.[] | select(.error != null)' > /dev/null; then
+          echo "Error: One or more errors occurred while resolving versions for ${{ inputs.sdk }}: $version_info"
           echo "| Alias | Error Message |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|---------------|" >> $GITHUB_STEP_SUMMARY
           echo "$version_info" | jq -r '.[] | select(.error != null) | "| \(.alias) | \(.error) |"' >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
+        echo "Version Info for ${{ inputs.sdk }}: $version_info"
 
         version_a=$(echo "$version_info" | jq -rc '.[0] // empty')
         version_b=$(echo "$version_info" | jq -rc '.[1] // empty')
