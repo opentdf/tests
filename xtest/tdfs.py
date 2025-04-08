@@ -182,6 +182,7 @@ class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
     assertions: list[tdfassertions.Assertion] | None = []
+    schemaVersion: str | None = None
 
 
 _version_re = re.compile(

@@ -149,6 +149,17 @@ def test_tdf_spec_target_422(
         target_mode="4.2.2",
     )
     assert os.path.isfile(ct_file)
+
+    # check if the manifest has a schemaVersion
+    tdf_manifest = tdfs.manifest(ct_file)
+    assert tdf_manifest.schemaVersion == None
+
+    # check that the root signature is not hexless
+    try:
+        bytes.fromhex(base64.b64decode(tdf_manifest.encryptionInformation.integrityInformation.rootSignature))
+    except:
+        assert False, "Root signature is hexless"
+    
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
