@@ -58,8 +58,8 @@ class PlatformFeatureSet(BaseModel):
         super().__init__(**kwargs)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
-            print("PLATFORM_VERSION environment variable is not set or is empty.")
-            return
+            print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")
+            v = "0.9.0"
 
         ver_match = _version_re.match(v)
         if not ver_match:
@@ -148,7 +148,7 @@ class Integrity(BaseModel):
     segmentHashAlg: str
     segmentSizeDefault: int | None = 0
     encryptedSegmentSizeDefault: int | None = 0
-    segments: list[IntegritySegment] | None = None
+    segments: list[IntegritySegment] = []
 
 
 class PayloadReference(BaseModel):
@@ -182,6 +182,7 @@ class Manifest(BaseModel):
     encryptionInformation: EncryptionInformation
     payload: PayloadReference
     assertions: list[tdfassertions.Assertion] | None = []
+    schemaVersion: str | None = None
 
 
 _version_re = re.compile(
