@@ -381,7 +381,7 @@ def test_tdf_assertions_422_format(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions-keys-roundtrip",
+        scenario="assertions-422-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
         target_mode="4.2.2",
     )
