@@ -204,14 +204,12 @@ def looks_like_422(manifest: tdfs.Manifest):
             case _:
                 assert False, f"Unknown alg: {ii.segmentHashAlg}"
 
-
 def b64hexTobytes(value: bytes) -> bytes:
     decoded = base64.b64decode(value, validate=True)
     maybe_hex = decoded.decode("ascii")
     assert maybe_hex.isalnum() and all(c in string.hexdigits for c in maybe_hex)
     binary_array = bytes.fromhex(maybe_hex)
     return binary_array
-
 
 def b64Tobytes(value: bytes) -> bytes:
     decoded = base64.b64decode(value, validate=True)
