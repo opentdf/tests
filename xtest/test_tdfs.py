@@ -26,6 +26,13 @@ def do_encrypt_with(
     scenario: str = "",
     target_mode: tdfs.container_version | None = None,
 ) -> str:
+    """
+    Encrypt a file with the given SDK and container type, and return the path to the ciphertext file.
+
+    Scenario is used to create a unique filename for the ciphertext file.
+
+    If targetmode is set, asserts that the manifest is in the correct format for that target.
+    """
     global counter
     counter = (counter or 0) + 1
     c = counter
@@ -46,6 +53,9 @@ def do_encrypt_with(
         assert_value=az,
         target_mode=target_mode,
     )
+
+    assert os.path.isfile(ct_file)
+
     if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
@@ -158,12 +168,6 @@ def test_tdf_spec_target_422(
         scenario="target-422",
         target_mode="4.2.2",
     )
-    assert os.path.isfile(ct_file)
-
-    manifest = tdfs.manifest(ct_file)
-    assert manifest.payload.isEncrypted
-
-    looks_like_422(manifest)
 
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -668,7 +672,7 @@ def test_tdf_with_altered_assertion_with_keys(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions-keys-roundtrip",
+        scenario="assertions-keys-roundtrip-altered",
         az=assertion_file_rs_and_hs_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
