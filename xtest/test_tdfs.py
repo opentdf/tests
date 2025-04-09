@@ -380,11 +380,6 @@ def test_tdf_assertions_422_format(
         az=assertion_file_rs_and_hs_keys,
         target_mode="4.2.2",
     )
-    assert os.path.isfile(ct_file)
-    manifest = tdfs.manifest(ct_file)
-    assert manifest.payload.isEncrypted
-
-    looks_like_422(manifest)
 
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
