@@ -3,18 +3,17 @@ import jsonschema
 import base64
 import logging
 import os
+import pytest
 import re
 import subprocess
 import zipfile
-
-import pytest
+from collections.abc import Callable
+from pydantic import BaseModel
+from typing import Any, Literal
+from pathlib import Path
 
 import assertions as tdfassertions
 
-
-from collections.abc import Callable
-from pydantic import BaseModel
-from typing import Literal
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -60,7 +59,7 @@ class PlatformFeatureSet(BaseModel):
         ]
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
@@ -199,7 +198,7 @@ _partial_version_re = re.compile(
 )
 
 
-def manifest(tdf_file: str) -> Manifest:
+def manifest(tdf_file: Path) -> Manifest:
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
         with tdfz.open("0.manifest.json") as manifestEntry:
             return Manifest.model_validate_json(manifestEntry.read())
@@ -207,59 +206,53 @@ def manifest(tdf_file: str) -> Manifest:
 
 # Create a modified variant of a TDF by manipulating its manifest
 def update_manifest(
-    scenario_name: str, tdf_file: str, manifest_change: Callable[[Manifest], Manifest]
-) -> str:
+    scenario_name: str, tdf_file: Path, manifest_change: Callable[[Manifest], Manifest]
+) -> Path:
     # get the parent directory of the tdf file
-    tmp_dir = os.path.dirname(tdf_file)
-    fname = os.path.basename(tdf_file).split(".")[0]
-    unzipped_dir = os.path.join(tmp_dir, f"{fname}-{scenario_name}-unzipped")
+    tmp_dir = tdf_file.parent
+    fname = tdf_file.stem
+    unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
-    with open(os.path.join(unzipped_dir, "0.manifest.json"), "r") as manifest_file:
+    with (unzipped_dir / "0.manifest.json").open("r") as manifest_file:
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
-    with open(os.path.join(unzipped_dir, "0.manifest.json"), "w") as manifest_file:
+    with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
         manifest_file.write(new_manifest_data.model_dump_json())
-    outfile = os.path.join(tmp_dir, f"{fname}-{scenario_name}.tdf")
+    outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
+            folder = Path(folder_name)
             for filename in filenames:
-                file_path = os.path.join(folder_name, filename)
-                zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
+                file_path = folder / filename
+                zipped.write(file_path, file_path.relative_to(unzipped_dir))
     return outfile
 
 
 # Create a modified variant of a TDF by manipulating its payload
 def update_payload(
-    scenario_name: str, tdf_file: str, payload_change: Callable[[bytes], bytes]
-) -> str:
-    tmp_dir = os.path.dirname(tdf_file)
-    fname = os.path.basename(tdf_file).split(".")[0]
-    unzipped_dir = os.path.join(tmp_dir, f"{fname}-{scenario_name}-unzipped")
+    scenario_name: str, tdf_file: Path, payload_change: Callable[[bytes], bytes]
+) -> Path:
+    tmp_dir = tdf_file.parent
+    fname = tdf_file.stem
+    unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
-    with open(os.path.join(unzipped_dir, "0.payload"), "rb") as payload_file:
+    with (unzipped_dir / "0.payload").open("rb") as payload_file:
         payload_data = payload_file.read()
     new_payload_data = payload_change(payload_data)
-    with open(os.path.join(unzipped_dir, "0.payload"), "wb") as payload_file:
+    with (unzipped_dir / "0.payload").open("wb") as payload_file:
         payload_file.write(new_payload_data)
-    outfile = os.path.join(tmp_dir, f"{fname}-{scenario_name}.tdf")
+    outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
             for filename in filenames:
-                file_path = os.path.join(folder_name, filename)
-                zipped.write(file_path, os.path.relpath(file_path, unzipped_dir))
+                file_path = Path(folder_name) / filename
+                zipped.write(file_path, file_path.relative_to(unzipped_dir))
     return outfile
 
 
-def validate_manifest_schema(tdf_file: str):
-    ## Unzip the tdf
-    tmp_dir = os.path.dirname(tdf_file)
-    fname = os.path.basename(tdf_file).split(".")[0]
-    unzipped_dir = os.path.join(tmp_dir, f"{fname}-manifest-validation-unzipped")
-    with zipfile.ZipFile(tdf_file, "r") as zipped:
-        zipped.extractall(unzipped_dir)
-
+def validate_manifest_schema(tdf_file: Path):
     ## Get the schema file
     schema_file_path = os.getenv("SCHEMA_FILE")
     if not schema_file_path:
@@ -269,9 +262,10 @@ def validate_manifest_schema(tdf_file: str):
     with open(schema_file_path, "r") as schema_file:
         schema = json.load(schema_file)
 
-    ## Get the manifest file
-    with open(os.path.join(unzipped_dir, "0.manifest.json"), "r") as manifest_file:
-        manifest = json.load(manifest_file)
+    ## Load the manifest file directly from the zipfile
+    with zipfile.ZipFile(tdf_file, "r") as zipped:
+        with zipped.open("0.manifest.json") as manifest_file:
+            manifest = json.load(manifest_file)
 
     ## Validate
     jsonschema.validate(instance=manifest, schema=schema)
@@ -320,8 +314,8 @@ class SDK:
 
     def encrypt(
         self,
-        pt_file: str,
-        ct_file: str,
+        pt_file: Path,
+        ct_file: Path,
         mime_type: str = "application/octet-stream",
         container: container_type = "nano",
         attr_values: list[str] | None = None,
@@ -334,8 +328,8 @@ class SDK:
         c = [
             self.path,
             "encrypt",
-            pt_file,
-            ct_file,
+            str(pt_file),
+            str(ct_file),
             fmt,
         ]
 
@@ -367,8 +361,8 @@ class SDK:
 
     def decrypt(
         self,
-        ct_file: str,
-        rt_file: str,
+        ct_file: Path,
+        rt_file: Path,
         container: container_type = "nano",
         assert_keys: str = "",
         verify_assertions: bool = True,
@@ -380,8 +374,8 @@ class SDK:
         c = [
             self.path,
             "decrypt",
-            ct_file,
-            rt_file,
+            str(ct_file),
+            str(rt_file),
             fmt,
         ]
 

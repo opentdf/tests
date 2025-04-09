@@ -1,31 +1,30 @@
 import filecmp
-import os
 import subprocess
 import base64
+import pytest
 import string
 import random
-
-import pytest
+from pathlib import Path
 
 import nano
 import tdfs
 
 
-cipherTexts: dict[str, str] = {}
+cipherTexts: dict[str, Path] = {}
 counter = 0
 
 #### HELPERS
 
 
 def do_encrypt_with(
-    pt_file: str,
+    pt_file: Path,
     encrypt_sdk: tdfs.SDK,
     container: tdfs.container_type,
-    tmp_dir: str,
+    tmp_dir: Path,
     az: str = "",
     scenario: str = "",
     target_mode: tdfs.container_version | None = None,
-) -> str:
+) -> Path:
     """
     Encrypt a file with the given SDK and container type, and return the path to the ciphertext file.
 
@@ -41,7 +40,7 @@ def do_encrypt_with(
         container_id += f"-{scenario}"
     if container_id in cipherTexts:
         return cipherTexts[container_id]
-    ct_file = f"{tmp_dir}test-{encrypt_sdk}-{scenario}{c}.{container}"
+    ct_file = tmp_dir / f"test-{encrypt_sdk}-{scenario}{c}.{container}"
 
     use_ecdsa = container == "nano-with-ecdsa"
     use_ecwrap = container == "ztdf-ecwrap"
@@ -54,7 +53,7 @@ def do_encrypt_with(
         target_mode=target_mode,
     )
 
-    assert os.path.isfile(ct_file)
+    assert ct_file.is_file()
 
     if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
@@ -92,8 +91,8 @@ def do_encrypt_with(
 def test_tdf_roundtrip(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ):
@@ -128,8 +127,8 @@ def test_tdf_roundtrip(
         target_mode=target_mode,
     )
 
-    fname = os.path.basename(ct_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = ct_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -146,8 +145,8 @@ def test_tdf_roundtrip(
 def test_tdf_spec_target_422(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
     pfs = tdfs.PlatformFeatureSet()
@@ -169,8 +168,8 @@ def test_tdf_spec_target_422(
         target_mode="4.2.2",
     )
 
-    fname = os.path.basename(ct_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = ct_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -248,8 +247,8 @@ def looks_like_430(manifest: tdfs.Manifest):
 
 def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk}:
@@ -261,8 +260,8 @@ def test_manifest_validity(
 
 def test_manifest_validity_with_assertions(
     encrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
 ):
@@ -288,8 +287,8 @@ def test_manifest_validity_with_assertions(
 def test_tdf_assertions_unkeyed(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
 ):
@@ -309,8 +308,8 @@ def test_tdf_assertions_unkeyed(
         az=assertion_file_no_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    fname = os.path.basename(ct_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = ct_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -318,8 +317,8 @@ def test_tdf_assertions_unkeyed(
 def test_tdf_assertions_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -340,8 +339,8 @@ def test_tdf_assertions_with_keys(
         az=assertion_file_rs_and_hs_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    fname = os.path.basename(ct_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = ct_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -355,8 +354,8 @@ def test_tdf_assertions_with_keys(
 def test_tdf_assertions_422_format(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -381,8 +380,8 @@ def test_tdf_assertions_422_format(
         target_mode="4.2.2",
     )
 
-    fname = os.path.basename(ct_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = ct_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -518,8 +517,8 @@ def assert_tamper_error(
 def test_tdf_with_unbound_policy(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -533,8 +532,8 @@ def test_tdf_with_unbound_policy(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -545,8 +544,8 @@ def test_tdf_with_unbound_policy(
 def test_tdf_with_altered_policy_binding(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -556,8 +555,8 @@ def test_tdf_with_altered_policy_binding(
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
     )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -571,8 +570,8 @@ def test_tdf_with_altered_policy_binding(
 def test_tdf_with_altered_root_sig(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -586,8 +585,8 @@ def test_tdf_with_altered_root_sig(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -598,8 +597,8 @@ def test_tdf_with_altered_root_sig(
 def test_tdf_with_altered_seg_sig_wrong(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -613,8 +612,8 @@ def test_tdf_with_altered_seg_sig_wrong(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -628,8 +627,8 @@ def test_tdf_with_altered_seg_sig_wrong(
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -645,8 +644,8 @@ def test_tdf_with_altered_enc_seg_size(
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
     )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -660,8 +659,8 @@ def test_tdf_with_altered_enc_seg_size(
 def test_tdf_with_altered_assertion_statement(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
 ):
@@ -684,8 +683,8 @@ def test_tdf_with_altered_assertion_statement(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -696,8 +695,8 @@ def test_tdf_with_altered_assertion_statement(
 def test_tdf_with_altered_assertion_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -721,8 +720,8 @@ def test_tdf_with_altered_assertion_with_keys(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(
             b_file,
@@ -742,8 +741,8 @@ def test_tdf_with_altered_assertion_with_keys(
 def test_tdf_altered_payload_end(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: str,
-    tmp_dir: str,
+    pt_file: Path,
+    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -757,8 +756,8 @@ def test_tdf_altered_payload_end(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
-    fname = os.path.basename(b_file).split(".")[0]
-    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
