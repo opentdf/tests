@@ -180,7 +180,7 @@ def looks_like_422(manifest: tdfs.Manifest):
     match ii.rootSignature.alg:
         case "GMAC":
             assert len(binary_array) == 16
-        case "HS256":
+        case "HS256" | "" | None:
             assert len(binary_array) == 32
         case _:
             assert False, f"Unknown alg: {ii.rootSignature.alg}"
@@ -188,12 +188,13 @@ def looks_like_422(manifest: tdfs.Manifest):
     for segment in ii.segments:
         hash = b64hexTobytes(segment.hash)
         match ii.segmentHashAlg:
-            case "GMAC":
+            case "GMAC" | "":
                 assert len(hash) == 16
-            case "HS256":
+            case "HS256" | "":
                 assert len(hash) == 32
             case _:
                 assert False, f"Unknown alg: {ii.segmentHashAlg}"
+
 
 def b64hexTobytes(value: bytes) -> bytes:
     decoded = base64.b64decode(value, validate=True)
@@ -201,6 +202,7 @@ def b64hexTobytes(value: bytes) -> bytes:
     assert maybe_hex.isalnum() and all(c in string.hexdigits for c in maybe_hex)
     binary_array = bytes.fromhex(maybe_hex)
     return binary_array
+
 
 def b64Tobytes(value: bytes) -> bytes:
     decoded = base64.b64decode(value, validate=True)
@@ -221,7 +223,7 @@ def looks_like_430(manifest: tdfs.Manifest):
     match ii.rootSignature.alg:
         case "GMAC":
             assert len(binary_array) == 16
-        case "HS256":
+        case "HS256" | "":
             assert len(binary_array) == 32
         case _:
             assert False, f"Unknown alg: {ii.rootSignature.alg}"
@@ -231,7 +233,7 @@ def looks_like_430(manifest: tdfs.Manifest):
         match ii.segmentHashAlg:
             case "GMAC":
                 assert len(hash) == 16
-            case "HS256":
+            case "HS256" | "":
                 assert len(hash) == 32
             case _:
                 assert False, f"Unknown alg: {ii.segmentHashAlg}"
