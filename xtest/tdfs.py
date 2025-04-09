@@ -58,7 +58,7 @@ class PlatformFeatureSet(BaseModel):
         super().__init__(**kwargs)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
-            print("PLATFORM_VERSION unsset or empty; defaulting to 0.9.0")
+            print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")
             v = "0.9.0"
 
         ver_match = _version_re.match(v)
