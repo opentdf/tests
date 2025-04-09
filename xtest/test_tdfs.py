@@ -352,6 +352,47 @@ def test_tdf_assertions_with_keys(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def test_tdf_assertions_422_format(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_rs_and_hs_keys: str,
+    assertion_verification_file_rs_and_hs_keys: str,
+    in_focus: set[tdfs.SDK],
+):
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not encrypt_sdk.supports("hexaflexible"):
+        pytest.skip(
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
+        )
+    if not encrypt_sdk.supports("assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not decrypt_sdk.supports("assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions-422-keys-roundtrip",
+        az=assertion_file_rs_and_hs_keys,
+        target_mode="4.2.2",
+    )
+
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+
+    decrypt_sdk.decrypt(
+        ct_file,
+        rt_file,
+        "ztdf",
+        assertion_verification_file_rs_and_hs_keys,
+    )
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 #### TAMPER
 
 ## TAMPER FUNCTIONS
