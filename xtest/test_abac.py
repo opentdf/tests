@@ -411,6 +411,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
+        ct_file = f"{tmp_dir}/{sample_name}.tdf"
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
