@@ -176,19 +176,65 @@ def looks_like_422(manifest: tdfs.Manifest):
 
     ii = manifest.encryptionInformation.integrityInformation
     # in 4.2.2, the root sig is hex encoded before base 64 encoding, and is twice the length
-    assert len(ii.rootSignature.sig) == 88
+    binary_array = b64hexTobytes(ii.rootSignature.sig)
+    match ii.rootSignature.alg:
+        case "GMAC":
+            assert len(binary_array) == 16
+        case "HS256":
+            assert len(binary_array) == 32
+        case _:
+            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+
     for segment in ii.segments:
-        # IDK why this is this long?
-        assert len(segment.hash) == 44
+        hash = b64hexTobytes(segment.hash)
+        match ii.segmentHashAlg:
+            case "GMAC":
+                assert len(hash) == 16
+            case "HS256":
+                assert len(hash) == 32
+            case _:
+                assert False, f"Unknown alg: {ii.segmentHashAlg}"
+
+def b64hexTobytes(value: bytes) -> bytes:
+    decoded = base64.b64decode(value, validate=True)
+    maybe_hex = decoded.decode("ascii")
+    assert maybe_hex.isalnum() and all(c in string.hexdigits for c in maybe_hex)
+    binary_array = bytes.fromhex(maybe_hex)
+    return binary_array
+
+def b64Tobytes(value: bytes) -> bytes:
+    decoded = base64.b64decode(value, validate=True)
+    try:
+        # In the unlikely event decode succeeds, at least make sure there are some non-hex-looking elememnts
+        assert not all(c in string.hexdigits for c in decoded.decode("ascii"))
+    except UnicodeDecodeError:
+        # If decode fails (the expected behavior), we are good
+        pass
+    return decoded
 
 
 def looks_like_430(manifest: tdfs.Manifest):
     assert manifest.schemaVersion == "4.3.0"
 
     ii = manifest.encryptionInformation.integrityInformation
-    assert len(ii.rootSignature.sig) == 44
+    binary_array = b64Tobytes(ii.rootSignature.sig)
+    match ii.rootSignature.alg:
+        case "GMAC":
+            assert len(binary_array) == 16
+        case "HS256":
+            assert len(binary_array) == 32
+        case _:
+            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+
     for segment in ii.segments:
-        assert len(segment.hash) == 24
+        hash = b64Tobytes(segment.hash)
+        match ii.segmentHashAlg:
+            case "GMAC":
+                assert len(hash) == 16
+            case "HS256":
+                assert len(hash) == 32
+            case _:
+                assert False, f"Unknown alg: {ii.segmentHashAlg}"
 
 
 #### MANIFEST VALIDITY TESTS
