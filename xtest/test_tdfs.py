@@ -113,8 +113,8 @@ def test_tdf_roundtrip(
             pytest.skip(
                 f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
             )
-        # Unlike javascript, Java uses an open box KAO so it doesn't support ecwrap if on older versions
-        if decrypt_sdk.sdk == "java" and not decrypt_sdk.supports("ecwrap"):
+        # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
+        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
             pytest.skip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
@@ -133,14 +133,14 @@ def test_tdf_roundtrip(
     decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
-    if container.startswith("ztdf") and decrypt_sdk.supports("ecwrap"):
-        if "ecwrap" not in pfs.features:
-            # ecwrap is not supported in older platforms, so we can't test it
-            pass
-        else:
-            ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
-            decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-            assert filecmp.cmp(pt_file, ert_file)
+    if (
+        container.startswith("ztdf")
+        and decrypt_sdk.supports("ecwrap")
+        and "ecwrap" in pfs.features
+    ):
+        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
+        assert filecmp.cmp(pt_file, ert_file)
 
 
 def test_tdf_spec_target_422(
