@@ -42,11 +42,10 @@ def test_autoconfigure_one_attribute_standard(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
 
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = f"{tmp_dir}test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -93,10 +92,9 @@ def test_autoconfigure_two_kas_or_standard(
     assert set([kas_url_value1, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -144,10 +142,9 @@ def test_autoconfigure_double_kas_and(
     assert set([kas_url_value1, kas_url_value2]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -187,10 +184,9 @@ def test_autoconfigure_one_attribute_attr_grant(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_attr
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -238,10 +234,9 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     assert set([kas_url_attr, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-attr-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -289,10 +284,9 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     assert set([kas_url_attr, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-attr-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -332,10 +326,9 @@ def test_autoconfigure_one_attribute_ns_grant(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_ns
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-one-ns-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -383,10 +376,9 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     assert set([kas_url_ns, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-ns-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
@@ -434,10 +426,9 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     assert set([kas_url_ns, kas_url_value1]) == set(
         [kao.url for kao in manifest.encryptionInformation.keyAccess]
     )
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    assert "ec-wrapped" not in [
+        kao.type for kao in manifest.encryptionInformation.keyAccess
+    ]
     rt_file = f"{tmp_dir}test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
