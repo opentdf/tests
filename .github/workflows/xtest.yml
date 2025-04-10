@@ -60,9 +60,10 @@ jobs:
     permissions: 
       contents: read
     outputs:
-      platform-tag-to-sha: ${{ steps.platform-version-info.outputs.platform-tag-to-sha }}
-      tag-list: ${{ steps.platform-version-info.outputs.tag-list }}
-      heads: ${{ steps.platform-version-info.outputs.heads }}
+      platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
+      tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
+      heads: ${{ steps.version-info.outputs.platform-heads }}
+      default-tags: ${{ steps.default-tags.outputs.values }}
     steps:
       - name: Validate focus-sdk input
         if : ${{ inputs.focus-sdk != '' }}
@@ -71,6 +72,22 @@ jobs:
             echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+      - name: Default Versions depend on context
+        id: default-tags
+        run: |-
+          if [[ $CRON_NIGHTLY == 'true' ]]; then
+            echo "Running nightly tests"
+            echo "values=main latest" >> "$GITHUB_OUTPUT"
+          elif [[ $CRON_WEEKLY == 'true' ]]; then
+            echo "Running weekly tests"
+            echo "values=main latest lts" >> "$GITHUB_OUTPUT"
+          else
+            echo "Running PR, Workflow Dispatch, or manual trigger"
+            echo "values=main" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
+          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
       - uses: actions/checkout@v4
         with:
           path: otdf-sdk
@@ -82,41 +99,57 @@ jobs:
       - run: |-
           pip install -r scripts/requirements.txt
         working-directory: otdf-sdk/xtest/sdk
-      - if: github.event_name != 'cron'
-        run: |-
-          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main' }}" >> $GITHUB_ENV
-      - if: github.event_name == 'cron' && github.event.schedule == '30 6 * * *'
-        # Run standard main v. latest nightly
-        run: |-
-          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest' }}" >> $GITHUB_ENV
-      - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
-        # Only run the full platform matrix on sundays at 6pm UTC
-        run: |-
-          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
-      - id: platform-version-info
-        run: |-
-          version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
-          echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
-          echo "platform-tag-to-sha=$(echo $version_info | jq -rc 'map({(.tag): .sha}) | add')" >> $GITHUB_OUTPUT
-          head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
-          echo "head_tags=$head_tags"
-          echo "heads=$head_tags" >> $GITHUB_OUTPUT
+      - id: version-info
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const path = require('path');
 
-          echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Tag | SHA | Alias | Error |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- | ----- | ----- |" >> $GITHUB_STEP_SUMMARY
-          echo "$version_info" | jq -rc '.[] | "| \(.tag) | \(.sha) | \(.alias // "N/A") | \(.err // "N/A") |"' >> $GITHUB_STEP_SUMMARY
+            const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
+            const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
 
-          # Check for errors in the version_info
-          error_count=$(echo "$version_info" | jq '[.[] | select(.err != null)] | length')
-          if [ "$error_count" -gt 0 ]; then
-            echo "Errors detected in version resolution. Failing the run." >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-        working-directory: otdf-sdk/xtest/sdk
+            const refs = {
+              platform: process.env.PLATFORM_REF || 'main',
+              go: process.env.OTDFCTL_REF || 'main',
+              js: process.env.WEB_REF || 'main',
+              java: process.env.JAVA_REF || 'main'
+            };
 
-  cross-client-test:
+            const versionData = {};
+
+            for (const [key, ref] of Object.entries(refs)) {
+              const output = execSync(`python3 ${resolveVersionScript} ${key} ${ref}`, { cwd: workingDir }).toString();
+              versionData[key] = JSON.parse(output);
+            }
+
+            for (const [key, data] of Object.entries(versionData)) {
+              const tagList = data.map(item => item.tag);
+              const tagToSha = data.reduce((acc, item) => {
+                acc[item.tag] = item.sha;
+                return acc;
+              }, {});
+              const headTags = data.filter(item => item.head).map(item => item.tag);
+
+              core.setOutput(`${key}-tag-list`, JSON.stringify(tagList));
+              core.setOutput(`${key}-tag-to-sha`, JSON.stringify(tagToSha));
+              core.setOutput(`${key}-heads`, JSON.stringify(headTags));
+
+              let summary = `### ${key.charAt(0).toUpperCase() + key.slice(1)} Versions under Test\\n\\n`;
+              summary += '| Tag | SHA | Alias | Error |\\n';
+              summary += '| --- | --- | ----- | ----- |\\n';
+              data.forEach(item => {
+                summary += `| ${item.tag} | ${item.sha} | ${item.alias || 'N/A'} | ${item.err || 'N/A'} |\\n`;
+              });
+
+              core.summary.addRaw(summary).write();
+
+              const errorCount = data.filter(item => item.err).length;
+              if (errorCount > 0) {
+                throw new Error(`Errors detected in ${key} version resolution. Failing the run.`);
+              }
+            }
+      cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
@@ -135,22 +168,6 @@ jobs:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
 
-      - name: Default Versions depend on context
-        id: default-tags
-        run: |-
-          if [[ $CRON_NIGHTLY == 'true' ]]; then
-            echo "Running nightly tests"
-            echo "values=main latest" >> "$GITHUB_OUTPUT"
-          elif [[ $CRON_WEEKLY == 'true' ]]; then
-            echo "Running weekly tests"
-            echo "values=main latest lts" >> "$GITHUB_OUTPUT"
-          else
-            echo "Running PR, Workflow Dispatch, or manual trigger"
-            echo "values=main" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
-          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
 
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
@@ -158,7 +175,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "${{ inputs.js-ref || steps.default-tags.outputs.values }}"
+          version: "${{ inputs.js-ref || needs.resolve-versions.outputs.default-tags }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -171,8 +188,8 @@ jobs:
             [{
               "kid": "golden-r1",
               "alg": "rsa:2048",
-              "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDxAXgP2SjRPhKe\nO1OdLco7zsU+uMnvQFnTrc0W8eQ/vUGjP8HNABA3kKUeJZUGb4lyE5u62sBqD+Va\nOWh0tIRCIEPRC/tF3hTE5TeDJLJiY9N3R5P9OjWuFewnQFXIfTPqmrny1pYowfkd\nnbxBSzb/xTpk6K+yzkyrZdW1JvYdW/1CBGpo7qtfxflR3Cy13V15YDuVTD2rHUSj\nM2eYUU+b4HLoHvKZ87y18nwaOMOMMqbvp4xFoxckoE/XkuaHyH1UWI9HqCyFBrh+\nf24OPMP0N3qMCseXJc2CTBGSX4jKdB0WGqOpZdBxKWlKxLGlKAe9Ko1eYzUHdhhN\npBRmU4HzAgMBAAECggEAHRHhSoAWJU8Ibd+YEVBxoU8qiYs+iEZJz3eaUlcxAeMx\nJKDPHowQaLNgx0cfN5yChqkI0rwKE4EBWCWujM0tWtCLfY6la2MDPFCtpnrprWZ/\nHlca6aN40BvC1WU0M6+ucHDjVwA9MoNbKhBZocKRyr4ecgeDEd1CcDYjVetyKk4v\nTKIa7mvoNfRMT5dsmvUdRgtkvIaomLYoCVc7nK2d7C0WP/RaUWpJUUpZE+8lP3ze\no44HMMpeq+yyeXJhq6+PIErJfOChYJVjwOWCVJ99NRJ2RFU4kNu4gY2YcL6IRCV5\n6rfwsJwdKlLxTKVEZPCWVEa0TS+G4yQV8gu1LtvAwQKBgQD6Z5Hxw2R+bTFFyeOx\nMlDno8PvBlw4B3QrrWppk3f+m4261eSFdCMkZTZw81QjdGCJ/BTtMASaNWIWVyc1\nkslSg+ARPF5XEBEGpUmINRUotV9B7Wtq5Nid9xTlUoUPiuVVVU+eEvwTw8F/tgOu\nITwUM/uOYJdI16XfL4qtGxab0wKBgQD2ZCIbXK4BO5+8YC23YWymspTK/YShfoYA\nM8Ktxdp+xHGZoNzbx+mSd6vvvtWPhiayje2ppc82OsB+q6BYQOYTRowwdidWBETd\nM7/Q/QKg9Zn3kM+WA71KDtK3VIQBqZfYjevpTEqGjG9XN1apWZh80YeU3uhBuaSZ\nKns62AxNYQKBgAj8jpBOotymro4CoNlLJPwrNGzvnX+lRNYMczU2xaetjXiXFIx1\njo1P1JRZJzvegVhyY43fm0qtf8eteQrDKdZ8RR5ZPEmDmhjS9cCdpxS+7ZxAGQrN\nC7kflPBl9cCJC5H0bdcOd11+OQOMVLV7G9zdwLlrXgKPOrS30BJGVplhAoGAU+YM\n5xxL9AeFgPOPHZ6DDNBKckSZYRRgNLlrVRjGKdxiglmQWxZbppAxb9Wfitu3WZ2S\ni+31/RVMbtWqJ+MRdQbUvbu98UBK4re4XUWKG50F7JLW3NIxJoKdpeeVe6twFUFe\nT3a2+dHgJ+akD85+aiI+9KZil97K+YzJoWPn7IECgYB9O3ZiTlT3N3iuML+CCrv/\nEttS+1sWf1fdwq1Roosw3JWxuXC45KNn/lUsk0jvVJkMM/XDxG19E3NyltMWr2de\nj0o4TgFsOvXh6k1k7ftMwauFooAdIgkn9HPU7zwv7eAwWfOOxz57RvVnKKvcUq9F\nrELh+ivyqdpAYiJ1z4+0LA==\n-----END PRIVATE KEY-----\n",
-              "cert": "-----BEGIN CERTIFICATE-----\nMIIC/TCCAeWgAwIBAgIUDiCm76cjcg4Wd862cEzTzLqSzFswDQYJKoZIhvcNAQEL\nBQAwDjEMMAoGA1UEAwwDa2FzMB4XDTI0MTIxODIwMzUxNFoXDTI1MTIxODIwMzUx\nNFowDjEMMAoGA1UEAwwDa2FzMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\nAQEA8QF4D9ko0T4SnjtTnS3KO87FPrjJ70BZ063NFvHkP71Boz/BzQAQN5ClHiWV\nBm+JchObutrAag/lWjlodLSEQiBD0Qv7Rd4UxOU3gySyYmPTd0eT/To1rhXsJ0BV\nyH0z6pq58taWKMH5HZ28QUs2/8U6ZOivss5Mq2XVtSb2HVv9QgRqaO6rX8X5Udws\ntd1deWA7lUw9qx1EozNnmFFPm+By6B7ymfO8tfJ8GjjDjDKm76eMRaMXJKBP15Lm\nh8h9VFiPR6gshQa4fn9uDjzD9Dd6jArHlyXNgkwRkl+IynQdFhqjqWXQcSlpSsSx\npSgHvSqNXmM1B3YYTaQUZlOB8wIDAQABo1MwUTAdBgNVHQ4EFgQUVl6EWRsZE5kf\nXR6EC9LDStsR1howHwYDVR0jBBgwFoAUVl6EWRsZE5kfXR6EC9LDStsR1howDwYD\nVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAJysUw1bQkm+UdIWubPVo\nh/h1YoSHMEmwtphLflMDiJvm1GIjFM5zVgnpmkiI9DVCAs8vyhHe+UVCgiCAMqU9\nuu1jYxXY54v8nx+Ps3X1snylIs82JHKXT1AJaXECSi0DwIuF3hIyPUJpK9AJ/PqC\nOvhq3sMX5p0D3bmk8518rRwkSZ2a7jn5qvLa6P0g4Ph32j5UdRmgvsgh/jJk7PkK\nHuf86yZ4KbkgU6kMs4rTOLNIBmMJlm7R9xrGMVwK8X/NPZWV4fBNQZPIJw7svNzo\npe60OK4cT0G0/LHEOGxCLpmxjq2+xedKkrmq6PrRZquL386RyjkCZh6F5AWJCqB9\n4g==\n-----END CERTIFICATE-----\n"
+              "privateKey": "-----BEGIN PRIVATE KEY-----\\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDxAXgP2SjRPhKe\\nO1OdLco7zsU+uMnvQFnTrc0W8eQ/vUGjP8HNABA3kKUeJZUGb4lyE5u62sBqD+Va\\nOWh0tIRCIEPRC/tF3hTE5TeDJLJiY9N3R5P9OjWuFewnQFXIfTPqmrny1pYowfkd\\nnbxBSzb/xTpk6K+yzkyrZdW1JvYdW/1CBGpo7qtfxflR3Cy13V15YDuVTD2rHUSj\\nM2eYUU+b4HLoHvKZ87y18nwaOMOMMqbvp4xFoxckoE/XkuaHyH1UWI9HqCyFBrh+\\nf24OPMP0N3qMCseXJc2CTBGSX4jKdB0WGqOpZdBxKWlKxLGlKAe9Ko1eYzUHdhhN\\npBRmU4HzAgMBAAECggEAHRHhSoAWJU8Ibd+YEVBxoU8qiYs+iEZJz3eaUlcxAeMx\\nJKDPHowQaLNgx0cfN5yChqkI0rwKE4EBWCWujM0tWtCLfY6la2MDPFCtpnrprWZ/\\nHlca6aN40BvC1WU0M6+ucHDjVwA9MoNbKhBZocKRyr4ecgeDEd1CcDYjVetyKk4v\\nTKIa7mvoNfRMT5dsmvUdRgtkvIaomLYoCVc7nK2d7C0WP/RaUWpJUUpZE+8lP3ze\\no44HMMpeq+yyeXJhq6+PIErJfOChYJVjwOWCVJ99NRJ2RFU4kNu4gY2YcL6IRCV5\\n6rfwsJwdKlLxTKVEZPCWVEa0TS+G4yQV8gu1LtvAwQKBgQD6Z5Hxw2R+bTFFyeOx\\nMlDno8PvBlw4B3QrrWppk3f+m4261eSFdCMkZTZw81QjdGCJ/BTtMASaNWIWVyc1\\nkslSg+ARPF5XEBEGpUmINRUotV9B7Wtq5Nid9xTlUoUPiuVVVU+eEvwTw8F/tgOu\\nITwUM/uOYJdI16XfL4qtGxab0wKBgQD2ZCIbXK4BO5+8YC23YWymspTK/YShfoYA\\nM8Ktxdp+xHGZoNzbx+mSd6vvvtWPhiayje2ppc82OsB+q6BYQOYTRowwdidWBETd\\nM7/Q/QKg9Zn3kM+WA71KDtK3VIQBqZfYjevpTEqGjG9XN1apWZh80YeU3uhBuaSZ\\nKns62AxNYQKBgAj8jpBOotymro4CoNlLJPwrNGzvnX+lRNYMczU2xaetjXiXFIx1\\njo1P1JRZJzvegVhyY43fm0qtf8eteQrDKdZ8RR5ZPEmDmhjS9cCdpxS+7ZxAGQrN\\nC7kflPBl9cCJC5H0bdcOd11+OQOMVLV7G9zdwLlrXgKPOrS30BJGVplhAoGAU+YM\\n5xxL9AeFgPOPHZ6DDNBKckSZYRRgNLlrVRjGKdxiglmQWxZbppAxb9Wfitu3WZ2S\\ni+31/RVMbtWqJ+MRdQbUvbu98UBK4re4XUWKG50F7JLW3NIxJoKdpeeVe6twFUFe\\nT3a2+dHgJ+akD85+aiI+9KZil97K+YzJoWPn7IECgYB9O3ZiTlT3N3iuML+CCrv/\\nEttS+1sWf1fdwq1Roosw3JWxuXC45KNn/lUsk0jvVJkMM/XDxG19E3NyltMWr2de\\nj0o4TgFsOvXh6k1k7ftMwauFooAdIgkn9HPU7zwv7eAwWfOOxz57RvVnKKvcUq9F\\nrELh+ivyqdpAYiJ1z4+0LA==\\n-----END PRIVATE KEY-----\\n",
+              "cert": "-----BEGIN CERTIFICATE-----\\nMIIC/TCCAeWgAwIBAgIUDiCm76cjcg4Wd862cEzTzLqSzFswDQYJKoZIhvcNAQEL\\nBQAwDjEMMAoGA1UEAwwDa2FzMB4XDTI0MTIxODIwMzUxNFoXDTI1MTIxODIwMzUx\\nNFowDjEMMAoGA1UEAwwDa2FzMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\\nAQEA8QF4D9ko0T4SnjtTnS3KO87FPrjJ70BZ063NFvHkP71Boz/BzQAQN5ClHiWV\\nBm+JchObutrAag/lWjlodLSEQiBD0Qv7Rd4UxOU3gySyYmPTd0eT/To1rhXsJ0BV\\nyH0z6pq58taWKMH5HZ28QUs2/8U6ZOivss5Mq2XVtSb2HVv9QgRqaO6rX8X5Udws\\ntd1deWA7lUw9qx1EozNnmFFPm+By6B7ymfO8tfJ8GjjDjDKm76eMRaMXJKBP15Lm\\nh8h9VFiPR6gshQa4fn9uDjzD9Dd6jArHlyXNgkwRkl+IynQdFhqjqWXQcSlpSsSx\\npSgHvSqNXmM1B3YYTaQUZlOB8wIDAQABo1MwUTAdBgNVHQ4EFgQUVl6EWRsZE5kf\\nXR6EC9LDStsR1howHwYDVR0jBBgwFoAUVl6EWRsZE5kfXR6EC9LDStsR1howDwYD\\nVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAJysUw1bQkm+UdIWubPVo\\nh/h1YoSHMEmwtphLflMDiJvm1GIjFM5zVgnpmkiI9DVCAs8vyhHe+UVCgiCAMqU9\\nuu1jYxXY54v8nx+Ps3X1snylIs82JHKXT1AJaXECSi0DwIuF3hIyPUJpK9AJ/PqC\\nOvhq3sMX5p0D3bmk8518rRwkSZ2a7jn5qvLa6P0g4Ph32j5UdRmgvsgh/jJk7PkK\\nHuf86yZ4KbkgU6kMs4rTOLNIBmMJlm7R9xrGMVwK8X/NPZWV4fBNQZPIJw7svNzo\\npe60OK4cT0G0/LHEOGxCLpmxjq2+xedKkrmq6PrRZquL386RyjkCZh6F5AWJCqB9\\n4g==\\n-----END CERTIFICATE-----\\n"
             }]
 
       - name: Set up Python 3.12
@@ -208,7 +225,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
+          version: "${{ inputs.otdfctl-ref || needs.resolve-versions.outputs.default-tags }}"
 
       - name: Replace otdfctl go.mod packages, but only at heaad version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
@@ -242,7 +259,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: "${{ inputs.java-ref || steps.default-tags.outputs.values }}"
+          version: "${{ inputs.java-ref || needs.resolve-versions.outputs.default-tags }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
