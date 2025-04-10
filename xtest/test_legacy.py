@@ -19,6 +19,8 @@ def test_decrypt_small(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "small-java.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -37,6 +39,8 @@ def test_decrypt_big(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = os.path.join(tmp_dir, "big-java.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -55,6 +59,8 @@ def test_decrypt_no_splitid(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = os.path.join(tmp_dir, "no-splitids-java.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -73,6 +79,8 @@ def test_decrypt_object_statement_value_json(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("assertion_verification"):
+        pytest.skip("assertion_verification is not supported")
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = os.path.join(tmp_dir, "with-json-object-assertions-java.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf", verify_assertions=False)

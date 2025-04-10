@@ -36,6 +36,7 @@ feature_type = Literal[
     "assertions",
     "assertion_verification",
     "autoconfigure",
+    "better-messages-2024",
     "ecwrap",
     "hexless",
     "hexaflexible",
@@ -51,7 +52,12 @@ class PlatformFeatureSet(BaseModel):
     version: str | None = None
     semver: tuple[int, int, int] | None = None
     features: set[feature_type] = set(
-        ["assertions", "assertion_verification", "autoconfigure"]
+        [
+            "assertions",
+            "assertion_verification",
+            "autoconfigure",
+            "better-messages-2024",
+        ]
     )
 
     def __init__(self, **kwargs):
@@ -403,6 +409,8 @@ class SDK:
     def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
             case ("autoconfigure", ("go" | "java")):
+                return True
+            case ("better-messages-2024", ("js" | "java")):
                 return True
             case ("nano_ecdsa", "go"):
                 return True
