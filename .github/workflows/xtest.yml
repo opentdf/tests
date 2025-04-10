@@ -300,14 +300,14 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          pytest -v  --focus "$FOCUS_SDK" test_legacy.py
+          pytest -ra -v  --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          pytest -v test_tdfs.py
+          pytest -ra -v test_tdfs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
@@ -315,7 +315,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          pytest -v --focus "$FOCUS_SDK" test_tdfs.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
@@ -374,7 +374,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          pytest -v --focus "$FOCUS_SDK" test_abac.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'

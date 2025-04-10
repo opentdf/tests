@@ -37,6 +37,7 @@ if [ "$1" == "supports" ]; then
     ecwrap)
       if "${cmd[@]}" help encrypt | grep wrapping-key; then
         # while the otdfctl app may support ecwrap, but sdk versions 0.3.28 and earlier uses the old salt
+        set -o pipefail
         "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 29)) exit 0; else exit 1; }'
         exit $?
       else
@@ -48,6 +49,17 @@ if [ "$1" == "supports" ]; then
       set -o pipefail
       # Schema version 4.3.0 introduced hexless
       "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 >= 2)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    hexaflexible)
+      "${cmd[@]}" help encrypt | grep target-mode
+      exit $?
+      ;;
+    better-messages-2024)
+      # In November 2024, we added more. detailed error messages
+      # These appeared in go sdk 0.3.28
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
     *)
@@ -98,6 +110,9 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
+  fi
+  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+    args+=(--target-mode "$XT_WITH_TARGET_MODE")
   fi
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then

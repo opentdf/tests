@@ -24,7 +24,15 @@ def do_encrypt_with(
     tmp_dir: str,
     az: str = "",
     scenario: str = "",
+    target_mode: tdfs.container_version | None = None,
 ) -> str:
+    """
+    Encrypt a file with the given SDK and container type, and return the path to the ciphertext file.
+
+    Scenario is used to create a unique filename for the ciphertext file.
+
+    If targetmode is set, asserts that the manifest is in the correct format for that target.
+    """
     global counter
     counter = (counter or 0) + 1
     c = counter
@@ -43,7 +51,11 @@ def do_encrypt_with(
         mime_type="text/plain",
         container=container,
         assert_value=az,
+        target_mode=target_mode,
     )
+
+    assert os.path.isfile(ct_file)
+
     if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
@@ -51,6 +63,14 @@ def do_encrypt_with(
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
+        if target_mode == "4.2.2":
+            looks_like_422(manifest)
+        elif target_mode == "4.3.0":
+            looks_like_430(manifest)
+        elif not encrypt_sdk.supports("hexless"):
+            looks_like_422(manifest)
+        else:
+            looks_like_430(manifest)
     elif tdfs.simple_container(container) == "nano":
         with open(ct_file, "rb") as f:
             envelope = nano.parse(f.read())
@@ -93,32 +113,134 @@ def test_tdf_roundtrip(
             pytest.skip(
                 f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
             )
-        # Unlike javascript, Java uses an open box KAO so it doesn't support ecwrap if on older versions
-        if decrypt_sdk.sdk == "java" and not decrypt_sdk.supports("ecwrap"):
+        # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
+        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
             pytest.skip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
 
+    target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,
         container,
         tmp_dir,
+        target_mode=target_mode,
     )
-    assert os.path.isfile(ct_file)
+
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
-    if container.startswith("ztdf") and decrypt_sdk.supports("ecwrap"):
-        if "ecwrap" not in pfs.features:
-            # ecwrap is not supported in older platforms, so we can't test it
-            pass
-        else:
-            ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
-            decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-            assert filecmp.cmp(pt_file, ert_file)
+    if (
+        container.startswith("ztdf")
+        and decrypt_sdk.supports("ecwrap")
+        and "ecwrap" in pfs.features
+    ):
+        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
+        assert filecmp.cmp(pt_file, ert_file)
+
+
+def test_tdf_spec_target_422(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: str,
+    tmp_dir: str,
+    in_focus: set[tdfs.SDK],
+):
+    pfs = tdfs.PlatformFeatureSet()
+    if "hexaflexible" not in pfs.features:
+        pytest.skip(f"Hexaflexible is not supported in platform {pfs.version}")
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not encrypt_sdk.supports("hexaflexible"):
+        pytest.skip(
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
+        )
+
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="target-422",
+        target_mode="4.2.2",
+    )
+
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def looks_like_422(manifest: tdfs.Manifest):
+    assert manifest.schemaVersion is None
+
+    ii = manifest.encryptionInformation.integrityInformation
+    # in 4.2.2, the root sig is hex encoded before base 64 encoding, and is twice the length
+    binary_array = b64hexTobytes(ii.rootSignature.sig)
+    match ii.rootSignature.alg:
+        case "GMAC":
+            assert len(binary_array) == 16
+        case "HS256" | "" | None:
+            assert len(binary_array) == 32
+        case _:
+            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+
+    for segment in ii.segments:
+        hash = b64hexTobytes(segment.hash)
+        match ii.segmentHashAlg:
+            case "GMAC" | "":
+                assert len(hash) == 16
+            case "HS256" | "":
+                assert len(hash) == 32
+            case _:
+                assert False, f"Unknown alg: {ii.segmentHashAlg}"
+
+
+def b64hexTobytes(value: bytes) -> bytes:
+    decoded = base64.b64decode(value, validate=True)
+    maybe_hex = decoded.decode("ascii")
+    assert maybe_hex.isalnum() and all(c in string.hexdigits for c in maybe_hex)
+    binary_array = bytes.fromhex(maybe_hex)
+    return binary_array
+
+
+def b64Tobytes(value: bytes) -> bytes:
+    decoded = base64.b64decode(value, validate=True)
+    try:
+        # In the unlikely event decode succeeds, at least make sure there are some non-hex-looking elememnts
+        assert not all(c in string.hexdigits for c in decoded.decode("ascii"))
+    except UnicodeDecodeError:
+        # If decode fails (the expected behavior), we are good
+        pass
+    return decoded
+
+
+def looks_like_430(manifest: tdfs.Manifest):
+    assert manifest.schemaVersion == "4.3.0"
+
+    ii = manifest.encryptionInformation.integrityInformation
+    binary_array = b64Tobytes(ii.rootSignature.sig)
+    match ii.rootSignature.alg:
+        case "GMAC":
+            assert len(binary_array) == 16
+        case "HS256" | "":
+            assert len(binary_array) == 32
+        case _:
+            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+
+    for segment in ii.segments:
+        hash = b64Tobytes(segment.hash)
+        match ii.segmentHashAlg:
+            case "GMAC":
+                assert len(hash) == 16
+            case "HS256" | "":
+                assert len(hash) == 32
+            case _:
+                assert False, f"Unknown alg: {ii.segmentHashAlg}"
 
 
 #### MANIFEST VALIDITY TESTS
@@ -133,7 +255,7 @@ def test_manifest_validity(
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+
     tdfs.validate_manifest_schema(ct_file)
 
 
@@ -156,7 +278,7 @@ def test_manifest_validity_with_assertions(
         scenario="assertions",
         az=assertion_file_no_keys,
     )
-    assert os.path.isfile(ct_file)
+
     tdfs.validate_manifest_schema(ct_file)
 
 
@@ -185,8 +307,8 @@ def test_tdf_assertions_unkeyed(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    assert os.path.isfile(ct_file)
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
@@ -216,8 +338,49 @@ def test_tdf_assertions_with_keys(
         tmp_dir,
         scenario="assertions-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    assert os.path.isfile(ct_file)
+    fname = os.path.basename(ct_file).split(".")[0]
+    rt_file = f"{tmp_dir}test-{fname}.untdf"
+
+    decrypt_sdk.decrypt(
+        ct_file,
+        rt_file,
+        "ztdf",
+        assertion_verification_file_rs_and_hs_keys,
+    )
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_tdf_assertions_422_format(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: str,
+    tmp_dir: str,
+    assertion_file_rs_and_hs_keys: str,
+    assertion_verification_file_rs_and_hs_keys: str,
+    in_focus: set[tdfs.SDK],
+):
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not encrypt_sdk.supports("hexaflexible"):
+        pytest.skip(
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
+        )
+    if not encrypt_sdk.supports("assertions"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
+    if not decrypt_sdk.supports("assertion_verification"):
+        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        scenario="assertions-422-keys-roundtrip",
+        az=assertion_file_rs_and_hs_keys,
+        target_mode="4.2.2",
+    )
+
     fname = os.path.basename(ct_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
 
@@ -314,9 +477,18 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 ### TAMPER TESTS
 
 
-def assert_tamper_error(exc: subprocess.CalledProcessError, type: str) -> None:
+def assert_tamper_error(
+    exc: subprocess.CalledProcessError, type: str, decrypt_sdk: tdfs.SDK
+) -> None:
     btype = type.encode()
     assert btype in exc.output
+
+    if not decrypt_sdk.supports("better-messages-2024"):
+        assert any(
+            err in exc.output for err in [b"integrity", b"signature", b"bad request"]
+        ), f"Unexpected error output: [{exc.output}]"
+        return
+
     expected_error_oneof = [
         b"tamper",
         b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
@@ -337,7 +509,7 @@ def assert_tamper_error(exc: subprocess.CalledProcessError, type: str) -> None:
             ]
     assert any(
         err in exc.output for err in expected_error_oneof
-    ), f"Unexpected error output: {exc.output}"
+    ), f"Unexpected error output: [{exc.output}]"
 
 
 ## POLICY TAMPER TESTS
@@ -353,8 +525,13 @@ def test_tdf_with_unbound_policy(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -362,7 +539,7 @@ def test_tdf_with_unbound_policy(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "wrap")
+        assert_tamper_error(exc, "wrap", decrypt_sdk)
 
 
 def test_tdf_with_altered_policy_binding(
@@ -376,7 +553,6 @@ def test_tdf_with_altered_policy_binding(
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
     )
@@ -386,7 +562,7 @@ def test_tdf_with_altered_policy_binding(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "wrap")
+        assert_tamper_error(exc, "wrap", decrypt_sdk)
 
 
 ## INTEGRITY TAMPER TESTS
@@ -402,8 +578,13 @@ def test_tdf_with_altered_root_sig(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -411,7 +592,7 @@ def test_tdf_with_altered_root_sig(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "root")
+        assert_tamper_error(exc, "root", decrypt_sdk)
 
 
 def test_tdf_with_altered_seg_sig_wrong(
@@ -424,8 +605,13 @@ def test_tdf_with_altered_seg_sig_wrong(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -433,7 +619,7 @@ def test_tdf_with_altered_seg_sig_wrong(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "signature")
+        assert_tamper_error(exc, "signature", decrypt_sdk)
 
 
 ## SEGMENT SIZE TAMPER TEST
@@ -449,8 +635,13 @@ def test_tdf_with_altered_enc_seg_size(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
     )
@@ -460,7 +651,7 @@ def test_tdf_with_altered_enc_seg_size(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "signature")
+        assert_tamper_error(exc, "", decrypt_sdk)
 
 
 ## ASSERTION TAMPER TESTS
@@ -488,8 +679,8 @@ def test_tdf_with_altered_assertion_statement(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
@@ -499,7 +690,7 @@ def test_tdf_with_altered_assertion_statement(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "assertion")
+        assert_tamper_error(exc, "assertion", decrypt_sdk)
 
 
 def test_tdf_with_altered_assertion_with_keys(
@@ -523,10 +714,10 @@ def test_tdf_with_altered_assertion_with_keys(
         encrypt_sdk,
         "ztdf",
         tmp_dir,
-        scenario="assertions-keys-roundtrip",
+        scenario="assertions-keys-roundtrip-altered",
         az=assertion_file_rs_and_hs_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
-    assert os.path.isfile(ct_file)
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
@@ -542,7 +733,7 @@ def test_tdf_with_altered_assertion_with_keys(
         )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "assertion")
+        assert_tamper_error(exc, "assertion", decrypt_sdk)
 
 
 ## PAYLOAD TAMPER TESTS
@@ -558,8 +749,13 @@ def test_tdf_altered_payload_end(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
-    assert os.path.isfile(ct_file)
+    ct_file = do_encrypt_with(
+        pt_file,
+        encrypt_sdk,
+        "ztdf",
+        tmp_dir,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
     fname = os.path.basename(b_file).split(".")[0]
     rt_file = f"{tmp_dir}test-{fname}.untdf"
@@ -567,4 +763,4 @@ def test_tdf_altered_payload_end(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "segment")
+        assert_tamper_error(exc, "segment", decrypt_sdk)

@@ -209,6 +209,12 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             for (sha, tag) in remote_tags
             if "refs/tags/" in tag
         ]
+
+        if version.startswith("refs/tags/"):
+            version = version.split("refs/tags/")[-1]
+        if infix and version.startswith(f"{infix}/"):
+            version = version.split(f"{infix}/")[-1]
+
         listed_tags = all_listed_tags
         if infix:
             listed_tags = [
