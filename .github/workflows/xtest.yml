@@ -103,6 +103,13 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
         with:
           script: |
+            function htmlEscape(str) {
+              return str.replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#39;");
+            }
             const { execSync } = require('child_process');
             const path = require('path');
 
@@ -144,13 +151,13 @@ jobs:
               const tagToSha = {};
               const headTags = [];
 
-              for (const { tag, head, sha, alias, err } of refInfo) {
-                const sdkRepoUrl = `https://github.com/opentdf/${sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType}`;
-                const sdkLink = `[${sdkType}${head ? ' ⬆' : ''}](${sdkRepoUrl})`;
-                const commitLink = sha ? `[${sha.substring(0, 7)}](${sdkRepoUrl}/commit/${sha})` : ' . ';
-                const tagLink = refInfo.some(({ release }) => release) 
-                  ? `[${tag}](${sdkRepoUrl}/releases/tag/${tag})` 
-                  : tag;
+              for (const { tag, head, sha, alias, err, release } of refInfo) {
+                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
+                const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}${head ? ' ⬆' : ''}</a>`;
+                const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
+                const tagLink = release
+                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${encodeURIComponent(release)}`)}">${htmlEscape(tag)}</a>` 
+                  : htmlEscape(tag);
                 table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
