@@ -61,7 +61,7 @@ jobs:
       contents: read
     outputs:
       platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
-      tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
+      platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.default-tags.outputs.values }}
     steps:
@@ -108,46 +108,50 @@ jobs:
 
             const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
             const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
+            const defaultTags = JSON.parse(steps["default-tags"].values);
 
             const refs = {
-              platform: process.env.PLATFORM_REF || 'main',
-              go: process.env.OTDFCTL_REF || 'main',
-              js: process.env.WEB_REF || 'main',
-              java: process.env.JAVA_REF || 'main'
+              platform: process.env.PLATFORM_REF || defaultTags.platform,
+              go: process.env.OTDFCTL_REF || defaultTags.go,
+              js: process.env.WEB_REF || defaultTags.js,
+              java: process.env.JAVA_REF || defaultTags.java
             };
 
             const versionData = {};
 
-            for (const [key, ref] of Object.entries(refs)) {
-              const output = execSync(`python3 ${resolveVersionScript} ${key} ${ref}`, { cwd: workingDir }).toString();
-              versionData[key] = JSON.parse(output);
+            for (const [sdkType, ref] of Object.entries(refs)) {
+              const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
+              versionData[sdkType] = JSON.parse(output);
             }
 
-            for (const [key, data] of Object.entries(versionData)) {
-              const tagList = data.map(item => item.tag);
-              const tagToSha = data.reduce((acc, item) => {
-                acc[item.tag] = item.sha;
-                return acc;
-              }, {});
-              const headTags = data.filter(item => item.head).map(item => item.tag);
+            let summary = `### Versions under Test\\n\\n`;
+            let errorCount = 0;
+            summary += '| Library | Tag | SHA | Alias | Error |\\n';
+            summary += '| ------- | --- | --- | ----- | ----- |\\n';
+            for (const [sdkType, refInfo] of Object.entries(versionData)) {
+              const tagList = [];
+              const tagToSha = {};
+              const headTags = [];
+              for (const { tag, head, sha, alias, err } of refInfo) {
+                summary += `| ${sdkType}${head ? "⬆️" : ""} | ${tag} | ${sha} | ${alias || 'N/A'} | ${err || 'N/A'} |\\n`;
+                if (err) {
+                  errorCount += 1;
+                  continue;
+                }
+                tagList.push(tag);
+                tagToSha[tag] = sha;
+                if (head) {
+                  headTags.push(tag);
+                }
+              }
 
               core.setOutput(`${key}-tag-list`, JSON.stringify(tagList));
               core.setOutput(`${key}-tag-to-sha`, JSON.stringify(tagToSha));
               core.setOutput(`${key}-heads`, JSON.stringify(headTags));
-
-              let summary = `### ${key.charAt(0).toUpperCase() + key.slice(1)} Versions under Test\\n\\n`;
-              summary += '| Tag | SHA | Alias | Error |\\n';
-              summary += '| --- | --- | ----- | ----- |\\n';
-              data.forEach(item => {
-                summary += `| ${item.tag} | ${item.sha} | ${item.alias || 'N/A'} | ${item.err || 'N/A'} |\\n`;
-              });
-
-              core.summary.addRaw(summary).write();
-
-              const errorCount = data.filter(item => item.err).length;
-              if (errorCount > 0) {
-                throw new Error(`Errors detected in ${key} version resolution. Failing the run.`);
-              }
+            }
+            core.summary.addRaw(summary).write();
+            if (errorCount > 0) {
+              throw new Error(`Errors detected in ${key} version resolution. Failing the run.`);
             }
       cross-client-test:
     timeout-minutes: 60
@@ -161,7 +165,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.tag-list) }}
+        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -227,7 +231,7 @@ jobs:
           sdk: go
           version: "${{ inputs.otdfctl-ref || needs.resolve-versions.outputs.default-tags }}"
 
-      - name: Replace otdfctl go.mod packages, but only at heaad version of platform
+      - name: Replace otdfctl go.mod packages, but only at head version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
