@@ -108,13 +108,13 @@ jobs:
 
             const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
             const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
-            const defaultTags = JSON.parse(steps["default-tags"].values);
+            const defaultTags = ${{ toJson(steps.default-tags.outputs.values) }};
 
             const refs = {
-              platform: process.env.PLATFORM_REF || defaultTags.platform,
-              go: process.env.OTDFCTL_REF || defaultTags.go,
-              js: process.env.WEB_REF || defaultTags.js,
-              java: process.env.JAVA_REF || defaultTags.java
+              platform: process.env.PLATFORM_REF || defaultTags,
+              go: process.env.OTDFCTL_REF || defaultTags,
+              js: process.env.WEB_REF || defaultTags,
+              java: process.env.JAVA_REF || defaultTags
             };
 
             const versionData = {};
@@ -123,6 +123,8 @@ jobs:
               const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
               versionData[sdkType] = JSON.parse(output);
             }
+
+            core.setOutput(`all`, JSON.stringify(versionData));
 
             let summary = `### Versions under Test\\n\\n`;
             let errorCount = 0;
@@ -145,15 +147,16 @@ jobs:
                 }
               }
 
-              core.setOutput(`${key}-tag-list`, JSON.stringify(tagList));
-              core.setOutput(`${key}-tag-to-sha`, JSON.stringify(tagToSha));
-              core.setOutput(`${key}-heads`, JSON.stringify(headTags));
+              core.setOutput(`${sdkType}-tag-list`, JSON.stringify(tagList));
+              core.setOutput(`${sdkType}-tag-to-sha`, JSON.stringify(tagToSha));
+              core.setOutput(`${sdkType}-heads`, JSON.stringify(headTags));
             }
             core.summary.addRaw(summary).write();
             if (errorCount > 0) {
-              throw new Error(`Errors detected in ${key} version resolution. Failing the run.`);
+              throw new Error(`Errors detected in version resolution. Failing the run.`);
             }
-      cross-client-test:
+
+  cross-client-test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
