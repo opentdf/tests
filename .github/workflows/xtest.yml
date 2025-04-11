@@ -66,7 +66,7 @@ jobs:
       default-tags: ${{ steps.version-info.outputs.default-tags }}
     steps:
       - name: Validate focus-sdk input
-        if : ${{ inputs.focus-sdk != '' }}
+        if: ${{ inputs.focus-sdk != '' }}
         run: |-
           if [[ ! "all go java js" =~ (^|[[:space:]])${{ inputs.focus-sdk }}($|[[:space:]]) ]]; then
             echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> $GITHUB_STEP_SUMMARY
@@ -217,7 +217,7 @@ jobs:
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
-          extra-keys: >- 
+          extra-keys: >-
             [{
               "kid": "golden-r1",
               "alg": "rsa:2048",
@@ -344,16 +344,16 @@ jobs:
           pytest -ra -v test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-          SCHEMA_FILE: 'manifest.schema.json'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-          SCHEMA_FILE: 'manifest.schema.json'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
@@ -388,7 +388,7 @@ jobs:
           ec-tdf-enabled: true
           kas-port: 8282
           kas-name: beta
-      
+
       - name: Start additional kas
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         uses: opentdf/platform/test/start-additional-kas@main
@@ -411,4 +411,4 @@ jobs:
           pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
