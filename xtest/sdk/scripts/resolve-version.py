@@ -150,7 +150,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                         }
                 # No pull request, probably a feature branch or release branch
                 for sha, tag in matching_tags:
-                    mq_match = re.match(merge_queue_regex, version)
+                    mq_match = re.match(merge_queue_regex, tag)
                     if mq_match:
                         to_branch = mq_match.group("branch")
                         pr_number = mq_match.group("pr_number")
