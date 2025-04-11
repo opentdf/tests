@@ -211,7 +211,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version-info: "${{ needs.resolve-versions.outputs.js-version-info }}"
+          version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -261,7 +261,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version-info: "${{ needs.resolve-versions.outputs.go-version-info }}"
+          version-info: "${{ needs.resolve-versions.outputs.go }}"
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
@@ -295,7 +295,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version-info: "${{ needs.resolve-versions.outputs.java-version-info }}"
+          version-info: "${{ needs.resolve-versions.outputs.java }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
