@@ -59,7 +59,7 @@ runs:
           exit 1
         fi
 
-        if echo "$version_info" | jq -e '.[] | select(.error != null)' > /dev/null; then
+        if echo "$version_info" | jq -e '.[] | select(.err != null)' > /dev/null; then
           echo "Error: One or more errors occurred while resolving versions for ${{ inputs.sdk }}: $version_info"
           exit 1
         fi
