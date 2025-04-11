@@ -57,20 +57,40 @@ jobs:
   resolve-versions:
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    permissions: 
+    permissions:
       contents: read
     outputs:
-      platform-tag-to-sha: ${{ steps.platform-version-info.outputs.platform-tag-to-sha }}
-      tag-list: ${{ steps.platform-version-info.outputs.tag-list }}
-      heads: ${{ steps.platform-version-info.outputs.heads }}
+      platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
+      platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
+      heads: ${{ steps.version-info.outputs.platform-heads }}
+      default-tags: ${{ steps.version-info.outputs.default-tags }}
+      go: ${{ steps.version-info.outputs.go-version-info }}
+      java: ${{ steps.version-info.outputs.java-version-info }}
+      js: ${{ steps.version-info.outputs.js-version-info }}
     steps:
       - name: Validate focus-sdk input
-        if : ${{ inputs.focus-sdk != '' }}
+        if: ${{ inputs.focus-sdk != '' }}
         run: |-
           if [[ ! "all go java js" =~ (^|[[:space:]])${{ inputs.focus-sdk }}($|[[:space:]]) ]]; then
             echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+      - name: Default Versions depend on context
+        id: default-tags
+        run: |-
+          if [[ $CRON_NIGHTLY == 'true' ]]; then
+            echo "Running nightly tests"
+            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
+          elif [[ $CRON_WEEKLY == 'true' ]]; then
+            echo "Running weekly tests"
+            echo "DEFAULT_TAGS=main latest lts" >> "$GITHUB_ENV"
+          else
+            echo "Running PR, Workflow Dispatch, or manual trigger"
+            echo "DEFAULT_TAGS=main" >> "$GITHUB_ENV"
+          fi
+        env:
+          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
+          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
       - uses: actions/checkout@v4
         with:
           path: otdf-sdk
@@ -82,39 +102,89 @@ jobs:
       - run: |-
           pip install -r scripts/requirements.txt
         working-directory: otdf-sdk/xtest/sdk
-      - if: github.event_name != 'cron'
-        run: |-
-          echo "PLATFORM_REF=${{ inputs.platform-ref || 'main' }}" >> $GITHUB_ENV
-      - if: github.event_name == 'cron' && github.event.schedule == '30 6 * * *'
-        # Run standard main v. latest nightly
-        run: |-
-          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest' }}" >> $GITHUB_ENV
-      - if: github.event_name == 'cron' && github.event.schedule == '0 18 * * 0'
-        # Only run the full platform matrix on sundays at 6pm UTC
-        run: |-
-          echo "PLATFORM_REF=${{ github.event.inputs.platform-ref || 'main latest lts' }}" >> $GITHUB_ENV
-      - id: platform-version-info
-        run: |-
-          version_info=$(./scripts/resolve-version.py platform $PLATFORM_REF)
-          echo "tag-list=$(echo $version_info | jq -rc '[.[].tag]')" >> $GITHUB_OUTPUT
-          echo "platform-tag-to-sha=$(echo $version_info | jq -rc 'map({(.tag): .sha}) | add')" >> $GITHUB_OUTPUT
-          head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
-          echo "head_tags=$head_tags"
-          echo "heads=$head_tags" >> $GITHUB_OUTPUT
+      - id: version-info
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
+        with:
+          script: |
+            function htmlEscape(str) {
+              return str.replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#39;");
+            }
+            const { execSync } = require('child_process');
+            const path = require('path');
 
-          echo "### Platform Versions under Test" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Tag | SHA | Alias | Error |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- | ----- | ----- |" >> $GITHUB_STEP_SUMMARY
-          echo "$version_info" | jq -rc '.[] | "| \(.tag) | \(.sha) | \(.alias // "N/A") | \(.err // "N/A") |"' >> $GITHUB_STEP_SUMMARY
+            const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
+            const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
+            const defaultTags = process.env.DEFAULT_TAGS || 'main';
+            core.setOutput('default-tags', defaultTags);
 
-          # Check for errors in the version_info
-          error_count=$(echo "$version_info" | jq '[.[] | select(.err != null)] | length')
-          if [ "$error_count" -gt 0 ]; then
-            echo "Errors detected in version resolution. Failing the run." >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-        working-directory: otdf-sdk/xtest/sdk
+            const refs = {
+              platform: process.env.PLATFORM_REF || defaultTags,
+              go: process.env.OTDFCTL_REF || defaultTags,
+              js: process.env.WEB_REF || defaultTags,
+              java: process.env.JAVA_REF || defaultTags
+            };
+
+            const versionData = {};
+
+            for (const [sdkType, ref] of Object.entries(refs)) {
+              try {
+                const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
+                versionData[sdkType] = JSON.parse(output);
+              } catch (error) {
+                console.error(`Error resolving version for ${sdkType}:`, error);
+                versionData[sdkType] = [{ tag: ref, err: error.message }];
+              }
+            }
+
+            core.setOutput('all', JSON.stringify(versionData));
+
+            core.summary.addHeading('Versions under Test', 3);
+
+            let errorCount = 0;
+            const table = [];
+            const th = (data) => ({ data, header: true });
+            table.push([th('Library'), th('Tag'), th('SHA'), th('Alias'), th('Error')]);
+
+            for (const [sdkType, refInfo] of Object.entries(versionData)) {
+              const tagList = [];
+              const tagToSha = {};
+              const headTags = [];
+
+              for (const { tag, head, sha, alias, err, release } of refInfo) {
+                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
+                const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
+                const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
+                const tagLink = release
+                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${encodeURIComponent(release)}`)}">${htmlEscape(tag)}</a>` 
+                  : htmlEscape(tag);
+                table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
+                if (err) {
+                  errorCount += 1;
+                  continue;
+                }
+                tagList.push(tag);
+                tagToSha[tag] = sha;
+                if (head) {
+                  headTags.push(tag);
+                }
+              }
+
+              core.setOutput(`${sdkType}-tag-list`, JSON.stringify(tagList));
+              core.setOutput(`${sdkType}-tag-to-sha`, JSON.stringify(tagToSha));
+              core.setOutput(`${sdkType}-heads`, JSON.stringify(headTags));
+              core.setOutput(`${sdkType}-version-info`, JSON.stringify(refInfo));
+            }
+
+            core.summary.addTable(table);
+            core.summary.write();
+
+            if (errorCount > 0) {
+              throw new Error('Errors detected in version resolution. Failing the run.');
+            }
 
   cross-client-test:
     timeout-minutes: 60
@@ -128,29 +198,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.tag-list) }}
+        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-
-      - name: Default Versions depend on context
-        id: default-tags
-        run: |-
-          if [[ $CRON_NIGHTLY == 'true' ]]; then
-            echo "Running nightly tests"
-            echo "values=main latest" >> "$GITHUB_OUTPUT"
-          elif [[ $CRON_WEEKLY == 'true' ]]; then
-            echo "Running weekly tests"
-            echo "values=main latest lts" >> "$GITHUB_OUTPUT"
-          else
-            echo "Running PR, Workflow Dispatch, or manual trigger"
-            echo "values=main" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
-          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
 
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
@@ -158,7 +211,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "${{ inputs.js-ref || steps.default-tags.outputs.values }}"
+          version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -167,7 +220,7 @@ jobs:
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
-          extra-keys: >- 
+          extra-keys: >-
             [{
               "kid": "golden-r1",
               "alg": "rsa:2048",
@@ -208,9 +261,9 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || steps.default-tags.outputs.values }}"
+          version-info: "${{ needs.resolve-versions.outputs.go }}"
 
-      - name: Replace otdfctl go.mod packages, but only at heaad version of platform
+      - name: Replace otdfctl go.mod packages, but only at head version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
@@ -242,7 +295,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: "${{ inputs.java-ref || steps.default-tags.outputs.values }}"
+          version-info: "${{ needs.resolve-versions.outputs.java }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
@@ -287,23 +340,23 @@ jobs:
           pytest -ra -v  --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           pytest -ra -v test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-          SCHEMA_FILE: 'manifest.schema.json'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
-          SCHEMA_FILE: 'manifest.schema.json'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
@@ -338,7 +391,7 @@ jobs:
           ec-tdf-enabled: true
           kas-port: 8282
           kas-name: beta
-      
+
       - name: Start additional kas
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         uses: opentdf/platform/test/start-additional-kas@main
@@ -361,4 +414,4 @@ jobs:
           pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
-          PLATFORM_DIR: '../../${{ steps.run-platform.outputs.platform-working-dir }}'
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
