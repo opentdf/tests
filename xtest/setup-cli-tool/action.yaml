@@ -31,6 +31,25 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: identify repo url
+      shell: bash
+      run: |
+        case "${{ inputs.sdk }}" in
+          "go")
+            echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
+            ;;
+          "java")
+            echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
+            ;;
+          "js")
+            echo "sdk_repo=opentdf/web-sdk" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "Invalid SDK specified: ${{ inputs.sdk }}" >> $GITHUB_STEP_SUMMARY
+            exit 1
+            ;;
+        esac
+
     - name: resolve versions
       id: resolve
       shell: bash
