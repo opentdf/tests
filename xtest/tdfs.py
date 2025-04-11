@@ -7,6 +7,7 @@ import pytest
 import re
 import subprocess
 import zipfile
+import shutil
 from collections.abc import Callable
 from pydantic import BaseModel
 from typing import Any, Literal
@@ -226,6 +227,8 @@ def update_manifest(
             for filename in filenames:
                 file_path = folder / filename
                 zipped.write(file_path, file_path.relative_to(unzipped_dir))
+    # Cleanup the unzipped directory; its contents are now stored as outfile
+    shutil.rmtree(unzipped_dir, ignore_errors=True)
     return outfile
 
 
@@ -249,6 +252,8 @@ def update_payload(
             for filename in filenames:
                 file_path = Path(folder_name) / filename
                 zipped.write(file_path, file_path.relative_to(unzipped_dir))
+    # Cleanup the unzipped directory; its contents are now stored as outfile
+    shutil.rmtree(unzipped_dir, ignore_errors=True)
     return outfile
 
 
