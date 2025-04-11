@@ -9,6 +9,17 @@
 #       v0.1.2: a git tag that is a semantic version
 #       refs/pull/1234: a pull request ref
 #
+#   The script will resolve the tags to their git SHAs and return it and other metadata in a JSON formatted list of objects.
+#   Fields of the object will be:
+#     sdk: the SDK name
+#     alias: the tag that was requested
+#     head: true if the tag is a head of a live branch
+#     tag: the resolved tag name
+#     sha: the current git SHA of the tag
+#     err: an error message if the tag could not be resolved, or resolved to multiple items
+#
+#   The script will also check for duplicate SHAs and remove them from the output.
+#
 # Sample Input:
 #
 #    python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
