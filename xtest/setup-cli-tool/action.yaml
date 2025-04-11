@@ -58,7 +58,6 @@ runs:
         echo "heads=$head_tags" >> $GITHUB_OUTPUT
       env:
         version_info: ${{ inputs.version-info }}
-      working-directory: otdf-sdk/xtest/sdk/
 
     - name: checkout version a
       uses: actions/checkout@v4
