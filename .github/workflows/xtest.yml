@@ -145,7 +145,13 @@ jobs:
               const headTags = [];
 
               for (const { tag, head, sha, alias, err } of refInfo) {
-                table.push([`${sdkType}${head ? '⬆️' : ''}`, tag, sha || 'N/A', alias || 'N/A', err || 'N/A']);
+                const sdkRepoUrl = `https://github.com/opentdf/${sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType}`;
+                const sdkLink = `[${sdkType}${head ? ' ⬆' : ''}](${sdkRepoUrl})`;
+                const commitLink = sha ? `[${sha.substring(0, 7)}](${sdkRepoUrl}/commit/${sha})` : ' . ';
+                const tagLink = refInfo.some(({ release }) => release) 
+                  ? `[${tag}](${sdkRepoUrl}/releases/tag/${tag})` 
+                  : tag;
+                table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
                   continue;

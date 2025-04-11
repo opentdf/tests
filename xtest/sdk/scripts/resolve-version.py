@@ -14,9 +14,11 @@
 #     sdk: the SDK name
 #     alias: the tag that was requested
 #     head: true if the tag is a head of a live branch
-#     tag: the resolved tag name
+#     tag: the resolved tag or branch name, if found
 #     sha: the current git SHA of the tag
 #     err: an error message if the tag could not be resolved, or resolved to multiple items
+#     pr: if set, the pr number associated with the tag
+#     release: if set, the release page for the tag
 #
 #   The script will also check for duplicate SHAs and remove them from the output.
 #
@@ -30,26 +32,29 @@
 #   {
 #     "sdk": "go",
 #     "alias": "0.15.0",
-#     "tag": "v0.15.0",
-#     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
+#     "release": "v0.15.0",
+#     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
+#     "tag": "v0.15.0"
 #   },
 #   {
 #     "sdk": "go",
 #     "alias": "latest",
-#     "tag": "v0.15.1",
-#     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
+#     "release": "v0.15.1",
+#     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2",
+#     "tag": "v0.15.1"
 #   },
 #   {
 #     "sdk": "go",
 #     "alias": "decaf01",
 #     "head": true,
-#     "tag": "refs/pull/1234/head",
-#     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2"
+#     "pr": "1234",
+#     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2",
+#     "tag": "refs/pull/1234/head"
 #   },
 #   {
 #     "sdk": "go",
-#     "tag": "unreleased-name",
-#     "err": "not found"
+#     "err": "not found",
+#     "tag": "unreleased-name"
 #   }
 # ]
 # ```
@@ -57,17 +62,19 @@
 import sys
 import json
 import re
-
 from git import Git
 from typing import NotRequired, TypedDict
+from urllib.parse import quote
 
 
 class ResolveSuccess(TypedDict):
     sdk: str  # The SDK name
     alias: str  # The tag that was requested
     head: NotRequired[bool]  # True if the tag is a head of a live branch
-    tag: str  # The resolved tag name
+    pr: NotRequired[str]  # The pull request number associated with the tag
+    release: NotRequired[str]  # The release name for the tag
     sha: str  # The current git SHA of the tag
+    tag: str  # The resolved tag name
 
 
 class ResolveError(TypedDict):
@@ -93,6 +100,8 @@ lts_versions = {
 }
 
 
+merge_queue_regex = r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
+
 sha_regex = r"^[a-f0-9]{7,40}$"
 
 
@@ -109,8 +118,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "sdk": sdk,
                 "alias": version,
                 "head": True,
-                "tag": "main",
                 "sha": sha,
+                "tag": "main",
             }
 
         if re.match(sha_regex, version):
@@ -123,8 +132,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 return {
                     "sdk": sdk,
                     "alias": version[:7],
-                    "tag": version,
                     "sha": version,
+                    "tag": version,
                 }
             if len(matching_tags) > 1:
                 # If multiple tags point to the same SHA, check for pull requests
@@ -136,20 +145,23 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                             "sdk": sdk,
                             "alias": version,
                             "head": True,
-                            "tag": f"pull-{pr_number}",
                             "sha": sha,
+                            "tag": f"pull-{pr_number}",
                         }
                 # No pull request, probably a feature branch or release branch
                 for sha, tag in matching_tags:
-                    if tag.startswith("refs/heads/gh-readonly-queue/"):
-                        to_branch, from_pr = tag.split("/")[-2:]
-                        if to_branch and from_pr:
+                    mq_match = re.match(merge_queue_regex, version)
+                    if mq_match:
+                        to_branch = mq_match.group("branch")
+                        pr_number = mq_match.group("pr_number")
+                        if to_branch and pr_number:
                             return {
                                 "sdk": sdk,
                                 "alias": version,
                                 "head": True,
-                                "tag": f"mq-{to_branch}-{from_pr}",
+                                "pr": pr_number,
                                 "sha": sha,
+                                "tag": f"mq-{to_branch}-{pr_number}",
                             }
                         suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
                         flattag = "mq--" + suffix.replace("/", "--")
@@ -157,8 +169,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                             "sdk": sdk,
                             "alias": version,
                             "head": True,
-                            "tag": flattag,
                             "sha": sha,
+                            "tag": flattag,
                         }
                     head = False
                     if tag.startswith("refs/heads/"):
@@ -169,8 +181,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                         "sdk": sdk,
                         "alias": version,
                         "head": head,
-                        "tag": flattag,
                         "sha": sha,
+                        "tag": flattag,
                     }
 
                 return {
@@ -186,8 +198,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             return {
                 "sdk": sdk,
                 "alias": version,
-                "tag": tag,
                 "sha": sha,
+                "tag": tag,
             }
 
         if version.startswith("refs/pull/"):
@@ -208,8 +220,9 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "sdk": sdk,
                 "alias": version,
                 "head": True,
-                "tag": f"pull-{pr_number}",
+                "pr": pr_number,
                 "sha": sha,
+                "tag": f"pull-{pr_number}",
             }
 
         remote_tags = [
@@ -239,9 +252,9 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
         ]
         listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
         alias = version
+        matching_tags = []
         if version == "latest":
-            sha, tag = listed_tags[-1]
-            return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
+            matching_tags = listed_tags[-1:]
         else:
             if version == "lts":
                 version = lts_versions[sdk]
@@ -250,10 +263,20 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 for (sha, tag) in listed_tags
                 if tag in [version, f"v{version}"]
             ]
-            if not matching_tags:
-                raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
-            sha, tag = matching_tags[0]
-            return {"sdk": sdk, "alias": alias, "tag": tag, "sha": sha}
+        if not matching_tags:
+            raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
+        sha, tag = matching_tags[-1]
+        release = tag
+        if infix:
+            release = f"{infix}/{release}"
+        release = quote(release, safe="-_.~")
+        return {
+            "sdk": sdk,
+            "alias": alias,
+            "release": release,
+            "sha": sha,
+            "tag": tag,
+        }
     except Exception as e:
         return {
             "sdk": sdk,
