@@ -5,9 +5,9 @@ import logging
 import os
 import pytest
 import re
+import shutil
 import subprocess
 import zipfile
-import shutil
 from collections.abc import Callable
 from pydantic import BaseModel
 from typing import Any, Literal
