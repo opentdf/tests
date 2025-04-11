@@ -77,13 +77,13 @@ jobs:
         run: |-
           if [[ $CRON_NIGHTLY == 'true' ]]; then
             echo "Running nightly tests"
-            echo "values=main latest" >> "$GITHUB_OUTPUT"
+            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
           elif [[ $CRON_WEEKLY == 'true' ]]; then
             echo "Running weekly tests"
-            echo "values=main latest lts" >> "$GITHUB_OUTPUT"
+            echo "DEFAULT_TAGS=main latest lts" >> "$GITHUB_ENV"
           else
             echo "Running PR, Workflow Dispatch, or manual trigger"
-            echo "values=main" >> "$GITHUB_OUTPUT"
+            echo "DEFAULT_TAGS=main" >> "$GITHUB_ENV"
           fi
         env:
           CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
@@ -108,7 +108,7 @@ jobs:
 
             const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
             const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
-            const defaultTags = ${{ toJson(steps.default-tags.outputs.values) }};
+            const defaultTags = process.env.DEFAULT_TAGS || 'main';
 
             const refs = {
               platform: process.env.PLATFORM_REF || defaultTags,
@@ -120,22 +120,31 @@ jobs:
             const versionData = {};
 
             for (const [sdkType, ref] of Object.entries(refs)) {
-              const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
-              versionData[sdkType] = JSON.parse(output);
+              try {
+                const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
+                versionData[sdkType] = JSON.parse(output);
+              } catch (error) {
+                console.error(`Error resolving version for ${sdkType}:`, error);
+                versionData[sdkType] = [{ tag: ref, err: error.message }];
+              }
             }
 
-            core.setOutput(`all`, JSON.stringify(versionData));
+            core.setOutput('all', JSON.stringify(versionData));
 
-            let summary = `### Versions under Test\\n\\n`;
+            core.summary.addHeading('Versions under Test', 3);
+
             let errorCount = 0;
-            summary += '| Library | Tag | SHA | Alias | Error |\\n';
-            summary += '| ------- | --- | --- | ----- | ----- |\\n';
+            const table = [];
+            const th = (data) => ({ data, header: true });
+            table.push([th('Library'), th('Tag'), th('SHA'), th('Alias'), th('Error')]);
+
             for (const [sdkType, refInfo] of Object.entries(versionData)) {
               const tagList = [];
               const tagToSha = {};
               const headTags = [];
+
               for (const { tag, head, sha, alias, err } of refInfo) {
-                summary += `| ${sdkType}${head ? "⬆️" : ""} | ${tag} | ${sha} | ${alias || 'N/A'} | ${err || 'N/A'} |\\n`;
+                table.push([`${sdkType}${head ? '⬆️' : ''}`, tag, sha || 'N/A', alias || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
                   continue;
@@ -151,9 +160,11 @@ jobs:
               core.setOutput(`${sdkType}-tag-to-sha`, JSON.stringify(tagToSha));
               core.setOutput(`${sdkType}-heads`, JSON.stringify(headTags));
             }
-            core.summary.addRaw(summary).write();
+
+            core.summary.addTable(table);
+
             if (errorCount > 0) {
-              throw new Error(`Errors detected in version resolution. Failing the run.`);
+              throw new Error('Errors detected in version resolution. Failing the run.');
             }
 
   cross-client-test:
