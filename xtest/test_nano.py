@@ -1,7 +1,6 @@
 import base64
 
 import nano
-
 from nano import dec_hex, enc_hex
 
 
