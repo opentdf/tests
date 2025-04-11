@@ -162,6 +162,7 @@ jobs:
             }
 
             core.summary.addTable(table);
+            core.summary.write();
 
             if (errorCount > 0) {
               throw new Error('Errors detected in version resolution. Failing the run.');
