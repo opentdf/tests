@@ -9,6 +9,7 @@ inputs:
     type: string
   version-info:
     description: JSON-encoded output of resolve-version.py
+    required: true
     type: string
 outputs:
   version-a:
