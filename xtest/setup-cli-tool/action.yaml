@@ -6,11 +6,9 @@ inputs:
     type: string
   sdk:
     description: The SDK to configure; one of go, java, js
-    default: go
     type: string
-  version:
-    description: A space separated list of versions of the SDK to configure. Accepts SHA, branches, and semver tags
-    default: latest
+  version-info:
+    description: JSON-encoded output of resolve-version.py
     type: string
 outputs:
   version-a:
@@ -32,60 +30,10 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: configure
-      shell: bash
-      run: |
-        case "${{ inputs.sdk }}" in
-          "go")
-            echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
-            ;;
-          "java")
-            echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
-            ;;
-          "js")
-            echo "sdk_repo=opentdf/web-sdk" >> $GITHUB_ENV
-            ;;
-          *)
-            echo "Invalid SDK specified: ${{ inputs.sdk }}" >> $GITHUB_STEP_SUMMARY
-            exit 1
-            ;;
-        esac
-
-    - name: validate versions string
-      shell: bash
-      env:
-        VERSIONS: "${{ inputs.version }}"
-      run: |
-        if [[ $(echo "$VERSIONS" | wc -w) -gt 4 ]]; then
-          echo "Error: Too many versions specified: [$VERSIONS]"
-          echo "Error: Too many versions specified: [$VERSIONS]" >> $GITHUB_STEP_SUMMARY
-          exit 1
-        fi
-
-    - name: checkout xtest/sdk folder
-      uses: actions/checkout@v4
-      with:
-        path: otdf-sdk
-        repository: opentdf/tests
-        sparse-checkout: xtest/sdk
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
-      with:
-        python-version: "3.12"
-
-    - name: 🐍 
-      shell: bash
-      run: |-
-        pip install -r scripts/requirements.txt
-      working-directory: otdf-sdk/xtest/sdk
-
     - name: resolve versions
       id: resolve
       shell: bash
       run: |
-        version_info=$(./scripts/resolve-version.py ${{ inputs.sdk }} ${{ inputs.version }})
-
         if [[ $(echo "$version_info" | jq 'length') -gt 4 ]]; then
           echo "Error: Too many versions resolved in version_info: $(echo "$version_info" | jq 'length')" >> $GITHUB_STEP_SUMMARY
           exit 1
@@ -93,9 +41,6 @@ runs:
 
         if echo "$version_info" | jq -e '.[] | select(.error != null)' > /dev/null; then
           echo "Error: One or more errors occurred while resolving versions for ${{ inputs.sdk }}: $version_info"
-          echo "| Alias | Error Message |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|---------------|" >> $GITHUB_STEP_SUMMARY
-          echo "$version_info" | jq -r '.[] | select(.error != null) | "| \(.alias) | \(.error) |"' >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
         echo "Version Info for ${{ inputs.sdk }}: $version_info"
@@ -111,6 +56,8 @@ runs:
         head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
         echo "head_tags=$head_tags"
         echo "heads=$head_tags" >> $GITHUB_OUTPUT
+      env:
+        version_info: ${{ inputs.version-info }}
       working-directory: otdf-sdk/xtest/sdk/
 
     - name: checkout version a

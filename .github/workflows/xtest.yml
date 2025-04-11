@@ -64,6 +64,9 @@ jobs:
       platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
+      go: ${{ steps.version-info.outputs.go-version-info }}
+      java: ${{ steps.version-info.outputs.java-version-info }}
+      js: ${{ steps.version-info.outputs.js-version-info }}
     steps:
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
@@ -173,6 +176,7 @@ jobs:
               core.setOutput(`${sdkType}-tag-list`, JSON.stringify(tagList));
               core.setOutput(`${sdkType}-tag-to-sha`, JSON.stringify(tagToSha));
               core.setOutput(`${sdkType}-heads`, JSON.stringify(headTags));
+              core.setOutput(`${sdkType}-version-info`, JSON.stringify(refInfo));
             }
 
             core.summary.addTable(table);
@@ -207,7 +211,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: js
-          version: "${{ inputs.js-ref || needs.resolve-versions.outputs.default-tags }}"
+          version-info: "${{ needs.resolve-versions.outputs.js-version-info }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -257,7 +261,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: go
-          version: "${{ inputs.otdfctl-ref || needs.resolve-versions.outputs.default-tags }}"
+          version-info: "${{ needs.resolve-versions.outputs.go-version-info }}"
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
@@ -291,7 +295,7 @@ jobs:
         with:
           path: otdftests/xtest/sdk
           sdk: java
-          version: "${{ inputs.java-ref || needs.resolve-versions.outputs.default-tags }}"
+          version-info: "${{ needs.resolve-versions.outputs.java-version-info }}"
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
