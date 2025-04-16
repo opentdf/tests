@@ -114,7 +114,7 @@ runs:
     - name: post checkout cleanups; currently only java does this
       if: inputs.sdk == 'java'
       run: |
-        otdf-sdk/xtest/sdk/scripts/post-checkout-java.sh
+        ${{ inputs.path }}/scripts/post-checkout-java.sh
       shell: bash
 
     - name: save env from version-info
