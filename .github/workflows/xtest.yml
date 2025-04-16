@@ -206,7 +206,6 @@ jobs:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
           ref: DSPX-959-java-sdk-protogen-changes
-          sparse-checkout: xtest/sdk
 
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
