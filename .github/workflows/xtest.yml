@@ -296,6 +296,26 @@ jobs:
           path: otdftests/xtest/sdk
           sdk: java
           version-info: "${{ needs.resolve-versions.outputs.java }}"
+      
+      - name: Replace java/main.env file if needed
+        if: |
+          contains('["go", "java"]', env.FOCUS_SDK) && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        run: |-
+            echo "Replacing .env files for java-sdk..."
+            echo "Platform tag: $platform_tag"
+            echo "Java version info: $java-version-info"
+            for row in $(echo "$java-version-info" | jq -c '.[]'); do
+              TAG=$(echo "$row" | jq -r '.tag')
+              HEAD=$(echo "$row" | jq -r '.head')
+              if [[ "$HEAD" == "true" ]]; then
+                echo "Creating .env file for tag: $TAG"
+                echo "PLATFORM_BRANCH=$PLATFORM_TAG" > "otdftests/xtest/sdk/java/${TAG}.env"
+              fi
+            done
+        env:
+          java-version-info: ${{ needs.resolve-versions.outputs.java }}
+          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
+          platform-tag: ${{ matrix.platform-tag }}
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli

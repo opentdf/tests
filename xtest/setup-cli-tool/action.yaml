@@ -110,3 +110,21 @@ runs:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
         ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
         repository: ${{ env.sdk_repo }}
+
+    - name: post checkout cleanups; currently only java does this
+      if: inputs.sdk == 'java'
+      run: |
+        otdf-sdk/xtest/sdk/scripts/post-checkout-java.sh
+      shell: bash
+
+    - name: save env from version-info
+      shell: bash
+      run: |
+        # Iterate over each version and save the env variable to a file
+        for version in $(echo "${{ inputs.version-info }}" | jq -c '.[]'); do
+          tag=$(echo "$version" | jq -r '.tag')
+          env=$(echo "$version" | jq -r '.env // empty')
+          if [[ -n "$env" ]]; then
+            echo "$env" > "${{ inputs.path }}/${{ inputs.sdk }}/src/${tag}.env"
+          fi
+        done
