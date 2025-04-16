@@ -335,7 +335,7 @@ def main():
     for version in versions:
         v = resolve(sdk, version, infix)
         if "err" not in v:
-            env = lookup_additional_options(sdk, version)
+            env = lookup_additional_options(sdk, v["tag"])
             if env:
                 v["env"] = env
         if "sha" in v:
