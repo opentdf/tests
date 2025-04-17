@@ -94,7 +94,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: otdf-sdk
-          ref: DSPX-959-java-sdk-protogen-changes
           repository: opentdf/tests
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
@@ -205,7 +204,6 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-          ref: DSPX-959-java-sdk-protogen-changes
 
       ######## CHECKOUT WEB SDK #############
       - name: Configure web SDK tools
