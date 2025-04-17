@@ -305,19 +305,19 @@ jobs:
         run: |-
             echo "Replacing .env files for java-sdk..."
             echo "Platform tag: $platform_tag"
-            echo "Java version info: $java-version-info"
-            for row in $(echo "$java-version-info" | jq -c '.[]'); do
+            echo "Java version info: $java_version_info"
+            for row in $(echo "$java_version_info" | jq -c '.[]'); do
               TAG=$(echo "$row" | jq -r '.tag')
               HEAD=$(echo "$row" | jq -r '.head')
               if [[ "$HEAD" == "true" ]]; then
-                echo "Creating .env file for tag: $TAG"
-                echo "PLATFORM_BRANCH=$PLATFORM_TAG" > "otdftests/xtest/sdk/java/${TAG}.env"
+                echo "Creating .env file for tag: [$TAG]; pointing to [$platform_ref]"
+                echo "PLATFORM_BRANCH=$platform_tag" > "otdftests/xtest/sdk/java/${TAG}.env"
               fi
             done
         env:
-          java-version-info: ${{ needs.resolve-versions.outputs.java }}
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          platform-tag: ${{ matrix.platform-tag }}
+          java_version_info: ${{ needs.resolve-versions.outputs.java }}
+          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
+          platform_tag: ${{ matrix.platform-tag }}
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
