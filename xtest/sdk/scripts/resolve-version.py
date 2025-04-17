@@ -32,7 +32,7 @@
 #   {
 #     "sdk": "go",
 #     "alias": "0.15.0",
-#     "env": "ADDITONAL_OPTION=per build metadata",
+#     "env": "ADDITIONAL_OPTION=per build metadata",
 #     "release": "v0.15.0",
 #     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
 #     "tag": "v0.15.0"
