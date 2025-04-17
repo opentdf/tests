@@ -111,7 +111,7 @@ runs:
         ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
         repository: ${{ env.sdk_repo }}
 
-    - name: post checkout cleanups; currently only java does this
+    - name: post checkout cleanups
       if: inputs.sdk == 'java'
       run: |
         ${{ inputs.path }}/scripts/post-checkout-java.sh

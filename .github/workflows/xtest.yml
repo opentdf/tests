@@ -299,7 +299,7 @@ jobs:
           sdk: java
           version-info: "${{ needs.resolve-versions.outputs.java }}"
       
-      - name: Replace java/main.env file if needed
+      - name: pre-release protocol buffers for java-sdk
         if: |
           contains('["go", "java"]', env.FOCUS_SDK) && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
