@@ -57,7 +57,10 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
-
+    kasallowlist)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep kas-allowlist
+      exit $?
+      ;;
     ecwrap)
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
         # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later

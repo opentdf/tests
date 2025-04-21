@@ -34,6 +34,10 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
+    kasallowlist)
+      "${cmd[@]}" help decrypt | grep kas-allowlist
+      exit $?
+      ;;
     ecwrap)
       if "${cmd[@]}" help encrypt | grep wrapping-key; then
         # while the otdfctl app may support ecwrap, but sdk versions 0.3.28 and earlier uses the old salt

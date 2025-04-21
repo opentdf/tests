@@ -44,6 +44,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep autoconfigure
       exit $?
       ;;
+    kasallowlist)
+      npx $CTL help | grep kas-allowlist
+      exit $?
+      ;;
     ecwrap)
       if npx $CTL help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
@@ -92,7 +96,7 @@ dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
-  --ignoreAllowList
+  --ignoreAllowList # should be removed when fetching from registry is implemented
   --oidcEndpoint "$KCFULLURL"
   --auth opentdf:secret
 )
