@@ -21,6 +21,8 @@ class Timestamp(BaseModelIgnoreExtra):
 
 
 class Metadata(BaseModelIgnoreExtra):
+    created_at: Timestamp
+    updated_at: Timestamp
     labels: list[str] | None = None
 
 
