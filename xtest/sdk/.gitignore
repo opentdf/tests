@@ -4,6 +4,9 @@
 */src
 */dist
 
+# Generated helper build .env files
+*/*.env
+
 # generated binaries
 otdfctl-*
 otdfctl

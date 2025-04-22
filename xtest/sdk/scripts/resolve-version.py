@@ -32,6 +32,7 @@
 #   {
 #     "sdk": "go",
 #     "alias": "0.15.0",
+#     "env": "ADDITIONAL_OPTION=per build metadata",
 #     "release": "v0.15.0",
 #     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
 #     "tag": "v0.15.0"
@@ -70,6 +71,7 @@ from urllib.parse import quote
 class ResolveSuccess(TypedDict):
     sdk: str  # The SDK name
     alias: str  # The tag that was requested
+    env: NotRequired[str]  # Additional options for the SDK
     head: NotRequired[bool]  # True if the tag is a head of a live branch
     pr: NotRequired[str]  # The pull request number associated with the tag
     release: NotRequired[str]  # The release name for the tag
@@ -103,6 +105,32 @@ lts_versions = {
 merge_queue_regex = r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
 
 sha_regex = r"^[a-f0-9]{7,40}$"
+
+
+def lookup_additional_options(sdk: str, version: str) -> str | None:
+    if sdk != "java":
+        return None
+    if version.startswith("v"):
+        version = version[1:]
+    match version:
+        case "0.7.8" | "0.7.7":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.29"
+        case "0.7.6":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.25"
+        case "0.7.5" | "0.7.4":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.18"
+        case "0.7.3" | "0.7.2":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.17"
+        case "0.6.1" | "0.6.0":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.14"
+        case "0.5.0":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.13"
+        case "0.4.0" | "0.3.0" | "0.2.0":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.10"
+        case "0.1.0":
+            return "PLATFORM_BRANCH=protocol/go/v0.2.3"
+        case _:
+            return None
 
 
 def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
@@ -306,6 +334,10 @@ def main():
     shas: set[str] = set()
     for version in versions:
         v = resolve(sdk, version, infix)
+        if "err" not in v:
+            env = lookup_additional_options(sdk, v["tag"])
+            if env:
+                v["env"] = env
         if "sha" in v:
             if v["sha"] in shas:
                 continue
