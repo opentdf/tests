@@ -113,7 +113,7 @@ class SubjectAction(BaseModelIgnoreExtra):
 
 
 class Action(BaseModelIgnoreExtra):
-    Value: SubjectAction
+    Value: SubjectAction | None = None
 
 
 class SubjectMapping(BaseModelIgnoreExtra):
