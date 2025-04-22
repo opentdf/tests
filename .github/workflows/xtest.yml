@@ -67,6 +67,12 @@ jobs:
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
+    env:
+      PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
+      JS_REF: "${{ inputs.js-ref || 'main' }}"
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
+      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
+      FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     steps:
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
