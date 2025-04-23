@@ -2,6 +2,9 @@
 
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
+# Let PLATFORM_VERSIONS default to `main` if not provided
+PLATFORM_BRANCH ?= main
+
 # Dynamically set VERSIONS to the names of all directories in the src folder if not provided
 VERSIONS ?= $(shell find $(MAKEFILE_DIR)/src -mindepth 1 -maxdepth 1 -type d -not -name "*.git" -exec basename {} \;)
 
@@ -19,12 +22,23 @@ all: build
 build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
+		if [ -f "$(MAKEFILE_DIR)/$$version.env" ]; then \
+			echo "Loading environment variables from $(MAKEFILE_DIR)/$$version.env"; \
+			set -a; \
+			. "$(MAKEFILE_DIR)/$$version.env"; \
+			set +a; \
+		fi; \
 		echo "Building binary for $$version"; \
 		cd $(MAKEFILE_DIR)/src/$$version && \
-		mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true || { \
+		if [ -n "$(PLATFORM_BRANCH)" ]; then \
+			mvn --batch-mode clean install "-Dplatform.branch=$(PLATFORM_BRANCH)" -DskipTests -Dmaven.javadoc.skip=true; \
+		else \
+			mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true; \
+		fi; \
+		if [ $$? -ne 0 ]; then \
 			echo "Error: Maven build failed for $$version"; \
 			exit 1; \
-		}; \
+		fi; \
 		echo "Copying cmdline.jar and cli.sh to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
 		cp $(MAKEFILE_DIR)/src/$$version/cmdline/target/cmdline.jar \

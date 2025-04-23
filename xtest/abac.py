@@ -4,29 +4,33 @@ import logging
 import subprocess
 import sys
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-class Timestamp(BaseModel):
+class BaseModelIgnoreExtra(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class Timestamp(BaseModelIgnoreExtra):
     seconds: int
     nanos: int
 
 
-class Metadata(BaseModel):
+class Metadata(BaseModelIgnoreExtra):
     created_at: Timestamp
     updated_at: Timestamp
     labels: list[str] | None = None
 
 
-class BoolValue(BaseModel):
+class BoolValue(BaseModelIgnoreExtra):
     value: bool
 
 
-class Namespace(BaseModel):
+class Namespace(BaseModelIgnoreExtra):
     id: str
     name: str
     fqn: str
@@ -40,7 +44,7 @@ class AttributeRule(enum.IntEnum):
     HIERARCHY = 3
 
 
-class AttributeValue(BaseModel):
+class AttributeValue(BaseModelIgnoreExtra):
     id: str
     value: str
     fqn: str | None = None
@@ -48,7 +52,7 @@ class AttributeValue(BaseModel):
     metadata: Metadata | None = None
 
 
-class Attribute(BaseModel):
+class Attribute(BaseModelIgnoreExtra):
     id: str
     namespace: Namespace
     name: str
@@ -73,7 +77,7 @@ class SubjectMappingOperatorEnum(enum.IntEnum):
     IN_CONTAINS = 3
 
 
-class Condition(BaseModel):
+class Condition(BaseModelIgnoreExtra):
     subject_external_selector_value: str
     operator: SubjectMappingOperatorEnum
     subject_external_values: list[str]
@@ -84,16 +88,16 @@ class ConditionBooleanTypeEnum(enum.IntEnum):
     OR = 2
 
 
-class ConditionGroup(BaseModel):
+class ConditionGroup(BaseModelIgnoreExtra):
     boolean_operator: ConditionBooleanTypeEnum
     conditions: list[Condition]
 
 
-class SubjectSet(BaseModel):
+class SubjectSet(BaseModelIgnoreExtra):
     condition_groups: list[ConditionGroup]
 
 
-class SubjectConditionSet(BaseModel):
+class SubjectConditionSet(BaseModelIgnoreExtra):
     id: str
     subject_sets: list[SubjectSet]
     active: BoolValue | None = None
@@ -105,17 +109,16 @@ class StandardAction(enum.IntEnum):
     TRANSMIT = 2
 
 
-class SubjectAction(BaseModel):
+class SubjectAction(BaseModelIgnoreExtra):
     Standard: StandardAction | None = None
     Custom: str | None = None
 
 
-# Huh? Is this a side effect of the oneof value field?
-class Action(BaseModel):
-    Value: SubjectAction
+class Action(BaseModelIgnoreExtra):
+    Value: SubjectAction | None = None
 
 
-class SubjectMapping(BaseModel):
+class SubjectMapping(BaseModelIgnoreExtra):
     id: str
     attribute_value: AttributeValue
     subject_condition_set: SubjectConditionSet
@@ -123,17 +126,17 @@ class SubjectMapping(BaseModel):
     metadata: Metadata | None = None
 
 
-class KasGrantNamespace(BaseModel):
+class KasGrantNamespace(BaseModelIgnoreExtra):
     namespace_id: str
     key_access_server_id: str | None = None
 
 
-class KasGrantAttribute(BaseModel):
+class KasGrantAttribute(BaseModelIgnoreExtra):
     attribute_id: str
     key_access_server_id: str | None = None
 
 
-class KasGrantValue(BaseModel):
+class KasGrantValue(BaseModelIgnoreExtra):
     value_id: str
     key_access_server_id: str | None = None
 
@@ -142,26 +145,26 @@ KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
 KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1 = 5
 
 
-class KasPublicKey(BaseModel):
+class KasPublicKey(BaseModelIgnoreExtra):
     pem: str
     kid: str
     alg: int
 
 
-class KasPublicKeySet(BaseModel):
+class KasPublicKeySet(BaseModelIgnoreExtra):
     keys: list[KasPublicKey]
 
 
-class PublicKey(BaseModel):
+class PublicKey(BaseModelIgnoreExtra):
     remote: str | None = None
     cached: KasPublicKeySet | None = None
 
 
-class PublicKeyChoice(BaseModel):
+class PublicKeyChoice(BaseModelIgnoreExtra):
     PublicKey: PublicKey
 
 
-class KasEntry(BaseModel):
+class KasEntry(BaseModelIgnoreExtra):
     id: str
     uri: str
     public_key: PublicKeyChoice | None
