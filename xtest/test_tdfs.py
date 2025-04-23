@@ -781,7 +781,6 @@ def test_tdf_with_malicious_kao(
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
     tmp_dir: Path,
-    container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -789,12 +788,12 @@ def test_tdf_with_malicious_kao(
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not decrypt_sdk.supports("kasallowlist"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support an allowlist for kases")
-    ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir)
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, container, expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert any(
