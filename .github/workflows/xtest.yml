@@ -222,7 +222,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@dspx-999/fix-compose
+        uses: strantalis/platform/test/start-up-with-containers@dspx-999/fix-compose
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
