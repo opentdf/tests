@@ -68,9 +68,9 @@ jobs:
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
     env:
-      PLATFORM_REF: "${{ inputs.platform-ref || 'main' }}"
+      PLATFORM_REF: "${{ inputs.platform-ref || 'dspx-966-kas-allowlist' }}"
       JS_REF: "${{ inputs.js-ref || 'main' }}"
-      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'dspx-966-kas-allowlist-options' }}"
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
       FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     steps:
