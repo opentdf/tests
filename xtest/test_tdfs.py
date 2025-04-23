@@ -474,14 +474,11 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
     return change_last_three(payload_bytes)
 
 
-def add_malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
+def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
     assert manifest.encryptionInformation.keyAccess
-    kaos = manifest.encryptionInformation.keyAccess
-    malicious_kao = copy.deepcopy(kaos[0])
-    malicious_kao.url = "http://localhost:8585/malicious/kas"  # nothing running at 8585
-    malicious_kao.sid = malicious_kao.sid + "1"  # append 1 to sid
-    kaos.insert(0, malicious_kao)
-    manifest.encryptionInformation.keyAccess = kaos
+    manifest.encryptionInformation.keyAccess[
+        0
+    ].url = "http://localhost:8585/malicious/kas"  # nothing running at 8585
     return manifest
 
 
@@ -780,7 +777,7 @@ def test_tdf_altered_payload_end(
 ## KAO TAMPER TESTS
 
 
-def test_tdf_with_added_malicious_kao(
+def test_tdf_with_malicious_kao(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -794,7 +791,7 @@ def test_tdf_with_added_malicious_kao(
     if not decrypt_sdk.supports("kasallowlist"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support an allowlist for kases")
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, container, tmp_dir)
-    b_file = tdfs.update_manifest("malicious_kao", ct_file, add_malicious_kao)
+    b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
     try:
