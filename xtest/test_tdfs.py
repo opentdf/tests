@@ -5,7 +5,6 @@ import pytest
 import string
 import random
 from pathlib import Path
-import copy
 
 import nano
 import tdfs
