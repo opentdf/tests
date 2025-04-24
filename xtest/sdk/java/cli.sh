@@ -58,7 +58,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     kasallowlist)
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep kas-allowlist
+      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist
       exit $?
       ;;
     ecwrap)
