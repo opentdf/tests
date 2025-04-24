@@ -475,9 +475,9 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
     assert manifest.encryptionInformation.keyAccess
-    manifest.encryptionInformation.keyAccess[
-        0
-    ].url = "http://localhost:8585/malicious/kas"  # nothing running at 8585
+    manifest.encryptionInformation.keyAccess[0].url = (
+        "http://localhost:8585/malicious/kas"  # nothing running at 8585
+    )
     return manifest
 
 

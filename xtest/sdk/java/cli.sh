@@ -93,9 +93,16 @@ fi
 args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"
-  "--platform-endpoint=$PLATFORMENDPOINT"
   "--plaintext"
 )
+
+# when we added support for KAS allowlist, we changed the platform endpoint format to require scheme
+if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist; then
+  args+=("--platform-endpoint=$PLATFORMURL")
+else
+  args+=("--platform-endpoint=$PLATFORMENDPOINT")
+fi
+
 COMMAND="$1"
 if [[ $4 == nano* ]]; then
   COMMAND="$1"nano
