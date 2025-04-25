@@ -57,7 +57,10 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
-
+    kasallowlist)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist
+      exit $?
+      ;;
     ecwrap)
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
         # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later
@@ -90,9 +93,16 @@ fi
 args=(
   "--client-id=$CLIENTID"
   "--client-secret=$CLIENTSECRET"
-  "--platform-endpoint=$PLATFORMENDPOINT"
   "--plaintext"
 )
+
+# when we added support for KAS allowlist, we changed the platform endpoint format to require scheme
+if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist; then
+  args+=("--platform-endpoint=$PLATFORMURL")
+else
+  args+=("--platform-endpoint=$PLATFORMENDPOINT")
+fi
+
 COMMAND="$1"
 if [[ $4 == nano* ]]; then
   COMMAND="$1"nano

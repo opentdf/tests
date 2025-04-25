@@ -473,6 +473,14 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
     return change_last_three(payload_bytes)
 
 
+def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    assert manifest.encryptionInformation.keyAccess
+    manifest.encryptionInformation.keyAccess[0].url = (
+        "http://localhost:8585/malicious/kas"  # nothing running at 8585
+    )
+    return manifest
+
+
 ### TAMPER TESTS
 
 
@@ -763,3 +771,32 @@ def test_tdf_altered_payload_end(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "segment", decrypt_sdk)
+
+
+## KAO TAMPER TESTS
+
+
+def test_tdf_with_malicious_kao(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    tmp_dir: Path,
+    in_focus: set[tdfs.SDK],
+) -> None:
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    if not decrypt_sdk.supports("kasallowlist"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support an allowlist for kases")
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
+    b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
+    fname = b_file.stem
+    rt_file = tmp_dir / f"{fname}.untdf"
+    try:
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert any(
+            err in exc.output
+            for err in [b"allowlist", b"kasallowlist", b"KasAllowlist", b"not allowed"]
+        ), f"Unexpected error output: [{exc.output}]"
