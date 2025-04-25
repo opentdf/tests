@@ -116,8 +116,8 @@ class SubjectAction(BaseModelIgnoreExtra):
 
 class Action(BaseModelIgnoreExtra):
     Value: SubjectAction | None = None
-    Id: str | None = None
-    Name: str | None = None
+    id: str | None = None
+    name: str | None = None
 
 
 class SubjectMapping(BaseModelIgnoreExtra):
