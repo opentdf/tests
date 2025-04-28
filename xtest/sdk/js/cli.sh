@@ -101,7 +101,7 @@ args=(
 )
 
 # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-if ! npx $CTL help | grep 'the list from "/key-access-servers" endpoint'; then
+if ! npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
   args+=(--ignoreAllowList)
 fi
 
