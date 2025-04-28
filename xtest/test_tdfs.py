@@ -798,5 +798,5 @@ def test_tdf_with_malicious_kao(
     except subprocess.CalledProcessError as exc:
         assert any(
             err in exc.output
-            for err in [b"allowlist", b"kasallowlist", b"KasAllowlist", b"not allowed"]
+            for err in [b"allowlist", b"kasallowlist", b"KasAllowlist", b"not allowed", b"disallowed KASes"]
         ), f"Unexpected error output: [{exc.output}]"

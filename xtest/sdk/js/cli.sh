@@ -45,7 +45,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     kasallowlist)
-      npx $CTL help | grep 'the list from "/key-access-servers" endpoint'
+      npx $CTL help | grep 'from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
@@ -99,11 +99,6 @@ args=(
   --oidcEndpoint "$KCFULLURL"
   --auth opentdf:secret
 )
-
-# only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-if ! npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
-  args+=(--ignoreAllowList)
-fi
 
 # default for js cli is nano
 if [ "$4" == "ztdf" ]; then
@@ -181,6 +176,13 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--rewrapKeyType "ec:secp256r1")
   fi
+  # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
+  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+    args+=(--policyEndpoint "$PLATFORMURL")
+  else
+    args+=(--ignoreAllowList)
+  fi
+
   echo npx $CTL decrypt "$src_file" "${args[@]}"
   npx $CTL decrypt "$src_file" "${args[@]}"
 else
