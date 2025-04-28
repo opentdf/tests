@@ -45,7 +45,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     kasallowlist)
-      npx $CTL help | grep kas-allowlist
+      npx $CTL help | grep 'the list from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
