@@ -96,10 +96,15 @@ dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
-  --ignoreAllowList # should be removed when fetching from registry is implemented
   --oidcEndpoint "$KCFULLURL"
   --auth opentdf:secret
 )
+
+# only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
+if ! npx $CTL help | grep 'the list from "/key-access-servers" endpoint'; then
+  args+=(--ignoreAllowList)
+fi
+
 # default for js cli is nano
 if [ "$4" == "ztdf" ]; then
   args+=(--containerType tdf3)
