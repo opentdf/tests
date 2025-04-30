@@ -18,6 +18,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_IGNORE_ALLOWLIST [boolean] - Add --ignoreAllowList flag on decrypt to ignore the kas allowlist
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -176,8 +177,8 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--rewrapKeyType "ec:secp256r1")
   fi
-  # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+  # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented and XT_WITH_IGNORE_ALLOWLIST is not set to true
+  if npx $CTL help | grep 'from "/key-access-servers" endpoint' && [[ "$XT_WITH_IGNORE_ALLOWLIST" != "true" ]]; then
     args+=(--policyEndpoint "$PLATFORMURL")
   else
     args+=(--ignoreAllowList)
