@@ -130,7 +130,7 @@ jobs:
             const refs = {
               platform: process.env.PLATFORM_REF || defaultTags,
               go: process.env.OTDFCTL_REF || defaultTags,
-              js: process.env.WEB_REF || defaultTags,
+              js: process.env.JS_REF || defaultTags,
               java: process.env.JAVA_REF || defaultTags
             };
 
@@ -252,6 +252,14 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
           node-version: "22.x"
+
+      ######### CHECKOUT JS CLI #############
+      - name: Configure js-sdk
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: js
+          version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       ######## SETUP THE JS CLI #############
       - name: build and setup the web-sdk cli
