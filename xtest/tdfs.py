@@ -96,7 +96,7 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 28):
             self.features.add("connectrpc")
-        
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
 
@@ -396,7 +396,11 @@ class SDK:
         if not verify_assertions:
             local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
         ## if platform does not have connect rpc && sdk is js && sdk supports kasallowlist, add ignore allowlist
-        if "connectrpc" not in pfs.features and self.sdk == "js" and self.supports("kasallowlist"):
+        if (
+            "connectrpc" not in pfs.features
+            and self.sdk == "js"
+            and self.supports("kasallowlist")
+        ):
             local_env |= {"XT_WITH_IGNORE_ALLOWLIST": "true"}
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
