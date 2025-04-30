@@ -783,11 +783,16 @@ def test_tdf_with_malicious_kao(
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ) -> None:
+    pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not decrypt_sdk.supports("kasallowlist"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support an allowlist for kases")
+    if decrypt_sdk.sdk == "js" and "connectrpc" not in pfs.features:
+        pytest.skip(
+            f"platform version {pfs.version} does not support connect rpc and {decrypt_sdk} sdk requires it for kasallowlist"
+        )
     ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
     fname = b_file.stem
