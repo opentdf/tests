@@ -28,6 +28,11 @@ on:
         type: string
         default: all
         description: "The SDK to focus on (go, js, java, all)"
+      message:
+        required: false
+        type: string
+        default: ""
+        description: "Message to display in the workflow summary"
   workflow_call:
     inputs:
       platform-ref:
@@ -74,6 +79,13 @@ jobs:
       JAVA_REF: "${{ inputs.java-ref || 'main' }}"
       FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
     steps:
+      - name: Workflow message
+        if : ${{ inputs.message != '' }}
+        run: |-
+          echo "## Workflow message" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ inputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ inputs.message }}"
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
         run: |-
@@ -206,6 +218,10 @@ jobs:
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
     steps:
+      - name: Workflow message
+        if : ${{ inputs.message != '' }}
+        run: |-
+          echo "${{ inputs.message }}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/tests
