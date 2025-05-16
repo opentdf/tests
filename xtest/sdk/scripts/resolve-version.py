@@ -98,7 +98,7 @@ lts_versions = {
     "go": "0.15.0",
     "java": "0.7.5",
     "js": "0.2.0",
-    "platform": "0.4.26",
+    "platform": "0.4.34",
 }
 
 
