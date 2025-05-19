@@ -93,6 +93,10 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 19):
             self.features.add("ns_grants")
+
+        if self.semver >= (0, 4, 28):
+            self.features.add("connectrpc")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
 
@@ -457,6 +461,15 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
     if encrypt_sdk.supports("hexless") and not decrypt_sdk.supports("hexless"):
         pytest.skip(
             f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
+        )
+
+
+def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
+    if (
+        encrypt_sdk.supports("connectrpc") or decrypt_sdk.supports("connectrpc")
+    ) and "connectrpc" not in pfs.features:
+        pytest.skip(
+            f"platform doesn't support [connectrpc], but {encrypt_sdk} or {decrypt_sdk} does"
         )
 
 

@@ -59,6 +59,12 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
+    connectrpc)
+      set -o pipefail
+      # SDK version 0.4.5 introduces connectrpc client side
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4) || ($1 == 0 && $2 == 4 && $3 >= 5)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     better-messages-2024)
       # In November 2024, we added more. detailed error messages
       # These appeared in go sdk 0.3.28

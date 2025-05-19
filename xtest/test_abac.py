@@ -23,6 +23,8 @@ def test_autoconfigure_one_attribute_standard(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-{encrypt_sdk}"
@@ -65,6 +67,8 @@ def test_autoconfigure_two_kas_or_standard(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-two-{encrypt_sdk}"
@@ -115,6 +119,8 @@ def test_autoconfigure_double_kas_and(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
@@ -165,6 +171,8 @@ def test_autoconfigure_one_attribute_attr_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-attr-{encrypt_sdk}"
@@ -209,6 +217,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
@@ -260,6 +270,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
@@ -310,6 +322,8 @@ def test_autoconfigure_one_attribute_ns_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-one-ns-{encrypt_sdk}"
@@ -354,6 +368,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
@@ -405,6 +421,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
