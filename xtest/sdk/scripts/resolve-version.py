@@ -254,7 +254,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             }
 
         remote_tags = [
-            r.split("\t") for r in repo.ls_remote(sdk_url, tags=True).split("\n")
+            r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")
         ]
         all_listed_tags = [
             (sha, tag.split("refs/tags/")[-1])
@@ -262,8 +262,23 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             if "refs/tags/" in tag
         ]
 
-        if version.startswith("refs/tags/"):
-            version = version.split("refs/tags/")[-1]
+        all_listed_branches = {
+            tag.split("refs/heads/")[-1]: sha
+            for (sha, tag) in remote_tags
+            if tag.startswith("refs/heads/")
+        }
+
+        if version in all_listed_branches:
+            sha = all_listed_branches[version]
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "sha": sha,
+                "tag": version,
+            }
+
+        
         if infix and version.startswith(f"{infix}/"):
             version = version.split(f"{infix}/")[-1]
 
