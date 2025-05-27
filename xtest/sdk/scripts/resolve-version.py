@@ -253,9 +253,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "tag": f"pull-{pr_number}",
             }
 
-        remote_tags = [
-            r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")
-        ]
+        remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
             (sha, tag.split("refs/tags/")[-1])
             for (sha, tag) in remote_tags
@@ -278,7 +276,6 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "tag": version,
             }
 
-        
         if infix and version.startswith(f"{infix}/"):
             version = version.split(f"{infix}/")[-1]
 
