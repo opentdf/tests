@@ -71,7 +71,7 @@ jobs:
     env:
       PLATFORM_REF: "${{ inputs.platform-ref }}"
       JS_REF: "${{ inputs.js-ref }}"
-      OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main lts' }}"
       JAVA_REF: "${{ inputs.java-ref }}"
     steps:
       - name: Validate focus-sdk input
