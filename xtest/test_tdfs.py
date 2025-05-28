@@ -85,6 +85,15 @@ def do_encrypt_with(
     return ct_file
 
 
+dspx1153Fails = []
+
+try:
+    dspx1153Fails = [
+        tdfs.SDK("go", "v0.15.0"),
+    ]
+except FileNotFoundError:
+    dspx1153Fails = []
+
 #### BASIC ROUNDTRIP TESTS
 
 
@@ -96,6 +105,8 @@ def test_tdf_roundtrip(
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ):
+    if container == "ztdf" and decrypt_sdk in dspx1153Fails:
+        pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
     pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -138,7 +149,7 @@ def test_tdf_roundtrip(
         and decrypt_sdk.supports("ecwrap")
         and "ecwrap" in pfs.features
     ):
-        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+        ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
 
@@ -777,6 +788,8 @@ def test_tdf_altered_payload_end(
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
+    if decrypt_sdk in dspx1153Fails:
+        pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
