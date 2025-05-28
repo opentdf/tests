@@ -9,9 +9,14 @@ from abac import Attribute
 cipherTexts: dict[str, Path] = {}
 
 
-dspx1153Fails = [
-    tdfs.SDK("go", "v0.15.0"),
-]
+dspx1153Fails = []
+
+try:
+    dspx1153Fails = [
+        tdfs.SDK("go", "v0.15.0"),
+    ]
+except FileNotFoundError:
+    dspx1153Fails = []
 
 
 def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):

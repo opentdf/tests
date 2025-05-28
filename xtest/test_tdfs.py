@@ -85,9 +85,14 @@ def do_encrypt_with(
     return ct_file
 
 
-dspx1153Fails = [
-    tdfs.SDK("go", "v0.15.0"),
-]
+dspx1153Fails = []
+
+try:
+    dspx1153Fails = [
+        tdfs.SDK("go", "v0.15.0"),
+    ]
+except FileNotFoundError:
+    dspx1153Fails = []
 
 #### BASIC ROUNDTRIP TESTS
 
