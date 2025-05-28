@@ -465,12 +465,7 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
 
 
 def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
-    if (
-        encrypt_sdk.supports("connectrpc") or decrypt_sdk.supports("connectrpc")
-    ) and "connectrpc" not in pfs.features:
-        pytest.skip(
-            f"platform doesn't support [connectrpc], but {encrypt_sdk} or {decrypt_sdk} does"
-        )
+    return False
 
 
 def select_target_version(
