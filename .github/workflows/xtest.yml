@@ -219,14 +219,6 @@ jobs:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
 
-      ######## CHECKOUT WEB SDK #############
-      - name: Configure web SDK tools
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: js
-          version-info: "${{ needs.resolve-versions.outputs.js }}"
-
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
