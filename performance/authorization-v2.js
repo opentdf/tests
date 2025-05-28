@@ -1,4 +1,3 @@
-// v1
 import { getClient } from './keycloakData.js';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -106,17 +105,30 @@ export default function() {
 
   // Test each endpoint in the OpenTDF Authorization Service
 
-  // 1. Test /v1/entitlements endpoint
-  const entitlementsUrl = `${authServiceBaseUrl}/v1/entitlements`;
+  // 1. Test /v2/entitlements endpoint
+  const entitlementsUrl = `${authServiceBaseUrl}/authorization.v2.AuthorizationService/GetEntitlements`;
   const entitlementsPayload = JSON.stringify({
-    "entities": [
-      {
-        "id": "e2",
-        "emailAddress": "bbb@topsecret.gbr"
+    "entityIdentifier": {
+      "entityChain": {
+        "ephemeralId": "ec1",
+        "entities": [
+          {
+            "ephemeralId": "e0",
+            "clientId": "opentdf"
+          },
+          {
+            "ephemeralId": "e1",
+            "userName": "secret-usa-aaa"
+          },
+          {
+            "ephemeralId": "e2",
+            "emailAddress": "bbb@topsecret.gbr"
+          }
+        ]
       }
-    ],
-    "scope": {
-      "attributeValueFqns": [
+    },
+    "resourceAttributeValues": {
+      "fqns": [
         "https://demo.com/attr/classification/value/secret"
       ]
     }
@@ -131,46 +143,41 @@ export default function() {
   // Ensure entitlements check runs for every request
   check(entitlementsResponse, {
     'Entitlements endpoint returns 200': (r) => r.status === 200,
-    'Entitlements response has entitlements array': (r) => r.json('entitlements') !== undefined,
+    'Entitlements response has entitlements array': (r) => r.json('entitlements') !== undefined || r.json('actionsPerAttributeValueFqn') !== undefined,
   });
 
   if (__VU <= 5) {
     console.log(`Entitlements response: ${entitlementsResponse.status}`);
-    console.log(`Entitlements body: ${entitlementsResponse.body}`);
+    // console.log(`Entitlements body: ${entitlementsResponse.body}`);
   }
 
-  // 2. Test /v1/authorization endpoint
-  const authorizationUrl = `${authServiceBaseUrl}/v1/authorization`;
+  // 2. Test /v2/authorization endpoint
+  const authorizationUrl = `${authServiceBaseUrl}/authorization.v2.AuthorizationService/GetDecision`;
   const authorizationPayload = JSON.stringify({
-    "decisionRequests": [
-      {
-        "actions": [
+    "entityIdentifier": {
+      "entityChain": {
+        "ephemeralId": "ec1",
+        "entities": [
           {
-            "name": "read"
-          }
-        ],
-        "entityChains": [
-          {
-            "id": "ec1",
-            "entities": [
-              {
-                "emailAddress": "bbb@topsecret.gbr"
-              }
-            ]
-          }
-        ],
-        "resourceAttributes": [
-          {
-            "resourceAttributesId": "attr-set-1",
-            "attributeValueFqns": [
-              "https://demo.com/attr/classification/value/secret",
-              "https://demo.com/attr/relto/value/usa",
-              "https://demo.com/attr/relto/value/fvey"
-            ]
+            "ephemeralId": "e0",
+            "emailAddress": "bbb@topsecret.gbr"
           }
         ]
       }
-    ]
+    },
+    "action": {
+      "name": "READ"
+    },
+    "resource": {
+      "ephemeralId": "attr-set-1",
+      "attributeValues": {
+        "fqns": [
+          "https://demo.com/attr/classification/value/secret",
+          "https://demo.com/attr/relto/value/usa",
+          "https://demo.com/attr/relto/value/fvey"
+        ]
+      }
+    }
   });
 
   const authorizationResponse = http.post(
@@ -181,7 +188,7 @@ export default function() {
   if (authorizationResponse.status >= 500 && authorizationResponse.status < 600) http_5xx_errors.add(1);
   check(authorizationResponse, {
     'Authorization endpoint returns 200': (r) => r.status === 200,
-    'Authorization response has decisionResponses': (r) => r.json('decisionResponses') !== undefined,
+    'Authorization response has decision': (r) => r.json('decision') !== undefined,
   });
 
   if (__VU <= 5) {
@@ -248,8 +255,8 @@ export function handleSummary(data) {
       ------------------------------------------
       
       THROUGHPUT ANALYSIS:
-      ✓ /v1/entitlements: ${entitlementsThroughput.toFixed(2)} req/sec [${entitlementsTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
-      ✓ /v1/authorization: ${authorizationThroughput.toFixed(2)} req/sec [${authorizationTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
+      ✓ /v2/entitlements: ${entitlementsThroughput.toFixed(2)} req/sec [${entitlementsTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
+      ✓ /v2/authorization: ${authorizationThroughput.toFixed(2)} req/sec [${authorizationTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
       
       PERFORMANCE METRICS:
       - Average response time: ${avgDuration.toFixed(2)}ms

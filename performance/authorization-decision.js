@@ -1,4 +1,3 @@
-// v1
 import { getClient } from './keycloakData.js';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -58,143 +57,108 @@ export default function() {
 
     const realmInfo = JSON.parse(realmInfoResponse.body);
     tokenEndpoint = `${realmInfo['token-service']}/token`;
-    __ENV.tokenEndpoint = tokenEndpoint;
+__ENV.tokenEndpoint = tokenEndpoint;
 
-    console.log(`Using discovered token endpoint: ${tokenEndpoint}`);
-  } else {
-    // Use the previously discovered endpoint
-    tokenEndpoint = __ENV.tokenEndpoint;
-  }
+console.log(`Using discovered token endpoint: ${tokenEndpoint}`);
+} else {
+  // Use the previously discovered endpoint
+  tokenEndpoint = __ENV.tokenEndpoint;
+}
 
-  // Step 2: Get access token using client credentials
-  const tokenData = {
-    'client_id': client.clientId,
-    'client_secret': client.secret,
-    'grant_type': 'client_credentials'
-  };
+// Step 2: Get access token using client credentials
+const tokenData = {
+  'client_id': client.clientId,
+  'client_secret': client.secret,
+  'grant_type': 'client_credentials'
+};
 
-  const tokenHeaders = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
+const tokenHeaders = {
+  'Content-Type': 'application/x-www-form-urlencoded',
+};
 
-  const tokenResponse = http.post(tokenEndpoint, tokenData, { headers: tokenHeaders });
-  if (tokenResponse.status >= 500 && tokenResponse.status < 600) http_5xx_errors.add(1);
+const tokenResponse = http.post(tokenEndpoint, tokenData, { headers: tokenHeaders });
+if (tokenResponse.status >= 500 && tokenResponse.status < 600) http_5xx_errors.add(1);
 
-  // Make sure checks always run and have consistent names
-  const tokenCheck = check(tokenResponse, {
-    'Token request successful': (r) => r.status === 200,
-    'Access token received': (r) => r.json('access_token') !== undefined,
-  });
+// Make sure checks always run and have consistent names
+const tokenCheck = check(tokenResponse, {
+  'Token request successful': (r) => r.status === 200,
+  'Access token received': (r) => r.json('access_token') !== undefined,
+});
 
-  // Log failures to help debugging
-  if (!tokenCheck) {
-    console.error(`Client credentials grant failed for ${client.clientId}: ${tokenResponse.status} ${tokenResponse.body}`);
-    return;
-  }
+// Log failures to help debugging
+if (!tokenCheck) {
+  console.error(`Client credentials grant failed for ${client.clientId}: ${tokenResponse.status} ${tokenResponse.body}`);
+  return;
+}
 
-  const token = tokenResponse.json('access_token');
+const token = tokenResponse.json('access_token');
 
-  if (__VU <= 5) {
-    console.log(`Successfully obtained access token for ${client.clientId}`);
-  }
+if (__VU <= 5) {
+  console.log(`Successfully obtained access token for ${client.clientId}`);
+}
 
-  // Step 3: Test the authorization service endpoints
-  const authHeaders = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+// Step 3: Test the authorization service endpoints
+const authHeaders = {
+  'Authorization': `Bearer ${token}`,
+  'Content-Type': 'application/json',
+};
 
-  // Test each endpoint in the OpenTDF Authorization Service
-
-  // 1. Test /v1/entitlements endpoint
-  const entitlementsUrl = `${authServiceBaseUrl}/v1/entitlements`;
-  const entitlementsPayload = JSON.stringify({
-    "entities": [
-      {
-        "id": "e2",
-        "emailAddress": "bbb@topsecret.gbr"
-      }
-    ],
-    "scope": {
-      "attributeValueFqns": [
-        "https://demo.com/attr/classification/value/secret"
+// Test /v1/authorization endpoint
+const authorizationUrl = `${authServiceBaseUrl}/v1/authorization`;
+const authorizationPayload = JSON.stringify({
+  "decisionRequests": [
+    {
+      "actions": [
+        {
+          "name": "read"
+        }
+      ],
+      "entityChains": [
+        {
+          "id": "ec1",
+          "entities": [
+            {
+              "emailAddress": "bbb@topsecret.gbr"
+            }
+          ]
+        }
+      ],
+      "resourceAttributes": [
+        {
+          "resourceAttributesId": "attr-set-1",
+          "attributeValueFqns": [
+            "https://demo.com/attr/classification/value/secret",
+            "https://demo.com/attr/relto/value/usa",
+            "https://demo.com/attr/relto/value/fvey"
+          ]
+        }
       ]
     }
-  });
+  ]
+});
 
-  const entitlementsResponse = http.post(
-    entitlementsUrl,
-    entitlementsPayload,
-    { headers: authHeaders }
-  );
-  if (entitlementsResponse.status >= 500 && entitlementsResponse.status < 600) http_5xx_errors.add(1);
-  // Ensure entitlements check runs for every request
-  check(entitlementsResponse, {
-    'Entitlements endpoint returns 200': (r) => r.status === 200,
-    'Entitlements response has entitlements array': (r) => r.json('entitlements') !== undefined,
-  });
+const authorizationResponse = http.post(
+  authorizationUrl,
+  authorizationPayload,
+  { headers: authHeaders }
+);
+if (authorizationResponse.status >= 500 && authorizationResponse.status < 600) http_5xx_errors.add(1);
+check(authorizationResponse, {
+  'Authorization endpoint returns 200': (r) => r.status === 200,
+  'Authorization response has decisionResponses': (r) => r.json('decisionResponses') !== undefined,
+});
 
-  if (__VU <= 5) {
-    console.log(`Entitlements response: ${entitlementsResponse.status}`);
-    console.log(`Entitlements body: ${entitlementsResponse.body}`);
+if (__VU <= 5) {
+  console.log(`Authorization response: ${authorizationResponse.status}`);
+
+  // If there was an error, log it for debugging
+  if (authorizationResponse.status !== 200) {
+    console.log(`Authorization error: ${authorizationResponse.body}`);
   }
+}
 
-  // 2. Test /v1/authorization endpoint
-  const authorizationUrl = `${authServiceBaseUrl}/v1/authorization`;
-  const authorizationPayload = JSON.stringify({
-    "decisionRequests": [
-      {
-        "actions": [
-          {
-            "name": "read"
-          }
-        ],
-        "entityChains": [
-          {
-            "id": "ec1",
-            "entities": [
-              {
-                "emailAddress": "bbb@topsecret.gbr"
-              }
-            ]
-          }
-        ],
-        "resourceAttributes": [
-          {
-            "resourceAttributesId": "attr-set-1",
-            "attributeValueFqns": [
-              "https://demo.com/attr/classification/value/secret",
-              "https://demo.com/attr/relto/value/usa",
-              "https://demo.com/attr/relto/value/fvey"
-            ]
-          }
-        ]
-      }
-    ]
-  });
-
-  const authorizationResponse = http.post(
-    authorizationUrl,
-    authorizationPayload,
-    { headers: authHeaders }
-  );
-  if (authorizationResponse.status >= 500 && authorizationResponse.status < 600) http_5xx_errors.add(1);
-  check(authorizationResponse, {
-    'Authorization endpoint returns 200': (r) => r.status === 200,
-    'Authorization response has decisionResponses': (r) => r.json('decisionResponses') !== undefined,
-  });
-
-  if (__VU <= 5) {
-    console.log(`Authorization response: ${authorizationResponse.status}`);
-
-    // If there was an error, log it for debugging
-    if (authorizationResponse.status !== 200) {
-      console.log(`Authorization error: ${authorizationResponse.body}`);
-    }
-  }
-
-  // Add small sleep to avoid overwhelming the service
-  sleep(0.1);
+// Add small sleep to avoid overwhelming the service
+sleep(0.1);
 }
 
 export function handleSummary(data) {
@@ -210,27 +174,24 @@ export function handleSummary(data) {
   const http5xxErrorsCount = data.metrics.http_5xx_errors ? data.metrics.http_5xx_errors.values.count : 0;
   const http5xxErrorRate = totalHttpRequests > 0 ? (http5xxErrorsCount / totalHttpRequests) * 100 : 0;
 
-  // For an HTTP test making 3 requests per iteration (token, entitlements, authorization)
+  // For an HTTP test making 2 requests per iteration (token, authorization)
   // we can estimate the per-endpoint counts
   const iterations = data.metrics.iterations ? data.metrics.iterations.values.count : 0;
 
-  // Estimate counts per endpoint (1 token request, 1 entitlements, 1 authorization per iteration)
+  // Estimate counts per endpoint (1 token request, 1 authorization per iteration)
   const tokenRequests = iterations;
-  const entitlementsRequests = iterations;
   const authorizationRequests = iterations;
 
   // Calculate throughput based on estimated requests per endpoint
-  const entitlementsThroughput = testDuration > 0 ? entitlementsRequests / testDuration : 0;
   const authorizationThroughput = testDuration > 0 ? authorizationRequests / testDuration : 0;
 
   // Response success estimate (if the iterations completed, we can assume most requests succeeded)
-  // Based on total HTTP requests vs expected requests (3 per iteration)
-  const expectedRequests = iterations * 3;
+  // Based on total HTTP requests vs expected requests (2 per iteration)
+  const expectedRequests = iterations * 2;
   const successRateEstimate = expectedRequests > 0 ? (Math.min(totalHttpRequests, expectedRequests) / expectedRequests) * 100 : 0;
 
   // Target throughput requirements
   const targetThroughput = 5000; // requests/sec
-  const entitlementsTargetMet = entitlementsThroughput >= targetThroughput;
   const authorizationTargetMet = authorizationThroughput >= targetThroughput;
 
   // Get performance metrics
@@ -248,7 +209,6 @@ export function handleSummary(data) {
       ------------------------------------------
       
       THROUGHPUT ANALYSIS:
-      ✓ /v1/entitlements: ${entitlementsThroughput.toFixed(2)} req/sec [${entitlementsTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
       ✓ /v1/authorization: ${authorizationThroughput.toFixed(2)} req/sec [${authorizationTargetMet ? 'PASS' : 'FAIL'}] (Target: ${targetThroughput} req/sec)
       
       PERFORMANCE METRICS:
@@ -268,11 +228,11 @@ export function handleSummary(data) {
       - Test Duration: ${testDuration.toFixed(2)} seconds
       
       SUMMARY:
-      The OpenTDF Authorization Service processed ${Math.round(entitlementsThroughput)} requests/second under a 
+      The OpenTDF Authorization Service processed ${Math.round(authorizationThroughput)} requests/second under a 
       load of ${__ENV.TOTAL_VUS || 0} virtual users over ${testDuration.toFixed(0)} seconds, with an average 
       response time of ${avgDuration.toFixed(0)}ms and a P95 of ${p95Duration.toFixed(0)}ms.
       
-      The system ${(entitlementsTargetMet && authorizationTargetMet) ? 'MEETS' : 'DOES NOT MEET'} the target throughput 
+      The system ${authorizationTargetMet ? 'MEETS' : 'DOES NOT MEET'} the target throughput 
       requirement of ${targetThroughput} requests/second.
     `,
   };
