@@ -69,7 +69,7 @@ jobs:
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
     env:
-      PLATFORM_REF: "${{ inputs.platform-ref }}"
+      PLATFORM_REF: "${{ inputs.platform-ref || 'main lts' }}"
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
       JAVA_REF: "${{ inputs.java-ref }}"
