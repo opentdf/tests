@@ -149,7 +149,7 @@ def test_tdf_roundtrip(
         and decrypt_sdk.supports("ecwrap")
         and "ecwrap" in pfs.features
     ):
-        ert_file = f"{tmp_dir}test-{fname}-ecrewrap.untdf"
+        ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
 
