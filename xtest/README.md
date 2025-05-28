@@ -4,10 +4,10 @@
 
 ## Requirements
 
-- `go 1.22.3`
-- `node 20`
+- `go 1.24`
+- `node 22`
 - `python 3.12`
-- `jdk 11`
+- `jdk 17`
 - `maven`
 
 ```shell
@@ -62,6 +62,7 @@ To build all the checked out SDKs, run `make` from the `sdk` folder.
    ```shell
    cp opentdf-dev.yaml opentdf.yaml
    sed -i '' 's/e1/ec1/g' opentdf.yaml
+   yq eval '.services.kas.ec_tdf_enabled = true' -i opentdf.yaml
    .github/scripts/init-temp-keys.sh
    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./keys/localhost.crt
    ```
