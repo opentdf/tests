@@ -76,6 +76,7 @@ def sample_pyright_warning[T](message: str) -> T:
     # This will cause a type error because we are returning an int where T is expected
     return 42  # type: ignore[return-value]  # pyright: ignore[reportReturnType]
 
+
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
