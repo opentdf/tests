@@ -90,6 +90,7 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 4, 39):
             self.features.add("hexless")
             self.features.add("hexaflexible")
+            self.features.add("superhexaflexible")
 
         if self.semver >= (0, 4, 23):
             self.features.add("nano_ecdsa")
