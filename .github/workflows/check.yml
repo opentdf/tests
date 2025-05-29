@@ -25,7 +25,6 @@ jobs:
         run: |-
           pip install -r requirements.txt
           pip install black pyright ruff
-          pip install 
           ruff check
           black --check .
           pyright .
