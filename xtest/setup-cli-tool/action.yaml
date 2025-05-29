@@ -3,14 +3,11 @@ description: Check out and build one or more SDK and its CLI tool for use by xte
 inputs:
   path:
     description: The path to checkout the the SDK source code to; concatenated with branch or tag name.
-    type: string
   sdk:
     description: The SDK to configure; one of go, java, js
-    type: string
   version-info:
     description: JSON-encoded output of resolve-version.py
     required: true
-    type: string
 outputs:
   version-a:
     description: "Object containing tag, sha, and name of a version checked out"

@@ -18,8 +18,9 @@ jobs:
       - name: 🧽 🐍 
         run: |-
           pip install -r requirements.txt
-          pip install ruff
-          pip install black
+          pip install black pyright ruff
+          pip install 
           ruff check
           black --check .
+          pyright .
         working-directory: xtest

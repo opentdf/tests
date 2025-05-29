@@ -14,6 +14,7 @@ from pydantic_core import to_jsonable_python
 
 import abac
 import tdfs
+from typing import cast
 
 
 def englist(s: tuple[str]) -> str:
@@ -75,17 +76,18 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             scope="session",
         )
 
-    def list_opt[T](name: str, t: typing.Any) -> list[T]:
+    def list_opt(name: str, t: typing.Any) -> list[str]:
         ttt = typing.get_args(t)
         v = metafunc.config.getoption(name)
         if not v:
             return []
         if type(v) is not str:
             raise ValueError(f"Invalid value for {name}: {v}")
-        for i in v.split():
+        a = v.split()
+        for i in a:
             if i not in ttt:
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
-        return [typing.cast(T, i) for i in v.split()]
+        return a
 
     def defaulted_list_opt[T](
         names: list[str], t: typing.Any, default: list[T]
@@ -93,7 +95,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         for name in names:
             v = metafunc.config.getoption(name)
             if v:
-                return list_opt(name, t)
+                return cast(list[T], list_opt(name, t))
         return default
 
     subject_sdks: set[tdfs.SDK] = set()
@@ -136,14 +138,16 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         if focus_opt == "all":
             focus = set(typing.get_args(tdfs.sdk_type))
         else:
-            focus = set(list_opt("--focus", tdfs.focus_type))
+            focus = cast(set[tdfs.sdk_type], set(list_opt("--focus", tdfs.focus_type)))
         focused_sdks = set(s for s in subject_sdks if s.sdk in focus)
         metafunc.parametrize("in_focus", [focused_sdks])
 
     if "container" in metafunc.fixturenames:
         containers: list[tdfs.container_type] = []
         if metafunc.config.getoption("--containers"):
-            containers = list_opt("--containers", tdfs.container_type)
+            containers = cast(
+                list[tdfs.container_type], list_opt("--containers", tdfs.container_type)
+            )
         else:
             containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
