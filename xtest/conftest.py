@@ -68,6 +68,14 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
 
+def sample_pyright_warning[T](message: str) -> T:
+    """
+    A sample function to demonstrate a Pyright warning.
+    This function is intentionally incorrect to trigger a warning.
+    """
+    # This will cause a type error because we are returning an int where T is expected
+    return 42  # type: ignore[return-value]  # pyright: ignore[reportReturnType]
+
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
