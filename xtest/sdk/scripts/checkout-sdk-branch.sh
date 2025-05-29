@@ -1,8 +1,8 @@
 #!/bin/bash
 # Refreshes to the latest sdk at branch in the appropriate folder.
 #
-# Usage: ./refresh-sdk-branch.sh [sdk language] [branch]
-# Example: ./refresh-sdk-branch.sh js main
+# Usage: ./checkout-sdk-branch.sh [sdk language] [branch]
+# Example: ./checkout-sdk-branch.sh js main
 
 # Resolve script directory
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)

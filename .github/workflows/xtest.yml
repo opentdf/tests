@@ -101,9 +101,10 @@ jobs:
           CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
           CRON_MONDAY_WEDNESDAY: ${{ github.event.schedule == '0 5 * * 1,3' }}
           CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: otdf-sdk
+          persist-credentials: false
           repository: opentdf/tests
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
@@ -173,7 +174,7 @@ jobs:
                 const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
                 const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
                 const tagLink = release
-                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${encodeURIComponent(release)}`)}">${htmlEscape(tag)}</a>` 
+                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>` 
                   : htmlEscape(tag);
                 table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
                 if (err) {
@@ -214,7 +215,7 @@ jobs:
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories

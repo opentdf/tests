@@ -37,9 +37,12 @@ feature_type = Literal[
     "assertion_verification",
     "autoconfigure",
     "better-messages-2024",
+    "bulk_rewrap",
+    "connectrpc",
     "ecwrap",
     "hexless",
     "hexaflexible",
+    "kasallowlist",
     "nano_ecdsa",
     "ns_grants",
 ]
