@@ -37,7 +37,7 @@ jobs:
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
             echo -e "## type check error\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
-          elif [ -z "$OUTPUT" ]; then
+          elif [[ -z "$OUTPUT" || "$OUTPUT" == '0 errors, 0 warnings, 0 informations'* ]]; then
             echo "No type errors found."
           else
             echo "Type check passed with warnings.\n\n$OUTPUT"
