@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 
@@ -9,8 +9,10 @@ BindingMethod = Literal["jws", "JWS"]
 
 
 class Statement(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     format: str
-    schema: str
+    schema_: str = Field(..., alias="schema")
     value: str | dict[str, str]
 
 

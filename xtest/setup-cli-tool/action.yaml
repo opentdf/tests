@@ -3,14 +3,11 @@ description: Check out and build one or more SDK and its CLI tool for use by xte
 inputs:
   path:
     description: The path to checkout the the SDK source code to; concatenated with branch or tag name.
-    type: string
   sdk:
     description: The SDK to configure; one of go, java, js
-    type: string
   version-info:
     description: JSON-encoded output of resolve-version.py
     required: true
-    type: string
 outputs:
   version-a:
     description: "Object containing tag, sha, and name of a version checked out"
@@ -80,34 +77,38 @@ runs:
         version_info: ${{ inputs.version-info }}
 
     - name: checkout version a
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: steps.resolve.outputs.version-a != ''
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
+        persist-credentials: false
         ref: ${{ fromJson(steps.resolve.outputs.version-a).sha }}
         repository: ${{ env.sdk_repo }}
 
     - name: checkout version b
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: steps.resolve.outputs.version-b != ''
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
+        persist-credentials: false
         ref: ${{ fromJson(steps.resolve.outputs.version-b).sha }}
         repository: ${{ env.sdk_repo }}
 
     - name: checkout version c
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: steps.resolve.outputs.version-c != ''
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
+        persist-credentials: false
         ref: ${{ fromJson(steps.resolve.outputs.version-c).sha }}
         repository: ${{ env.sdk_repo }}
 
     - name: checkout version d
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: steps.resolve.outputs.version-d != ''
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
+        persist-credentials: false
         ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
         repository: ${{ env.sdk_repo }}
 
