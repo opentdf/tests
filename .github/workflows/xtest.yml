@@ -69,7 +69,7 @@ jobs:
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
     env:
-      PLATFORM_REF: "${{ inputs.platform-ref }}"
+      PLATFORM_REF: "${{ inputs.platform-ref || 'main lts' }}"
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
       JAVA_REF: "${{ inputs.java-ref }}"
@@ -219,14 +219,6 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-
-      ######## CHECKOUT WEB SDK #############
-      - name: Configure web SDK tools
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: js
-          version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
