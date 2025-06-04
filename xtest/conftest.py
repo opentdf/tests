@@ -176,7 +176,7 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
     if heads:
         return abac.OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
     if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
-        return abac.OpentdfCommandLineTool("sdk/go/otdfctl.sh")
+        return abac.OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
     return abac.OpentdfCommandLineTool()
 
 
