@@ -173,9 +173,9 @@ jobs:
                 const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
                 const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
                 const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
-                const tagLink = release
+                const tagLink = (release && tag)
                   ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>` 
-                  : htmlEscape(tag);
+                  : tag ? htmlEscape(tag) : 'N/A';
                 table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
