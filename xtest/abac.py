@@ -1,6 +1,7 @@
 import enum
 import json
 import logging
+import os
 import subprocess
 import sys
 
@@ -174,8 +175,11 @@ class KasEntry(BaseModelIgnoreExtra):
 
 
 class OpentdfCommandLineTool:
-    def __init__(self):
-        self.otdfctl = ["sdk/go/otdfctl.sh"]
+    def __init__(self, otdfctl_path: str | None = None):
+        path = otdfctl_path if otdfctl_path else "sdk/go/otdfctl.sh"
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
+        self.otdfctl = [path]
 
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()
@@ -394,6 +398,7 @@ class OpentdfCommandLineTool:
     ) -> SubjectMapping:
         cmd = self.otdfctl + "policy subject-mappings create".split()
 
+        # FIXME: if fails, replace with `--action-condition=read`
         cmd += [
             "--action=read",
             f"--attribute-value-id={value if isinstance(value, str) else value.id}",

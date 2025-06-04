@@ -179,7 +179,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 # and return the first one.
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
-                        pr_number = tag.split("/")[-2]
+                        pr_number = tag.split("/")[2]
                         return {
                             "sdk": sdk,
                             "alias": version,
@@ -247,7 +247,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 for r in repo.ls_remote(sdk_url).split("\n")
                 if r.endswith(version)
             ]
-            pr_number = version.split("/")[-2]
+            pr_number = version.split("/")[2]
             if not merge_heads:
                 return {
                     "sdk": sdk,

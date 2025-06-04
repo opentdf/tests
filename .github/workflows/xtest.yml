@@ -78,7 +78,7 @@ jobs:
         if: ${{ inputs.focus-sdk != '' }}
         run: |-
           if [[ ! "all go java js" =~ (^|[[:space:]])${{ inputs.focus-sdk }}($|[[:space:]]) ]]; then
-            echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> $GITHUB_STEP_SUMMARY
+            echo "Invalid focus-sdk input: ${{ inputs.focus-sdk }}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
       - name: Default Versions depend on context
@@ -277,6 +277,13 @@ jobs:
           path: otdftests/xtest/sdk
           sdk: go
           version-info: "${{ needs.resolve-versions.outputs.go }}"
+      
+      - name: Resolve otdfctl heads
+        id: resolve-otdfctl-heads
+        run: |-
+          echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
+        env:
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
         if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
@@ -294,8 +301,6 @@ jobs:
             done
             go mod tidy
           done
-        env:
-          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
@@ -348,12 +353,12 @@ jobs:
           if ! go run ./service version; then
             # NOTE: the version command was added in 0.4.37
             echo "Error: Unable to get platform version; defaulting to tag: [$PLATFORM_TAG]"
-            echo "PLATFORM_VERSION=$PLATFORM_TAG" >> $GITHUB_ENV
+            echo "PLATFORM_VERSION=$PLATFORM_TAG" >> "$GITHUB_ENV"
             exit
           fi
           # Older version commands output version to stderr; newer versions output to stdout
           PLATFORM_VERSION=$(go run ./service version 2>&1)
-          echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> $GITHUB_ENV
+          echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
           echo "## Platform version output: [$PLATFORM_VERSION]"
         working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
         env:
