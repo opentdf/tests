@@ -116,6 +116,8 @@ class SubjectAction(BaseModelIgnoreExtra):
 
 class Action(BaseModelIgnoreExtra):
     Value: SubjectAction | None = None
+    id: str | None = None
+    name: str | None = None
 
 
 class SubjectMapping(BaseModelIgnoreExtra):
@@ -393,7 +395,7 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy subject-mappings create".split()
 
         cmd += [
-            "--action-standard=DECRYPT",
+            "--action=read",
             f"--attribute-value-id={value if isinstance(value, str) else value.id}",
             f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
         ]
