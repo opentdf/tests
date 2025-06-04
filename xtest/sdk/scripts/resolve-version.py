@@ -64,7 +64,7 @@ import sys
 import json
 import re
 from git import Git
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypeGuard, TypedDict
 from urllib.parse import quote
 
 
@@ -87,6 +87,17 @@ class ResolveError(TypedDict):
 
 ResolveResult = ResolveSuccess | ResolveError
 
+
+def is_resolve_error(val: ResolveResult) -> TypeGuard[ResolveError]:
+    """Check if the given value is a ResolveError type."""
+    return "err" in val
+
+
+def is_resolve_success(val: ResolveResult) -> TypeGuard[ResolveSuccess]:
+    """Check if the given value is a ResolveSuccess type."""
+    return "err" not in val and "sha" in val and "tag" in val
+
+
 sdk_urls = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
@@ -98,7 +109,7 @@ lts_versions = {
     "go": "0.15.0",
     "java": "0.7.5",
     "js": "0.2.0",
-    "platform": "0.4.26",
+    "platform": "0.4.34",
 }
 
 
@@ -253,17 +264,29 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "tag": f"pull-{pr_number}",
             }
 
-        remote_tags = [
-            r.split("\t") for r in repo.ls_remote(sdk_url, tags=True).split("\n")
-        ]
+        remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
             (sha, tag.split("refs/tags/")[-1])
             for (sha, tag) in remote_tags
             if "refs/tags/" in tag
         ]
 
-        if version.startswith("refs/tags/"):
-            version = version.split("refs/tags/")[-1]
+        all_listed_branches = {
+            tag.split("refs/heads/")[-1]: sha
+            for (sha, tag) in remote_tags
+            if tag.startswith("refs/heads/")
+        }
+
+        if version in all_listed_branches:
+            sha = all_listed_branches[version]
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "sha": sha,
+                "tag": version,
+            }
+
         if infix and version.startswith(f"{infix}/"):
             version = version.split(f"{infix}/")[-1]
 
@@ -334,11 +357,10 @@ def main():
     shas: set[str] = set()
     for version in versions:
         v = resolve(sdk, version, infix)
-        if "err" not in v:
+        if is_resolve_success(v):
             env = lookup_additional_options(sdk, v["tag"])
             if env:
                 v["env"] = env
-        if "sha" in v:
             if v["sha"] in shas:
                 continue
             shas.add(v["sha"])

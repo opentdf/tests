@@ -37,9 +37,12 @@ feature_type = Literal[
     "assertion_verification",
     "autoconfigure",
     "better-messages-2024",
+    "bulk_rewrap",
+    "connectrpc",
     "ecwrap",
     "hexless",
     "hexaflexible",
+    "kasallowlist",
     "nano_ecdsa",
     "ns_grants",
 ]
@@ -93,6 +96,10 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 19):
             self.features.add("ns_grants")
+
+        if self.semver >= (0, 4, 28):
+            self.features.add("connectrpc")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
 
@@ -458,6 +465,10 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
         pytest.skip(
             f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
         )
+
+
+def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
+    return False
 
 
 def select_target_version(
