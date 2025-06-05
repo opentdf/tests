@@ -27,12 +27,12 @@ case "$LANGUAGE" in
     REPO_URL="https://github.com/opentdf/web-sdk"
     ;;
   java)
-    BARE_REPO_PATH="$XTEST_DIR/sdk/java/src/web-sdk.git"
+    BARE_REPO_PATH="$XTEST_DIR/sdk/java/src/java-sdk.git"
     WORKTREE_PATH="$XTEST_DIR/sdk/java/src/$LOCAL_NAME"
     REPO_URL="https://github.com/opentdf/java-sdk"
     ;;
   go)
-    BARE_REPO_PATH="$XTEST_DIR/sdk/go/src/web-sdk.git"
+    BARE_REPO_PATH="$XTEST_DIR/sdk/go/src/otdfctl.git"
     WORKTREE_PATH="$XTEST_DIR/sdk/go/src/$LOCAL_NAME"
     REPO_URL="https://github.com/opentdf/otdfctl"
     ;;

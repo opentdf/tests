@@ -25,7 +25,7 @@ build:
 			echo "Error: Go build failed for $$version"; \
 			exit 1; \
 		}; \
-		echo "Copying binary and cli.sh to dist/$$version"; \
+		echo "Copying binary and shell scripts to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
 		mv $(MAKEFILE_DIR)/binary-$$version $(MAKEFILE_DIR)/dist/$$version/otdfctl || { \
 			echo "Error: Failed to copy binary for $$version"; \
@@ -33,6 +33,14 @@ build:
 		}; \
 		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/ || { \
 			echo "Error: Failed to copy cli.sh for $$version"; \
+			exit 3; \
+		}; \
+		cp $(MAKEFILE_DIR)/otdfctl.sh $(MAKEFILE_DIR)/dist/$$version/ || { \
+			echo "Error: Failed to copy otdfctl.sh for $$version"; \
+			exit 3; \
+		}; \
+		cp $(MAKEFILE_DIR)/opentdfctl.yaml $(MAKEFILE_DIR)/dist/$$version/ || { \
+			echo "Error: Failed to copy opentdfctl.yaml for $$version"; \
 			exit 3; \
 		}; \
 	done

@@ -170,7 +170,20 @@ def tmp_dir() -> Path:
     return dname
 
 
-_otdfctl = abac.OpentdfCommandLineTool()
+def load_otdfctl() -> abac.OpentdfCommandLineTool:
+    oh = os.environ.get("OTDFCTL_HEADS", "[]")
+    try:
+        heads = json.loads(oh)
+        if heads:
+            return abac.OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
+    except json.JSONDecodeError:
+        print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
+    if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
+        return abac.OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
+    return abac.OpentdfCommandLineTool()
+
+
+_otdfctl = load_otdfctl()
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,7 @@
 import enum
 import json
 import logging
+import os
 import subprocess
 import sys
 
@@ -174,8 +175,15 @@ class KasEntry(BaseModelIgnoreExtra):
 
 
 class OpentdfCommandLineTool:
-    def __init__(self):
-        self.otdfctl = ["sdk/go/otdfctl.sh"]
+    # Flag to indicate we are using an older version of policy subject-mappings create that uses the `action-standard` flag
+    # instead of just `action`
+    flag_scs_map_action_standard: bool = False
+
+    def __init__(self, otdfctl_path: str | None = None):
+        path = otdfctl_path if otdfctl_path else "sdk/go/otdfctl.sh"
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
+        self.otdfctl = [path]
 
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()
@@ -392,10 +400,14 @@ class OpentdfCommandLineTool:
     def scs_map(
         self, sc: str | SubjectConditionSet, value: str | AttributeValue
     ) -> SubjectMapping:
-        cmd = self.otdfctl + "policy subject-mappings create".split()
+        cmd: list[str] = self.otdfctl + "policy subject-mappings create".split()
+
+        if self.flag_scs_map_action_standard:
+            cmd += ["--action-standard=read"]
+        else:
+            cmd += ["--action=read"]
 
         cmd += [
-            "--action=read",
             f"--attribute-value-id={value if isinstance(value, str) else value.id}",
             f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
         ]
@@ -408,5 +420,13 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
         if out:
             print(out)
+        if (
+            code != 0
+            and not self.flag_scs_map_action_standard
+            and err.find(b"--action-standard") >= 0
+        ):
+            self.flag_scs_map_action_standard = True
+            return self.scs_map(sc, value)
+
         assert code == 0
         return SubjectMapping.model_validate_json(out)
