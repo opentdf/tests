@@ -72,6 +72,12 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
+    public-client-id)
+      # this was removed in 0.21.0
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .version | awk -F. '{ if (($1 == 0 && $2 < 21)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

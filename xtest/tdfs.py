@@ -100,6 +100,10 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 4, 28):
             self.features.add("connectrpc")
 
+        # removed after service 0.5.5
+        if self.semver <= (0, 5, 5):
+            self.features.add("public-client-id")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
 
@@ -469,6 +473,14 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
 
 def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
     return False
+
+
+def skip_public_client_id_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
+    for sdk in (encrypt_sdk, decrypt_sdk):
+        if sdk is not None and sdk.sdk == "go" and sdk.supports("public-client-id") and "public-client-id" not in pfs.features:
+            pytest.skip(
+                f"{sdk} sdk expects [public_client_id], but platform service {pfs.version} does not support it"
+            )
 
 
 def select_target_version(
