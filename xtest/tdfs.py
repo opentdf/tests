@@ -486,7 +486,7 @@ def skip_public_client_id_skew(
             and "no-public-client-id" in pfs.features
         ):
             pytest.skip(
-                f"{sdk} sdk expects [public_client_id], but platform service {pfs.version} does not support it"
+                f"{sdk} sdk expects [public_client_id], but platform service {pfs.semver} does not support it"
             )
 
 
