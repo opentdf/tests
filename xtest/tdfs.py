@@ -475,9 +475,16 @@ def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatur
     return False
 
 
-def skip_public_client_id_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
+def skip_public_client_id_skew(
+    encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet
+):
     for sdk in (encrypt_sdk, decrypt_sdk):
-        if sdk is not None and sdk.sdk == "go" and sdk.supports("public-client-id") and "public-client-id" not in pfs.features:
+        if (
+            sdk is not None
+            and sdk.sdk == "go"
+            and sdk.supports("public-client-id")
+            and "public-client-id" not in pfs.features
+        ):
             pytest.skip(
                 f"{sdk} sdk expects [public_client_id], but platform service {pfs.version} does not support it"
             )
