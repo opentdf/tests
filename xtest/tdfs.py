@@ -479,9 +479,6 @@ def skip_public_client_id_skew(
     encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet
 ):
     for sdk in (encrypt_sdk, decrypt_sdk):
-        logger.info(f"Checking public_client_id support for {sdk}, platform {pfs.version}")
-        logger.info(f"Platform features: {', '.join(sorted(pfs.features))}")
-        logger.info(f"sdk supports: {sdk.supports('public-client-id')}")
         if (
             sdk is not None
             and sdk.sdk == "go"
