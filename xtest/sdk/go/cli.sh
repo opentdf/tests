@@ -75,7 +75,7 @@ if [ "$1" == "supports" ]; then
     public-client-id)
       # this was removed in 0.21.0
       set -o pipefail
-      "${cmd[@]}" --version --json | jq -re .version | awk -F. '{ if (($1 == 0 && $2 < 21)) exit 0; else exit 1; }'
+      "${cmd[@]}" --version --json | jq -re .version | awk -F. '{ if ($1 == 0 && $2 < 21) exit 0; else exit 1; }'
       exit $?
       ;;
     *)
