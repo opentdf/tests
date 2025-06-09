@@ -101,8 +101,8 @@ class PlatformFeatureSet(BaseModel):
             self.features.add("connectrpc")
 
         # public_client_id removed in service 0.5.6
-        if self.semver >= (0, 5, 6):
-            self.features.add("no-public-client-id")
+        if self.semver < (0, 5, 6):
+            self.features.add("public-client-id")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
@@ -483,7 +483,7 @@ def skip_public_client_id_skew(
             sdk is not None
             and sdk.sdk == "go"
             and sdk.supports("public-client-id")
-            and "no-public-client-id" in pfs.features
+            and "public-client-id" not in pfs.features
         ):
             pytest.skip(
                 f"{sdk} sdk expects [public_client_id], but platform service {pfs.semver} does not support it"
