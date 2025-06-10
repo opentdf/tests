@@ -137,7 +137,7 @@ class NamespaceKey(BaseModelIgnoreExtra):
 # Deprecated
 class KasGrantNamespace(BaseModelIgnoreExtra):
     namespace_id: str
-    key_access_server_id: str
+    key_access_server_id: str | None = None
 
 
 class AttributeKey(BaseModelIgnoreExtra):
