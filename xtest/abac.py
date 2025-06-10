@@ -130,7 +130,7 @@ class SubjectMapping(BaseModelIgnoreExtra):
 
 class NamespaceKey(BaseModelIgnoreExtra):
     namespace_id: str
-    key_access_server_id: str | None = None
+    key_id: str
 
 
 
