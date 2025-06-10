@@ -128,17 +128,33 @@ class SubjectMapping(BaseModelIgnoreExtra):
     actions: list[Action]
     metadata: Metadata | None = None
 
-
-class KasGrantNamespace(BaseModelIgnoreExtra):
+class NamespaceKey(BaseModelIgnoreExtra):
     namespace_id: str
     key_access_server_id: str | None = None
 
 
+
+# Deprecated
+class KasGrantNamespace(BaseModelIgnoreExtra):
+    namespace_id: str
+    key_id: str
+
+
+class AttributeKey(BaseModelIgnoreExtra):
+    attribute_id: str
+    key_id: str
+
+# Deprecated
 class KasGrantAttribute(BaseModelIgnoreExtra):
     attribute_id: str
     key_access_server_id: str | None = None
 
 
+class ValueKey(BaseModelIgnoreExtra):
+    value_id: str
+    key_id: str
+
+# Deprecated
 class KasGrantValue(BaseModelIgnoreExtra):
     value_id: str
     key_access_server_id: str | None = None
@@ -153,6 +169,12 @@ class KasPublicKey(BaseModelIgnoreExtra):
     kid: str
     alg: int
 
+class KasKey(BaseModelIgnoreExtra):
+    id: str
+    public_key_ctx: str
+    private_key_ctx: str
+    alg: str
+    mode: str
 
 class KasPublicKeySet(BaseModelIgnoreExtra):
     keys: list[KasPublicKey]
@@ -225,7 +247,42 @@ class OpentdfCommandLineTool:
             if e.uri == uri:
                 return e
         return self.kas_registry_create(uri, key)
+    
+    def kas_registry_create_public_key_only(self, publicKey: KasPublicKey) -> KasKey:
+        cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
+        cmd += [
+            f"--public-key-pem={publicKey.pem}",
+            f"--key-id={publicKey.kid}",
+            f"--algorithm={publicKey.alg}",
+        ]
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return KasKey.model_validate_json(out)
 
+    def key_assign_ns(self,  keyID: KasKey, ns: Namespace) -> NamespaceKey:
+        cmd = self.otdfctl + "policy attributes namespace key assign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--namespace={ns.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return NamespaceKey.model_validate_json(out)
+
+    # Deprecated
     def grant_assign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
         cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
@@ -242,7 +299,25 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
+    
+    def key_assign_attr(self,  keyID: KasKey, attr: Attribute) -> AttributeKey:
+        cmd = self.otdfctl + "policy attributes key assign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--attribute={attr.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return AttributeKey.model_validate_json(out)
 
+    # Deprecated
     def grant_assign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
@@ -260,6 +335,24 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
+    def key_assign_value(self,  keyID: KasKey, val: AttributeValue) -> ValueKey:
+        cmd = self.otdfctl + "policy attributes value key assign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--value-id={val.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return ValueKey.model_validate_json(out)
+
+    # Deprecated
     def grant_assign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
         cmd = self.otdfctl + "policy kas-grants assign".split()
         cmd += [
@@ -276,7 +369,25 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantValue.model_validate_json(out)
+    
+    def key_unassign_ns(self,  keyID: KasKey, ns: Namespace) -> NamespaceKey:
+        cmd = self.otdfctl + "policy attributes namespace key unassign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--namespace={ns.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return NamespaceKey.model_validate_json(out)
 
+    # Deprecated
     def grant_unassign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
@@ -293,7 +404,25 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
-
+    
+    def key_unassign_attr(self,  keyID: KasKey, attr: Attribute) -> AttributeKey:
+        cmd = self.otdfctl + "policy attributes key unassign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--attribute={attr.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return AttributeKey.model_validate_json(out)
+    
+    # Deprecated
     def grant_unassign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
@@ -311,6 +440,24 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
+    def key_unassign_value(self,  keyID: KasKey, val: AttributeValue) -> ValueKey:
+        cmd = self.otdfctl + "policy attributes value key unassign".split()
+        cmd += [
+            f"--key-id={keyID.id}",
+            f"--value-id={val.id}",
+        ]
+        logger.info(f"key-assign [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert code == 0
+        return ValueKey.model_validate_json(out)
+
+    # Deprecated
     def grant_unassign_value(self, kas: KasEntry, val: AttributeValue) -> KasGrantValue:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [

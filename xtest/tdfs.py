@@ -47,6 +47,7 @@ feature_type = Literal[
     "ns_grants",
 ]
 
+KEY_MANAGEMENT_FEATURE = "key_management"
 
 container_version = Literal["4.2.2", "4.3.0"]
 
@@ -99,6 +100,9 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 28):
             self.features.add("connectrpc")
+
+        if self.semver >= (0 ,6, 0):
+            self.features.add(KEY_MANAGEMENT_FEATURE)
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 

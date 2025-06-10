@@ -230,6 +230,23 @@ def load_cached_kas_keys() -> abac.PublicKey:
         )
     )
 
+def load_kas_public_keys(alg: str) -> abac.KasPublicKey:
+    if alg == abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
+        with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
+            return abac.KasPublicKey(
+                alg=alg,
+                kid="r1",
+                pem=rsaFile.read(),
+            )
+    elif alg == abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
+        with open(f"{PLATFORM_DIR}/kas-ec-cert.pem", "r") as ecFile:    
+            return abac.KasPublicKey(
+                alg=alg,
+                kid="e1",
+                pem=ecFile.read(),
+            )
+
+
 
 @pytest.fixture(scope="session")
 def kas_url_default():
@@ -262,6 +279,7 @@ def attribute_single_kas_grant(
     kas_url_value1: str,
     temporary_namespace: abac.Namespace,
 ):
+    pfs = tdfs.PlatformFeatureSet()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "letter", abac.AttributeRule.ANY_OF, ["a"]
     )
@@ -291,11 +309,20 @@ def attribute_single_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in pfs.features:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+    else:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key, alpha)
     return anyof
 
 
@@ -336,17 +363,34 @@ def attribute_two_kas_grant_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_alpha, alpha)
 
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value2,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value2,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
+    else:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_alph = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_alph, alpha)
+
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value2,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_beta, beta)
     return anyof
 
 
@@ -389,18 +433,36 @@ def attribute_two_kas_grant_and(
     assert sm1.attribute_value.value == "alef"
     sm2 = otdfctl.scs_map(sc, bet)
     assert sm2.attribute_value.value == "bet"
-    # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_alpha, alef)
 
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value2,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, bet)
+    # Now assign it to the current KAS
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_alpha, alef)
+
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value2,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, bet)
+    else:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_alpha, alef)
+
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value2,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_beta, bet) 
 
     return allof
 
@@ -440,12 +502,20 @@ def one_attribute_attr_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-        kas_url_attr,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
-
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_attr(kas_entry_alpha, anyof)
+    else:
+        kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+        )
+        kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_attr(kas_key_alpha, anyof)
     return anyof
 
 
@@ -489,16 +559,25 @@ def attr_and_value_kas_grants_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
-        kas_url_attr,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_attr(kas_entry_attr, anyof)
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_attr(kas_entry_attr, anyof)
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
+    else:
+        kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+        )
+        kas_key_attr = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_attr(kas_key_attr, anyof)
 
     return anyof
 
@@ -545,16 +624,34 @@ def attr_and_value_kas_grants_and(
     sm2 = otdfctl.scs_map(sc, beta)
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
-    kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
-        kas_url_attr,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_attr(kas_entry_attr, allof)
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_attr(kas_entry_attr, allof)
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
+    else:
+        kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
+            kas_url_attr,
+        )
+        kas_key_attr = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_attr(kas_key_attr, allof)
+
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_beta, beta)
+
 
     return allof
 
@@ -594,11 +691,20 @@ def one_attribute_ns_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url_ns,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+    else:
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+        )
+        kas_key_ns = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_ns(kas_key_ns, temporary_namespace)
 
     return anyof
 
@@ -643,16 +749,32 @@ def ns_and_value_kas_grants_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
-    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url_ns,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+    else:
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048) 
+        )
+        otdfctl.key_assign_value(kas_key_beta, beta)
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+        )
+        kas_key_ns = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
     return anyof
 
@@ -699,16 +821,32 @@ def ns_and_value_kas_grants_and(
     sm2 = otdfctl.scs_map(sc, beta)
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
-    kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
-        kas_url_value1,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_value(kas_entry_beta, beta)
-    kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
-        kas_url_ns,
-        load_cached_kas_keys(),
-    )
-    otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+            load_cached_kas_keys(),
+        )
+        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+    else:
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_beta, beta)
+        
+        kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_url_ns,
+        )
+        kas_key_ns = otdfctl.kas_registry_create_if_not_present(
+            load_kas_public_keys
+        )
 
     return allof
 
