@@ -42,6 +42,7 @@ def test_autoconfigure_one_attribute_standard(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-one-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -87,6 +88,7 @@ def test_autoconfigure_two_kas_or_standard(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-two-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -140,6 +142,7 @@ def test_autoconfigure_double_kas_and(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -193,6 +196,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -240,6 +244,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -294,6 +299,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -347,6 +353,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -394,6 +401,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
@@ -448,6 +456,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_public_client_id_skew(encrypt_sdk, decrypt_sdk, pfs)
 
     sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:

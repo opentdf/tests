@@ -22,6 +22,8 @@ def test_decrypt_small(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_public_client_id_skew(None, decrypt_sdk, pfs)
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / "small-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -42,6 +44,8 @@ def test_decrypt_big(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_public_client_id_skew(None, decrypt_sdk, pfs)
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / "big-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -62,6 +66,8 @@ def test_decrypt_no_splitid(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_public_client_id_skew(None, decrypt_sdk, pfs)
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = tmp_dir / "no-splitids-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -82,6 +88,8 @@ def test_decrypt_object_statement_value_json(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("assertion_verification"):
         pytest.skip("assertion_verification is not supported")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_public_client_id_skew(None, decrypt_sdk, pfs)
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = tmp_dir / "with-json-object-assertions-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf", verify_assertions=False)
