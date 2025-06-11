@@ -169,6 +169,7 @@ class KasPublicKey(BaseModelIgnoreExtra):
     pem: str
     kid: str
     alg: int
+    algStr: str | None = None
 
 class KasKey(BaseModelIgnoreExtra):
     id: str
@@ -255,7 +256,7 @@ class OpentdfCommandLineTool:
             f"--kas={kas.uri}",
             f"--public-key-pem={base64.b64encode(public_key.pem.encode('utf-8')).decode('utf-8')}",
             f"--key-id={public_key.kid}",
-            f"--algorithm={public_key.alg}",
+            f"--algorithm={public_key.algStr}",
         ]
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         out, err = process.communicate()

@@ -234,15 +234,15 @@ def load_kas_public_keys(alg: str) -> abac.KasPublicKey:
     if alg == abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
         with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
             return abac.KasPublicKey(
-                alg="rsa:2048",
+                algStr="rsa:2048",
                 kid="r1",
                 pem=rsaFile.read(),
             )
     elif alg == abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
         with open(f"{PLATFORM_DIR}/kas-ec-cert.pem", "r") as ecFile:    
             return abac.KasPublicKey(
-                alg=alg,
-                kid="ec:secp256r1",
+                algStr="ec:secp256r1",
+                kid="e1",
                 pem=ecFile.read(),
             )
 
