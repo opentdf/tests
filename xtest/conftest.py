@@ -455,7 +455,7 @@ def attribute_two_kas_grant_and(
             kas_url_value1,
         )
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_alpha
+            kas_entry_alpha,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_alpha, alef)
