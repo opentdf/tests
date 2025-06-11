@@ -186,7 +186,6 @@ class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
     metadata: Metadata | None = None
 
 class KasKey(BaseModelIgnoreExtra):
-    id: str
     kas_id: str
     key: KasKeyResponseKeyDetails
     kas_uri: str
@@ -315,10 +314,10 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
     
-    def key_assign_attr(self,  key_id: KasKey, attr: Attribute) -> AttributeKey:
+    def key_assign_attr(self,  key: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key assign".split()
         cmd += [
-            f"--key-id={key_id.id}",
+            f"--key-id={key.key.id}",
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
@@ -349,10 +348,10 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_assign_value(self,  key_id: KasKey, val: AttributeValue) -> ValueKey:
+    def key_assign_value(self,  key: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key assign".split()
         cmd += [
-            f"--key-id={key_id.id}",
+            f"--key-id={key.key.id}",
             f"--value-id={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
@@ -383,10 +382,10 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantValue.model_validate_json(out)
     
-    def key_unassign_ns(self,  keyID: KasKey, ns: Namespace) -> NamespaceKey:
+    def key_unassign_ns(self,  key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key unassign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key.key.id}",
             f"--namespace={ns.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
@@ -418,10 +417,10 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
     
-    def key_unassign_attr(self,  key_id: KasKey, attr: Attribute) -> AttributeKey:
+    def key_unassign_attr(self,  key: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key unassign".split()
         cmd += [
-            f"--key-id={key_id.id}",
+            f"--key-id={key.key.id}",
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
@@ -452,10 +451,10 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_unassign_value(self,  key_id: KasKey, val: AttributeValue) -> ValueKey:
+    def key_unassign_value(self,  key: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key unassign".split()
         cmd += [
-            f"--key-id={key_id.id}",
+            f"--key-id={key.key.id}",
             f"--value-id={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
