@@ -352,7 +352,7 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy attributes value key assign".split()
         cmd += [
             f"--key-id={key.key.id}",
-            f"--value-id={val.id}",
+            f"--value={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -455,7 +455,7 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy attributes value key unassign".split()
         cmd += [
             f"--key-id={key.key.id}",
-            f"--value-id={val.id}",
+            f"--value={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
