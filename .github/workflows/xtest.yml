@@ -376,28 +376,28 @@ jobs:
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
-      # - name: Run legacy decryption tests
-      #   run: |-
-      #     pytest -ra -v -n auto --focus "$FOCUS_SDK" test_legacy.py
-      #   working-directory: otdftests/xtest
-      #   env:
-      #     PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-      # - name: Run all standard xtests
-      #   if: ${{ env.FOCUS_SDK == 'all' }}
-      #   run: |-
-      #     pytest -ra -v -n auto test_tdfs.py
-      #   working-directory: otdftests/xtest
-      #   env:
-      #     PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-      #     SCHEMA_FILE: "manifest.schema.json"
-      # - name: Run xtests focusing on a specific SDK
-      #   if: ${{ env.FOCUS_SDK != 'all' }}
-      #   run: |-
-      #     pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py
-      #   working-directory: otdftests/xtest
-      #   env:
-      #     PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-      #     SCHEMA_FILE: "manifest.schema.json"
+      - name: Run legacy decryption tests
+        run: |-
+          pytest -ra -v -n auto --focus "$FOCUS_SDK" test_legacy.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+      - name: Run all standard xtests
+        if: ${{ env.FOCUS_SDK == 'all' }}
+        run: |-
+          pytest -ra -v -n auto test_tdfs.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
+      - name: Run xtests focusing on a specific SDK
+        if: ${{ env.FOCUS_SDK != 'all' }}
+        run: |-
+          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
