@@ -264,6 +264,7 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
         if out:
             print(out)
+        logger.debug(f"Raw output from kas_registry_create_public_key_only: {out}")
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
