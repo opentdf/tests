@@ -857,9 +857,9 @@ def ns_and_value_kas_grants_and(
         kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
             kas_url_ns,
         )
-        kas_key_ns = otdfctl.kas_registry_create_if_not_present(
+        kas_key_ns = otdfctl.kas_registry_create_public_key_only(
             kas_entry_ns,
-            load_kas_public_keys
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
