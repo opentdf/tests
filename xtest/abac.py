@@ -168,7 +168,7 @@ KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1 = 5
 class KasPublicKey(BaseModelIgnoreExtra):
     pem: str
     kid: str
-    alg: int
+    alg: int | None = None
     algStr: str | None = None
 
 class KasKey(BaseModelIgnoreExtra):
