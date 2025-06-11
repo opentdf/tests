@@ -301,10 +301,10 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
-    def key_assign_ns(self,  key_id: KasKey, ns: Namespace) -> NamespaceKey:
+    def key_assign_ns(self,  key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
         cmd += [
-            f"--key-id={key_id.id}",
+            f"--key-id={key.key.id}",
             f"--namespace={ns.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
