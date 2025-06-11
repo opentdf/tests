@@ -171,12 +171,24 @@ class KasPublicKey(BaseModelIgnoreExtra):
     alg: int | None = None
     algStr: str | None = None
 
-class KasKey(BaseModelIgnoreExtra):
+# Helper model for the structure within key.public_key_ctx in the KAS key creation response
+class KasKeyResponsePublicKeyContext(BaseModelIgnoreExtra):
+    pem: str
+
+# Helper model for the nested "key" object in the KAS key creation response
+class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
     id: str
-    public_key_ctx: str
-    private_key_ctx: str
-    alg: str
-    mode: str
+    key_id: str
+    key_algorithm: int
+    key_status: int
+    key_mode: int
+    public_key_ctx: KasKeyResponsePublicKeyContext
+    metadata: Metadata | None = None
+
+class KasKey(BaseModelIgnoreExtra):
+    kas_id: str
+    key: KasKeyResponseKeyDetails
+    kas_uri: str
 
 class KasPublicKeySet(BaseModelIgnoreExtra):
     keys: list[KasPublicKey]
