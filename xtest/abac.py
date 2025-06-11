@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+import base64
 
 from pydantic import BaseModel, ConfigDict
 
@@ -251,7 +252,7 @@ class OpentdfCommandLineTool:
     def kas_registry_create_public_key_only(self, public_key: KasPublicKey) -> KasKey:
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
-            f"--public-key-pem={public_key.pem}",
+            f"--public-key-pem={base64.b64encode(public_key.pem.encode('utf-8')).decode('utf-8')}",
             f"--key-id={public_key.kid}",
             f"--algorithm={public_key.alg}",
         ]
