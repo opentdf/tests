@@ -309,7 +309,7 @@ def attribute_single_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in pfs.features:
+    if "key_management" not in pfs.features:
         kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
             kas_url_value1,
             load_cached_kas_keys(),
@@ -363,7 +363,7 @@ def attribute_two_kas_grant_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
             kas_url_value1,
             load_cached_kas_keys(),
@@ -435,7 +435,7 @@ def attribute_two_kas_grant_and(
     assert sm2.attribute_value.value == "bet"
 
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
             kas_url_value1,
             load_cached_kas_keys(),
@@ -502,7 +502,7 @@ def one_attribute_attr_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
             kas_url_attr,
             load_cached_kas_keys(),
@@ -559,7 +559,7 @@ def attr_and_value_kas_grants_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
             kas_url_attr,
             load_cached_kas_keys(),
@@ -624,7 +624,7 @@ def attr_and_value_kas_grants_and(
     sm2 = otdfctl.scs_map(sc, beta)
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_attr = otdfctl.kas_registry_create_if_not_present(
             kas_url_attr,
             load_cached_kas_keys(),
@@ -691,7 +691,7 @@ def one_attribute_ns_kas_grant(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_ns = otdfctl.kas_registry_create_if_not_present(
             kas_url_ns,
             load_cached_kas_keys(),
@@ -749,7 +749,7 @@ def ns_and_value_kas_grants_or(
     sm = otdfctl.scs_map(sc, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
             kas_url_value1,
             load_cached_kas_keys(),
@@ -821,7 +821,7 @@ def ns_and_value_kas_grants_and(
     sm2 = otdfctl.scs_map(sc, beta)
     assert sm2.attribute_value.value == "beta"
     # Now assign it to the current KAS
-    if tdfs.KEY_MANAGEMENT_FEATURE not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
         kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
             kas_url_value1,
             load_cached_kas_keys(),

@@ -186,7 +186,7 @@ class PublicKey(BaseModelIgnoreExtra):
 
 
 class PublicKeyChoice(BaseModelIgnoreExtra):
-    PublicKey: PublicKey
+    PublicKey: PublicKey | None
 
 
 class KasEntry(BaseModelIgnoreExtra):
@@ -226,60 +226,58 @@ class OpentdfCommandLineTool:
     def kas_registry_create(
         self,
         url: str,
-        public_key: PublicKey,
+        public_key: PublicKey | None = None,
     ) -> KasEntry:
         cmd = self.otdfctl + "policy kas-registry create".split()
         cmd += [f"--uri={url}"]
-        cmd += [f"--public-keys={public_key.model_dump_json()}"]
+        if public_key:
+            cmd += [f"--public-keys={public_key.model_dump_json()}"]
         logger.info(f"kr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0, f"otdfctl kas-registry create failed: {err.decode() if err else out.decode()}"
         return KasEntry.model_validate_json(out)
 
-    def kas_registry_create_if_not_present(self, uri: str, key: PublicKey) -> KasEntry:
+    def kas_registry_create_if_not_present(self, uri: str, key: PublicKey | None = None) -> KasEntry:
         for e in self.kas_registry_list():
             if e.uri == uri:
                 return e
         return self.kas_registry_create(uri, key)
     
-    def kas_registry_create_public_key_only(self, publicKey: KasPublicKey) -> KasKey:
+    def kas_registry_create_public_key_only(self, public_key: KasPublicKey) -> KasKey:
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
-            f"--public-key-pem={publicKey.pem}",
-            f"--key-id={publicKey.kid}",
-            f"--algorithm={publicKey.alg}",
+            f"--public-key-pem={public_key.pem}",
+            f"--key-id={public_key.kid}",
+            f"--algorithm={public_key.alg}",
         ]
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
-    def key_assign_ns(self,  keyID: KasKey, ns: Namespace) -> NamespaceKey:
+    def key_assign_ns(self,  key_id: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key_id.id}",
             f"--namespace={ns.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return NamespaceKey.model_validate_json(out)
 
     # Deprecated
@@ -300,21 +298,20 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
     
-    def key_assign_attr(self,  keyID: KasKey, attr: Attribute) -> AttributeKey:
+    def key_assign_attr(self,  key_id: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key assign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key_id.id}",
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return AttributeKey.model_validate_json(out)
 
     # Deprecated
@@ -335,21 +332,20 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_assign_value(self,  keyID: KasKey, val: AttributeValue) -> ValueKey:
+    def key_assign_value(self,  key_id: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key assign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key_id.id}",
             f"--value-id={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return ValueKey.model_validate_json(out)
 
     # Deprecated
@@ -405,21 +401,20 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
     
-    def key_unassign_attr(self,  keyID: KasKey, attr: Attribute) -> AttributeKey:
+    def key_unassign_attr(self,  key_id: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key unassign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key_id.id}",
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return AttributeKey.model_validate_json(out)
     
     # Deprecated
@@ -440,21 +435,20 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_unassign_value(self,  keyID: KasKey, val: AttributeValue) -> ValueKey:
+    def key_unassign_value(self,  key_id: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key unassign".split()
         cmd += [
-            f"--key-id={keyID.id}",
+            f"--key-id={key_id.id}",
             f"--value-id={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return ValueKey.model_validate_json(out)
 
     # Deprecated
