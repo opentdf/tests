@@ -320,6 +320,7 @@ def attribute_single_kas_grant(
             kas_url_value1,
         )
         kas_key = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_alpha,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key, alpha)
@@ -380,6 +381,7 @@ def attribute_two_kas_grant_or(
             kas_url_value1,
         )
         kas_key_alph = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_alpha,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_alph, alpha)
@@ -388,6 +390,7 @@ def attribute_two_kas_grant_or(
             kas_url_value2,
         )
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
@@ -452,6 +455,7 @@ def attribute_two_kas_grant_and(
             kas_url_value1,
         )
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_alpha
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_alpha, alef)
@@ -460,6 +464,7 @@ def attribute_two_kas_grant_and(
             kas_url_value2,
         )
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_beta, bet) 
@@ -513,6 +518,7 @@ def one_attribute_attr_kas_grant(
             kas_url_attr,
         )
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_alpha,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_attr(kas_key_alpha, anyof)
@@ -575,6 +581,7 @@ def attr_and_value_kas_grants_or(
             kas_url_attr,
         )
         kas_key_attr = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_attr,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_attr(kas_key_attr, anyof)
@@ -640,6 +647,7 @@ def attr_and_value_kas_grants_and(
             kas_url_attr,
         )
         kas_key_attr = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_attr,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_attr(kas_key_attr, allof)
@@ -648,6 +656,7 @@ def attr_and_value_kas_grants_and(
             kas_url_value1,
         )
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
@@ -702,6 +711,7 @@ def one_attribute_ns_kas_grant(
             kas_url_ns,
         )
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_ns,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_ns(kas_key_ns, temporary_namespace)
@@ -765,6 +775,7 @@ def ns_and_value_kas_grants_or(
             kas_url_value1,
         )
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048) 
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
@@ -772,6 +783,7 @@ def ns_and_value_kas_grants_or(
             kas_url_ns,
         )
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_ns,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
@@ -837,6 +849,7 @@ def ns_and_value_kas_grants_and(
             kas_url_value1,
         )
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
@@ -845,8 +858,10 @@ def ns_and_value_kas_grants_and(
             kas_url_ns,
         )
         kas_key_ns = otdfctl.kas_registry_create_if_not_present(
+            kas_entry_ns,
             load_kas_public_keys
         )
+        otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
     return allof
 

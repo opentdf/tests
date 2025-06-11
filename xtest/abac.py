@@ -249,9 +249,10 @@ class OpentdfCommandLineTool:
                 return e
         return self.kas_registry_create(uri, key)
     
-    def kas_registry_create_public_key_only(self, public_key: KasPublicKey) -> KasKey:
+    def kas_registry_create_public_key_only(self,kas: KasEntry, public_key: KasPublicKey) -> KasKey:
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
+            f"--kas={kas.uri}",
             f"--public-key-pem={base64.b64encode(public_key.pem.encode('utf-8')).decode('utf-8')}",
             f"--key-id={public_key.kid}",
             f"--algorithm={public_key.alg}",
