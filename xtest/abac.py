@@ -262,7 +262,28 @@ class OpentdfCommandLineTool:
                 return e
         return self.kas_registry_create(uri, key)
     
+    def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
+        cmd = self.otdfctl + "policy kas-registry key list".split()
+        cmd += [f"--kas={kas.uri}"]
+        logger.info(f"kr-keys-ls [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+            return []
+        if out:
+            print(out)
+        assert process.returncode == 0
+        o = json.loads(out)
+        if not o:
+            return []
+        return [KasKey(**n) for n in o]
+    
     def kas_registry_create_public_key_only(self,kas: KasEntry, public_key: KasPublicKey) -> KasKey:
+        for k in self.kas_registry_keys_list(kas):
+            if k.key.key_id == public_key.kid and k.kas_uri == kas.uri:
+                return k
+            
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
             f"--kas={kas.uri}",
