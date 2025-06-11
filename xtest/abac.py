@@ -186,6 +186,7 @@ class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
     metadata: Metadata | None = None
 
 class KasKey(BaseModelIgnoreExtra):
+    id: str
     kas_id: str
     key: KasKeyResponseKeyDetails
     kas_uri: str
