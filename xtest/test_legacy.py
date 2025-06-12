@@ -33,7 +33,7 @@ def test_decrypt_small(
             assert b == expected_bytes
 
 def test_decrypt_SDKv0_7_5(
-    decrypt_sdk: tdfs.SDK,)
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
 ):
