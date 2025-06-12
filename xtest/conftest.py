@@ -585,6 +585,16 @@ def attr_and_value_kas_grants_or(
             load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
         )
         otdfctl.key_assign_attr(kas_key_attr, anyof)
+        
+        kas_entry_beta = otdfctl.kas_registry_create_if_not_present(
+            kas_url_value1,
+        )
+        kas_key_beta = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_beta,
+            load_kas_public_keys(abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+        )
+        otdfctl.key_assign_value(kas_key_beta, beta)
+
 
     return anyof
 

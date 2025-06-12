@@ -24,5 +24,5 @@ cmd+=(--json)
 cmd+=(--host="$PLATFORMURL" --tls-no-verify --log-level=debug)
 cmd+=(--with-client-creds='{"clientId":"'$CLIENTID'","clientSecret":"'$CLIENTSECRET'"}')
 
->&2 echo "${cmd[@]}" "$@"
+echo >&2 "${cmd[@]}" "$@"
 "${cmd[@]}" "$@"
