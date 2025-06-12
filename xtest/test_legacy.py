@@ -32,6 +32,29 @@ def test_decrypt_small(
         while b := f.read(1024):
             assert b == expected_bytes
 
+def test_decrypt_SDKv0_7_5(
+    decrypt_sdk: tdfs.SDK,)
+    tmp_dir: Path,
+    in_focus: set[tdfs.SDK],
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
+    rt_file = tmp_dir / "0.7.5-java.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    file_stats = os.stat(rt_file)
+    # print file_stats.st_size value in the output
+    print(f"Print file stats: {file_stats}")
+    print(f"Decrypted file size: {file_stats.st_size} bytes")
+
+    assert file_stats.st_size == 5 * 2**10
+    expected_bytes = bytes([0] * 1024)
+    with rt_file.open("rb") as f:
+        while b := f.read(1024):
+            assert b == expected_bytes
+
 
 def test_decrypt_big(
     decrypt_sdk: tdfs.SDK,
