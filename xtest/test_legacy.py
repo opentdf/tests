@@ -37,7 +37,7 @@ def test_decrypt_small(
 def test_decrypt_SDKv0_7_5(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
-    in_focus: {SDK(sdk='java', version='main')},
+    in_focus: {(sdk='java', version='main')},
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
