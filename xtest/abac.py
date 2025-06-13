@@ -129,10 +129,10 @@ class SubjectMapping(BaseModelIgnoreExtra):
     actions: list[Action]
     metadata: Metadata | None = None
 
+
 class NamespaceKey(BaseModelIgnoreExtra):
     namespace_id: str
     key_id: str
-
 
 
 # Deprecated
@@ -145,6 +145,7 @@ class AttributeKey(BaseModelIgnoreExtra):
     attribute_id: str
     key_id: str
 
+
 # Deprecated
 class KasGrantAttribute(BaseModelIgnoreExtra):
     attribute_id: str
@@ -154,6 +155,7 @@ class KasGrantAttribute(BaseModelIgnoreExtra):
 class ValueKey(BaseModelIgnoreExtra):
     value_id: str
     key_id: str
+
 
 # Deprecated
 class KasGrantValue(BaseModelIgnoreExtra):
@@ -171,9 +173,11 @@ class KasPublicKey(BaseModelIgnoreExtra):
     alg: int | None = None
     algStr: str | None = None
 
+
 # Helper model for the structure within key.public_key_ctx in the KAS key creation response
 class KasKeyResponsePublicKeyContext(BaseModelIgnoreExtra):
     pem: str
+
 
 # Helper model for the nested "key" object in the KAS key creation response
 class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
@@ -185,10 +189,12 @@ class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
     public_key_ctx: KasKeyResponsePublicKeyContext
     metadata: Metadata | None = None
 
+
 class KasKey(BaseModelIgnoreExtra):
     kas_id: str
     key: KasKeyResponseKeyDetails
     kas_uri: str
+
 
 class KasPublicKeySet(BaseModelIgnoreExtra):
     keys: list[KasPublicKey]
@@ -253,15 +259,19 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert process.returncode == 0, f"otdfctl kas-registry create failed: {err.decode() if err else out.decode()}"
+        assert (
+            process.returncode == 0
+        ), f"otdfctl kas-registry create failed: {err.decode() if err else out.decode()}"
         return KasEntry.model_validate_json(out)
 
-    def kas_registry_create_if_not_present(self, uri: str, key: PublicKey | None = None) -> KasEntry:
+    def kas_registry_create_if_not_present(
+        self, uri: str, key: PublicKey | None = None
+    ) -> KasEntry:
         for e in self.kas_registry_list():
             if e.uri == uri:
                 return e
         return self.kas_registry_create(uri, key)
-    
+
     def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
         cmd = self.otdfctl + "policy kas-registry key list".split()
         cmd += [f"--kas={kas.uri}"]
@@ -278,12 +288,14 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         return [KasKey(**n) for n in o]
-    
-    def kas_registry_create_public_key_only(self,kas: KasEntry, public_key: KasPublicKey) -> KasKey:
+
+    def kas_registry_create_public_key_only(
+        self, kas: KasEntry, public_key: KasPublicKey
+    ) -> KasKey:
         for k in self.kas_registry_keys_list(kas):
             if k.key.key_id == public_key.kid and k.kas_uri == kas.uri:
                 return k
-            
+
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
             f"--kas={kas.uri}",
@@ -301,7 +313,7 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
-    def key_assign_ns(self,  key: KasKey, ns: Namespace) -> NamespaceKey:
+    def key_assign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
         cmd += [
             f"--key-id={key.key.id}",
@@ -334,8 +346,8 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
-    
-    def key_assign_attr(self,  key: KasKey, attr: Attribute) -> AttributeKey:
+
+    def key_assign_attr(self, key: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key assign".split()
         cmd += [
             f"--key-id={key.key.id}",
@@ -369,7 +381,7 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_assign_value(self,  key: KasKey, val: AttributeValue) -> ValueKey:
+    def key_assign_value(self, key: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key assign".split()
         cmd += [
             f"--key-id={key.key.id}",
@@ -402,8 +414,8 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantValue.model_validate_json(out)
-    
-    def key_unassign_ns(self,  key: KasKey, ns: Namespace) -> NamespaceKey:
+
+    def key_unassign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key unassign".split()
         cmd += [
             f"--key-id={key.key.id}",
@@ -437,8 +449,8 @@ class OpentdfCommandLineTool:
             print(out)
         assert code == 0
         return KasGrantNamespace.model_validate_json(out)
-    
-    def key_unassign_attr(self,  key: KasKey, attr: Attribute) -> AttributeKey:
+
+    def key_unassign_attr(self, key: KasKey, attr: Attribute) -> AttributeKey:
         cmd = self.otdfctl + "policy attributes key unassign".split()
         cmd += [
             f"--key-id={key.key.id}",
@@ -453,7 +465,7 @@ class OpentdfCommandLineTool:
             print(out)
         assert process.returncode == 0
         return AttributeKey.model_validate_json(out)
-    
+
     # Deprecated
     def grant_unassign_attr(self, kas: KasEntry, attr: Attribute) -> KasGrantAttribute:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
@@ -472,7 +484,7 @@ class OpentdfCommandLineTool:
         assert code == 0
         return KasGrantAttribute.model_validate_json(out)
 
-    def key_unassign_value(self,  key: KasKey, val: AttributeValue) -> ValueKey:
+    def key_unassign_value(self, key: KasKey, val: AttributeValue) -> ValueKey:
         cmd = self.otdfctl + "policy attributes value key unassign".split()
         cmd += [
             f"--key-id={key.key.id}",

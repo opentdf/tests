@@ -219,7 +219,6 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
-          ref: dspx-501/key-management
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
