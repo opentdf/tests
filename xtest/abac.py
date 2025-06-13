@@ -420,7 +420,7 @@ class OpentdfCommandLineTool:
         assert code == 0
         return NamespaceKey.model_validate_json(out)
 
-    # Deprecated
+    # Deprecated in otdfctl 0.22
     def grant_unassign_ns(self, kas: KasEntry, ns: Namespace) -> KasGrantNamespace:
         cmd = self.otdfctl + "policy kas-grants unassign".split()
         cmd += [
