@@ -17,7 +17,7 @@ def get_golden_file(golden_file_name: str) -> Path:
 def test_decrypt_small(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
-    in_focus: set[tdfs.SDK],
+    in_focus: "java",
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -47,7 +47,7 @@ def test_decrypt_SDKv0_7_5(
 #     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
 #     java -jar /home/runner/work/tests/tests/otdftests/xtest/sdk/java/dist/main/cmdline.jar --client-id=opentdf --client-secret=secret --plaintext --platform-endpoint=http://localhost:8080 decrypt --file=/home/runner/work/tests/tests/otdftests/xtest/golden/java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf > tmp/0.7.5-java.untdf
 
-    # Customize these paths and arguments as needed
+    # Constants for the cmdline jar command
     jar_path = "/home/runner/work/tests/tests/otdftests/xtest/sdk/java/dist/main/cmdline.jar"
     file_path = "/home/runner/work/tests/tests/otdftests/xtest/golden/java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf"
     output_file = "tmp/0.7.5-java.untdf"
