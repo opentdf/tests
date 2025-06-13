@@ -6,7 +6,7 @@ import subprocess
 import sys
 import base64
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -171,7 +171,7 @@ class KasPublicKey(BaseModelIgnoreExtra):
     pem: str
     kid: str
     alg: int | None = None
-    algStr: str | None = None
+    algStr: str | None = Field(default=None, exclude=True)
 
 
 # Helper model for the structure within key.public_key_ctx in the KAS key creation response
