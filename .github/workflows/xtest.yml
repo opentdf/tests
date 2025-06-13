@@ -213,6 +213,7 @@ jobs:
       packages: read
     env:
       FOCUS_SDK: "${{ inputs.focus-sdk || 'all' }}"
+      PLATFORMENDPOINT: "localhost:8080"
     strategy:
       fail-fast: false
       matrix:
