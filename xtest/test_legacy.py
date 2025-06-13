@@ -35,7 +35,7 @@ def test_decrypt_small(
             assert b == expected_bytes
 
 def test_decrypt_SDKv0_7_5(
-    decrypt_sdk: "java",
+    decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     in_focus: set["java"],
 ):
@@ -76,7 +76,7 @@ def test_decrypt_SDKv0_7_5(
     else:
         print("Decryption successful. Output written to", output_file)
 
-    file_stats = os.stat(rt_file)
+    file_stats = os.stat(output_file)
     # print file_stats.st_size value in the output
     print(f"Print file stats: {file_stats}")
     print(f"Decrypted file size: {file_stats.st_size} bytes")
