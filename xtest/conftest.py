@@ -311,9 +311,9 @@ def attribute_single_kas_grant(
     assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
     kas_entry_alpha = otdfctl.kas_registry_create_if_not_present(
-            kas_url_value1,
-            load_cached_kas_keys(),
-        )
+        kas_url_value1,
+        load_cached_kas_keys(),
+    )
     if "key_management" not in pfs.features:
         otdfctl.grant_assign_value(kas_entry_alpha, alpha)
     else:
