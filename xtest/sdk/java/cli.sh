@@ -127,7 +127,7 @@ fi
 
 if [ "$1" == "decrypt" ]; then
   if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
-    args+=(--kas-allowlist "$XT_WITH_KAS_ALLOW_LIST")
+    args+=(--kas-allowlist="$XT_WITH_KAS_ALLOW_LIST")
   fi
 
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
