@@ -125,6 +125,16 @@ else
   fi
 fi
 
+if [ "$1" == "decrypt" ]; then
+  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+    args+=(--kas-allowlist "$XT_WITH_KAS_ALLOW_LIST")
+  fi
+
+  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+    args+=(--ignore-kas-allowlist)
+  fi
+fi
+
 if [ -n "$XT_WITH_MIME_TYPE" ] && [ "$4" != "nano" ]; then
   args+=(--mime-type "$XT_WITH_MIME_TYPE")
 fi
@@ -140,6 +150,8 @@ fi
 if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
   args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
 fi
+
+
 
 if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
   args+=(--with-assertion-verification-disabled)
