@@ -131,7 +131,7 @@ if [ "$1" == "decrypt" ]; then
   fi
 
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
-    args+=(--ignore-kas-allowlist)
+    args+=(--ignoreAllowList=true)
   fi
 fi
 

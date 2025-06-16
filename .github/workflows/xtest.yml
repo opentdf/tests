@@ -385,7 +385,8 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          XT_WITH_KAS_ALLOW_LIST: "localhost:8080,http://localhost:8080,https://localhost:8080"
+          XT_WITH_IGNORE_KAS_ALLOWLIST: true
+#          XT_WITH_KAS_ALLOW_LIST: "localhost:8080,http://localhost:8080,https://localhost:8080"
 #      - name: Run all standard xtests
 #        if: ${{ env.FOCUS_SDK == 'all' }}
 #        run: |-
