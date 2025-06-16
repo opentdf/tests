@@ -44,9 +44,9 @@ def test_decrypt_SDKv0_7_5(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
-    ct_file = get_golden_file("java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
-#     ct_file = get_golden_file("test6.tdf")
-    rt_file = tmp_dir / "0.7.5-java.untdf"
+#     ct_file = get_golden_file("java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
+    ct_file = get_golden_file("test082withkasinurl.tdf")
+    rt_file = tmp_dir / "0.8.2-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
 #     java -jar /home/runner/work/tests/tests/otdftests/xtest/sdk/java/dist/main/cmdline.jar --client-id=opentdf --client-secret=secret --plaintext --platform-endpoint=http://localhost:8080 decrypt --file=/home/runner/work/tests/tests/otdftests/xtest/golden/java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf > tmp/0.7.5-java.untdf
 
