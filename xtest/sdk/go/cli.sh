@@ -143,10 +143,11 @@ elif [ "$1" == "decrypt" ]; then
     args+=(--no-verify-assertions)
   fi
   if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
-    args+=(--kas-allowlist="$XT_WITH_KAS_ALLOW_LIST")
+    args+=(--kas-allowlist "$XT_WITH_KAS_ALLOW_LIST")
   fi
+  # bypassing the allowlist may expose potential security risks
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
-    args+=(--ignoreAllowList)
+    args+=(--kas-allowlist '*')
   fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
