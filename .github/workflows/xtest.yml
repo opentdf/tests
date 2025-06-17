@@ -277,7 +277,7 @@ jobs:
           path: otdftests/xtest/sdk
           sdk: go
           version-info: "${{ needs.resolve-versions.outputs.go }}"
-      
+
       - name: Resolve otdfctl heads
         id: resolve-otdfctl-heads
         run: |-
@@ -316,22 +316,22 @@ jobs:
           path: otdftests/xtest/sdk
           sdk: java
           version-info: "${{ needs.resolve-versions.outputs.java }}"
-      
+
       - name: pre-release protocol buffers for java-sdk
         if: |
           contains('["go", "java"]', env.FOCUS_SDK) && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
-            echo "Replacing .env files for java-sdk..."
-            echo "Platform tag: $platform_tag"
-            echo "Java version info: $java_version_info"
-            for row in $(echo "$java_version_info" | jq -c '.[]'); do
-              TAG=$(echo "$row" | jq -r '.tag')
-              HEAD=$(echo "$row" | jq -r '.head')
-              if [[ "$HEAD" == "true" ]]; then
-                echo "Creating .env file for tag: [$TAG]; pointing to [$platform_ref]"
-                echo "PLATFORM_BRANCH=$platform_tag" > "otdftests/xtest/sdk/java/${TAG}.env"
-              fi
-            done
+          echo "Replacing .env files for java-sdk..."
+          echo "Platform tag: $platform_tag"
+          echo "Java version info: $java_version_info"
+          for row in $(echo "$java_version_info" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            if [[ "$HEAD" == "true" ]]; then
+              echo "Creating .env file for tag: [$TAG]; pointing to [$platform_ref]"
+              echo "PLATFORM_BRANCH=$platform_tag" > "otdftests/xtest/sdk/java/${TAG}.env"
+            fi
+          done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
           platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
@@ -377,7 +377,7 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          pytest -ra -v  --focus "$FOCUS_SDK" test_legacy.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
