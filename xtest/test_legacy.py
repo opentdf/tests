@@ -31,72 +31,6 @@ def test_decrypt_small(
         while b := f.read(1024):
             assert b == expected_bytes
 
-def test_decrypt_SDKv0_7_5(
-    decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
-    in_focus: tdfs.SDK,
-):
-    if not in_focus & {decrypt_sdk}:
-        pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
-#     ct_file = get_golden_file("java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
-#     ct_file = get_golden_file("test082withkasinurl2.tdf")
-    ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
-    rt_file = tmp_dir / "0.7.5-java.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
-
-#     java -jar /home/runner/work/tests/tests/otdftests/xtest/sdk/java/dist/main/cmdline.jar --client-id=opentdf --client-secret=secret --plaintext --platform-endpoint=http://localhost:8080 decrypt --file=/home/runner/work/tests/tests/otdftests/xtest/golden/java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf > tmp/0.7.5-java.untdf
-
-#     # Constants for the cmdline jar command
-#     jar_path = "/home/runner/work/tests/tests/otdftests/xtest/sdk/java/dist/main/cmdline.jar"
-#     file_path = "/home/runner/work/tests/tests/otdftests/xtest/golden/java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf"
-#     output_file = "tmp/0.7.5-java.untdf"
-#     client_id = "opentdf"
-#     client_secret = "secret"
-#     platform_endpoint = "http://localhost:8080"
-#     # Construct the command
-#     command = [
-#         "java", "-jar", jar_path,
-#         "--client-id=" + client_id,
-#         "--client-secret=" + client_secret,
-#         "--plaintext",
-#         f"--platform-endpoint={platform_endpoint}",
-#         "--ignoreAllowList=true",
-#         "decrypt",
-#         f"--file={file_path}"
-#     ]
-#     # Open output file for writing decrypted data
-#     with open(output_file, "w") as outfile:
-#         result = subprocess.run(command, stdout=outfile, stderr=subprocess.PIPE, text=True)
-#     # Handle result
-#     if result.returncode != 0:
-#         print("Decryption failed:")
-#         print(result.stderr)
-#     else:
-#         print("Decryption successful. Output written to", output_file)
-
-    file_stats = os.stat(rt_file)
-    print(f"Print file stats: {file_stats}")
-    assert file_stats.st_size == 102
-
-def test_decrypt_SDKv0_7_8(
-    decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
-    in_focus: tdfs.SDK,
-):
-    if not in_focus & {decrypt_sdk}:
-        pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
-    ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
-    rt_file = tmp_dir / "0.7.8-java.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
-    file_stats = os.stat(rt_file)
-    print(f"Print file stats: {file_stats}")
-    assert file_stats.st_size == 92
-
-
 def test_decrypt_big(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -116,6 +50,37 @@ def test_decrypt_big(
         while b := f.read(1024):
             assert b == expected_bytes
 
+def test_decrypt_SDKv0_7_5(
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: tdfs.SDK,
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
+    rt_file = tmp_dir / "0.7.5-java.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    file_stats = os.stat(rt_file)
+    print(f"Print file stats: {file_stats}")
+    assert file_stats.st_size == 102
+
+def test_decrypt_SDKv0_7_8(
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: tdfs.SDK,
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
+    rt_file = tmp_dir / "0.7.8-java.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    file_stats = os.stat(rt_file)
+    print(f"Print file stats: {file_stats}")
+    assert file_stats.st_size == 92
 
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.SDK,

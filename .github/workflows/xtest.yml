@@ -384,16 +384,14 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-#          XT_WITH_IGNORE_KAS_ALLOWLIST: true
-          XT_WITH_KAS_ALLOW_LIST: "localhost:8080,http://localhost:8080,https://localhost:8080"
-#      - name: Run all standard xtests
-#        if: ${{ env.FOCUS_SDK == 'all' }}
-#        run: |-
-#          pytest -ra -v test_tdfs.py
-#        working-directory: otdftests/xtest
-#        env:
-#          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-#          SCHEMA_FILE: "manifest.schema.json"
+      - name: Run all standard xtests
+        if: ${{ env.FOCUS_SDK == 'all' }}
+        run: |-
+          pytest -ra -v test_tdfs.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
@@ -453,10 +451,10 @@ jobs:
           kas-port: 8484
           kas-name: delta
 
-#      - name: Run attribute based configuration tests
-#        if: ${{ steps.multikas.outputs.supported == 'true' }}
-#        run: |-
-#          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
-#        working-directory: otdftests/xtest
-#        env:
-#          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+      - name: Run attribute based configuration tests
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        run: |-
+          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
