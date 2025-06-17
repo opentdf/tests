@@ -45,8 +45,8 @@ feature_type = Literal[
     "kasallowlist",
     "nano_ecdsa",
     "ns_grants",
+    "key_management",
 ]
-
 
 container_version = Literal["4.2.2", "4.3.0"]
 
@@ -99,6 +99,9 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 4, 28):
             self.features.add("connectrpc")
+
+        if self.semver >= (0, 6, 0):
+            self.features.add("key_management")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
