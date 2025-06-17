@@ -142,6 +142,12 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)
   fi
+  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+    args+=(--kas-allowlist="$XT_WITH_KAS_ALLOW_LIST")
+  fi
+  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+    args+=(--ignoreAllowList)
+  fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
 else

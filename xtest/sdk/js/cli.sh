@@ -176,6 +176,12 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--rewrapKeyType "ec:secp256r1")
   fi
+  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+    args+=(--kas-allowlist="$XT_WITH_KAS_ALLOW_LIST")
+  fi
+  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+    args+=(--ignoreAllowList)
+  fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
   if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
     args+=(--policyEndpoint "$PLATFORMURL")

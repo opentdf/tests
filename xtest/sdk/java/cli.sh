@@ -151,8 +151,6 @@ if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
   args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
 fi
 
-
-
 if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
   args+=(--with-assertion-verification-disabled)
 fi

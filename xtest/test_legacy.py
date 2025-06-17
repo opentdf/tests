@@ -82,15 +82,8 @@ def test_decrypt_SDKv0_7_5(
 
     file_stats = os.stat(rt_file)
     print(f"Print file stats: {file_stats}")
-    print(f"Decrypted file size: {file_stats.st_size} bytes")
-
     assert file_stats.st_size == 102
-#     expected_bytes = bytes([0] * 1024)
-#     with rt_file.open("rb") as f:
-#         while b := f.read(1024):
-#             assert b == expected_bytes
 
-# create a function to test SDK 0.7.8 similar to the previous one but with another file
 def test_decrypt_SDKv0_7_8(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -105,7 +98,7 @@ def test_decrypt_SDKv0_7_8(
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     print(f"Print file stats: {file_stats}")
-#     assert file_stats.st_size == 102
+    assert file_stats.st_size == 91
 
 
 def test_decrypt_big(
