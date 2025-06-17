@@ -4,12 +4,14 @@ from pathlib import Path
 
 import tdfs
 
+
 def get_golden_file(golden_file_name: str) -> Path:
     xtest_dir = Path(__file__).parent
     filename = xtest_dir / "golden" / golden_file_name
     if filename.is_file():
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
+
 
 def test_decrypt_small(
     decrypt_sdk: tdfs.SDK,
@@ -31,6 +33,7 @@ def test_decrypt_small(
         while b := f.read(1024):
             assert b == expected_bytes
 
+
 def test_decrypt_big(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -50,6 +53,7 @@ def test_decrypt_big(
         while b := f.read(1024):
             assert b == expected_bytes
 
+
 def test_decrypt_SDKv0_7_5(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -66,6 +70,7 @@ def test_decrypt_SDKv0_7_5(
     print(f"Print file stats: {file_stats}")
     assert file_stats.st_size == 102
 
+
 def test_decrypt_SDKv0_7_8(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -81,6 +86,7 @@ def test_decrypt_SDKv0_7_8(
     file_stats = os.stat(rt_file)
     print(f"Print file stats: {file_stats}")
     assert file_stats.st_size == 92
+
 
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.SDK,
