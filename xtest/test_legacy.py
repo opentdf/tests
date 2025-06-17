@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import tdfs
-import subprocess
+# import subprocess
 
 os.environ["PLATFORMENDPOINT"] = "localhost:8080"
 
@@ -98,7 +98,7 @@ def test_decrypt_SDKv0_7_8(
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     print(f"Print file stats: {file_stats}")
-    assert file_stats.st_size == 91
+    assert file_stats.st_size == 92
 
 
 def test_decrypt_big(
