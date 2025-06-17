@@ -3,9 +3,6 @@ import os
 from pathlib import Path
 
 import tdfs
-# import subprocess
-
-os.environ["PLATFORMENDPOINT"] = "localhost:8080"
 
 def get_golden_file(golden_file_name: str) -> Path:
     xtest_dir = Path(__file__).parent
@@ -13,7 +10,6 @@ def get_golden_file(golden_file_name: str) -> Path:
     if filename.is_file():
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
-
 
 def test_decrypt_small(
     decrypt_sdk: tdfs.SDK,
