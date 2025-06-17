@@ -46,7 +46,7 @@ def test_decrypt_SDKv0_7_5(
         pytest.skip("Decrypting hexless files is not supported")
 #     ct_file = get_golden_file("java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
 #     ct_file = get_golden_file("test082withkasinurl2.tdf")
-    ct_file = get_golden_file("test075golden.tdf")
+    ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
     rt_file = tmp_dir / "0.7.5-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
 
@@ -81,23 +81,31 @@ def test_decrypt_SDKv0_7_5(
 #         print("Decryption successful. Output written to", output_file)
 
     file_stats = os.stat(rt_file)
-    # print file_stats.st_size value in the output
     print(f"Print file stats: {file_stats}")
     print(f"Decrypted file size: {file_stats.st_size} bytes")
 
-# PLATFORMENDPOINT
-#     java -jar target/cmdline.jar \
-#       --client-id=opentdf-sdk \
-#       --client-secret=secret \
-#       --platform-endpoint=http://localhost:8080 \
-#       -h\
-#       decrypt -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282  > decrypted
-
-#     assert file_stats.st_size == 5 * 2**10
+    assert file_stats.st_size == 102
 #     expected_bytes = bytes([0] * 1024)
 #     with rt_file.open("rb") as f:
 #         while b := f.read(1024):
 #             assert b == expected_bytes
+
+# create a function to test SDK 0.7.8 similar to the previous one but with another file
+def test_decrypt_SDKv0_7_8(
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: tdfs.SDK,
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
+    rt_file = tmp_dir / "0.7.8-java.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    file_stats = os.stat(rt_file)
+    print(f"Print file stats: {file_stats}")
+#     assert file_stats.st_size == 102
 
 
 def test_decrypt_big(
