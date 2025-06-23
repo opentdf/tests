@@ -17,4 +17,4 @@ pydantic_core==2.23.3
 pytest==8.3.2
 requests==2.32.4
 typing_extensions==4.12.2
-urllib3==2.2.2
+urllib3==2.5.0
