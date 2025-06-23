@@ -383,6 +383,8 @@ class SDK:
         verify_assertions: bool = True,
         ecwrap: bool = False,
         expect_error: bool = False,
+        kasallowlist: str = "",
+        ignore_kas_allowlist: bool = False,
     ):
         fmt = simple_container(container)
 
@@ -401,6 +403,10 @@ class SDK:
             local_env |= {"XT_WITH_ECWRAP": "true"}
         if not verify_assertions:
             local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
+        if kasallowlist:
+            local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
+        if ignore_kas_allowlist:
+            local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
