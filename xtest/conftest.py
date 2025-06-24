@@ -236,8 +236,6 @@ def cached_kas_keys() -> abac.PublicKey:
     return load_cached_kas_keys()
 
 
-
-
 @pytest.fixture(scope="session")
 def kas_public_key_r1() -> abac.KasPublicKey:
     with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
