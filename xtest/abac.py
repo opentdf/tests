@@ -164,7 +164,45 @@ class KasGrantValue(BaseModelIgnoreExtra):
 
 
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
+KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096 = 2
+
 KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1 = 5
+KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1 = 6
+KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1 = 7
+
+
+def kas_public_key_alg_to_str(alg: int | None) -> str | None:
+    if alg is None:
+        return None
+    if alg == KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
+        return "rsa:2048"
+    elif alg == KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096:
+        return "rsa:4096"
+    elif alg == KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
+        return "ec:secp256r1"
+    elif alg == KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1:
+        return "ec:secp384r1"
+    elif alg == KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
+        return "ec:secp521r1"
+    else:
+        raise ValueError(f"Unknown KAS public key algorithm: {alg}")
+
+
+def str_to_kas_public_key_alg(alg_str: str | None) -> int | None:
+    if alg_str is None:
+        return None
+    if alg_str == "rsa:2048":
+        return KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048
+    elif alg_str == "rsa:4096":
+        return KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096
+    elif alg_str == "ec:secp256r1":
+        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1
+    elif alg_str == "ec:secp384r1":
+        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1
+    elif alg_str == "ec:secp521r1":
+        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1
+    else:
+        raise ValueError(f"Unknown KAS public key algorithm string: {alg_str}")
 
 
 class KasPublicKey(BaseModelIgnoreExtra):
