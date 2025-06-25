@@ -30,7 +30,7 @@ def test_key_mapping_multiple_mechanisms(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
+    kas_url_default: str,
     in_focus: set[tdfs.SDK],
 ):
     global counter
@@ -49,17 +49,25 @@ def test_key_mapping_multiple_mechanisms(
     else:
         ct_file = tmp_dir / f"{sample_name}.tdf"
         cipherTexts[sample_name] = ct_file
+        # Currently, we only support rsa:2048 and ec:secp256r1
+        vals = [
+            v
+            for v in attribute_with_different_kids.value_fqns
+            if v.endswith("/e1") or v.endswith("/r1")
+        ]
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
             mime_type="text/plain",
             container="ztdf",
-            attr_values=attribute_with_different_kids.value_fqns,
+            attr_values=vals,
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
     manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 5
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
+    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == set(
+        ["r1", "e1"]
+    )
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = tmp_dir / f"multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"

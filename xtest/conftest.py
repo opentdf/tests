@@ -360,51 +360,53 @@ def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicK
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_r1(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_reg_default: abac.KasEntry,
-    extra_keys: dict[str, ExtraKey],
+    kas_entry_default: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
 ) -> abac.KasKey:
-    pk = pick_extra_key(extra_keys, "r1")
-    return otdfctl.kas_registry_create_public_key_only(kas_reg_default, pk)
+    return otdfctl.kas_registry_create_public_key_only(
+        kas_entry_default, kas_public_key_r1
+    )
 
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_r4(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_reg_default: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
 ) -> abac.KasKey:
     pk = pick_extra_key(extra_keys, "r4")
-    return otdfctl.kas_registry_create_public_key_only(kas_reg_default, pk)
+    return otdfctl.kas_registry_create_public_key_only(kas_entry_default, pk)
 
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_e1(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_reg_default: abac.KasEntry,
-    extra_keys: dict[str, ExtraKey],
+    kas_entry_default: abac.KasEntry,
+    kas_public_key_e1: abac.KasPublicKey,
 ) -> abac.KasKey:
-    pk = pick_extra_key(extra_keys, "e1")
-    return otdfctl.kas_registry_create_public_key_only(kas_reg_default, pk)
+    return otdfctl.kas_registry_create_public_key_only(
+        kas_entry_default, kas_public_key_e1
+    )
 
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_e3(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_reg_default: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
 ) -> abac.KasKey:
     pk = pick_extra_key(extra_keys, "e3")
-    return otdfctl.kas_registry_create_public_key_only(kas_reg_default, pk)
+    return otdfctl.kas_registry_create_public_key_only(kas_entry_default, pk)
 
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_e5(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_reg_default: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
 ) -> abac.KasKey:
     pk = pick_extra_key(extra_keys, "e5")
-    return otdfctl.kas_registry_create_public_key_only(kas_reg_default, pk)
+    return otdfctl.kas_registry_create_public_key_only(kas_entry_default, pk)
 
 
 @pytest.fixture(scope="module")
@@ -415,7 +417,6 @@ def attribute_with_different_kids(
     public_key_kas_default_kid_r4: abac.KasKey,
     public_key_kas_default_kid_e1: abac.KasKey,
     public_key_kas_default_kid_e3: abac.KasKey,
-    public_key_kas_default_kid_e5: abac.KasKey,
     otdf_client_scs: abac.SubjectConditionSet,
 ):
     """
@@ -431,17 +432,16 @@ def attribute_with_different_kids(
         temporary_namespace,
         "multikeys",
         abac.AttributeRule.ALL_OF,
-        ["r1", "r4", "e1", "e3", "e5"],
+        ["r1", "r4", "e1", "e3"],
     )
     assert allof.values
-    (ar1, ar4, ae1, ae3, ae5) = allof.values
+    (ar1, ar4, ae1, ae3) = allof.values
     assert ar1.value == "r1"
     assert ar4.value == "r4"
     assert ae1.value == "e1"
     assert ae3.value == "e3"
-    assert ae5.value == "e5"
 
-    for attr in [ar1, ar4, ae1, ae3, ae5]:
+    for attr in [ar1, ar4, ae1, ae3]:
         # Then assign it to all clientIds = opentdf-sdk
         sm = otdfctl.scs_map(otdf_client_scs, attr)
         assert sm.attribute_value.value == attr.value
@@ -449,7 +449,6 @@ def attribute_with_different_kids(
     # Assign it to the current KAS
     otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
     otdfctl.key_assign_value(public_key_kas_default_kid_e3, ae3)
-    otdfctl.key_assign_value(public_key_kas_default_kid_e5, ae5)
     otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
     otdfctl.key_assign_value(public_key_kas_default_kid_r4, ar4)
 
