@@ -193,17 +193,9 @@ def kas_public_key_alg_to_str(alg: int | None) -> str | None:
 def str_to_kas_public_key_alg(alg_str: str | None) -> int | None:
     if alg_str is None:
         return None
-    if alg_str == "rsa:2048":
-        return KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048
-    elif alg_str == "rsa:4096":
-        return KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096
-    elif alg_str == "ec:secp256r1":
-        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1
-    elif alg_str == "ec:secp384r1":
-        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1
-    elif alg_str == "ec:secp521r1":
-        return KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1
-    else:
+    try:
+        return _STR_TO_KAS_ALG_MAP[alg_str]
+    except KeyError:
         raise ValueError(f"Unknown KAS public key algorithm string: {alg_str}")
 
 

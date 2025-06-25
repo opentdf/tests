@@ -661,7 +661,7 @@ def ns_and_value_kas_grants_and(
         otdfctl.key_assign_value(kas_key_beta, beta)
 
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_ns, kas_public_key_r1  # FIXME r2
+            kas_entry_ns, kas_public_key_r1
         )
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
