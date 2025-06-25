@@ -53,7 +53,7 @@ def test_key_mapping_multiple_mechanisms(
         vals = [
             v
             for v in attribute_with_different_kids.value_fqns
-            if v.endswith("/e1") or v.endswith("/r1")
+            if v.endswith("/e1") or v.endswith("/r1") or v.endswith("/r4")
         ]
         encrypt_sdk.encrypt(
             pt_file,
@@ -65,7 +65,7 @@ def test_key_mapping_multiple_mechanisms(
         )
     manifest = tdfs.manifest(ct_file)
     assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == set(
-        ["r1", "e1"]
+        ["r1", "e1", "r4"]
     )
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
