@@ -384,7 +384,6 @@ def attribute_with_different_kids(
     otdfctl: abac.OpentdfCommandLineTool,
     temporary_namespace: abac.Namespace,
     public_key_kas_default_kid_r1: abac.KasKey,
-    public_key_kas_default_kid_r4: abac.KasKey,
     public_key_kas_default_kid_e1: abac.KasKey,
     otdf_client_scs: abac.SubjectConditionSet,
 ):
@@ -408,7 +407,7 @@ def attribute_with_different_kids(
     assert ar1.value == "r1"
     assert ae1.value == "e1"
 
-    for attr in [ar1, ar4, ae1]:
+    for attr in [ar1, ae1]:
         # Then assign it to all clientIds = opentdf-sdk
         sm = otdfctl.scs_map(otdf_client_scs, attr)
         assert sm.attribute_value.value == attr.value
@@ -416,7 +415,6 @@ def attribute_with_different_kids(
     # Assign it to the current KAS
     otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
     otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
-    otdfctl.key_assign_value(public_key_kas_default_kid_r4, ar4)
 
     return allof
 
