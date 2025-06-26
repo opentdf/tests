@@ -86,6 +86,7 @@ def test_autoconfigure_one_attribute_standard(
 ):
     global counter
 
+    tdfs.skip_if_unsupported(encrypt_sdk, "key-management")
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")

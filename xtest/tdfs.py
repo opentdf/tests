@@ -43,6 +43,7 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
+    "key-management",
     "nano_ecdsa",
     "ns_grants",
     "key_management",
