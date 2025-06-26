@@ -412,7 +412,7 @@ def attribute_with_different_kids(
         sm = otdfctl.scs_map(otdf_client_scs, attr)
         assert sm.attribute_value.value == attr.value
 
-    # Assign it to the current KAS
+    # Assign kas key to the attribute values
     otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
     otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
 
