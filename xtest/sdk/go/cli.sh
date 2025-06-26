@@ -38,7 +38,7 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep kas-allowlist
       exit $?
       ;;
-    key-management)
+    key_management)
       # Advanced key management from SDK version 0.5.1
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 5) || ($1 == 0 && $2 == 5 && $3 >= 1)) exit 0; else exit 1; }'
       exit $?

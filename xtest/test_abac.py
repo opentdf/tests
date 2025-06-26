@@ -35,7 +35,7 @@ def test_key_mapping_multiple_mechanisms(
 ):
     global counter
 
-    tdfs.skip_if_unsupported(encrypt_sdk, "key-management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
