@@ -328,6 +328,9 @@ class OpentdfCommandLineTool:
             if k.key.key_id == public_key.kid and k.kas_uri == kas.uri:
                 return k
 
+        if not public_key.algStr:
+            public_key.algStr = kas_public_key_alg_to_str(public_key.alg)
+
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
             f"--kas={kas.uri}",

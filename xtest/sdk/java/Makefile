@@ -6,7 +6,7 @@ MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PLATFORM_BRANCH ?= main
 
 # Dynamically set VERSIONS to the names of all directories in the src folder if not provided
-VERSIONS ?= $(shell find $(MAKEFILE_DIR)/src -mindepth 1 -maxdepth 1 -type d -not -name "*.git" -exec basename {} \;)
+VERSIONS ?= $(shell find "$(MAKEFILE_DIR)/src" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" -exec basename {} \;)
 
 # Fail if no versions are found
 ifeq ($(strip $(VERSIONS)),)

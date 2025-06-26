@@ -236,6 +236,26 @@ def cached_kas_keys() -> abac.PublicKey:
     return load_cached_kas_keys()
 
 
+class ExtraKey(typing.TypedDict):
+    """TypedDict for extra keys in extra-keys.json"""
+
+    kid: str
+    alg: str
+    privateKey: str | None
+    cert: str
+
+
+@pytest.fixture(scope="module")
+def extra_keys() -> dict[str, ExtraKey]:
+    """Extra key data from extra-keys.json"""
+    extra_keys_file = Path("extra-keys.json")
+    if not extra_keys_file.exists():
+        raise FileNotFoundError(f"Extra keys file not found: {extra_keys_file}")
+    with extra_keys_file.open("r") as f:
+        extra_key_list = typing.cast(list[ExtraKey], json.load(f))
+    return {k["kid"]: k for k in extra_key_list}
+
+
 @pytest.fixture(scope="session")
 def kas_public_key_r1() -> abac.KasPublicKey:
     with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
@@ -324,6 +344,79 @@ def kas_entry_ns(
     kas_url_ns: str,
 ) -> abac.KasEntry:
     return otdfctl.kas_registry_create_if_not_present(kas_url_ns, cached_kas_keys)
+
+
+def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicKey:
+    if kid not in extra_keys:
+        raise ValueError(f"Extra key with kid {kid} not found in extra keys")
+    ek = extra_keys[kid]
+    return abac.KasPublicKey(
+        alg=abac.str_to_kas_public_key_alg(ek["alg"]),
+        kid=ek["kid"],
+        pem=ek["cert"],
+    )
+
+
+@pytest.fixture(scope="module")
+def public_key_kas_default_kid_r1(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+) -> abac.KasKey:
+    return otdfctl.kas_registry_create_public_key_only(
+        kas_entry_default, kas_public_key_r1
+    )
+
+
+@pytest.fixture(scope="module")
+def public_key_kas_default_kid_e1(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    kas_public_key_e1: abac.KasPublicKey,
+) -> abac.KasKey:
+    return otdfctl.kas_registry_create_public_key_only(
+        kas_entry_default, kas_public_key_e1
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_different_kids(
+    otdfctl: abac.OpentdfCommandLineTool,
+    temporary_namespace: abac.Namespace,
+    public_key_kas_default_kid_r1: abac.KasKey,
+    public_key_kas_default_kid_e1: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+):
+    """
+    Create an attribute with different KAS public keys.
+    This is used to test the handling of multiple KAS public keys with different mechanisms.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip(
+            "Key management feature is not enabled, skipping test for multiple KAS keys"
+        )
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "multikeys",
+        abac.AttributeRule.ALL_OF,
+        ["r1", "e1"],
+    )
+    assert allof.values
+    (ar1, ae1) = allof.values
+    assert ar1.value == "r1"
+    assert ae1.value == "e1"
+
+    for attr in [ar1, ae1]:
+        # Then assign it to all clientIds = opentdf-sdk
+        sm = otdfctl.scs_map(otdf_client_scs, attr)
+        assert sm.attribute_value.value == attr.value
+
+    # Assign kas key to the attribute values
+    otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
+    otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
+
+    return allof
 
 
 @pytest.fixture(scope="module")

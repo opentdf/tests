@@ -3,7 +3,7 @@
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # Dynamically set VERSIONS to the names of all directories in the src folder if not provided in environment
-VERSIONS ?= $(shell find ./src -mindepth 1 -maxdepth 1 -type d -not -name "*.git" -exec basename {} \;)
+VERSIONS ?= $(shell find "$(MAKEFILE_DIR)/src" -mindepth 1 -maxdepth 1 \( -type d -o -type l \) -not -name "*.git" -exec basename {} \;)
 
 # Fail if no versions are found
 ifeq ($(strip $(VERSIONS)),)
