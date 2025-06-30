@@ -1,0 +1,17 @@
+10 VUs
+5 pods
+1 req/s / VU = 20MB/VU/s
+40MB/pod/s
+
+2000MB / pod 
+
+
+
+50 VUs == 50 rps * 20 MB
+
+roughly 300 requests within 2 mins / 5 pods is max
+6000MB / 5 pods
+1200MB / pod / 2 mins
+
+
+1690 reqs / 180 seconds / 5 pods => 1.9 20MB rps / pod with env var GOMEMLIMIT set to .75 RAM (if pod is 2GiB, GOMEMLIMIT=1500MiB)
