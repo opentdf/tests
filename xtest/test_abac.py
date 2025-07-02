@@ -76,6 +76,58 @@ def test_key_mapping_multiple_mechanisms(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+
+
+def test_key_mapping_from_mgmt(
+    attribute_with_managed_keys: Attribute,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_default: str,
+    in_focus: set[tdfs.SDK],
+):
+    global counter
+
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    skip_dspx1153(encrypt_sdk, decrypt_sdk)
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"multimechanism-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        # Currently, we only support rsa:2048 and ec:secp256r1
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attribute_with_managed_keys.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+
+    val: abac.AttributeValue = attribute_with_managed_keys.values[0]
+    assert val.kas_keys is not None
+    manifest = tdfs.manifest(ct_file)
+    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == set(
+        [attribute_with_managed_keys.values[0].kas_keys[0].kid]
+    )
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
+
+    tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    rt_file = tmp_dir / f"multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 def test_autoconfigure_one_attribute_standard(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
