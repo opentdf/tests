@@ -423,6 +423,52 @@ def attribute_with_different_kids(
 
 
 @pytest.fixture(scope="module")
+def attribute_with_managed_keys(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    temporary_namespace: abac.Namespace,
+    otdf_client_scs: abac.SubjectConditionSet,
+):
+    """
+    Create an attribute with a newly created managed key.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip(
+            "Key management feature is not enabled, skipping test for multiple KAS keys"
+        )
+
+    managed_key = otdfctl.kas_registry_key_create(kas_entry_default, None)
+
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "managedkeys",
+        abac.AttributeRule.ALL_OF,
+        ["r1"],
+    )
+    assert allof.values
+    (ar1,) = allof.values
+    assert ar1.value == "r1"
+
+    sm = otdfctl.scs_map(otdf_client_scs, ar1)
+    assert sm.attribute_value.value == ar1.value
+
+    # Assign kas key to the attribute values
+    otdfctl.key_assign_value(managed_key, ar1)
+    ar1.kas_keys = [abac.SimpleKasKey(
+        kas_uri=managed_key.kas_uri,
+        public_key=abac.SimpleKasPublicKey(
+            algorithm=managed_key.key.key_algorithm,
+            kid=managed_key.key.key_id,
+            pem=managed_key.key.public_key_ctx.pem,
+        ),
+        kas_id=managed_key.kas_id,
+    )]
+
+    return allof
+
+
+@pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,

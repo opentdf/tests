@@ -2,6 +2,8 @@ import enum
 import json
 import logging
 import os
+import random
+import string
 import subprocess
 import sys
 import base64
@@ -45,6 +47,17 @@ class AttributeRule(enum.IntEnum):
     ANY_OF = 2
     HIERARCHY = 3
 
+class SimpleKasPublicKey(BaseModelIgnoreExtra):
+    algorithm: int
+    kid: str
+    pem: str
+
+
+class SimpleKasKey(BaseModelIgnoreExtra):
+    kas_uri: str
+    public_key: SimpleKasPublicKey | None = None
+    kas_id: str | None = None
+
 
 class AttributeValue(BaseModelIgnoreExtra):
     id: str
@@ -52,6 +65,7 @@ class AttributeValue(BaseModelIgnoreExtra):
     fqn: str | None = None
     active: BoolValue | None = None
     metadata: Metadata | None = None
+    kas_keys: list[SimpleKasKey] | None = None
 
 
 class Attribute(BaseModelIgnoreExtra):
@@ -206,25 +220,40 @@ class KasPublicKey(BaseModelIgnoreExtra):
     algStr: str | None = Field(default=None, exclude=True)
 
 
+
+class PrivateKeyCtx(BaseModelIgnoreExtra):
+    key_id: str
+    wrapped_key: str
+
+
+class KeyProviderConfig(BaseModelIgnoreExtra):
+    id: str
+    name: str
+    config_json: bytes | None = None
+    metadata: Metadata | None = None
+
+
 # Helper model for the structure within key.public_key_ctx in the KAS key creation response
-class KasKeyResponsePublicKeyContext(BaseModelIgnoreExtra):
+class PublicKeyCtx(BaseModelIgnoreExtra):
     pem: str
 
 
 # Helper model for the nested "key" object in the KAS key creation response
-class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
+class AsymmetricKey(BaseModelIgnoreExtra):
     id: str
     key_id: str
     key_algorithm: int
     key_status: int
     key_mode: int
-    public_key_ctx: KasKeyResponsePublicKeyContext
+    public_key_ctx: PublicKeyCtx
+    private_key_ctx: PrivateKeyCtx | None = None
+    provider_config: KeyProviderConfig | None = None
     metadata: Metadata | None = None
 
 
 class KasKey(BaseModelIgnoreExtra):
     kas_id: str
-    key: KasKeyResponseKeyDetails
+    key: AsymmetricKey
     kas_uri: str
 
 
@@ -304,6 +333,34 @@ class OpentdfCommandLineTool:
                 return e
         return self.kas_registry_create(uri, key)
 
+
+    def kas_registry_key_create(self, kas: KasEntry, key_id: str | None) -> KasKey:
+        cmd = self.otdfctl + "policy kas-registry key create".split()
+        if not key_id:
+            key_id = ''.join(random.choices(string.ascii_lowercase, k=8))
+        cmd += [
+            f"--kas={kas.id}",
+            f"--key-id={key_id}",
+            "--mode=local",
+            "--algorithm=rsa:2048",
+            "--wrapping-key-id=wrapping-key-1",
+            f"--wrapping-key={os.environ['OT_ROOT_KEY']}",
+        ]
+        
+        logger.info(f"kr-keys-create [{' '.join(cmd)}]")
+
+        cmd += [f"--wrapping-key={os.environ['OT_ROOT_KEY']}"]
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+            raise RuntimeError(f"Error creating KAS key: {err.decode()}")
+        if out:
+            print(out)
+        assert process.returncode == 0
+        return KasKey.model_validate_json(out)
+
+
     def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
         cmd = self.otdfctl + "policy kas-registry key list".split()
         cmd += [f"--kas={kas.uri}"]
@@ -314,7 +371,7 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
             return []
         if out:
-            print(out)
+            print(out) 
         assert process.returncode == 0
         o = json.loads(out)
         if not o:
