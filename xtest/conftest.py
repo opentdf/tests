@@ -444,11 +444,11 @@ def attribute_with_managed_keys(
         temporary_namespace,
         "managedkeys",
         abac.AttributeRule.ALL_OF,
-        ["r1"],
+        [managed_key.key.key_id],
     )
     assert allof.values
     (ar1,) = allof.values
-    assert ar1.value == "r1"
+    assert ar1.value == managed_key.key.key_id
 
     sm = otdfctl.scs_map(otdf_client_scs, ar1)
     assert sm.attribute_value.value == ar1.value
