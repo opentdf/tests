@@ -236,7 +236,7 @@ jobs:
 
       - name: Enable key management
         run: |-
-          OT_CONFIG_FILE="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}/opentdf.yaml"
+          OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           echo "OT_CONFIG_FILE=$OT_CONFIG_FILE">> "$GITHUB_ENV"
           key_management_enabled=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE")
           switch "$key_management_enabled" in
