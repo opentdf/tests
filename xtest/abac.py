@@ -47,6 +47,7 @@ class AttributeRule(enum.IntEnum):
     ANY_OF = 2
     HIERARCHY = 3
 
+
 class SimpleKasPublicKey(BaseModelIgnoreExtra):
     algorithm: int
     kid: str
@@ -55,8 +56,8 @@ class SimpleKasPublicKey(BaseModelIgnoreExtra):
 
 class SimpleKasKey(BaseModelIgnoreExtra):
     kas_uri: str
-    public_key: SimpleKasPublicKey | None = None
-    kas_id: str | None = None
+    public_key: SimpleKasPublicKey
+    kas_id: str
 
 
 class AttributeValue(BaseModelIgnoreExtra):
@@ -220,7 +221,6 @@ class KasPublicKey(BaseModelIgnoreExtra):
     algStr: str | None = Field(default=None, exclude=True)
 
 
-
 class PrivateKeyCtx(BaseModelIgnoreExtra):
     key_id: str
     wrapped_key: str
@@ -333,11 +333,10 @@ class OpentdfCommandLineTool:
                 return e
         return self.kas_registry_create(uri, key)
 
-
     def kas_registry_key_create(self, kas: KasEntry, key_id: str | None) -> KasKey:
         cmd = self.otdfctl + "policy kas-registry key create".split()
         if not key_id:
-            key_id = ''.join(random.choices(string.ascii_lowercase, k=8))
+            key_id = "".join(random.choices(string.ascii_lowercase, k=8))
         cmd += [
             f"--kas={kas.id}",
             f"--key-id={key_id}",
@@ -346,7 +345,7 @@ class OpentdfCommandLineTool:
             "--wrapping-key-id=wrapping-key-1",
             f"--wrapping-key={os.environ['OT_ROOT_KEY']}",
         ]
-        
+
         logger.info(f"kr-keys-create [{' '.join(cmd)}]")
 
         cmd += [f"--wrapping-key={os.environ['OT_ROOT_KEY']}"]
@@ -360,7 +359,6 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
-
     def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
         cmd = self.otdfctl + "policy kas-registry key list".split()
         cmd += [f"--kas={kas.uri}"]
@@ -371,7 +369,7 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
             return []
         if out:
-            print(out) 
+            print(out)
         assert process.returncode == 0
         o = json.loads(out)
         if not o:

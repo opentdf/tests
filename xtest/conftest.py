@@ -452,15 +452,17 @@ def attribute_with_managed_keys(
 
     # Assign kas key to the attribute values
     otdfctl.key_assign_value(managed_key, ar1)
-    ar1.kas_keys = [abac.SimpleKasKey(
-        kas_uri=managed_key.kas_uri,
-        public_key=abac.SimpleKasPublicKey(
-            algorithm=managed_key.key.key_algorithm,
-            kid=managed_key.key.key_id,
-            pem=managed_key.key.public_key_ctx.pem,
-        ),
-        kas_id=managed_key.kas_id,
-    )]
+    ar1.kas_keys = [
+        abac.SimpleKasKey(
+            kas_uri=managed_key.kas_uri,
+            public_key=abac.SimpleKasPublicKey(
+                algorithm=managed_key.key.key_algorithm,
+                kid=managed_key.key.key_id,
+                pem=managed_key.key.public_key_ctx.pem,
+            ),
+            kas_id=managed_key.kas_id,
+        )
+    ]
 
     return allof
 

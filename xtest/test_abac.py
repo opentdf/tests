@@ -76,8 +76,6 @@ def test_key_mapping_multiple_mechanisms(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-
-
 def test_key_mapping_from_mgmt(
     attribute_with_managed_keys: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -114,11 +112,14 @@ def test_key_mapping_from_mgmt(
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
 
-    val: abac.AttributeValue = attribute_with_managed_keys.values[0]
-    assert val.kas_keys is not None
+    assert attribute_with_managed_keys.values
+    val = attribute_with_managed_keys.values[0]
+    assert val.kas_keys
+    assert len(val.kas_keys) == 1
+    kek = val.kas_keys[0]
     manifest = tdfs.manifest(ct_file)
     assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == set(
-        [attribute_with_managed_keys.values[0].kas_keys[0].kid]
+        [kek.public_key.kid]
     )
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
