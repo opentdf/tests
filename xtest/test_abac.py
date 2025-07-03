@@ -96,7 +96,7 @@ def test_key_mapping_from_mgmt(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"multimechanism-{encrypt_sdk}"
+    sample_name = f"from-mgmt-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
