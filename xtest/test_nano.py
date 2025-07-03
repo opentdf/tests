@@ -18,12 +18,12 @@ def test_magic_version():
 
 
 def test_resource_locator():
-    rl0 = nano.locator("https://localhost:8080/kas")
+    rl0 = nano.locator("https://localhost:8080")
     print(rl0)
     expected_bits = "01 12 6c 6f 63 61 6c 68 6f 73 74 3a 38 30 38 30 2f 6b 61 73"
     assert expected_bits == enc_hex(bytes(rl0))
 
-    rl1 = nano.locator("https://localhost:8080/kas", b"ab")
+    rl1 = nano.locator("https://localhost:8080", b"ab")
     print(rl1)
     assert """11 12 6c 6f 63 61 6c 68 6f 73 74 3a 38 30 38 30 2f 6b 61 73
 61 62""" == enc_hex(
