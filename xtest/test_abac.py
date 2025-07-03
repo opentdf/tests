@@ -71,7 +71,7 @@ def test_key_mapping_multiple_mechanisms(
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -124,7 +124,7 @@ def test_key_mapping_from_mgmt(
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
