@@ -239,7 +239,7 @@ jobs:
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           echo "OT_CONFIG_FILE=$OT_CONFIG_FILE">> "$GITHUB_ENV"
           key_management_enabled=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE")
-          switch "$key_management_enabled" in
+          case "$key_management_enabled" in
             true)
               echo "Key management is already enabled."
               echo "OT_KEY_MANAGEMENT_ENABLED=true" >> "$GITHUB_ENV"
