@@ -367,8 +367,9 @@ jobs:
         run: |-
           pip install -r requirements.txt
         working-directory: otdftests/xtest
+
       - name: Validate xtest helper library (tests of the test harness and its utilities)
-        if: ${{ !inputs }}
+        if: ${{ github.event_name == 'pull_request' && github.repository == 'opentdf/tests' && contains(join(github.event.pull_request.changed_files.*.filename, ','), 'xtest/') }}
         run: |-
           pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
