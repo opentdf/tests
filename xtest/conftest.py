@@ -278,7 +278,7 @@ def kas_public_key_e1() -> abac.KasPublicKey:
 
 @pytest.fixture(scope="session")
 def kas_url_default():
-    return os.getenv("KASURL", "http://localhost:8080")
+    return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
 @pytest.fixture(scope="module")
@@ -292,7 +292,7 @@ def kas_entry_default(
 
 @pytest.fixture(scope="session")
 def kas_url_value1():
-    return os.getenv("KASURL1", "http://localhost:8181")
+    return os.getenv("KASURL1", "http://localhost:8181/kas")
 
 
 @pytest.fixture(scope="module")
@@ -306,7 +306,7 @@ def kas_entry_value1(
 
 @pytest.fixture(scope="session")
 def kas_url_value2():
-    return os.getenv("KASURL2", "http://localhost:8282")
+    return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
 @pytest.fixture(scope="module")
@@ -320,7 +320,7 @@ def kas_entry_value2(
 
 @pytest.fixture(scope="session")
 def kas_url_attr():
-    return os.getenv("KASURL3", "http://localhost:8383")
+    return os.getenv("KASURL3", "http://localhost:8383/kas")
 
 
 @pytest.fixture(scope="module")
@@ -334,7 +334,7 @@ def kas_entry_attr(
 
 @pytest.fixture(scope="session")
 def kas_url_ns():
-    return os.getenv("KASURL4", "http://localhost:8484")
+    return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
 @pytest.fixture(scope="module")
