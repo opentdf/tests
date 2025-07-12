@@ -10,17 +10,18 @@ from abac import Attribute
 cipherTexts: dict[str, Path] = {}
 
 
-def test_or_attributes_success(
-    attribute_with_or_type: Attribute,
+def skip_rts_as_needed(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
-    pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
+    if container == "nano-with-ecdsa" and not encrypt_sdk.supports("nano_ecdsa"):
+        pytest.skip(
+            f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
+        )
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -36,6 +37,18 @@ def test_or_attributes_success(
             pytest.skip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )
+
+
+def test_or_attributes_success(
+    attribute_with_or_type: Attribute,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    container: tdfs.container_type,
+    in_focus: set[tdfs.SDK],
+):
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
 
     attrs = attribute_with_or_type.values
     assert attrs and len(attrs) == 2, "Expected exactly two attributes for OR type"
@@ -95,22 +108,7 @@ def test_and_attributes_success(
     The user only has alpha assigned (not beta), so should be able to access files
     with only alpha but not files with beta or both alpha and beta.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if container == "ztdf-ecwrap":
-        if not encrypt_sdk.supports("ecwrap"):
-            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        if "ecwrap" not in pfs.features:
-            pytest.skip(
-                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
-            )
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
-            pytest.skip(
-                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
-            )
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
 
     attrs = attribute_with_and_type.values
     assert attrs and len(attrs) == 2, "Expected exactly two attributes for AND type"
@@ -170,22 +168,7 @@ def test_hierarchy_attributes_success(
     The user has beta assigned, so should be able to access files with beta or gamma,
     but not files with alpha.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if container == "ztdf-ecwrap":
-        if not encrypt_sdk.supports("ecwrap"):
-            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        if "ecwrap" not in pfs.features:
-            pytest.skip(
-                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
-            )
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
-            pytest.skip(
-                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
-            )
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
 
     attrs = attribute_with_hierarchy_type.values
     assert (
