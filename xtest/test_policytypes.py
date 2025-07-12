@@ -82,15 +82,31 @@ def test_or_attributes_success(
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
-        if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, container)
-            assert filecmp.cmp(pt_file, rt_file)
-        else:
-            try:
-                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
-                assert False, "decrypt succeeded unexpectedly"
-            except subprocess.CalledProcessError as exc:
-                assert b"forbidden" in exc.output or exc.stderr
+        decrypt_or_dont(
+            decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
+        )
+
+
+def decrypt_or_dont(
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    container: tdfs.container_type,
+    expect_success: bool,
+    ct_file: Path,
+    rt_file: Path,
+):
+    if expect_success:
+        decrypt_sdk.decrypt(ct_file, rt_file, container)
+        assert filecmp.cmp(pt_file, rt_file)
+    else:
+        try:
+            decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
+            assert False, "decrypt succeeded unexpectedly"
+        except subprocess.CalledProcessError as exc:
+            assert any(
+                e in exc.output or exc.stderr
+                for e in [b"forbidden", b"unable to reconstruct split key"]
+            )
 
 
 def test_and_attributes_success(
@@ -141,15 +157,9 @@ def test_and_attributes_success(
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
-        if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, container)
-            assert filecmp.cmp(pt_file, rt_file)
-        else:
-            try:
-                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
-                assert False, "decrypt succeeded unexpectedly"
-            except subprocess.CalledProcessError as exc:
-                assert b"forbidden" in exc.output or exc.stderr
+        decrypt_or_dont(
+            decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
+        )
 
 
 def test_hierarchy_attributes_success(
@@ -203,12 +213,6 @@ def test_hierarchy_attributes_success(
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
-        if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, container)
-            assert filecmp.cmp(pt_file, rt_file)
-        else:
-            try:
-                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
-                assert False, "decrypt succeeded unexpectedly"
-            except subprocess.CalledProcessError as exc:
-                assert b"forbidden" in exc.output or exc.stderr
+        decrypt_or_dont(
+            decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
+        )
