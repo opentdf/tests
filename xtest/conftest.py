@@ -560,6 +560,119 @@ def one_attribute_attr_kas_grant(
 
 
 @pytest.fixture(scope="module")
+def attribute_with_or_type(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_attr: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> abac.Attribute:
+    """Create an attribute with OR type and assign it to a KAS entry.
+
+    The attribute will have a rule of ANY_OF with values "alpha" and "beta".
+    The user only has permission to access the attribute if they have the "alpha" value.
+    Files with both will be accessible to the user, but files with only "beta" will not.
+    """
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "or", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
+    )
+    assert anyof.values
+    (alpha, beta) = anyof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Assign or:alpha to all clientIds = opentdf-sdk
+    sm = otdfctl.scs_map(otdf_client_scs, alpha)
+    assert sm.attribute_value.value == "alpha"
+
+    # Now assign it to the current KAS
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
+        otdfctl.grant_assign_attr(kas_entry_attr, anyof)
+    else:
+        kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_attr, kas_public_key_r1
+        )
+        otdfctl.key_assign_attr(kas_key_alpha, anyof)
+    return anyof
+
+
+@pytest.fixture(scope="module")
+def attribute_with_and_type(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_attr: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> abac.Attribute:
+    """Create an attribute with AND type and assign it to a KAS entry.
+
+    The attribute will have a rule of ALL_OF with values "alpha" and "beta".
+    The user only has alpha assigned, so will be able to access files that do not have beta applied.
+    """
+    allof = otdfctl.attribute_create(
+        temporary_namespace, "and", abac.AttributeRule.ALL_OF, ["alpha", "beta"]
+    )
+    assert allof.values
+    (alpha, beta) = allof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+
+    # Assign and:alpha to all clientIds = opentdf-sdk
+    sm = otdfctl.scs_map(otdf_client_scs, alpha)
+    assert sm.attribute_value.value == "alpha"
+
+    # Now assign it to the current KAS
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
+        otdfctl.grant_assign_attr(kas_entry_attr, allof)
+    else:
+        kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_attr, kas_public_key_r1
+        )
+        otdfctl.key_assign_attr(kas_key_alpha, allof)
+    return allof
+
+
+@pytest.fixture(scope="module")
+def attribute_with_hierarchy_type(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_attr: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> abac.Attribute:
+    """Create an attribute with HIERARCHY type and assign it to a KAS entry.
+
+    The attribute will have a rule of HIERARCHY with values "alpha", "beta" and "gamma".
+    The user only has "beta" assigned, so will be able to access files that have "gamma" or "beta" but not "alpha".
+    """
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "hierarchy",
+        abac.AttributeRule.HIERARCHY,
+        ["alpha", "beta", "gamma"],
+    )
+    assert allof.values
+    (alpha, beta, gamma) = allof.values
+    assert alpha.value == "alpha"
+    assert beta.value == "beta"
+    assert gamma.value == "gamma"
+
+    # Assign hierarchical:alpha to all clientIds = opentdf-sdk
+    sm = otdfctl.scs_map(otdf_client_scs, beta)
+    assert sm.attribute_value.value == "beta"
+
+    # Now assign it to the current KAS
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
+        otdfctl.grant_assign_attr(kas_entry_attr, allof)
+    else:
+        kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_attr, kas_public_key_r1
+        )
+        otdfctl.key_assign_attr(kas_key_alpha, allof)
+    return allof
+
+
+@pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_attr: abac.KasEntry,
