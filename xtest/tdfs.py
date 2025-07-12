@@ -48,7 +48,7 @@ feature_type = Literal[
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
     # Attributes are not added properly to the nanotdfs. okay maybe should not be called a feature :-(
-    "nano_attribute_bug"
+    "nano_attribute_bug",
     "nano_ecdsa",
     "ns_grants",
 ]
