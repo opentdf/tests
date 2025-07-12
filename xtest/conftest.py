@@ -562,7 +562,7 @@ def one_attribute_attr_kas_grant(
 @pytest.fixture(scope="module")
 def attribute_with_or_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -587,10 +587,10 @@ def attribute_with_or_type(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, anyof)
+        otdfctl.grant_assign_attr(kas_entry_default, anyof)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_default, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_alpha, anyof)
     return anyof
@@ -599,7 +599,7 @@ def attribute_with_or_type(
 @pytest.fixture(scope="module")
 def attribute_with_and_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -623,10 +623,10 @@ def attribute_with_and_type(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, allof)
+        otdfctl.grant_assign_attr(kas_entry_default, allof)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_default, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_alpha, allof)
     return allof
@@ -635,7 +635,7 @@ def attribute_with_and_type(
 @pytest.fixture(scope="module")
 def attribute_with_hierarchy_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
+    kas_entry_default: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -663,10 +663,10 @@ def attribute_with_hierarchy_type(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, allof)
+        otdfctl.grant_assign_attr(kas_entry_default, allof)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_default, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_alpha, allof)
     return allof
