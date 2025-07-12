@@ -374,6 +374,13 @@ jobs:
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
+      - name: Run all standard xtests
+        run: |-
+          pytest -ra -v test_policytypes.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
       - name: Run legacy decryption tests
         run: |-
           pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
