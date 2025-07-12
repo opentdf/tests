@@ -59,29 +59,27 @@ def test_or_attributes_success(
             ct_file = cipherTexts[sample_name]
         else:
             ct_file = tmp_dir / f"{sample_name}"
-            cipherTexts[sample_name] = ct_file
             # Currently, we only support rsa:2048 and ec:secp256r1
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
                 mime_type="text/plain",
-                container="ztdf",
+                container=container,
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"${sample_name}.returned"
+        rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
             decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
-                assert any(
-                    err in exc.output for err in [b"bad request"]
-                ), f"Unexpected error output: [{exc.output}]"
+                assert b"forbidden" in exc.output or exc.stderr
 
 
 def test_and_attributes_success(
@@ -136,28 +134,26 @@ def test_and_attributes_success(
             ct_file = cipherTexts[sample_name]
         else:
             ct_file = tmp_dir / f"{sample_name}"
-            cipherTexts[sample_name] = ct_file
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
                 mime_type="text/plain",
-                container="ztdf",
+                container=container,
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"${sample_name}.returned"
+        rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
             decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
-                assert any(
-                    err in exc.output for err in [b"bad request"]
-                ), f"Unexpected error output: [{exc.output}]"
+                assert b"forbidden" in exc.output or exc.stderr
 
 
 def test_hierarchy_attributes_success(
@@ -194,12 +190,14 @@ def test_hierarchy_attributes_success(
             )
 
     attrs = attribute_with_hierarchy_type.values
-    assert attrs and len(attrs) == 3, "Expected exactly three attributes for HIERARCHY type"
+    assert (
+        attrs and len(attrs) == 3
+    ), "Expected exactly three attributes for HIERARCHY type"
     (alpha, beta, gamma) = attrs
     samples = [
         ([alpha], False),  # Should fail: user has beta, not alpha (higher level)
-        ([beta], True),    # Should succeed: user has beta assigned
-        ([gamma], True),   # Should succeed: user has beta which is higher than gamma
+        ([beta], True),  # Should succeed: user has beta assigned
+        ([gamma], True),  # Should succeed: user has beta which is higher than gamma
     ]
 
     for vals_to_use, expect_success in samples:
@@ -213,25 +211,23 @@ def test_hierarchy_attributes_success(
             ct_file = cipherTexts[sample_name]
         else:
             ct_file = tmp_dir / f"{sample_name}"
-            cipherTexts[sample_name] = ct_file
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
                 mime_type="text/plain",
-                container="ztdf",
+                container=container,
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"${sample_name}.returned"
+        rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
             decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
-                assert any(
-                    err in exc.output for err in [b"bad request"]
-                ), f"Unexpected error output: [{exc.output}]"
+                assert b"forbidden" in exc.output or exc.stderr
