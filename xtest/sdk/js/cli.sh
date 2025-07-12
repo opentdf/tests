@@ -71,6 +71,12 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep policyBinding
       exit $?
       ;;
+    nano_attribute_bug)
+      set -o pipefail
+      # Versions released without failing nanotdf attributes
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 3)) exit 1; else exit 0; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
