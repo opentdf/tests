@@ -83,11 +83,11 @@ def test_or_attributes_success(
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+            decrypt_sdk.decrypt(ct_file, rt_file, container)
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
                 assert b"forbidden" in exc.output or exc.stderr
@@ -142,11 +142,11 @@ def test_and_attributes_success(
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+            decrypt_sdk.decrypt(ct_file, rt_file, container)
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
                 assert b"forbidden" in exc.output or exc.stderr
@@ -204,11 +204,11 @@ def test_hierarchy_attributes_success(
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         if expect_success:
-            decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+            decrypt_sdk.decrypt(ct_file, rt_file, container)
             assert filecmp.cmp(pt_file, rt_file)
         else:
             try:
-                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+                decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
                 assert False, "decrypt succeeded unexpectedly"
             except subprocess.CalledProcessError as exc:
                 assert b"forbidden" in exc.output or exc.stderr
