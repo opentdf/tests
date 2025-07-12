@@ -626,14 +626,14 @@ def attribute_with_hierarchy_type(
     The attribute will have a rule of HIERARCHY with values "alpha", "beta" and "gamma".
     The user only has "beta" assigned, so will be able to access files that have "gamma" or "beta" but not "alpha".
     """
-    allof = otdfctl.attribute_create(
+    hierarchy_attr = otdfctl.attribute_create(
         temporary_namespace,
         "hierarchy",
         abac.AttributeRule.HIERARCHY,
         ["alpha", "beta", "gamma"],
     )
-    assert allof.values
-    (alpha, beta, gamma) = allof.values
+    assert hierarchy_attr.values
+    (alpha, beta, gamma) = hierarchy_attr.values
     assert alpha.value == "alpha"
     assert beta.value == "beta"
     assert gamma.value == "gamma"
@@ -642,7 +642,7 @@ def attribute_with_hierarchy_type(
     sm = otdfctl.scs_map(otdf_client_scs, beta)
     assert sm.attribute_value.value == "beta"
 
-    return allof
+    return hierarchy_attr
 
 
 @pytest.fixture(scope="module")

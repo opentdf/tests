@@ -19,8 +19,6 @@ def test_or_attributes_success(
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
 ):
-    global counter
-
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.PlatformFeatureSet()
