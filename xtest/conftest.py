@@ -562,7 +562,6 @@ def one_attribute_attr_kas_grant(
 @pytest.fixture(scope="module")
 def attribute_with_or_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_default: abac.KasEntry,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
@@ -590,7 +589,6 @@ def attribute_with_or_type(
 @pytest.fixture(scope="module")
 def attribute_with_and_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_default: abac.KasEntry,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
@@ -617,7 +615,6 @@ def attribute_with_and_type(
 @pytest.fixture(scope="module")
 def attribute_with_hierarchy_type(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_default: abac.KasEntry,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
