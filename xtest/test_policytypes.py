@@ -22,10 +22,8 @@ def skip_rts_as_needed(
         pytest.skip(
             f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
         )
-    if (
-        container == "nano"
-        or container == "nano-with-ecdsa"
-        and encrypt_sdk.supports("nano_attribute_bug")
+    if (container == "nano" or container == "nano-with-ecdsa") and encrypt_sdk.supports(
+        "nano_attribute_bug"
     ):
         # This is a bug in the nano sdk that was fixed in 0.3.3
         pytest.skip(f"{encrypt_sdk} sdk fails to add attributes to nanotdfs properly")
