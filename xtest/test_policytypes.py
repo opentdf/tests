@@ -1,4 +1,5 @@
 import filecmp
+import logging
 import subprocess
 import pytest
 from pathlib import Path
@@ -8,6 +9,10 @@ from abac import Attribute
 
 
 cipherTexts: dict[str, Path] = {}
+
+logger = logging.getLogger("xtest")
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 def skip_rts_as_needed(
@@ -109,10 +114,16 @@ def decrypt_or_dont(
             decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
             assert False, "decrypt succeeded unexpectedly"
         except subprocess.CalledProcessError as exc:
-            assert any(
+            if not any(
                 e in exc.output or exc.stderr
                 for e in [b"forbidden", b"unable to reconstruct split key"]
-            )
+            ):
+                logger.warning(
+                    f"Failed to decrypt {ct_file} with {decrypt_sdk} in {container}: {exc}\n"
+                    f"Output: {getattr(exc, 'output', b'').decode(errors='replace')}\n"
+                    f"Stderr: {getattr(exc, 'stderr', b'').decode(errors='replace')}"
+                )
+                assert False, f"decrypt failed with unexpected error: {exc}"
 
 
 def test_and_attributes_success(
