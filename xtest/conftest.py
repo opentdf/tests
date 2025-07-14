@@ -7,6 +7,8 @@ import base64
 import secrets
 import assertions
 import json
+import logging
+import sys
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from pathlib import Path
@@ -14,7 +16,34 @@ from pydantic_core import to_jsonable_python
 
 import abac
 import tdfs
-from typing import cast
+from typing import cast, Any
+
+
+# Configure pytest to capture all subprocess output
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: Any) -> None:
+    # Set log capture level to debug to ensure all logs are captured
+    if hasattr(config, "option"):
+        config.option.log_cli = True
+        config.option.log_cli_level = "DEBUG"
+        config.option.log_cli_format = (
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+
+    # Configure logging to ensure we see everything from subprocesses
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stdout,  # Ensure output goes to stdout for pytest capture
+    )
+    # Make sure subprocess logger is set to DEBUG level
+    logging.getLogger("subprocess").setLevel(logging.DEBUG)
+
+    # Set environment variable to make sure Python doesn't buffer stdout/stderr
+    os.environ["PYTHONUNBUFFERED"] = "1"
+
+    # Set buffering mode for subprocess to line buffered
+    os.environ["PYTHONFAULTHANDLER"] = "1"
 
 
 def englist(s: tuple[str]) -> str:

@@ -2,6 +2,7 @@ import filecmp
 import logging
 import subprocess
 import pytest
+import sys
 from pathlib import Path
 
 import tdfs
@@ -10,9 +11,19 @@ from abac import Attribute
 
 cipherTexts: dict[str, Path] = {}
 
+# Improved logging configuration
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+# Configure logging to ensure we see everything
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,  # Ensure output goes to stdout for pytest capture
+)
+# Make sure our logger is set to DEBUG level
+logger.setLevel(logging.DEBUG)
+
+# Configure subprocess logging if needed
+logging.getLogger("subprocess").setLevel(logging.DEBUG)
 
 
 def skip_rts_as_needed(
@@ -107,21 +118,37 @@ def decrypt_or_dont(
     rt_file: Path,
 ):
     if expect_success:
-        decrypt_sdk.decrypt(ct_file, rt_file, container)
+        output = decrypt_sdk.decrypt(ct_file, rt_file, container)
         assert filecmp.cmp(pt_file, rt_file)
+        # Log successful output for debugging
+        if output and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Successful decrypt output: {output.decode(errors='replace')}"
+            )
     else:
         try:
-            decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
+            output = decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
             assert False, "decrypt succeeded unexpectedly"
         except subprocess.CalledProcessError as exc:
+            output_content = getattr(exc, "output", b"").decode(errors="replace")
+            stderr_content = getattr(exc, "stderr", b"").decode(errors="replace")
+
+            # Make sure we have complete output for debugging
+            logger.debug(
+                f"Command failed as expected. Return code: {exc.returncode}\n"
+                f"Output: {output_content}\n"
+                f"Stderr: {stderr_content}"
+            )
+
+            # Verify it failed for the expected reason
             if not any(
-                e in exc.output or exc.stderr
+                e in (exc.output or b"") or e in (exc.stderr or b"")
                 for e in [b"forbidden", b"unable to reconstruct split key"]
             ):
                 logger.warning(
                     f"Failed to decrypt {ct_file} with {decrypt_sdk} in {container}: {exc}\n"
-                    f"Output: {getattr(exc, 'output', b'').decode(errors='replace')}\n"
-                    f"Stderr: {getattr(exc, 'stderr', b'').decode(errors='replace')}"
+                    f"Output: {output_content}\n"
+                    f"Stderr: {stderr_content}"
                 )
                 assert False, f"decrypt failed with unexpected error: {exc}"
 

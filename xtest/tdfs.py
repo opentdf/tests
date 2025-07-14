@@ -416,9 +416,33 @@ class SDK:
         env = dict(os.environ)
         env |= local_env
         if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+            # Use run instead of check_output to ensure we capture all output
+            result = subprocess.run(
+                c,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                text=False,  # Keep as bytes to match existing code
+            )
+            # Store output and stderr in the exception for proper reporting
+            if result.returncode != 0:
+                error = subprocess.CalledProcessError(result.returncode, c)
+                error.output = result.stdout
+                error.stderr = result.stderr
+                raise error
+            return result.stdout
         else:
-            subprocess.check_call(c, env=env)
+            # For normal operation, capture output for logging purposes
+            result = subprocess.run(
+                c,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+                text=False,  # Keep as bytes to match existing code
+            )
+            return result.stdout
 
     def supports(self, feature: feature_type) -> bool:
         if feature in self._supports:
