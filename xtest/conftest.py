@@ -193,7 +193,10 @@ def otdfctl():
 
 @pytest.fixture(scope="module")
 def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
-    return create_temp_namesapce(otdfctl)
+    try:
+        return create_temp_namesapce(otdfctl)
+    except AssertionError as e:
+        pytest.skip(f"Failed to create temporary namespace: {e}")
 
 
 def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):

@@ -560,9 +560,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         o = json.loads(out)
         if not o:
@@ -577,9 +577,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return Namespace.model_validate_json(out)
 
@@ -600,9 +600,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return Attribute.model_validate_json(out)
 
@@ -616,9 +616,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return SubjectConditionSet.model_validate_json(out)
 
