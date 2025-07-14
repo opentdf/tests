@@ -25,7 +25,7 @@ def skip_rts_as_needed(
     if (container == "nano" or container == "nano-with-ecdsa") and encrypt_sdk.supports(
         "nano_attribute_bug"
     ):
-        # This is a bug in the nano sdk that was fixed in 0.3.3
+        # This is a bug in the nano sdk that was fixed in 0.4.1
         pytest.skip(f"{encrypt_sdk} sdk fails to add attributes to nanotdfs properly")
 
     pfs = tdfs.PlatformFeatureSet()
