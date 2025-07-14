@@ -533,7 +533,7 @@ def assert_tamper_error(
                 b"integrity check",
             ]
     assert any(
-        err in exc.output for err in expected_error_oneof
+        [err in exc.output for err in expected_error_oneof]
     ), f"Unexpected error output: [{exc.output}]"
 
 

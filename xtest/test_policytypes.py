@@ -109,10 +109,15 @@ def decrypt_or_dont(
             decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
             assert False, "decrypt succeeded unexpectedly"
         except subprocess.CalledProcessError as exc:
+            output_content = (exc.output or b"").decode(errors="replace")
+            stderr_content = (exc.stderr or b"").decode(errors="replace")
+            assert isinstance(output_content, str)
+            assert isinstance(stderr_content, str)
+
             assert any(
-                e in exc.output or exc.stderr
-                for e in [b"forbidden", b"unable to reconstruct split key"]
-            )
+                e in output_content or e in stderr_content
+                for e in ["Forbidden", "forbidden", "unable to reconstruct split key"]
+            ), f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
 
 
 def test_and_attributes_success(
