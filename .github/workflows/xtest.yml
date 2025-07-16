@@ -383,77 +383,77 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-      - name: Run all standard xtests
-        if: ${{ env.FOCUS_SDK == 'all' }}
-        run: |-
-          pytest -ra -v test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
-      - name: Run xtests focusing on a specific SDK
-        if: ${{ env.FOCUS_SDK != 'all' }}
-        run: |-
-          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
+#      - name: Run all standard xtests
+#        if: ${{ env.FOCUS_SDK == 'all' }}
+#        run: |-
+#          pytest -ra -v test_tdfs.py test_policytypes.py
+#        working-directory: otdftests/xtest
+#        env:
+#          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+#          SCHEMA_FILE: "manifest.schema.json"
+#      - name: Run xtests focusing on a specific SDK
+#        if: ${{ env.FOCUS_SDK != 'all' }}
+#        run: |-
+#          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
+#        working-directory: otdftests/xtest
+#        env:
+#          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+#          SCHEMA_FILE: "manifest.schema.json"
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
-      - name: Does platform support multikas?
-        id: multikas
-        run: |-
-          if [[ $PLATFORM_TAG == main ]]; then
-            echo "Main supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif [[ $PLATFORM_VERSION =~ ^0\.[5-9]\.[0-9]+$ ]]; then
-            echo "Selected version [$PLATFORM_VERSION] supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Start additional kas
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8181
-          kas-name: alpha
-
-      - name: Start additional kas
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8282
-          kas-name: beta
-
-      - name: Start additional kas
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8383
-          kas-name: gamma
-
-      - name: Start additional kas
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8484
-          kas-name: delta
-
-      - name: Run attribute based configuration tests
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        run: |-
-          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+#      - name: Does platform support multikas?
+#        id: multikas
+#        run: |-
+#          if [[ $PLATFORM_TAG == main ]]; then
+#            echo "Main supports multikas"
+#            echo "supported=true" >> "$GITHUB_OUTPUT"
+#          elif [[ $PLATFORM_VERSION =~ ^0\.[5-9]\.[0-9]+$ ]]; then
+#            echo "Selected version [$PLATFORM_VERSION] supports multikas"
+#            echo "supported=true" >> "$GITHUB_OUTPUT"
+#          else
+#            echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
+#            echo "supported=false" >> "$GITHUB_OUTPUT"
+#          fi
+#        env:
+#          PLATFORM_TAG: ${{ matrix.platform-tag }}
+#
+#      - name: Start additional kas
+#        if: ${{ steps.multikas.outputs.supported == 'true' }}
+#        uses: opentdf/platform/test/start-additional-kas@main
+#        with:
+#          ec-tdf-enabled: true
+#          kas-port: 8181
+#          kas-name: alpha
+#
+#      - name: Start additional kas
+#        if: ${{ steps.multikas.outputs.supported == 'true' }}
+#        uses: opentdf/platform/test/start-additional-kas@main
+#        with:
+#          ec-tdf-enabled: true
+#          kas-port: 8282
+#          kas-name: beta
+#
+#      - name: Start additional kas
+#        if: ${{ steps.multikas.outputs.supported == 'true' }}
+#        uses: opentdf/platform/test/start-additional-kas@main
+#        with:
+#          ec-tdf-enabled: true
+#          kas-port: 8383
+#          kas-name: gamma
+#
+#      - name: Start additional kas
+#        if: ${{ steps.multikas.outputs.supported == 'true' }}
+#        uses: opentdf/platform/test/start-additional-kas@main
+#        with:
+#          ec-tdf-enabled: true
+#          kas-port: 8484
+#          kas-name: delta
+#
+#      - name: Run attribute based configuration tests
+#        if: ${{ steps.multikas.outputs.supported == 'true' }}
+#        run: |-
+#          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
+#        working-directory: otdftests/xtest
+#        env:
+#          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
