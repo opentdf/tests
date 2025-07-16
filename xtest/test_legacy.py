@@ -57,7 +57,7 @@ def test_decrypt_big(
 def test_decrypt_SDKv0_7_5(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
-    in_focus: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -75,7 +75,7 @@ def test_decrypt_SDKv0_7_5(
 def test_decrypt_SDKv0_7_8(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
-    in_focus: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -93,7 +93,7 @@ def test_decrypt_SDKv0_7_8(
 def test_decrypt_SDKv0_9_0(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
-    in_focus: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
