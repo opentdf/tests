@@ -164,7 +164,39 @@ class KasGrantValue(BaseModelIgnoreExtra):
 
 
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
+KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096 = 2
+
 KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1 = 5
+KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1 = 6
+KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1 = 7
+
+
+_KAS_ALG_TO_STR_MAP = {
+    KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048: "rsa:2048",
+    KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096: "rsa:4096",
+    KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1: "ec:secp256r1",
+    KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1: "ec:secp384r1",
+    KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1: "ec:secp521r1",
+}
+_STR_TO_KAS_ALG_MAP = {v: k for k, v in _KAS_ALG_TO_STR_MAP.items()}
+
+
+def kas_public_key_alg_to_str(alg: int | None) -> str | None:
+    if alg is None:
+        return None
+    try:
+        return _KAS_ALG_TO_STR_MAP[alg]
+    except KeyError:
+        raise ValueError(f"Unknown KAS public key algorithm: {alg}") from None
+
+
+def str_to_kas_public_key_alg(alg_str: str | None) -> int | None:
+    if alg_str is None:
+        return None
+    try:
+        return _STR_TO_KAS_ALG_MAP[alg_str]
+    except KeyError:
+        raise ValueError(f"Unknown KAS public key algorithm string: {alg_str}")
 
 
 class KasPublicKey(BaseModelIgnoreExtra):
@@ -295,6 +327,9 @@ class OpentdfCommandLineTool:
         for k in self.kas_registry_keys_list(kas):
             if k.key.key_id == public_key.kid and k.kas_uri == kas.uri:
                 return k
+
+        if not public_key.algStr:
+            public_key.algStr = kas_public_key_alg_to_str(public_key.alg)
 
         cmd = self.otdfctl + "policy kas-registry key create --mode public_key".split()
         cmd += [
@@ -525,9 +560,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         o = json.loads(out)
         if not o:
@@ -542,9 +577,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return Namespace.model_validate_json(out)
 
@@ -565,9 +600,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return Attribute.model_validate_json(out)
 
@@ -581,9 +616,9 @@ class OpentdfCommandLineTool:
         code = process.wait()
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr)
+            print(err, file=sys.stderr, flush=code != 0)
         if out:
-            print(out)
+            print(out, flush=code != 0)
         assert code == 0
         return SubjectConditionSet.model_validate_json(out)
 

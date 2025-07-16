@@ -4,11 +4,12 @@
 
 ## Requirements
 
-- `go 1.24`
-- `node 22`
+- `go 1.24` (For the Go SDK, otcfctl tool, and platform services)
+- `node 22` (For the JavaScript SDK)
 - `python 3.12`
-- `jdk 17`
-- `maven`
+- `jdk 17` (For the Java SDK)
+- `maven` (For the Java SDK)
+- `docker` (For the platform backend)
 
 ```shell
 brew install maven
@@ -43,14 +44,23 @@ use a symbolic link to pull in your working tree:
 
 ```shell
 mkdir -p sdk/{go,java,js}/src
-ln -s ../../../otcfctl  sdk/go/src/local
-ln -s ../../../java-sdk sdk/java/src/local
-ln -s ../../../web-sdk  sdk/js/src/local
+GH_ORG_DIR=$(cd ../..; pwd)
+ln -s "$GH_ORG_DIR/otcfctl" sdk/go/src/local
+ln -s "$GH_ORG_DIR/java-sdk" sdk/java/src/local
+ln -s "$GH_ORG_DIR/web-sdk" sdk/js/src/local
 ```
 
 #### Using the latest `platform` (go SDK code) in `otdfctl`
 
 Use replace directives in the `otdfctl/go.mod` to point to the version of the SDK (or other libraries) you wish to test.
+
+```shell
+cd sdk/go/src/local
+go mod edit -replace github.com/opentdf/platform/lib/flattening=$GH_ORG_DIR/platform/lib/flattening
+go mod edit -replace github.com/opentdf/platform/lib/ocrypto=$GH_ORG_DIR/platform/lib/ocrypto
+go mod edit -replace github.com/opentdf/platform/protocol/go=$GH_ORG_DIR/platform/protocol/go
+go mod edit -replace github.com/opentdf/platform/sdk=$GH_ORG_DIR/platform/sdk
+```
 
 #### Build the SDKs
 

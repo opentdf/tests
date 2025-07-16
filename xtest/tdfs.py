@@ -43,9 +43,14 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
+    # Allow and respect assigning specific keys (kas url + key id) to attributes,
+    # including splitting with multiple keys on the same kas (sdk feature),
+    # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
+    "key_management",
+    # Attributes are not added properly to the nanotdfs. okay maybe should not be called a feature :-(
+    "nano_attribute_bug",
     "nano_ecdsa",
     "ns_grants",
-    "key_management",
 ]
 
 container_version = Literal["4.2.2", "4.3.0"]

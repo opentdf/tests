@@ -112,11 +112,10 @@ def test_tdf_roundtrip(
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if container == "nano-with-ecdsa":
-        if not encrypt_sdk.supports("nano_ecdsa"):
-            pytest.skip(
-                f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
-            )
+    if container == "nano-with-ecdsa" and not encrypt_sdk.supports("nano_ecdsa"):
+        pytest.skip(
+            f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
+        )
     if container == "ztdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
@@ -534,7 +533,7 @@ def assert_tamper_error(
                 b"integrity check",
             ]
     assert any(
-        err in exc.output for err in expected_error_oneof
+        [err in exc.output for err in expected_error_oneof]
     ), f"Unexpected error output: [{exc.output}]"
 
 
