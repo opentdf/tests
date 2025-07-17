@@ -1,9 +1,6 @@
 name: X-Test
 on:
   pull_request:
-  push:
-    branches:
-      - AB-2042-java-backward-compatibility-for-0.9.0-file
   workflow_dispatch:
     inputs:
       platform-ref:
