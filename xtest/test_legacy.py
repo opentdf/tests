@@ -67,7 +67,6 @@ def test_decrypt_SDKv0_7_5(
     rt_file = tmp_dir / "0.7.5-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
-    print(f"Print file stats: {file_stats}")
     assert file_stats.st_size == 102
 
 
@@ -85,7 +84,6 @@ def test_decrypt_SDKv0_7_8(
     rt_file = tmp_dir / "0.7.8-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
-    print(f"Print file stats: {file_stats}")
     assert file_stats.st_size == 92
 
 
@@ -103,7 +101,6 @@ def test_decrypt_SDKv0_9_0(
     rt_file = tmp_dir / "0.9.0-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
-    print(f"Print file stats: {file_stats}")
     assert file_stats.st_size == 92
 
 
