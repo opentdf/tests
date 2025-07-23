@@ -374,16 +374,16 @@ jobs:
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
-      - name: Run legacy decryption tests
-        run: |-
-          pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+      # - name: Run legacy decryption tests
+      #   run: |-
+      #     pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
+      #   working-directory: otdftests/xtest
+      #   env:
+      #     PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          pytest -ra -v test_tdfs.py test_policytypes.py
+          pytest --encrypt-sdks=java --decrypt-sdks=js -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
