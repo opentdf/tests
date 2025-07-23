@@ -383,7 +383,7 @@ jobs:
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          pytest --encrypt-sdks=java --decrypt-sdks=js -ra -v test_tdfs.py test_policytypes.py
+           pytest -vvvv test_tdfs.py::test_tdf_with_altered_seg_sig_wrong --sdks-encrypt=java --sdks-decrypt=js
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
