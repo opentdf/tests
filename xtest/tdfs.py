@@ -234,7 +234,7 @@ def update_manifest(
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
     with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
-        manifest_file.write(new_manifest_data.model_dump_json())
+        manifest_file.write(new_manifest_data.model_dump_json(by_alias=True))
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
