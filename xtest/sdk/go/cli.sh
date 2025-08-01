@@ -64,6 +64,10 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
+    nano_policymode_plaintext)
+      "${cmd[@]}" help encrypt | grep policy-mode
+      exit $?
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
@@ -125,6 +129,9 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
+  fi
+  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+    args+=(--policy-mode plaintext)
   fi
   if [ -n "$XT_WITH_TARGET_MODE" ]; then
     args+=(--target-mode "$XT_WITH_TARGET_MODE")

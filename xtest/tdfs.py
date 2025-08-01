@@ -50,6 +50,8 @@ feature_type = Literal[
     # Attributes are not added properly to the nanotdfs. okay maybe should not be called a feature :-(
     "nano_attribute_bug",
     "nano_ecdsa",
+    # Nano encrypt supports policy encoding mode = plaintext
+    "nano_policymode_plaintext",
     "ns_grants",
 ]
 
@@ -340,6 +342,7 @@ class SDK:
         container: container_type = "nano",
         attr_values: list[str] | None = None,
         assert_value: str = "",
+        policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
     ):
         use_ecdsa = container == "nano-with-ecdsa"
@@ -368,6 +371,8 @@ class SDK:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
             else:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
+            if policy_mode == "plaintext":
+                local_env |= {"XT_WITH_PLAINTEXT_POLICY": "true"}
 
         if fmt == "ztdf" and target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}

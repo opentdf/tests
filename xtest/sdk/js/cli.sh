@@ -77,6 +77,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4) || ($1 == 0 && $2 == 4 && $3 > 0)) exit 1; else exit 0; }'
       exit $?
       ;;
+    nano_policymode_plaintext)
+      npx $CTL help | grep policyType
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -168,6 +172,10 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--encapKeyType "ec:secp256r1")
+  fi
+
+  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+    args+=(--policyType plaintext)
   fi
   if [ -n "$XT_WITH_TARGET_MODE" ]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")

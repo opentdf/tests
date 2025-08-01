@@ -83,6 +83,11 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
 
+    nano_policymode_plaintext)
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep policy-type
+      exit $?
+      ;;
+
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -118,6 +123,10 @@ if [ "$1" == "encrypt" ]; then
 
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then
     args+=(--encap-key-type="ec:secp256r1")
+  fi
+
+  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+    args+=(--policy-type="plaintext")
   fi
 else
   if [ "$XT_WITH_ECWRAP" == 'true' ]; then

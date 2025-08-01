@@ -3,6 +3,7 @@ import subprocess
 import pytest
 from pathlib import Path
 
+import nano
 import tdfs
 from abac import Attribute
 
@@ -70,7 +71,7 @@ def test_or_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -151,7 +152,7 @@ def test_and_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -207,7 +208,7 @@ def test_hierarchy_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -222,6 +223,70 @@ def test_hierarchy_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             cipherTexts[sample_name] = ct_file
+
+        rt_file = tmp_dir / f"{sample_name}.returned"
+        decrypt_or_dont(
+            decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
+        )
+
+
+def test_container_policy_mode(
+    attribute_with_hierarchy_type: Attribute,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    container: tdfs.container_type,
+    in_focus: set[tdfs.SDK],
+):
+    """
+    Test plaintext policy mode in nanotdf.
+    """
+    if container not in {"nano", "nano-with-ecdsa"}:
+        pytest.skip(f"Container {container} does not support plaintext policy mode")
+    if not encrypt_sdk.supports("nano_policymode_plaintext"):
+        pytest.skip(f"SDK {encrypt_sdk} does not support plaintext policy mode")
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
+
+    attrs = attribute_with_hierarchy_type.values
+    assert (
+        attrs and len(attrs) == 3
+    ), "Expected exactly three attributes for HIERARCHY type"
+    (alpha, beta, gamma) = attrs
+    samples = [
+        ([alpha], False),  # Should fail: user has beta, not alpha (higher level)
+        ([beta], True),  # Should succeed: user has beta assigned
+        ([gamma], True),  # Should succeed: user has beta which is higher than gamma
+    ]
+
+    for vals_to_use, expect_success in samples:
+        assert len([v.fqn for v in vals_to_use if v.fqn is None]) == 0
+        fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
+        assert len(fqns) == len(vals_to_use)
+        short_names = [v.value for v in vals_to_use]
+        assert len(short_names) == len(vals_to_use)
+        sample_name = (
+            f"pt-plaintextpolicy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
+        )
+        if sample_name in cipherTexts:
+            ct_file = cipherTexts[sample_name]
+        else:
+            ct_file = tmp_dir / f"{sample_name}"
+            encrypt_sdk.encrypt(
+                pt_file,
+                ct_file,
+                mime_type="text/plain",
+                container=container,
+                attr_values=fqns,
+                policy_mode="plaintext",
+                target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+            )
+            cipherTexts[sample_name] = ct_file
+
+        with open(ct_file, "rb") as f:
+            envelope = nano.parse(f.read())
+            assert envelope.header.version.version == 12
+            assert envelope.header.policy.policy_type == nano.PolicyType.EMBEDDED
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(
