@@ -80,6 +80,7 @@ if [ "$1" == "supports" ]; then
     nano_policymode_plaintext)
       npx $CTL help | grep policyType
       exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
