@@ -57,6 +57,8 @@ feature_type = Literal[
 
 container_version = Literal["4.2.2", "4.3.0"]
 
+policy_type = Literal["plaintext", "encrypted"]
+
 
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
