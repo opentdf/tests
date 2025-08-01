@@ -87,6 +87,7 @@ def test_or_attributes_success(
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
@@ -169,6 +170,7 @@ def test_and_attributes_success(
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
@@ -225,6 +227,7 @@ def test_hierarchy_attributes_success(
                 attr_values=fqns,
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
@@ -284,14 +287,53 @@ def test_container_policy_mode(
                 policy_mode="plaintext",
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
+            assert_expected_attrs(container, "plaintext", ct_file, fqns)
             cipherTexts[sample_name] = ct_file
-
-        with open(ct_file, "rb") as f:
-            envelope = nano.parse(f.read())
-            assert envelope.header.version.version == 12
-            assert envelope.header.policy.policy_type == nano.PolicyType.EMBEDDED
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
+
+
+def assert_expected_attrs(
+    c: tdfs.container_type, pt: tdfs.policy_type | None, ct_file: Path, fqns: list[str]
+):
+    if not pt:
+        if "nano" == tdfs.simple_container(c):
+            pt = "encrypted"
+        else:
+            pt = "plaintext"
+    with open(ct_file, "rb") as f:
+        if pt == "encrypted":
+            match tdfs.simple_container(c):
+                case "nano":
+                    envelope = nano.parse(f.read())
+                    assert envelope.header.version.version == 12
+                    assert (
+                        envelope.header.policy.policy_type == nano.PolicyType.ENCRYPTED
+                    )
+                    assert not envelope.header.policy.embedded
+                    assert envelope.header.policy.encrypted
+                case _:
+                    assert False, "Unsupported container & policy type pair"
+            return
+        policy: tdfs.PolicyBody
+        match tdfs.simple_container(c):
+            case "nano":
+                envelope = nano.parse(f.read())
+                assert envelope.header.version.version == 12
+                assert envelope.header.policy.policy_type == nano.PolicyType.EMBEDDED
+                assert envelope.header.policy.embedded
+                policy = tdfs.PolicyBody.model_validate_json(
+                    envelope.header.policy.embedded
+                )
+            case _:
+                manifest = tdfs.manifest(ct_file)
+                policy_with_uuid = manifest.encryptionInformation.policy_object
+                policy = policy_with_uuid.body
+
+        assert not policy.dissem
+        assert policy.dataAttributes is not None
+        attrs = [v.attribute for v in policy.dataAttributes]
+        assert sorted(attrs) == sorted(fqns)
