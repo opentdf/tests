@@ -71,7 +71,7 @@ def test_or_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -152,7 +152,7 @@ def test_and_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -208,7 +208,7 @@ def test_hierarchy_attributes_success(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
@@ -264,7 +264,7 @@ def test_container_policy_mode(
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
-        assert len(fqns) == len(vals_to_use)
+        assert len(short_names) == len(vals_to_use)
         sample_name = (
             f"pt-plaintextpolicy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         )
@@ -278,6 +278,7 @@ def test_container_policy_mode(
                 mime_type="text/plain",
                 container=container,
                 attr_values=fqns,
+                policy_mode="plaintext",
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             cipherTexts[sample_name] = ct_file

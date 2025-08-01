@@ -84,7 +84,7 @@ if [ "$1" == "supports" ]; then
       ;;
 
     nano_policymode_plaintext)
-      "${cmd[@]}" help encryptnano | grep policy-type
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep policy-type
       exit $?
 
     *)

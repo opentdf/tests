@@ -371,8 +371,8 @@ class SDK:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
             else:
                 local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
-        if policy_mode == "plaintext":
-            local_env |= {"XT_WITH_PLAINTEXT_POLICY": "true"}
+            if policy_mode == "plaintext":
+                local_env |= {"XT_WITH_PLAINTEXT_POLICY": "true"}
 
         if fmt == "ztdf" and target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
