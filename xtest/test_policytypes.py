@@ -300,10 +300,8 @@ def assert_expected_attrs(
     c: tdfs.container_type, pt: tdfs.policy_type | None, ct_file: Path, fqns: list[str]
 ):
     if not pt:
-        if "nano" == tdfs.simple_container(c):
-            pt = "encrypted"
-        else:
-            pt = "plaintext"
+        # Nano defaults to encrypted; ztdf only supports plaintext
+        pt = "encrypted" if "nano" == tdfs.simple_container(c) else "plaintext"
     with open(ct_file, "rb") as f:
         if pt == "encrypted":
             match tdfs.simple_container(c):
@@ -316,7 +314,9 @@ def assert_expected_attrs(
                     assert not envelope.header.policy.embedded
                     assert envelope.header.policy.encrypted
                 case _:
-                    assert False, "Unsupported container & policy type pair"
+                    assert (
+                        False
+                    ), f"Unsupported container & policy type pair [{tdfs.simple_container(c)} & {pt}]"
             return
         policy: tdfs.PolicyBody
         match tdfs.simple_container(c):

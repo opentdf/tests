@@ -58,6 +58,7 @@ feature_type = Literal[
 container_version = Literal["4.2.2", "4.3.0"]
 
 policy_type = Literal["plaintext", "encrypted"]
+"""How policy (data attributes) should be bound within the output container on encrypt."""
 
 
 class PlatformFeatureSet(BaseModel):
