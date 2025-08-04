@@ -1,6 +1,7 @@
 import filecmp
-import subprocess
 import pytest
+import re
+import subprocess
 from pathlib import Path
 
 import nano
@@ -115,9 +116,11 @@ def decrypt_or_dont(
             assert isinstance(output_content, str)
             assert isinstance(stderr_content, str)
 
-            assert any(
-                e in output_content or e in stderr_content
-                for e in ["Forbidden", "forbidden", "unable to reconstruct split key"]
+            combined_output = output_content + stderr_content
+            assert re.search(
+                r"forbidden|unable to reconstruct split key",
+                combined_output,
+                re.IGNORECASE,
             ), f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
 
 
