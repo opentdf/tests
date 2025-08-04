@@ -1,9 +1,10 @@
-import filecmp
-import subprocess
 import base64
+import filecmp
 import pytest
-import string
 import random
+import re
+import string
+import subprocess
 from pathlib import Path
 
 import nano
@@ -509,8 +510,8 @@ def assert_tamper_error(
     assert btype in exc.output
 
     if not decrypt_sdk.supports("better-messages-2024"):
-        assert any(
-            err in exc.output for err in [b"integrity", b"signature", b"bad request"]
+        assert re.search(
+            b"integrity|signature|bad request", exc.output, re.IGNORECASE | re.MULTILINE
         ), f"Unexpected error output: [{exc.output}]"
         return
 
@@ -532,8 +533,10 @@ def assert_tamper_error(
                 b"IntegrityError",
                 b"integrity check",
             ]
-    assert any(
-        [err in exc.output for err in expected_error_oneof]
+    # Convert list of byte strings to regex pattern
+    pattern = b"|".join(re.escape(err) for err in expected_error_oneof)
+    assert re.search(
+        pattern, exc.output, re.IGNORECASE | re.MULTILINE
     ), f"Unexpected error output: [{exc.output}]"
 
 
@@ -834,13 +837,8 @@ def test_tdf_with_malicious_kao(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert any(
-            err in exc.output
-            for err in [
-                b"allowlist",
-                b"kasallowlist",
-                b"KasAllowlist",
-                b"not allowed",
-                b"disallowed KASes",
-            ]
+        assert re.search(
+            b"allowlist|not allowed|disallowed KASes",
+            exc.output,
+            re.IGNORECASE | re.MULTILINE,
         ), f"Unexpected error output: [{exc.output}]"
