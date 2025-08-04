@@ -511,7 +511,7 @@ def assert_tamper_error(
 
     if not decrypt_sdk.supports("better-messages-2024"):
         assert re.search(
-            b"integrity|signature|bad request", exc.output, re.IGNORECASE | re.MULTILINE
+            b"integrity|signature|bad request", exc.output, re.IGNORECASE
         ), f"Unexpected error output: [{exc.output}]"
         return
 
@@ -536,7 +536,7 @@ def assert_tamper_error(
     # Convert list of byte strings to regex pattern
     pattern = b"|".join(re.escape(err) for err in expected_error_oneof)
     assert re.search(
-        pattern, exc.output, re.IGNORECASE | re.MULTILINE
+        pattern, exc.output, re.IGNORECASE
     ), f"Unexpected error output: [{exc.output}]"
 
 
@@ -652,7 +652,9 @@ def test_tdf_with_altered_seg_sig_wrong(
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(
+            b_file, rt_file, "ztdf", expect_error=True, verify_assertions=False
+        )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "signature", decrypt_sdk)

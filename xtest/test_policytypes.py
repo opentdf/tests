@@ -120,7 +120,7 @@ def decrypt_or_dont(
             assert re.search(
                 r"forbidden|unable to reconstruct split key",
                 combined_output,
-                re.IGNORECASE | re.MULTILINE,
+                re.IGNORECASE,
             ), f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
 
 
