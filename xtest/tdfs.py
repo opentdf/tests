@@ -120,8 +120,8 @@ class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
     displayName: str | None = None
-    pubKey: str
-    kasUrl: str
+    pubKey: str | None = None
+    kasUrl: str | None = None
     schemaVersion: str | None = None
 
 
