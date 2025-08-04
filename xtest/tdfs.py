@@ -57,6 +57,9 @@ feature_type = Literal[
 
 container_version = Literal["4.2.2", "4.3.0"]
 
+policy_type = Literal["plaintext", "encrypted"]
+"""How policy (data attributes) should be bound within the output container on encrypt."""
+
 
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
@@ -117,8 +120,8 @@ class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
     displayName: str | None = None
-    pubKey: str
-    kasUrl: str
+    pubKey: str | None = None
+    kasUrl: str | None = None
     schemaVersion: str | None = None
 
 
