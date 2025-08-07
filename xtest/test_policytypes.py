@@ -332,8 +332,8 @@ def assert_expected_attrs(
                 manifest = tdfs.manifest(ct_file)
                 policy = manifest.encryptionInformation.policy_object
 
-        assert policy.body
-        assert not policy.body.dissem
-        assert policy.body.dataAttributes
-        attrs = [v.attribute for v in policy.body.dataAttributes]
+        policy_body = policy.body
+        assert not policy_body.dissem
+        assert policy_body.dataAttributes
+        attrs = [v.attribute for v in policy_body.dataAttributes]
         assert sorted(attrs) == sorted(fqns)
