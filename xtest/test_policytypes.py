@@ -318,22 +318,22 @@ def assert_expected_attrs(
                         False
                     ), f"Unsupported container & policy type pair [{tdfs.simple_container(c)} & {pt}]"
             return
-        policy: tdfs.PolicyBody
+        policy: tdfs.Policy
         match tdfs.simple_container(c):
             case "nano":
                 envelope = nano.parse(f.read())
                 assert envelope.header.version.version == 12
                 assert envelope.header.policy.policy_type == nano.PolicyType.EMBEDDED
                 assert envelope.header.policy.embedded
-                policy = tdfs.PolicyBody.model_validate_json(
+                policy = tdfs.Policy.model_validate_json(
                     envelope.header.policy.embedded
                 )
             case _:
                 manifest = tdfs.manifest(ct_file)
-                policy_with_uuid = manifest.encryptionInformation.policy_object
-                policy = policy_with_uuid.body
+                policy = manifest.encryptionInformation.policy_object
 
-        assert not policy.dissem
-        assert policy.dataAttributes is not None
-        attrs = [v.attribute for v in policy.dataAttributes]
+        assert policy.body
+        assert not policy.body.dissem
+        assert policy.body.dataAttributes
+        attrs = [v.attribute for v in policy.body.dataAttributes]
         assert sorted(attrs) == sorted(fqns)
