@@ -281,7 +281,7 @@ def kas_public_key_e1() -> abac.KasPublicKey:
 
 @pytest.fixture(scope="session")
 def kas_url_default():
-    return os.getenv("KASURL", "http://localhost:8080/kas")
+    return os.getenv("KASURL", "http://localhost:8080")
 
 
 @pytest.fixture(scope="module")
@@ -295,7 +295,7 @@ def kas_entry_default(
 
 @pytest.fixture(scope="session")
 def kas_url_value1():
-    return os.getenv("KASURL1", "http://localhost:8181/kas")
+    return os.getenv("KASURL1", "http://localhost:8181")
 
 
 @pytest.fixture(scope="module")
@@ -309,7 +309,7 @@ def kas_entry_value1(
 
 @pytest.fixture(scope="session")
 def kas_url_value2():
-    return os.getenv("KASURL2", "http://localhost:8282/kas")
+    return os.getenv("KASURL2", "http://localhost:8282")
 
 
 @pytest.fixture(scope="module")
@@ -323,7 +323,7 @@ def kas_entry_value2(
 
 @pytest.fixture(scope="session")
 def kas_url_attr():
-    return os.getenv("KASURL3", "http://localhost:8383/kas")
+    return os.getenv("KASURL3", "http://localhost:8383")
 
 
 @pytest.fixture(scope="module")
@@ -337,7 +337,7 @@ def kas_entry_attr(
 
 @pytest.fixture(scope="session")
 def kas_url_ns():
-    return os.getenv("KASURL4", "http://localhost:8484/kas")
+    return os.getenv("KASURL4", "http://localhost:8484")
 
 
 @pytest.fixture(scope="module")
@@ -418,6 +418,54 @@ def attribute_with_different_kids(
     # Assign kas key to the attribute values
     otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
     otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
+
+    return allof
+
+
+@pytest.fixture(scope="module")
+def attribute_with_managed_keys(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    temporary_namespace: abac.Namespace,
+    otdf_client_scs: abac.SubjectConditionSet,
+):
+    """
+    Create an attribute with a newly created managed key.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip(
+            "Key management feature is not enabled, skipping test for multiple KAS keys"
+        )
+
+    managed_key = otdfctl.kas_registry_key_create(kas_entry_default, None)
+
+    allof = otdfctl.attribute_create(
+        temporary_namespace,
+        "managedkeys",
+        abac.AttributeRule.ALL_OF,
+        [managed_key.key.key_id],
+    )
+    assert allof.values
+    (ar1,) = allof.values
+    assert ar1.value == managed_key.key.key_id
+
+    sm = otdfctl.scs_map(otdf_client_scs, ar1)
+    assert sm.attribute_value.value == ar1.value
+
+    # Assign kas key to the attribute values
+    otdfctl.key_assign_value(managed_key, ar1)
+    ar1.kas_keys = [
+        abac.SimpleKasKey(
+            kas_uri=managed_key.kas_uri,
+            public_key=abac.SimpleKasPublicKey(
+                algorithm=managed_key.key.key_algorithm,
+                kid=managed_key.key.key_id,
+                pem=managed_key.key.public_key_ctx.pem,
+            ),
+            kas_id=managed_key.kas_id,
+        )
+    ]
 
     return allof
 
