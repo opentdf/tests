@@ -87,6 +87,7 @@ capabilities:
       - 'embedded'     # Keys embedded in TDF
       - 'external'     # External key management
       - 'hsm'          # Hardware security module
+      - 'none'         # No key management (authorization only)
     type: 'string'
     default: 'kas'
 

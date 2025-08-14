@@ -1,50 +1,35 @@
 # Capabilities for no-KAS profile
-# This profile is for testing scenarios without KAS service
-# NO ENCRYPTION CAPABILITIES - encryption requires KAS
+# This profile is for testing authorization decisions via GetDecisions API
+# without encryption/decryption capabilities (no KAS for key management)
 
+# SDKs that support authorization-only operations
 sdk:
   - go
   - java
   - js
 
-# No TDF formats available (all require KAS for encryption)
-# format: NOT AVAILABLE - TDF formats require KAS
+# No TDF formats - encryption/decryption requires KAS
+# format: [] # Empty - no encryption/decryption support
 
-# No encryption available without KAS
-# encryption: NOT AVAILABLE - All encryption requires KAS
+# No encryption - requires KAS for key management
+# encryption: [] # Empty - no encryption support
 
-# No policy enforcement (KAS required for policy)
-# policy: NOT AVAILABLE - Policy requires KAS
+# No policy enforcement for encryption - but can make authorization decisions
+policy:
+  - none  # No policy enforcement during encryption/decryption
 
-# No KAS-related capabilities
-# kas_type: NOT AVAILABLE
-# kas_endpoint: NOT AVAILABLE  
-# kas_protocol: NOT AVAILABLE
+# No KAS for key management
+kas_type:
+  - none
 
-# Limited authentication
+# OIDC authentication for GetDecisions API
 auth_type:
-  - none         # No authentication
+  - oidc  # Used for authorization decisions via GetDecisions
 
-# Non-encryption operations only
-operations:
-  - validate_schema     # Schema validation
-  - parse_manifest     # Manifest parsing (no decryption)
-  - check_format       # Format checking
-  - extract_metadata   # Metadata extraction (unencrypted)
-  - test_connectivity  # Service connectivity tests
-  - mock_operations    # Mock/stub operations for testing
-
-# Testing capabilities (what we CAN test without KAS)
-test_capabilities:
-  - error_handling     # Test error scenarios when KAS unavailable
-  - fallback_behavior  # Test fallback mechanisms
-  - offline_detection  # Test offline mode detection
-  - service_discovery  # Test service discovery failures
-  - configuration     # Test configuration loading
-  - logging           # Test logging functionality
-
-# Operation modes
+# Operation mode - standalone authorization decisions
 operation_mode:
-  - mock        # Mock mode for testing
-  - dry_run     # Dry run without actual operations
-  - validate    # Validation only mode
+  - standalone  # Can make authorization decisions without full platform
+
+# No key management without KAS
+key_management:
+  - none  # No key management capability

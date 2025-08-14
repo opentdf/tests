@@ -125,8 +125,9 @@ class CapabilityCatalog:
     def _load_catalog(self):
         """Load capability catalog from file."""
         if not self.catalog_path or not self.catalog_path.exists():
-            # Use default catalog
-            self.capabilities = self._get_default_catalog()
+            # No default catalog - must have capability-catalog.yaml
+            logger.error(f"Capability catalog not found at {self.catalog_path}")
+            self.capabilities = {}
             return
         
         with open(self.catalog_path) as f:
@@ -136,41 +137,6 @@ class CapabilityCatalog:
                 data = json.load(f)
         
         self.capabilities = data.get('capabilities', {})
-    
-    def _get_default_catalog(self) -> Dict[str, Dict[str, Any]]:
-        """Get default OpenTDF capability catalog."""
-        return {
-            'sdk': {
-                'description': 'SDK implementation',
-                'values': ['go', 'java', 'js', 'swift'],
-                'type': 'string'
-            },
-            'format': {
-                'description': 'TDF container format',
-                'values': ['nano', 'ztdf', 'ztdf-ecwrap'],
-                'type': 'string'
-            },
-            'encryption': {
-                'description': 'Encryption algorithm',
-                'values': ['aes256gcm', 'chacha20poly1305'],
-                'type': 'string'
-            },
-            'policy': {
-                'description': 'Policy type',
-                'values': ['abac-basic', 'abac-hierarchical', 'simple'],
-                'type': 'string'
-            },
-            'kas_type': {
-                'description': 'KAS implementation type',
-                'values': ['standard', 'hsm', 'remote'],
-                'type': 'string'
-            },
-            'auth_type': {
-                'description': 'Authentication type',
-                'values': ['oidc', 'saml', 'client-cert'],
-                'type': 'string'
-            }
-        }
     
     def validate_capability(self, key: str, value: str) -> bool:
         """Validate a capability key-value pair."""
