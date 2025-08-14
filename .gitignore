@@ -29,3 +29,12 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
+
+# Test Framework Modernization
+TODO.md
+.venv/
+artifacts/
+test-results/
+*.pyc
+.pytest_cache/
+.env

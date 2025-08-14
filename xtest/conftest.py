@@ -16,6 +16,10 @@ import abac
 import tdfs
 from typing import cast
 
+# Load the framework pytest plugin for universal test framework support
+# This provides profile-based testing, evidence collection, and service discovery
+pytest_plugins = ["framework.pytest_plugin"]
+
 
 def englist(s: tuple[str]) -> str:
     if len(s) > 1:
@@ -99,6 +103,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         return default
 
     subject_sdks: set[tdfs.SDK] = set()
+    
+    # Check if we have a profile that limits SDK capabilities
+    profile = None
+    if hasattr(metafunc.config, "framework_profile"):
+        profile = metafunc.config.framework_profile
 
     if "encrypt_sdk" in metafunc.fixturenames:
         encrypt_sdks: list[tdfs.sdk_type] = []
@@ -113,6 +122,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
             for v in sdks
         ]
+        
+        # Filter SDKs by profile capabilities if profile is set
+        if profile and "sdk" in profile.capabilities:
+            from framework.pytest_plugin import filter_sdks_by_profile
+            e_sdks = filter_sdks_by_profile(e_sdks, profile)
+        
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
@@ -127,6 +142,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
             for v in sdks
         ]
+        
+        # Filter SDKs by profile capabilities if profile is set
+        if profile and "sdk" in profile.capabilities:
+            from framework.pytest_plugin import filter_sdks_by_profile
+            d_sdks = filter_sdks_by_profile(d_sdks, profile)
+        
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 

@@ -1,0 +1,49 @@
+# Configuration for standard cross-SDK testing
+
+roles:
+  alice:
+    attributes:
+      - "group:engineering"
+      - "clearance:secret"
+      - "department:rd"
+  bob:
+    attributes:
+      - "group:marketing"
+      - "clearance:public"
+      - "department:sales"
+  admin:
+    attributes:
+      - "role:admin"
+      - "clearance:topsecret"
+      - "department:security"
+
+selection:
+  strategy: "pairwise"
+  max_variants: 20
+
+matrix:
+  include_combinations:
+    # Essential cross-SDK tests
+    - sdk: ["go", "java"]
+      format: ["nano", "ztdf"]
+    - sdk: ["js", "go"]
+      format: ["nano"]
+
+timeouts:
+  test: 60
+  suite: 600
+  operation: 10
+
+services:
+  kas:
+    enabled: true
+    endpoint: "${KAS_URL}"
+    port: "${KAS_PORT}"
+  platform:
+    enabled: true
+    endpoint: "${PLATFORM_URL}"
+    port: "${PLATFORM_PORT}"
+  keycloak:
+    enabled: true
+    endpoint: "${KEYCLOAK_URL}"
+    port: "${KEYCLOAK_PORT}"

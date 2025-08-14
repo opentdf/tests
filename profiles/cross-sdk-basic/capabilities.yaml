@@ -1,0 +1,31 @@
+# Standard cross-SDK testing profile with full KAS capabilities
+
+sdk:
+  - go
+  - java
+  - js
+  - swift
+
+format:
+  - nano
+  - ztdf
+  - ztdf-ecwrap
+
+encryption:
+  - aes256gcm
+  - chacha20poly1305
+
+policy:
+  - abac-basic
+  - abac-hierarchical
+  - simple
+
+kas_type:
+  - standard
+
+auth_type:
+  - oidc
+  - client-cert
+
+operation_mode:
+  - online

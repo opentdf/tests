@@ -1,0 +1,187 @@
+# Master Capability Catalog for OpenTDF Testing
+# Defines all valid capabilities and their possible values
+
+capabilities:
+  # SDK implementations
+  sdk:
+    description: 'SDK implementation language/platform'
+    values: ['go', 'java', 'js', 'swift', 'python', 'rust']
+    type: 'string'
+    required: true
+
+  # TDF container formats
+  format:
+    description: 'TDF container format'
+    values: 
+      - 'nano'           # NanoTDF format
+      - 'ztdf'           # Standard TDF3 (ZIP-based)
+      - 'ztdf-ecwrap'    # TDF3 with elliptic curve wrapping
+      - 'local-store'    # Local storage only (no-KAS)
+      - 'offline'        # Offline format (no-KAS)
+    type: 'string'
+    required: true
+
+  # Encryption algorithms
+  encryption:
+    description: 'Encryption algorithm used'
+    values: 
+      - 'aes256gcm'           # AES-256-GCM
+      - 'chacha20poly1305'    # ChaCha20-Poly1305
+      - 'local-aes256gcm'     # Local AES without KAS
+    type: 'string'
+    required: true
+
+  # Policy types
+  policy:
+    description: 'Policy enforcement type'
+    values:
+      - 'abac-basic'         # Basic ABAC
+      - 'abac-hierarchical'  # Hierarchical ABAC
+      - 'simple'             # Simple policy
+      - 'none'               # No policy (no-KAS)
+      - 'local-only'         # Local policy only (no-KAS)
+    type: 'string'
+    default: 'none'
+
+  # KAS implementation types
+  kas_type:
+    description: 'KAS implementation type'
+    values:
+      - 'standard'     # Standard KAS
+      - 'hsm'          # Hardware Security Module backed
+      - 'remote'       # Remote KAS
+      - 'multi'        # Multiple KAS
+      - 'none'         # No KAS available
+    type: 'string'
+    default: 'none'
+
+  # Authentication types
+  auth_type:
+    description: 'Authentication mechanism'
+    values:
+      - 'oidc'         # OpenID Connect
+      - 'saml'         # SAML
+      - 'client-cert'  # Client certificate
+      - 'none'         # No authentication
+      - 'local-cert'   # Local certificate only
+    type: 'string'
+    default: 'none'
+
+  # Storage mechanisms (no-KAS profiles)
+  storage:
+    description: 'Storage mechanism for keys/data'
+    values:
+      - 'file'         # File-based storage
+      - 'memory'       # In-memory storage
+      - 'database'     # Database storage
+      - 's3'           # S3 storage
+    type: 'string'
+    optional: true
+
+  # Key management strategies
+  key_management:
+    description: 'Key management approach'
+    values:
+      - 'kas'          # KAS-managed keys
+      - 'local'        # Local key storage
+      - 'embedded'     # Keys embedded in TDF
+      - 'external'     # External key management
+      - 'hsm'          # Hardware security module
+    type: 'string'
+    default: 'kas'
+
+  # Operation modes
+  operation_mode:
+    description: 'Operation mode for testing'
+    values:
+      - 'online'       # Full online mode with all services
+      - 'offline'      # Offline mode without services
+      - 'standalone'   # Standalone without dependencies
+      - 'hybrid'       # Mix of online/offline
+    type: 'string'
+    default: 'online'
+
+  # Risk levels
+  risk_level:
+    description: 'Risk level of the test'
+    values: ['low', 'medium', 'high', 'critical']
+    type: 'string'
+    optional: true
+
+  # Environment types
+  environment:
+    description: 'Target environment'
+    values:
+      - 'local'        # Local development
+      - 'ci'           # CI/CD pipeline
+      - 'staging'      # Staging environment
+      - 'production'   # Production environment
+      - 'airgap'       # Air-gapped environment
+    type: 'string'
+    default: 'local'
+
+  # Performance categories
+  performance:
+    description: 'Performance testing category'
+    values:
+      - 'unit'         # Single operation
+      - 'integration'  # Multiple operations
+      - 'stress'       # High load
+      - 'endurance'    # Long running
+    type: 'string'
+    optional: true
+
+  # Compliance requirements
+  compliance:
+    description: 'Compliance standard'
+    values:
+      - 'none'
+      - 'fips'         # FIPS 140-2
+      - 'hipaa'        # HIPAA
+      - 'gdpr'         # GDPR
+      - 'sox'          # SOX
+    type: 'string'
+    optional: true
+
+# Capability dependencies and rules
+dependencies:
+  # KAS-dependent capabilities
+  - when:
+      kas_type: ['standard', 'hsm', 'remote', 'multi']
+    require:
+      operation_mode: ['online', 'hybrid']
+    forbid:
+      operation_mode: ['offline', 'standalone']
+      
+  # No-KAS profile restrictions
+  - when:
+      kas_type: ['none']
+    require:
+      operation_mode: ['offline', 'standalone']
+      key_management: ['local', 'embedded']
+      policy: ['none', 'local-only']
+    forbid:
+      format: ['nano', 'ztdf', 'ztdf-ecwrap']
+      policy: ['abac-basic', 'abac-hierarchical']
+      
+  # Swift SDK requirements
+  - when:
+      sdk: ['swift']
+    require:
+      kas_type: ['standard', 'remote']
+    forbid:
+      operation_mode: ['offline', 'standalone']
+
+# Validation rules
+validation:
+  # At least one SDK must be specified
+  - rule: "len(sdk) > 0"
+    message: "At least one SDK must be specified"
+    
+  # Format and encryption must be compatible
+  - rule: "format != 'offline' or encryption == 'local-aes256gcm'"
+    message: "Offline format requires local encryption"
+    
+  # KAS type and operation mode must align
+  - rule: "kas_type == 'none' implies operation_mode in ['offline', 'standalone']"
+    message: "No-KAS profile requires offline or standalone mode"
