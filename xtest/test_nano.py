@@ -1,9 +1,12 @@
 import base64
 
+import pytest
 import nano
 from nano import dec_hex, enc_hex
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano")
 def test_magic_version():
     mv0 = nano.MagicAndVersion(version=12)
 
@@ -17,6 +20,8 @@ def test_magic_version():
     assert base64.b64encode(bytes(mv1)).startswith(b"TDF")
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano")
 def test_resource_locator():
     rl0 = nano.locator("https://localhost:8080/kas")
     print(rl0)
@@ -31,6 +36,8 @@ def test_resource_locator():
     )
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano", feature="ecdsa-binding")
 def test_binding_mode():
     bm0 = nano.BindingMode(
         use_ecdsa_binding=True,
@@ -43,6 +50,8 @@ def test_binding_mode():
     assert not nano.binding_mode_format.parse(dec_hex("00")).use_ecdsa_binding
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano", encryption="aes256gcm")
 def test_sym_and_payload_cfg():
     sp0 = nano.SymmetricAndPayloadConfig(
         has_signature=False,
@@ -62,6 +71,8 @@ def test_sym_and_payload_cfg():
     assert 33 == nano.EccMode.secp256r1.public_key_length
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano", policy="plaintext")
 def test_policy():
     p1 = nano.embedded_policy("{}")
     assert "01 00 02 7b 7d" == enc_hex(nano.policy_format.build(p1))
@@ -87,6 +98,8 @@ def test_policy():
     )
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(format="nano")
 def test_header():
     h0 = nano.Header(
         version=nano.MagicAndVersion(version=12),
@@ -195,6 +208,8 @@ d4 3e 71 76 35 27 8d bd 62 af 42 04 9e af c6 5f c0 # ciphertext
 df d4 f2 2e 5f fe 14 49 79 a3 e5 5a # mac"""
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(format="nano", sdk="go")
 def test_whole_go():
     h0 = nano.header_format.parse(nano.dec_hex_w_comments(whole_go))
     assert h0.pretty() in whole_go
@@ -269,6 +284,8 @@ f6 16 97 a1 88 eb ce dc 6e b2 5f ea 17
 77 55 19 d5 02 2e a9 25 ae 77 ec 9e # mac"""
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(format="nano", sdk="js")
 def test_whole_js():
     e0 = nano.parse(nano.dec_hex_w_comments(whole_js))
     assert e0.pretty() == whole_js

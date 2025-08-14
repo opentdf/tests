@@ -98,6 +98,8 @@ except FileNotFoundError:
 #### BASIC ROUNDTRIP TESTS
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="parametrized")
 def test_tdf_roundtrip(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -154,6 +156,8 @@ def test_tdf_roundtrip(
         assert filecmp.cmp(pt_file, ert_file)
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="hexaflexible")
 def test_tdf_spec_target_422(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -258,6 +262,8 @@ def looks_like_430(manifest: tdfs.Manifest):
 #### MANIFEST VALIDITY TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf")
 def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -271,6 +277,8 @@ def test_manifest_validity(
     tdfs.validate_manifest_schema(ct_file)
 
 
+@pytest.mark.req("BR-301")  # Feature coverage
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertions")
 def test_manifest_validity_with_assertions(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -297,6 +305,8 @@ def test_manifest_validity_with_assertions(
 #### ASSERTION TESTS
 
 
+@pytest.mark.req("BR-301")  # Feature coverage
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertions")
 def test_tdf_assertions_unkeyed(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -329,6 +339,8 @@ def test_tdf_assertions_unkeyed(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-301")  # Feature coverage
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertion_verification")
 def test_tdf_assertions_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -368,6 +380,8 @@ def test_tdf_assertions_with_keys(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-301")  # Feature coverage
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertion_verification", feature2="hexaflexible")
 def test_tdf_assertions_422_format(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -543,6 +557,8 @@ def assert_tamper_error(
 ## POLICY TAMPER TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_unbound_policy(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -572,6 +588,8 @@ def test_tdf_with_unbound_policy(
         assert_tamper_error(exc, "wrap", decrypt_sdk)
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_altered_policy_binding(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -600,6 +618,8 @@ def test_tdf_with_altered_policy_binding(
 ## INTEGRITY TAMPER TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_altered_root_sig(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -629,6 +649,8 @@ def test_tdf_with_altered_root_sig(
         assert_tamper_error(exc, "root", decrypt_sdk)
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_altered_seg_sig_wrong(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -663,6 +685,8 @@ def test_tdf_with_altered_seg_sig_wrong(
 ## SEGMENT SIZE TAMPER TEST
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -697,6 +721,8 @@ def test_tdf_with_altered_enc_seg_size(
 ## ASSERTION TAMPER TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertions", feature2="tamper-detection")
 def test_tdf_with_altered_assertion_statement(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -735,6 +761,8 @@ def test_tdf_with_altered_assertion_statement(
         assert_tamper_error(exc, "assertion", decrypt_sdk)
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="assertion_verification", feature2="tamper-detection")
 def test_tdf_with_altered_assertion_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -783,6 +811,8 @@ def test_tdf_with_altered_assertion_with_keys(
 ## PAYLOAD TAMPER TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_altered_payload_end(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -817,6 +847,8 @@ def test_tdf_altered_payload_end(
 ## KAO TAMPER TESTS
 
 
+@pytest.mark.req("BR-101")  # Core product reliability
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="tamper-detection")
 def test_tdf_with_malicious_kao(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,

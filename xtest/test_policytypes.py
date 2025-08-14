@@ -179,6 +179,8 @@ def test_and_attributes_success(
         )
 
 
+@pytest.mark.req("BR-301")  # Feature coverage
+@pytest.mark.cap(sdk="parametrized", format="parametrized", policy="hierarchy")
 def test_hierarchy_attributes_success(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,

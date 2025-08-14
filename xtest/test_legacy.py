@@ -13,6 +13,8 @@ def get_golden_file(golden_file_name: str) -> Path:
     raise FileNotFoundError(f"Golden file '{filename}' not found.")
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-support")
 def test_decrypt_small(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -33,6 +35,8 @@ def test_decrypt_small(
             assert b == expected_bytes
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-support")
 def test_decrypt_big(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -54,6 +58,8 @@ def test_decrypt_big(
 
 
 # test decryption of legacy tdf created with Java SDK v0_7_5 which is used in the DSP v2.0.2 and DSP v2.0.3 (Gateway)
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.7.5")
 def test_decrypt_SDKv0_7_5(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -71,6 +77,8 @@ def test_decrypt_SDKv0_7_5(
 
 
 # test decryption of legacy tdf created with Java SDK v0_7_8 which is used in the DSP v2.0.4 (Gateway)
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.7.8")
 def test_decrypt_SDKv0_7_8(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -88,6 +96,8 @@ def test_decrypt_SDKv0_7_8(
 
 
 # test decryption of legacy tdf created with Java SDK v0_9_0 which is used in the DSP v2.0.5.1 (Gateway)
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.9.0")
 def test_decrypt_SDKv0_9_0(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -104,6 +114,8 @@ def test_decrypt_SDKv0_9_0(
     assert file_stats.st_size == 92
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-no-splitid")
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -124,6 +136,8 @@ def test_decrypt_no_splitid(
             assert b == expected_bytes
 
 
+@pytest.mark.req("BR-302")  # Cross-product compatibility
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-json-object")
 def test_decrypt_object_statement_value_json(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,

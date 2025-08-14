@@ -38,3 +38,6 @@ test-results/
 *.pyc
 .pytest_cache/
 .env
+/coverage_reports/coverage_report.html
+/coverage_reports/coverage_report.json
+/coverage_reports/coverage_report.md

@@ -24,6 +24,8 @@ def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
         pytest.skip("dspx1153 fails with this SDK version combination")
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="key_management", policy="abac")
 def test_key_mapping_multiple_mechanisms(
     attribute_with_different_kids: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -76,6 +78,8 @@ def test_key_mapping_multiple_mechanisms(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac")
 def test_autoconfigure_one_attribute_standard(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -122,6 +126,8 @@ def test_autoconfigure_one_attribute_standard(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac-or")
 def test_autoconfigure_two_kas_or_standard(
     attribute_two_kas_grant_or: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -175,6 +181,8 @@ def test_autoconfigure_two_kas_or_standard(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac-and")
 def test_autoconfigure_double_kas_and(
     attribute_two_kas_grant_and: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -229,6 +237,8 @@ def test_autoconfigure_double_kas_and(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac-attr-grant")
 def test_autoconfigure_one_attribute_attr_grant(
     one_attribute_attr_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -275,6 +285,8 @@ def test_autoconfigure_one_attribute_attr_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac-attr-value-or")
 def test_autoconfigure_two_kas_or_attr_and_value_grant(
     attr_and_value_kas_grants_or: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -329,6 +341,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", policy="abac-attr-value-and")
 def test_autoconfigure_two_kas_and_attr_and_value_grant(
     attr_and_value_kas_grants_and: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -383,6 +397,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", feature2="ns_grants", policy="abac-ns-grant")
 def test_autoconfigure_one_attribute_ns_grant(
     one_attribute_ns_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -429,6 +445,8 @@ def test_autoconfigure_one_attribute_ns_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", feature2="ns_grants", policy="abac-ns-value-or")
 def test_autoconfigure_two_kas_or_ns_and_value_grant(
     ns_and_value_kas_grants_or: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -483,6 +501,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.req("BR-303")  # KAS test consolidation
+@pytest.mark.cap(sdk="parametrized", format="ztdf", feature="autoconfigure", feature2="ns_grants", policy="abac-ns-value-and")
 def test_autoconfigure_two_kas_and_ns_and_value_grant(
     ns_and_value_kas_grants_and: Attribute,
     encrypt_sdk: tdfs.SDK,

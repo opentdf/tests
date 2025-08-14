@@ -84,7 +84,15 @@ def generate_variant_id(row):
     """Generate variant ID from scenario outline row."""
     if not row:
         return "default"
-    return "-".join(str(v) for v in row.values())
+    # Handle both dict and Row objects
+    if hasattr(row, 'values'):
+        # It's likely a dict
+        return "-".join(str(v) for v in row.values())
+    elif hasattr(row, 'cells'):
+        # It's a behave Row object
+        return "-".join(str(cell) for cell in row.cells)
+    else:
+        return "default"
 
 
 def scenario_to_result(scenario):
@@ -193,7 +201,7 @@ def before_scenario(context, scenario):
         "req_id": context.req_id,
         "profile_id": context.profile.id if context.profile else "unknown",
         "variant": context.variant,
-        "capabilities": context.capabilities,
+        "capabilities": context.required_capabilities,
         "start_timestamp": datetime.utcnow().isoformat() + "Z",
         "scenario_name": scenario.name,
         "tags": list(scenario.tags)
@@ -204,6 +212,18 @@ def before_scenario(context, scenario):
 
 def after_scenario(context, scenario):
     """Collect evidence after scenario execution."""
+    # Check if scenario evidence was initialized (might not be if skipped early)
+    if not hasattr(context, 'scenario_evidence'):
+        context.scenario_evidence = {
+            "req_id": getattr(context, 'req_id', None),
+            "profile_id": context.profile.id if context.profile else "unknown",
+            "variant": getattr(context, 'variant', 'default'),
+            "capabilities": getattr(context, 'required_capabilities', {}),
+            "scenario_name": scenario.name,
+            "tags": list(scenario.tags),
+            "start_timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
     # Complete scenario evidence
     context.scenario_evidence.update({
         "end_timestamp": datetime.utcnow().isoformat() + "Z",

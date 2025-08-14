@@ -18,7 +18,27 @@ from typing import cast
 
 # Load the framework pytest plugin for universal test framework support
 # This provides profile-based testing, evidence collection, and service discovery
-pytest_plugins = ["framework.pytest_plugin"]
+# Only load if framework module is available
+import sys
+from pathlib import Path
+try:
+    # Add parent directory to path to find framework module
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    import framework
+    pytest_plugins = ["framework.pytest_plugin"]
+except ImportError:
+    # Framework not available, continue without it
+    pass
+
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "req(id): Mark test with business requirement ID"
+    )
+    config.addinivalue_line(
+        "markers", "cap(**kwargs): Mark test with required capabilities"
+    )
 
 
 def englist(s: tuple[str]) -> str:
