@@ -510,5 +510,5 @@ jobs:
 
       - name: Run bdd tests
         run: |-
-          behave
+          uv run behave
         working-directory: otdftests/bdd

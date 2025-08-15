@@ -37,7 +37,7 @@ jobs:
       - name: Run Pyright and summarize errors if any
         run: |
           set +e
-          OUTPUT=$(pyright 2>&1)
+          OUTPUT=$(uv run pyright 2>&1)
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
             echo -e "## type check error\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
