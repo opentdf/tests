@@ -25,6 +25,7 @@ jobs:
           enable-cache: true
       - name: 🧽 🐍 
         run: |-
+          uv venv
           uv pip sync requirements.txt
           ruff check .
           black --check .
