@@ -20,6 +20,7 @@ dependencies = [
     "pycparser",
     "pydantic",
     "pydantic_core",
+    "pyyaml>=6.0.2",
     "requests",
     "typing_extensions",
     "urllib3",

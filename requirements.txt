@@ -77,6 +77,8 @@ pygments==2.19.2
     # via pytest
 pytest==8.4.1
     # via opentdf-tests (pyproject.toml:dev)
+pyyaml==6.0.2
+    # via opentdf-tests (pyproject.toml)
 referencing==0.36.2
     # via
     #   jsonschema
