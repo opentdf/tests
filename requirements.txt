@@ -8,6 +8,8 @@ attrs==25.3.0
     # via
     #   jsonschema
     #   referencing
+behave==1.3.1
+    # via opentdf-tests (pyproject.toml:dev)
 black==25.1.0
     # via opentdf-tests (pyproject.toml:dev)
 certifi==2025.8.3
@@ -24,6 +26,8 @@ charset-normalizer==3.4.3
     #   requests
 click==8.2.1
     # via black
+colorama==0.4.6
+    # via behave
 construct==2.10.68
     # via
     #   opentdf-tests (pyproject.toml)
@@ -32,6 +36,10 @@ construct-typing==0.6.2
     # via opentdf-tests (pyproject.toml)
 cryptography==45.0.6
     # via opentdf-tests (pyproject.toml)
+cucumber-expressions==18.0.1
+    # via behave
+cucumber-tag-expressions==6.2.0
+    # via behave
 gitdb==4.0.12
     # via gitpython
 gitpython==3.1.45
@@ -50,11 +58,19 @@ jsonschema-specifications==2025.4.1
     # via jsonschema
 mypy-extensions==1.1.0
     # via black
+nodeenv==1.9.1
+    # via pyright
 packaging==25.0
     # via
     #   opentdf-tests (pyproject.toml)
     #   black
     #   pytest
+parse==1.20.2
+    # via
+    #   behave
+    #   parse-type
+parse-type==0.6.6
+    # via behave
 pathspec==0.12.1
     # via black
 platformdirs==4.3.8
@@ -75,6 +91,8 @@ pydantic-core==2.33.2
     #   pydantic
 pygments==2.19.2
     # via pytest
+pyright==1.1.403
+    # via opentdf-tests (pyproject.toml:dev)
 pytest==8.4.1
     # via opentdf-tests (pyproject.toml:dev)
 pyyaml==6.0.2
@@ -91,6 +109,10 @@ rpds-py==0.27.0
     #   referencing
 ruff==0.12.9
     # via opentdf-tests (pyproject.toml:dev)
+six==1.17.0
+    # via
+    #   behave
+    #   parse-type
 smmap==5.0.2
     # via gitdb
 typing-extensions==4.14.1
@@ -99,6 +121,7 @@ typing-extensions==4.14.1
     #   construct-typing
     #   pydantic
     #   pydantic-core
+    #   pyright
     #   typing-inspection
 typing-inspection==0.4.1
     # via pydantic
