@@ -106,7 +106,9 @@ jobs:
           path: otdf-sdk
           persist-credentials: false
           repository: opentdf/tests
-          sparse-checkout: xtest/sdk
+          sparse-checkout: |
+            xtest/sdk
+            requirements.txt
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.13"
@@ -122,7 +124,7 @@ jobs:
           pip install uv
           uv venv
           source .venv/bin/activate
-          uv pip install -e otdf-sdk/[xtest]
+          uv pip sync requirements.txt
       - id: version-info
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
         with:
