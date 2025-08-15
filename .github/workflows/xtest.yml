@@ -126,7 +126,17 @@ jobs:
           source .venv/bin/activate
           pwd
           ls -la
-          uv pip sync requirements.txt
+          # Check for requirements.txt in both main branch and current branch locations
+          if [ -f "requirements.txt" ]; then
+            echo "Using requirements.txt from current branch"
+            uv pip sync requirements.txt
+          elif [ -f "otdf-sdk/requirements.txt" ]; then
+            echo "Using requirements.txt from main branch checkout"
+            uv pip sync otdf-sdk/requirements.txt
+          else
+            echo "Error: requirements.txt not found in either location"
+            exit 1
+          fi
       - id: version-info
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
         with:
