@@ -123,7 +123,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         return default
 
     subject_sdks: set[tdfs.SDK] = set()
-    
+
     # Check if we have a profile that limits SDK capabilities
     profile = None
     if hasattr(metafunc.config, "framework_profile"):
@@ -142,12 +142,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
             for v in sdks
         ]
-        
+
         # Filter SDKs by profile capabilities if profile is set
         if profile and "sdk" in profile.capabilities:
             from framework.pytest_plugin import filter_sdks_by_profile
             e_sdks = filter_sdks_by_profile(e_sdks, profile)
-        
+
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
@@ -162,12 +162,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
             for v in sdks
         ]
-        
+
         # Filter SDKs by profile capabilities if profile is set
         if profile and "sdk" in profile.capabilities:
             from framework.pytest_plugin import filter_sdks_by_profile
             d_sdks = filter_sdks_by_profile(d_sdks, profile)
-        
+
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
@@ -216,11 +216,11 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
     try:
         heads = json.loads(oh)
         if heads:
-            return abac.OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
+            return abac.OpentdfCommandLineTool(f"xtest/sdk/go/dist/{heads[0]}/otdfctl.sh")
     except json.JSONDecodeError:
         print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
-    if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
-        return abac.OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
+    if os.path.isfile("xtest/sdk/go/dist/main/otdfctl.sh"):
+        return abac.OpentdfCommandLineTool("xtest/sdk/go/dist/main/otdfctl.sh")
     return abac.OpentdfCommandLineTool()
 
 

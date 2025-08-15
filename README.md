@@ -40,23 +40,23 @@ The `run.py` script has the following commands:
 To set up the environment, start the platform, run all the tests, and then stop the platform, you would run the following commands:
 
 ```bash
-python3 run.py setup
-python3 run.py start
-python3 run.py test
-python3 run.py stop
+./run.py setup
+./run.py start
+./run.py test
+./run.py stop
 ```
 
 To run a specific test suite, such as the `xtest` suite with the `no-kas` profile, you would run:
 
 ```bash
-python3 run.py test --suite xtest --profile no-kas
+./run.py test --suite xtest --profile no-kas
 ```
 
 For more information on the available options, run:
 
 ```bash
-python3 run.py --help
-python3 run.py test --help
+./run.py --help
+./run.py test --help
 ```
 
 ## Manual Setup

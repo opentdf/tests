@@ -1,12 +1,10 @@
+#!.venv/bin/python3
 import argparse
-import os
 import subprocess
 import sys
 
 def run_command(command, cwd=None, venv=False):
     """Run a shell command and exit if it fails."""
-    if venv:
-        command = ["source", ".venv/bin/activate", "&&"] + command
     print(f"Running command: {' '.join(command)}")
     # run with shell=True because of `source`
     result = subprocess.run(" ".join(command), cwd=cwd, shell=True, executable="/bin/bash")
@@ -75,6 +73,23 @@ def test(args):
         run_command(["npm", "install"], cwd="vulnerability")
         run_command(["npm", "test"], cwd="vulnerability")
 
+def clean(args):
+    """Clean up the test environment."""
+    print("Cleaning up the test environment...")
+
+    # Stop the platform first
+    print("Stopping OpenTDF platform...")
+    try:
+        run_command(["docker-compose", "down", "-v"], cwd="xtest/platform")
+    except SystemExit:
+        print("Platform was not running or failed to stop cleanly.")
+
+    # Remove only untracked files and directories using git clean, but exclude *.md files and .venv
+    print("Removing untracked files and directories (excluding *.md files and .venv)...")
+    run_command(["git", "clean", "-fdx", "--exclude=*.md", "--exclude=.venv"])
+
+    print("Environment cleaned successfully.")
+
 def main():
     parser = argparse.ArgumentParser(description="A script to rule the OpenTDF tests.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -99,6 +114,10 @@ def main():
     parser_test.add_argument("--deterministic", action="store_true", help="Enable deterministic mode.")
     parser_test.add_argument("extra_args", nargs=argparse.REMAINDER, help="Additional arguments to pass to the test runner.")
     parser_test.set_defaults(func=test)
+
+    # Clean command
+    parser_clean = subparsers.add_parser("clean", help="Clean up the test environment.")
+    parser_clean.set_defaults(func=clean)
 
     args = parser.parse_args()
     args.func(args)
