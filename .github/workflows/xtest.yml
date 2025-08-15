@@ -228,7 +228,7 @@ jobs:
           repository: opentdf/tests
           path: otdftests
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.13"
@@ -242,7 +242,7 @@ jobs:
             uv-${{ runner.os }}-
 
       - name: Install uv and dependencies
-        run: |-
+        run: |
           pip install uv
           uv venv
           source .venv/bin/activate
