@@ -68,7 +68,7 @@ For more granular control over the test environment, you can set up the virtual 
 To create the virtual environment, run the following command from the root of the `tests` directory:
 
 ```bash
-uv venv
+uv venv --python python3.13
 ```
 
 This will create a new virtual environment in the `.venv` directory.
