@@ -124,8 +124,6 @@ jobs:
           pip install uv
           uv venv
           source .venv/bin/activate
-          pwd
-          ls -la
           # Check for requirements.txt in both main branch and current branch locations
           if [ -f "requirements.txt" ]; then
             echo "Using requirements.txt from next main"
@@ -168,7 +166,7 @@ jobs:
 
             for (const [sdkType, ref] of Object.entries(refs)) {
               try {
-                const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
+                const output = execSync(`${process.env.GITHUB_WORKSPACE}/.venv/bin/python ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
                 const ojson = JSON.parse(output);
                 if (!!ojson.err) {
                   throw new Error(ojson.err);
