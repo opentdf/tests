@@ -28,7 +28,11 @@ jobs:
           uv venv
           uv pip sync requirements.txt
           uv run ruff check --exit-zero .
-          uv run black --check .
+          if uv run black --check . ; then
+            echo "Black formatting check passed."
+          else
+            echo "Black formatting check failed. Please run 'uvx black .' to format your code."
+          fi
         working-directory: .
       - name: Run Pyright and summarize errors if any
         run: |
