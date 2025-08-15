@@ -51,7 +51,7 @@ def test_or_attributes_success(
     attribute_with_or_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -77,7 +77,7 @@ def test_or_attributes_success(
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
         else:
-            ct_file = tmp_dir / f"{sample_name}"
+            ct_file = tmp_path / f"{sample_name}"
             # Currently, we only support rsa:2048 and ec:secp256r1
             encrypt_sdk.encrypt(
                 pt_file,
@@ -90,7 +90,7 @@ def test_or_attributes_success(
             assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_path / f"{sample_name}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -129,7 +129,7 @@ def test_and_attributes_success(
     attribute_with_and_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -161,7 +161,7 @@ def test_and_attributes_success(
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
         else:
-            ct_file = tmp_dir / f"{sample_name}"
+            ct_file = tmp_path / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
@@ -173,7 +173,7 @@ def test_and_attributes_success(
             assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_path / f"{sample_name}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -185,7 +185,7 @@ def test_hierarchy_attributes_success(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -220,7 +220,7 @@ def test_hierarchy_attributes_success(
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
         else:
-            ct_file = tmp_dir / f"{sample_name}"
+            ct_file = tmp_path / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
@@ -232,7 +232,7 @@ def test_hierarchy_attributes_success(
             assert_expected_attrs(container, None, ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_path / f"{sample_name}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -242,7 +242,7 @@ def test_container_policy_mode(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -279,7 +279,7 @@ def test_container_policy_mode(
         if sample_name in cipherTexts:
             ct_file = cipherTexts[sample_name]
         else:
-            ct_file = tmp_dir / f"{sample_name}"
+            ct_file = tmp_path / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
                 ct_file,
@@ -292,7 +292,7 @@ def test_container_policy_mode(
             assert_expected_attrs(container, "plaintext", ct_file, fqns)
             cipherTexts[sample_name] = ct_file
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_path / f"{sample_name}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )

@@ -40,6 +40,8 @@ cucumber-expressions==18.0.1
     # via behave
 cucumber-tag-expressions==6.2.0
     # via behave
+execnet==2.1.1
+    # via pytest-xdist
 gitdb==4.0.12
     # via gitpython
 gitpython==3.1.45
@@ -94,6 +96,10 @@ pygments==2.19.2
 pyright==1.1.403
     # via opentdf-tests (pyproject.toml:dev)
 pytest==8.4.1
+    # via
+    #   opentdf-tests (pyproject.toml:dev)
+    #   pytest-xdist
+pytest-xdist==3.8.0
     # via opentdf-tests (pyproject.toml:dev)
 pyyaml==6.0.2
     # via opentdf-tests (pyproject.toml)

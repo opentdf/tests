@@ -9,7 +9,6 @@ import assertions
 import json
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
-from pathlib import Path
 from pydantic_core import to_jsonable_python
 
 import abac
@@ -194,8 +193,21 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         metafunc.parametrize("container", containers)
 
 
+@pytest.fixture(scope="session")
+def work_dir(tmp_path_factory) -> Path:
+    """
+    Create a session-scoped temporary directory for the entire test run.
+    This is the master directory that can be used by external processes
+    and for sharing artifacts between tests (e.g., encrypting with one SDK
+    and decrypting with another).
+    """
+    base_dir = tmp_path_factory.mktemp("opentdf_work")
+    return base_dir
+
+
 @pytest.fixture(scope="module")
-def pt_file(tmp_dir: Path, size: str) -> Path:
+def pt_file(tmp_path_factory, size: str) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("test_data")
     pt_file = tmp_dir / f"test-plain-{size}.txt"
     length = (5 * 2**30) if size == "large" else 128
     with pt_file.open("w") as f:
@@ -204,11 +216,6 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="module")
-def tmp_dir() -> Path:
-    dname = Path("tmp/")
-    dname.mkdir(parents=True, exist_ok=True)
-    return dname
 
 
 def load_otdfctl() -> abac.OpentdfCommandLineTool:
@@ -922,9 +929,9 @@ def rs256_keys() -> tuple[str, str]:
 
 
 def write_assertion_to_file(
-    tmp_dir: Path, file_name: str, assertion_list: list[assertions.Assertion] = []
+    tmp_path: Path, file_name: str, assertion_list: list[assertions.Assertion] = []
 ) -> Path:
-    as_file = tmp_dir / f"test-assertion-{file_name}.json"
+    as_file = tmp_path / f"test-assertion-{file_name}.json"
     assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
     with as_file.open("w") as f:
         f.write(assertion_json)
@@ -932,7 +939,8 @@ def write_assertion_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_file_no_keys(tmp_dir: Path) -> Path:
+def assertion_file_no_keys(tmp_path_factory) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     assertion_list = [
         assertions.Assertion(
             appliesToState="encrypted",
@@ -953,8 +961,9 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def assertion_file_rs_and_hs_keys(
-    tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_path_factory, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -994,11 +1003,11 @@ def assertion_file_rs_and_hs_keys(
 
 
 def write_assertion_verification_keys_to_file(
-    tmp_dir: Path,
+    tmp_path: Path,
     file_name: str,
     assertion_verification_keys: assertions.AssertionVerificationKeys,
 ) -> Path:
-    as_file = tmp_dir / f"test-assertion-verification-{file_name}.json"
+    as_file = tmp_path / f"test-assertion-verification-{file_name}.json"
     assertion_verification_json = json.dumps(
         to_jsonable_python(assertion_verification_keys, exclude_none=True)
     )
@@ -1009,8 +1018,9 @@ def write_assertion_verification_keys_to_file(
 
 @pytest.fixture(scope="module")
 def assertion_verification_file_rs_and_hs_keys(
-    tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_path_factory, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
         keys={

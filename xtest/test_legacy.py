@@ -17,7 +17,7 @@ def get_golden_file(golden_file_name: str) -> Path:
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-support")
 def test_decrypt_small(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -25,7 +25,7 @@ def test_decrypt_small(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
-    rt_file = tmp_dir / "small-java.untdf"
+    rt_file = tmp_path / "small-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
@@ -39,7 +39,7 @@ def test_decrypt_small(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-support")
 def test_decrypt_big(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -47,7 +47,7 @@ def test_decrypt_big(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
-    rt_file = tmp_dir / "big-java.untdf"
+    rt_file = tmp_path / "big-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 10 * 2**20
@@ -62,7 +62,7 @@ def test_decrypt_big(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.7.5")
 def test_decrypt_SDKv0_7_5(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -70,7 +70,7 @@ def test_decrypt_SDKv0_7_5(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
-    rt_file = tmp_dir / "0.7.5-java.untdf"
+    rt_file = tmp_path / "0.7.5-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 102
@@ -81,7 +81,7 @@ def test_decrypt_SDKv0_7_5(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.7.8")
 def test_decrypt_SDKv0_7_8(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -89,7 +89,7 @@ def test_decrypt_SDKv0_7_8(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
-    rt_file = tmp_dir / "0.7.8-java.untdf"
+    rt_file = tmp_path / "0.7.8-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 92
@@ -100,7 +100,7 @@ def test_decrypt_SDKv0_7_8(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-v0.9.0")
 def test_decrypt_SDKv0_9_0(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -108,7 +108,7 @@ def test_decrypt_SDKv0_9_0(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.9.0-2de6a49-DSP2.0.5.1.tdf")
-    rt_file = tmp_dir / "0.9.0-java.untdf"
+    rt_file = tmp_path / "0.9.0-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 92
@@ -118,7 +118,7 @@ def test_decrypt_SDKv0_9_0(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-no-splitid")
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -126,7 +126,7 @@ def test_decrypt_no_splitid(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("no-splitids-java.tdf")
-    rt_file = tmp_dir / "no-splitids-java.untdf"
+    rt_file = tmp_path / "no-splitids-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
@@ -140,7 +140,7 @@ def test_decrypt_no_splitid(
 @pytest.mark.cap(sdk="parametrized", format="ztdf", feature="legacy-json-object")
 def test_decrypt_object_statement_value_json(
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
+    tmp_path: Path,
     in_focus: set[tdfs.SDK],
 ):
     if not in_focus & {decrypt_sdk}:
@@ -148,7 +148,7 @@ def test_decrypt_object_statement_value_json(
     if not decrypt_sdk.supports("assertion_verification"):
         pytest.skip("assertion_verification is not supported")
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
-    rt_file = tmp_dir / "with-json-object-assertions-java.untdf"
+    rt_file = tmp_path / "with-json-object-assertions-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf", verify_assertions=False)
     with rt_file.open("rb") as f:
         assert f.read().decode("utf-8") == "text"

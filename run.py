@@ -31,6 +31,9 @@ def setup(args):
     print("Checking out SDKs...")
     run_command(["./xtest/sdk/scripts/checkout-all.sh"])
     print("SDKs checked out successfully.")
+    print("Building SDKs...")
+    run_command(["make", "all"], cwd="xtest/sdk")
+    print("SDKs built successfully.")
 
 def start(args):
     """Start the OpenTDF platform."""
@@ -51,6 +54,15 @@ def test(args):
     if args.suite in ["xtest", "all"]:
         print("Running xtest suite...")
         pytest_cmd = ["pytest"]
+        
+        # Add parallel execution by default
+        if args.parallel:
+            # Use number of CPU cores if not specified
+            if args.parallel == "auto":
+                pytest_cmd.extend(["-n", "auto"])
+            else:
+                pytest_cmd.extend(["-n", str(args.parallel)])
+        
         if args.profile:
             pytest_cmd.extend(["--profile", args.profile])
         if args.evidence:
@@ -108,7 +120,11 @@ def main():
 
     # Test command
     parser_test = subparsers.add_parser("test", help="Run the tests.")
-    parser_test.add_argument("--suite", choices=["xtest", "bdd", "vulnerability", "all"], default="all", help="The test suite to run.")
+    parser_test.add_argument("suite", nargs="?", choices=["xtest", "bdd", "vulnerability", "all"], default="xtest", help="The test suite to run (default: xtest).")
+    parser_test.add_argument("-n", "--parallel", nargs="?", const="auto", default="auto", 
+                           help="Run tests in parallel. Use 'auto' for automatic CPU detection, or specify number of workers (default: auto)")
+    parser_test.add_argument("--no-parallel", dest="parallel", action="store_false", 
+                           help="Disable parallel test execution")
     parser_test.add_argument("--profile", help="The profile to use for testing.")
     parser_test.add_argument("--evidence", action="store_true", help="Enable evidence collection.")
     parser_test.add_argument("--deterministic", action="store_true", help="Enable deterministic mode.")

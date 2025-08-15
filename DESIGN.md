@@ -316,6 +316,69 @@ class ProfileManager:
         return matrix
 ```
 
+### 3.6 Temporary File Management
+
+The test framework implements a robust temporary file management strategy to ensure test isolation, parallel safety, and debugging capabilities.
+
+#### Design Principles
+- **Test Isolation**: Each test gets its own isolated temporary directory
+- **Parallel Safety**: No race conditions when running tests with pytest-xdist
+- **Debugging Support**: Failed test artifacts preserved for inspection
+- **Automatic Cleanup**: Successful test directories cleaned automatically
+
+#### Implementation
+
+```python
+# xtest/conftest.py
+
+@pytest.fixture(scope="session")
+def work_dir(tmp_path_factory) -> Path:
+    """
+    Session-scoped directory for sharing artifacts between tests
+    and external processes (e.g., cross-SDK encryption/decryption).
+    """
+    return tmp_path_factory.mktemp("opentdf_work")
+
+# Individual tests use standard tmp_path fixture (function-scoped)
+def test_example(tmp_path: Path):
+    """Each test gets its own isolated tmp_path directory."""
+    test_file = tmp_path / "output.tdf"
+    # Test logic here...
+```
+
+#### Configuration
+
+```ini
+# xtest/pytest.ini
+[pytest]
+addopts = --basetemp=.pytest_tmp
+tmp_path_retention_count = 3
+tmp_path_retention_policy = failed
+```
+
+#### External Process Integration
+
+When tests need to coordinate with external processes (SDKs, Docker containers):
+
+```python
+def test_external_sdk(work_dir: Path):
+    """Pass work_dir to external processes via environment variables."""
+    env = os.environ.copy()
+    env["WORK_DIR"] = str(work_dir)
+    
+    subprocess.run(
+        ["./sdk/encrypt.sh"],
+        env=env,
+        check=True
+    )
+    
+    # Verify results in shared directory
+    encrypted_file = work_dir / "output.tdf"
+    assert encrypted_file.exists()
+```
+
+This approach eliminates the problems of hardcoded `tmp/` directories while maintaining ease of debugging and inspection.
+
 ## 4. Test Suite Integration
 
 ### 4.1 XTest (pytest) Integration

@@ -12,7 +12,7 @@ vulnerability/tilt_modules/
 
 /xtest/node_modules/
 /xtest/tilt_modules/
-/xtest/tmp/
+/xtest/.pytest_tmp/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
@@ -37,6 +37,7 @@ artifacts/
 test-results/
 *.pyc
 .pytest_cache/
+.pytest_tmp/
 .env
 /coverage_reports/coverage_report.html
 /coverage_reports/coverage_report.json

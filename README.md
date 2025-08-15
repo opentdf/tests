@@ -30,10 +30,11 @@ Before running the script, you must have the following tools installed:
 
 The `run.py` script has the following commands:
 
-*   `setup`: Sets up the test environment by creating a virtual environment, installing dependencies from `requirements.txt`, and checking out the necessary SDKs.
+*   `setup`: Sets up the test environment by creating a virtual environment, installing dependencies from `requirements.txt`, checking out the necessary SDKs, and building them.
 *   `start`: Starts the OpenTDF platform using Docker Compose.
 *   `stop`: Stops the OpenTDF platform.
-*   `test`: Runs the specified test suite within the virtual environment.
+*   `test`: Runs the specified test suite within the virtual environment (with parallel execution by default for speed).
+*   `clean`: Cleans up the test environment, stopping services and removing untracked files.
 
 **Examples:**
 
@@ -46,10 +47,23 @@ To set up the environment, start the platform, run all the tests, and then stop 
 ./run.py stop
 ```
 
-To run a specific test suite, such as the `xtest` suite with the `no-kas` profile, you would run:
+To run tests with different options:
 
 ```bash
-./run.py test --suite xtest --profile no-kas
+# Run xtest suite (default) with parallel execution
+./run.py test
+
+# Run with specific number of parallel workers
+./run.py test -n 4
+
+# Run tests sequentially (for debugging)
+./run.py test --no-parallel
+
+# Run specific test suite with profile
+./run.py test xtest --profile no-kas
+
+# Run all test suites
+./run.py test all
 ```
 
 For more information on the available options, run:
@@ -87,6 +101,12 @@ To install the dependencies from the `requirements.txt` lock file, run the follo
 
 ```bash
 uv pip sync requirements.txt
+```
+
+**Note:** The `requirements.txt` file is auto-generated from `pyproject.toml`. To regenerate it after updating dependencies in `pyproject.toml`, run:
+
+```bash
+uv pip compile --group dev pyproject.toml -o requirements.txt
 ```
 
 ## Test Framework
