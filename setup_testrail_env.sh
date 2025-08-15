@@ -6,7 +6,7 @@ echo "TestRail Environment Setup"
 echo "=========================================="
 
 # Check if credentials are already set
-if [ ! -z "$TESTRAIL_API_KEY" ]; then
+if [ -n "$TESTRAIL_API_KEY" ]; then
     echo "✓ TestRail credentials already configured"
     echo "  URL: $TESTRAIL_URL"
     echo "  Username: $TESTRAIL_USERNAME"

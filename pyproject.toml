@@ -20,6 +20,7 @@ dependencies = [
     "pycparser",
     "pydantic",
     "pydantic_core",
+    "pyyaml>=6.0.2",
     "requests",
     "typing_extensions",
     "urllib3",
@@ -29,3 +30,10 @@ dependencies = [
 xtest = ["pytest"]
 bdd = ["behave", "pyyaml"]
 linting = ["black", "pyright", "ruff"]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.4.1",
+    "ruff>=0.12.9",
+]
