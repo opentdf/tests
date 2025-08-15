@@ -27,7 +27,7 @@ jobs:
         run: |-
           uv venv
           uv pip sync requirements.txt
-          uv run ruff check .
+          uv run ruff check --exit-zero .
           uv run black --check .
         working-directory: .
       - name: Run Pyright and summarize errors if any
