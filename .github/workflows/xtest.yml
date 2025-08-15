@@ -109,19 +109,13 @@ jobs:
           sparse-checkout: |
             xtest/sdk
             requirements.txt
-      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.13"
-      - name: Cache UV dependencies
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('otdf-sdk/pyproject.toml') }}
-          restore-keys: |
-            uv-${{ runner.os }}-
+          enable-cache: true
+
       - name: Install uv and dependencies
         run: |-
-          pip install uv
           uv venv
           source .venv/bin/activate
           # Check for requirements.txt in both main branch and current branch locations
@@ -243,24 +237,14 @@ jobs:
           repository: opentdf/tests
           path: otdftests
 
-      - name: Set up Python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.13"
-
-      - name: Cache UV dependencies
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
-          restore-keys: |
-            uv-${{ runner.os }}-
+          python-version: '3.13' 
+          enable-cache: true
 
       - name: Install uv and dependencies
         run: |
-          pip install uv
           uv venv
-          source .venv/bin/activate
           uv pip sync requirements.txt
         working-directory: otdftests
 
@@ -406,23 +390,20 @@ jobs:
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest test_nano.py test_self.py
+          uv run pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
+          uv run pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest -ra -v test_tdfs.py test_policytypes.py
+          uv run pytest -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -430,8 +411,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
+          uv run pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -490,8 +470,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
+          uv run pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -499,8 +478,7 @@ jobs:
 
       - name: Run nano tdf tests
         run: |-
-          source otdftests/.venv/bin/activate
-          pytest -ra -v --focus "$FOCUS_SDK" test_nano.py
+          uv run pytest -ra -v --focus "$FOCUS_SDK" test_nano.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -532,6 +510,5 @@ jobs:
 
       - name: Run bdd tests
         run: |-
-          source otdftests/.venv/bin/activate
           behave
         working-directory: otdftests/bdd
