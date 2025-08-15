@@ -1,20 +1,30 @@
-import os
-import typing
-import pytest
-import random
-import string
 import base64
-import secrets
-import assertions
 import json
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+import os
+import random
+import secrets
+import string
+import typing
 from pathlib import Path
+from typing import cast
+
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_core import to_jsonable_python
 
 import abac
+import assertions
 import tdfs
-from typing import cast
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "req(id): Mark test with business requirement ID"
+    )
+    config.addinivalue_line(
+        "markers", "cap(**kwargs): Mark test with required capabilities"
+    )
 
 
 def englist(s: tuple[str]) -> str:
@@ -35,37 +45,7 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
     return is_a
 
 
-def pytest_addoption(parser: pytest.Parser):
-    parser.addoption(
-        "--large",
-        action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
-    )
-    parser.addoption(
-        "--sdks",
-        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--focus",
-        help="skips tests which don't use the requested sdk",
-        type=is_type_or_list_of_types(tdfs.focus_type),
-    )
-    parser.addoption(
-        "--sdks-decrypt",
-        help="select which sdks to run for decrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--sdks-encrypt",
-        help="select which sdks to run for encrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
-        type=is_type_or_list_of_types(tdfs.container_type),
-    )
+# pytest_addoption moved to root conftest.py to ensure options are available globally
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -93,12 +73,19 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         names: list[str], t: typing.Any, default: list[T]
     ) -> list[T]:
         for name in names:
-            v = metafunc.config.getoption(name)
+            # Remove leading dashes for getoption
+            option_name = name.lstrip('-').replace('-', '_')
+            v = metafunc.config.getoption(option_name)
             if v:
-                return cast(list[T], list_opt(name, t))
+                return cast(list[T], list_opt(option_name, t))
         return default
 
     subject_sdks: set[tdfs.SDK] = set()
+
+    # Check if we have a profile that limits SDK capabilities
+    profile = None
+    if hasattr(metafunc.config, "framework_profile"):
+        profile = metafunc.config.framework_profile
 
     if "encrypt_sdk" in metafunc.fixturenames:
         encrypt_sdks: list[tdfs.sdk_type] = []
@@ -113,6 +100,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
             for v in sdks
         ]
+
+        # Filter SDKs by profile capabilities if profile is set
+        if profile and "sdk" in profile.capabilities:
+            from framework.pytest_plugin import filter_sdks_by_profile
+            e_sdks = filter_sdks_by_profile(e_sdks, profile)
+
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
@@ -127,6 +120,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
             for v in sdks
         ]
+
+        # Filter SDKs by profile capabilities if profile is set
+        if profile and "sdk" in profile.capabilities:
+            from framework.pytest_plugin import filter_sdks_by_profile
+            d_sdks = filter_sdks_by_profile(d_sdks, profile)
+
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
@@ -153,8 +152,21 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         metafunc.parametrize("container", containers)
 
 
+@pytest.fixture(scope="session")
+def work_dir(tmp_path_factory) -> Path:
+    """
+    Create a session-scoped temporary directory for the entire test run.
+    This is the master directory that can be used by external processes
+    and for sharing artifacts between tests (e.g., encrypting with one SDK
+    and decrypting with another).
+    """
+    base_dir = tmp_path_factory.mktemp("opentdf_work")
+    return base_dir
+
+
 @pytest.fixture(scope="module")
-def pt_file(tmp_dir: Path, size: str) -> Path:
+def pt_file(tmp_path_factory, size: str) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("test_data")
     pt_file = tmp_dir / f"test-plain-{size}.txt"
     length = (5 * 2**30) if size == "large" else 128
     with pt_file.open("w") as f:
@@ -163,11 +175,6 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="module")
-def tmp_dir() -> Path:
-    dname = Path("tmp/")
-    dname.mkdir(parents=True, exist_ok=True)
-    return dname
 
 
 def load_otdfctl() -> abac.OpentdfCommandLineTool:
@@ -175,11 +182,11 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
     try:
         heads = json.loads(oh)
         if heads:
-            return abac.OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
+            return abac.OpentdfCommandLineTool(f"xtest/sdk/go/dist/{heads[0]}/otdfctl.sh")
     except json.JSONDecodeError:
         print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
-    if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
-        return abac.OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
+    if os.path.isfile("xtest/sdk/go/dist/main/otdfctl.sh"):
+        return abac.OpentdfCommandLineTool("xtest/sdk/go/dist/main/otdfctl.sh")
     return abac.OpentdfCommandLineTool()
 
 
@@ -206,7 +213,7 @@ def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
     return ns
 
 
-PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
+PLATFORM_DIR = os.getenv("PLATFORM_DIR", "work/platform")
 
 
 def load_cached_kas_keys() -> abac.PublicKey:
@@ -881,9 +888,9 @@ def rs256_keys() -> tuple[str, str]:
 
 
 def write_assertion_to_file(
-    tmp_dir: Path, file_name: str, assertion_list: list[assertions.Assertion] = []
+    tmp_path: Path, file_name: str, assertion_list: list[assertions.Assertion] = []
 ) -> Path:
-    as_file = tmp_dir / f"test-assertion-{file_name}.json"
+    as_file = tmp_path / f"test-assertion-{file_name}.json"
     assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
     with as_file.open("w") as f:
         f.write(assertion_json)
@@ -891,7 +898,8 @@ def write_assertion_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_file_no_keys(tmp_dir: Path) -> Path:
+def assertion_file_no_keys(tmp_path_factory) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     assertion_list = [
         assertions.Assertion(
             appliesToState="encrypted",
@@ -912,8 +920,9 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def assertion_file_rs_and_hs_keys(
-    tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_path_factory, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -953,11 +962,11 @@ def assertion_file_rs_and_hs_keys(
 
 
 def write_assertion_verification_keys_to_file(
-    tmp_dir: Path,
+    tmp_path: Path,
     file_name: str,
     assertion_verification_keys: assertions.AssertionVerificationKeys,
 ) -> Path:
-    as_file = tmp_dir / f"test-assertion-verification-{file_name}.json"
+    as_file = tmp_path / f"test-assertion-verification-{file_name}.json"
     assertion_verification_json = json.dumps(
         to_jsonable_python(assertion_verification_keys, exclude_none=True)
     )
@@ -968,8 +977,9 @@ def write_assertion_verification_keys_to_file(
 
 @pytest.fixture(scope="module")
 def assertion_verification_file_rs_and_hs_keys(
-    tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
+    tmp_path_factory, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
+    tmp_dir = tmp_path_factory.mktemp("assertions")
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
         keys={

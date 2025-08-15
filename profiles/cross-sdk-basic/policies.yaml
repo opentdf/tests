@@ -1,0 +1,11 @@
+
+waivers:
+  - test: "test_legacy_format"
+    reason: "Legacy format deprecated"
+expected_skips:
+  - condition: "sdk == 'swift' and format == 'ztdf-ecwrap'"
+    reason: "Swift SDK doesn't support EC yet"
+severities:
+  encryption_failure: "critical"
+  policy_mismatch: "high"
+  performance_degradation: "medium"

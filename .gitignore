@@ -12,7 +12,6 @@ vulnerability/tilt_modules/
 
 /xtest/node_modules/
 /xtest/tilt_modules/
-/xtest/tmp/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
@@ -29,3 +28,14 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
+
+# Test Framework Modernization
+TODO.md
+.venv/
+artifacts/
+test-results/
+*.pyc
+.pytest_cache/
+work/
+.env
+coverage_reports/

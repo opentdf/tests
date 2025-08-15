@@ -1,0 +1,102 @@
+# Metadata for no-KAS profile
+
+name: "No-KAS Profile"
+version: "1.0.0"
+description: "Profile for testing OpenTDF operations without KAS service dependency"
+created_date: "2024-08-14"
+author: "Test Framework Team"
+
+purpose: |
+  This profile is designed for testing OpenTDF framework behavior when KAS
+  (Key Access Service) is not available. Since ALL encryption/decryption 
+  operations in OpenTDF require KAS, this profile focuses on testing
+  non-encryption functionality such as error handling, service discovery
+  failures, configuration management, and framework behavior without KAS.
+
+use_cases:
+  - "Testing error handling when KAS is unavailable"
+  - "Validating service discovery failures"
+  - "Testing configuration loading without services"
+  - "Verifying framework behavior in degraded mode"
+  - "Testing mock/stub operations for development"
+  - "Validating schema and manifest structure (without decryption)"
+
+requirements:
+  - "Local file system access for key storage"
+  - "Sufficient memory for in-memory operations"
+  - "No network connectivity required"
+  - "Local certificate store (optional)"
+
+limitations:
+  - "NO ENCRYPTION/DECRYPTION - All encryption requires KAS"
+  - "No TDF creation or parsing with decryption"
+  - "No policy enforcement"
+  - "No attribute validation"
+  - "No key management operations"
+  - "No cross-SDK compatibility testing (requires encryption)"
+  - "Limited to non-cryptographic operations only"
+
+compatible_sdks:
+  go:
+    version: ">=1.0.0"
+    notes: "Requires offline mode support"
+  java:
+    version: ">=1.0.0"
+    notes: "Local key provider required"
+  js:
+    version: ">=1.0.0"
+    notes: "Browser local storage or Node.js fs"
+  swift:
+    version: "unsupported"
+    notes: "Swift SDK requires KAS for all operations"
+
+dependencies:
+  required: []
+  optional:
+    - name: "local-key-store"
+      version: ">=1.0.0"
+      purpose: "Local key management"
+    - name: "sqlite"
+      version: ">=3.0.0"
+      purpose: "Local policy storage"
+
+environment_variables:
+  TDF_NO_KAS: "true"
+  TDF_OFFLINE_MODE: "true"
+  TDF_LOCAL_KEY_DIR: "/tmp/tdf-keys"
+  TDF_DISABLE_REMOTE: "true"
+
+tags:
+  - "offline"
+  - "no-kas"
+  - "local-only"
+  - "standalone"
+  - "edge"
+  - "airgap"
+
+business_requirements:
+  # This profile addresses specific business requirements
+  BR-102: "Partial - Supports local dev/test environment without full stack"
+  BR-301: "Not Applicable - No policy enforcement without KAS"
+  BR-302: "Limited - Only local cross-SDK compatibility"
+  BR-303: "Not Applicable - No KAS key management"
+
+notes: |
+  This profile is particularly useful for:
+  1. Testing framework behavior when KAS is unavailable
+  2. Validating error handling and fallback mechanisms
+  3. Testing service discovery failures
+  4. Configuration management testing
+  5. Mock/stub operation development
+  
+  IMPORTANT: This profile CANNOT perform any encryption/decryption operations
+  as ALL OpenTDF encryption requires KAS. Use this profile only for:
+  - Error scenario testing
+  - Framework behavior validation
+  - Non-cryptographic operation testing
+  - Service availability checking
+  
+  When using this profile:
+  - ALL encryption tests will be skipped/waived
+  - Only non-cryptographic operations will run
+  - Focus is on framework behavior, not TDF operations
