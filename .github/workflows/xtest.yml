@@ -109,10 +109,7 @@ jobs:
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
-          python-version: "3.12"
-      - run: |-
-          pip install -r scripts/requirements.txt
-        working-directory: otdf-sdk/xtest/sdk
+          python-version: "3.13"
       - id: version-info
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
         with:
@@ -218,7 +215,20 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: opentdf/tests
-          path: otdftests # use different name bc other repos might have tests directories
+          path: otdftests
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.13"
+
+      - name: Install uv and dependencies
+        run: |-
+          pip install uv
+          uv venv
+          source .venv/bin/activate
+          uv pip sync requirements.txt
+        working-directory: otdftests
 
       - name: load extra keys from file
         id: load-extra-keys
@@ -234,10 +244,6 @@ jobs:
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
-        with:
-          python-version: "3.12"
       - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -363,19 +369,17 @@ jobs:
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
-      - name: Install test dependencies
-        run: |-
-          pip install -r requirements.txt
-        working-directory: otdftests/xtest
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
+          source otdftests/.venv/bin/activate
           pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
+          source otdftests/.venv/bin/activate
           pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
@@ -383,6 +387,7 @@ jobs:
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
+          source otdftests/.venv/bin/activate
           pytest -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
@@ -391,6 +396,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
+          source otdftests/.venv/bin/activate
           pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
@@ -450,7 +456,48 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
+          source otdftests/.venv/bin/activate
           pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+
+
+      - name: Run nano tdf tests
+        run: |-
+          source otdftests/.venv/bin/activate
+          pytest -ra -v --focus "$FOCUS_SDK" test_nano.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+
+      - name: Run bats tests
+        run: |-
+          sudo apt-get update
+          sudo apt-get install -y bats
+          bats --filter-tags "$FOCUS_SDK" e2e
+        working-directory: otdftests/otdfctl
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+
+      - name: Run vulnerability tests
+        run: |-
+          npm install
+          npm test
+        working-directory: otdftests/vulnerability
+
+      - name: Run swift tests
+        run: |-
+          swift test
+        working-directory: otdftests/xtest/OpenTDFKit
+
+      - name: Run performance tests
+        run: |-
+          swift test --filter BenchmarkTests
+        working-directory: otdftests/xtest/OpenTDFKit
+
+      - name: Run bdd tests
+        run: |-
+          source otdftests/.venv/bin/activate
+          behave
+        working-directory: otdftests/bdd

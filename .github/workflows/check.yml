@@ -25,11 +25,13 @@ jobs:
           python-version: '3.13' 
       - name: 🧽 🐍 
         run: |-
-          pip install -r requirements.txt
-          pip install black pyright ruff
-          ruff check
+          pip install uv
+          uv venv
+          source .venv/bin/activate
+          uv pip sync requirements.txt
+          ruff check .
           black --check .
-        working-directory: xtest
+        working-directory: .
       - name: Run Pyright and summarize errors if any
         run: |
           set +e

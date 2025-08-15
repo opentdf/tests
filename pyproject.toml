@@ -1,51 +1,31 @@
 [project]
 name = "opentdf-tests"
-version = "0.1.0"
-description = "OpenTDF Test Framework"
-requires-python = ">=3.12"
+version = "2.0.0"
+description = "Test suite for OpenTDF"
+requires-python = ">=3.13"
 dependencies = [
-    "pytest>=7.0",
-    "pyyaml>=6.0",
-    "requests>=2.25",
-    "behave>=1.2.6",
-    "pydantic>=2.0",
-    "cryptography>=3.4",
+    "annotated-types",
+    "certifi",
+    "cffi",
+    "charset-normalizer",
+    "construct",
+    "construct-typing",
+    "cryptography",
+    "gitpython",
+    "idna",
+    "iniconfig",
+    "jsonschema",
+    "packaging",
+    "pluggy",
+    "pycparser",
+    "pydantic",
+    "pydantic_core",
+    "requests",
+    "typing_extensions",
+    "urllib3",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest-cov",
-    "black",
-    "ruff",
-    "mypy",
-]
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.pytest.ini_options]
-minversion = "7.0"
-testpaths = [
-    "xtest",
-    "bdd",
-]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-addopts = "-ra --strict-markers"
-markers = [
-    "req: mark test with requirement ID",
-    "cap: mark test with required capabilities",
-    "smoke: mark test as smoke test",
-    "slow: mark test as slow running",
-]
-
-[tool.ruff]
-target-version = "py312"
-line-length = 120
-select = ["E", "F", "W", "I", "N"]
-
-[tool.black]
-target-version = ['py312']
-line-length = 120
+xtest = ["pytest"]
+bdd = ["behave", "pyyaml"]
+linting = ["black", "pyright", "ruff"]
