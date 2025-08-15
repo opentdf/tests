@@ -317,7 +317,8 @@ class SDK:
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        # Always use path relative to project root (tests directory)
+        self.path = f"xtest/sdk/{sdk}/dist/{version}/cli.sh"
         self._supports = {}
         self.version = version
         if not os.path.isfile(self.path):
@@ -462,7 +463,8 @@ class SDK:
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
     versions: list[SDK] = []
-    sdk_path = os.path.join("sdk", sdk, "dist")
+    # Always use path relative to project root (tests directory)
+    sdk_path = os.path.join("xtest", "sdk", sdk, "dist")
     for version in os.listdir(sdk_path):
         if os.path.isdir(os.path.join(sdk_path, version)):
             versions.append(SDK(sdk, version))

@@ -1,34 +1,21 @@
-import os
-import typing
-import pytest
-import random
-import string
 import base64
-import secrets
-import assertions
 import json
-from cryptography.hazmat.primitives.asymmetric import rsa
+import os
+import random
+import secrets
+import string
+import typing
+from pathlib import Path
+from typing import cast
+
+import pytest
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_core import to_jsonable_python
 
 import abac
+import assertions
 import tdfs
-from typing import cast
-
-# Load the framework pytest plugin for universal test framework support
-# This provides profile-based testing, evidence collection, and service discovery
-# Only load if framework module is available
-import sys
-from pathlib import Path
-try:
-    # Add parent directory to path to find framework module
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    import framework
-    pytest_plugins = ["framework.pytest_plugin"]
-except ImportError:
-    # Framework not available, continue without it
-    pass
-
 
 def pytest_configure(config):
     """Register custom markers."""
@@ -58,37 +45,7 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
     return is_a
 
 
-def pytest_addoption(parser: pytest.Parser):
-    parser.addoption(
-        "--large",
-        action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
-    )
-    parser.addoption(
-        "--sdks",
-        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--focus",
-        help="skips tests which don't use the requested sdk",
-        type=is_type_or_list_of_types(tdfs.focus_type),
-    )
-    parser.addoption(
-        "--sdks-decrypt",
-        help="select which sdks to run for decrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--sdks-encrypt",
-        help="select which sdks to run for encrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
-        type=is_type_or_list_of_types(tdfs.container_type),
-    )
+# pytest_addoption moved to root conftest.py to ensure options are available globally
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -116,9 +73,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         names: list[str], t: typing.Any, default: list[T]
     ) -> list[T]:
         for name in names:
-            v = metafunc.config.getoption(name)
+            # Remove leading dashes for getoption
+            option_name = name.lstrip('-').replace('-', '_')
+            v = metafunc.config.getoption(option_name)
             if v:
-                return cast(list[T], list_opt(name, t))
+                return cast(list[T], list_opt(option_name, t))
         return default
 
     subject_sdks: set[tdfs.SDK] = set()
@@ -254,7 +213,7 @@ def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
     return ns
 
 
-PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
+PLATFORM_DIR = os.getenv("PLATFORM_DIR", "work/platform")
 
 
 def load_cached_kas_keys() -> abac.PublicKey:

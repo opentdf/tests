@@ -3,6 +3,7 @@ name = "opentdf-tests"
 version = "2.0.0"
 description = "Test suite for OpenTDF"
 requires-python = ">=3.13"
+packages = ["xtest", "bdd", "framework", "profiles"]
 dependencies = [
     "annotated-types",
     "certifi",
@@ -28,18 +29,42 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "behave>=1.3.1",
     "black>=25.1.0",
     "pyright>=1.1.403",
     "pytest>=8.4.1",
+    "pytest-bdd>=7.3.0",
     "pytest-xdist>=3.6.1",
     "ruff>=0.12.9",
 ]
 
 [tool.pytest.ini_options]
-# Use a predictable base directory for temporary files
-addopts = "--basetemp=.pytest_tmp"
+# Use a predictable base directory for temporary files at project root
+# This creates all temp directories under work/ for easy inspection
+# The directory is visible in IDEs and easy to navigate
+addopts = "--basetemp=work --tb=short -q --dist=loadscope"
+
+# Add directories to the Python path so modules can be imported
+pythonpath = [".", "xtest", "bdd"]
+
+# Keep failed test directories for debugging
 tmp_path_retention_count = 3
 tmp_path_retention_policy = "failed"
+
+# Minimum Python version
 minversion = "3.13"
-testpaths = ["xtest"]
+
+# Test paths - both xtest and bdd will use this base config
+testpaths = ["xtest", "bdd"]
+
+# Test discovery patterns
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# Markers configuration
+markers = [
+    "req(id): Mark test with business requirement ID",
+    "cap(**kwargs): Mark test with required capabilities",
+    "large: Mark tests that generate large files (>4GB)",
+    "integration: Mark integration tests that require external services",
+]

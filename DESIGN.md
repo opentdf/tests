@@ -18,7 +18,7 @@ graph TB
     
     subgraph "Test Suites"
         XT[XTest Suite<br/>pytest]
-        BDD[BDD Suite<br/>behave/cucumber]
+        BDD[BDD Suite<br/>pytest-bdd]
         PERF[Performance Tests]
         VUL[Vulnerability Tests<br/>Playwright]
     end
@@ -76,15 +76,50 @@ The test framework operates in distinct phases:
 
 ## 2. Directory Structure
 
-The test framework uses a modular directory structure with all framework components organized under `/tests/framework/`. To view the complete directory structure, run `tree -L 3` from the tests directory.
+The test framework uses a modular directory structure with all components organized as proper Python modules.
 
-Key directories:
+### 2.1 Module Organization
+
+```
+tests/
+├── __init__.py                 # Top-level package
+├── framework/                  # Test framework module
+│   ├── __init__.py
+│   ├── core/                   # Core components
+│   ├── utils/                  # Utility functions
+│   └── integrations/           # External integrations
+├── xtest/                      # Cross-SDK test module
+│   ├── __init__.py
+│   ├── conftest.py
+│   └── test_*.py
+├── bdd/                        # BDD test module (pytest-bdd)
+│   ├── __init__.py
+│   ├── features/               # Gherkin feature files
+│   ├── test_*.py              # pytest-bdd test implementations
+│   └── steps/                  # Shared step definitions (optional)
+├── profiles/                   # Profile configuration module
+│   ├── __init__.py
+│   └── *.yaml
+├── work/                       # Temporary work directory (gitignored)
+│   └── README.md
+└── tools/                      # Utility scripts
+```
+
+### 2.2 Key Benefits
+
+- **Clean imports**: No `sys.path` manipulation needed
+- **IDE support**: Full auto-completion and type checking
+- **Namespace isolation**: Each test suite in its own namespace
+- **Code reuse**: Easy sharing between test suites
+
+### 2.3 Key Directories
+
 - **framework/** - Core framework components including discovery, execution, evidence collection, integrations, schemas, linters, and utilities
 - **profiles/** - Test profiles with capability definitions, configurations, and policies
-- **xtest/** - Existing cross-SDK compatibility tests
+- **xtest/** - Cross-SDK compatibility tests
 - **bdd/** - Behavior-driven development test suite
+- **work/** - Temporary files and test artifacts (created during setup)
 - **tools/** - Utility scripts and LLM prompt templates
-- **artifacts/** - Test execution artifacts organized by run_id/req.id/profile.id/variant
 
 ## 3. Core Components Design
 
@@ -324,7 +359,9 @@ The test framework implements a robust temporary file management strategy to ens
 - **Test Isolation**: Each test gets its own isolated temporary directory
 - **Parallel Safety**: No race conditions when running tests with pytest-xdist
 - **Debugging Support**: Failed test artifacts preserved for inspection
+- **IDE Visibility**: Work directory is visible and navigable in IDEs
 - **Automatic Cleanup**: Successful test directories cleaned automatically
+- **Centralized Location**: All temporary files in a single `work/` directory
 
 #### Implementation
 
@@ -348,12 +385,26 @@ def test_example(tmp_path: Path):
 
 #### Configuration
 
-```ini
-# xtest/pytest.ini
-[pytest]
-addopts = --basetemp=.pytest_tmp
+All pytest configuration is centralized in `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+# Use a predictable base directory for temporary files
+addopts = "--basetemp=work --tb=short -q --dist=loadscope"
 tmp_path_retention_count = 3
-tmp_path_retention_policy = failed
+tmp_path_retention_policy = "failed"
+```
+
+#### Work Directory Structure
+
+The `work/` directory is created during `./run.py setup` and has the following structure:
+
+```
+tests/work/
+├── README.md                      # Documentation for the work directory
+├── test_abac_test_key_mapping0/  # Individual test temporary directories
+├── test_tdfs_test_roundtrip1/
+└── opentdf_work0/                # Session-scoped shared directory
 ```
 
 #### External Process Integration
@@ -377,7 +428,7 @@ def test_external_sdk(work_dir: Path):
     assert encrypted_file.exists()
 ```
 
-This approach eliminates the problems of hardcoded `tmp/` directories while maintaining ease of debugging and inspection.
+This approach provides a simple, predictable `work/` directory that's managed by pytest, visible in IDEs, and automatically cleaned with `./run.py clean`.
 
 ## 4. Test Suite Integration
 
@@ -432,56 +483,87 @@ def pytest_collection_modifyitems(config, items):
     items[:] = [item for item in items if item.nodeid in selected_tests]
 ```
 
-### 4.2 BDD Integration
+### 4.2 BDD Integration (pytest-bdd)
+
+The BDD suite has been migrated from behave to pytest-bdd for unified test execution through pytest. This enables parallel execution across both xtest and BDD suites using pytest-xdist.
 
 ```python
-# bdd/environment.py
+# bdd/test_framework_demo.py
 
-from behave import fixture, use_fixture
+import pytest
+from pytest_bdd import scenarios, given, when, then, parsers
 from framework.core import ServiceLocator, EvidenceManager
 
-@fixture
-def service_locator(context):
-    """Setup service locator for BDD tests."""
-    context.service_locator = ServiceLocator()
-    yield context.service_locator
+# Load all scenarios from feature files
+scenarios('features/framework_demo.feature')
 
-@fixture  
-def evidence_collector(context):
+@pytest.fixture
+def service_locator():
+    """Setup service locator for BDD tests."""
+    return ServiceLocator()
+
+@pytest.fixture
+def evidence_collector():
     """Setup evidence collection for scenarios."""
-    context.evidence_manager = EvidenceManager()
-    yield context.evidence_manager
-    
-def before_all(context):
-    """Global test setup."""
-    use_fixture(service_locator, context)
-    use_fixture(evidence_collector, context)
-    
-def before_scenario(context, scenario):
-    """Scenario setup with profile binding."""
-    # Extract tags
-    context.req_id = extract_tag(scenario.tags, "@req:")
-    context.capabilities = extract_tags(scenario.tags, "@cap:")
-    
-    # Setup variant from examples
-    if hasattr(context, "active_outline"):
-        context.variant = generate_variant_id(context.active_outline)
-        
-def after_scenario(context, scenario):
-    """Collect evidence after scenario execution."""
-    evidence = context.evidence_manager.collect_evidence(
-        test_result=scenario_to_result(scenario),
-        profile_id=context.config.profile_id,
-        variant=getattr(context, "variant", "default")
-    )
-    
-    # Attach evidence to scenario for reporting
-    scenario.evidence = evidence
+    return EvidenceManager()
+
+@given('the framework is initialized')
+def framework_initialized(service_locator, evidence_collector):
+    """Initialize framework with service locator and evidence collection."""
+    # Framework initialization logic
+    pass
+
+@when(parsers.parse('I resolve the "{service}" service'))
+def resolve_service(service_locator, service):
+    """Resolve a service using the service locator."""
+    return service_locator.resolve(service)
+
+@then('evidence should be collected for the operation')
+def evidence_collected(evidence_collector):
+    """Verify evidence was collected."""
+    assert evidence_collector.has_evidence()
 ```
+
+#### Benefits of pytest-bdd Integration
+
+1. **Unified Test Execution**: All tests run through pytest, enabling consistent parallelization
+2. **Shared Fixtures**: BDD tests can use the same fixtures as xtest suite
+3. **Parallel Execution**: pytest-xdist handles parallelization across both test suites
+4. **Single Configuration**: All test configuration in `pyproject.toml`
+5. **Consistent Reporting**: Unified test results and coverage reporting
 
 ## 5. Parallelization Strategy
 
-### 5.1 Test Partitioning
+### 5.1 Unified Parallel Execution
+
+With the migration to pytest-bdd, all test suites now run through pytest, enabling unified parallel execution:
+
+```python
+# run.py
+
+def test(args):
+    """Run test suites with unified parallelization."""
+    pytest_cmd = ["pytest"]
+    
+    # Add parallel execution with pytest-xdist
+    if args.parallel:
+        if args.parallel == "auto":
+            pytest_cmd.extend(["-n", "auto"])  # Use all CPU cores
+        else:
+            pytest_cmd.extend(["-n", str(args.parallel)])
+    
+    # Determine test directories
+    if args.suite == "all":
+        # Run both xtest and bdd in parallel
+        pytest_cmd.extend(["xtest", "bdd"])
+    elif args.suite in ["xtest", "bdd"]:
+        pytest_cmd.append(args.suite)
+    
+    # pytest-xdist automatically distributes tests across workers
+    run_command(pytest_cmd)
+```
+
+### 5.2 Test Partitioning
 
 ```python
 class TestPartitioner:
@@ -581,9 +663,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run BDD Suite
         run: |
-          behave bdd/features \
-            --tags=@profile:${{ matrix.profile }} \
-            --junit --junit-directory=results/
+          python -m pytest bdd/ \
+            --profile=${{ matrix.profile }} \
+            --variant=${{ matrix.variant }} \
+            --junit-xml=results/bdd-${{ matrix.variant }}.xml
         timeout-minutes: 15
         
   publish-results:
@@ -1102,7 +1185,109 @@ class TestTracer:
 - Database indexing for quick queries
 - CDN for static report assets
 
-## 14. Appendices
+## 14. Platform Profile Architecture
+
+### 14.1 Multi-Profile Platform Design
+
+The test framework supports multiple platform profiles sharing common infrastructure:
+
+#### Shared Infrastructure
+- **Single Keycloak Instance**: One Keycloak server supports multiple realms
+  - Each profile uses a dedicated realm (e.g., `cross-sdk-basic`, `no-kas`)
+  - Realms provide isolation for users, clients, and configurations
+  - Port: 8081 (shared across all profiles)
+
+- **Single PostgreSQL Instance**: One database server with multiple databases
+  - Each profile uses a dedicated database (e.g., `opentdf_cross_sdk_basic`)
+  - Database isolation ensures no cross-profile data contamination
+  - Port: 5432 (shared across all profiles)
+
+#### Per-Profile Services
+- **KAS Instances**: Each profile runs its own KAS instance
+  - Configured via profile-specific `opentdf.yaml`
+  - Uses profile-specific realm and database
+  - Default profile on port 8080, others on 8090, 8100, etc.
+
+#### Profile Configuration Structure
+```
+profiles/
+├── cross-sdk-basic/
+│   ├── capabilities.yaml    # SDK and format support
+│   ├── config.yaml          # Test configuration, roles, timeouts
+│   ├── policies.yaml        # Test policies and waivers
+│   └── opentdf.yaml        # Platform service configuration (optional)
+├── no-kas/
+│   ├── capabilities.yaml
+│   └── config.yaml         # Services disabled for offline testing
+```
+
+#### Start Command Behavior
+```bash
+./run.py start --profile cross-sdk-basic
+```
+1. Loads profile configuration from `profiles/{profile}/`
+2. Copies profile-specific `opentdf.yaml` if present
+3. Starts docker-compose with profile environment variables
+4. Waits for services to be ready via health checks
+5. Exports environment configuration to `work/profile_{name}.env`
+
+## 15. Recent Improvements (Phase 1 Implementation)
+
+### 14.1 Completed Enhancements
+
+The following improvements have been implemented as part of the Phase 1 modernization:
+
+#### Test Framework Unification
+- **pytest-bdd Migration**: Migrated BDD suite from behave to pytest-bdd for unified test execution
+- **Single Test Runner**: All tests now run through pytest, eliminating the need for multiple test runners
+- **Parallel Execution**: Both xtest and BDD suites run in parallel using pytest-xdist
+- **Unified Configuration**: All test configuration centralized in `pyproject.toml`
+
+#### Module Structure
+- **Python Packages**: Converted all test directories to proper Python packages with `__init__.py` files
+- **Clean Imports**: Fixed all import statements to use module namespacing
+- **Path Resolution**: Implemented robust path resolution for running tests from project root
+
+#### Temporary File Management
+- **pytest Integration**: Leveraging pytest's built-in `tmp_path` and `tmp_path_factory` fixtures
+- **Work Directory**: Centralized temporary files in visible `work/` directory
+- **Automatic Cleanup**: Failed test directories retained for debugging (configurable retention)
+- **Parallel Safety**: Full isolation when running tests with pytest-xdist
+
+#### Developer Experience
+- **Simplified Commands**: `./run.py test all` now runs all test suites in parallel
+- **IDE Visibility**: Work directory is visible and navigable in IDEs
+- **Clean Command**: Idempotent clean command with IDE configuration exclusions
+- **Python 3.13 Support**: Updated to use Python 3.13.6 with virtual environment management
+
+### 14.2 Configuration Updates
+
+#### pyproject.toml
+```toml
+[tool.pytest.ini_options]
+addopts = "--basetemp=work --tb=short -q --dist=loadscope"
+pythonpath = [".", "xtest", "bdd"]
+testpaths = ["xtest", "bdd"]
+tmp_path_retention_count = 3
+tmp_path_retention_policy = "failed"
+```
+
+#### run.py Enhancements
+- Unified test execution through pytest
+- Parallel suite execution for `test all`
+- SDK building moved to setup phase
+- Platform repository cloned to work/platform
+
+### 14.3 Migration Notes
+
+For teams migrating to the new framework:
+
+1. **Update Dependencies**: Run `uv pip install pytest-bdd` to add pytest-bdd
+2. **Convert BDD Tests**: Create `test_*.py` files for each feature file using pytest-bdd
+3. **Update Imports**: Remove any `sys.path` manipulation and use module imports
+4. **Run Tests**: Use `./run.py test all` for parallel execution of all suites
+
+## 15. Appendices
 
 ### A. Configuration Examples
 
@@ -1115,9 +1300,10 @@ Jira API: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
 ### C. Tool Dependencies
 
-- Python 3.12+
-- pytest 7.0+
-- behave 1.2.6+
+- Python 3.13+
+- pytest 8.4+
+- pytest-bdd 8.1+
+- pytest-xdist 3.8+
 - Docker 24.0+
 - GitHub Actions
 
