@@ -111,7 +111,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Cache UV dependencies
-        uses: actions/cache@4e6c2eefdc53c0eef9af9cb7b5fb5ad5e77bea37 # v4.2.2
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('otdf-sdk/pyproject.toml') }}
@@ -234,7 +234,7 @@ jobs:
           python-version: "3.13"
 
       - name: Cache UV dependencies
-        uses: actions/cache@4e6c2eefdc53c0eef9af9cb7b5fb5ad5e77bea37 # v4.2.2
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
