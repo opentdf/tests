@@ -128,11 +128,12 @@ jobs:
           ls -la
           # Check for requirements.txt in both main branch and current branch locations
           if [ -f "requirements.txt" ]; then
-            echo "Using requirements.txt from current branch"
+            echo "Using requirements.txt from next main"
             uv pip sync requirements.txt
           elif [ -f "otdf-sdk/requirements.txt" ]; then
-            echo "Using requirements.txt from main branch checkout"
+            echo "Using requirements.txt from legacy main checkout"
             uv pip sync otdf-sdk/requirements.txt
+            uv pip install GitPython
           else
             echo "Error: requirements.txt not found in either location"
             exit 1
