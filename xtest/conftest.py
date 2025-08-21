@@ -192,7 +192,25 @@ def pt_file(tmp_path_factory, size: str) -> Path:
 
 
 
-def load_otdfctl() -> abac.OpentdfCommandLineTool:
+def load_otdfctl():
+    # Check if we should use the HTTP client
+    use_http = os.environ.get("USE_TESTHELPER_SERVER", "true").lower() == "true"
+    
+    # Check if the test helper server is actually running
+    if use_http:
+        try:
+            import requests
+            testhelper_url = os.environ.get("TESTHELPER_URL", "http://localhost:8090")
+            response = requests.get(f"{testhelper_url}/healthz", timeout=1)
+            if response.status_code == 200:
+                # Import and return the HTTP client
+                from abac_http import OpentdfHttpClient
+                print(f"Using test helper HTTP server at {testhelper_url}")
+                return OpentdfHttpClient(testhelper_url)
+        except Exception as e:
+            print(f"Test helper server not available ({e}), falling back to subprocess mode")
+    
+    # Fall back to subprocess-based implementation
     oh = os.environ.get("OTDFCTL_HEADS", "[]")
     try:
         heads = json.loads(oh)
@@ -249,7 +267,7 @@ _session_namespace_cache = None
 
 
 @pytest.fixture(scope="session")
-def session_namespace(otdfctl: abac.OpentdfCommandLineTool):
+def session_namespace(otdfctl):
     """Create a single namespace for the entire test session to minimize external calls.
     
     This namespace can be reused across all tests that don't require isolation.

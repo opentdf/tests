@@ -73,6 +73,63 @@ This directory is automatically cleaned with './run.py clean'
     run_command(["make", "all"], cwd="xtest/sdk")
     print("SDKs built successfully.")
 
+def start_testhelper_server(profile):
+    """Start the test helper HTTP server."""
+    import subprocess
+    
+    # Build the test helper server if needed
+    testhelper_dir = "xtest/testhelper"
+    if not os.path.exists(f"{testhelper_dir}/testhelper"):
+        print("Building test helper server...")
+        run_command(["go", "build", "-o", "testhelper", "."], cwd=testhelper_dir)
+    
+    # Start the test helper server
+    env = os.environ.copy()
+    env["TESTHELPER_PORT"] = "8090"
+    env["PLATFORM_ENDPOINT"] = "http://localhost:8080"
+    
+    service_log = f"work/testhelper_{profile}.log"
+    with open(service_log, 'w') as log_file:
+        process = subprocess.Popen(
+            ["./testhelper", "-port", "8090", "-daemonize"],
+            cwd=testhelper_dir,
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True
+        )
+    
+    # Save the PID for later cleanup
+    with open(f"work/testhelper_{profile}.pid", 'w') as f:
+        f.write(str(process.pid))
+    
+    # Wait for the server to be ready
+    time.sleep(2)
+    if wait_for_testhelper(8090):
+        print("  ✓ Test helper server is ready on port 8090")
+    else:
+        print("  ✗ Test helper server failed to start")
+        print(f"  Check logs at: {service_log}")
+
+def wait_for_testhelper(port, timeout=30):
+    """Wait for test helper server to be ready."""
+    import urllib.request
+    import urllib.error
+    
+    url = f"http://localhost:{port}/healthz"
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if response.status == 200:
+                    return True
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+            pass
+        time.sleep(1)
+    
+    return False
+
 def wait_for_platform(port, timeout=120):
     """Wait for platform services to be ready."""
     import time
@@ -238,6 +295,11 @@ def start(args):
         f.write(f"PROFILE={profile}\n")
     print(f"Environment exported to {env_file}")
 
+    # Start the test helper server if enabled
+    if os.environ.get("USE_TESTHELPER_SERVER", "true") == "true":
+        print("Starting test helper server...")
+        start_testhelper_server(profile)
+
     print(f"Platform started successfully.")
 
 def stop(args):
@@ -260,6 +322,20 @@ def stop(args):
             os.remove(pid_file)
         except Exception as e:
             print(f"Error stopping service from {pid_file}: {e}")
+    
+    # Stop test helper server
+    for pid_file in glob.glob("work/testhelper_*.pid"):
+        try:
+            with open(pid_file, 'r') as f:
+                pid = int(f.read().strip())
+            print(f"Stopping test helper server (PID: {pid})...")
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                print(f"Process {pid} not found (already stopped)")
+            os.remove(pid_file)
+        except Exception as e:
+            print(f"Error stopping test helper from {pid_file}: {e}")
 
     # Stop docker-compose
     platform_dir = "work/platform"
@@ -382,16 +458,24 @@ def clean(args):
             if os.path.exists(sdk_dist):
                 run_command(["rm", "-rf", sdk_dist])
 
-    # Remove only untracked files and directories using git clean, but exclude important files
-    print("Removing untracked files and directories (excluding *.md files, .venv, and IDE configs)...")
-    run_command(["git", "clean", "-fdx",
-                "--exclude=*.md",
-                "--exclude=.venv",
-                "--exclude=.idea",      # IntelliJ IDEA
-                "--exclude=.vscode",     # Visual Studio Code
-                "--exclude=.claude",     # Claude artifacts
-                "--exclude=.gemini",     # Gemini artifacts
-                "--exclude=.cursor"])
+    # Remove common generated files and directories, but NOT uncommitted source files
+    print("Removing generated files and build artifacts...")
+    
+    # Remove Python cache directories
+    run_command(["find", ".", "-type", "d", "-name", "__pycache__", "-exec", "rm", "-rf", "{}", "+"])
+    run_command(["find", ".", "-type", "d", "-name", "*.egg-info", "-exec", "rm", "-rf", "{}", "+"])
+    
+    # Remove compiled files
+    run_command(["find", ".", "-type", "f", "-name", "*.pyc", "-delete"])
+    run_command(["find", ".", "-type", "f", "-name", "*.pyo", "-delete"])
+    run_command(["find", ".", "-type", "f", "-name", "*.so", "-delete"])
+    
+    # Remove test artifacts
+    for pattern in ["*.log", "*.pid", "*.tmp", ".coverage", "htmlcov"]:
+        run_command(["find", ".", "-name", pattern, "-exec", "rm", "-rf", "{}", "+"])
+    
+    # Note: We do NOT use git clean -fdx because it would remove uncommitted source files
+    # Users should manually run 'git clean -fdx' if they want to remove ALL untracked files
 
     print("Environment cleaned successfully.")
 

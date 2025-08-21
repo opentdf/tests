@@ -348,6 +348,7 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
+        expect_error: bool = False,
     ):
         use_ecdsa = container == "nano-with-ecdsa"
         use_ecwrap = container == "ztdf-ecwrap"
@@ -386,7 +387,14 @@ class SDK:
         logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
         env = dict(os.environ)
         env |= local_env
-        subprocess.check_call(c, env=env)
+        if expect_error:
+            # When we expect an error, we don't want check_call to raise an exception
+            # Instead, we run the command and verify it returns non-zero
+            result = subprocess.run(c, capture_output=True, text=True, env=env)
+            if result.returncode == 0:
+                raise AssertionError(f"Expected encrypt to fail but it succeeded. Output: {result.stdout}")
+        else:
+            subprocess.check_call(c, env=env)
 
     def decrypt(
         self,
@@ -425,7 +433,11 @@ class SDK:
         env = dict(os.environ)
         env |= local_env
         if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+            # When we expect an error, we don't want check_output to raise an exception
+            # Instead, we run the command and verify it returns non-zero
+            result = subprocess.run(c, capture_output=True, text=True, env=env)
+            if result.returncode == 0:
+                raise AssertionError(f"Expected decrypt to fail but it succeeded. Output: {result.stdout}")
         else:
             subprocess.check_call(c, env=env)
 
