@@ -56,6 +56,15 @@ This directory is automatically cleaned with './run.py clean'
     else:
         print("Platform directory already exists, pulling latest...")
         run_command(["git", "pull"], cwd="work/platform")
+    
+    # Generate KAS certificates if they don't exist
+    print("Checking for KAS certificates...")
+    if not os.path.exists("work/platform/kas-cert.pem") or not os.path.exists("work/platform/kas-ec-cert.pem"):
+        print("Generating KAS certificates...")
+        run_command(["bash", "work/platform/.github/scripts/init-temp-keys.sh", "--output", "work/platform"])
+        print("KAS certificates generated successfully")
+    else:
+        print("KAS certificates already exist")
 
     print("Checking out SDKs...")
     run_command(["./xtest/sdk/scripts/checkout-all.sh"])

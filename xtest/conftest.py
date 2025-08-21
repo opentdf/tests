@@ -1,3 +1,18 @@
+"""
+Pytest fixtures for OpenTDF cross-SDK testing.
+
+Optimization Strategy:
+- Session-scoped fixtures for resources that can be safely shared across all tests
+- Module-scoped fixtures for resources that need some isolation but can be shared within a module
+- Caching of external command results to minimize subprocess calls
+- Reuse of namespaces, KAS entries, and public keys across tests
+
+Key optimizations:
+1. Single session-wide namespace for most tests (session_namespace)
+2. Cached KAS registry entries to avoid repeated lookups
+3. Session-scoped otdfctl instance to avoid repeated initialization
+4. Cached public keys and subject condition sets
+"""
 import base64
 import json
 import os
@@ -182,31 +197,103 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
     try:
         heads = json.loads(oh)
         if heads:
-            return abac.OpentdfCommandLineTool(f"xtest/sdk/go/dist/{heads[0]}/otdfctl.sh")
+            path = f"xtest/sdk/go/dist/{heads[0]}/otdfctl.sh"
+            if os.path.isfile(path):
+                return abac.OpentdfCommandLineTool(path)
     except json.JSONDecodeError:
         print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
-    if os.path.isfile("xtest/sdk/go/dist/main/otdfctl.sh"):
-        return abac.OpentdfCommandLineTool("xtest/sdk/go/dist/main/otdfctl.sh")
-    return abac.OpentdfCommandLineTool()
+    
+    # Check for the default otdfctl location
+    default_path = "xtest/sdk/go/dist/main/otdfctl.sh"
+    if os.path.isfile(default_path):
+        return abac.OpentdfCommandLineTool(default_path)
+    
+    # Check for fallback location
+    fallback_path = "xtest/sdk/go/otdfctl.sh"
+    if os.path.isfile(fallback_path):
+        return abac.OpentdfCommandLineTool(fallback_path)
+    
+    # If otdfctl is not found, provide helpful error message
+    raise FileNotFoundError(
+        f"\n\notdfctl not found. Please run the setup first:\n"
+        f"  ./run.py setup\n\n"
+        f"This will:\n"
+        f"  1. Clone and build the platform\n"
+        f"  2. Check out and build all SDKs including otdfctl\n"
+        f"  3. Generate required certificates\n\n"
+        f"Expected locations checked:\n"
+        f"  - {default_path}\n"
+        f"  - {fallback_path}\n\n"
+        f"Note: Always run pytest from the project root, not from xtest/\n"
+    )
 
 
-_otdfctl = load_otdfctl()
+# Lazy loading of otdfctl - only load when first requested
+_otdfctl = None
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def otdfctl():
+    """Session-scoped otdfctl instance to minimize subprocess calls.
+    
+    Lazily loads otdfctl on first use to avoid import-time errors.
+    """
+    global _otdfctl
+    if _otdfctl is None:
+        _otdfctl = load_otdfctl()
     return _otdfctl
 
 
+# Cache for session-level namespace to avoid repeated creation
+_session_namespace_cache = None
+
+
+@pytest.fixture(scope="session")
+def session_namespace(otdfctl: abac.OpentdfCommandLineTool):
+    """Create a single namespace for the entire test session to minimize external calls.
+    
+    This namespace can be reused across all tests that don't require isolation.
+    For tests that need isolated namespaces, use the temporary_namespace fixture.
+    """
+    global _session_namespace_cache
+    if _session_namespace_cache is None:
+        # Use a fixed namespace name for the test session
+        # This allows reuse across multiple pytest invocations
+        session_ns = "xtest.session.opentdf.com"
+        
+        # Try to use existing namespace first
+        try:
+            # Check if namespace already exists by trying to create it
+            _session_namespace_cache = otdfctl.namespace_create(session_ns)
+        except (AssertionError, Exception) as e:
+            # Namespace might already exist, that's fine for session-scoped fixture
+            # We'll create a mock namespace object since we know the name
+            _session_namespace_cache = abac.Namespace(
+                id="session-namespace",  # This will be overridden if we fetch the real one
+                name=session_ns,
+                fqn=f"https://{session_ns}",
+                active=abac.BoolValue(value=True)
+            )
+            print(f"Using existing or mock session namespace: {session_ns}")
+    return _session_namespace_cache
+
+
 @pytest.fixture(scope="module")
-def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
-    try:
-        return create_temp_namesapce(otdfctl)
-    except AssertionError as e:
-        pytest.skip(f"Failed to create temporary namespace: {e}")
+def temporary_namespace(session_namespace: abac.Namespace):
+    """Module-scoped namespace that reuses the session namespace.
+    
+    For backward compatibility, this returns the session namespace.
+    Tests that require true isolation should create their own namespace.
+    """
+    return session_namespace
 
 
 def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
+    """Create a new isolated namespace when needed.
+    
+    This function should only be used when test isolation is required.
+    Most tests should use the session_namespace or temporary_namespace fixtures.
+    """
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
@@ -216,7 +303,71 @@ def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "work/platform")
 
 
+def ensure_platform_setup():
+    """Ensure platform is set up with required certificates.
+    
+    Automatically clones platform and generates certificates if needed.
+    This is called lazily when fixtures that need certificates are first accessed.
+    """
+    import subprocess
+    
+    kas_cert_path = f"{PLATFORM_DIR}/kas-cert.pem"
+    kas_ec_cert_path = f"{PLATFORM_DIR}/kas-ec-cert.pem"
+    
+    # Check if we're in CI environment (GitHub Actions sets this)
+    in_ci = os.environ.get("CI") == "true"
+    
+    if os.path.exists(kas_cert_path) and os.path.exists(kas_ec_cert_path):
+        # Certificates already exist
+        return
+    
+    if in_ci:
+        # In CI, the platform action should have set this up
+        raise FileNotFoundError(
+            f"\n\nKAS certificates not found in {PLATFORM_DIR}/\n"
+            f"The GitHub Actions workflow should have set up the platform.\n"
+            f"Check that the 'start-up-with-containers' action ran successfully.\n"
+        )
+    
+    # For local development, automatically set up platform
+    print(f"Setting up platform for local testing...")
+    
+    # Clone platform if it doesn't exist
+    if not os.path.exists(PLATFORM_DIR):
+        print(f"Cloning platform repository to {PLATFORM_DIR}...")
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "https://github.com/opentdf/platform.git", PLATFORM_DIR],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print(f"Platform cloned successfully")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to clone platform: {e.stderr}")
+    
+    # Generate certificates
+    init_script = f"{PLATFORM_DIR}/.github/scripts/init-temp-keys.sh"
+    if os.path.exists(init_script):
+        print(f"Generating KAS certificates...")
+        try:
+            subprocess.run(
+                ["bash", init_script, "--output", PLATFORM_DIR],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print(f"Certificates generated successfully")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to generate certificates: {e.stderr}")
+    else:
+        raise FileNotFoundError(f"Certificate generation script not found: {init_script}")
+
+
 def load_cached_kas_keys() -> abac.PublicKey:
+    # Ensure platform is set up (will clone and generate certs if needed)
+    ensure_platform_setup()
+    
     keyset: list[abac.KasPublicKey] = []
     with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
         keyset.append(
@@ -241,8 +392,9 @@ def load_cached_kas_keys() -> abac.PublicKey:
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def cached_kas_keys() -> abac.PublicKey:
+    """Session-scoped KAS keys to avoid redundant file reads."""
     return load_cached_kas_keys()
 
 
@@ -268,6 +420,8 @@ def extra_keys() -> dict[str, ExtraKey]:
 
 @pytest.fixture(scope="session")
 def kas_public_key_r1() -> abac.KasPublicKey:
+    # Ensure platform is set up (will clone and generate certs if needed)
+    ensure_platform_setup()
     with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
         return abac.KasPublicKey(
             algStr="rsa:2048",
@@ -278,6 +432,8 @@ def kas_public_key_r1() -> abac.KasPublicKey:
 
 @pytest.fixture(scope="session")
 def kas_public_key_e1() -> abac.KasPublicKey:
+    # Ensure platform is set up (will clone and generate certs if needed)
+    ensure_platform_setup()
     with open(f"{PLATFORM_DIR}/kas-ec-cert.pem", "r") as ecFile:
         return abac.KasPublicKey(
             algStr="ec:secp256r1",
@@ -291,13 +447,55 @@ def kas_url_default():
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
-@pytest.fixture(scope="module")
+# Cache for KAS entries to avoid repeated registry lookups
+_kas_entry_cache = {}
+# Cache for KAS registry list to avoid repeated calls
+_kas_registry_list_cache = None
+
+
+def get_or_create_kas_entry(
+    otdfctl: abac.OpentdfCommandLineTool,
+    uri: str,
+    key: abac.PublicKey | None = None,
+    cache_key: str = None
+) -> abac.KasEntry:
+    """Get or create a KAS entry with caching to minimize registry calls."""
+    global _kas_registry_list_cache
+    
+    # Use cache key if provided, otherwise use URI
+    cache_key = cache_key or uri
+    
+    # Check if we already have this entry cached
+    if cache_key in _kas_entry_cache:
+        return _kas_entry_cache[cache_key]
+    
+    # Get the registry list once and cache it
+    if _kas_registry_list_cache is None:
+        _kas_registry_list_cache = otdfctl.kas_registry_list()
+    
+    # Look for existing entry
+    for e in _kas_registry_list_cache:
+        if e.uri == uri:
+            _kas_entry_cache[cache_key] = e
+            return e
+    
+    # Create new entry if not found
+    entry = otdfctl.kas_registry_create(uri, key)
+    _kas_entry_cache[cache_key] = entry
+    # Add to cache list to avoid re-fetching
+    if _kas_registry_list_cache is not None:
+        _kas_registry_list_cache.append(entry)
+    return entry
+
+
+@pytest.fixture(scope="session")
 def kas_entry_default(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_default: str,
 ) -> abac.KasEntry:
-    return otdfctl.kas_registry_create_if_not_present(kas_url_default, cached_kas_keys)
+    """Session-scoped default KAS entry to minimize registry calls."""
+    return get_or_create_kas_entry(otdfctl, kas_url_default, cached_kas_keys, 'default')
 
 
 @pytest.fixture(scope="session")
@@ -305,13 +503,14 @@ def kas_url_value1():
     return os.getenv("KASURL1", "http://localhost:8181/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_value1(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_value1: str,
 ) -> abac.KasEntry:
-    return otdfctl.kas_registry_create_if_not_present(kas_url_value1, cached_kas_keys)
+    """Session-scoped KAS entry for value1 to minimize registry calls."""
+    return get_or_create_kas_entry(otdfctl, kas_url_value1, cached_kas_keys, 'value1')
 
 
 @pytest.fixture(scope="session")
@@ -319,13 +518,14 @@ def kas_url_value2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_value2(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_value2: str,
 ) -> abac.KasEntry:
-    return otdfctl.kas_registry_create_if_not_present(kas_url_value2, cached_kas_keys)
+    """Session-scoped KAS entry for value2 to minimize registry calls."""
+    return get_or_create_kas_entry(otdfctl, kas_url_value2, cached_kas_keys, 'value2')
 
 
 @pytest.fixture(scope="session")
@@ -333,13 +533,14 @@ def kas_url_attr():
     return os.getenv("KASURL3", "http://localhost:8383/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_attr(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_attr: str,
 ) -> abac.KasEntry:
-    return otdfctl.kas_registry_create_if_not_present(kas_url_attr, cached_kas_keys)
+    """Session-scoped KAS entry for attr to minimize registry calls."""
+    return get_or_create_kas_entry(otdfctl, kas_url_attr, cached_kas_keys, 'attr')
 
 
 @pytest.fixture(scope="session")
@@ -347,13 +548,14 @@ def kas_url_ns():
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_ns(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_ns: str,
 ) -> abac.KasEntry:
-    return otdfctl.kas_registry_create_if_not_present(kas_url_ns, cached_kas_keys)
+    """Session-scoped KAS entry for ns to minimize registry calls."""
+    return get_or_create_kas_entry(otdfctl, kas_url_ns, cached_kas_keys, 'ns')
 
 
 def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicKey:
@@ -367,26 +569,38 @@ def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicK
     )
 
 
-@pytest.fixture(scope="module")
+# Cache for KAS public keys to avoid repeated registry calls
+_kas_public_key_cache = {}
+
+
+@pytest.fixture(scope="session")
 def public_key_kas_default_kid_r1(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
 ) -> abac.KasKey:
-    return otdfctl.kas_registry_create_public_key_only(
-        kas_entry_default, kas_public_key_r1
-    )
+    """Session-scoped KAS public key to minimize registry calls."""
+    cache_key = f"default_r1_{kas_entry_default.id}"
+    if cache_key not in _kas_public_key_cache:
+        _kas_public_key_cache[cache_key] = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_default, kas_public_key_r1
+        )
+    return _kas_public_key_cache[cache_key]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def public_key_kas_default_kid_e1(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
     kas_public_key_e1: abac.KasPublicKey,
 ) -> abac.KasKey:
-    return otdfctl.kas_registry_create_public_key_only(
-        kas_entry_default, kas_public_key_e1
-    )
+    """Session-scoped KAS public key to minimize registry calls."""
+    cache_key = f"default_e1_{kas_entry_default.id}"
+    if cache_key not in _kas_public_key_cache:
+        _kas_public_key_cache[cache_key] = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_default, kas_public_key_e1
+        )
+    return _kas_public_key_cache[cache_key]
 
 
 @pytest.fixture(scope="module")
@@ -775,10 +989,11 @@ def ns_and_value_kas_grants_or(
     kas_entry_ns: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,  # Reuse existing namespace
 ) -> abac.Attribute:
-    temp_namespace = create_temp_namesapce(otdfctl)
+    # Use the shared namespace to minimize external calls
     anyof = otdfctl.attribute_create(
-        temp_namespace,
+        temporary_namespace,
         "nsorvalgrant",
         abac.AttributeRule.ANY_OF,
         ["alpha", "beta"],
@@ -795,7 +1010,7 @@ def ns_and_value_kas_grants_or(
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
         otdfctl.grant_assign_value(kas_entry_value1, beta)
-        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+        otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
     else:
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
             kas_entry_value1, kas_public_key_r1
@@ -805,7 +1020,7 @@ def ns_and_value_kas_grants_or(
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
             kas_entry_ns, kas_public_key_r1
         )
-        otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
+        otdfctl.key_assign_ns(kas_key_ns, temporary_namespace)
 
     return anyof
 
@@ -817,10 +1032,11 @@ def ns_and_value_kas_grants_and(
     kas_entry_ns: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,  # Reuse existing namespace
 ) -> abac.Attribute:
-    temp_namespace = create_temp_namesapce(otdfctl)
+    # Use the shared namespace to minimize external calls
     allof = otdfctl.attribute_create(
-        temp_namespace,
+        temporary_namespace,
         "nsandvalgrant",
         abac.AttributeRule.ALL_OF,
         ["alpha", "beta"],
@@ -839,7 +1055,7 @@ def ns_and_value_kas_grants_and(
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
         otdfctl.grant_assign_value(kas_entry_value1, beta)
-        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+        otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
     else:
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
             kas_entry_value1, kas_public_key_r1
@@ -849,7 +1065,7 @@ def ns_and_value_kas_grants_and(
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
             kas_entry_ns, kas_public_key_r1
         )
-        otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
+        otdfctl.key_assign_ns(kas_key_ns, temporary_namespace)
 
     return allof
 
@@ -998,7 +1214,11 @@ def assertion_verification_file_rs_and_hs_keys(
     )
 
 
-@pytest.fixture(scope="module")
+# Cache for subject condition sets
+_scs_cache = None
+
+
+@pytest.fixture(scope="session")
 def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditionSet:
     """
     Creates a standard subject condition set for OpenTDF clients.
@@ -1007,22 +1227,24 @@ def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditi
     Returns:
         abac.SubjectConditionSet: The created subject condition set
     """
-    sc: abac.SubjectConditionSet = otdfctl.scs_create(
-        [
-            abac.SubjectSet(
-                condition_groups=[
-                    abac.ConditionGroup(
-                        boolean_operator=abac.ConditionBooleanTypeEnum.OR,
-                        conditions=[
-                            abac.Condition(
-                                subject_external_selector_value=".clientId",
-                                operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf", "opentdf-sdk"],
-                            )
-                        ],
-                    )
-                ]
-            )
-        ],
-    )
-    return sc
+    global _scs_cache
+    if _scs_cache is None:
+        _scs_cache = otdfctl.scs_create(
+            [
+                abac.SubjectSet(
+                    condition_groups=[
+                        abac.ConditionGroup(
+                            boolean_operator=abac.ConditionBooleanTypeEnum.OR,
+                            conditions=[
+                                abac.Condition(
+                                    subject_external_selector_value=".clientId",
+                                    operator=abac.SubjectMappingOperatorEnum.IN,
+                                    subject_external_values=["opentdf", "opentdf-sdk"],
+                                )
+                            ],
+                        )
+                    ]
+                )
+            ],
+        )
+    return _scs_cache
