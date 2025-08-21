@@ -32,6 +32,9 @@ import abac
 import assertions
 import tdfs
 
+# Check if we should use SDK servers
+USE_SDK_SERVERS = os.environ.get("USE_SDK_SERVERS", "true").lower() == "true"
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
@@ -110,11 +113,24 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             list(typing.get_args(tdfs.sdk_type)),
         )
         # convert list of sdk_type to list of SDK objects
-        e_sdks = [
-            v
-            for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
-            for v in sdks
-        ]
+        if USE_SDK_SERVERS:
+            # Use SDK servers if available
+            try:
+                from sdk_tdfs import SDK
+                e_sdks = [SDK(sdk, "main") for sdk in encrypt_sdks]
+            except (ImportError, RuntimeError):
+                # Fall back to CLI-based SDKs
+                e_sdks = [
+                    v
+                    for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
+                    for v in sdks
+                ]
+        else:
+            e_sdks = [
+                v
+                for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
+                for v in sdks
+            ]
 
         # Filter SDKs by profile capabilities if profile is set
         if profile and "sdk" in profile.capabilities:
@@ -130,11 +146,24 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             tdfs.sdk_type,
             list(typing.get_args(tdfs.sdk_type)),
         )
-        d_sdks = [
-            v
-            for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
-            for v in sdks
-        ]
+        if USE_SDK_SERVERS:
+            # Use SDK servers if available
+            try:
+                from sdk_tdfs import SDK
+                d_sdks = [SDK(sdk, "main") for sdk in decrypt_sdks]
+            except (ImportError, RuntimeError):
+                # Fall back to CLI-based SDKs
+                d_sdks = [
+                    v
+                    for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
+                    for v in sdks
+                ]
+        else:
+            d_sdks = [
+                v
+                for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
+                for v in sdks
+            ]
 
         # Filter SDKs by profile capabilities if profile is set
         if profile and "sdk" in profile.capabilities:

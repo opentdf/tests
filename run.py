@@ -73,46 +73,136 @@ This directory is automatically cleaned with './run.py clean'
     run_command(["make", "all"], cwd="xtest/sdk")
     print("SDKs built successfully.")
 
-def start_testhelper_server(profile):
-    """Start the test helper HTTP server."""
+def start_sdk_servers(profile):
+    """Start SDK servers for each language (Go, JS, Java)."""
     import subprocess
     
-    # Build the test helper server if needed
-    testhelper_dir = "xtest/testhelper"
-    if not os.path.exists(f"{testhelper_dir}/testhelper"):
-        print("Building test helper server...")
-        run_command(["go", "build", "-o", "testhelper", "."], cwd=testhelper_dir)
+    servers_started = []
     
-    # Start the test helper server
-    env = os.environ.copy()
-    env["TESTHELPER_PORT"] = "8090"
-    env["PLATFORM_ENDPOINT"] = "http://localhost:8080"
+    # Start Go SDK server
+    if os.environ.get("ENABLE_GO_SDK_SERVER", "true") == "true":
+        print("Starting Go SDK server...")
+        go_server_dir = "xtest/sdk/go/server"
+        
+        # Build the Go server if needed
+        if not os.path.exists(f"{go_server_dir}/server"):
+            print("  Building Go SDK server...")
+            os.makedirs(go_server_dir, exist_ok=True)
+            run_command(["go", "build", "-o", "server", "."], cwd=go_server_dir)
+        
+        # Start the server
+        env = os.environ.copy()
+        env["GO_SDK_PORT"] = "8091"
+        env["PLATFORM_ENDPOINT"] = "http://localhost:8080"
+        
+        service_log = f"work/go_sdk_server_{profile}.log"
+        with open(service_log, 'w') as log_file:
+            process = subprocess.Popen(
+                ["./server", "-port", "8091", "-daemonize"],
+                cwd=go_server_dir,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                start_new_session=True
+            )
+        
+        # Save the PID for later cleanup
+        with open(f"work/go_sdk_server_{profile}.pid", 'w') as f:
+            f.write(str(process.pid))
+        
+        # Wait for the server to be ready
+        time.sleep(2)
+        if wait_for_sdk_server(8091, "Go"):
+            print("  ✓ Go SDK server is ready on port 8091")
+            servers_started.append("go")
+        else:
+            print("  ✗ Go SDK server failed to start")
+            print(f"  Check logs at: {service_log}")
     
-    service_log = f"work/testhelper_{profile}.log"
-    with open(service_log, 'w') as log_file:
-        process = subprocess.Popen(
-            ["./testhelper", "-port", "8090", "-daemonize"],
-            cwd=testhelper_dir,
-            env=env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True
-        )
+    # Start JavaScript SDK server
+    if os.environ.get("ENABLE_JS_SDK_SERVER", "true") == "true":
+        print("Starting JavaScript SDK server...")
+        js_server_file = "xtest/sdk/js/server.js"
+        
+        if os.path.exists(js_server_file):
+            # Start the server
+            env = os.environ.copy()
+            env["TESTHELPER_PORT"] = "8093"
+            env["PLATFORM_ENDPOINT"] = "http://localhost:8080"
+            env["OIDC_ENDPOINT"] = "http://localhost:8888/auth"
+            
+            service_log = f"work/js_sdk_server_{profile}.log"
+            with open(service_log, 'w') as log_file:
+                process = subprocess.Popen(
+                    ["node", "server.js", "--daemonize"],
+                    cwd="xtest/sdk/js",
+                    env=env,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True
+                )
+            
+            # Save the PID for later cleanup
+            with open(f"work/js_sdk_server_{profile}.pid", 'w') as f:
+                f.write(str(process.pid))
+            
+            # Wait for the server to be ready
+            time.sleep(2)
+            if wait_for_sdk_server(8093, "JavaScript"):
+                print("  ✓ JavaScript SDK server is ready on port 8093")
+                servers_started.append("js")
+            else:
+                print("  ✗ JavaScript SDK server failed to start")
+                print(f"  Check logs at: {service_log}")
+        else:
+            print("  ⚠ JavaScript SDK server not found, skipping")
     
-    # Save the PID for later cleanup
-    with open(f"work/testhelper_{profile}.pid", 'w') as f:
-        f.write(str(process.pid))
+    # Start Java SDK server
+    if os.environ.get("ENABLE_JAVA_SDK_SERVER", "true") == "true":
+        print("Starting Java SDK server...")
+        java_server_script = "xtest/sdk/java/start-server.sh"
+        
+        if os.path.exists(java_server_script):
+            # Start the server
+            env = os.environ.copy()
+            env["JAVA_SDK_PORT"] = "8092"
+            env["PLATFORM_ENDPOINT"] = "http://localhost:8080"
+            env["OIDC_ENDPOINT"] = "http://localhost:8888/auth"
+            
+            service_log = f"work/java_sdk_server_{profile}.log"
+            with open(service_log, 'w') as log_file:
+                process = subprocess.Popen(
+                    ["bash", java_server_script, "--daemonize"],
+                    env=env,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True
+                )
+            
+            # Save the PID for later cleanup
+            with open(f"work/java_sdk_server_{profile}.pid", 'w') as f:
+                f.write(str(process.pid))
+            
+            # Wait for the server to be ready
+            time.sleep(3)  # Java takes a bit longer to start
+            if wait_for_sdk_server(8092, "Java"):
+                print("  ✓ Java SDK server is ready on port 8092")
+                servers_started.append("java")
+            else:
+                print("  ✗ Java SDK server failed to start")
+                print(f"  Check logs at: {service_log}")
+        else:
+            print("  ⚠ Java SDK server script not found, skipping")
     
-    # Wait for the server to be ready
-    time.sleep(2)
-    if wait_for_testhelper(8090):
-        print("  ✓ Test helper server is ready on port 8090")
+    if servers_started:
+        print(f"SDK servers started: {', '.join(servers_started)}")
     else:
-        print("  ✗ Test helper server failed to start")
-        print(f"  Check logs at: {service_log}")
+        print("No SDK servers were started")
+    
+    return servers_started
 
-def wait_for_testhelper(port, timeout=30):
-    """Wait for test helper server to be ready."""
+def wait_for_sdk_server(port, sdk_name, timeout=30):
+    """Wait for an SDK server to be ready."""
     import urllib.request
     import urllib.error
     
@@ -295,10 +385,10 @@ def start(args):
         f.write(f"PROFILE={profile}\n")
     print(f"Environment exported to {env_file}")
 
-    # Start the test helper server if enabled
-    if os.environ.get("USE_TESTHELPER_SERVER", "true") == "true":
-        print("Starting test helper server...")
-        start_testhelper_server(profile)
+    # Start SDK servers if enabled
+    if os.environ.get("USE_SDK_SERVERS", "true") == "true":
+        print("Starting SDK servers...")
+        start_sdk_servers(profile)
 
     print(f"Platform started successfully.")
 
@@ -323,19 +413,21 @@ def stop(args):
         except Exception as e:
             print(f"Error stopping service from {pid_file}: {e}")
     
-    # Stop test helper server
-    for pid_file in glob.glob("work/testhelper_*.pid"):
-        try:
-            with open(pid_file, 'r') as f:
-                pid = int(f.read().strip())
-            print(f"Stopping test helper server (PID: {pid})...")
+    # Stop SDK servers
+    for pattern in ["work/go_sdk_server_*.pid", "work/js_sdk_server_*.pid", "work/java_sdk_server_*.pid"]:
+        for pid_file in glob.glob(pattern):
             try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                print(f"Process {pid} not found (already stopped)")
-            os.remove(pid_file)
-        except Exception as e:
-            print(f"Error stopping test helper from {pid_file}: {e}")
+                with open(pid_file, 'r') as f:
+                    pid = int(f.read().strip())
+                server_type = os.path.basename(pid_file).split('_')[0].upper()
+                print(f"Stopping {server_type} SDK server (PID: {pid})...")
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    print(f"Process {pid} not found (already stopped)")
+                os.remove(pid_file)
+            except Exception as e:
+                print(f"Error stopping SDK server from {pid_file}: {e}")
 
     # Stop docker-compose
     platform_dir = "work/platform"
