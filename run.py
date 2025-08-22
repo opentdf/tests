@@ -375,6 +375,121 @@ def wait_for_platform(port, timeout=120):
     print(f"Timeout waiting for services. Status: {services_ready}")
     return False
 
+def start_multi_kas(profile, config):
+    """Start multiple KAS servers for multi-KAS testing."""
+    import os
+    import yaml
+    
+    services = config.get('services', [])
+    platform_dir = "work/platform"
+    
+    # Check if platform directory exists
+    if not os.path.exists(platform_dir):
+        print(f"Error: Platform directory not found at {platform_dir}")
+        print(f"Please run './run.py setup' first to set up the platform")
+        sys.exit(1)
+    
+    # Build platform service once
+    print(f"Building platform services...")
+    run_command(["go", "build", "-o", "opentdf-service", "./service"], cwd=platform_dir)
+    
+    # Start docker-compose for PostgreSQL and Keycloak
+    env = os.environ.copy()
+    env["JAVA_OPTS_APPEND"] = ""  # Suppress warning
+    print(f"Starting docker-compose for PostgreSQL and Keycloak...")
+    run_command(["docker-compose", "up", "-d", "opentdfdb", "keycloak"], cwd=platform_dir, env=env)
+    
+    # Wait for Keycloak to be ready
+    print(f"Waiting for Keycloak to be ready...")
+    if not wait_for_keycloak():
+        print(f"✗ Keycloak failed to start within timeout")
+        sys.exit(1)
+    print(f"✓ Keycloak is ready")
+    
+    # Track PIDs for cleanup
+    pids = []
+    
+    # Start each KAS service
+    for service in services:
+        name = service['name']
+        port = service['port']
+        grpc_port = service['grpc_port']
+        realm = service['realm']
+        db_name = service['db_name']
+        key_dir = service['key_dir']
+        
+        print(f"\nStarting {name} on port {port}...")
+        
+        # Create database if needed
+        env = os.environ.copy()
+        env["PGPASSWORD"] = "changeme"
+        create_db_cmd = f"psql -h localhost -U postgres -c \"CREATE DATABASE {db_name};\" || true"
+        subprocess.run(create_db_cmd, shell=True, env=env, capture_output=True)
+        
+        # Provision Keycloak realm if not already done
+        provisioning_marker = f"work/.provisioned_{realm}"
+        if not os.path.exists(provisioning_marker):
+            print(f"  Provisioning Keycloak realm '{realm}'...")
+            env = os.environ.copy()
+            env["OPENTDF_REALM"] = realm
+            env["OPENTDF_DB_NAME"] = db_name
+            run_command(["go", "run", "./service", "provision", "keycloak"], cwd=platform_dir, env=env)
+            run_command(["go", "run", "./service", "provision", "fixtures"], cwd=platform_dir, env=env)
+            with open(provisioning_marker, 'w') as f:
+                f.write(f"Provisioned {realm}\n")
+        
+        # Start the service with specific configuration
+        env = os.environ.copy()
+        env["OPENTDF_PORT"] = str(port)
+        env["OPENTDF_GRPC_PORT"] = str(grpc_port)
+        env["OPENTDF_DB_NAME"] = db_name
+        env["OPENTDF_REALM"] = realm
+        env["OPENTDF_ISSUER"] = f"http://localhost:8443/auth/realms/{realm}"
+        env["OPENTDF_DISCOVERY_BASE_URL"] = f"http://localhost:8443/auth/realms/{realm}"
+        
+        # Set key paths
+        env["OPENTDF_KAS_CERT_PATH"] = f"{key_dir}/kas-cert.pem"
+        env["OPENTDF_KAS_KEY_PATH"] = f"{key_dir}/kas-private.pem"
+        env["OPENTDF_KAS_EC_CERT_PATH"] = f"{key_dir}/kas-ec-cert.pem"
+        env["OPENTDF_KAS_EC_KEY_PATH"] = f"{key_dir}/kas-ec-private.pem"
+        
+        # Start the service
+        service_log = f"work/{name}.log"
+        with open(service_log, 'w') as log_file:
+            service_process = subprocess.Popen(
+                ["./opentdf-service", "start"],
+                cwd=platform_dir,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                start_new_session=True
+            )
+            pids.append((name, service_process.pid))
+        
+        # Wait for service to be ready
+        time.sleep(3)
+        if wait_for_platform(port, timeout=30):
+            print(f"  ✓ {name} is ready on port {port}")
+        else:
+            print(f"  ✗ {name} failed to start on port {port}")
+            print(f"  Check logs at: {service_log}")
+            # Kill already started services
+            for svc_name, pid in pids:
+                try:
+                    os.kill(pid, 15)  # SIGTERM
+                except:
+                    pass
+            sys.exit(1)
+    
+    # Save PIDs for cleanup
+    with open("work/multi_kas_pids.txt", 'w') as f:
+        for name, pid in pids:
+            f.write(f"{name}:{pid}\n")
+    
+    print(f"\n✓ All KAS services started successfully for profile '{profile}'")
+    print(f"Services running on ports: {', '.join(str(s['port']) for s in services)}")
+
+
 def start(args):
     """Start the OpenTDF platform for the specified profile."""
     import os
@@ -399,6 +514,14 @@ def start(args):
 
     # Check if this profile needs platform services
     services = config.get('services', {})
+    
+    # Check if this is a multi-service configuration (services is a list)
+    if isinstance(services, list):
+        print(f"Profile '{profile}' uses multi-KAS configuration")
+        start_multi_kas(profile, config)
+        return
+    
+    # Original single-service logic
     if services.get('kas', {}).get('enabled', True) == False:
         print(f"Profile '{profile}' configured for no-KAS operation, no platform services to start")
         return
@@ -517,6 +640,23 @@ def stop(args):
     import signal
     import glob
 
+    # Stop multi-KAS services if running
+    if os.path.exists("work/multi_kas_pids.txt"):
+        print("Stopping multi-KAS services...")
+        try:
+            with open("work/multi_kas_pids.txt", 'r') as f:
+                for line in f:
+                    name, pid = line.strip().split(':')
+                    pid = int(pid)
+                    print(f"  Stopping {name} (PID: {pid})...")
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        print(f"    Process {pid} not found (already stopped)")
+            os.remove("work/multi_kas_pids.txt")
+        except Exception as e:
+            print(f"Error stopping multi-KAS services: {e}")
+    
     # Stop any running platform services
     print("Stopping platform services...")
     for pid_file in glob.glob("work/platform_service_*.pid"):

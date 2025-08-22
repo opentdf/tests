@@ -17,8 +17,6 @@ import assertions as tdfassertions
 
 
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]

@@ -5,8 +5,6 @@ import construct as cs
 import construct_typed as ct
 
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 def enc_hex(b: bytes) -> str:

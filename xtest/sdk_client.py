@@ -42,12 +42,12 @@ class SDKClient:
             port = os.environ.get(f'{sdk_type.upper()}_SDK_PORT', self.SDK_PORTS.get(sdk_type, 8091))
             self.base_url = f"http://localhost:{port}"
         
-        # Create session with connection pooling and retry logic
+        # Create session with connection pooling and minimal retry logic
         self.session = requests.Session()
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=0.3,
-            status_forcelist=[500, 502, 503, 504]
+            total=0,  # No retries for connection errors
+            status_forcelist=[],  # Don't retry on any status codes
+            raise_on_status=False
         )
         adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
         self.session.mount("http://", adapter)

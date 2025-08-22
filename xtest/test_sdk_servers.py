@@ -72,7 +72,7 @@ class TestSDKServers:
 class TestCrossSDK:
     """Test cross-SDK compatibility."""
     
-    @pytest.mark.parametrize("encrypt_sdk,decrypt_sdk", [
+    @pytest.mark.parametrize("enc_sdk,dec_sdk", [
         ("go", "js"),
         ("js", "go"),
         ("go", "java"),
@@ -81,26 +81,26 @@ class TestCrossSDK:
         ("java", "js"),
     ])
     def test_cross_sdk_compatibility(self, multi_sdk, test_data, test_attributes, 
-                                    encrypt_sdk, decrypt_sdk):
+                                    enc_sdk, dec_sdk):
         """Test encrypting with one SDK and decrypting with another."""
-        if encrypt_sdk not in multi_sdk.available_sdks:
-            pytest.skip(f"{encrypt_sdk.upper()} SDK not available")
-        if decrypt_sdk not in multi_sdk.available_sdks:
-            pytest.skip(f"{decrypt_sdk.upper()} SDK not available")
+        if enc_sdk not in multi_sdk.available_sdks:
+            pytest.skip(f"{enc_sdk.upper()} SDK not available")
+        if dec_sdk not in multi_sdk.available_sdks:
+            pytest.skip(f"{dec_sdk.upper()} SDK not available")
         
         # Test standard TDF
         decrypted = multi_sdk.cross_sdk_encrypt_decrypt(
-            test_data, encrypt_sdk, decrypt_sdk, test_attributes, format="ztdf"
+            test_data, enc_sdk, dec_sdk, test_attributes, format="ztdf"
         )
         assert decrypted == test_data
-        print(f"✓ Cross-SDK: {encrypt_sdk}→{decrypt_sdk} (ztdf) successful")
+        print(f"✓ Cross-SDK: {enc_sdk}→{dec_sdk} (ztdf) successful")
         
         # Test NanoTDF
         decrypted = multi_sdk.cross_sdk_encrypt_decrypt(
-            test_data, encrypt_sdk, decrypt_sdk, test_attributes, format="nano"
+            test_data, enc_sdk, dec_sdk, test_attributes, format="nano"
         )
         assert decrypted == test_data
-        print(f"✓ Cross-SDK: {encrypt_sdk}→{decrypt_sdk} (nano) successful")
+        print(f"✓ Cross-SDK: {enc_sdk}→{dec_sdk} (nano) successful")
 
 
 class TestPerformance:

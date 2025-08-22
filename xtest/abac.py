@@ -9,8 +9,6 @@ import base64
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 class BaseModelIgnoreExtra(BaseModel):

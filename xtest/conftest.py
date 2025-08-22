@@ -15,6 +15,7 @@ Key optimizations:
 """
 import base64
 import json
+import logging
 import os
 import random
 import secrets
@@ -24,6 +25,12 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+
+# Configure logging to suppress verbose urllib3 output
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+# Keep xtest at INFO level for important messages
+logging.getLogger("xtest").setLevel(logging.INFO)
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_core import to_jsonable_python
