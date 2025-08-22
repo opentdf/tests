@@ -68,3 +68,11 @@ markers = [
     "large: Mark tests that generate large files (>4GB)",
     "integration: Mark integration tests that require external services",
 ]
+
+# Filter warnings
+filterwarnings = [
+    # Ignore pytest-bdd warnings about unknown marks from Gherkin tags with colons
+    "ignore:Unknown pytest.mark.*:pytest.PytestUnknownMarkWarning",
+    # Ignore DeprecationWarning from gherkin about maxsplit
+    "ignore:'maxsplit' is passed as positional argument:DeprecationWarning:gherkin.gherkin_line",
+]
