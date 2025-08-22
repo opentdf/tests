@@ -41,7 +41,7 @@ dev = [
 # Use a predictable base directory for temporary files at project root
 # This creates all temp directories under work/ for easy inspection
 # The directory is visible in IDEs and easy to navigate
-addopts = "--basetemp=work --tb=short -q --dist=loadscope"
+addopts = "--basetemp=work --tb=short --dist=loadscope"
 
 # Add directories to the Python path so modules can be imported
 pythonpath = [".", "xtest", "bdd"]

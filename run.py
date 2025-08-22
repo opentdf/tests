@@ -5,11 +5,28 @@ import sys
 import os
 import time
 
-def run_command(command, cwd=None, venv=False, env=None):
+def run_command(command, cwd=None, venv=False, env=None, stream_output=False):
     """Run a shell command and exit if it fails."""
     print(f"Running command: {' '.join(command)}")
-    # run with shell=True because of `source`
-    result = subprocess.run(" ".join(command), cwd=cwd, shell=True, executable="/bin/bash", env=env)
+    
+    # For pytest commands, stream output in real-time
+    if stream_output or (len(command) > 0 and command[0] == "pytest"):
+        # Don't use shell for streaming output
+        if venv:
+            # Prepend venv activation for non-shell mode
+            import os
+            venv_python = os.path.join(".venv", "bin", "python")
+            if command[0] == "pytest":
+                command = [venv_python, "-m"] + command
+        
+        result = subprocess.run(command, cwd=cwd, env=env)
+    else:
+        # Use shell mode for other commands (needed for source, etc.)
+        cmd_str = " ".join(command)
+        if venv:
+            cmd_str = f"source .venv/bin/activate && {cmd_str}"
+        result = subprocess.run(cmd_str, cwd=cwd, shell=True, executable="/bin/bash", env=env)
+    
     if result.returncode != 0:
         print(f"Command failed with exit code {result.returncode}")
         sys.exit(result.returncode)
@@ -587,8 +604,10 @@ def test(args):
 
     # Determine which test directories to include
     if args.suite == "xtest":
+        print("Running xtest suite...")
         pytest_cmd.append("xtest")
     elif args.suite == "bdd":
+        print("Running BDD suite...")
         # BDD now uses pytest-bdd
         pytest_cmd.append("bdd")
     elif args.suite == "vulnerability":
