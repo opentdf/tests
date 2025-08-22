@@ -312,9 +312,15 @@ def wait_for_platform(port, timeout=120):
     import time
     import urllib.request
     import urllib.error
+    import ssl
 
     kas_url = f"http://localhost:{port}/healthz"
     keycloak_url = "https://localhost:8443/auth/"
+
+    # Create SSL context that doesn't verify certificates
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 
     start_time = time.time()
     services_ready = {"kas": False, "keycloak": False}
@@ -333,10 +339,11 @@ def wait_for_platform(port, timeout=120):
         # Check Keycloak health
         if not services_ready["keycloak"]:
             try:
-                with urllib.request.urlopen(keycloak_url, timeout=2) as response:
-                    if response.status == 200:
+                with urllib.request.urlopen(keycloak_url, timeout=2, context=ssl_context) as response:
+                    # Keycloak returns 302 redirect when ready
+                    if response.status in [200, 302]:
                         services_ready["keycloak"] = True
-                        print(f"  ✓ Keycloak is ready on port {port + 1}")
+                        print(f"  ✓ Keycloak is ready on port 8443")
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
                 pass
 

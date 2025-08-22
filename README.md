@@ -45,6 +45,7 @@ To set up the environment, start the platform, run all the tests, and then stop 
 ./run.py start
 ./run.py test
 ./run.py stop
+./run.py clean
 ```
 
 To run tests with different options:
