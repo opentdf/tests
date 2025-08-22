@@ -18,7 +18,7 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <spring.boot.version>2.7.14</spring.boot.version>
-        <opentdf.sdk.version>0.6.0</opentdf.sdk.version>
+        <opentdf.sdk.version>0.9.1-SNAPSHOT</opentdf.sdk.version>
     </properties>
 
     <dependencies>

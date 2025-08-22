@@ -61,7 +61,9 @@ This directory is automatically cleaned with './run.py clean'
     print("Checking for KAS certificates...")
     if not os.path.exists("work/platform/kas-cert.pem") or not os.path.exists("work/platform/kas-ec-cert.pem"):
         print("Generating KAS certificates...")
-        run_command(["bash", "work/platform/.github/scripts/init-temp-keys.sh", "--output", "work/platform"])
+        # The init-temp-keys.sh script creates a 'keys' directory relative to where it's run
+        # We need to run it from work/platform so the keys end up in work/platform/keys
+        run_command(["bash", ".github/scripts/init-temp-keys.sh"], cwd="work/platform")
         print("KAS certificates generated successfully")
     else:
         print("KAS certificates already exist")
@@ -72,10 +74,67 @@ This directory is automatically cleaned with './run.py clean'
     print("Building SDKs...")
     run_command(["make", "all"], cwd="xtest/sdk")
     print("SDKs built successfully.")
+    
+    # Build SDK servers
+    print("Building SDK servers...")
+    build_sdk_servers()
+    print("SDK servers built successfully.")
+
+def build_sdk_servers():
+    """Build SDK servers for testing."""
+    import os
+    
+    # Build Go SDK server if it exists
+    go_server_dir = "xtest/sdk/go/server"
+    if os.path.exists(f"{go_server_dir}/main.go"):
+        print("  Building Go SDK server...")
+        try:
+            # Try to build with existing go.mod
+            run_command(["go", "mod", "tidy"], cwd=go_server_dir)
+            run_command(["go", "build", "-o", "server", "."], cwd=go_server_dir)
+            print("  ✓ Go SDK server built")
+        except Exception as e:
+            print(f"  ⚠ Failed to build Go SDK server: {e}")
+    
+    # Build JavaScript SDK server if it exists
+    js_server_dir = "xtest/sdk/js"
+    if os.path.exists(f"{js_server_dir}/server.js"):
+        print("  Building JavaScript SDK server...")
+        try:
+            run_command(["npm", "install"], cwd=js_server_dir)
+            print("  ✓ JavaScript SDK server built")
+        except Exception as e:
+            print(f"  ⚠ Failed to build JavaScript SDK server: {e}")
+    
+    # Build Java SDK server if it exists
+    java_server_dir = "xtest/sdk/java/server"
+    if os.path.exists(f"{java_server_dir}/pom.xml"):
+        print("  Building Java SDK server...")
+        try:
+            run_command(["mvn", "clean", "package"], cwd=java_server_dir)
+            print("  ✓ Java SDK server built")
+        except Exception as e:
+            print(f"  ⚠ Failed to build Java SDK server: {e}")
+
+def check_sdk_servers_running():
+    """Check if SDK servers are already running."""
+    import urllib.request
+    import urllib.error
+    
+    ports = [8091, 8092, 8093]  # Go, Java, JS
+    for port in ports:
+        try:
+            with urllib.request.urlopen(f"http://localhost:{port}/healthz", timeout=1) as response:
+                if response.status == 200:
+                    return True  # At least one server is running
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+            pass
+    return False
 
 def start_sdk_servers(profile):
     """Start SDK servers for each language (Go, JS, Java)."""
     import subprocess
+    import os
     
     servers_started = []
     
@@ -84,11 +143,10 @@ def start_sdk_servers(profile):
         print("Starting Go SDK server...")
         go_server_dir = "xtest/sdk/go/server"
         
-        # Build the Go server if needed
+        # Check if server binary exists
         if not os.path.exists(f"{go_server_dir}/server"):
-            print("  Building Go SDK server...")
-            os.makedirs(go_server_dir, exist_ok=True)
-            run_command(["go", "build", "-o", "server", "."], cwd=go_server_dir)
+            print("  Go SDK server not built, building now...")
+            build_sdk_servers()
         
         # Start the server
         env = os.environ.copy()
@@ -98,7 +156,7 @@ def start_sdk_servers(profile):
         service_log = f"work/go_sdk_server_{profile}.log"
         with open(service_log, 'w') as log_file:
             process = subprocess.Popen(
-                ["./server", "-port", "8091", "-daemonize"],
+                ["./server"],
                 cwd=go_server_dir,
                 env=env,
                 stdout=log_file,
@@ -220,6 +278,35 @@ def wait_for_sdk_server(port, sdk_name, timeout=30):
     
     return False
 
+def wait_for_keycloak(timeout=120):
+    """Wait for Keycloak to be ready."""
+    import time
+    import urllib.request
+    import urllib.error
+    import ssl
+    import http.client
+
+    # Create an SSL context that doesn't verify certificates (for local development)
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    keycloak_url = "http://localhost:8888/auth/"
+    
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with urllib.request.urlopen(keycloak_url, timeout=2) as response:
+                if response.status == 200:
+                    return True
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, 
+                http.client.RemoteDisconnected, ConnectionResetError):
+            # Keycloak is still starting up
+            pass
+        time.sleep(2)
+    
+    return False
+
 def wait_for_platform(port, timeout=120):
     """Wait for platform services to be ready."""
     import time
@@ -325,6 +412,14 @@ def start(args):
     # Build platform (if needed)
     print(f"Building platform services...")
     run_command(["go", "build", "-o", "opentdf-service", "./service"], cwd=platform_dir)
+
+    # Wait for Keycloak to be ready before provisioning
+    print(f"Waiting for Keycloak to be ready...")
+    if not wait_for_keycloak():
+        print(f"✗ Keycloak failed to start within timeout")
+        print(f"Check docker logs with: docker-compose -f work/platform/docker-compose.yaml logs keycloak")
+        sys.exit(1)
+    print(f"✓ Keycloak is ready")
 
     # Provision Keycloak realm for this profile (if not already done)
     provisioning_marker = f"{platform_dir}/.provisioned_{profile}"
@@ -442,7 +537,26 @@ def stop(args):
 
 def test(args):
     """Run the specified test suite."""
+    import os
+    
     print(f"Running test suite: {args.suite}")
+    
+    # Start SDK servers if needed for xtest suite (optional for now)
+    if args.suite in ["xtest", "all"]:
+        if os.environ.get("USE_SDK_SERVERS", "false").lower() == "true":
+            print("Checking SDK servers...")
+            profile = args.profile if hasattr(args, 'profile') and args.profile else "default"
+            if not check_sdk_servers_running():
+                print("Starting SDK servers for testing...")
+                try:
+                    start_sdk_servers(profile)
+                except Exception as e:
+                    print(f"Warning: Failed to start SDK servers: {e}")
+                    print("Continuing without SDK servers...")
+            else:
+                print("SDK servers already running")
+        else:
+            print("SDK servers disabled (set USE_SDK_SERVERS=true to enable)")
 
     # Build pytest command
     pytest_cmd = ["pytest"]
