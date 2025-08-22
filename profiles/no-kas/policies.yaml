@@ -1,0 +1,116 @@
+# Policies for no-KAS profile
+# ALL ENCRYPTION TESTS ARE WAIVED - No encryption without KAS
+
+# Waivers for ALL encryption-related tests
+waivers:
+  # Core encryption operations
+  - test: "test_encrypt"
+    reason: "Encryption requires KAS - not available"
+  - test: "test_decrypt"
+    reason: "Decryption requires KAS - not available"
+  - test: "test_encrypt_decrypt_roundtrip"
+    reason: "Encryption/decryption requires KAS - not available"
+  
+  # TDF format tests
+  - test: "test_nano_tdf"
+    reason: "NanoTDF requires KAS for encryption"
+  - test: "test_ztdf"
+    reason: "ZTDF requires KAS for encryption"
+  - test: "test_tdf3"
+    reason: "TDF3 requires KAS for encryption"
+  
+  # KAS-specific operations
+  - test: "test_kas_rewrap"
+    reason: "KAS not available in this profile"
+  - test: "test_kas_public_key"
+    reason: "KAS not available in this profile"
+  - test: "test_kas_grant"
+    reason: "KAS not available in this profile"
+  
+  # Policy operations
+  - test: "test_policy_enforcement"
+    reason: "Policy enforcement requires KAS"
+  - test: "test_attribute_validation"
+    reason: "Attribute validation requires KAS"
+  - test: "test_abac"
+    reason: "ABAC requires KAS for policy enforcement"
+  
+  # Cross-SDK tests
+  - test: "test_cross_sdk_compatibility"
+    reason: "Cross-SDK testing requires encryption which needs KAS"
+
+# Expected skips based on capabilities
+expected_skips:
+  # Skip ALL encryption operations
+  - condition: "'encrypt' in test_name or 'decrypt' in test_name"
+    reason: "All encryption/decryption requires KAS"
+  
+  # Skip all TDF format tests
+  - condition: "'tdf' in test_name.lower() or 'nano' in test_name.lower()"
+    reason: "All TDF formats require KAS for encryption"
+  
+  # Skip all policy tests
+  - condition: "'policy' in test_name or 'abac' in test_name or 'attribute' in test_name"
+    reason: "Policy operations require KAS"
+  
+  # Skip all KAS-related tests
+  - condition: "'kas' in test_name.lower()"
+    reason: "KAS not available in this profile"
+  
+  # Skip all key management tests
+  - condition: "'key' in test_name and 'mock' not in test_name"
+    reason: "Key management requires KAS"
+
+# Severity levels for different error types
+severities:
+  # Critical - These should never happen in no-KAS mode
+  kas_connection_error: "critical"
+  remote_service_error: "critical"
+  policy_violation: "critical"
+  
+  # High - Important but expected in some cases
+  unsupported_operation: "high"
+  missing_local_key: "high"
+  
+  # Medium - Expected limitations
+  feature_not_available: "medium"
+  local_storage_error: "medium"
+  
+  # Low - Informational
+  performance_degradation: "low"
+  cache_miss: "low"
+
+# Special handling rules
+special_handling:
+  # Redirect KAS operations to local alternatives
+  operation_redirects:
+    kas_rewrap: "local_key_rotation"
+    kas_public_key: "local_public_key"
+    policy_fetch: "local_policy_load"
+  
+  # Fallback behaviors
+  fallbacks:
+    missing_kas:
+      action: "use_local_keys"
+      log_level: "info"
+    missing_policy:
+      action: "skip_policy_check"
+      log_level: "warning"
+    missing_attributes:
+      action: "use_default_attributes"
+      log_level: "debug"
+
+# Validation rules for no-KAS mode
+validation:
+  require_local_keys: true
+  allow_embedded_keys: true
+  max_key_age_days: 30
+  require_offline_capability: true
+  block_remote_calls: true
+
+# Test execution adjustments
+execution:
+  parallel: false  # Run serially to avoid local resource conflicts
+  retry_on_failure: false  # No retries for deterministic local operations
+  cleanup_after_each: true  # Clean local storage after each test
+  verbose_logging: true  # Extra logging for debugging offline issues

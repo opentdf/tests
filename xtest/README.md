@@ -6,7 +6,7 @@
 
 - `go 1.24` (For the Go SDK, otcfctl tool, and platform services)
 - `node 22` (For the JavaScript SDK)
-- `python 3.12`
+- `python 3.13`
 - `jdk 17` (For the Java SDK)
 - `maven` (For the Java SDK)
 - `docker` (For the platform backend)
@@ -99,8 +99,10 @@ To build all the checked out SDKs, run `make` from the `sdk` folder.
 
 ### Install test harness requirements
 
+All python dependencies are managed by `uv` and are defined in the `pyproject.toml` file at the root of this repository. A lock file is generated at `requirements.txt`. To install the dependencies, run the following command from the root of the `tests` directory:
+
 ```shell
-pip install -r requirements.txt
+python3 run.py setup
 ```
 
 ### Run Tests

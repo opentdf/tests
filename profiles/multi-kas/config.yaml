@@ -1,0 +1,67 @@
+# Multi-KAS Configuration Profile
+# This profile runs 5 separate KAS servers for split-key testing
+
+services:
+  - name: kas-default
+    port: 8080
+    grpc_port: 8084
+    realm: opentdf_default
+    db_name: opentdf_default
+    key_dir: work/multi-kas-keys/kas-default
+    
+  - name: kas-value1
+    port: 8181
+    grpc_port: 8185
+    realm: opentdf_value1
+    db_name: opentdf_value1
+    key_dir: work/multi-kas-keys/kas-value1
+    
+  - name: kas-value2
+    port: 8282
+    grpc_port: 8286
+    realm: opentdf_value2
+    db_name: opentdf_value2
+    key_dir: work/multi-kas-keys/kas-value2
+    
+  - name: kas-attr
+    port: 8383
+    grpc_port: 8387
+    realm: opentdf_attr
+    db_name: opentdf_attr
+    key_dir: work/multi-kas-keys/kas-attr
+    
+  - name: kas-ns
+    port: 8484
+    grpc_port: 8488
+    realm: opentdf_ns
+    db_name: opentdf_ns
+    key_dir: work/multi-kas-keys/kas-ns
+
+# Test user roles and attributes
+roles:
+  alice:
+    attributes:
+      - "group:engineering"
+      - "clearance:secret"
+      - "project:alpha"
+  bob:
+    attributes:
+      - "group:marketing"
+      - "clearance:public"
+      - "project:beta"
+  charlie:
+    attributes:
+      - "group:finance"
+      - "clearance:confidential"
+      - "project:gamma"
+
+# Test selection strategy
+selection:
+  strategy: "pairwise"
+  max_variants: 10
+
+# Timeouts
+timeouts:
+  test: 60
+  suite: 600
+  service_startup: 30

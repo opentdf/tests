@@ -11,10 +11,18 @@ $(error No versions found in the sdk/js/src directory)
 endif
 
 # Targets
-.PHONY: all build clean
+.PHONY: all build clean server
 
 all: build
 	@echo "Setup js sdk clis for versions: $(VERSIONS)"
+
+server: server.js server-package.json
+	@echo "Setting up JavaScript test helper server"
+	@if [ ! -d "node_modules" ]; then \
+		echo "Installing server dependencies..."; \
+		npm install --no-save express body-parser morgan node-fetch || exit 1; \
+	fi
+	@echo "Server ready at xtest/sdk/js/server.js"
 
 build:
 	@echo "Building binaries for versions: $(VERSIONS)"

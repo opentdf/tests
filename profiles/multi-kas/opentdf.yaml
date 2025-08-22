@@ -1,0 +1,81 @@
+# OpenTDF Configuration for Multi-KAS Profile
+# This configuration is used as a template for all KAS instances
+# Environment variables override these settings for each instance
+
+logger:
+  level: debug
+  type: json
+  output: stdout
+
+# Database configuration
+# OPENTDF_DB_NAME environment variable overrides database per instance
+db:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: changeme
+  runMigration: true
+  
+# Server configuration
+# OPENTDF_PORT and OPENTDF_GRPC_PORT environment variables override these per instance
+# Each KAS will run on its designated port:
+#   kas-default: 8080 (grpc: 8084)
+#   kas-value1:  8181 (grpc: 8185)
+#   kas-value2:  8282 (grpc: 8286)
+#   kas-attr:    8383 (grpc: 8387)
+#   kas-ns:      8484 (grpc: 8488)
+server:
+  port: 8080  # Overridden by OPENTDF_PORT environment variable
+  grpc:
+    port: 8084  # Overridden by OPENTDF_GRPC_PORT environment variable
+    reflectionEnabled: true
+  auth:
+    enabled: true
+    audience: "opentdf"
+    issuer: "http://localhost:8443/auth/realms/opentdf"
+    clients:
+      - "opentdf"
+      - "opentdf-sdk"
+  cors:
+    enabled: true
+    allowedOrigins:
+      - "*"
+    allowedMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowedHeaders:
+      - "*"
+    exposedHeaders:
+      - "*"
+    allowCredentials: true
+    maxAge: 86400
+
+# Service configuration
+services:
+  kas:
+    enabled: true
+    eccertid: "123"
+    rsacertid: "456"
+    
+  policy:
+    enabled: true
+    
+  authorization:
+    enabled: true
+    
+  entityresolution:
+    enabled: true
+    url: "http://localhost:8443/auth/realms/opentdf"
+    clientId: "tdf-entity-resolution"
+    clientSecret: "opentdf"
+    realm: "opentdf"
+    
+# SDK configuration
+sdk:
+  platformEndpoint: "http://localhost:8080"
+  
+# Mode selection
+mode: all # Run all services

@@ -1,0 +1,75 @@
+# Configuration for no-KAS profile
+# Testing framework behavior when KAS is unavailable
+# NO ENCRYPTION OPERATIONS POSSIBLE
+
+# Mock roles for testing (no actual authentication)
+roles:
+  mock_user:
+    attributes: []  # No attributes without KAS
+    purpose: "Testing error handling"
+  test_user:
+    attributes: []
+    purpose: "Testing service discovery failures"
+
+# Selection strategy for test matrix
+selection:
+  strategy: "minimal"  # Minimal testing for offline mode
+  max_variants: 5      # Limited variants for faster execution
+  focus: "offline"     # Focus on offline capabilities
+
+# Matrix generation rules
+matrix:
+  exclude_combinations:
+    # Exclude any KAS-dependent combinations
+    - policy: ["abac-*", "attribute-based"]
+    - format: ["ztdf", "nano"]  # These require KAS
+  required_combinations:
+    # Ensure offline mode is always tested
+    - operation_mode: "offline"
+      key_management: "local"
+
+# Timeouts (shorter for local operations)
+timeouts:
+  test: 30        # 30 seconds per test (local is faster)
+  suite: 300      # 5 minutes for entire suite
+  operation: 5    # 5 seconds for individual operations
+
+# Service configuration
+services:
+  kas:
+    enabled: false
+    reason: "Profile configured for no-KAS operation"
+  platform:
+    enabled: false
+    reason: "Standalone mode without platform services"
+  keycloak:
+    enabled: false
+    reason: "No authentication service in offline mode"
+
+# Test data configuration (no actual storage needed)
+test_data:
+  mock_responses_directory: "/tmp/tdf-mocks"
+  error_scenarios_directory: "/tmp/tdf-errors"
+
+# Limitations and constraints
+limitations:
+  supported_operations:
+    # Only non-encryption operations
+    - validate_schema
+    - parse_manifest_structure
+    - check_format_validity
+    - extract_unencrypted_metadata
+    - test_service_connectivity
+    - simulate_kas_unavailable
+    - test_error_handling
+  unsupported_operations:
+    # ALL encryption operations require KAS
+    - encrypt
+    - decrypt  
+    - rewrap
+    - policy_enforcement
+    - attribute_validation
+    - key_management
+    - kas_grant
+    - tdf_creation
+    - tdf_parsing_with_decryption

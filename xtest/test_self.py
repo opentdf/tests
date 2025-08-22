@@ -1,17 +1,22 @@
 import random
 import string
 
+import pytest
 import abac
 
 
 otdfctl = abac.OpentdfCommandLineTool()
 
 
+@pytest.mark.req("BR-102")  # Environment setup
+@pytest.mark.cap(feature="cli-tools")
 def test_namespaces_list() -> None:
     ns = otdfctl.namespace_list()
     assert len(ns) >= 4
 
 
+@pytest.mark.req("BR-102")  # Environment setup
+@pytest.mark.cap(feature="cli-tools", policy="abac")
 def test_attribute_create() -> None:
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
@@ -24,6 +29,8 @@ def test_attribute_create() -> None:
     assert anyof != allof
 
 
+@pytest.mark.req("BR-102")  # Environment setup
+@pytest.mark.cap(feature="cli-tools", policy="abac")
 def test_scs_create() -> None:
     c = abac.Condition(
         subject_external_selector_value=".clientId",

@@ -1,0 +1,16 @@
+
+roles:
+  alice:
+    attributes:
+      - "group:engineering"
+      - "clearance:secret"
+  bob:
+    attributes:
+      - "group:marketing"
+      - "clearance:public"
+selection:
+  strategy: "pairwise"
+  max_variants: 10
+timeouts:
+  test: 60
+  suite: 600

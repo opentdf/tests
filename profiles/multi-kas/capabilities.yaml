@@ -1,0 +1,52 @@
+# Multi-KAS Capabilities
+# Defines the features and capabilities supported by this profile
+
+features:
+  - key_management      # Support for split-key functionality
+  - autoconfigure      # Automatic KAS selection based on attributes
+  - ns_grants         # Namespace-level grants
+  - split_key        # Key splitting across multiple KAS
+  - multi_kas       # Multiple KAS server support
+
+supported:
+  # SDK implementations supported
+  sdk: 
+    - go
+    - java
+    - js
+    - swift
+  
+  # TDF container formats supported
+  format:
+    - nano
+    - ztdf
+    - ztdf-ecwrap
+  
+  # Encryption algorithms supported
+  encryption:
+    - aes256gcm
+    - chacha20poly1305
+  
+  # Policy types supported
+  policy:
+    - abac                    # Basic attribute-based access control
+    - abac-or                # OR policies across attributes
+    - abac-and               # AND policies across attributes
+    - abac-attr-value-or     # OR between attribute and value grants
+    - abac-attr-value-and    # AND between attribute and value grants
+    - abac-ns-value-or       # OR between namespace and value grants
+    - abac-ns-value-and      # AND between namespace and value grants
+  
+  # Grant types supported
+  grant_types:
+    - value      # Value-level grants
+    - attribute  # Attribute-level grants
+    - namespace  # Namespace-level grants
+
+# Testing scenarios enabled
+scenarios:
+  - split_key_same_kas      # Split keys within same KAS
+  - split_key_different_kas # Split keys across different KAS
+  - multi_attribute_policy  # Policies with multiple attributes
+  - cascading_grants       # Hierarchical grant structures
+  - cross_domain          # Cross-domain key management
