@@ -382,12 +382,32 @@ def start_multi_kas(profile, config):
     
     services = config.get('services', [])
     platform_dir = "work/platform"
+    profile_dir = f"profiles/{profile}"
     
     # Check if platform directory exists
     if not os.path.exists(platform_dir):
         print(f"Error: Platform directory not found at {platform_dir}")
         print(f"Please run './run.py setup' first to set up the platform")
         sys.exit(1)
+    
+    # Copy profile-specific opentdf.yaml if it exists
+    profile_opentdf = f"{profile_dir}/opentdf.yaml"
+    if os.path.exists(profile_opentdf):
+        print(f"Using profile-specific opentdf.yaml from {profile_opentdf}")
+        run_command(["cp", profile_opentdf, f"{platform_dir}/opentdf.yaml"])
+    elif not os.path.exists(f"{platform_dir}/opentdf.yaml"):
+        print(f"Creating opentdf.yaml from opentdf-dev.yaml")
+        run_command(["cp", f"{platform_dir}/opentdf-dev.yaml", f"{platform_dir}/opentdf.yaml"])
+    
+    # Generate keys if they don't exist
+    keys_dir = "work/multi-kas-keys"
+    if not os.path.exists(keys_dir):
+        print(f"Generating unique KAS keys...")
+        key_gen_script = f"{profile_dir}/generate-keys.sh"
+        if os.path.exists(key_gen_script):
+            run_command(["bash", key_gen_script])
+        else:
+            print(f"Warning: Key generation script not found at {key_gen_script}")
     
     # Build platform service once
     print(f"Building platform services...")
