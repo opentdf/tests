@@ -1302,3 +1302,82 @@ def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditi
             ],
         )
     return _scs_cache
+
+
+# Evidence Collection Fixtures
+# The following fixtures and hooks are for collecting evidence about test runs.
+
+
+@pytest.fixture(scope="session")
+def artifact_manager(tmp_path_factory) -> "ArtifactManager":
+    """Session-scoped artifact manager."""
+    from framework.core.evidence import ArtifactManager
+    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    artifacts_dir = tmp_path_factory.mktemp(f"run_{run_id}")
+    return ArtifactManager(artifacts_dir)
+
+
+@pytest.fixture
+def evidence_manager(artifact_manager: "ArtifactManager") -> "EvidenceManager":
+    """Function-scoped evidence manager."""
+    from framework.core.evidence import EvidenceManager
+    return EvidenceManager(artifact_manager)
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Hook to capture test result and collect evidence."""
+    from framework.core.models import TestStatus, TestCase
+    from framework.core.evidence import EvidenceManager
+    from pathlib import Path
+
+    outcome = yield
+    report = outcome.get_result()
+
+    # We only need to collect evidence once, so we do it at the teardown stage.
+    if report.when != "call":
+        return
+
+    # Extract capabilities from marker
+    required_capabilities = {}
+    cap_marker = item.get_closest_marker("cap")
+    if cap_marker:
+        required_capabilities = cap_marker.kwargs
+
+    # Create a TestCase object from the pytest item
+    test_case = TestCase(
+        id=item.nodeid,
+        name=item.name,
+        file_path=Path(item.fspath),
+        requirement_id=item.get_closest_marker("req").args[0] if item.get_closest_marker("req") else None,
+        required_capabilities=required_capabilities,
+        tags=[marker.name for marker in item.iter_markers()],
+    )
+
+    # Determine test status
+    status = TestStatus.PASSED
+    if report.skipped:
+        status = TestStatus.SKIPPED
+    elif report.failed:
+        status = TestStatus.FAILED
+
+    # Get profile and variant from config
+    profile_id = item.config.getoption("--profile") or "default"
+    # variant can be constructed from parametrize values
+    variant = "-".join(str(v) for v in item.callspec.params.values()) if hasattr(item, 'callspec') else "default"
+
+
+    # Collect evidence
+    evidence_manager_fixture = item.funcargs.get("evidence_manager")
+    if evidence_manager_fixture:
+        evidence = evidence_manager_fixture.collect_evidence(
+            test_case=test_case,
+            profile_id=profile_id,
+            variant=variant,
+            status=status,
+            start_time=datetime.fromtimestamp(report.start),
+            end_time=datetime.fromtimestamp(report.stop),
+            error_message=report.longreprtext,
+        )
+        # Attach evidence to the report object
+        report.evidence = evidence

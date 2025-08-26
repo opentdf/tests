@@ -46,7 +46,7 @@ def setup(args):
     print("Creating virtual environment...")
     run_command(["uv", "venv"])
     print("Installing dependencies...")
-    run_command(["uv", "pip", "sync", "requirements.txt"], venv=True)
+    run_command(["uv", "pip", "install", "-e", ".[dev]"], venv=True)
 
     # Create work directory for all temporary files
     print("Creating work directory...")

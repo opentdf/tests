@@ -3,7 +3,6 @@ name = "opentdf-tests"
 version = "2.0.0"
 description = "Test suite for OpenTDF"
 requires-python = ">=3.13"
-packages = ["xtest", "bdd", "framework", "profiles"]
 dependencies = [
     "annotated-types",
     "certifi",
@@ -25,10 +24,6 @@ dependencies = [
     "requests",
     "typing_extensions",
     "urllib3",
-]
-
-[dependency-groups]
-dev = [
     "black>=25.1.0",
     "pyright>=1.1.403",
     "pytest>=8.4.1",
@@ -36,6 +31,9 @@ dev = [
     "pytest-xdist>=3.6.1",
     "ruff>=0.12.9",
 ]
+
+[tool.setuptools]
+packages = ["xtest", "bdd", "framework", "profiles"]
 
 [tool.pytest.ini_options]
 # Use a predictable base directory for temporary files at project root
