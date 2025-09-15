@@ -61,8 +61,15 @@ def do_encrypt_with(
         assert manifest.payload.isEncrypted
         if use_ecwrap:
             assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
+            assert (
+                manifest.encryptionInformation.keyAccess[0].ephemeralPublicKey
+                is not None
+            )
         else:
             assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
+            assert (
+                manifest.encryptionInformation.keyAccess[0].ephemeralPublicKey is None
+            )
         if target_mode == "4.2.2":
             looks_like_422(manifest)
         elif target_mode == "4.3.0":

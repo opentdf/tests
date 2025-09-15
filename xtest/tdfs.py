@@ -149,6 +149,7 @@ class KeyAccessObject(BaseModel):
     encryptedMetadata: str | None = None
     kid: str | None = None
     sid: str | None = None
+    ephemeralPublicKey: str | None = None
     tdf_spec_version: str | None = None
 
 
