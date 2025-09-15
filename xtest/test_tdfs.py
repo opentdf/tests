@@ -59,17 +59,14 @@ def do_encrypt_with(
     if tdfs.simple_container(container) == "ztdf":
         manifest = tdfs.manifest(ct_file)
         assert manifest.payload.isEncrypted
+        assert len(manifest.encryptionInformation.keyAccess) == 1
+        kao = manifest.encryptionInformation.keyAccess[0]
         if use_ecwrap:
-            assert manifest.encryptionInformation.keyAccess[0].type == "ec-wrapped"
-            assert (
-                manifest.encryptionInformation.keyAccess[0].ephemeralPublicKey
-                is not None
-            )
+            assert kao.type == "ec-wrapped"
+            assert kao.ephemeralPublicKey is not None
         else:
-            assert manifest.encryptionInformation.keyAccess[0].type == "wrapped"
-            assert (
-                manifest.encryptionInformation.keyAccess[0].ephemeralPublicKey is None
-            )
+            assert kao.type == "wrapped"
+            assert kao.ephemeralPublicKey is None
         if target_mode == "4.2.2":
             looks_like_422(manifest)
         elif target_mode == "4.3.0":
