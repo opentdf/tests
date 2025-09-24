@@ -1,0 +1,10 @@
+
+sdk:
+  - go
+  - java
+  - js
+format:
+  - nano
+  - ztdf
+encryption:
+  - aes256gcm

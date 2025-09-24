@@ -9,8 +9,6 @@ import base64
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 class BaseModelIgnoreExtra(BaseModel):
@@ -254,7 +252,11 @@ class OpentdfCommandLineTool:
     flag_scs_map_action_standard: bool = False
 
     def __init__(self, otdfctl_path: str | None = None):
-        path = otdfctl_path if otdfctl_path else "sdk/go/otdfctl.sh"
+        if otdfctl_path:
+            path = otdfctl_path
+        else:
+            # Always use path relative to project root (tests directory)
+            path = "xtest/sdk/go/otdfctl.sh"
         if not os.path.isfile(path):
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]

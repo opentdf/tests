@@ -1,0 +1,14 @@
+
+capabilities:
+  sdk:
+    description: 'SDK implementation'
+    values: ['go', 'java', 'js', 'swift']
+    type: 'string'
+  format:
+    description: 'TDF container format'
+    values: ['nano', 'ztdf', 'ztdf-ecwrap']
+    type: 'string'
+  encryption:
+    description: 'Encryption algorithm'
+    values: ['aes256gcm', 'chacha20poly1305']
+    type: 'string'

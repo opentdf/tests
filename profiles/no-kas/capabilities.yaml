@@ -1,0 +1,35 @@
+# Capabilities for no-KAS profile
+# This profile is for testing authorization decisions via GetDecisions API
+# without encryption/decryption capabilities (no KAS for key management)
+
+# SDKs that support authorization-only operations
+sdk:
+  - go
+  - java
+  - js
+
+# No TDF formats - encryption/decryption requires KAS
+# format: [] # Empty - no encryption/decryption support
+
+# No encryption - requires KAS for key management
+# encryption: [] # Empty - no encryption support
+
+# No policy enforcement for encryption - but can make authorization decisions
+policy:
+  - none  # No policy enforcement during encryption/decryption
+
+# No KAS for key management
+kas_type:
+  - none
+
+# OIDC authentication for GetDecisions API
+auth_type:
+  - oidc  # Used for authorization decisions via GetDecisions
+
+# Operation mode - standalone authorization decisions
+operation_mode:
+  - standalone  # Can make authorization decisions without full platform
+
+# No key management without KAS
+key_management:
+  - none  # No key management capability

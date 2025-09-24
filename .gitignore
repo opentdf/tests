@@ -12,7 +12,6 @@ vulnerability/tilt_modules/
 
 /xtest/node_modules/
 /xtest/tilt_modules/
-/xtest/tmp/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
@@ -29,3 +28,95 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
+
+# Test Framework Modernization
+TODO.md
+.venv/
+artifacts/
+test-results/
+*.pyc
+.pytest_cache/
+work/
+.env
+coverage_reports/
+
+# SDK Server build artifacts
+xtest/sdk/go/server/server
+xtest/sdk/go/server/go.sum
+xtest/sdk/java/server/target/
+xtest/sdk/js/package.json
+xtest/sdk/js/package-lock.json
+xtest/sdk/js/node_modules/
+
+# SDK build directories
+xtest/sdk/go/dist/
+xtest/sdk/java/dist/
+xtest/sdk/js/dist/
+
+# SDK source checkouts (git worktrees)
+xtest/sdk/go/src/
+xtest/sdk/java/src/
+xtest/sdk/js/src/
+
+# Maven build files
+*.jar
+*.war
+*.ear
+*.class
+target/
+
+# Go build files
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Node/npm files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# IDE files
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test output
+*.log
+test-output/
+test-reports/
+
+# Python bytecode
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment files
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+tmp/
+temp/

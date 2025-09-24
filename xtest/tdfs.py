@@ -17,8 +17,6 @@ import assertions as tdfassertions
 
 
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
@@ -318,7 +316,8 @@ class SDK:
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        # Always use path relative to project root (tests directory)
+        self.path = f"xtest/sdk/{sdk}/dist/{version}/cli.sh"
         self._supports = {}
         self.version = version
         if not os.path.isfile(self.path):
@@ -348,6 +347,7 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
+        expect_error: bool = False,
     ):
         use_ecdsa = container == "nano-with-ecdsa"
         use_ecwrap = container == "ztdf-ecwrap"
@@ -386,7 +386,14 @@ class SDK:
         logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
         env = dict(os.environ)
         env |= local_env
-        subprocess.check_call(c, env=env)
+        if expect_error:
+            # When we expect an error, we don't want check_call to raise an exception
+            # Instead, we run the command and verify it returns non-zero
+            result = subprocess.run(c, capture_output=True, text=True, env=env)
+            if result.returncode == 0:
+                raise AssertionError(f"Expected encrypt to fail but it succeeded. Output: {result.stdout}")
+        else:
+            subprocess.check_call(c, env=env)
 
     def decrypt(
         self,
@@ -425,7 +432,11 @@ class SDK:
         env = dict(os.environ)
         env |= local_env
         if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+            # When we expect an error, we don't want check_output to raise an exception
+            # Instead, we run the command and verify it returns non-zero
+            result = subprocess.run(c, capture_output=True, text=True, env=env)
+            if result.returncode == 0:
+                raise AssertionError(f"Expected decrypt to fail but it succeeded. Output: {result.stdout}")
         else:
             subprocess.check_call(c, env=env)
 
@@ -463,7 +474,8 @@ class SDK:
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
     versions: list[SDK] = []
-    sdk_path = os.path.join("sdk", sdk, "dist")
+    # Always use path relative to project root (tests directory)
+    sdk_path = os.path.join("xtest", "sdk", sdk, "dist")
     for version in os.listdir(sdk_path):
         if os.path.isdir(os.path.join(sdk_path, version)):
             versions.append(SDK(sdk, version))

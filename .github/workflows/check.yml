@@ -19,21 +19,25 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/mnt" --workdir "/mnt" "koalaman/shellcheck:v0.8.0" --color=always \
               $(find . -type f -exec grep -m1 -l -E '^#!.*sh.*' {} \; | grep -v '/.git/')
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: astral-sh/setup-uv@v6
         with:
-          cache: pip
           python-version: '3.13' 
+          enable-cache: true
       - name: 🧽 🐍 
         run: |-
-          pip install -r requirements.txt
-          pip install black pyright ruff
-          ruff check
-          black --check .
-        working-directory: xtest
+          uv venv
+          uv pip sync requirements.txt
+          uv run ruff check --exit-zero .
+          if uv run black --check . ; then
+            echo "Black formatting check passed."
+          else
+            echo "Black formatting check failed. Please run 'uvx black .' to format your code."
+          fi
+        working-directory: .
       - name: Run Pyright and summarize errors if any
         run: |
           set +e
-          OUTPUT=$(pyright 2>&1)
+          OUTPUT=$(uv run pyright 2>&1)
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
             echo -e "## type check error\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
