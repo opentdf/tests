@@ -7,7 +7,7 @@
 - `go 1.24` (For the Go SDK, otcfctl tool, and platform services)
 - `node 22` (For the JavaScript SDK)
 - `python 3.12`
-- `jdk 17` (For the Java SDK)
+- `jdk 11` (For the Java SDK)
 - `maven` (For the Java SDK)
 - `docker` (For the platform backend)
 
