@@ -370,20 +370,20 @@ jobs:
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
-          pytest -n 4 test_nano.py test_self.py
+          pytest test_nano.py test_self.py
         working-directory: otdftests/xtest
 
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          pytest -ra -v --focus "$FOCUS_SDK" -n 4 test_legacy.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          pytest -ra -v -n 4 test_tdfs.py test_policytypes.py
+          pytest -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -391,7 +391,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          pytest -ra -v --focus "$FOCUS_SDK" -n 4 test_tdfs.py test_policytypes.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -450,7 +450,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          pytest -ra -v -n 4 --focus "$FOCUS_SDK" test_abac.py
+          pytest -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
