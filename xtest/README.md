@@ -60,6 +60,7 @@ go mod edit -replace github.com/opentdf/platform/lib/flattening=$GH_ORG_DIR/plat
 go mod edit -replace github.com/opentdf/platform/lib/ocrypto=$GH_ORG_DIR/platform/lib/ocrypto
 go mod edit -replace github.com/opentdf/platform/protocol/go=$GH_ORG_DIR/platform/protocol/go
 go mod edit -replace github.com/opentdf/platform/sdk=$GH_ORG_DIR/platform/sdk
+go mod tidy
 ```
 
 #### Build the SDKs
