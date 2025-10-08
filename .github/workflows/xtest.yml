@@ -405,7 +405,7 @@ jobs:
           if [[ $PLATFORM_TAG == main ]]; then
             echo "Main supports multikas"
             echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif [[ $PLATFORM_VERSION =~ ^0\.[5-9]\.[0-9]+$ ]]; then
+          elif awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }' <<< "$PLATFORM_VERSION"; then
             echo "Selected version [$PLATFORM_VERSION] supports multikas"
             echo "supported=true" >> "$GITHUB_OUTPUT"
           else
