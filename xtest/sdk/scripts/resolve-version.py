@@ -124,6 +124,8 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
     if version.startswith("v"):
         version = version[1:]
     match version:
+        case "main":
+            return "PLATFORM_BRANCH=protocol/go/v0.11.0"
         case "0.10.0" | "0.9.0" | "0.8.1" | "0.8.0" | "0.7.9":
             return "PLATFORM_BRANCH=protocol/go/v0.11.0"
         case "0.7.8" | "0.7.7":
