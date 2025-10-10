@@ -7,7 +7,6 @@ There are a couple notable things we can see with our current testing methodolog
   - The tests themselves are actually quite sort, the long test averages about 6 seconds according to `pytest --duration`. But the sheer number of tests is what makes this process take a long time
 2. The `decrypt` function is _extremely_ slow. This is most likely because of the fact that a.) any filesystem activity is going to be slower than using RAM or CPU
 ![Python Profiling Heatmap](./xtest/prof.svg) *Generated with `pytest-profiling` package*
-<img src="./xtest/prof.svg">
 3. We run all of our tests serially, which underutilizes the resources we have available
 
 ### Recommendations
@@ -28,7 +27,9 @@ Test results are very hard to read. Due to the nature of the tests, when a failu
 ### Recommendations
 pytest has plugins available to make reporting easier. Here's a sample HTML that makes the test results more readable and also makes identifying specific failures. There are other plugins that we could use, this is largely up to the person who is reviewing the report to determine which result gives the best view of what they want.
 
-[Sample HTML Report](./xtest/test-report-example.html) *generated with `pytest-html`*
+>![NOTE]
+>You will need to copy this file locally and open it a web browser
+[Sample HTML Report](./xtest/test-report-example.html) *generated with `pytest-html`* 
 
 ## Skew
 ### The Current issue
@@ -40,4 +41,3 @@ I think the best solution here is to refactor this process. Instead of hardcodin
 
 # Remaining questions
 - Is xtest the right repo for this type of testing? As ultimately we're doing tests against the SDKs, should these tests not live inside of the SDK's themselves?
-- 
