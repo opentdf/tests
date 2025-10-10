@@ -29,7 +29,7 @@ pytest has plugins available to make reporting easier. Here's a sample HTML that
 
 >![NOTE]  
 >You will need to copy this file locally and open it a web browser
-
+  
 [Sample HTML Report](./xtest/test-report-example.html) *generated with `pytest-html`* 
 
 ## Skew
