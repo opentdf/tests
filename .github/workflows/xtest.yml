@@ -211,7 +211,7 @@ jobs:
       checks: write # Needed to publish junit tests
       pull-requests: write # Add comments to PRs
     env:
-      FOCUS_SDK: ${{ inputs.focus-sdk }}
+      FOCUS_SDK: ${{ inputs.focus-sdk | 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk }}
     strategy:
       fail-fast: false
@@ -290,7 +290,7 @@ jobs:
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: matrix.sdk == 'go' && env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
           PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -323,7 +323,7 @@ jobs:
 
       - name: pre-release protocol buffers for java-sdk
         if: |
-          contains('["go", "java"]', matrix.sdk) && contains('["go", "java"]', env.FOCUS_SDK) && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+          contains('["go", "java"]', env.FOCUS_SDK) && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing .env files for java-sdk..."
           echo "Platform tag: $platform_tag"
