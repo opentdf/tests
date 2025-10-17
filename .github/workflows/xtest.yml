@@ -123,7 +123,6 @@ jobs:
           python-version: "3.12"
       - run: |-
           pip install -r scripts/requirements.txt
-          pip install pytest-html
         working-directory: otdf-sdk/xtest/sdk
       - id: version-info
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
@@ -290,7 +289,6 @@ jobs:
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl
-        if: matrix.sdk == 'go'
         id: configure-go
         uses: ./otdftests/xtest/setup-cli-tool
         with:
@@ -299,7 +297,6 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.go }}"
 
       - name: Resolve otdfctl heads
-        if: matrix.sdk == 'go'
         id: resolve-otdfctl-heads
         run: |-
           echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
@@ -391,7 +388,6 @@ jobs:
       - name: Install test dependencies
         run: |-
           pip install -r requirements.txt
-          pip install pytest-html
         working-directory: otdftests/xtest
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
