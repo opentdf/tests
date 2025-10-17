@@ -201,7 +201,7 @@ jobs:
               throw new Error('Errors detected in version resolution. Failing the run.');
             }
 
-  cross-client-test:
+  xct:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
@@ -478,7 +478,7 @@ jobs:
 
   publish-results:
     runs-on: ubuntu-latest
-    needs: cross-client-test
+    needs: xct
     if: always() # Always try to publish results, even if tests fail
     permissions:
       pull-requests: write # Add comments to PRs
