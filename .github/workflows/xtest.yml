@@ -68,23 +68,12 @@ jobs:
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
-      version-matrix: ${{ steps.version-matrix.outputs.sdks }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main lts' }}"
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
       JAVA_REF: "${{ inputs.java-ref }}"
     steps:
-      - name: Define version matrix
-        id: version-matrix
-        run: |
-          if [[ "${FOCUS_SDK}" == "all" || "${FOCUS_SDK}" == "" ]]; then
-            echo 'sdks=["go", "js", "java"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'sdk=['"${FOCUS_SDK}"']' >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          FOCUS_SDK: ${{ inputs.focus-sdk }}
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
         run: |-
@@ -228,7 +217,7 @@ jobs:
       fail-fast: false
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
-        sdk: ${{ fromJSON(needs.resolve-versions.outputs.version-matrix) }}
+        sdk: ["go", "java", "js"]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
