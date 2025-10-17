@@ -211,7 +211,7 @@ jobs:
       checks: write # Needed to publish junit tests
       pull-requests: write # Add comments to PRs
     env:
-      FOCUS_SDK: ${{ inputs.focus-sdk | 'all' }}
+      FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk }}
     strategy:
       fail-fast: false
