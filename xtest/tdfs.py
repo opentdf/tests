@@ -35,6 +35,9 @@ container_type = Literal[
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    # Support for V2 assertion schema (urn:opentdf:system:metadata:v2)
+    # Go SDK supports V2, Java/JS only support V1
+    "assertion_schema_v2",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -445,6 +448,10 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
+            case ("assertion_schema_v2", "go"):
+                # Go SDK supports V2 assertion schema (urn:opentdf:system:metadata:v2)
+                # Java/JS SDKs don't support V2 yet - they only support V1
+                return True
             case _:
                 pass
 
@@ -492,6 +499,59 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
 
 def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
     return False
+
+
+def skip_assertion_schema_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Path | None = None):
+    """Skip if the encrypted TDF uses assertion schemas that decrypt SDK can't verify.
+
+    Checks the actual TDF manifest to see which assertion schemas were used, then
+    verifies if the decrypt SDK supports those schemas. This avoids hardcoding SDK
+    compatibility and makes the logic self-documenting through SDK.supports() checks.
+
+    Currently, V2 assertion schema (urn:opentdf:system:metadata:v2) is not supported
+    by Java/JS SDKs. They can still decrypt the payload, but assertion verification fails.
+
+    This function is generic and will automatically work when Java/JS add V2 support
+    or if new SDKs are added with different schema support.
+
+    Args:
+        encrypt_sdk: The SDK used for encryption
+        decrypt_sdk: The SDK used for decryption
+        tdf_file: Path to the encrypted TDF file to inspect for actual schemas used.
+    """
+    if tdf_file is None:
+        # Can't check without TDF file - caller error
+        return
+
+    m = manifest(tdf_file)
+    if not m.assertions:
+        # No assertions - nothing to verify
+        return
+
+    for assertion in m.assertions:
+        if assertion.id == "system-metadata":
+            schema = assertion.statement.schema_
+
+            # Check if decrypt SDK supports this specific schema
+            # V2 schema uses URN format
+            if schema == "urn:opentdf:system:metadata:v2":
+                if not decrypt_sdk.supports("assertion_schema_v2"):
+                    pytest.skip(
+                        f"TDF uses V2 assertion schema that {decrypt_sdk} doesn't support yet. "
+                        f"Payload decryption works, but assertion verification will fail."
+                    )
+
+            # V1 schema or empty (legacy) - all SDKs support this
+            elif schema in ["system-metadata-v1", ""]:
+                # All SDKs support V1 - continue
+                return
+
+            # Unknown schema - check if decrypt SDK explicitly supports it
+            else:
+                # Unknown schema - be conservative and skip
+                pytest.skip(
+                    f"TDF uses unknown assertion schema ({schema}) that {decrypt_sdk} may not support"
+                )
 
 
 def select_target_version(
