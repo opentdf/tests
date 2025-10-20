@@ -448,10 +448,6 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
-            case ("assertion_schema_v2", "go"):
-                # Go SDK supports V2 assertion schema (urn:opentdf:system:metadata:v2)
-                # Java/JS SDKs don't support V2 yet - they only support V1
-                return True
             case _:
                 pass
 
