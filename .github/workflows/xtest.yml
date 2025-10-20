@@ -234,6 +234,38 @@ jobs:
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
 
+      - name: Enable key management
+        run: |-
+          OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
+          echo "OT_CONFIG_FILE=$OT_CONFIG_FILE">> "$GITHUB_ENV"
+          key_management_enabled=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE")
+          case "$key_management_enabled" in
+            true)
+              echo "Key management is already enabled."
+              echo "OT_KEY_MANAGEMENT_ENABLED=true" >> "$GITHUB_ENV"
+              ;;
+            false)
+              echo "Enabling key management..."
+              yq eval -i '.services.kas.preview.key_management = true' opentdf.yaml
+              echo "OT_KEY_MANAGEMENT_ENABLED=true" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Key management is not available"
+              echo "OT_KEY_MANAGEMENT_ENABLED=false" >> "$GITHUB_ENV"
+              exit 0
+              ;;
+          esac
+          # Extract or add a new root key
+          root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE")
+          if [ -z "$root_key" ]; then
+            echo "No root key found, generating a new one..."
+            root_key=$(openssl rand -hex 32)
+            yq eval -i ".services.kas.root_key = \"$root_key\"" "$OT_CONFIG_FILE"
+          fi
+          root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE")
+          echo "OT_ROOT_KEY=$root_key" >> "$GITHUB_ENV"
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+
       - name: Set up Python 3.12
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
