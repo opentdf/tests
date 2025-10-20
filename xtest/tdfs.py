@@ -500,32 +500,39 @@ def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatur
 def skip_assertion_schema_skew(
     encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Path | None = None
 ):
-    """Skip if the encrypted TDF uses assertion schemas that decrypt SDK can't verify.
+    """Check assertion compatibility and skip/fail tests appropriately.
 
-    Checks the actual TDF manifest to see which assertion schemas were used, then
-    verifies if the decrypt SDK supports those schemas. This avoids hardcoding SDK
-    compatibility and makes the logic self-documenting through SDK.supports() checks.
+    In xtest (testing environment): All assertion types and schemas MUST be explicitly
+    tested. Unknown assertions cause test FAILURE (not skip) to ensure comprehensive
+    test coverage and alert developers to new assertion types.
 
-    Currently, V2 assertion schema (urn:opentdf:system:metadata:v2) is not supported
-    by Java/JS SDKs. They can still decrypt the payload, but assertion verification fails.
+    In real-world SDK usage: Unknown assertions are gracefully logged and skipped
+    to maintain forward compatibility (see tdf.go:1572).
 
-    This function is generic and will automatically work when Java/JS add V2 support
-    or if new SDKs are added with different schema support.
+    This function inspects the TDF manifest to determine if the decrypt SDK can handle
+    the assertions created by the encrypt SDK, using feature detection via SDK.supports().
+
+    Known assertion schemas (identified by schema, not ID):
+        - "system-metadata-v1": System metadata V1 (all SDKs)
+        - "urn:opentdf:system:metadata:v2": System metadata V2 (Go SDK >= 0.10.0)
+        - "urn:nato:stanag:5636:A:1:elements:json": STANAG 5636 military standard (all SDKs)
+        - Key assertions: Identified by ID "assertion-key" (use custom schemas)
 
     Args:
         encrypt_sdk: The SDK used for encryption
         decrypt_sdk: The SDK used for decryption
-        tdf_file: Path to the encrypted TDF file to inspect for actual schemas used.
+        tdf_file: Path to the encrypted TDF file to inspect for actual assertions.
                   Must not be None.
 
     Raises:
         ValueError: If tdf_file is None (caller error).
+        pytest.fail: If TDF contains unknown assertion types or schemas.
 
     Behavior:
-        - If the TDF contains no assertions, no skip occurs (test continues).
-        - If all assertions use V1 schema, no skip occurs (V1 is universally supported).
-        - If any assertion uses V2 schema and decrypt SDK doesn't support it, test is skipped.
-        - If any assertion uses unknown schema, test is skipped for safety.
+        - No assertions: test continues
+        - All compatible: test continues
+        - V2 schema without SDK support: test skips (temporary incompatibility)
+        - Unknown assertion type/schema: test FAILS (requires explicit handling)
     """
     if tdf_file is None:
         # Caller must provide a TDF file for inspection
@@ -538,32 +545,42 @@ def skip_assertion_schema_skew(
         # No assertions in TDF - nothing to verify, test can proceed
         return
 
+    # Check all assertions - fail on unknown schemas to ensure comprehensive test coverage
+    # Assertions are identified by their schema, not their ID
     for assertion in m.assertions:
-        if assertion.id == "system-metadata":
-            schema = assertion.statement.schema_
+        schema = assertion.statement.schema_
 
-            # Check if decrypt SDK supports this specific schema
-            # V2 schema uses URN format
-            if schema == "urn:opentdf:system:metadata:v2":
-                if not decrypt_sdk.supports("assertion_schema_v2"):
-                    pytest.skip(
-                        f"TDF uses V2 assertion schema that {decrypt_sdk} doesn't support yet. "
-                        f"Payload decryption works, but assertion verification will fail."
-                    )
-                # V2 supported - continue checking other assertions
-                continue
-
-            # V1 schema or empty (legacy) - all SDKs support this
-            elif schema in ["system-metadata-v1", ""]:
-                # All SDKs support V1 - continue checking other assertions
-                continue
-
-            # Unknown schema - be conservative and skip
-            else:
+        # System metadata V2 schema - check if decrypt SDK supports it
+        if schema == "urn:opentdf:system:metadata:v2":
+            if not decrypt_sdk.supports("assertion_schema_v2"):
                 pytest.skip(
-                    f"TDF uses unknown assertion schema ({schema}) "
-                    f"that {decrypt_sdk} may not support"
+                    f"TDF uses V2 assertion schema that {decrypt_sdk} doesn't support yet. "
+                    f"Payload decryption works, but assertion verification will fail."
                 )
+            continue
+
+        # System metadata V1 schema or empty (legacy) - all SDKs support this
+        elif schema in ["system-metadata-v1", ""]:
+            continue
+
+        # STANAG 5636 assertions - all SDKs support this
+        elif schema == "urn:nato:stanag:5636:A:1:elements:json":
+            continue
+
+        # Key-based assertions use wildcard schema - all SDKs support this
+        # These can have various custom schemas, so we check with a pattern
+        elif assertion.id == "assertion-key":
+            # Key assertions are identified by ID since they use custom schemas
+            continue
+
+        # Unknown assertion schema - FAIL the test
+        else:
+            pytest.fail(
+                f"TDF uses unknown assertion schema: {schema!r} (id={assertion.id!r}). "
+                f"Known schemas: 'system-metadata-v1', 'urn:opentdf:system:metadata:v2', "
+                f"'urn:nato:stanag:5636:A:1:elements:json'. "
+                f"New assertion schemas must be explicitly tested and added to this function."
+            )
 
 
 def select_target_version(
