@@ -501,7 +501,9 @@ def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatur
     return False
 
 
-def skip_assertion_schema_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Path | None = None):
+def skip_assertion_schema_skew(
+    encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Path | None = None
+):
     """Skip if the encrypted TDF uses assertion schemas that decrypt SDK can't verify.
 
     Checks the actual TDF manifest to see which assertion schemas were used, then
