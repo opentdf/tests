@@ -383,7 +383,7 @@ class SDK:
 
         if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
-        logger.debug(f"enc [{' '.join([fmt_env(local_env)]+ c)}]")
+        logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
         subprocess.check_call(c, env=env)
@@ -464,6 +464,8 @@ class SDK:
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
     versions: list[SDK] = []
     sdk_path = os.path.join("sdk", sdk, "dist")
+    if not os.path.isdir(sdk_path):
+        return []
     for version in os.listdir(sdk_path):
         if os.path.isdir(os.path.join(sdk_path, version)):
             versions.append(SDK(sdk, version))
