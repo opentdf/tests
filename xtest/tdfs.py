@@ -518,14 +518,26 @@ def skip_assertion_schema_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Pat
         encrypt_sdk: The SDK used for encryption
         decrypt_sdk: The SDK used for decryption
         tdf_file: Path to the encrypted TDF file to inspect for actual schemas used.
+                  Must not be None.
+
+    Raises:
+        ValueError: If tdf_file is None (caller error).
+
+    Behavior:
+        - If the TDF contains no assertions, no skip occurs (test continues).
+        - If all assertions use V1 schema, no skip occurs (V1 is universally supported).
+        - If any assertion uses V2 schema and decrypt SDK doesn't support it, test is skipped.
+        - If any assertion uses unknown schema, test is skipped for safety.
     """
     if tdf_file is None:
-        # Can't check without TDF file - caller error
-        return
+        # Caller must provide a TDF file for inspection
+        raise ValueError(
+            "tdf_file cannot be None - must provide encrypted TDF to inspect"
+        )
 
     m = manifest(tdf_file)
     if not m.assertions:
-        # No assertions - nothing to verify
+        # No assertions in TDF - nothing to verify, test can proceed
         return
 
     for assertion in m.assertions:
@@ -540,17 +552,19 @@ def skip_assertion_schema_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, tdf_file: Pat
                         f"TDF uses V2 assertion schema that {decrypt_sdk} doesn't support yet. "
                         f"Payload decryption works, but assertion verification will fail."
                     )
+                # V2 supported - continue checking other assertions
+                continue
 
             # V1 schema or empty (legacy) - all SDKs support this
             elif schema in ["system-metadata-v1", ""]:
-                # All SDKs support V1 - continue
-                return
+                # All SDKs support V1 - continue checking other assertions
+                continue
 
-            # Unknown schema - check if decrypt SDK explicitly supports it
+            # Unknown schema - be conservative and skip
             else:
-                # Unknown schema - be conservative and skip
                 pytest.skip(
-                    f"TDF uses unknown assertion schema ({schema}) that {decrypt_sdk} may not support"
+                    f"TDF uses unknown assertion schema ({schema}) "
+                    f"that {decrypt_sdk} may not support"
                 )
 
 
