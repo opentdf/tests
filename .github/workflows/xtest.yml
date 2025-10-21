@@ -514,8 +514,10 @@ jobs:
       - name: Assert all matrix jobs passed
         if: ${{ needs.xct.result == 'failure' || needs.xct.result == 'cancelled' }}
         run: |-
-          echo "xct matrix had failures (overall result: ${{ needs.xct.result }}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
+          echo "xct matrix had failures (overall result: ${XCT_RESULT}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
           exit 1
+        env:
+          XCT_RESULT: ${{ needs.xct.result }}
       - name: Success summary
         if: ${{ needs.xct.result == 'success' }}
         run: |-
