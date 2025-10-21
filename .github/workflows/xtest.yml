@@ -495,7 +495,9 @@ jobs:
               run_id: runId,
             })
             const results = artifacts.data.artifacts.map(({ name, id }) => `[${name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${id})`).join('\n');
-            const md = `## X-Test Failure Results\n${results}`
+            const xctResult = '${{ needs.xct.result }}';
+            const heading = xctResult === 'success' ? 'X-Test Results' : 'X-Test Failure Report';
+            const md = `## ${heading}\n${results}`
             const issue_number = context.issue?.number ?? context.pull_request?.number;
             if (!issue_number) {
               core.summary.addRaw(md);
