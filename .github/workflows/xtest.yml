@@ -502,3 +502,23 @@ jobs:
               issue_number: context.issue.number,
               body: md,
             })
+
+  xtest:
+    # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
+    runs-on: ubuntu-latest
+    needs: xct
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - name: Assert all matrix jobs passed
+        if: ${{ needs.xct.result == 'failure' || needs.xct.result == 'cancelled' }}
+        run: |-
+          echo "xct matrix had failures (overall result: ${XCT_RESULT}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        env:
+          XCT_RESULT: ${{ needs.xct.result }}
+      - name: Success summary
+        if: ${{ needs.xct.result == 'success' }}
+        run: |-
+          echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"
