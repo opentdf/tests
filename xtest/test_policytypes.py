@@ -2,6 +2,7 @@ import filecmp
 import pytest
 import re
 import subprocess
+import threading
 from pathlib import Path
 
 import nano
@@ -10,6 +11,7 @@ from abac import Attribute
 
 
 cipherTexts: dict[str, Path] = {}
+cipherTexts_lock = threading.Lock()
 
 
 def skip_rts_as_needed(
@@ -47,6 +49,12 @@ def skip_rts_as_needed(
             )
 
 
+@pytest.mark.smoke
+@pytest.mark.integration
+@pytest.mark.abac
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_or_attributes_success(
     attribute_with_or_type: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -74,9 +82,14 @@ def test_or_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
+        
+        with cipherTexts_lock:
+            if sample_name in cipherTexts:
+                ct_file = cipherTexts[sample_name]
+            else:
+                ct_file = None
+        
+        if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             # Currently, we only support rsa:2048 and ec:secp256r1
             encrypt_sdk.encrypt(
@@ -88,7 +101,9 @@ def test_or_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+            
+            with cipherTexts_lock:
+                cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(
@@ -125,6 +140,12 @@ def decrypt_or_dont(
             ), f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
 
 
+@pytest.mark.smoke
+@pytest.mark.integration
+@pytest.mark.abac
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_and_attributes_success(
     attribute_with_and_type: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -158,9 +179,14 @@ def test_and_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
+        
+        with cipherTexts_lock:
+            if sample_name in cipherTexts:
+                ct_file = cipherTexts[sample_name]
+            else:
+                ct_file = None
+        
+        if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
@@ -171,7 +197,9 @@ def test_and_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+            
+            with cipherTexts_lock:
+                cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(
@@ -179,6 +207,11 @@ def test_and_attributes_success(
         )
 
 
+@pytest.mark.integration
+@pytest.mark.abac
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_hierarchy_attributes_success(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -215,9 +248,14 @@ def test_hierarchy_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
+        
+        with cipherTexts_lock:
+            if sample_name in cipherTexts:
+                ct_file = cipherTexts[sample_name]
+            else:
+                ct_file = None
+        
+        if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
@@ -228,7 +266,9 @@ def test_hierarchy_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+            
+            with cipherTexts_lock:
+                cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(
@@ -236,6 +276,11 @@ def test_hierarchy_attributes_success(
         )
 
 
+@pytest.mark.integration
+@pytest.mark.abac
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_container_policy_mode(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -274,9 +319,14 @@ def test_container_policy_mode(
         sample_name = (
             f"pt-plaintextpolicy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         )
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
+        
+        with cipherTexts_lock:
+            if sample_name in cipherTexts:
+                ct_file = cipherTexts[sample_name]
+            else:
+                ct_file = None
+        
+        if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
                 pt_file,
@@ -288,7 +338,9 @@ def test_container_policy_mode(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, "plaintext", ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+            
+            with cipherTexts_lock:
+                cipherTexts[sample_name] = ct_file
 
         rt_file = tmp_dir / f"{sample_name}.returned"
         decrypt_or_dont(

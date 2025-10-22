@@ -165,7 +165,11 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
 
 @pytest.fixture(scope="module")
 def tmp_dir() -> Path:
-    dname = Path("tmp/")
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
+    if worker_id == "master":
+        dname = Path("tmp/")
+    else:
+        dname = Path(f"tmp/{worker_id}/")
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 
