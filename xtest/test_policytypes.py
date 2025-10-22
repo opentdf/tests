@@ -82,13 +82,13 @@ def test_or_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        
+
         with cipherTexts_lock:
             if sample_name in cipherTexts:
                 ct_file = cipherTexts[sample_name]
             else:
                 ct_file = None
-        
+
         if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             # Currently, we only support rsa:2048 and ec:secp256r1
@@ -101,7 +101,7 @@ def test_or_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            
+
             with cipherTexts_lock:
                 cipherTexts[sample_name] = ct_file
 
@@ -179,13 +179,13 @@ def test_and_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        
+
         with cipherTexts_lock:
             if sample_name in cipherTexts:
                 ct_file = cipherTexts[sample_name]
             else:
                 ct_file = None
-        
+
         if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
@@ -197,7 +197,7 @@ def test_and_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            
+
             with cipherTexts_lock:
                 cipherTexts[sample_name] = ct_file
 
@@ -248,13 +248,13 @@ def test_hierarchy_attributes_success(
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
         sample_name = f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        
+
         with cipherTexts_lock:
             if sample_name in cipherTexts:
                 ct_file = cipherTexts[sample_name]
             else:
                 ct_file = None
-        
+
         if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
@@ -266,7 +266,7 @@ def test_hierarchy_attributes_success(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, None, ct_file, fqns)
-            
+
             with cipherTexts_lock:
                 cipherTexts[sample_name] = ct_file
 
@@ -319,13 +319,13 @@ def test_container_policy_mode(
         sample_name = (
             f"pt-plaintextpolicy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
         )
-        
+
         with cipherTexts_lock:
             if sample_name in cipherTexts:
                 ct_file = cipherTexts[sample_name]
             else:
                 ct_file = None
-        
+
         if ct_file is None:
             ct_file = tmp_dir / f"{sample_name}"
             encrypt_sdk.encrypt(
@@ -338,7 +338,7 @@ def test_container_policy_mode(
                 target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
             )
             assert_expected_attrs(container, "plaintext", ct_file, fqns)
-            
+
             with cipherTexts_lock:
                 cipherTexts[sample_name] = ct_file
 

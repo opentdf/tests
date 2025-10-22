@@ -153,7 +153,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         metafunc.parametrize("container", containers)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def pt_file(tmp_dir: Path, size: str) -> Path:
     pt_file = tmp_dir / f"test-plain-{size}.txt"
     length = (5 * 2**30) if size == "large" else 128
@@ -163,7 +163,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def tmp_dir() -> Path:
     worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
     if worker_id == "master":
@@ -190,7 +190,7 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
 _otdfctl = load_otdfctl()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def otdfctl():
     return _otdfctl
 
@@ -238,7 +238,7 @@ def load_cached_kas_keys() -> abac.PublicKey:
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def cached_kas_keys() -> abac.PublicKey:
     return load_cached_kas_keys()
 
@@ -252,7 +252,7 @@ class ExtraKey(typing.TypedDict):
     cert: str
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def extra_keys() -> dict[str, ExtraKey]:
     """Extra key data from extra-keys.json"""
     extra_keys_file = Path("extra-keys.json")
@@ -288,7 +288,7 @@ def kas_url_default():
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_default(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
@@ -302,7 +302,7 @@ def kas_url_value1():
     return os.getenv("KASURL1", "http://localhost:8181/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_value1(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
@@ -316,7 +316,7 @@ def kas_url_value2():
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_value2(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
@@ -330,7 +330,7 @@ def kas_url_attr():
     return os.getenv("KASURL3", "http://localhost:8383/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_attr(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
@@ -344,7 +344,7 @@ def kas_url_ns():
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def kas_entry_ns(
     otdfctl: abac.OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
@@ -364,7 +364,7 @@ def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicK
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def public_key_kas_default_kid_r1(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
@@ -375,7 +375,7 @@ def public_key_kas_default_kid_r1(
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def public_key_kas_default_kid_e1(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
@@ -851,12 +851,12 @@ def ns_and_value_kas_grants_and(
     return allof
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def hs256_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def rs256_keys() -> tuple[str, str]:
     # Generate an RSA private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -894,7 +894,7 @@ def write_assertion_to_file(
     return as_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_file_no_keys(tmp_dir: Path) -> Path:
     assertion_list = [
         assertions.Assertion(
@@ -914,7 +914,7 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
@@ -970,7 +970,7 @@ def write_assertion_verification_keys_to_file(
     return as_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_verification_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
@@ -992,7 +992,7 @@ def assertion_verification_file_rs_and_hs_keys(
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditionSet:
     """
     Creates a standard subject condition set for OpenTDF clients.

@@ -37,19 +37,19 @@ def do_encrypt_with(
     If targetmode is set, asserts that the manifest is in the correct format for that target.
     """
     global counter
-    
+
     container_id = f"{encrypt_sdk}-{container}"
     if scenario != "":
         container_id += f"-{scenario}"
-    
+
     with cipherTexts_lock:
         if container_id in cipherTexts:
             return cipherTexts[container_id]
-    
+
     with counter_lock:
         counter = (counter or 0) + 1
         c = counter
-    
+
     ct_file = tmp_dir / f"test-{encrypt_sdk}-{scenario}{c}.{container}"
 
     use_ecdsa = container == "nano-with-ecdsa"
@@ -93,11 +93,9 @@ def do_encrypt_with(
             assert envelope.header.kas.kid == expected_kid
     else:
         assert False, f"Unknown container type: {container}"
-    
+
     with cipherTexts_lock:
-        cipherTexts[container_id] = ct_file
-    
-    return ct_file
+        return cipherTexts.setdefault(container_id, ct_file)
 
 
 dspx1153Fails = []
