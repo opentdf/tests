@@ -495,20 +495,25 @@ jobs:
               run_id: runId,
             })
             const results = artifacts.data.artifacts.map(({ name, id }) => `[${name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${id})`).join('\n');
-            const md = `## X-Test Failure Results\n${results}`
+            const body = `## X-Test Failure Results\n${results}`
             const issue_number = context.issue?.number ?? context.pull_request?.number;
             if (!issue_number) {
-              core.summary.addRaw(md);
+              core.summary.addRaw(body);
               await core.summary.write();
               console.log("No issue or pull request number found in context; skipping comment.");
               return;
             }
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number,
-              body: md,
-            })
+            try {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            } catch (err) {
+              core.summary.addRaw(body);
+              await core.summary.write();
+              if (err.status === 403) {
+                console.error("403 when attempting to comment on PR (likely fork)", err);
+                return;
+              }
+              throw err; // Re-throw unexpected errors
+            }
 
   xtest:
     # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
