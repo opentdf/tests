@@ -5,6 +5,7 @@ import random
 import re
 import string
 import subprocess
+import threading
 from pathlib import Path
 
 import nano
@@ -12,7 +13,9 @@ import tdfs
 
 
 cipherTexts: dict[str, Path] = {}
+cipherTexts_lock = threading.Lock()
 counter = 0
+counter_lock = threading.Lock()
 
 #### HELPERS
 
@@ -34,13 +37,19 @@ def do_encrypt_with(
     If targetmode is set, asserts that the manifest is in the correct format for that target.
     """
     global counter
-    counter = (counter or 0) + 1
-    c = counter
+
     container_id = f"{encrypt_sdk}-{container}"
     if scenario != "":
         container_id += f"-{scenario}"
-    if container_id in cipherTexts:
-        return cipherTexts[container_id]
+
+    with cipherTexts_lock:
+        if container_id in cipherTexts:
+            return cipherTexts[container_id]
+
+    with counter_lock:
+        counter = (counter or 0) + 1
+        c = counter
+
     ct_file = tmp_dir / f"test-{encrypt_sdk}-{scenario}{c}.{container}"
 
     use_ecdsa = container == "nano-with-ecdsa"
@@ -84,8 +93,9 @@ def do_encrypt_with(
             assert envelope.header.kas.kid == expected_kid
     else:
         assert False, f"Unknown container type: {container}"
-    cipherTexts[container_id] = ct_file
-    return ct_file
+
+    with cipherTexts_lock:
+        return cipherTexts.setdefault(container_id, ct_file)
 
 
 dspx1153Fails = []
@@ -100,6 +110,11 @@ except FileNotFoundError:
 #### BASIC ROUNDTRIP TESTS
 
 
+@pytest.mark.smoke
+@pytest.mark.integration
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_tdf_roundtrip(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -156,6 +171,10 @@ def test_tdf_roundtrip(
         assert filecmp.cmp(pt_file, ert_file)
 
 
+@pytest.mark.integration
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_tdf_spec_target_422(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -260,6 +279,8 @@ def looks_like_430(manifest: tdfs.Manifest):
 #### MANIFEST VALIDITY TESTS
 
 
+@pytest.mark.smoke
+@pytest.mark.encryption
 def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -273,6 +294,7 @@ def test_manifest_validity(
     tdfs.validate_manifest_schema(ct_file)
 
 
+@pytest.mark.encryption
 def test_manifest_validity_with_assertions(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -299,6 +321,10 @@ def test_manifest_validity_with_assertions(
 #### ASSERTION TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_tdf_assertions_unkeyed(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -331,6 +357,10 @@ def test_tdf_assertions_unkeyed(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.integration
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_tdf_assertions_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -370,6 +400,10 @@ def test_tdf_assertions_with_keys(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+@pytest.mark.integration
+@pytest.mark.roundtrip
+@pytest.mark.encryption
+@pytest.mark.decryption
 def test_tdf_assertions_422_format(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -545,6 +579,8 @@ def assert_tamper_error(
 ## POLICY TAMPER TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_unbound_policy(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -574,6 +610,8 @@ def test_tdf_with_unbound_policy(
         assert_tamper_error(exc, "wrap", decrypt_sdk)
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_policy_binding(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -602,6 +640,8 @@ def test_tdf_with_altered_policy_binding(
 ## INTEGRITY TAMPER TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_root_sig(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -631,6 +671,8 @@ def test_tdf_with_altered_root_sig(
         assert_tamper_error(exc, "root", decrypt_sdk)
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_seg_sig_wrong(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -665,6 +707,8 @@ def test_tdf_with_altered_seg_sig_wrong(
 ## SEGMENT SIZE TAMPER TEST
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -699,6 +743,8 @@ def test_tdf_with_altered_enc_seg_size(
 ## ASSERTION TAMPER TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_assertion_statement(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -737,6 +783,8 @@ def test_tdf_with_altered_assertion_statement(
         assert_tamper_error(exc, "assertion", decrypt_sdk)
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_altered_assertion_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -785,6 +833,8 @@ def test_tdf_with_altered_assertion_with_keys(
 ## PAYLOAD TAMPER TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_altered_payload_end(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -819,6 +869,8 @@ def test_tdf_altered_payload_end(
 ## KAO TAMPER TESTS
 
 
+@pytest.mark.integration
+@pytest.mark.decryption
 def test_tdf_with_malicious_kao(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
