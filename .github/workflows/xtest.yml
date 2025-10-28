@@ -222,7 +222,6 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: opentdf/tests
-          ref: fix-scheduled-xtests-java-build
           path: otdftests # use different name bc other repos might have tests directories
 
       - name: load extra keys from file
