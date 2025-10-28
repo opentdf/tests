@@ -2,10 +2,6 @@
 
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-# Let PLATFORM_BRANCH default to `main` if not provided
-# This can be overridden by .env files for specific versions
-PLATFORM_BRANCH ?= main
-
 # Dynamically set VERSIONS to the names of all directories in the src folder if not provided
 VERSIONS ?= $(shell find "$(MAKEFILE_DIR)/src" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" -exec basename {} \;)
 
@@ -39,7 +35,8 @@ build:
 			echo "Using platform branch override: $$PLATFORM_BRANCH_OVERRIDE"; \
 			mvn --batch-mode clean install "-Dplatform.branch=$$PLATFORM_BRANCH_OVERRIDE" -DskipTests -Dmaven.javadoc.skip=true; \
 		else \
-			echo "Using default platform branch from pom.xml"; \
+			DEFAULT_PLATFORM_BRANCH=$$(mvn help:evaluate -Dexpression=platform.branch -q -DforceStdout 2>/dev/null || echo "not-found"); \
+			echo "Using default platform branch from pom.xml: $$DEFAULT_PLATFORM_BRANCH"; \
 			mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true; \
 		fi; \
 		if [ $$? -ne 0 ]; then \
