@@ -35,8 +35,7 @@ build:
 			echo "Using platform branch override: $$PLATFORM_BRANCH_OVERRIDE"; \
 			mvn --batch-mode clean install "-Dplatform.branch=$$PLATFORM_BRANCH_OVERRIDE" -DskipTests -Dmaven.javadoc.skip=true; \
 		else \
-			DEFAULT_PLATFORM_BRANCH=$$(mvn help:evaluate -Dexpression=platform.branch -q -DforceStdout 2>/dev/null || echo "not-found"); \
-			echo "Using default platform branch from pom.xml: $$DEFAULT_PLATFORM_BRANCH"; \
+			echo "Using default platform branch from pom.xml"; \
 			mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true; \
 		fi; \
 		if [ $$? -ne 0 ]; then \
