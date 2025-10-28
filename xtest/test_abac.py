@@ -1,9 +1,12 @@
 import filecmp
+import re
+import subprocess
 import pytest
 from pathlib import Path
 
 import tdfs
-from abac import Attribute
+from abac import Attribute, ObligationValue
+from test_policytypes import skip_rts_as_needed
 
 
 cipherTexts: dict[str, Path] = {}
@@ -535,3 +538,124 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     rt_file = tmp_dir / f"test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_obligations_not_entitled(
+    obligation_setup_no_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
+):
+    """
+        Test that no required obligations are returned when the user is not entitled
+        to the data.
+    """
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    
+    # Skip platform compatibility checks
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_obligation_test(decrypt_sdk, pfs)
+    
+    # Unpack the test setup
+    attr, _ = obligation_setup_no_scs_unscoped_trigger
+    
+    # Encrypt the file with the attribute
+    ct_file = tmp_dir / f"test-obligations.ztdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        attr_values=[attr.values[0].fqn],
+        container=container,
+    )
+    
+    # Attempt to decrypt - this should fail with a 403 rewrap request error
+    rt_file = tmp_dir / f"test-obligations.untdf"
+    try:
+        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+        assert False, "decrypt succeeded unexpectedly - should have failed with 403 rewrap request error"
+    except subprocess.CalledProcessError as exc:
+        # Verify that the error is related to obligations
+        output_content = (exc.output or b"").decode(errors="replace")
+        stderr_content = (exc.stderr or b"").decode(errors="replace")
+        combined_output = output_content + stderr_content
+        
+        # Check for rewrap request 403 error
+        rewrap_403_pattern = "tdf: rewrap request 403"
+        obligations_pattern = "required\\s+obligations"
+
+        found_obligations_error = re.search(obligations_pattern, combined_output, re.IGNORECASE)
+        found_rewrap_403_error = re.search(rewrap_403_pattern, combined_output, re.IGNORECASE)
+        
+        assert found_obligations_error == None, (
+            f"Found match: {found_obligations_error}"
+            f"Did not expect required obligations to be returned: {exc}\n"
+            f"stdout: {output_content}\nstderr: {stderr_content}"
+        )
+        assert found_rewrap_403_error, (
+            f"Expected 'tdf: rewrap request 403' error but got: {exc}\n"
+            f"stdout: {output_content}\nstderr: {stderr_content}"
+        )
+
+def test_obligations_not_fulfillable(
+        obligation_setup_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
+        encrypt_sdk: tdfs.SDK,
+        decrypt_sdk: tdfs.SDK,
+        tmp_dir: Path,
+        pt_file: Path,
+        in_focus: set[tdfs.SDK],
+        container: tdfs.container_type,
+):
+    """
+        Test that required obligations are returned when the user is entitled
+        to the data but cannot fulfill the obligations.
+    """
+
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    
+    # Skip platform compatibility checks
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_obligation_test(decrypt_sdk, pfs)
+    
+    # Unpack the test setup
+    attr, obligation_value = obligation_setup_scs_unscoped_trigger
+    
+    # Encrypt the file with the attribute
+    ct_file = tmp_dir / f"test-obligations-fulfillable.ztdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        attr_values=[attr.values[0].fqn],
+        container=container,
+    )
+    
+    # Attempt to decrypt - this should fail with obligation enforcement error
+    rt_file = tmp_dir / f"test-obligations-fulfillable.untdf"
+    try:
+        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+        assert False, "decrypt succeeded unexpectedly - should have failed with obligation enforcement error"
+    except subprocess.CalledProcessError as exc:
+        # Verify that the error is related to obligations
+        output_content = (exc.output or b"").decode(errors="replace")
+        stderr_content = (exc.stderr or b"").decode(errors="replace")
+        combined_output = output_content + stderr_content
+        
+        # Check for obligation enforcement error
+        rewrap_403_pattern = "tdf: rewrap request 403"
+        obligations_pattern = obligation_value.fqn
+        found_obligations_error = re.search(obligations_pattern, combined_output, re.IGNORECASE)
+        found_rewrap_403_error = re.search(rewrap_403_pattern, combined_output, re.IGNORECASE)
+        assert found_obligations_error, (
+            f"Expected required obligation {obligations_pattern}, but got: {exc}\n"
+            f"stdout: {output_content}\nstderr: {stderr_content}"
+        )
+        assert found_rewrap_403_error, (
+            f"Expected 'tdf: rewrap request 403' error but got: {exc}\n"
+            f"stdout: {output_content}\nstderr: {stderr_content}"
+        )
