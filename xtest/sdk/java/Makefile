@@ -2,7 +2,8 @@
 
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-# Let PLATFORM_VERSIONS default to `main` if not provided
+# Let PLATFORM_BRANCH default to `main` if not provided
+# This can be overridden by .env files for specific versions
 PLATFORM_BRANCH ?= main
 
 # Dynamically set VERSIONS to the names of all directories in the src folder if not provided
@@ -22,17 +23,23 @@ all: build
 build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
+		PLATFORM_BRANCH_OVERRIDE=""; \
 		if [ -f "$(MAKEFILE_DIR)/$$version.env" ]; then \
 			echo "Loading environment variables from $(MAKEFILE_DIR)/$$version.env"; \
 			set -a; \
 			. "$(MAKEFILE_DIR)/$$version.env"; \
 			set +a; \
+			if [ -n "$$PLATFORM_BRANCH" ]; then \
+				PLATFORM_BRANCH_OVERRIDE="$$PLATFORM_BRANCH"; \
+			fi; \
 		fi; \
 		echo "Building binary for $$version"; \
 		cd $(MAKEFILE_DIR)/src/$$version && \
-		if [ -n "$(PLATFORM_BRANCH)" ]; then \
-			mvn --batch-mode clean install "-Dplatform.branch=$(PLATFORM_BRANCH)" -DskipTests -Dmaven.javadoc.skip=true; \
+		if [ -n "$$PLATFORM_BRANCH_OVERRIDE" ]; then \
+			echo "Using platform branch override: $$PLATFORM_BRANCH_OVERRIDE"; \
+			mvn --batch-mode clean install "-Dplatform.branch=$$PLATFORM_BRANCH_OVERRIDE" -DskipTests -Dmaven.javadoc.skip=true; \
 		else \
+			echo "Using default platform branch from pom.xml"; \
 			mvn --batch-mode clean install -DskipTests -Dmaven.javadoc.skip=true; \
 		fi; \
 		if [ $$? -ne 0 ]; then \

@@ -333,8 +333,10 @@ jobs:
             TAG=$(echo "$row" | jq -r '.tag')
             HEAD=$(echo "$row" | jq -r '.head')
             if [[ "$HEAD" == "true" ]]; then
-              echo "Creating .env file for tag: [$TAG]; pointing to [$platform_ref]"
+              echo "Creating .env file for tag: [$TAG]; pointing to platform branch [$platform_tag]"
               echo "PLATFORM_BRANCH=$platform_tag" > "otdftests/xtest/sdk/java/${TAG}.env"
+            else
+              echo "Skipping .env file creation for release version [$TAG] - using default platform branch"
             fi
           done
         env:
