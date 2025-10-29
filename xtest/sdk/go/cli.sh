@@ -33,8 +33,6 @@ if [ "$1" == "supports" ]; then
     obligations)
       # Obligations support from SDK version 0.10.0
       set -o pipefail
-      echo "Checking SDK version for obligations support:"
-      "${cmd[@]}" --version --json
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 10) || ($1 == 0 && $2 == 10 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;

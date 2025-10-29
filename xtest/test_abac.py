@@ -26,6 +26,31 @@ def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
     if encrypt_sdk != decrypt_sdk and decrypt_sdk in dspx1153Fails:
         pytest.skip("dspx1153 fails with this SDK version combination")
 
+def assert_decrypt_fails_with_patterns(
+    decrypt_sdk: tdfs.SDK,
+    ct_file: Path,
+    rt_file: Path,
+    container: tdfs.container_type,
+    expected_patterns: list[str],
+    unexpected_patterns: list[str] | None = None,
+):
+    try:
+        decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
+        pytest.fail(f"Decrypt succeeded unexpectedly for {ct_file}")
+    except subprocess.CalledProcessError as exc:
+        output = (exc.output or b'').decode(errors='replace')
+        stderr = (exc.stderr or b'').decode(errors='replace')
+        combined_output = output + stderr
+
+        for pattern in expected_patterns:
+            assert re.search(pattern, combined_output, re.IGNORECASE), \
+                f"Expected pattern '{pattern}' not found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+
+        if unexpected_patterns:
+            for pattern in unexpected_patterns:
+                assert not re.search(pattern, combined_output, re.IGNORECASE), \
+                    f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+
 
 def test_key_mapping_multiple_mechanisms(
     attribute_with_different_kids: Attribute,
@@ -565,41 +590,23 @@ def test_obligations_not_entitled(
     attr, _ = obligation_setup_no_scs_unscoped_trigger
     
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / f"test-obligations.ztdf"
+    ct_file = tmp_dir / "test-obligations.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
         attr_values=[attr.values[0].fqn],
         container=container,
     )
-    
-    # Attempt to decrypt - this should fail with a 403 rewrap request error
-    rt_file = tmp_dir / f"test-obligations.untdf"
-    try:
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
-        assert False, "decrypt succeeded unexpectedly - should have failed with 403 rewrap request error"
-    except subprocess.CalledProcessError as exc:
-        # Verify that the error is related to obligations
-        output_content = (exc.output or b"").decode(errors="replace")
-        stderr_content = (exc.stderr or b"").decode(errors="replace")
-        combined_output = output_content + stderr_content
-        
-        # Check for rewrap request 403 error
-        rewrap_403_pattern = "tdf: rewrap request 403"
-        obligations_pattern = "required\\s+obligations"
 
-        found_obligations_error = re.search(obligations_pattern, combined_output, re.IGNORECASE)
-        found_rewrap_403_error = re.search(rewrap_403_pattern, combined_output, re.IGNORECASE)
-        
-        assert found_obligations_error == None, (
-            f"Found match: {found_obligations_error}"
-            f"Did not expect required obligations to be returned: {exc}\n"
-            f"stdout: {output_content}\nstderr: {stderr_content}"
-        )
-        assert found_rewrap_403_error, (
-            f"Expected 'tdf: rewrap request 403' error but got: {exc}\n"
-            f"stdout: {output_content}\nstderr: {stderr_content}"
-        )
+    rewrap_403_pattern = "tdf: rewrap request 403"
+    obligations_pattern = "required\\s+obligations"
+    rt_file = tmp_dir / "test-obligations.untdf"
+    assert_decrypt_fails_with_patterns(decrypt_sdk=decrypt_sdk,
+                                       ct_file=ct_file,
+                                       rt_file=rt_file,
+                                       container=container,
+                                       expected_patterns=[rewrap_403_pattern],
+                                       unexpected_patterns=[obligations_pattern])
 
 def test_obligations_not_fulfillable(
         obligation_setup_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
@@ -627,35 +634,19 @@ def test_obligations_not_fulfillable(
     attr, obligation_value = obligation_setup_scs_unscoped_trigger
     
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / f"test-obligations-fulfillable.ztdf"
+    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
         attr_values=[attr.values[0].fqn],
         container=container,
     )
-    
-    # Attempt to decrypt - this should fail with obligation enforcement error
-    rt_file = tmp_dir / f"test-obligations-fulfillable.untdf"
-    try:
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
-        assert False, "decrypt succeeded unexpectedly - should have failed with obligation enforcement error"
-    except subprocess.CalledProcessError as exc:
-        # Verify that the error is related to obligations
-        output_content = (exc.output or b"").decode(errors="replace")
-        stderr_content = (exc.stderr or b"").decode(errors="replace")
-        combined_output = output_content + stderr_content
-        
-        # Check for obligation enforcement error
-        rewrap_403_pattern = "tdf: rewrap request 403"
-        obligations_pattern = obligation_value.fqn
-        found_obligations_error = re.search(obligations_pattern, combined_output, re.IGNORECASE)
-        found_rewrap_403_error = re.search(rewrap_403_pattern, combined_output, re.IGNORECASE)
-        assert found_obligations_error, (
-            f"Expected required obligation {obligations_pattern}, but got: {exc}\n"
-            f"stdout: {output_content}\nstderr: {stderr_content}"
-        )
-        assert found_rewrap_403_error, (
-            f"Expected 'tdf: rewrap request 403' error but got: {exc}\n"
-            f"stdout: {output_content}\nstderr: {stderr_content}"
-        )
+
+    rewrap_403_pattern = "tdf: rewrap request 403"
+    obligations_pattern = obligation_value.fqn
+    rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
+    assert_decrypt_fails_with_patterns(decrypt_sdk=decrypt_sdk,
+                                       ct_file=ct_file,
+                                       rt_file=rt_file,
+                                       container=container,
+                                       expected_patterns=[obligations_pattern, rewrap_403_pattern])

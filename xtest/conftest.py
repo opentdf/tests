@@ -1027,7 +1027,7 @@ def obligation_setup_no_scs_unscoped_trigger(
     
     Creates:
     - A namespace for obligations testing
-    - An attribute with a "sensitive" value
+    - An attribute with a "alpha" value
     - An obligation definition with a required value
     - An obligation value instance
     
@@ -1067,8 +1067,8 @@ def obligation_setup_no_scs_unscoped_trigger(
     assert len(obligation.values) == 1
     assert obligation.values[0].fqn == f"{ns.fqn}/obl/{obligation.name}/value/watermark"
 
-    trigger = otdfctl.obligation_triggers_create(obligation.values[0], "update", attr_value)
-    assert trigger is not None
+    _ = otdfctl.obligation_triggers_create(obligation.values[0], "update", attr_value)
+    assert _ is not None
     
     return attr, obligation.values[0]
 
@@ -1082,7 +1082,7 @@ def obligation_setup_scs_unscoped_trigger(
     
     Creates:
     - A namespace for obligations testing
-    - An attribute with a "confidential" value
+    - An attribute with a "beta" value
     - An obligation definition with a required value
     - An obligation value instance
     - Maps the attribute value to the provided subject condition set
@@ -1124,8 +1124,8 @@ def obligation_setup_scs_unscoped_trigger(
     assert len(obligation.values) == 1
     assert obligation.values[0].fqn == f"{ns.fqn}/obl/{obligation.name}/value/geofence"
 
-    trigger = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
-    assert trigger is not None
+    _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
+    assert _ is not None
     
     return attr, obligation.values[0]
 
