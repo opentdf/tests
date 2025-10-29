@@ -1024,16 +1024,16 @@ def obligation_setup_no_scs_unscoped_trigger(
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
     """
     Sets up an obligation test scenario with an attribute and obligation value.
-    
+
     Creates:
     - A namespace for obligations testing
     - An attribute with a "alpha" value
     - An obligation definition with a required value
     - An obligation value instance
-    
+
     Note: Subject mapping is intentionally omitted for testing scenarios
     where obligations should prevent access.
-    
+
     Returns:
         tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
     """
@@ -1041,7 +1041,7 @@ def obligation_setup_no_scs_unscoped_trigger(
     ns = otdfctl.namespace_create("test-obligations.com")
     assert ns is not None
     assert ns.fqn == f"https://{ns.name}"
-    
+
     # Create attribute with a "sensitive" value
     attr = otdfctl.attribute_create(
         name="obligation-test",
@@ -1052,15 +1052,13 @@ def obligation_setup_no_scs_unscoped_trigger(
     assert attr is not None
     assert attr.fqn == f"{ns.fqn}/attr/{attr.name}"
     assert len(attr.values) == 1
-    
+
     attr_value = attr.values[0]  # "sensitive" value
     assert attr_value.fqn == f"{ns.fqn}/attr/{attr.name}/value/{attr_value.value}"
-    
+
     # Create obligation definition and value
     obligation = otdfctl.obligation_def_create(
-        name="test_obligation", 
-        namespace=ns, 
-        value=["watermark"]
+        name="test_obligation", namespace=ns, value=["watermark"]
     )
     assert obligation is not None
     assert obligation.fqn == f"{ns.fqn}/obl/{obligation.name}"
@@ -1069,8 +1067,9 @@ def obligation_setup_no_scs_unscoped_trigger(
 
     _ = otdfctl.obligation_triggers_create(obligation.values[0], "update", attr_value)
     assert _ is not None
-    
+
     return attr, obligation.values[0]
+
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_unscoped_trigger(
@@ -1079,14 +1078,14 @@ def obligation_setup_scs_unscoped_trigger(
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
     """
     Sets up an obligation test scenario with an attribute, obligation value, and subject condition set.
-    
+
     Creates:
     - A namespace for obligations testing
     - An attribute with a "beta" value
     - An obligation definition with a required value
     - An obligation value instance
     - Maps the attribute value to the provided subject condition set
-    
+
     Returns:
         tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
     """
@@ -1094,7 +1093,7 @@ def obligation_setup_scs_unscoped_trigger(
     ns = otdfctl.namespace_create("test-obligations-scs.com")
     assert ns is not None
     assert ns.fqn == f"https://{ns.name}"
-    
+
     # Create attribute with a "confidential" value
     attr = otdfctl.attribute_create(
         name="obligation-test-scs",
@@ -1105,19 +1104,17 @@ def obligation_setup_scs_unscoped_trigger(
     assert attr is not None
     assert attr.fqn == f"{ns.fqn}/attr/{attr.name}"
     assert len(attr.values) == 1
-    
+
     attr_value = attr.values[0]  # "confidential" value
     assert attr_value.fqn == f"{ns.fqn}/attr/{attr.name}/value/{attr_value.value}"
-    
+
     # Map attribute value to the provided subject condition set
     sm = otdfctl.scs_map(otdf_client_scs, attr_value)
     assert sm is not None
-    
+
     # Create obligation definition and value
     obligation = otdfctl.obligation_def_create(
-        name="test_obligation_scs", 
-        namespace=ns, 
-        value=["geofence"]
+        name="test_obligation_scs", namespace=ns, value=["geofence"]
     )
     assert obligation is not None
     assert obligation.fqn == f"{ns.fqn}/obl/{obligation.name}"
@@ -1126,6 +1123,5 @@ def obligation_setup_scs_unscoped_trigger(
 
     _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
     assert _ is not None
-    
-    return attr, obligation.values[0]
 
+    return attr, obligation.values[0]

@@ -26,6 +26,7 @@ def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
     if encrypt_sdk != decrypt_sdk and decrypt_sdk in dspx1153Fails:
         pytest.skip("dspx1153 fails with this SDK version combination")
 
+
 def assert_decrypt_fails_with_patterns(
     decrypt_sdk: tdfs.SDK,
     ct_file: Path,
@@ -38,18 +39,20 @@ def assert_decrypt_fails_with_patterns(
         decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
         pytest.fail(f"Decrypt succeeded unexpectedly for {ct_file}")
     except subprocess.CalledProcessError as exc:
-        output = (exc.output or b'').decode(errors='replace')
-        stderr = (exc.stderr or b'').decode(errors='replace')
+        output = (exc.output or b"").decode(errors="replace")
+        stderr = (exc.stderr or b"").decode(errors="replace")
         combined_output = output + stderr
 
         for pattern in expected_patterns:
-            assert re.search(pattern, combined_output, re.IGNORECASE), \
-                f"Expected pattern '{pattern}' not found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+            assert re.search(
+                pattern, combined_output, re.IGNORECASE
+            ), f"Expected pattern '{pattern}' not found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
 
         if unexpected_patterns:
             for pattern in unexpected_patterns:
-                assert not re.search(pattern, combined_output, re.IGNORECASE), \
-                    f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+                assert not re.search(
+                    pattern, combined_output, re.IGNORECASE
+                ), f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
 
 
 def test_key_mapping_multiple_mechanisms(
@@ -575,20 +578,20 @@ def test_obligations_not_entitled(
     container: tdfs.container_type,
 ):
     """
-        Test that no required obligations are returned when the user is not entitled
-        to the data.
+    Test that no required obligations are returned when the user is not entitled
+    to the data.
     """
     skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    
+
     # Skip platform compatibility checks
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_obligation_test(decrypt_sdk, pfs)
-    
+
     # Unpack the test setup
     attr, _ = obligation_setup_no_scs_unscoped_trigger
-    
+
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations.ztdf"
     encrypt_sdk.encrypt(
@@ -601,38 +604,41 @@ def test_obligations_not_entitled(
     rewrap_403_pattern = "tdf: rewrap request 403"
     obligations_pattern = "required\\s+obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
-    assert_decrypt_fails_with_patterns(decrypt_sdk=decrypt_sdk,
-                                       ct_file=ct_file,
-                                       rt_file=rt_file,
-                                       container=container,
-                                       expected_patterns=[rewrap_403_pattern],
-                                       unexpected_patterns=[obligations_pattern])
+    assert_decrypt_fails_with_patterns(
+        decrypt_sdk=decrypt_sdk,
+        ct_file=ct_file,
+        rt_file=rt_file,
+        container=container,
+        expected_patterns=[rewrap_403_pattern],
+        unexpected_patterns=[obligations_pattern],
+    )
+
 
 def test_obligations_not_fulfillable(
-        obligation_setup_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
-        encrypt_sdk: tdfs.SDK,
-        decrypt_sdk: tdfs.SDK,
-        tmp_dir: Path,
-        pt_file: Path,
-        in_focus: set[tdfs.SDK],
-        container: tdfs.container_type,
+    obligation_setup_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
 ):
     """
-        Test that required obligations are returned when the user is entitled
-        to the data but cannot fulfill the obligations.
+    Test that required obligations are returned when the user is entitled
+    to the data but cannot fulfill the obligations.
     """
 
     skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    
+
     # Skip platform compatibility checks
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_obligation_test(decrypt_sdk, pfs)
-    
+
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_unscoped_trigger
-    
+
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
@@ -645,8 +651,10 @@ def test_obligations_not_fulfillable(
     rewrap_403_pattern = "tdf: rewrap request 403"
     obligations_pattern = obligation_value.fqn
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
-    assert_decrypt_fails_with_patterns(decrypt_sdk=decrypt_sdk,
-                                       ct_file=ct_file,
-                                       rt_file=rt_file,
-                                       container=container,
-                                       expected_patterns=[obligations_pattern, rewrap_403_pattern])
+    assert_decrypt_fails_with_patterns(
+        decrypt_sdk=decrypt_sdk,
+        ct_file=ct_file,
+        rt_file=rt_file,
+        container=container,
+        expected_patterns=[obligations_pattern, rewrap_403_pattern],
+    )
