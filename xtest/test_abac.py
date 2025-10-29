@@ -602,7 +602,7 @@ def test_obligations_not_entitled(
     )
 
     rewrap_403_pattern = "tdf: rewrap request 403"
-    obligations_pattern = "required\\s+obligations"
+    obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
