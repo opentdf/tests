@@ -601,7 +601,7 @@ def test_obligations_not_entitled(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403"
+    rewrap_403_patterns = ["tdf: rewrap request 403", "403 for \\[https?://[^\\]]+\\]; rewrap permission denied"]
     obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
     assert_decrypt_fails_with_patterns(
@@ -609,7 +609,7 @@ def test_obligations_not_entitled(
         ct_file=ct_file,
         rt_file=rt_file,
         container=container,
-        expected_patterns=[rewrap_403_pattern],
+        expected_patterns=rewrap_403_patterns,
         unexpected_patterns=[obligations_pattern],
     )
 
@@ -648,7 +648,7 @@ def test_obligations_not_fulfillable(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403"
+    rewrap_403_patterns = ["tdf: rewrap request 403", "403 for \\[https?://[^\\]]+\\]; rewrap permission denied"]
     obligations_pattern = obligation_value.fqn
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
@@ -656,5 +656,5 @@ def test_obligations_not_fulfillable(
         ct_file=ct_file,
         rt_file=rt_file,
         container=container,
-        expected_patterns=[obligations_pattern, rewrap_403_pattern],
+        expected_patterns=[obligations_pattern] + rewrap_403_patterns,
     )
