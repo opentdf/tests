@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import base64
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -245,6 +246,41 @@ class KasEntry(BaseModelIgnoreExtra):
     id: str
     uri: str
     public_key: PublicKeyChoice | None
+    metadata: Metadata | None = None
+
+
+class PolicyEnforcementPoint(BaseModelIgnoreExtra):
+    client_id: str | None = None
+
+
+class ObligationRequestContext(BaseModelIgnoreExtra):
+    pep: PolicyEnforcementPoint | None = None
+
+
+class ObligationTrigger(BaseModelIgnoreExtra):
+    id: str
+    action: Action
+    attribute_value: AttributeValue
+    obligation_value: Optional["ObligationValue"] = None
+    context: list[ObligationRequestContext] | ObligationRequestContext | None = None
+    metadata: Metadata | None = None
+
+
+class ObligationValue(BaseModelIgnoreExtra):
+    id: str
+    obligation: Optional["Obligation"] = None
+    value: str
+    triggers: Optional[list["ObligationTrigger"]] = None
+    fqn: str
+    metadata: Metadata | None = None
+
+
+class Obligation(BaseModelIgnoreExtra):
+    id: str
+    namespace: Namespace
+    name: str
+    values: Optional[list["ObligationValue"]] = None
+    fqn: str | None = None
     metadata: Metadata | None = None
 
 
@@ -623,14 +659,19 @@ class OpentdfCommandLineTool:
         return SubjectConditionSet.model_validate_json(out)
 
     def scs_map(
-        self, sc: str | SubjectConditionSet, value: str | AttributeValue
+        self,
+        sc: str | SubjectConditionSet,
+        value: str | AttributeValue,
+        action: str | Action = "read",
     ) -> SubjectMapping:
         cmd: list[str] = self.otdfctl + "policy subject-mappings create".split()
 
         if self.flag_scs_map_action_standard:
-            cmd += ["--action-standard=read"]
+            cmd += [
+                f"--action-standard={action if isinstance(action, str) else action.name}"
+            ]
         else:
-            cmd += ["--action=read"]
+            cmd += [f"--action={action if isinstance(action, str) else action.name}"]
 
         cmd += [
             f"--attribute-value-id={value if isinstance(value, str) else value.id}",
@@ -655,3 +696,79 @@ class OpentdfCommandLineTool:
 
         assert code == 0
         return SubjectMapping.model_validate_json(out)
+
+    def obligation_def_create(
+        self, name: str, namespace: str | Namespace, value: list[str] | None
+    ) -> Obligation:
+        cmd = self.otdfctl + "policy obligations create".split()
+        cmd += [
+            f"--name={name}",
+            f"--namespace={namespace.id if isinstance(namespace, Namespace) else namespace}",
+        ]
+        if value:
+            cmd += [f"--value={','.join(value)}"]
+        logger.info(f"obligation-def-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=code != 0)
+        if out:
+            print(out, flush=code != 0)
+        assert code == 0
+        return Obligation.model_validate_json(out)
+
+    def obligation_value_create(
+        self,
+        obligation: str | Obligation,
+        value: str,
+        triggers: list[ObligationTrigger] | None = None,
+    ) -> ObligationValue:
+        """
+        Create an obligation value with optional triggers.
+        If you provide triggers with request context, the context needs to be in the form
+        of an individual object and not a list of request contexts.
+        """
+        cmd = self.otdfctl + "policy obligations value create".split()
+        cmd += [
+            f"--obligation={obligation.id if isinstance(obligation, Obligation) else obligation}",
+            f"--value={value}",
+        ]
+        if triggers:
+            cmd += [f"--triggers=[{','.join([t.model_dump_json() for t in triggers])}]"]
+        logger.info(f"obligation-value-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=code != 0)
+        if out:
+            print(out, flush=code != 0)
+        assert code == 0
+        return ObligationValue.model_validate_json(out)
+
+    def obligation_triggers_create(
+        self,
+        obligation_value: str | ObligationValue,
+        action: str | Action,
+        attribute_value: str | AttributeValue,
+        client_id: str | None = None,
+    ) -> ObligationTrigger:
+        cmd = self.otdfctl + "policy obligations triggers create".split()
+        cmd += [
+            f"--obligation-value={obligation_value.id if isinstance(obligation_value, ObligationValue) else obligation_value}",
+            f"--action={action.id if isinstance(action, Action) else action}",
+            f"--attribute-value={attribute_value.id if isinstance(attribute_value, AttributeValue) else attribute_value}",
+        ]
+        if client_id:
+            cmd += [f"--client-id={client_id}"]
+        logger.info(f"obligation-triggers-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        code = process.wait()
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=code != 0)
+        if out:
+            print(out, flush=code != 0)
+        assert code == 0
+        return ObligationTrigger.model_validate_json(out)

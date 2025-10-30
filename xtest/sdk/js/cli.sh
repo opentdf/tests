@@ -81,6 +81,12 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep policyType
       exit $?
       ;;
+    obligations)
+      # Obligations support from SDK version >= 0.6.0
+      set -o pipefail
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
