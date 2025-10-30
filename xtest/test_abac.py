@@ -601,8 +601,8 @@ def test_obligations_not_entitled(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403"
-    obligations_pattern = "required\\s+obligations"
+    rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
+    obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
@@ -648,7 +648,7 @@ def test_obligations_not_fulfillable(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403"
+    rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
     obligations_pattern = obligation_value.fqn
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
