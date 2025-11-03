@@ -606,21 +606,13 @@ def test_obligations_not_entitled(
     obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
 
-    expected_patterns = [rewrap_403_pattern]
-    unexpected_patterns = []
-    if tdfs.PlatformFeatureSet().semver >= (0, 11, 1):
-        # Small bug in v0.11.0 where required obligations are returned even when not entitled
-        unexpected_patterns.append(obligations_pattern)
-    else:
-        expected_patterns.append(obligations_pattern)
-
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
         ct_file=ct_file,
         rt_file=rt_file,
         container=container,
-        expected_patterns=expected_patterns,
-        unexpected_patterns=unexpected_patterns,
+        expected_patterns=[rewrap_403_pattern],
+        unexpected_patterns=[obligations_pattern],
     )
 
 
