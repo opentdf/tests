@@ -697,7 +697,6 @@ def test_obligations_client_not_scoped(
         container=container,
     )
 
-    obligations_pattern = obligation_value.fqn
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=False)
     
