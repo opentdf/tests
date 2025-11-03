@@ -53,6 +53,7 @@ feature_type = Literal[
     # Nano encrypt supports policy encoding mode = plaintext
     "nano_policymode_plaintext",
     "ns_grants",
+    "obligations",
 ]
 
 container_version = Literal["4.2.2", "4.3.0"]
@@ -112,6 +113,10 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 6, 0):
             self.features.add("key_management")
+
+        # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
+        if self.semver >= (0, 11, 0):
+            self.features.add("obligations")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
