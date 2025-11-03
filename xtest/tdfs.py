@@ -501,13 +501,6 @@ def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatur
     return False
 
 
-def skip_obligation_test(decrypt_sdk: SDK, pfs: PlatformFeatureSet):
-    if "obligations" not in pfs.features:
-        pytest.skip(f"platform service {pfs.version} doesn't yet support [obligations]")
-    if not decrypt_sdk.supports("obligations"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support [obligations]")
-
-
 def select_target_version(
     encrypt_sdk: SDK, decrypt_sdk: SDK
 ) -> container_version | None:

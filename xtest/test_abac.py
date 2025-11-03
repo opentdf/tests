@@ -10,6 +10,7 @@ from test_policytypes import skip_rts_as_needed
 
 
 cipherTexts: dict[str, Path] = {}
+rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
 
 
 dspx1153Fails = []
@@ -586,8 +587,7 @@ def test_obligations_not_entitled(
         pytest.skip("Not in focus")
 
     # Skip platform compatibility checks
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_obligation_test(decrypt_sdk, pfs)
+    tdfs.skip_if_unsupported(decrypt_sdk, "obligations")
 
     # Unpack the test setup
     attr, _ = obligation_setup_no_scs_unscoped_trigger
@@ -601,16 +601,24 @@ def test_obligations_not_entitled(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
     obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
+
+    expected_patterns = [rewrap_403_pattern]
+    unexpected_patterns = []
+    if tdfs.PlatformFeatureSet().semver >= (0, 11, 1):
+        # Small bug in v0.11.0 where required obligations are returned even when not entitled
+        unexpected_patterns.append(obligations_pattern)
+    else:
+        expected_patterns.append(obligations_pattern)
+
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
         ct_file=ct_file,
         rt_file=rt_file,
         container=container,
-        expected_patterns=[rewrap_403_pattern],
-        unexpected_patterns=[obligations_pattern],
+        expected_patterns=expected_patterns,
+        unexpected_patterns=unexpected_patterns,
     )
 
 
@@ -633,8 +641,7 @@ def test_obligations_not_fulfillable(
         pytest.skip("Not in focus")
 
     # Skip platform compatibility checks
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_obligation_test(decrypt_sdk, pfs)
+    tdfs.skip_if_unsupported(decrypt_sdk, "obligations")
 
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_unscoped_trigger
@@ -648,7 +655,6 @@ def test_obligations_not_fulfillable(
         container=container,
     )
 
-    rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
     obligations_pattern = obligation_value.fqn
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
@@ -658,3 +664,84 @@ def test_obligations_not_fulfillable(
         container=container,
         expected_patterns=[obligations_pattern, rewrap_403_pattern],
     )
+
+
+def test_obligations_client_not_scoped(
+    obligation_setup_scs_scoped_trigger_different_client: tuple[Attribute, ObligationValue],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
+):
+    """
+    Otdf client is not scoped to the trigger, so it should be able to decrypt the data.
+    """
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+
+    # Skip platform compatibility checks
+    tdfs.skip_if_unsupported(decrypt_sdk, "obligations")
+
+    # Unpack the test setup
+    attr, obligation_value = obligation_setup_scs_scoped_trigger_different_client
+
+    # Encrypt the file with the attribute
+    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        attr_values=[attr.values[0].fqn],
+        container=container,
+    )
+
+    obligations_pattern = obligation_value.fqn
+    rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=False)
+    
+    # Assert that the decrypted file matches the original plaintext file
+    assert filecmp.cmp(pt_file, rt_file), f"Decrypted file {rt_file} does not match original {pt_file}"
+
+def test_obligations_client_scoped(
+    obligation_setup_scs_scoped_trigger: tuple[Attribute, ObligationValue],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
+):
+    """
+    Otdf client is scoped to the trigger, so it should NOT be able to decrypt the data.
+    """
+    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container=container, in_focus=in_focus)
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+
+    # Skip platform compatibility checks
+    tdfs.skip_if_unsupported(decrypt_sdk, "obligations")
+
+    # Unpack the test setup
+    attr, obligation_value = obligation_setup_scs_scoped_trigger
+
+    # Encrypt the file with the attribute
+    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        attr_values=[attr.values[0].fqn],
+        container=container,
+    )
+
+    obligations_pattern = obligation_value.fqn
+    rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
+    assert_decrypt_fails_with_patterns(
+        decrypt_sdk=decrypt_sdk,
+        ct_file=ct_file,
+        rt_file=rt_file,
+        container=container,
+        expected_patterns=[obligations_pattern, rewrap_403_pattern],
+    )
+

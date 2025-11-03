@@ -1021,6 +1021,7 @@ def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditi
 @pytest.fixture(scope="module")
 def obligation_setup_no_scs_unscoped_trigger(
     otdfctl: abac.OpentdfCommandLineTool,
+    temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
     """
     Sets up an obligation test scenario with an attribute and obligation value.
@@ -1037,35 +1038,29 @@ def obligation_setup_no_scs_unscoped_trigger(
     Returns:
         tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
     """
-    # Create a namespace for the test
-    ns = otdfctl.namespace_create("test-obligations.com")
-    assert ns is not None
-    assert ns.fqn == f"https://{ns.name}"
-
-    # Create attribute with a "sensitive" value
     attr = otdfctl.attribute_create(
         name="obligation-test",
-        namespace=ns,
+        namespace=temporary_namespace,
         t=abac.AttributeRule.ALL_OF,
         values=["alpha"],
     )
     assert attr is not None
-    assert attr.fqn == f"{ns.fqn}/attr/{attr.name}"
+    assert attr.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}"
     assert len(attr.values) == 1
 
-    attr_value = attr.values[0]  # "sensitive" value
-    assert attr_value.fqn == f"{ns.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    attr_value = attr.values[0]
+    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
 
     # Create obligation definition and value
     obligation = otdfctl.obligation_def_create(
-        name="test_obligation", namespace=ns, value=["watermark"]
+        name="test_obligation", namespace=temporary_namespace, value=["watermark"]
     )
     assert obligation is not None
-    assert obligation.fqn == f"{ns.fqn}/obl/{obligation.name}"
+    assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{ns.fqn}/obl/{obligation.name}/value/watermark"
+    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/watermark"
 
-    _ = otdfctl.obligation_triggers_create(obligation.values[0], "update", attr_value)
+    _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
     assert _ is not None
 
     return attr, obligation.values[0]
@@ -1075,6 +1070,7 @@ def obligation_setup_no_scs_unscoped_trigger(
 def obligation_setup_scs_unscoped_trigger(
     otdfctl: abac.OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
     """
     Sets up an obligation test scenario with an attribute, obligation value, and subject condition set.
@@ -1089,24 +1085,19 @@ def obligation_setup_scs_unscoped_trigger(
     Returns:
         tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
     """
-    # Create a namespace for the test
-    ns = otdfctl.namespace_create("test-obligations-scs.com")
-    assert ns is not None
-    assert ns.fqn == f"https://{ns.name}"
 
-    # Create attribute with a "confidential" value
     attr = otdfctl.attribute_create(
         name="obligation-test-scs",
-        namespace=ns,
+        namespace=temporary_namespace,
         t=abac.AttributeRule.ANY_OF,
         values=["beta"],
     )
     assert attr is not None
-    assert attr.fqn == f"{ns.fqn}/attr/{attr.name}"
+    assert attr.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}"
     assert len(attr.values) == 1
 
-    attr_value = attr.values[0]  # "confidential" value
-    assert attr_value.fqn == f"{ns.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    attr_value = attr.values[0]
+    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
 
     # Map attribute value to the provided subject condition set
     sm = otdfctl.scs_map(otdf_client_scs, attr_value)
@@ -1114,14 +1105,132 @@ def obligation_setup_scs_unscoped_trigger(
 
     # Create obligation definition and value
     obligation = otdfctl.obligation_def_create(
-        name="test_obligation_scs", namespace=ns, value=["geofence"]
+        name="test_obligation_scs", namespace=temporary_namespace, value=["geofence"]
     )
     assert obligation is not None
-    assert obligation.fqn == f"{ns.fqn}/obl/{obligation.name}"
+    assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{ns.fqn}/obl/{obligation.name}/value/geofence"
+    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/geofence"
 
     _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
     assert _ is not None
 
     return attr, obligation.values[0]
+
+@pytest.fixture(scope="module")
+def obligation_setup_scs_scoped_trigger(
+    otdfctl: abac.OpentdfCommandLineTool,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, abac.ObligationValue]:
+    """
+    Sets up an obligation test scenario with an attribute, obligation value, and subject condition set.
+    The obligation trigger will be scoped to the specified client ID.
+
+    Args:
+        client_id: The client ID to scope the obligation trigger to (defaults to "opentdf")
+
+    Creates:
+    - A namespace for obligations testing
+    - An attribute with a "gamma" value
+    - An obligation definition with a required value
+    - An obligation value instance
+    - Maps the attribute value to the provided subject condition set
+    - Scopes a trigger to the specified client ID
+
+    Returns:
+        tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
+    """
+    name = "obligation-test-scs-scoped-otdf-client"
+    attr = otdfctl.attribute_create(
+        name=name,
+        namespace=temporary_namespace,
+        t=abac.AttributeRule.ANY_OF,
+        values=["gamma"],
+    )
+    assert attr is not None
+    assert attr.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}"
+    assert len(attr.values) == 1
+
+    attr_value = attr.values[0]
+    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+
+    # Map attribute value to the provided subject condition set
+    sm = otdfctl.scs_map(otdf_client_scs, attr_value)
+    assert sm is not None
+
+    # Create obligation definition and value
+    obligation = otdfctl.obligation_def_create(
+        name=name, namespace=temporary_namespace, value=["prevent-download"]
+    )
+    assert obligation is not None
+    assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
+    assert len(obligation.values) == 1
+    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+
+    _ = otdfctl.obligation_triggers_create(
+        obligation.values[0], "read", attr_value, "opentdf"
+    )
+    assert _ is not None
+
+    return attr, obligation.values[0]
+
+@pytest.fixture(scope="module")
+def obligation_setup_scs_scoped_trigger_different_client(
+    otdfctl: abac.OpentdfCommandLineTool,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, abac.ObligationValue]:
+    """
+    Sets up an obligation test scenario with an attribute, obligation value, and subject condition set.
+    The obligation trigger will be scoped to a different client ID than the one in the subject condition set.
+
+    Args:
+        client_id: The client ID to scope the obligation trigger to (defaults to "different-client")
+
+    Creates:
+    - A namespace for obligations testing
+    - An attribute with a "delta" value
+    - An obligation definition with a required value
+    - An obligation value instance
+    - Maps the attribute value to the provided subject condition set
+    - Scopes a trigger to the specified different client ID
+
+    Returns:
+        tuple[abac.Attribute, abac.ObligationValue]: The attribute and obligation value for testing
+    """
+    # Create attribute with a "topsecret" value
+    name = "obligation-test-scs-scoped-different-client"
+    attr = otdfctl.attribute_create(
+        name=name,
+        namespace=temporary_namespace,
+        t=abac.AttributeRule.ANY_OF,
+        values=["delta"],
+    )
+    assert attr is not None
+    assert attr.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}"
+    assert len(attr.values) == 1
+
+    attr_value = attr.values[0]  # "topsecret" value
+    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+
+    # Map attribute value to the provided subject condition set
+    sm = otdfctl.scs_map(otdf_client_scs, attr_value)
+    assert sm is not None
+
+    # Create obligation definition and value
+    obligation = otdfctl.obligation_def_create(
+        name=name, namespace=temporary_namespace, value=["prevent-download"]
+    )
+    assert obligation is not None
+    assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
+    assert len(obligation.values) == 1
+    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+
+    _ = otdfctl.obligation_triggers_create(
+        obligation.values[0], "read", attr_value, "different-client"
+    )
+    assert _ is not None
+
+    return attr, obligation.values[0]
+
