@@ -1049,7 +1049,10 @@ def obligation_setup_no_scs_unscoped_trigger(
     assert len(attr.values) == 1
 
     attr_value = attr.values[0]
-    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    assert (
+        attr_value.fqn
+        == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    )
 
     # Create obligation definition and value
     obligation = otdfctl.obligation_def_create(
@@ -1058,7 +1061,10 @@ def obligation_setup_no_scs_unscoped_trigger(
     assert obligation is not None
     assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/watermark"
+    assert (
+        obligation.values[0].fqn
+        == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/watermark"
+    )
 
     _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
     assert _ is not None
@@ -1097,7 +1103,10 @@ def obligation_setup_scs_unscoped_trigger(
     assert len(attr.values) == 1
 
     attr_value = attr.values[0]
-    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    assert (
+        attr_value.fqn
+        == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    )
 
     # Map attribute value to the provided subject condition set
     sm = otdfctl.scs_map(otdf_client_scs, attr_value)
@@ -1110,12 +1119,16 @@ def obligation_setup_scs_unscoped_trigger(
     assert obligation is not None
     assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/geofence"
+    assert (
+        obligation.values[0].fqn
+        == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/geofence"
+    )
 
     _ = otdfctl.obligation_triggers_create(obligation.values[0], "read", attr_value)
     assert _ is not None
 
     return attr, obligation.values[0]
+
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_scoped_trigger(
@@ -1153,7 +1166,10 @@ def obligation_setup_scs_scoped_trigger(
     assert len(attr.values) == 1
 
     attr_value = attr.values[0]
-    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    assert (
+        attr_value.fqn
+        == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    )
 
     # Map attribute value to the provided subject condition set
     sm = otdfctl.scs_map(otdf_client_scs, attr_value)
@@ -1166,7 +1182,10 @@ def obligation_setup_scs_scoped_trigger(
     assert obligation is not None
     assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+    assert (
+        obligation.values[0].fqn
+        == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+    )
 
     _ = otdfctl.obligation_triggers_create(
         obligation.values[0], "read", attr_value, "opentdf"
@@ -1174,6 +1193,7 @@ def obligation_setup_scs_scoped_trigger(
     assert _ is not None
 
     return attr, obligation.values[0]
+
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_scoped_trigger_different_client(
@@ -1212,7 +1232,10 @@ def obligation_setup_scs_scoped_trigger_different_client(
     assert len(attr.values) == 1
 
     attr_value = attr.values[0]  # "topsecret" value
-    assert attr_value.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    assert (
+        attr_value.fqn
+        == f"{temporary_namespace.fqn}/attr/{attr.name}/value/{attr_value.value}"
+    )
 
     # Map attribute value to the provided subject condition set
     sm = otdfctl.scs_map(otdf_client_scs, attr_value)
@@ -1225,7 +1248,10 @@ def obligation_setup_scs_scoped_trigger_different_client(
     assert obligation is not None
     assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
     assert len(obligation.values) == 1
-    assert obligation.values[0].fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+    assert (
+        obligation.values[0].fqn
+        == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/prevent-download"
+    )
 
     _ = otdfctl.obligation_triggers_create(
         obligation.values[0], "read", attr_value, "different-client"
@@ -1233,4 +1259,3 @@ def obligation_setup_scs_scoped_trigger_different_client(
     assert _ is not None
 
     return attr, obligation.values[0]
-

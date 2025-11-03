@@ -10,7 +10,9 @@ from test_policytypes import skip_rts_as_needed
 
 
 cipherTexts: dict[str, Path] = {}
-rewrap_403_pattern = "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
+rewrap_403_pattern = (
+    "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
+)
 
 
 dspx1153Fails = []
@@ -667,7 +669,9 @@ def test_obligations_not_fulfillable(
 
 
 def test_obligations_client_not_scoped(
-    obligation_setup_scs_scoped_trigger_different_client: tuple[Attribute, ObligationValue],
+    obligation_setup_scs_scoped_trigger_different_client: tuple[
+        Attribute, ObligationValue
+    ],
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -699,9 +703,12 @@ def test_obligations_client_not_scoped(
 
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=False)
-    
+
     # Assert that the decrypted file matches the original plaintext file
-    assert filecmp.cmp(pt_file, rt_file), f"Decrypted file {rt_file} does not match original {pt_file}"
+    assert filecmp.cmp(
+        pt_file, rt_file
+    ), f"Decrypted file {rt_file} does not match original {pt_file}"
+
 
 def test_obligations_client_scoped(
     obligation_setup_scs_scoped_trigger: tuple[Attribute, ObligationValue],
@@ -743,4 +750,3 @@ def test_obligations_client_scoped(
         container=container,
         expected_patterns=[obligations_pattern, rewrap_403_pattern],
     )
-
