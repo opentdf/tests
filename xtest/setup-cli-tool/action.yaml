@@ -35,6 +35,10 @@ runs:
           "go")
             echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
             ;;
+          "go-sdk")
+            # The golang SDK lives in the platform repo
+            echo "sdk_repo=opentdf/platform" >> $GITHUB_ENV
+            ;;
           "java")
             echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
             ;;
@@ -131,4 +135,3 @@ runs:
         done
       env:
         version_info: ${{ inputs.version-info }}
-
