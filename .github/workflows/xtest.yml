@@ -149,7 +149,7 @@ jobs:
             };
             // Only test/resolve go-sdk when explicitly requested
             if ((process.env.GO_SDK_REF || '').trim() !== '') {
-              refs['go-sdk'] = process.env.GO_SDK_REF;
+              refs['goSDK'] = process.env.GO_SDK_REF;
             }
 
             const versionData = {};
