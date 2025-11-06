@@ -73,7 +73,7 @@ jobs:
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
       go: ${{ steps.version-info.outputs.go-version-info }}
-      go-sdk: ${{ steps.version-info.outputs.go-sdk-version-info }}
+      go-sdk: ${{ steps.version-info.outputs.goSDK-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
     env:
