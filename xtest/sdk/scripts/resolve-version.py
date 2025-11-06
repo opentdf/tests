@@ -113,7 +113,7 @@ lts_versions = {
     "js": "0.2.0",
     "platform": "0.4.34",
     # Default go-sdk LTS aligns with platform
-    "go-sdk": "0.4.34",
+    "go-sdk": "0.2.3",
 }
 
 
@@ -356,6 +356,8 @@ def main():
         infix = "sdk"
     if sdk == "platform":
         infix = "service"
+    if sdk == "go-sdk":
+        infix = "sdk"
 
     results: list[ResolveResult] = []
     shas: set[str] = set()
