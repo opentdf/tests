@@ -142,7 +142,7 @@ jobs:
             core.setOutput('default-tags', defaultTags);
 
             const refs = {
-              go-sdk: process.env.GO_SDK_REF || defaultTags,
+              goSDK: process.env.GO_SDK_REF || defaultTags,
               platform: process.env.PLATFORM_REF || defaultTags,
               go: process.env.OTDFCTL_REF || defaultTags,
               js: process.env.JS_REF || defaultTags,
