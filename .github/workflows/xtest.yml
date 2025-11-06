@@ -16,7 +16,7 @@ on:
       go-sdk-ref:
         required: false
         type: string
-        description: "The branch or commit to use for the go-sdk (otdfctl); defaults to platform-ref when not set"
+        description: "The branch or commit to use for the go-sdk (platform/sdk); if not set, platform repo is used for local replaces"
       js-ref:
         required: false
         type: string
@@ -80,7 +80,7 @@ jobs:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main lts' }}"
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
-      GO_SDK_REF: "${{ inputs.go-sdk-ref || inputs.platform-ref || 'main lts' }}" # Useful if you want to specify a different golang sdk then the platform ref.
+      GO_SDK_REF: "${{ inputs.go-sdk-ref || '' }}" # Only resolve go-sdk when explicitly provided
       JAVA_REF: "${{ inputs.java-ref }}"
     steps:
       - name: Validate focus-sdk input
@@ -142,12 +142,15 @@ jobs:
             core.setOutput('default-tags', defaultTags);
 
             const refs = {
-              goSDK: process.env.GO_SDK_REF || defaultTags,
               platform: process.env.PLATFORM_REF || defaultTags,
               go: process.env.OTDFCTL_REF || defaultTags,
               js: process.env.JS_REF || defaultTags,
               java: process.env.JAVA_REF || defaultTags
             };
+            // Only test/resolve go-sdk when explicitly requested
+            if ((process.env.GO_SDK_REF || '').trim() !== '') {
+              refs['go-sdk'] = process.env.GO_SDK_REF;
+            }
 
             const versionData = {};
 
@@ -310,6 +313,7 @@ jobs:
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
       
       - name: Configure go-sdk (platform/sdk)
+        if: ${{ needs.resolve-versions.outputs.go-sdk != '' }}
         id: configure-go-sdk
         uses: ./otdftests/xtest/setup-cli-tool
         with:
@@ -318,6 +322,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.go-sdk }}"
 
       - name: Export go-sdk dir and heads
+        if: ${{ needs.resolve-versions.outputs.go-sdk != '' }}
         run: |-
           set -euo pipefail
           echo "GO_SDK_HEADS=$GO_SDK_HEADS" >> "$GITHUB_ENV"
@@ -332,15 +337,29 @@ jobs:
         env:
           GO_SDK_HEADS: ${{ steps.configure-go-sdk.outputs.heads }}
 
-      - name: Replace go.mod packages for Go SDK selection (based on go-sdk output)
+      - name: Decide platform source dir for Go replaces
+        id: decide-platform-src
+        run: |-
+          set -euo pipefail
+          if [[ -n "${GO_SDK_DIR:-}" ]]; then
+            echo "Using GO_SDK_DIR for replaces: $GO_SDK_DIR"
+            echo "SDK_PLATFORM_DIR_ABS=$GO_SDK_DIR" >> "$GITHUB_ENV"
+          else
+            platform_dir_abs="$(pwd)/${PLATFORM_WORKDIR}"
+            echo "Using platform working dir for replaces: $platform_dir_abs"
+            echo "SDK_PLATFORM_DIR_ABS=$platform_dir_abs" >> "$GITHUB_ENV"
+          fi
+        env:
+          PLATFORM_WORKDIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      - name: Replace otdfctl go.mod packages
         if: ${{ env.FOCUS_SDK == 'go' }}
         run: |-
           echo "Replacing go.mod packages..."
-          if [[ -z "${GO_SDK_DIR}" ]]; then
-            echo "GO_SDK_DIR is not set; cannot replace go.mod dependencies" >&2
+          if [[ -z "${SDK_PLATFORM_DIR_ABS:-}" ]]; then
+            echo "SDK_PLATFORM_DIR_ABS is not set; cannot replace go.mod dependencies" >&2
             exit 1
           fi
-          SDK_PLATFORM_DIR_ABS="${GO_SDK_DIR}"
           OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
           echo "SDK_PLATFORM_DIR_ABS: $SDK_PLATFORM_DIR_ABS"
           echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
