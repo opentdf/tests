@@ -87,6 +87,8 @@ class ResolveError(TypedDict):
 
 ResolveResult = ResolveSuccess | ResolveError
 
+platform_url = "https://github.com/opentdf/platform.git"
+
 
 def is_resolve_error(val: ResolveResult) -> TypeGuard[ResolveError]:
     """Check if the given value is a ResolveError type."""
@@ -97,12 +99,12 @@ def is_resolve_success(val: ResolveResult) -> TypeGuard[ResolveSuccess]:
     """Check if the given value is a ResolveSuccess type."""
     return "err" not in val and "sha" in val and "tag" in val
 
-
 sdk_urls = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
     "js": "https://github.com/opentdf/web-sdk.git",
-    "platform": "https://github.com/opentdf/platform.git",
+    "platform": platform_url,
+    "go-sdk": platform_url
 }
 
 lts_versions = {
@@ -110,6 +112,8 @@ lts_versions = {
     "java": "0.7.5",
     "js": "0.2.0",
     "platform": "0.4.34",
+    # Default go-sdk LTS aligns with platform
+    "go-sdk": "0.4.34",
 }
 
 

@@ -13,6 +13,10 @@ on:
         type: string
         default: main
         description: "The branch or commit to use for otdfctl"
+      go-sdk-ref:
+        required: false
+        type: string
+        description: "The branch or commit to use for the go-sdk (otdfctl); defaults to platform-ref when not set"
       js-ref:
         required: false
         type: string
@@ -38,6 +42,9 @@ on:
         required: false
         type: string
         default: main
+      go-sdk-ref:
+        required: false
+        type: string
       js-ref:
         required: false
         type: string
@@ -66,12 +73,14 @@ jobs:
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
       go: ${{ steps.version-info.outputs.go-version-info }}
+      go-sdk: ${{ steps.version-info.outputs.go-sdk-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref || 'main lts' }}"
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
+      GO_SDK_REF: "${{ inputs.go-sdk-ref || inputs.platform-ref || 'main lts' }}" # Useful if you want to specify a different golang sdk then the platform ref.
       JAVA_REF: "${{ inputs.java-ref }}"
     steps:
       - name: Validate focus-sdk input
@@ -133,6 +142,7 @@ jobs:
             core.setOutput('default-tags', defaultTags);
 
             const refs = {
+              go-sdk: process.env.GO_SDK_REF || defaultTags,
               platform: process.env.PLATFORM_REF || defaultTags,
               go: process.env.OTDFCTL_REF || defaultTags,
               js: process.env.JS_REF || defaultTags,
@@ -170,7 +180,17 @@ jobs:
               const headTags = [];
 
               for (const { tag, head, sha, alias, err, release } of refInfo) {
-                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
+                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(
+                  sdkType == 'js'
+                    ? 'web-sdk'
+                    : sdkType == 'go'
+                      ? 'otdfctl'
+                      : sdkType == 'java'
+                        ? 'java-sdk'
+                        : sdkType == 'go-sdk'
+                          ? 'platform/sdk'
+                          : sdkType
+                )}`;
                 const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
                 const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
                 const tagLink = (release && tag)
@@ -288,23 +308,51 @@ jobs:
           echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
         env:
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+      
+      - name: Configure go-sdk (platform/sdk)
+        id: configure-go-sdk
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go-sdk
+          version-info: "${{ needs.resolve-versions.outputs.go-sdk }}"
 
-      - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+      - name: Export go-sdk dir and heads
+        run: |-
+          set -euo pipefail
+          echo "GO_SDK_HEADS=$GO_SDK_HEADS" >> "$GITHUB_ENV"
+          if [[ -n "${GO_SDK_HEADS:-}" && "${GO_SDK_HEADS}" != "[]" ]]; then
+            first_head=$(echo "$GO_SDK_HEADS" | jq -r '.[0]')
+            go_sdk_dir_abs="$(pwd)/otdftests/xtest/sdk/go-sdk/src/${first_head}"
+            echo "GO_SDK_DIR=${go_sdk_dir_abs}" >> "$GITHUB_ENV"
+            echo "Using GO_SDK_DIR=${go_sdk_dir_abs} (first head: ${first_head})"
+          else
+            echo "No go-sdk heads available to set GO_SDK_DIR" >&2
+          fi
+        env:
+          GO_SDK_HEADS: ${{ steps.configure-go-sdk.outputs.heads }}
+
+      - name: Replace go.mod packages for Go SDK selection (based on go-sdk output)
+        if: ${{ env.FOCUS_SDK == 'go' }}
         run: |-
           echo "Replacing go.mod packages..."
-          PLATFORM_DIR_ABS="$(pwd)/${{ steps.run-platform.outputs.platform-working-dir }}"
+          if [[ -z "${GO_SDK_DIR}" ]]; then
+            echo "GO_SDK_DIR is not set; cannot replace go.mod dependencies" >&2
+            exit 1
+          fi
+          SDK_PLATFORM_DIR_ABS="${GO_SDK_DIR}"
           OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
-          echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
+          echo "SDK_PLATFORM_DIR_ABS: $SDK_PLATFORM_DIR_ABS"
           echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
           for head in $(echo "${OTDFCTL_HEADS}" | jq -r '.[]'); do
             echo "Processing head: $head"
             cd "${OTDFCTL_DIR_ABS}/$head"
             for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-              go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+              go mod edit -replace "github.com/opentdf/platform/$m=${SDK_PLATFORM_DIR_ABS}/$m"
             done
             go mod tidy
           done
+          
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
