@@ -353,7 +353,8 @@ jobs:
           PLATFORM_WORKDIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Replace otdfctl go.mod packages
-        if: ${{ env.FOCUS_SDK == 'go' }}
+        if: |
+          env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing go.mod packages..."
           if [[ -z "${SDK_PLATFORM_DIR_ABS:-}" ]]; then
