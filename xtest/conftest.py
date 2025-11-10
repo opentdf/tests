@@ -1067,7 +1067,7 @@ def _obligation_setup_helper(
         assert obligation.name == obligation_def_name
         obligation.fqn = f"{temporary_namespace.fqn}/obl/{obligation.name}"
     else:
-        assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
+        assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation_def_name}"
 
     assert len(obligation.values) == 1
 
