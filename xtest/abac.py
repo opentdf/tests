@@ -271,7 +271,7 @@ class ObligationValue(BaseModelIgnoreExtra):
     obligation: Optional["Obligation"] = None
     value: str
     triggers: Optional[list["ObligationTrigger"]] = None
-    fqn: str
+    fqn: str | None = None
     metadata: Metadata | None = None
 
 
