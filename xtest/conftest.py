@@ -1075,7 +1075,7 @@ def _obligation_setup_helper(
     else:
         assert ( 
             obligation.values[0].fqn
-            == f"{temporary_namespace.fqn}/obl/{obligation.name}/value/{obligation_value_name}"
+            == f"{temporary_namespace.fqn}/obl/{obligation_def_name}/value/{obligation_value_name}"
         )
 
     # Trigger
