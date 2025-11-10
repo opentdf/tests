@@ -1062,16 +1062,20 @@ def _obligation_setup_helper(
         value=[obligation_value_name],
     )
     assert obligation is not None
-    assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
+    if obligation.fqn is None:
+        assert obligation.name is not None
+        assert obligation.name == obligation_def_name
+        obligation.fqn = f"{temporary_namespace.fqn}/obl/{obligation.name}"
+    else:
+        assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation.name}"
+
     assert len(obligation.values) == 1
 
     if obligation.values[0].fqn is None:
         assert obligation.values[0].value is not None
         assert obligation.values[0].value == obligation_value_name
-        assert obligation.name is not None
-        assert obligation.name == obligation_def_name
         obligation.values[0].fqn = (
-            f"{temporary_namespace.fqn}/obl/{obligation.name}/value/{obligation.values[0].value}"
+            f"{obligation.fqn}/value/{obligation.values[0].value}"
         )
     else:
         assert (
