@@ -1019,7 +1019,6 @@ def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditi
 
 
 def _obligation_setup_helper(
-    *,
     otdfctl: abac.OpentdfCommandLineTool,
     temporary_namespace: abac.Namespace,
     attr_name: str,
