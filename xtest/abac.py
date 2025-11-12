@@ -310,9 +310,7 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         if isinstance(o, dict):
-            if "key_access_servers" not in o:
-                return []
-            o = o["key_access_servers"]
+            o = o.get["key_access_servers", []]
         return [KasEntry(**n) for n in o]
 
     def kas_registry_create(
@@ -360,9 +358,7 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         if isinstance(o, dict):
-            if "kas_keys" not in o:
-                return []
-            o = o["kas_keys"]
+            o = o.get["kas_keys", []]
         return [KasKey(**n) for n in o]
 
     def kas_registry_create_public_key_only(
@@ -612,9 +608,7 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         if isinstance(o, dict):
-            if "namespaces" not in o:
-                return []
-            o = o["namespaces"]
+            o = o.get("namespaces", [])
 
         return [Namespace(**n) for n in o]
 
