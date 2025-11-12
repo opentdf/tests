@@ -607,7 +607,7 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
-        elif o["namespace"]:
+        if isinstance(o, dict) and "namespace" in o:
             o = o["namespace"]
 
         return [Namespace(**n) for n in o]
