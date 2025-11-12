@@ -309,6 +309,8 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
+        elif o["key_access_servers"]:
+            o = o["key_access_servers"]
         return [KasEntry(**n) for n in o]
 
     def kas_registry_create(
@@ -355,6 +357,8 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
+        elif o["kas_keys"]:
+            o = o["kas_keys"]
         return [KasKey(**n) for n in o]
 
     def kas_registry_create_public_key_only(
@@ -603,6 +607,9 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
+        elif o["namespace"]:
+            o = o["namespace"]
+
         return [Namespace(**n) for n in o]
 
     def namespace_create(self, name: str) -> Namespace:
