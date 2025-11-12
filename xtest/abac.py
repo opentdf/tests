@@ -310,7 +310,7 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         if isinstance(o, dict):
-            o = o.get["key_access_servers", []]
+            o = o.get("key_access_servers", [])
         return [KasEntry(**n) for n in o]
 
     def kas_registry_create(
@@ -358,7 +358,7 @@ class OpentdfCommandLineTool:
         if not o:
             return []
         if isinstance(o, dict):
-            o = o.get["kas_keys", []]
+            o = o.get("kas_keys", [])
         return [KasKey(**n) for n in o]
 
     def kas_registry_create_public_key_only(
