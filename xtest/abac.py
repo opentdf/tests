@@ -309,7 +309,9 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
-        if isinstance(o, dict) and "key_access_servers" in o:
+        if isinstance(o, dict):
+            if "key_access_servers" not in o:
+                return []
             o = o["key_access_servers"]
         return [KasEntry(**n) for n in o]
 
@@ -357,7 +359,9 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
-        if isinstance(o, dict) and "kas_keys" in o:
+        if isinstance(o, dict):
+            if "kas_keys" not in o:
+                return []
             o = o["kas_keys"]
         return [KasKey(**n) for n in o]
 
@@ -607,8 +611,10 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
-        if isinstance(o, dict) and "namespace" in o:
-            o = o["namespace"]
+        if isinstance(o, dict):
+            if "namespaces" not in o:
+                return []
+            o = o["namespaces"]
 
         return [Namespace(**n) for n in o]
 
