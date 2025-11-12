@@ -357,7 +357,7 @@ class OpentdfCommandLineTool:
         o = json.loads(out)
         if not o:
             return []
-        elif o["kas_keys"]:
+        if isinstance(o, dict) and "kas_keys" in o:
             o = o["kas_keys"]
         return [KasKey(**n) for n in o]
 
