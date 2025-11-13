@@ -17,6 +17,10 @@ import tdfs
 from typing import cast
 
 
+def get_root_key() -> str:
+    return os.getenv("OT_ROOT_KEY")
+
+
 def englist(s: tuple[str]) -> str:
     if len(s) > 1:
         return ", ".join(s[:-1]) + ", or " + s[-1]
@@ -347,6 +351,99 @@ def kas_entry_ns(
     kas_url_ns: str,
 ) -> abac.KasEntry:
     return otdfctl.kas_registry_create_if_not_present(kas_url_ns, cached_kas_keys)
+
+
+# Additional KAS instances intended for key management testing
+@pytest.fixture(scope="session")
+def kas_url_km1():
+    """URL for first key management KAS instance (km1)."""
+    return os.getenv("KASURL5", "http://localhost:8585")
+
+
+@pytest.fixture(scope="module")
+def kas_entry_km1(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url_km1: str,
+) -> abac.KasEntry:
+    return otdfctl.kas_registry_create_if_not_present(kas_url_km1)
+
+
+@pytest.fixture(scope="session")
+def kas_url_km2():
+    """URL for second key management KAS instance (km2)."""
+    return os.getenv("KASURL6", "http://localhost:8686")
+
+
+@pytest.fixture(scope="module")
+def kas_entry_km2(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_url_km2: str,
+) -> abac.KasEntry:
+    return otdfctl.kas_registry_create_if_not_present(kas_url_km2)
+
+
+@pytest.fixture(scope="module")
+def attribute_allof_with_two_managed_keys(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    kas_entry_km2: abac.KasEntry,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute and assign two managed keys (RSA and EC) to it.
+
+    - Uses km1 (rsa:2048) and km2 (ec:secp256r1)
+    - Creates managed keys on each KAS
+    - Assigns both keys to the same attribute (attribute-level assignment)
+    - Maps both attribute values to the client SCS
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip(
+            "Key management feature is not enabled; skipping key assignment fixture"
+        )
+
+    # Create attribute with two values under ALL_OF
+    wrapping_key_id = "root"
+    root_key = get_root_key()
+    assert root_key is not None
+
+    attr = otdfctl.attribute_create(
+        temporary_namespace, "kmallof", abac.AttributeRule.ALL_OF, ["r1", "e1"]
+    )
+    assert attr.values and len(attr.values) == 2
+    r1, e1 = attr.values
+    assert r1.value == "r1"
+    assert e1.value == "e1"
+
+    # Ensure client has access to both values
+    sm1 = otdfctl.scs_map(otdf_client_scs, r1)
+    assert sm1.attribute_value.value == r1.value
+    sm2 = otdfctl.scs_map(otdf_client_scs, e1)
+    assert sm2.attribute_value.value == e1.value
+
+    km1_rsa_key = otdfctl.kas_registry_create_key(
+        kas_entry_km1,
+        key_id="km1-rsa",
+        mode="local",
+        algorithm="rsa:2048",
+        wrapping_key=root_key,
+        wrapping_key_id=wrapping_key_id,
+    )
+    km2_ec_key = otdfctl.kas_registry_create_key(
+        kas_entry_km2,
+        key_id="km2-ec",
+        mode="local",
+        algorithm="ec:secp256r1",
+        wrapping_key=root_key,
+        wrapping_key_id=wrapping_key_id,
+    )
+
+    # Assign both keys to the attribute
+    otdfctl.key_assign_attr(km1_rsa_key, attr)
+    otdfctl.key_assign_attr(km2_ec_key, attr)
+
+    return [attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id]]
 
 
 def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicKey:

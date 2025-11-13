@@ -388,6 +388,77 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
 
+    def kas_registry_create_key(
+        self,
+        kas: KasEntry | str,
+        key_id: str,
+        mode: str | None = None,
+        algorithm: str | None = None,
+        public_key_pem: str | None = None,
+        private_key_pem: str | None = None,
+        provider_config_id: str | None = None,
+        wrapping_key: str | None = None,
+        wrapping_key_id: str | None = None,
+    ) -> KasKey:
+        """Create a KAS key with flexible options.
+
+        Parameters
+        - kas: KAS registry entry or URI/ID/Name string
+        - key_id: desired key identifier
+        - mode: one of public_key | provider | remote | local
+        - algorithm: enum value or string like 'rsa:2048', 'ec:secp256r1'
+        - labels: optional metadata as dict or list of 'k=v' strings
+        - public_key_pem: PEM (raw or base64-encoded) for public key
+        - private_key_pem: PEM (raw or base64-encoded) for private key
+        - provider_config_id: config id for provider/remote modes
+        - wrapping_key: AES key (hex) used to wrap generated private key (local mode)
+        - wrapping_key_id: id for the wrapping key (semantics mode-dependent)
+        """
+
+        def _b64_pem(pem: str | None) -> str | None:
+            if pem is None:
+                return None
+
+            s = pem.strip()
+            try:
+                _ = base64.b64decode(s, validate=True)
+                return s
+            except Exception:
+                return base64.b64encode(s.encode("utf-8")).decode("utf-8")
+
+        kas_id = kas.uri if isinstance(kas, KasEntry) else kas
+        cmd = self.otdfctl + "policy kas-registry key create".split()
+        cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
+
+        if algorithm:
+            cmd += [f"--algorithm={algorithm}"]
+        if mode:
+            cmd += [f"--mode={mode}"]
+
+        if public_key_pem:
+            encoded_pem = _b64_pem(public_key_pem)
+            cmd += [f"--public-key-pem={encoded_pem}"]
+        if private_key_pem:
+            encoded_pem = _b64_pem(private_key_pem)
+            cmd += [f"--private-key-pem={encoded_pem}"]
+
+        if provider_config_id:
+            cmd += [f"--provider-config-id={provider_config_id}"]
+        if wrapping_key:
+            cmd += [f"--wrapping-key={wrapping_key}"]
+        if wrapping_key_id:
+            cmd += [f"--wrapping-key-id={wrapping_key_id}"]
+
+        logger.info(f"kas-registry key-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert process.returncode == 0
+        return KasKey.model_validate_json(out)
+
     def key_assign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
         cmd += [
