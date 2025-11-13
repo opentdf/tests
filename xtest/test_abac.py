@@ -571,8 +571,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_key_management_allof_two_keys_encrypt_decrypt(
-    attribute_allof_with_two_keys: tuple[Attribute, list[str]],
+def test_autoconfigure_key_management_two_kas_two_keys(
+    attribute_allof_with_two_managed_keys: tuple[Attribute, list[str]],
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -604,7 +604,7 @@ def test_key_management_allof_two_keys_encrypt_decrypt(
             ct_file,
             mime_type="text/plain",
             container="ztdf",
-            attr_values=attribute_allof_with_two_keys[0].value_fqns,
+            attr_values=attribute_allof_with_two_managed_keys[0].value_fqns,
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
@@ -612,10 +612,7 @@ def test_key_management_allof_two_keys_encrypt_decrypt(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
-    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
-        attribute_allof_with_two_keys[1][0],
-        attribute_allof_with_two_keys[1][1],
-    }
+    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == attribute_allof_with_two_managed_keys[1]
     assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
         kas_url_km1,
         kas_url_km2,
@@ -625,6 +622,51 @@ def test_key_management_allof_two_keys_encrypt_decrypt(
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = tmp_dir / f"km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_km_ec_single_across_containers(
+    attribute_single_ec_managed_key: tuple[Attribute, str],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    container: tdfs.container_type,
+    in_focus: set[tdfs.SDK],
+    kas_url_km2,
+):
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"km-ec-single-{container}-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container=container,
+            attr_values=attribute_single_ec_managed_key[0].value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        cipherTexts[sample_name] = ct_file
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    assert manifest.encryptionInformation.keyAccess[0].kid == attribute_single_ec_managed_key[1]
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_km2
+
+    if any(kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess):
+        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    rt_file = tmp_dir / f"km-ec-single-{container}-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
 

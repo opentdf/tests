@@ -382,7 +382,7 @@ def kas_entry_km2(
 
 
 @pytest.fixture(scope="module")
-def attribute_allof_with_two_keys(
+def attribute_allof_with_two_managed_keys(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
     kas_entry_km2: abac.KasEntry,
@@ -440,7 +440,45 @@ def attribute_allof_with_two_keys(
     otdfctl.key_assign_attr(km1_rsa_key, attr)
     otdfctl.key_assign_attr(km2_ec_key, attr)
 
-    return attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id]
+    return [attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id]]
+
+@pytest.fixture(scope="module")
+def attribute_single_ec_managed_key(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_km2: abac.KasEntry,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, str]:
+    """Create an attribute with a single value and assign one EC managed key.
+
+    This is used to validate KM across all containers.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled; skipping EC single key fixture")
+
+    attr = otdfctl.attribute_create(
+        temporary_namespace, "kmec", abac.AttributeRule.ANY_OF, ["e1"]
+    )
+    assert attr.values and len(attr.values) == 1
+    (e1,) = attr.values
+
+    sm = otdfctl.scs_map(otdf_client_scs, e1)
+    assert sm.attribute_value.value == e1.value
+
+    root_key = get_root_key()
+    assert root_key is not None
+    km_ec_key = otdfctl.kas_registry_create_key(
+        kas_entry_km2,
+        key_id="km-ec-single",
+        mode="local",
+        algorithm="ec:secp256r1",
+        wrapping_key=root_key,
+        wrapping_key_id="root",
+    )
+    otdfctl.key_assign_attr(km_ec_key, attr)
+
+    return [attr, km_ec_key.key.key_id]
 
 def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicKey:
     if kid not in extra_keys:
