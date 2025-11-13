@@ -612,7 +612,10 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
-    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == attribute_allof_with_two_managed_keys[1]
+    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
+        attribute_allof_with_two_managed_keys[1][0],
+        attribute_allof_with_two_managed_keys[1][1]
+    }
     assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
         kas_url_km1,
         kas_url_km2,
@@ -625,7 +628,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_km_ec_single_across_containers(
+def test_managed_key(
     attribute_single_ec_managed_key: tuple[Attribute, str],
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -658,10 +661,43 @@ def test_km_ec_single_across_containers(
         )
         cipherTexts[sample_name] = ct_file
 
-    manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].kid == attribute_single_ec_managed_key[1]
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_km2
+    # Validate key management details depending on container type
+    if tdfs.simple_container(container) == "ztdf":
+        manifest = tdfs.manifest(ct_file)
+        assert len(manifest.encryptionInformation.keyAccess) == 1
+        assert (
+            manifest.encryptionInformation.keyAccess[0].kid
+            == attribute_single_ec_managed_key[1]
+        )
+        assert manifest.encryptionInformation.keyAccess[0].url == kas_url_km2
+    else:
+        # NanoTDF: KAS URL and KID are stored in the header ResourceLocator
+        import nano
+
+        with open(ct_file, "rb") as f:
+            envelope = nano.parse(f.read())
+
+        # Reconstruct URL from protocol + body
+        proto = (
+            "https://"
+            if envelope.header.kas.info.protocol == nano.UrlProtocol.HTTPS
+            else "http://"
+        )
+        kas_url = proto + envelope.header.kas.body
+        assert kas_url == kas_url_km2
+
+        # Kid is right-padded to 2/8/32 as per nano.locator rules
+        kid_bytes = attribute_single_ec_managed_key[1].encode("utf-8")
+        if len(kid_bytes) <= 2:
+            padded_len = 2
+        elif len(kid_bytes) <= 8:
+            padded_len = 8
+        elif len(kid_bytes) <= 32:
+            padded_len = 32
+        else:
+            pytest.fail("Managed key id too long for NanoTDF KAS kid field")
+        expected_kid = b"\0" * (padded_len - len(kid_bytes)) + kid_bytes
+        assert envelope.header.kas.kid == expected_kid
 
     if any(kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")

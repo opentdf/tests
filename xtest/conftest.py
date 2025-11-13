@@ -470,7 +470,7 @@ def attribute_single_ec_managed_key(
     assert root_key is not None
     km_ec_key = otdfctl.kas_registry_create_key(
         kas_entry_km2,
-        key_id="km-ec-single",
+        key_id="km-ec-k1",
         mode="local",
         algorithm="ec:secp256r1",
         wrapping_key=root_key,
