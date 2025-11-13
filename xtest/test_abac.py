@@ -614,14 +614,16 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
     assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
         attribute_allof_with_two_managed_keys[1][0],
-        attribute_allof_with_two_managed_keys[1][1]
+        attribute_allof_with_two_managed_keys[1][1],
     }
     assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
         kas_url_km1,
         kas_url_km2,
     }
 
-    if any(kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess):
+    if any(
+        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
+    ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = tmp_dir / f"km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")

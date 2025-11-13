@@ -20,6 +20,7 @@ from typing import cast
 def get_root_key() -> str:
     return os.getenv("OT_ROOT_KEY")
 
+
 def englist(s: tuple[str]) -> str:
     if len(s) > 1:
         return ", ".join(s[:-1]) + ", or " + s[-1]
@@ -398,7 +399,9 @@ def attribute_allof_with_two_managed_keys(
     """
     pfs = tdfs.PlatformFeatureSet()
     if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled; skipping key assignment fixture")
+        pytest.skip(
+            "Key management feature is not enabled; skipping key assignment fixture"
+        )
 
     # Create attribute with two values under ALL_OF
     wrapping_key_id = "root"
@@ -425,7 +428,7 @@ def attribute_allof_with_two_managed_keys(
         mode="local",
         algorithm="rsa:2048",
         wrapping_key=root_key,
-        wrapping_key_id=wrapping_key_id
+        wrapping_key_id=wrapping_key_id,
     )
     km2_ec_key = otdfctl.kas_registry_create_key(
         kas_entry_km2,
@@ -433,7 +436,7 @@ def attribute_allof_with_two_managed_keys(
         mode="local",
         algorithm="ec:secp256r1",
         wrapping_key=root_key,
-        wrapping_key_id=wrapping_key_id
+        wrapping_key_id=wrapping_key_id,
     )
 
     # Assign both keys to the attribute
@@ -441,6 +444,7 @@ def attribute_allof_with_two_managed_keys(
     otdfctl.key_assign_attr(km2_ec_key, attr)
 
     return [attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id]]
+
 
 def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicKey:
     if kid not in extra_keys:

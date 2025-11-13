@@ -414,17 +414,17 @@ class OpentdfCommandLineTool:
         - wrapping_key: AES key (hex) used to wrap generated private key (local mode)
         - wrapping_key_id: id for the wrapping key (semantics mode-dependent)
         """
+
         def _b64_pem(pem: str | None) -> str | None:
             if pem is None:
                 return None
-            
+
             s = pem.strip()
             try:
                 _ = base64.b64decode(s, validate=True)
                 return s
             except Exception:
                 return base64.b64encode(s.encode("utf-8")).decode("utf-8")
-
 
         kas_id = kas.uri if isinstance(kas, KasEntry) else kas
         cmd = self.otdfctl + "policy kas-registry key create".split()
