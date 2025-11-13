@@ -494,7 +494,7 @@ jobs:
 
       - name: Start additional KM kas (km1)
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@bc0f10d4d5032f0e64d95136ad3ab4e45009a1e7
+        uses: opentdf/platform/test/start-additional-kas@main
         with:
           ec-tdf-enabled: true
           key-management: ${{ env.KM_ENABLED }}
@@ -507,7 +507,7 @@ jobs:
 
       - name: Start additional KM kas (km2)
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@bc0f10d4d5032f0e64d95136ad3ab4e45009a1e7
+        uses: opentdf/platform/test/start-additional-kas@main
         with:
           ec-tdf-enabled: true
           key-management: ${{ env.KM_ENABLED }}
