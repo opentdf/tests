@@ -370,6 +370,37 @@ jobs:
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
+      - name: Check key management support and prepare root key
+        id: km-check
+        run: |-
+          OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
+          echo "OT_CONFIG_FILE=$OT_CONFIG_FILE" >> "$GITHUB_ENV"
+          # Determine if the config declares the key_management field
+          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$km_value" in
+            true|false)
+              echo "KEY_MANAGEMENT_SUPPORTED=true" >> "$GITHUB_ENV"
+              echo "supported=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "KEY_MANAGEMENT_SUPPORTED=false" >> "$GITHUB_ENV"
+              echo "supported=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          # Prepare a root key for use by additional KAS instances
+          existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
+          if [ -n "$existing_root_key" ] && [ "$existing_root_key" != "null" ]; then
+            echo "Using existing root key from config"
+            echo "OT_ROOT_KEY=$existing_root_key" >> "$GITHUB_ENV"
+            echo "root_key=$existing_root_key" >> "$GITHUB_OUTPUT"
+          else
+            echo "Generating a new root key for additional KAS"
+            gen_root_key=$(openssl rand -hex 32)
+            echo "OT_ROOT_KEY=$gen_root_key" >> "$GITHUB_ENV"
+            echo "root_key=$gen_root_key" >> "$GITHUB_OUTPUT"
+          fi
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+
       - name: Install test dependencies
         run: |-
           pip install -r requirements.txt
@@ -460,6 +491,32 @@ jobs:
           ec-tdf-enabled: true
           kas-port: 8484
           kas-name: delta
+
+      - name: Start additional KM kas (km1)
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        uses: opentdf/platform/test/start-additional-kas@661328968b7b85a83f085a8d60476d11c8f22a3e
+        with:
+          ec-tdf-enabled: true
+          key-management: ${{ env.KM_ENABLED }}
+          root-key: ${{ env.OT_ROOT_KEY }}
+          kas-port: 8585
+          kas-name: km1
+        env:
+          OT_ROOT_KEY: ${{ steps.km-check.outputs.root_key }}
+          KM_ENABLED: ${{ steps.km-check.outputs.supported }}
+
+      - name: Start additional KM kas (km2)
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        uses: opentdf/platform/test/start-additional-kas@661328968b7b85a83f085a8d60476d11c8f22a3e
+        with:
+          ec-tdf-enabled: true
+          key-management: ${{ env.KM_ENABLED }}
+          root-key: ${{ env.OT_ROOT_KEY }}
+          kas-port: 8686
+          kas-name: km2
+        env:
+          OT_ROOT_KEY: ${{ steps.km-check.outputs.root_key }}
+          KM_ENABLED: ${{ steps.km-check.outputs.supported }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
