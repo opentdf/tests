@@ -520,6 +520,74 @@ def attribute_with_different_kids(
 
 
 @pytest.fixture(scope="module")
+def legacy_imported_golden_r1_key(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    extra_keys: dict[str, ExtraKey],
+) -> abac.KasKey:
+    """
+    Import (or reuse) the legacy 'golden-r1' key for decrypting golden TDFs.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip(
+            "Key management feature is not enabled; skipping legacy key import fixture"
+        )
+
+    root_key = get_root_key()
+    assert root_key is not None
+
+    golden_key = extra_keys["golden-r1"]
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    for key in existing_keys:
+        if key.key.key_id == golden_key["kid"]:
+            return key
+
+    return otdfctl.kas_registry_import_key(
+        kas_entry_default,
+        private_pem=golden_key["privateKey"],
+        public_pem=golden_key["cert"],
+        key_id=golden_key["kid"],
+        legacy=True,
+        wrapping_key=root_key,
+        wrapping_key_id="root",
+        algorithm=golden_key["alg"],
+    )
+
+
+@pytest.fixture(scope="module")
+def base_key_e1(
+    otdfctl: abac.OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+) -> abac.KasKey:
+    """
+    Ensure a managed key with key_id 'e1' exists on the default KAS
+    and is configured as the base key.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled; skipping base key fixture")
+
+    root_key = get_root_key()
+    assert root_key is not None
+
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
+    key_id = "e1"
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp256r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+
+    return otdfctl.set_base_key(key, kas_entry_km1)
+
+
+@pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
