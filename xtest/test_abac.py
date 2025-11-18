@@ -826,8 +826,9 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
 
     from test_legacy import get_golden_file
 
-    ct_file = get_golden_file("no-splitids-java.tdf")
-    rt_file = tmp_dir / "no-splitids-java-legacy-import.untdf"
+    golden_file_name = "golden_file_no_split_key_management"
+    ct_file = get_golden_file(f"{golden_file_name}.tdf")
+    rt_file = tmp_dir / f"{golden_file_name}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10

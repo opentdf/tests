@@ -522,7 +522,7 @@ def attribute_with_different_kids(
 @pytest.fixture(scope="module")
 def legacy_imported_golden_r1_key(
     otdfctl: abac.OpentdfCommandLineTool,
-    kas_entry_default: abac.KasEntry,
+    kas_entry_km2: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
 ) -> abac.KasKey:
     """
@@ -538,13 +538,13 @@ def legacy_imported_golden_r1_key(
     assert root_key is not None
 
     golden_key = extra_keys["golden-r1"]
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
     for key in existing_keys:
         if key.key.key_id == golden_key["kid"]:
             return key
 
     return otdfctl.kas_registry_import_key(
-        kas_entry_default,
+        kas_entry_km2,
         private_pem=golden_key["privateKey"],
         public_pem=golden_key["cert"],
         key_id=golden_key["kid"],
@@ -576,7 +576,7 @@ def base_key_e1(
     key = next((k for k in existing_keys if k.key.key_id == key_id), None)
     if key is None:
         key = otdfctl.kas_registry_create_key(
-            kas_entry_default,
+            kas_entry_km1,
             key_id=key_id,
             mode="local",
             algorithm="ec:secp256r1",

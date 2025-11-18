@@ -296,7 +296,7 @@ class OpentdfCommandLineTool:
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]
 
-    def _b64_pem(pem: str | None) -> str | None:
+    def _b64_pem(self, pem: str | None) -> str | None:
         if pem is None:
             return None
 
