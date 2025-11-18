@@ -571,65 +571,6 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_autoconfigure_key_management_two_kas_two_keys(
-    attribute_allof_with_two_managed_keys: tuple[Attribute, list[str]],
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
-    pt_file: Path,
-    kas_url_km1: str,
-    kas_url_km2: str,
-    in_focus: set[tdfs.SDK],
-):
-    """Encrypts with an ALL_OF attribute that has two managed keys and decrypts successfully.
-
-    Verifies that the manifest contains two keyAccess entries pointing to km1/km2
-    with KIDs matching the managed keys created by the fixture.
-    """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
-    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-
-    sample_name = f"km-allof-two-{encrypt_sdk}"
-    if sample_name in cipherTexts:
-        ct_file = cipherTexts[sample_name]
-    else:
-        ct_file = tmp_dir / f"{sample_name}.tdf"
-        encrypt_sdk.encrypt(
-            pt_file,
-            ct_file,
-            mime_type="text/plain",
-            container="ztdf",
-            attr_values=attribute_allof_with_two_managed_keys[0].value_fqns,
-            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        )
-        cipherTexts[sample_name] = ct_file
-
-    manifest = tdfs.manifest(ct_file)
-    assert len(manifest.encryptionInformation.keyAccess) == 2
-    # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
-    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
-        attribute_allof_with_two_managed_keys[1][0],
-        attribute_allof_with_two_managed_keys[1][1],
-    }
-    assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
-        kas_url_km1,
-        kas_url_km2,
-    }
-
-    if any(
-        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
-    ):
-        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
-
-
 def test_obligations_not_entitled(
     obligation_setup_no_scs_unscoped_trigger: tuple[Attribute, ObligationValue],
     encrypt_sdk: tdfs.SDK,
@@ -741,7 +682,7 @@ def test_obligations_client_not_scoped(
     tdfs.skip_if_unsupported(decrypt_sdk, "obligations")
 
     # Unpack the test setup
-    attr, obligation_value = obligation_setup_scs_scoped_trigger_different_client
+    attr, _ = obligation_setup_scs_scoped_trigger_different_client
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
@@ -801,3 +742,121 @@ def test_obligations_client_scoped(
         container=container,
         expected_patterns=[obligations_pattern, rewrap_403_pattern],
     )
+
+
+"""
+Key management tests
+
+Note: 
+These tests should be last, because one sets a default key on the platform
+that cannot currently be unset.
+"""
+
+
+def test_autoconfigure_key_management_two_kas_two_keys(
+    attribute_allof_with_two_managed_keys: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Encrypts with an ALL_OF attribute that has two managed keys and decrypts successfully.
+
+    Verifies that the manifest contains two keyAccess entries pointing to km1/km2
+    with KIDs matching the managed keys created by the fixture.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"km-allof-two-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attribute_allof_with_two_managed_keys[0].value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        cipherTexts[sample_name] = ct_file
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
+    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
+        attribute_allof_with_two_managed_keys[1][0],
+        attribute_allof_with_two_managed_keys[1][1],
+    }
+    assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
+        kas_url_km1,
+        kas_url_km2,
+    }
+
+    if any(
+        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
+    ):
+        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    rt_file = tmp_dir / f"km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_import_legacy_golden_r1_key_and_decrypt_no_split(
+    legacy_imported_golden_r1_key,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: set[tdfs.SDK],
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+
+    from test_legacy import get_golden_file
+
+    golden_file_name = "key-management-no-split-golden"
+    ct_file = get_golden_file(f"{golden_file_name}.tdf")
+    rt_file = tmp_dir / f"{golden_file_name}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    with rt_file.open("r", encoding="utf-8") as f:
+        assert f.read().strip() == "hello"
+
+
+def test_encrypt_decrypt_all_containers_with_base_key_e1(
+    base_key_e1,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
+):
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"base-e1-{encrypt_sdk}"
+    ct_file = tmp_dir / f"{sample_name}.tdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        container=container,
+    )
+
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container=container)
+    assert filecmp.cmp(pt_file, rt_file)

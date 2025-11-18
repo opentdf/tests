@@ -220,6 +220,7 @@ class KasKeyResponseKeyDetails(BaseModelIgnoreExtra):
     key_status: int
     key_mode: int
     public_key_ctx: KasKeyResponsePublicKeyContext
+    legacy: bool = False
     metadata: Metadata | None = None
 
 
@@ -294,6 +295,17 @@ class OpentdfCommandLineTool:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]
+
+    def _b64_pem(self, pem: str | None) -> str | None:
+        if pem is None:
+            return None
+
+        s = pem.strip()
+        try:
+            _ = base64.b64decode(s, validate=True)
+            return s
+        except Exception:
+            return base64.b64encode(s.encode("utf-8")).decode("utf-8")
 
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()
@@ -415,17 +427,6 @@ class OpentdfCommandLineTool:
         - wrapping_key_id: id for the wrapping key (semantics mode-dependent)
         """
 
-        def _b64_pem(pem: str | None) -> str | None:
-            if pem is None:
-                return None
-
-            s = pem.strip()
-            try:
-                _ = base64.b64decode(s, validate=True)
-                return s
-            except Exception:
-                return base64.b64encode(s.encode("utf-8")).decode("utf-8")
-
         kas_id = kas.uri if isinstance(kas, KasEntry) else kas
         cmd = self.otdfctl + "policy kas-registry key create".split()
         cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
@@ -436,10 +437,10 @@ class OpentdfCommandLineTool:
             cmd += [f"--mode={mode}"]
 
         if public_key_pem:
-            encoded_pem = _b64_pem(public_key_pem)
+            encoded_pem = self._b64_pem(public_key_pem)
             cmd += [f"--public-key-pem={encoded_pem}"]
         if private_key_pem:
-            encoded_pem = _b64_pem(private_key_pem)
+            encoded_pem = self._b64_pem(private_key_pem)
             cmd += [f"--private-key-pem={encoded_pem}"]
 
         if provider_config_id:
@@ -458,6 +459,53 @@ class OpentdfCommandLineTool:
             print(out)
         assert process.returncode == 0
         return KasKey.model_validate_json(out)
+
+    def kas_registry_import_key(
+        self,
+        kas: KasEntry | str,
+        private_pem: str,
+        public_pem: str,
+        key_id: str,
+        legacy: bool | None,
+        wrapping_key: str,
+        wrapping_key_id: str,
+        algorithm: str,
+    ):
+        kas_id = kas.uri if isinstance(kas, KasEntry) else kas
+        cmd = self.otdfctl + "policy kas-registry key import".split()
+        cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
+        cmd += [f"--algorithm={algorithm}"]
+        cmd += [f"--public-key-pem={self._b64_pem(public_pem)}"]
+        cmd += [f"--private-key-pem={self._b64_pem(private_pem)}"]
+        cmd += [f"--wrapping-key={wrapping_key}"]
+        cmd += [f"--wrapping-key-id={wrapping_key_id}"]
+
+        if legacy:
+            cmd += [f"--legacy={legacy}"]
+
+        logger.info(f"kas-registry key-import [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert process.returncode == 0
+        return KasKey.model_validate_json(out)
+
+    def set_base_key(self, key: KasKey | str, kas: KasEntry | str):
+        kas_id = kas.uri if isinstance(kas, KasEntry) else kas
+        key_id = key.key.key_id if isinstance(key, KasKey) else key
+        cmd = self.otdfctl + "policy kas-registry key base set".split()
+        cmd += [f"--key={key_id}", f"--kas={kas_id}"]
+        logger.info(f"kas-registry base key set [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        assert process.returncode == 0
 
     def key_assign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
