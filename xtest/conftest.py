@@ -547,7 +547,7 @@ def legacy_imported_golden_r1_key(
         kas_entry_km2,
         private_pem=golden_key["privateKey"],
         public_pem=golden_key["cert"],
-        key_id=golden_key["kid"],
+        key_id="r1",
         legacy=True,
         wrapping_key=root_key,
         wrapping_key_id="root",
