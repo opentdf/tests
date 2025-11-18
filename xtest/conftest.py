@@ -559,7 +559,7 @@ def legacy_imported_golden_r1_key(
 def base_key_e1(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
-) -> abac.KasKey:
+) -> None:
     """
     Ensure a managed key with key_id 'e1' exists on the default KAS
     and is configured as the base key.

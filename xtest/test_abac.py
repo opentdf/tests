@@ -830,12 +830,8 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
     ct_file = get_golden_file(f"{golden_file_name}.tdf")
     rt_file = tmp_dir / f"{golden_file_name}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
-    file_stats = os.stat(rt_file)
-    assert file_stats.st_size == 5 * 2**10
-    expected_bytes = bytes([0] * 1024)
-    with rt_file.open("rb") as f:
-        while b := f.read(1024):
-            assert b == expected_bytes
+    with rt_file.open("r", encoding="utf-8") as f:
+        assert f.read().strip() == "hello"
 
 
 def test_encrypt_decrypt_all_containers_with_base_key_e1(

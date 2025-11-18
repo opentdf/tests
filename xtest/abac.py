@@ -506,7 +506,6 @@ class OpentdfCommandLineTool:
         if out:
             print(out)
         assert process.returncode == 0
-        return KasKey.model_validate_json(out)
 
     def key_assign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
         cmd = self.otdfctl + "policy attributes namespace key assign".split()
