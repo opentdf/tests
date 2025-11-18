@@ -497,7 +497,7 @@ class OpentdfCommandLineTool:
         kas_id = kas.uri if isinstance(kas, KasEntry) else kas
         key_id = key.key.key_id if isinstance(key, KasKey) else key
         cmd = self.otdfctl + "policy kas-registry key base set".split()
-        cmd += f"--key={key_id} --kas={kas_id}"
+        cmd += [f"--key={key_id}", f"--kas={kas_id}"]
         logger.info(f"kas-registry base key set [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         out, err = process.communicate()
