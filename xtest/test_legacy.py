@@ -87,7 +87,7 @@ def test_decrypt_SDKv0_7_8(
     assert file_stats.st_size == 92
 
 
-# test decryption of legacy tdf created with Java SDK v0_9_0 which is used in the DSP v2.0.5.1 (Gateway)
+# test decryption of legacy tdf created with Java SDK v0_9_0 which is used in the DSP v2.0.5.1 and DSP v2.0.6 (Gateway)
 def test_decrypt_SDKv0_9_0(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
@@ -97,7 +97,7 @@ def test_decrypt_SDKv0_9_0(
         pytest.skip("Not in focus")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
-    ct_file = get_golden_file("xstext-java-v0.9.0-2de6a49-DSP2.0.5.1.tdf")
+    ct_file = get_golden_file("xstext-java-v0.9.0-2de6a49-DSP2.0.5.1_and_2.0.6.tdf")
     rt_file = tmp_dir / "0.9.0-java.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
