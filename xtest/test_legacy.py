@@ -87,7 +87,7 @@ def test_decrypt_SDKv0_7_8(
     assert file_stats.st_size == 92
 
 
-# test decryption of legacy tdf created with Java SDK v0_9_0 which is used in the DSP v2.0.5.1 (Gateway)
+# test decryption of legacy tdf created with Java SDK v0_9_0 which is used in the DSP v2.0.5.1 and DSP v2.0.6 (Gateway)
 def test_decrypt_SDKv0_9_0(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
