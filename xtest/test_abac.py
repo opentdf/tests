@@ -167,7 +167,6 @@ def test_autoconfigure_two_kas_or_standard(
     kas_url_value1: str,
     kas_url_value2: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -222,7 +221,6 @@ def test_autoconfigure_double_kas_and(
     kas_url_value1: str,
     kas_url_value2: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -277,7 +275,6 @@ def test_autoconfigure_one_attribute_attr_grant(
     pt_file: Path,
     kas_url_attr: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -326,7 +323,6 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -382,7 +378,6 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -437,7 +432,6 @@ def test_autoconfigure_one_attribute_ns_grant(
     pt_file: Path,
     kas_url_ns: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -486,7 +480,6 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -542,7 +535,6 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -780,7 +772,6 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     kas_url_km1: str,
     kas_url_km2: str,
     in_focus: set[tdfs.SDK],
-,
     worker_id: str,
 ):
     """Encrypts with an ALL_OF attribute that has two managed keys and decrypts successfully.
@@ -861,7 +852,6 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     container: tdfs.container_type,
-,
     worker_id: str,
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:

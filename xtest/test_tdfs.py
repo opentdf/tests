@@ -12,7 +12,6 @@ import tdfs
 
 
 cipherTexts: dict[str, Path] = {}
-counter = 0
 
 #### HELPERS
 
@@ -34,15 +33,16 @@ def do_encrypt_with(
 
     If targetmode is set, asserts that the manifest is in the correct format for that target.
     """
-    global counter
-    counter = (counter or 0) + 1
-    c = counter
     container_id = f"{worker_id}-{encrypt_sdk}-{container}"
     if scenario != "":
         container_id += f"-{scenario}"
     if container_id in cipherTexts:
         return cipherTexts[container_id]
-    ct_file = tmp_dir / f"test-{worker_id}-{encrypt_sdk}-{scenario}{c}.{container}"
+    
+    # Use container_id in filename to ensure consistency across cache lookups
+    # This prevents race conditions in parallel execution where multiple workers
+    # with different counter values try to create files for the same encryption parameters
+    ct_file = tmp_dir / f"test-{container_id}.{container}"
 
     use_ecdsa = container == "nano-with-ecdsa"
     use_ecwrap = container == "ztdf-ecwrap"
