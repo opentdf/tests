@@ -36,6 +36,15 @@ def do_encrypt_with(
     container_id = f"{worker_id}-{encrypt_sdk}-{container}"
     if scenario != "":
         container_id += f"-{scenario}"
+    # Include target_mode and az in cache key since they affect the encrypted output
+    if target_mode:
+        container_id += f"-{target_mode}"
+    if az:
+        # Use a hash of az to keep filename reasonable length
+        import hashlib
+        az_str = str(az)  # Convert Path to string if needed
+        az_hash = hashlib.md5(az_str.encode()).hexdigest()[:8]
+        container_id += f"-az{az_hash}"
     if container_id in cipherTexts:
         return cipherTexts[container_id]
     
