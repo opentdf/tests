@@ -167,7 +167,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def tmp_dir() -> Path:
     dname = Path("tmp/")
     dname.mkdir(parents=True, exist_ok=True)
@@ -1012,12 +1012,12 @@ def ns_and_value_kas_grants_and(
     return allof
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def hs256_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def rs256_keys() -> tuple[str, str]:
     # Generate an RSA private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -1055,7 +1055,7 @@ def write_assertion_to_file(
     return as_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_file_no_keys(tmp_dir: Path) -> Path:
     assertion_list = [
         assertions.Assertion(
@@ -1075,7 +1075,7 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
@@ -1131,7 +1131,7 @@ def write_assertion_verification_keys_to_file(
     return as_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def assertion_verification_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
