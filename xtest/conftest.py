@@ -1014,33 +1014,58 @@ def ns_and_value_kas_grants_and(
 
 @pytest.fixture(scope="session")
 def hs256_key() -> str:
-    return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+    # Use a fixed key for deterministic behavior across pytest-xdist workers
+    # This ensures all workers use the same key for signature verification
+    fixed_bytes = b"test_key_for_assertions_1234"
+    # Pad to 32 bytes for HS256
+    padded = fixed_bytes + b"\x00" * (32 - len(fixed_bytes))
+    return base64.b64encode(padded).decode("ascii")
 
 
 @pytest.fixture(scope="session")
 def rs256_keys() -> tuple[str, str]:
-    # Generate an RSA private key
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    # Use fixed RSA keys for deterministic behavior across pytest-xdist workers
+    # This ensures all workers use the same keys for signature verification
+    # These are test-only keys and should NEVER be used in production
+    
+    private_pem_str = """-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCqSi8a72zicj0y
+U6OnwqZDqhZk4SPImDwrjJARdnxRWVaRo3I/S/o00IRBi7BTi6f22D5Lt85jH9VD
+IXMUPE2KHfZSieJRLxoQnvtUATmF7tPMFhnLp8l8a6NqIZLkPIDNJfTNYPe0iiYk
+xAr/7lDRgBErilTpPrzKvrU7Cyu11ZC3rzqijNO6vfFJbiU0V+l3Y2poOdZfDNxg
+qpoBTrL4r+iN8Iq8Dazt4yVrI8i/THtjHKh8bPZslhu2Bj7y+CsLV7PhjYxpeqBo
+w1/prazlSKmJetxBvc0nwf98J9dxLbMU9C5+gm2p6mfVLm87M3wJKiUp0uCLHUHD
+L8r4DYGnAgMBAAECggEAG8/pPkfztk7xfxe5TJFLoGoretG+i2jkYuRz3zZFJZrR
+ZbtBJzoHJRBtRAXxiCObYi3SjCv6pvva/o98VnC8Op5GzcI8AVsPsb6VeRSIyulv
+vrmuqtwThKD72+ichMRQ8QXi+UF+E1wre1O9dtalwncH1t738URQMfjQa/1DZ/te
+OtC3l+F1MSD25i4HtMLJAeC62G9q6SmggVU99PvBARZ10S2v8yIRUFxzFF/c9jjW
+5TzRPtQBetaNk8UxFhGtmUg2p8xmk5SEoeNRyWKWwkLyUbX84B60RzRCQBQyd/ey
+btfARBHAimHYHoDs9PmsWOECaoRH+xfKaOSjmP9aoQKBgQDT6ndhikL2KhJfcMXC
+2fNY5XlZfureMMTRpU4DhrMy6v7aw1++cvMm2x1dQaIqlTJFXkNI+gwTXib530AK
+5rIv34khjpQ3wfDrwXTmoZ7Sg7g/EwxplAU4ohQR/nWjztREgoR6W6V1Ntukd1Bx
+TZvZoybu4Pbv32czc0aZ4i8VMQKBgQDNtu3CXAEhzWZYXLy/kBMoG8Emj3AaK0FI
+BjRBuj3beeWqaJ8KoClFFJqZ4P/Ly89rbIEjuaUNFRUPBDjdcjKNcNHt7x5094GZ
+xusEv7Cl+4Jazh6xzRIDLC1Ok///qp7ks4h6puKBMiVF5cVKYJYYkTzw0y25eCCo
+dwvFooauVwKBgCLfpe++UhCykb11EIZlWZ+ae+LXeQ1Bl1Is0u7PnvPVKkWT+1Cb
+GBqf2nA7WdWKIfC6d3Yt+AjD6MQcEiz5E/++2JFWJlwapWwWtQczN7DLDmoK13MU
+cduFCKqBZpijc9kmZWjBZjQo5/Jj1DAhJnGlYMXU7a5B5HjaEpdGWpsxAoGAaXbS
+OCWxEuJaCQ0qW0+C8rof8SPyhggNBN7hZZ0U33OEEjRm7SylW9wvUpquqY3Ivjs3
+jdg8TRO04yj3+lf0oNzpU4GW7MKDeBIqJRodd0sVTnaD+AW5qVS5uaJYyXtw0LFW
+VANA9pl90HL3DaWs7dVwF8s8kuyKWbQGngEv6SsCgYA3vCMfzGYw98blit6S06af
+bE7fgNprYMl4a7gTWUZXqMTNReZvDxkm+pWZcKOwZ6htetN84jyavalXfWW1MK2q
+xuHklB1/2Hhn35g2Gz2aqC2WzDqYqY91zBX1Gf781A94rZER0UoOV1ddl7q9Furi
+uQOVCFZ3NrVMs5GNtKEb4g==
+-----END PRIVATE KEY-----"""
 
-    # Generate the public key from the private key
-    public_key = private_key.public_key()
-
-    # Serialize the private key to PEM format
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-
-    # Serialize the public key to PEM format
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-
-    # Convert to string with escaped newlines
-    private_pem_str = private_pem.decode("utf-8")
-    public_pem_str = public_pem.decode("utf-8")
+    public_pem_str = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqkovGu9s4nI9MlOjp8Km
+Q6oWZOEjyJg8K4yQEXZ8UVlWkaNyP0v6NNCEQYuwU4un9tg+S7fOYx/VQyFzFDxN
+ih32UoniUS8aEJ77VAE5he7TzBYZy6fJfGujaiGS5DyAzSX0zWD3tIomJMQK/+5Q
+0YARK4pU6T68yr61OwsrtdWQt686oozTur3xSW4lNFfpd2NqaDnWXwzcYKqaAU6y
++K/ojfCKvA2s7eMlayPIv0x7YxyofGz2bJYbtgY+8vgrC1ez4Y2MaXqgaMNf6a2s
+5UipiXrcQb3NJ8H/fCfXcS2zFPQufoJtqepn1S5vOzN8CSolKdLgix1Bwy/K+A2B
+pwIDAQAB
+-----END PUBLIC KEY-----"""
 
     return private_pem_str, public_pem_str
 
