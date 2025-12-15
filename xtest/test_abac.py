@@ -66,6 +66,7 @@ def test_key_mapping_multiple_mechanisms(
     pt_file: Path,
     kas_url_default: str,
     in_focus: set[tdfs.SDK],
+    worker_id: str,
 ):
     global counter
 
@@ -78,7 +79,7 @@ def test_key_mapping_multiple_mechanisms(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"multimechanism-{encrypt_sdk}"
+    sample_name = f"{worker_id}-multimechanism-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -105,7 +106,7 @@ def test_key_mapping_multiple_mechanisms(
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-multimechanism-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -118,6 +119,7 @@ def test_autoconfigure_one_attribute_standard(
     pt_file: Path,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+    worker_id: str,
 ):
     global counter
 
@@ -129,7 +131,7 @@ def test_autoconfigure_one_attribute_standard(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-one-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-one-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -151,7 +153,7 @@ def test_autoconfigure_one_attribute_standard(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -165,6 +167,8 @@ def test_autoconfigure_two_kas_or_standard(
     kas_url_value1: str,
     kas_url_value2: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -174,7 +178,7 @@ def test_autoconfigure_two_kas_or_standard(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-two-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-two-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -204,7 +208,7 @@ def test_autoconfigure_two_kas_or_standard(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -218,6 +222,8 @@ def test_autoconfigure_double_kas_and(
     kas_url_value1: str,
     kas_url_value2: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -227,7 +233,7 @@ def test_autoconfigure_double_kas_and(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-three-and-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-three-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -258,7 +264,7 @@ def test_autoconfigure_double_kas_and(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -271,6 +277,8 @@ def test_autoconfigure_one_attribute_attr_grant(
     pt_file: Path,
     kas_url_attr: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -280,7 +288,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-one-attr-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-one-attr-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -304,7 +312,7 @@ def test_autoconfigure_one_attribute_attr_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-one-attr-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -318,6 +326,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -327,7 +337,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-attr-val-or-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-attr-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -358,7 +368,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-attr-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-attr-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -372,6 +382,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     kas_url_attr: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -381,7 +393,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-attr-val-and-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-attr-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -412,7 +424,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-attr-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-attr-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -425,6 +437,8 @@ def test_autoconfigure_one_attribute_ns_grant(
     pt_file: Path,
     kas_url_ns: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -434,7 +448,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-one-ns-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-one-ns-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -458,7 +472,7 @@ def test_autoconfigure_one_attribute_ns_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-one-ns-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-one-ns-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -472,6 +486,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -481,7 +497,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-ns-val-or-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-ns-val-or-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -512,7 +528,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-ns-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-ns-val-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -526,6 +542,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     kas_url_ns: str,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -535,7 +553,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"test-abac-ns-val-and-{encrypt_sdk}"
+    sample_name = f"{worker_id}-test-abac-ns-val-and-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -566,7 +584,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-test-abac-ns-val-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -762,6 +780,8 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     kas_url_km1: str,
     kas_url_km2: str,
     in_focus: set[tdfs.SDK],
+,
+    worker_id: str,
 ):
     """Encrypts with an ALL_OF attribute that has two managed keys and decrypts successfully.
 
@@ -776,7 +796,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"km-allof-two-{encrypt_sdk}"
+    sample_name = f"{worker_id}-km-allof-two-{encrypt_sdk}"
     if sample_name in cipherTexts:
         ct_file = cipherTexts[sample_name]
     else:
@@ -807,7 +827,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = tmp_dir / f"km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    rt_file = tmp_dir / f"{worker_id}-km-allof-two-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -841,6 +861,8 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     container: tdfs.container_type,
+,
+    worker_id: str,
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -849,7 +871,7 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
-    sample_name = f"base-e1-{encrypt_sdk}"
+    sample_name = f"{worker_id}-base-e1-{encrypt_sdk}"
     ct_file = tmp_dir / f"{sample_name}.tdf"
     encrypt_sdk.encrypt(
         pt_file,
