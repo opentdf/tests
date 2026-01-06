@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the OpenTDF integration testing repository that validates cross-SDK compatibility for the OpenTDF ecosystem. It tests multiple SDKs (Go/otdfctl, JavaScript/web-sdk, Java) against various versions of the platform backend through automated GitHub workflows and local development.
+This is the OpenTDF integration testing repository that validates cross-SDK compatibility for the OpenTDF ecosystem.
+It tests multiple SDKs (Go/otdfctl, JavaScript/web-sdk, Java) against various versions of the platform backend through automated GitHub workflows and local development.
 
 **Repository Location**: `github.com/opentdf/tests`
 
@@ -35,12 +36,89 @@ The core testing framework is a pytest-based system in `xtest/` that:
 
 ### SDK Management (xtest/sdk/)
 
-SDKs are checked out into `xtest/sdk/{go,java,js}/src/{version}/` and built using version-specific Makefiles:
+SDKs are checked out into `xtest/sdk/{go,java,js}/src/{version}/` and built using version-specific Makefiles.
 
-- **Checkout**: `scripts/checkout-all.sh` or `scripts/checkout-sdk-branch.sh`
-- **Version Resolution**: `scripts/resolve-version.py` maps tags/branches to SHAs
-- **Build Outputs**: Each SDK builds to `xtest/sdk/{sdk}/dist/{version}/`
-- **CLI Wrappers**: Standardized shell scripts (`cli.sh`, `otdfctl.sh`) provide uniform interfaces
+#### Directory Structure
+
+```
+xtest/sdk/
+├── go/
+│   ├── src/
+│   │   ├── otdfctl.git/        # Bare repository
+│   │   ├── main/               # Worktree for main branch
+│   │   └── v0.19.0/            # Worktree for v0.19.0 tag
+│   ├── dist/
+│   │   ├── main/               # Built artifacts for main
+│   │   └── v0.19.0/            # Built artifacts for v0.19.0
+│   └── cli.sh                  # SDK wrapper script
+├── java/
+│   └── ...                     # Similar structure
+└── js/
+    └── ...                     # Similar structure
+```
+
+#### Management Scripts
+
+**Query SDK State:**
+```bash
+# List all checked-out SDK versions (JSON format)
+./sdk/scripts/list-available.sh
+
+# List in human-readable table format
+./sdk/scripts/list-available.sh --format table
+```
+
+Output includes:
+- SDK type (go/java/js)
+- Version/branch name
+- Current git SHA
+- Build status (whether `dist/{version}/` exists)
+- File paths for source and dist directories
+
+**Checkout SDKs:**
+```bash
+# Check out main branch of all SDKs
+./sdk/scripts/checkout-all.sh
+
+# Check out specific version of a single SDK
+./sdk/scripts/checkout-sdk-branch.sh go v0.19.0
+./sdk/scripts/checkout-sdk-branch.sh js main
+```
+
+**Build SDKs:**
+```bash
+# Build all checked-out SDK versions
+cd sdk && make
+
+# Build specific SDK
+cd sdk && make go
+```
+
+**Cleanup:**
+```bash
+# Remove all checked-out versions and build artifacts
+./sdk/scripts/cleanup-all.sh
+```
+
+**Version Resolution:**
+- `scripts/resolve-version.py` maps tags/branches/SHAs to concrete commit SHAs
+- Used in CI to resolve version matrices
+- Supports: semantic versions (`v0.19.0`), branches (`main`), SHAs, PRs (`refs/pull/123`), special tags (`latest`, `lts`)
+
+**CLI Wrappers:**
+- Each SDK has standardized shell scripts (`cli.sh`, `otdfctl.sh`) that provide uniform interfaces
+- Wrappers handle SDK-specific invocation differences (e.g., Java classpath, Node.js module loading)
+
+#### When to Use `list-available.sh`
+
+Use this script when you need to:
+- Understand what SDK versions are currently checked out before running tests
+- Verify that required SDK versions are built before starting test execution
+- Debug why tests aren't finding a particular SDK version
+- Clean up specific versions (first list, then selectively remove)
+- Quickly assess the current SDK environment state
+
+The JSON output is particularly useful for scripting and automation, while the table format is better for quick visual inspection.
 
 ### GitHub Workflows
 
