@@ -140,7 +140,7 @@ def test_tdf_roundtrip(
     ):
         ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-    assert filecmp.cmp(pt_file, ert_file)
+        assert filecmp.cmp(pt_file, ert_file)
 
 
 def test_tdf_spec_target_422(
