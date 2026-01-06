@@ -596,10 +596,14 @@ def test_obligations_not_entitled(
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations.ztdf"
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
+
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
@@ -639,17 +643,21 @@ def test_obligations_not_fulfillable(
 
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_unscoped_trigger
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
     obligations_pattern = obligation_value.fqn
+    assert obligations_pattern, "Obligation fqn is invalid"
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
@@ -683,13 +691,16 @@ def test_obligations_client_not_scoped(
 
     # Unpack the test setup
     attr, _ = obligation_setup_scs_scoped_trigger_different_client
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
@@ -723,17 +734,21 @@ def test_obligations_client_scoped(
 
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_scoped_trigger
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
     obligations_pattern = obligation_value.fqn
+    assert obligations_pattern, "Obligation fqn is invalid"
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
