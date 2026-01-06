@@ -27,7 +27,7 @@ fi
 
 if [ "$1" == "supports" ]; then
   case "$2" in
-    autoconfigure | nano_ecdsa | ns_grants)
+    autoconfigure | ns_grants)
       exit 0
       ;;
     obligations)
@@ -70,10 +70,6 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
-    nano_policymode_plaintext)
-      "${cmd[@]}" help encrypt | grep policy-mode
-      exit $?
-      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
@@ -114,8 +110,9 @@ args=(
   --log-level debug
   --with-client-creds '{"clientId":"'"$CLIENTID"'","clientSecret":"'"$CLIENTSECRET"'"}'
 )
-if [ "$4" == "nano" ]; then
-  args+=(--tdf-type "$4")
+if [ "$4" != "ztdf" ]; then
+  echo "Unsupported container format: $4"
+  exit 2
 fi
 
 if [ "$1" == "encrypt" ]; then

@@ -67,20 +67,6 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep tdfSpecVersion
       exit $?
       ;;
-    nano_ecdsa)
-      npx $CTL help | grep policyBinding
-      exit $?
-      ;;
-    nano_attribute_bug)
-      set -o pipefail
-      # Versions released unable to set nanotdf attributes
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4) || ($1 == 0 && $2 == 4 && $3 > 0)) exit 1; else exit 0; }'
-      exit $?
-      ;;
-    nano_policymode_plaintext)
-      npx $CTL help | grep policyType
-      exit $?
-      ;;
     obligations)
       # Obligations support from SDK version >= 0.6.0
       set -o pipefail
@@ -116,10 +102,7 @@ args=(
   --auth opentdf:secret
 )
 
-# default for js cli is nano
-if [ "$4" == "ztdf" ]; then
-  args+=(--containerType tdf3)
-fi
+args+=(--containerType tdf3)
 
 if [ -n "$XT_WITH_ATTRIBUTES" ]; then
   attributes="$XT_WITH_ATTRIBUTES"

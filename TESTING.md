@@ -27,10 +27,11 @@ Test results are very hard to read. Due to the nature of the tests, when a failu
 ### Recommendations
 pytest has plugins available to make reporting easier. Here's a sample HTML that makes the test results more readable and also makes identifying specific failures. There are other plugins that we could use, this is largely up to the person who is reviewing the report to determine which result gives the best view of what they want.
 
-> [!NOTE]  
-> You will need to copy this file locally and open it a web browser
-  
-[Sample HTML Report](./xtest/test-report-example.html) *generated with `pytest-html`* 
+To generate an HTML report locally, install `pytest-html` (already in `xtest/requirements.txt`) and run:
+
+```shell
+pytest --html tmp/test-report.html --self-contained-html
+```
 
 ## Skew
 ### The Current issue

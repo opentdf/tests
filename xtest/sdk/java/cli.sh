@@ -39,16 +39,6 @@ if [ "$1" == "supports" ]; then
     autoconfigure | ns_grants)
       exit 0
       ;;
-    nano_ecdsa)
-      if java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep ecdsa-binding; then
-        # Java version 0.7.7 fixwa a bug in the ECDSA parsing for nano
-        java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }'
-        exit $?
-      else
-        echo "ecdsa-binding not supported"
-        exit 1
-      fi
-      ;;
     assertions)
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
       exit $?
@@ -83,11 +73,6 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
 
-    nano_policymode_plaintext)
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encryptnano | grep policy-type
-      exit $?
-      ;;
-
     *)
       echo "Unknown feature: $2"
       exit 2
@@ -108,11 +93,7 @@ else
   args+=("--platform-endpoint=$PLATFORMENDPOINT")
 fi
 
-COMMAND="$1"
-if [[ $4 == nano* ]]; then
-  COMMAND="$1"nano
-fi
-args+=("$COMMAND")
+args+=("$1")
 
 if [ "$1" == "encrypt" ]; then
   args+=("--kas-url=$KASURL")
@@ -144,7 +125,7 @@ if [ "$1" == "decrypt" ]; then
   fi
 fi
 
-if [ -n "$XT_WITH_MIME_TYPE" ] && [ "$4" != "nano" ]; then
+if [ -n "$XT_WITH_MIME_TYPE" ]; then
   args+=(--mime-type "$XT_WITH_MIME_TYPE")
 fi
 
