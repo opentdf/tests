@@ -7,14 +7,16 @@ This module contains fixtures for setting up various attribute configurations:
 - Attribute-level, value-level, and namespace-level grants
 - Mixed grant scenarios (attr + value, ns + value)
 """
+
 import pytest
 import random
 import string
 import abac
 import tdfs
+from otdfctl import OpentdfCommandLineTool
 
 
-def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
+def create_temp_namesapce(otdfctl: OpentdfCommandLineTool):
     """Create a temporary namespace with a random name."""
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
@@ -22,7 +24,7 @@ def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
 
 
 @pytest.fixture(scope="module")
-def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+def temporary_namespace(otdfctl: OpentdfCommandLineTool):
     """Create a temporary namespace for test attributes."""
     try:
         return create_temp_namesapce(otdfctl)
@@ -33,7 +35,7 @@ def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
 # Single KAS grant fixtures
 @pytest.fixture(scope="module")
 def attribute_single_kas_grant(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
@@ -65,7 +67,7 @@ def attribute_single_kas_grant(
 # Two KAS grant fixtures (OR/AND)
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_or(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
     kas_entry_value2: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
@@ -104,7 +106,7 @@ def attribute_two_kas_grant_or(
 
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_and(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
     kas_entry_value2: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
@@ -148,7 +150,7 @@ def attribute_two_kas_grant_and(
 # Attribute-level KAS grant
 @pytest.fixture(scope="module")
 def one_attribute_attr_kas_grant(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_attr: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
@@ -180,7 +182,7 @@ def one_attribute_attr_kas_grant(
 # Attribute rule type fixtures
 @pytest.fixture(scope="module")
 def attribute_with_or_type(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
@@ -207,7 +209,7 @@ def attribute_with_or_type(
 
 @pytest.fixture(scope="module")
 def attribute_with_and_type(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
@@ -233,7 +235,7 @@ def attribute_with_and_type(
 
 @pytest.fixture(scope="module")
 def attribute_with_hierarchy_type(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
@@ -264,7 +266,7 @@ def attribute_with_hierarchy_type(
 # Mixed grant scenarios (attribute + value)
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_attr: abac.KasEntry,
     kas_entry_value1: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
@@ -307,7 +309,7 @@ def attr_and_value_kas_grants_or(
 
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_and(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_attr: abac.KasEntry,
     kas_entry_value1: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
@@ -353,7 +355,7 @@ def attr_and_value_kas_grants_and(
 # Namespace-level KAS grant
 @pytest.fixture(scope="module")
 def one_attribute_ns_kas_grant(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_ns: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
@@ -385,7 +387,7 @@ def one_attribute_ns_kas_grant(
 # Mixed grant scenarios (namespace + value)
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
     kas_entry_ns: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
@@ -428,7 +430,7 @@ def ns_and_value_kas_grants_or(
 
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_and(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_value1: abac.KasEntry,
     kas_entry_ns: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,

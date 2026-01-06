@@ -12,6 +12,7 @@ Domain-specific fixtures are organized in the fixtures/ package:
 - fixtures.obligations: Obligation and trigger fixtures
 - fixtures.keys: Key management fixtures
 """
+
 import os
 import typing
 import pytest
@@ -19,8 +20,8 @@ import json
 from pathlib import Path
 from typing import cast
 
-import abac
 import tdfs
+from otdfctl import OpentdfCommandLineTool
 
 
 # Load all fixture modules
@@ -44,6 +45,7 @@ def englist(s: tuple[str]) -> str:
 
 def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any]:
     """Create a validator function for CLI options that accept one or more typed values."""
+
     def is_a(v: str) -> typing.Any:
         for i in v.split():
             if i not in typing.get_args(t):
@@ -209,7 +211,7 @@ def tmp_dir() -> Path:
     return dname
 
 
-def load_otdfctl() -> abac.OpentdfCommandLineTool:
+def load_otdfctl() -> OpentdfCommandLineTool:
     """Load the otdfctl CLI tool from the SDK distribution.
 
     Attempts to load otdfctl in this order:
@@ -224,12 +226,12 @@ def load_otdfctl() -> abac.OpentdfCommandLineTool:
     try:
         heads = json.loads(oh)
         if heads:
-            return abac.OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
+            return OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
     except json.JSONDecodeError:
         print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
     if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
-        return abac.OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
-    return abac.OpentdfCommandLineTool()
+        return OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
+    return OpentdfCommandLineTool()
 
 
 _otdfctl = load_otdfctl()
