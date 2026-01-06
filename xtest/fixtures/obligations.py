@@ -66,7 +66,7 @@ def _obligation_setup_helper(
     )
     assert attr is not None
     assert attr.fqn == f"{temporary_namespace.fqn}/attr/{attr.name}"
-    assert len(attr.values) == 1
+    assert attr.values is not None and len(attr.values) == 1
     attr_value = attr.values[0]
     assert (
         attr_value.fqn
@@ -92,27 +92,28 @@ def _obligation_setup_helper(
     else:
         assert obligation.fqn == f"{temporary_namespace.fqn}/obl/{obligation_def_name}"
 
-    assert len(obligation.values) == 1
+    assert obligation.values is not None and len(obligation.values) == 1
 
-    if obligation.values[0].fqn is None:
-        assert obligation.values[0].value is not None
-        assert obligation.values[0].value == obligation_value_name
-        obligation.values[0].fqn = (
-            f"{obligation.fqn}/value/{obligation.values[0].value}"
+    oval = obligation.values[0]
+    if oval.fqn is None:
+        assert oval.value is not None
+        assert oval.value == obligation_value_name
+        oval.fqn = (
+            f"{obligation.fqn}/value/{oval.value}"
         )
     else:
         assert (
-            obligation.values[0].fqn
+            oval.fqn
             == f"{temporary_namespace.fqn}/obl/{obligation_def_name}/value/{obligation_value_name}"
         )
 
     # Trigger
     _ = otdfctl.obligation_triggers_create(
-        obligation.values[0], "read", attr_value, trigger_client_id
+        oval, "read", attr_value, trigger_client_id
     )
     assert _ is not None
 
-    return attr, obligation.values[0]
+    return attr, oval
 
 
 @pytest.fixture(scope="module")
