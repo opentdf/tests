@@ -16,7 +16,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Generator, Iterator
 
 import pytest
 
@@ -213,7 +213,9 @@ def audit_logs(
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None]
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """Pytest hook to capture test results for audit log collection.
 
     This hook runs for each test phase (setup, call, teardown) and stores
@@ -225,37 +227,4 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
 
     # Store report on item for fixture to access
     setattr(item, f"rep_{report.when}", report)
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_html_results_table_row(report, cells):
-    """Pytest hook to add audit log links to HTML report.
-
-    This hook is called by pytest-html plugin to add custom columns to
-    the test results table. We add a link to the audit log file if the
-    test failed and logs were collected.
-    """
-    outcome = yield
-
-    # Only add link for failed tests with audit logs
-    if report.failed and hasattr(report, "location"):
-        # Get the test item from report
-        if hasattr(report, "_audit_log_file"):
-            try:
-                from py.xml import html
-
-                # Insert link after status column
-                cells.insert(
-                    2,
-                    html.td(
-                        html.a(
-                            "View Audit Logs",
-                            href=report._audit_log_file,
-                            target="_blank",
-                        ),
-                        class_="col-links",
-                    ),
-                )
-            except ImportError:
-                # pytest-html not available or different version
-                pass
+    return report

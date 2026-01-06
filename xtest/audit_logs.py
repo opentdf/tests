@@ -21,7 +21,6 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 logger = logging.getLogger("xtest")
 
@@ -103,7 +102,11 @@ class AuditLogCollector:
                 timeout=2,
                 check=True,
             )
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        except (
+            subprocess.CalledProcessError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+        ) as e:
             logger.warning(
                 f"Docker compose not available: {e}. "
                 f"Audit log collection disabled. Tests will continue without log assertions."
@@ -191,7 +194,9 @@ class AuditLogCollector:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
 
-        logger.debug(f"Audit log collection stopped. Collected {len(self._buffer)} log entries.")
+        logger.debug(
+            f"Audit log collection stopped. Collected {len(self._buffer)} log entries."
+        )
 
     def get_logs(
         self,
@@ -253,16 +258,30 @@ class AuditLogCollector:
         """
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
-            f.write(f"Audit Log Collection Summary\n")
-            f.write(f"============================\n\n")
+            f.write(
+                """
+Audit Log Collection Summary
+============================
+"""
+            )
             f.write(f"Total entries: {len(self._buffer)}\n")
-            f.write(f"Services monitored: {', '.join(self.services) if self.services else 'all'}\n")
+            f.write(
+                f"Services monitored: {', '.join(self.services) if self.services else 'all'}\n"
+            )
             if self._marks:
-                f.write(f"\nTimestamp marks:\n")
+                f.write(
+                    """
+Timestamp marks:
+"""
+                )
                 for label, ts in self._marks.items():
                     f.write(f"  {label}: {ts}\n")
-            f.write(f"\nLog Entries:\n")
-            f.write(f"============\n\n")
+            f.write(
+                """
+Log Entries:
+============
+"""
+            )
             for entry in self._buffer:
                 f.write(f"[{entry.timestamp}] {entry.service_name}: {entry.raw_line}\n")
 
@@ -603,8 +622,7 @@ class AuditLogAsserter:
         matching = [
             log
             for log in logs
-            if regex.search(log.raw_line)
-            and start_time <= log.timestamp <= end_time
+            if regex.search(log.raw_line) and start_time <= log.timestamp <= end_time
         ]
 
         if not matching:
@@ -666,7 +684,9 @@ class AuditLogAsserter:
         if matching:
             context.append("Matching logs:")
             for log in matching[:10]:
-                context.append(f"  [{log.timestamp}] {log.service_name}: {log.raw_line}")
+                context.append(
+                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                )
             if len(matching) > 10:
                 context.append(f"  ... and {len(matching) - 10} more")
             context.append("")
@@ -676,7 +696,9 @@ class AuditLogAsserter:
         if recent_logs:
             context.append(f"Recent context (last {len(recent_logs)} lines):")
             for log in recent_logs:
-                context.append(f"  [{log.timestamp}] {log.service_name}: {log.raw_line}")
+                context.append(
+                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                )
             context.append("")
 
         # Collection summary
@@ -688,6 +710,8 @@ class AuditLogAsserter:
                     f"  - Services monitored: {', '.join(self._collector.services)}"
                 )
             if self._collector._marks:
-                context.append(f"  - Timestamp marks: {', '.join(self._collector._marks.keys())}")
+                context.append(
+                    f"  - Timestamp marks: {', '.join(self._collector._marks.keys())}"
+                )
 
         raise AssertionError("\n".join(context))
