@@ -18,9 +18,12 @@ from pathlib import Path
 from otdfctl import OpentdfCommandLineTool
 
 
-def get_root_key() -> str:
+@pytest.fixture(scope="session")
+def root_key() -> str:
     """Get the root key from environment variable."""
-    return os.getenv("OT_ROOT_KEY")
+    ot_root_key = os.getenv("OT_ROOT_KEY")
+    assert ot_root_key is not None, "OT_ROOT_KEY environment variable is not set"
+    return ot_root_key
 
 
 class ExtraKey(typing.TypedDict):
@@ -62,6 +65,7 @@ def attribute_allof_with_two_managed_keys(
     kas_entry_km2: abac.KasEntry,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
+    root_key: str,
 ) -> tuple[abac.Attribute, list[str]]:
     """Create an ALL_OF attribute and assign two managed keys (RSA and EC) to it.
 
@@ -78,8 +82,6 @@ def attribute_allof_with_two_managed_keys(
 
     # Create attribute with two values under ALL_OF
     wrapping_key_id = "root"
-    root_key = get_root_key()
-    assert root_key is not None
 
     attr = otdfctl.attribute_create(
         temporary_namespace, "kmallof", abac.AttributeRule.ALL_OF, ["r1", "e1"]
@@ -188,6 +190,7 @@ def legacy_imported_golden_r1_key(
     otdfctl: OpentdfCommandLineTool,
     kas_entry_km2: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
+    root_key: str,
 ) -> abac.KasKey:
     """
     Import (or reuse) the legacy 'golden-r1' key for decrypting golden TDFs.
@@ -197,9 +200,6 @@ def legacy_imported_golden_r1_key(
         pytest.skip(
             "Key management feature is not enabled; skipping legacy key import fixture"
         )
-
-    root_key = get_root_key()
-    assert root_key is not None
 
     golden_key = extra_keys["golden-r1"]
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
@@ -223,6 +223,7 @@ def legacy_imported_golden_r1_key(
 def base_key_e1(
     otdfctl: OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
+    root_key: str,
 ) -> None:
     """
     Ensure a managed key with key_id 'e1' exists on the default KAS
@@ -231,9 +232,6 @@ def base_key_e1(
     pfs = tdfs.PlatformFeatureSet()
     if "key_management" not in pfs.features:
         pytest.skip("Key management feature is not enabled; skipping base key fixture")
-
-    root_key = get_root_key()
-    assert root_key is not None
 
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
     key_id = "e1"
