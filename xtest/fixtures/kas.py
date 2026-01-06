@@ -7,10 +7,11 @@ This module contains fixtures for setting up KAS instances used in testing:
 - Namespace-level KAS (ns)
 - Key management KAS instances (km1, km2)
 """
+
 import os
 import pytest
 import abac
-from pathlib import Path
+from otdfctl import OpentdfCommandLineTool
 
 
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
@@ -79,7 +80,7 @@ def kas_url_default():
 
 @pytest.fixture(scope="module")
 def kas_entry_default(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_default: str,
 ) -> abac.KasEntry:
@@ -96,7 +97,7 @@ def kas_url_value1():
 
 @pytest.fixture(scope="module")
 def kas_entry_value1(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_value1: str,
 ) -> abac.KasEntry:
@@ -113,7 +114,7 @@ def kas_url_value2():
 
 @pytest.fixture(scope="module")
 def kas_entry_value2(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_value2: str,
 ) -> abac.KasEntry:
@@ -130,7 +131,7 @@ def kas_url_attr():
 
 @pytest.fixture(scope="module")
 def kas_entry_attr(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_attr: str,
 ) -> abac.KasEntry:
@@ -147,7 +148,7 @@ def kas_url_ns():
 
 @pytest.fixture(scope="module")
 def kas_entry_ns(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_ns: str,
 ) -> abac.KasEntry:
@@ -164,7 +165,7 @@ def kas_url_km1():
 
 @pytest.fixture(scope="module")
 def kas_entry_km1(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_url_km1: str,
 ) -> abac.KasEntry:
     """KAS registry entry for key management KAS km1."""
@@ -179,7 +180,7 @@ def kas_url_km2():
 
 @pytest.fixture(scope="module")
 def kas_entry_km2(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_url_km2: str,
 ) -> abac.KasEntry:
     """KAS registry entry for key management KAS km2."""

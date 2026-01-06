@@ -5,12 +5,14 @@ This module contains fixtures for testing TDF obligations:
 - Obligation definitions and values
 - Obligation triggers (scoped and unscoped)
 """
+
 import pytest
 import abac
+from otdfctl import OpentdfCommandLineTool
 
 
 @pytest.fixture(scope="module")
-def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditionSet:
+def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet:
     """
     Creates a standard subject condition set for OpenTDF clients.
     This condition set matches client IDs 'opentdf' or 'opentdf-sdk'.
@@ -40,7 +42,7 @@ def otdf_client_scs(otdfctl: abac.OpentdfCommandLineTool) -> abac.SubjectConditi
 
 
 def _obligation_setup_helper(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     temporary_namespace: abac.Namespace,
     attr_name: str,
     attr_rule: abac.AttributeRule,
@@ -115,7 +117,7 @@ def _obligation_setup_helper(
 
 @pytest.fixture(scope="module")
 def obligation_setup_no_scs_unscoped_trigger(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
     """
@@ -148,7 +150,7 @@ def obligation_setup_no_scs_unscoped_trigger(
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_unscoped_trigger(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
@@ -181,7 +183,7 @@ def obligation_setup_scs_unscoped_trigger(
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_scoped_trigger(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:
@@ -218,7 +220,7 @@ def obligation_setup_scs_scoped_trigger(
 
 @pytest.fixture(scope="module")
 def obligation_setup_scs_scoped_trigger_different_client(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, abac.ObligationValue]:

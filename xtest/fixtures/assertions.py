@@ -5,6 +5,7 @@ This module contains fixtures for:
 - Creating assertion files with various signing configurations
 - Creating assertion verification key files
 """
+
 import pytest
 import base64
 import secrets

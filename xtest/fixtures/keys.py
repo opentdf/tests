@@ -7,6 +7,7 @@ This module contains fixtures for:
 - Legacy key imports
 - Base key configuration
 """
+
 import os
 import json
 import typing
@@ -14,6 +15,7 @@ import pytest
 import abac
 import tdfs
 from pathlib import Path
+from otdfctl import OpentdfCommandLineTool
 
 
 def get_root_key() -> str:
@@ -55,7 +57,7 @@ def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicK
 
 @pytest.fixture(scope="module")
 def attribute_allof_with_two_managed_keys(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
     kas_entry_km2: abac.KasEntry,
     otdf_client_scs: abac.SubjectConditionSet,
@@ -119,7 +121,7 @@ def attribute_allof_with_two_managed_keys(
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_r1(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
 ) -> abac.KasKey:
@@ -131,7 +133,7 @@ def public_key_kas_default_kid_r1(
 
 @pytest.fixture(scope="module")
 def public_key_kas_default_kid_e1(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_default: abac.KasEntry,
     kas_public_key_e1: abac.KasPublicKey,
 ) -> abac.KasKey:
@@ -143,7 +145,7 @@ def public_key_kas_default_kid_e1(
 
 @pytest.fixture(scope="module")
 def attribute_with_different_kids(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     temporary_namespace: abac.Namespace,
     public_key_kas_default_kid_r1: abac.KasKey,
     public_key_kas_default_kid_e1: abac.KasKey,
@@ -183,7 +185,7 @@ def attribute_with_different_kids(
 
 @pytest.fixture(scope="module")
 def legacy_imported_golden_r1_key(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_km2: abac.KasEntry,
     extra_keys: dict[str, ExtraKey],
 ) -> abac.KasKey:
@@ -219,7 +221,7 @@ def legacy_imported_golden_r1_key(
 
 @pytest.fixture(scope="module")
 def base_key_e1(
-    otdfctl: abac.OpentdfCommandLineTool,
+    otdfctl: OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
 ) -> None:
     """
