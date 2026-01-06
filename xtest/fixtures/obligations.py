@@ -98,9 +98,7 @@ def _obligation_setup_helper(
     if oval.fqn is None:
         assert oval.value is not None
         assert oval.value == obligation_value_name
-        oval.fqn = (
-            f"{obligation.fqn}/value/{oval.value}"
-        )
+        oval.fqn = f"{obligation.fqn}/value/{oval.value}"
     else:
         assert (
             oval.fqn
@@ -108,9 +106,7 @@ def _obligation_setup_helper(
         )
 
     # Trigger
-    _ = otdfctl.obligation_triggers_create(
-        oval, "read", attr_value, trigger_client_id
-    )
+    _ = otdfctl.obligation_triggers_create(oval, "read", attr_value, trigger_client_id)
     assert _ is not None
 
     return attr, oval
