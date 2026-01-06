@@ -218,7 +218,7 @@ class OpentdfCommandLineTool:
     def kas_registry_import_key(
         self,
         kas: KasEntry | str,
-        private_pem: str,
+        private_pem: str | None,
         public_pem: str,
         key_id: str,
         legacy: bool | None,
@@ -231,7 +231,8 @@ class OpentdfCommandLineTool:
         cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
         cmd += [f"--algorithm={algorithm}"]
         cmd += [f"--public-key-pem={self._b64_pem(public_pem)}"]
-        cmd += [f"--private-key-pem={self._b64_pem(private_pem)}"]
+        if private_pem:
+            cmd += [f"--private-key-pem={self._b64_pem(private_pem)}"]
         cmd += [f"--wrapping-key={wrapping_key}"]
         cmd += [f"--wrapping-key-id={wrapping_key_id}"]
 
