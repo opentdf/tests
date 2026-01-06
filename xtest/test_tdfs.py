@@ -7,7 +7,6 @@ import string
 import subprocess
 from pathlib import Path
 
-import nano
 import tdfs
 
 
@@ -43,7 +42,6 @@ def do_encrypt_with(
         return cipherTexts[container_id]
     ct_file = tmp_dir / f"test-{encrypt_sdk}-{scenario}{c}.{container}"
 
-    use_ecdsa = container == "nano-with-ecdsa"
     use_ecwrap = container == "ztdf-ecwrap"
     encrypt_sdk.encrypt(
         pt_file,
@@ -75,13 +73,6 @@ def do_encrypt_with(
             looks_like_422(manifest)
         else:
             looks_like_430(manifest)
-    elif tdfs.simple_container(container) == "nano":
-        with open(ct_file, "rb") as f:
-            envelope = nano.parse(f.read())
-            assert envelope.header.version.version == 12
-            assert envelope.header.binding_mode.use_ecdsa_binding == use_ecdsa
-            expected_kid = b"ec1" + b"\0" * 5
-            assert envelope.header.kas.kid == expected_kid
     else:
         assert False, f"Unknown container type: {container}"
     cipherTexts[container_id] = ct_file
@@ -115,10 +106,6 @@ def test_tdf_roundtrip(
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if container == "nano-with-ecdsa" and not encrypt_sdk.supports("nano_ecdsa"):
-        pytest.skip(
-            f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
-        )
     if container == "ztdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
@@ -153,7 +140,7 @@ def test_tdf_roundtrip(
     ):
         ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-        assert filecmp.cmp(pt_file, ert_file)
+    assert filecmp.cmp(pt_file, ert_file)
 
 
 def test_tdf_spec_target_422(

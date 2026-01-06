@@ -4,7 +4,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import nano
 import tdfs
 from abac import Attribute
 
@@ -20,15 +19,6 @@ def skip_rts_as_needed(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    if container == "nano-with-ecdsa" and not encrypt_sdk.supports("nano_ecdsa"):
-        pytest.skip(
-            f"{encrypt_sdk} sdk doesn't yet support ecdsa bindings for nanotdfs"
-        )
-    if (container == "nano" or container == "nano-with-ecdsa") and encrypt_sdk.supports(
-        "nano_attribute_bug"
-    ):
-        # This is a bug in the nano sdk that was fixed in 0.4.1
-        pytest.skip(f"{encrypt_sdk} sdk fails to add attributes to nanotdfs properly")
 
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
@@ -236,104 +226,14 @@ def test_hierarchy_attributes_success(
         )
 
 
-def test_container_policy_mode(
-    attribute_with_hierarchy_type: Attribute,
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
-    pt_file: Path,
-    container: tdfs.container_type,
-    in_focus: set[tdfs.SDK],
-):
-    """
-    Test plaintext policy mode in nanotdf.
-    """
-    if container not in {"nano", "nano-with-ecdsa"}:
-        pytest.skip(f"Container {container} does not support plaintext policy mode")
-    if not encrypt_sdk.supports("nano_policymode_plaintext"):
-        pytest.skip(f"SDK {encrypt_sdk} does not support plaintext policy mode")
-    skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
-
-    attrs = attribute_with_hierarchy_type.values
-    assert (
-        attrs and len(attrs) == 3
-    ), "Expected exactly three attributes for HIERARCHY type"
-    (alpha, beta, gamma) = attrs
-    samples = [
-        ([alpha], False),  # Should fail: user has beta, not alpha (higher level)
-        ([beta], True),  # Should succeed: user has beta assigned
-        ([gamma], True),  # Should succeed: user has beta which is higher than gamma
-    ]
-
-    for vals_to_use, expect_success in samples:
-        assert len([v.fqn for v in vals_to_use if v.fqn is None]) == 0
-        fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
-        assert len(fqns) == len(vals_to_use)
-        short_names = [v.value for v in vals_to_use]
-        assert len(short_names) == len(vals_to_use)
-        sample_name = (
-            f"pt-plaintextpolicy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        )
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
-            ct_file = tmp_dir / f"{sample_name}"
-            encrypt_sdk.encrypt(
-                pt_file,
-                ct_file,
-                mime_type="text/plain",
-                container=container,
-                attr_values=fqns,
-                policy_mode="plaintext",
-                target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-            )
-            assert_expected_attrs(container, "plaintext", ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
-
-        rt_file = tmp_dir / f"{sample_name}.returned"
-        decrypt_or_dont(
-            decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
-        )
-
-
 def assert_expected_attrs(
     c: tdfs.container_type, pt: tdfs.policy_type | None, ct_file: Path, fqns: list[str]
 ):
-    if not pt:
-        # Nano defaults to encrypted; ztdf only supports plaintext
-        pt = "encrypted" if "nano" == tdfs.simple_container(c) else "plaintext"
-    with open(ct_file, "rb") as f:
-        if pt == "encrypted":
-            match tdfs.simple_container(c):
-                case "nano":
-                    envelope = nano.parse(f.read())
-                    assert envelope.header.version.version == 12
-                    assert (
-                        envelope.header.policy.policy_type == nano.PolicyType.ENCRYPTED
-                    )
-                    assert not envelope.header.policy.embedded
-                    assert envelope.header.policy.encrypted
-                case _:
-                    assert (
-                        False
-                    ), f"Unsupported container & policy type pair [{tdfs.simple_container(c)} & {pt}]"
-            return
-        policy: tdfs.Policy
-        match tdfs.simple_container(c):
-            case "nano":
-                envelope = nano.parse(f.read())
-                assert envelope.header.version.version == 12
-                assert envelope.header.policy.policy_type == nano.PolicyType.EMBEDDED
-                assert envelope.header.policy.embedded
-                policy = tdfs.Policy.model_validate_json(
-                    envelope.header.policy.embedded
-                )
-            case _:
-                manifest = tdfs.manifest(ct_file)
-                policy = manifest.encryptionInformation.policy_object
+    manifest = tdfs.manifest(ct_file)
+    policy = manifest.encryptionInformation.policy_object
 
-        policy_body = policy.body
-        assert not policy_body.dissem
-        assert policy_body.dataAttributes
-        attrs = [v.attribute for v in policy_body.dataAttributes]
-        assert sorted(attrs) == sorted(fqns)
+    policy_body = policy.body
+    assert not policy_body.dissem
+    assert policy_body.dataAttributes
+    attrs = [v.attribute for v in policy_body.dataAttributes]
+    assert sorted(attrs) == sorted(fqns)
