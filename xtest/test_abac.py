@@ -37,6 +37,7 @@ def assert_decrypt_fails_with_patterns(
     container: tdfs.container_type,
     expected_patterns: list[str],
     unexpected_patterns: list[str] | None = None,
+    audit_logs=None,
 ):
     try:
         decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
@@ -56,6 +57,11 @@ def assert_decrypt_fails_with_patterns(
                 assert not re.search(
                     pattern, combined_output, re.IGNORECASE
                 ), f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+
+        # Additionally check audit logs if available
+        if audit_logs:
+            for pattern in expected_patterns:
+                audit_logs.assert_contains(pattern, min_count=1)
 
 
 def test_key_mapping_multiple_mechanisms(
@@ -118,6 +124,7 @@ def test_autoconfigure_one_attribute_standard(
     pt_file: Path,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
+    audit_logs,
 ):
     global counter
 
@@ -147,6 +154,9 @@ def test_autoconfigure_one_attribute_standard(
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
 
+    # Mark timestamp before decrypt for audit log correlation
+    audit_logs.mark("before_decrypt")
+
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -154,6 +164,13 @@ def test_autoconfigure_one_attribute_standard(
     rt_file = tmp_dir / f"test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged in audit logs
+    audit_logs.assert_contains(
+        r"rewrap",
+        min_count=1,
+        since_mark="before_decrypt",
+    )
 
 
 def test_autoconfigure_two_kas_or_standard(
@@ -579,6 +596,7 @@ def test_obligations_not_entitled(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     container: tdfs.container_type,
+    audit_logs,
 ):
     """
     Test that no required obligations are returned when the user is not entitled
@@ -610,6 +628,9 @@ def test_obligations_not_entitled(
     obligations_pattern = "required\\s*obligations"
     rt_file = tmp_dir / "test-obligations.untdf"
 
+    # Mark timestamp before decrypt attempt
+    audit_logs.mark("before_decrypt")
+
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
         ct_file=ct_file,
@@ -617,6 +638,7 @@ def test_obligations_not_entitled(
         container=container,
         expected_patterns=[rewrap_403_pattern],
         unexpected_patterns=[obligations_pattern],
+        audit_logs=audit_logs,
     )
 
 

@@ -525,7 +525,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          pytest --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
+          pytest --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --audit-log-dir=test-results/audit-logs --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -538,6 +538,14 @@ jobs:
         with:
           name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
           path: otdftests/xtest/test-results/*.html
+
+      - name: Upload audit logs on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          path: otdftests/xtest/test-results/audit-logs/*.log
+          if-no-files-found: ignore
 
   publish-results:
     runs-on: ubuntu-latest
