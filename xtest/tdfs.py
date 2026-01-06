@@ -442,7 +442,7 @@ class SDK:
 
     def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
-            case ("key_management", "js") if self.version == "v0.2.0":
+            case ("key_management", "js"):
                 return False
             case ("autoconfigure", ("go" | "java")):
                 return True
