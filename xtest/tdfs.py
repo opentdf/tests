@@ -26,8 +26,6 @@ sdk_type = Literal["go", "java", "js"]
 focus_type = Literal[sdk_type, "all"]
 
 container_type = Literal[
-    "nano",
-    "nano-with-ecdsa",
     "ztdf",
     "ztdf-ecwrap",
 ]
@@ -47,11 +45,6 @@ feature_type = Literal[
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
-    # Attributes are not added properly to the nanotdfs. okay maybe should not be called a feature :-(
-    "nano_attribute_bug",
-    "nano_ecdsa",
-    # Nano encrypt supports policy encoding mode = plaintext
-    "nano_policymode_plaintext",
     "ns_grants",
     "obligations",
 ]
@@ -101,9 +94,6 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 4, 39):
             self.features.add("hexless")
             self.features.add("hexaflexible")
-
-        if self.semver >= (0, 4, 23):
-            self.features.add("nano_ecdsa")
 
         if self.semver >= (0, 4, 19):
             self.features.add("ns_grants")
@@ -310,8 +300,6 @@ def fmt_env(env: dict[str, str]) -> str:
 
 
 def simple_container(container: container_type) -> container_type:
-    if container == "nano-with-ecdsa":
-        return "nano"
     if container == "ztdf-ecwrap":
         return "ztdf"
     return container
@@ -348,13 +336,12 @@ class SDK:
         pt_file: Path,
         ct_file: Path,
         mime_type: str = "application/octet-stream",
-        container: container_type = "nano",
+        container: container_type = "ztdf",
         attr_values: list[str] | None = None,
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
     ):
-        use_ecdsa = container == "nano-with-ecdsa"
         use_ecwrap = container == "ztdf-ecwrap"
         fmt = simple_container(container)
         c = [
@@ -375,14 +362,6 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if fmt == "nano":
-            if use_ecdsa:
-                local_env |= {"XT_WITH_ECDSA_BINDING": "true"}
-            else:
-                local_env |= {"XT_WITH_ECDSA_BINDING": "false"}
-            if policy_mode == "plaintext":
-                local_env |= {"XT_WITH_PLAINTEXT_POLICY": "true"}
-
         if fmt == "ztdf" and target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
@@ -397,7 +376,7 @@ class SDK:
         self,
         ct_file: Path,
         rt_file: Path,
-        container: container_type = "nano",
+        container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
         ecwrap: bool = False,
@@ -448,8 +427,6 @@ class SDK:
             case ("autoconfigure", ("go" | "java")):
                 return True
             case ("better-messages-2024", ("js" | "java")):
-                return True
-            case ("nano_ecdsa", "go"):
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
