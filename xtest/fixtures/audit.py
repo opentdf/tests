@@ -59,6 +59,8 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
 
     Environment Variables:
         PLATFORM_DIR: Path to platform directory (default: ../../platform)
+        PLATFORM_LOG_FILE: Path to main KAS log file
+        KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Paths to additional KAS log files
     """
     # Check if disabled via CLI
     enabled = not request.config.getoption("--no-audit-logs", default=False)
@@ -98,10 +100,67 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
     )
 
 
+@pytest.fixture(scope="session")
+def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
+    """Discover KAS log files from environment variables.
+
+    Checks for log file paths set by GitHub Actions or other automation.
+    Returns dict mapping service names to log file paths.
+
+    Environment Variables:
+        PLATFORM_LOG_FILE: Main KAS/platform log
+        KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Additional KAS logs
+    """
+    log_files = {}
+
+    # Check for main platform log
+    platform_log = os.getenv("PLATFORM_LOG_FILE")
+    if platform_log:
+        log_files["kas"] = Path(platform_log)
+
+    # Check for additional KAS logs
+    kas_mapping = {
+        "KAS_ALPHA_LOG_FILE": "kas-alpha",
+        "KAS_BETA_LOG_FILE": "kas-beta",
+        "KAS_GAMMA_LOG_FILE": "kas-gamma",
+        "KAS_DELTA_LOG_FILE": "kas-delta",
+        "KAS_KM1_LOG_FILE": "kas-km1",
+        "KAS_KM2_LOG_FILE": "kas-km2",
+    }
+
+    for env_var, service_name in kas_mapping.items():
+        log_path = os.getenv(env_var)
+        if log_path:
+            log_files[service_name] = Path(log_path)
+
+    # If no env vars found, try default locations
+    if not log_files:
+        log_dir = audit_log_config.platform_dir / "logs"
+        if log_dir.exists():
+            logger.debug(f"No log file env vars found, checking {log_dir}")
+            for service in audit_log_config.services:
+                # Map service names to expected filenames
+                if service == "kas":
+                    log_file = log_dir / "kas-main.log"
+                else:
+                    log_file = log_dir / f"{service}.log"
+
+                if log_file.exists():
+                    log_files[service] = log_file
+
+    if log_files:
+        logger.info(f"Found {len(log_files)} KAS log files for file-based collection")
+        return log_files
+    else:
+        logger.debug("No KAS log files found, will use docker compose logs")
+        return None
+
+
 @pytest.fixture(scope="function")
 def audit_logs(
     request: pytest.FixtureRequest,
     audit_log_config: AuditLogConfig,
+    kas_log_files: dict[str, Path] | None,
     tmp_dir: Path,
 ) -> Iterator[AuditLogAsserter]:
     """Collect and assert on KAS audit logs during test execution.
@@ -156,10 +215,11 @@ def audit_logs(
         yield AuditLogAsserter(None)
         return
 
-    # Create collector
+    # Create collector with log files if available
     collector = AuditLogCollector(
         platform_dir=audit_log_config.platform_dir,
         services=audit_log_config.services,
+        log_files=kas_log_files,
     )
 
     # Try to start collection
