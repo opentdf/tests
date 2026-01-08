@@ -142,7 +142,7 @@ If these are not set, the framework will:
 
 ### Configuration
 
-- `LOG_LEVEL` - Log level for services (audit, debug, info, warn, error). Default: `audit`
+- `LOG_LEVEL` - Log level for services (trace, debug, info, warn, error, audit). Default: `audit`
 - `LOG_TYPE` - Log format (text, json). Default: `json` (recommended for audit logs)
 - `START_KAS_INSTANCES` - Space-separated KAS names to start. Default: `"alpha beta gamma delta km1 km2"`
 - `SKIP_KAS_START` - Set to `"true"` to skip starting KAS instances with run-local.sh
