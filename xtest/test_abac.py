@@ -820,6 +820,7 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
 
@@ -845,6 +846,7 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
