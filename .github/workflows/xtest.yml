@@ -497,7 +497,6 @@ jobs:
         with:
           ec-tdf-enabled: true
           kas-port: 8484
-          key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: delta
           root-key: ${{ steps.km-check.outputs.root_key }}
 
