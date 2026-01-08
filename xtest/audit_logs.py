@@ -56,31 +56,44 @@ class AuditLogCollector:
     MAX_BUFFER_SIZE = 10000
     """Maximum number of log entries to keep in memory."""
 
-    def __init__(self, platform_dir: Path, services: list[str] | None = None):
-        """Initialize collector for specified docker compose services.
+    def __init__(
+        self,
+        platform_dir: Path,
+        services: list[str] | None = None,
+        log_files: dict[str, Path] | None = None,
+    ):
+        """Initialize collector for log collection.
 
         Args:
             platform_dir: Path to platform directory containing docker-compose.yaml
             services: List of service names to monitor (e.g., ['kas', 'kas-alpha']).
                      If None or empty, monitors all services.
+            log_files: Optional dict mapping service names to log file paths.
+                      If provided, reads from files instead of docker compose.
+                      Example: {'kas': Path('logs/kas-main.log'), 'kas-alpha': Path('logs/kas-alpha.log')}
         """
         self.platform_dir = platform_dir
         self.services = services or []
+        self.log_files = log_files
         self._buffer: deque[LogEntry] = deque(maxlen=self.MAX_BUFFER_SIZE)
         self._marks: dict[str, datetime] = {}
         self._process: subprocess.Popen | None = None
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
         self._disabled = False
         self._error: Exception | None = None
         self.log_file_path: Path | None = None
         self.log_file_written = False
+        self._mode: str = "file" if log_files else "docker"
 
     def start(self) -> None:
-        """Start background log collection subprocess.
+        """Start background log collection.
 
-        Gracefully handles errors by disabling collection if docker compose
-        is unavailable or platform directory doesn't exist.
+        Supports two modes:
+        - File mode: Tails log files directly (preferred for CI)
+        - Docker mode: Uses docker compose logs (fallback for local dev)
+
+        Gracefully handles errors by disabling collection if resources unavailable.
         """
         if self._disabled:
             return
@@ -94,6 +107,51 @@ class AuditLogCollector:
             self._disabled = True
             return
 
+        if self._mode == "file":
+            self._start_file_mode()
+        else:
+            self._start_docker_mode()
+
+    def _start_file_mode(self) -> None:
+        """Start log collection from files (tailing)."""
+        if not self.log_files:
+            logger.warning("No log files provided for file mode. Disabling collection.")
+            self._disabled = True
+            return
+
+        # Filter to existing files
+        existing_files = {
+            service: path
+            for service, path in self.log_files.items()
+            if path.exists()
+        }
+
+        if not existing_files:
+            logger.warning(
+                f"None of the log files exist yet: {list(self.log_files.values())}. "
+                f"Will wait for them to be created..."
+            )
+            # Don't disable - files may be created soon by the platform startup
+            existing_files = self.log_files
+
+        logger.debug(f"Starting file-based log collection for: {list(existing_files.keys())}")
+
+        # Start a thread for each log file to tail
+        for service, log_path in existing_files.items():
+            thread = threading.Thread(
+                target=self._tail_file,
+                args=(service, log_path),
+                daemon=True,
+            )
+            thread.start()
+            self._threads.append(thread)
+
+        logger.info(
+            f"Audit log collection started (file mode) for: {', '.join(existing_files.keys())}"
+        )
+
+    def _start_docker_mode(self) -> None:
+        """Start log collection from docker compose."""
         # Check if docker compose is available
         try:
             subprocess.run(
@@ -151,7 +209,7 @@ class AuditLogCollector:
         ]
         cmd.extend(filtered_services)
 
-        logger.debug(f"Starting audit log collection: {' '.join(cmd)}")
+        logger.debug(f"Starting docker compose log collection: {' '.join(cmd)}")
 
         try:
             self._process = subprocess.Popen(
@@ -167,22 +225,24 @@ class AuditLogCollector:
             return
 
         # Start background thread to read logs
-        self._thread = threading.Thread(target=self._read_logs, daemon=True)
-        self._thread.start()
+        thread = threading.Thread(target=self._read_docker_logs, daemon=True)
+        thread.start()
+        self._threads.append(thread)
 
         logger.info(
-            f"Audit log collection started for services: {', '.join(filtered_services)}"
+            f"Audit log collection started (docker mode) for: {', '.join(filtered_services)}"
         )
 
     def stop(self) -> None:
         """Stop log collection and cleanup resources."""
-        if self._disabled or not self._process:
+        if self._disabled:
             return
 
         logger.debug("Stopping audit log collection")
 
         self._stop_event.set()
 
+        # Stop docker compose process if running
         if self._process:
             self._process.terminate()
             try:
@@ -191,8 +251,10 @@ class AuditLogCollector:
                 self._process.kill()
                 self._process.wait()
 
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2)
+        # Wait for all threads to finish
+        for thread in self._threads:
+            if thread.is_alive():
+                thread.join(timeout=2)
 
         logger.debug(
             f"Audit log collection stopped. Collected {len(self._buffer)} log entries."
@@ -317,8 +379,47 @@ Log Entries:
             logger.warning(f"Failed to query running services: {e}")
             return []
 
-    def _read_logs(self) -> None:
-        """Background thread target that reads logs from subprocess."""
+    def _tail_file(self, service: str, log_path: Path) -> None:
+        """Background thread target that tails a log file.
+
+        Args:
+            service: Service name (e.g., 'kas', 'kas-alpha')
+            log_path: Path to log file to tail
+        """
+        logger.debug(f"Starting to tail {log_path} for service {service}")
+
+        # Wait for file to exist (with timeout)
+        wait_start = datetime.now()
+        while not log_path.exists():
+            if self._stop_event.is_set():
+                return
+            if (datetime.now() - wait_start).total_seconds() > 30:
+                logger.warning(f"Timeout waiting for log file: {log_path}")
+                return
+            self._stop_event.wait(0.5)
+
+        try:
+            with open(log_path, "r") as f:
+                # Seek to end for new logs only
+                f.seek(0, 2)
+
+                while not self._stop_event.is_set():
+                    line = f.readline()
+                    if line:
+                        try:
+                            entry = self._parse_file_log_line(service, line.rstrip())
+                            self._buffer.append(entry)
+                        except Exception as e:
+                            logger.debug(f"Error parsing log line from {service}: {e}")
+                    else:
+                        # No new data, wait a bit
+                        self._stop_event.wait(0.1)
+        except Exception as e:
+            logger.error(f"Error tailing log file {log_path}: {e}")
+            self._error = e
+
+    def _read_docker_logs(self) -> None:
+        """Background thread target that reads logs from docker compose subprocess."""
         if not self._process or not self._process.stdout:
             return
 
@@ -330,19 +431,49 @@ Log Entries:
                 try:
                     decoded_line = line.decode("utf-8", errors="replace").rstrip()
                     if decoded_line:
-                        entry = self._parse_log_line(decoded_line)
+                        entry = self._parse_docker_log_line(decoded_line)
                         self._buffer.append(entry)
                 except Exception as e:
-                    logger.debug(f"Error parsing log line: {e}")
+                    logger.debug(f"Error parsing docker log line: {e}")
                     continue
         except Exception as e:
-            logger.error(f"Log collection subprocess error: {e}")
+            logger.error(f"Docker log collection subprocess error: {e}")
             self._error = e
         finally:
             if self._process and self._process.stdout:
                 self._process.stdout.close()
 
-    def _parse_log_line(self, raw_line: str) -> LogEntry:
+    def _parse_file_log_line(self, service: str, raw_line: str) -> LogEntry:
+        """Parse log line from file with format auto-detection.
+
+        Args:
+            service: Service name (e.g., 'kas', 'kas-alpha')
+            raw_line: Raw log line from file
+
+        Returns:
+            Parsed LogEntry
+        """
+        collection_time = datetime.now()
+
+        # Try JSON parsing
+        parsed_json = None
+        log_timestamp = None
+        try:
+            parsed_json = json.loads(raw_line)
+            log_timestamp = self._parse_timestamp_from_json(parsed_json)
+        except (json.JSONDecodeError, ValueError):
+            # Not JSON, try syslog timestamp parsing
+            log_timestamp = self._parse_syslog_timestamp(raw_line)
+
+        return LogEntry(
+            timestamp=collection_time,
+            log_timestamp=log_timestamp,
+            raw_line=raw_line,
+            parsed_json=parsed_json,
+            service_name=service,
+        )
+
+    def _parse_docker_log_line(self, raw_line: str) -> LogEntry:
         """Parse docker compose log line with format auto-detection.
 
         Docker compose log format: "service_name_1 | 2026-01-06T10:15:23.456789Z <log content>"
