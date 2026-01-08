@@ -21,8 +21,6 @@
 #   LOG_TYPE              Log format type (default: json)
 #   SKIP_KAS_START        Set to "true" to skip starting additional KAS instances
 
-set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
@@ -119,6 +117,13 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
       continue
     fi
 
+    # Check if port is in use by another process
+    if lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; then
+      echo "  ✗ Port ${port} is already in use by another process"
+      echo "     Run: kill \$(lsof -t -i:${port})"
+      continue
+    fi
+
     # Determine if this is a key management KAS
     extra_args=""
     if [[ "${kas_name}" == "km1" ]]; then
@@ -129,29 +134,63 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
 
     echo "Starting KAS ${kas_name} on port ${port}..."
 
+    # Create temporary file for capturing startup output
+    startup_log=$(mktemp)
+
     # Start KAS in background
     (
       cd "${PLATFORM_DIR}"
       LOG_LEVEL="${LOG_LEVEL}" LOG_TYPE="${LOG_TYPE}" \
-        test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >/dev/null 2>&1
+        test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >"${startup_log}" 2>&1
     ) &
 
-    KAS_PIDS+=($!)
+    startup_pid=$!
+    KAS_PIDS+=($startup_pid)
 
     # Wait for KAS to be ready
+    kas_ready=false
     for i in {1..30}; do
+      # Check if startup process failed
+      if ! kill -0 ${startup_pid} 2>/dev/null; then
+        echo "  ✗ KAS ${kas_name} startup process died"
+        echo ""
+        echo "  Startup output:"
+        sed 's/^/    /' "${startup_log}"
+        echo ""
+        rm -f "${startup_log}"
+        break
+      fi
+
       if curl -s "http://localhost:${port}/healthz" >/dev/null 2>&1; then
         echo "  ✓ KAS ${kas_name} ready"
         log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
         KAS_LOG_FILES+=("${kas_name}:${log_file}")
+        kas_ready=true
+        rm -f "${startup_log}"
         break
       fi
       sleep 1
-      if [[ $i -eq 30 ]]; then
-        echo "  ✗ KAS ${kas_name} failed to start"
-        exit 1
-      fi
     done
+
+    if [[ "${kas_ready}" != "true" ]]; then
+      echo "  ✗ KAS ${kas_name} failed to start after 30 seconds"
+      echo ""
+      echo "  Startup output:"
+      sed 's/^/    /' "${startup_log}"
+      echo ""
+
+      # Check log file if it exists
+      log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
+      if [[ -f "${log_file}" ]]; then
+        echo "  Last 10 lines of KAS log:"
+        tail -10 "${log_file}" | sed 's/^/    /'
+        echo ""
+      fi
+
+      rm -f "${startup_log}"
+      echo "  Hint: Check if platform is running and properly configured"
+      exit 1
+    fi
   done
 
   echo ""
