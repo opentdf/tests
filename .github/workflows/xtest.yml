@@ -232,7 +232,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@main
+        uses: opentdf/platform/test/start-up-with-containers@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
@@ -461,62 +461,67 @@ jobs:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
       - name: Start additional kas
+        id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
-          kas-port: 8181
           kas-name: alpha
+          kas-port: 8181
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
+        id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
-          kas-port: 8282
           kas-name: beta
+          kas-port: 8282
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
+        id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
-          kas-port: 8383
           kas-name: gamma
+          kas-port: 8383
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
+        id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
           kas-port: 8484
+          key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: delta
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km1)
+        id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
-          key-management: ${{ env.KM_ENABLED }}
-          root-key: ${{ env.OT_ROOT_KEY }}
-          kas-port: 8585
+          key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: km1
-        env:
-          OT_ROOT_KEY: ${{ steps.km-check.outputs.root_key }}
-          KM_ENABLED: ${{ steps.km-check.outputs.supported }}
+          kas-port: 8585
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km2)
+        id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
         with:
           ec-tdf-enabled: true
-          key-management: ${{ env.KM_ENABLED }}
-          root-key: ${{ env.OT_ROOT_KEY }}
-          kas-port: 8686
           kas-name: km2
-        env:
-          OT_ROOT_KEY: ${{ steps.km-check.outputs.root_key }}
-          KM_ENABLED: ${{ steps.km-check.outputs.supported }}
+          key-management: ${{ steps.km-check.outputs.supported }}
+          kas-port: 8686
+          root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
