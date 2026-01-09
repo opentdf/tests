@@ -42,8 +42,8 @@ declare -A KAS_PORTS=(
 )
 
 # KAS root keys for key management
-KM1_ROOT_KEY="${OT_ROOT_KEY:-Sk5OQ1dLQWExRkMyelFWdz09}"  # Base64 encoded test key
-KM2_ROOT_KEY="${OT_ROOT_KEY2:-U2s1T1EzZExRV0V4UmtNMmVsRldkejA5}"  # Different test key
+KM1_ROOT_KEY="${OT_ROOT_KEY:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1}"
+KM2_ROOT_KEY="${OT_ROOT_KEY2:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1}"
 
 echo "=== OpenTDF xtest Local Runner ==="
 echo ""
@@ -196,6 +196,12 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
   echo ""
 fi
 
+# Detect if running in tmux
+TMUX_MODE=false
+if [[ -n "${TMUX}" ]]; then
+  TMUX_MODE=true
+fi
+
 # Export environment variables for pytest
 export PLATFORM_DIR="${PLATFORM_DIR}"
 [[ -n "${PLATFORM_LOG_FILE}" ]] && export PLATFORM_LOG_FILE="${PLATFORM_LOG_FILE}"
@@ -208,6 +214,30 @@ for entry in "${KAS_LOG_FILES[@]}"; do
   export "${env_var}=${log_file}"
   echo "Export: ${env_var}=${log_file}"
 done
+
+# If running in tmux, export variables to tmux session environment
+# This makes them available to all windows in the session
+if [[ "${TMUX_MODE}" == "true" ]]; then
+  # Get session name from TMUX variable
+  SESSION_NAME=$(tmux display-message -p '#S')
+
+  echo ""
+  echo "Running in tmux session: ${SESSION_NAME}"
+  echo "Exporting environment variables to tmux session..."
+
+  tmux setenv -t "${SESSION_NAME}" PLATFORM_DIR "${PLATFORM_DIR}" 2>/dev/null || true
+  [[ -n "${PLATFORM_LOG_FILE}" ]] && tmux setenv -t "${SESSION_NAME}" PLATFORM_LOG_FILE "${PLATFORM_LOG_FILE}" 2>/dev/null || true
+
+  # Export KAS log files to tmux session
+  for entry in "${KAS_LOG_FILES[@]}"; do
+    kas_name="${entry%%:*}"
+    log_file="${entry#*:}"
+    env_var="KAS_${kas_name^^}_LOG_FILE"
+    tmux setenv -t "${SESSION_NAME}" "${env_var}" "${log_file}" 2>/dev/null || true
+  done
+
+  echo "Environment variables exported to tmux session."
+fi
 
 echo ""
 echo "=== Running pytest ==="
