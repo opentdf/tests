@@ -109,7 +109,7 @@ jobs:
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: |-
           pip install -r scripts/requirements.txt
         working-directory: otdf-sdk/xtest/sdk
@@ -238,10 +238,10 @@ jobs:
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.14
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -497,6 +497,7 @@ jobs:
         with:
           ec-tdf-enabled: true
           kas-port: 8484
+          key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: delta
           root-key: ${{ steps.km-check.outputs.root_key }}
 
@@ -525,19 +526,34 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          pytest --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
+          pytest --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --audit-log-dir=test-results/audit-logs --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
+          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
+          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
+          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
+          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
+          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact
         if: success() || failure()
         with:
           name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
           path: otdftests/xtest/test-results/*.html
+
+      - name: Upload audit logs on failure
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: failure()
+        with:
+          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          path: otdftests/xtest/test-results/audit-logs/*.log
+          if-no-files-found: ignore
 
   publish-results:
     runs-on: ubuntu-latest
