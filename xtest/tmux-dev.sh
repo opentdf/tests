@@ -29,6 +29,7 @@ SESSION_NAME="opentdf-dev"
 MODE="full"
 ATTACH_ONLY=false
 STOP_SESSION=false
+DETACHED=false
 
 # KAS port mappings
 declare -A KAS_PORTS=(
@@ -64,6 +65,7 @@ Options:
   --standard     Start standard environment (docker + platform + 2 KAS)
   --full         Start full environment (all services) [default]
   --attach-only  Attach to existing session without starting
+  --detached     Create session without attaching (useful for testing/automation)
   --stop         Stop session and cleanup all services
   -h, --help     Show this help message
 
@@ -74,20 +76,22 @@ Examples:
   $0 --stop         # Stop and cleanup
 
 Window Layout:
-  0: control     - Status dashboard with service health
-  1: docker      - Docker Compose logs
-  2: platform    - Platform main service (port 8080)
-  3: kas-alpha   - KAS instance (port 8181)
-  4: kas-beta    - KAS instance (port 8282)
-  5: kas-gamma   - KAS instance (port 8383)
-  6: kas-delta   - KAS instance (port 8484)
-  7: kas-km1     - Key management KAS (port 8585)
-  8: kas-km2     - Key management KAS (port 8686)
-  9: tests       - Test runner shell
+  control     - Status dashboard with service health
+  docker      - Docker Compose logs
+  platform    - Platform main service (port 8080)
+  kas-alpha   - KAS instance (port 8181)
+  kas-beta    - KAS instance (port 8282)
+  kas-gamma   - KAS instance (port 8383)
+  kas-delta   - KAS instance (port 8484)
+  kas-km1     - Key management KAS (port 8585)
+  kas-km2     - Key management KAS (port 8686)
+  tests       - Test runner shell
 
 Navigation:
-  Ctrl-b <number>  - Switch to window
-  Ctrl-b w         - Window list
+  Ctrl-b <number>  - Switch to window by index
+  Ctrl-b '         - Switch to window by name (e.g., 'tests')
+  Ctrl-b w         - Window list (interactive)
+  Ctrl-b n/p       - Next/previous window
   Ctrl-b d         - Detach from session
   Ctrl-b :         - Command prompt
 
@@ -241,7 +245,7 @@ setup_log_directory() {
 create_control_window() {
   local window_name="control"
 
-  tmux new-window -t "${SESSION_NAME}:0" -n "${window_name}"
+  tmux new-window -t "${SESSION_NAME}" -n "${window_name}"
   tmux send-keys -t "${SESSION_NAME}:${window_name}" \
     "cd '${SCRIPT_DIR}' && MODE='${MODE}' PLATFORM_DIR='${PLATFORM_DIR}' watch -n 2 -c ./tmux-control-panel.sh" C-m
 }
@@ -249,7 +253,7 @@ create_control_window() {
 start_docker_compose() {
   local window_name="docker"
 
-  tmux new-window -t "${SESSION_NAME}:1" -n "${window_name}"
+  tmux new-window -t "${SESSION_NAME}" -n "${window_name}"
 
   # Check if docker compose is already running
   tmux send-keys -t "${SESSION_NAME}:${window_name}" \
@@ -262,7 +266,7 @@ start_docker_compose() {
 start_platform() {
   local window_name="platform"
 
-  tmux new-window -t "${SESSION_NAME}:2" -n "${window_name}"
+  tmux new-window -t "${SESSION_NAME}" -n "${window_name}"
   tmux send-keys -t "${SESSION_NAME}:${window_name}" \
     "cd '${PLATFORM_DIR}'" C-m
 
@@ -274,7 +278,6 @@ start_platform() {
 start_kas_instance() {
   local kas_name="$1"
   local port="${KAS_PORTS[$kas_name]}"
-  local window_num="$2"
   local window_name="kas-${kas_name}"
 
   # Extra args for key management KAS
@@ -285,7 +288,7 @@ start_kas_instance() {
     extra_args="--key-management=true --root-key=${KM2_ROOT_KEY}"
   fi
 
-  tmux new-window -t "${SESSION_NAME}:${window_num}" -n "${window_name}"
+  tmux new-window -t "${SESSION_NAME}" -n "${window_name}"
   tmux send-keys -t "${SESSION_NAME}:${window_name}" \
     "cd '${PLATFORM_DIR}'" C-m
 
@@ -297,7 +300,7 @@ start_kas_instance() {
 create_test_window() {
   local window_name="tests"
 
-  tmux new-window -t "${SESSION_NAME}:9" -n "${window_name}"
+  tmux new-window -t "${SESSION_NAME}" -n "${window_name}"
   tmux send-keys -t "${SESSION_NAME}:${window_name}" \
     "cd '${SCRIPT_DIR}'" C-m
 
@@ -339,17 +342,17 @@ start_environment() {
 
   echo "Creating windows..."
 
-  # Create control window (window 0)
+  # Create control window
   create_control_window
 
-  # Create docker window (window 1)
+  # Create docker window
   start_docker_compose
 
   # Wait for docker compose to be ready
   echo "Waiting for Docker Compose services..."
   sleep 3
 
-  # Create platform window (window 2)
+  # Create platform window
   start_platform
 
   if [[ "${MODE}" == "minimal" ]]; then
@@ -358,40 +361,55 @@ start_environment() {
   elif [[ "${MODE}" == "standard" ]]; then
     # Standard mode: docker + platform + 2 KAS
     echo "Standard mode: Starting docker + platform + 2 KAS instances"
-    start_kas_instance "alpha" 3
-    start_kas_instance "beta" 4
+    start_kas_instance "alpha"
+    start_kas_instance "beta"
   else
     # Full mode: all services
     echo "Full mode: Starting all services"
-    start_kas_instance "alpha" 3
-    start_kas_instance "beta" 4
-    start_kas_instance "gamma" 5
-    start_kas_instance "delta" 6
-    start_kas_instance "km1" 7
-    start_kas_instance "km2" 8
+    start_kas_instance "alpha"
+    start_kas_instance "beta"
+    start_kas_instance "gamma"
+    start_kas_instance "delta"
+    start_kas_instance "km1"
+    start_kas_instance "km2"
   fi
 
-  # Create test window (window 9)
+  # Create test window
   create_test_window
 
   # Kill the init window
   tmux kill-window -t "${SESSION_NAME}:init"
 
   # Select control window
-  tmux select-window -t "${SESSION_NAME}:0"
+  tmux select-window -t "${SESSION_NAME}:control"
 
   echo ""
   echo "Environment started!"
-  echo "Attaching to session '${SESSION_NAME}'..."
-  echo ""
-  echo "Use 'Ctrl-b d' to detach from session"
-  echo "Use './tmux-dev.sh --attach-only' to reattach"
-  echo "Use './tmux-dev.sh --stop' to stop and cleanup"
-  echo ""
-  sleep 2
 
-  # Attach to session
-  tmux attach-session -t "${SESSION_NAME}"
+  if [[ "${DETACHED}" == "true" ]]; then
+    echo ""
+    echo "Session '${SESSION_NAME}' created in detached mode."
+    echo ""
+    echo "To attach to the session:"
+    echo "  tmux attach-session -t ${SESSION_NAME}"
+    echo ""
+    echo "Or use:"
+    echo "  ./tmux-dev.sh --attach-only"
+    echo ""
+    echo "To stop:"
+    echo "  ./tmux-dev.sh --stop"
+  else
+    echo "Attaching to session '${SESSION_NAME}'..."
+    echo ""
+    echo "Use 'Ctrl-b d' to detach from session"
+    echo "Use './tmux-dev.sh --attach-only' to reattach"
+    echo "Use './tmux-dev.sh --stop' to stop and cleanup"
+    echo ""
+    sleep 2
+
+    # Attach to session
+    tmux attach-session -t "${SESSION_NAME}"
+  fi
 }
 
 #################
@@ -415,6 +433,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --attach-only)
       ATTACH_ONLY=true
+      shift
+      ;;
+    --detached)
+      DETACHED=true
       shift
       ;;
     --stop)
@@ -458,8 +480,8 @@ if [[ "${ATTACH_ONLY}" == "true" ]]; then
   exit 0
 fi
 
-# Check if we're already inside a tmux session
-if check_nested_tmux; then
+# Check if we're already inside a tmux session (skip if --detached)
+if [[ "${DETACHED}" != "true" ]] && check_nested_tmux; then
   handle_nested_tmux
   # If we get here, user chose to cancel or we switched sessions
   exit 0

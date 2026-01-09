@@ -132,10 +132,10 @@ show_log_files() {
 show_quick_commands() {
   echo ""
   echo -e "${BOLD}Quick Commands:${RESET}"
-  echo "  Ctrl-b 1     - Switch to docker window"
-  echo "  Ctrl-b 2     - Switch to platform window"
-  echo "  Ctrl-b 9     - Switch to test window"
-  echo "  Ctrl-b w     - Window list"
+  echo "  Ctrl-b '     - Switch to window by name"
+  echo "                 (e.g., type: docker, platform, tests)"
+  echo "  Ctrl-b w     - Window list (interactive)"
+  echo "  Ctrl-b n/p   - Next/previous window"
   echo "  Ctrl-b d     - Detach from session"
   echo "  Ctrl-b ?     - Show all keybindings"
 }
