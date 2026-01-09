@@ -4,7 +4,7 @@
 # Usage: ./list-available.sh [--format json|table]
 # Example: ./list-available.sh --format table
 
-set -euo pipefail
+set -uo pipefail
 
 # Resolve script directory
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
@@ -18,8 +18,7 @@ fi
 
 # Function to get SHA for a worktree
 get_worktree_sha() {
-  local git_dir=$1
-  local worktree_path=$2
+  local worktree_path=$1
 
   if [[ -e "$worktree_path/.git" ]]; then
     git -C "$worktree_path" rev-parse HEAD 2>/dev/null || echo "unknown"
@@ -85,7 +84,7 @@ collect_sdk_info() {
     [[ "$dir" == *.git ]] && continue
 
     local version=$(basename "$dir")
-    local sha=$(get_worktree_sha "$bare_repo_path" "$dir")
+    local sha=$(get_worktree_sha "$dir")
     local built=$(is_built "$sdk" "$version")
     local dist_path=$(get_dist_path "$sdk" "$version")
 

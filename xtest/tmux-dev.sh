@@ -19,7 +19,7 @@
 #   ./tmux-dev.sh --attach-only  # Reattach to existing session
 #   ./tmux-dev.sh --stop         # Stop and cleanup
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -132,7 +132,7 @@ check_existing_session() {
 }
 
 check_nested_tmux() {
-  if [[ -n "${TMUX}" ]]; then
+  if [[ -n "${TMUX:-}" ]]; then
     return 0  # We are inside tmux
   else
     return 1  # Not inside tmux
