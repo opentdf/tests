@@ -2,9 +2,10 @@ import random
 import string
 
 import abac
+from otdfctl import OpentdfCommandLineTool
 
 
-otdfctl = abac.OpentdfCommandLineTool()
+otdfctl = OpentdfCommandLineTool()
 
 
 def test_namespaces_list() -> None:
