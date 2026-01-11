@@ -30,6 +30,7 @@ MODE="full"
 ATTACH_ONLY=false
 STOP_SESSION=false
 DETACHED=false
+SKIP_PROVISION=false
 
 # KAS port mappings
 declare -A KAS_PORTS=(
@@ -61,13 +62,14 @@ Tmux-based development environment for OpenTDF integration testing
 Usage: $0 [options]
 
 Options:
-  --minimal      Start minimal environment (docker + platform)
-  --standard     Start standard environment (docker + platform + 2 KAS)
-  --full         Start full environment (all services) [default]
-  --attach-only  Attach to existing session without starting
-  --detached     Create session without attaching (useful for testing/automation)
-  --stop         Stop session and cleanup all services
-  -h, --help     Show this help message
+  --minimal         Start minimal environment (docker + platform)
+  --standard        Start standard environment (docker + platform + 2 KAS)
+  --full            Start full environment (all services) [default]
+  --skip-provision  Skip Keycloak/fixtures provisioning (use if already provisioned)
+  --attach-only     Attach to existing session without starting
+  --detached        Create session without attaching (useful for testing/automation)
+  --stop            Stop session and cleanup all services
+  -h, --help        Show this help message
 
 Examples:
   $0                # Start full environment
@@ -263,6 +265,48 @@ start_docker_compose() {
     "if docker compose ps | grep -q 'postgres.*Up'; then echo 'Docker Compose already running'; docker compose logs -f; else echo 'Starting Docker Compose...'; docker compose up -d --wait && echo 'Docker Compose started' && docker compose logs -f; fi" C-m
 }
 
+provision_keycloak() {
+  echo "Provisioning Keycloak and fixtures..."
+
+  # Run provisioning in a temporary window
+  tmux new-window -t "${SESSION_NAME}" -n "provision-temp"
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "cd '${PLATFORM_DIR}'" C-m
+
+  # Wait for keycloak to be ready (check if port 8888 is up)
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "echo 'Waiting for Keycloak to be ready...'" C-m
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "for i in {1..30}; do if curl -s http://localhost:8888/health >/dev/null 2>&1; then echo 'Keycloak is ready'; break; fi; echo \"Waiting for Keycloak... (\$i/30)\"; sleep 2; done" C-m
+
+  # Provision keycloak
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "echo 'Provisioning Keycloak...'" C-m
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "go run ./service provision keycloak || echo 'Keycloak provisioning completed (may have been already provisioned)'" C-m
+
+  # Provision fixtures
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "echo 'Provisioning fixtures...'" C-m
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "go run ./service provision fixtures || echo 'Fixtures provisioning completed (may have been already provisioned)'" C-m
+
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "echo 'Provisioning complete!'" C-m
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "echo 'This window will remain open for 5 seconds...'" C-m
+  tmux send-keys -t "${SESSION_NAME}:provision-temp" \
+    "sleep 5" C-m
+
+  # Wait for provisioning to complete before continuing
+  # We'll do this by sleeping in the main script
+  echo "Waiting for provisioning to complete (this may take 30-60 seconds)..."
+  sleep 45
+
+  # Close the temporary provisioning window
+  tmux kill-window -t "${SESSION_NAME}:provision-temp" 2>/dev/null || true
+}
+
 start_platform() {
   local window_name="platform"
 
@@ -350,7 +394,14 @@ start_environment() {
 
   # Wait for docker compose to be ready
   echo "Waiting for Docker Compose services..."
-  sleep 3
+  sleep 5
+
+  # Provision Keycloak and fixtures (unless skipped)
+  if [[ "${SKIP_PROVISION}" == "false" ]]; then
+    provision_keycloak
+  else
+    echo "Skipping provisioning (--skip-provision flag set)"
+  fi
 
   # Create platform window
   start_platform
@@ -429,6 +480,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --full)
       MODE="full"
+      shift
+      ;;
+    --skip-provision)
+      SKIP_PROVISION=true
       shift
       ;;
     --attach-only)

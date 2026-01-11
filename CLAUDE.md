@@ -377,6 +377,217 @@ From `TESTING.md`:
 - CI uses matrix parallelization by SDK to reduce time (~2 minutes per job)
 - Consider using `pytest-xdist` for local parallelization (requires refactoring)
 
+## Tmux Development Environment
+
+The repository includes tmux-based tools for managing the multi-service development environment. These tools simplify running and monitoring the platform backend, multiple KAS instances, and tests simultaneously.
+
+### Prerequisites
+
+**macOS users**: The `watch` command is not installed by default on macOS but is required for the control panel dashboard. Install it with Homebrew:
+```bash
+brew install watch
+```
+
+### Tmux Scripts
+
+**`tmux-dev.sh`** - Main development environment launcher:
+- Creates a tmux session named `opentdf-dev` with multiple windows
+- Supports three modes:
+  - `--minimal`: Docker + platform only
+  - `--standard`: Docker + platform + 2 KAS instances (alpha, beta)
+  - `--full`: All services including 6 KAS instances (alpha, beta, gamma, delta, km1, km2)
+- Windows created:
+  - `control`: Status dashboard showing service health (updates every 2 seconds)
+  - `docker`: Docker Compose logs
+  - `platform`: Platform main service on port 8080
+  - `kas-*`: Individual KAS instance windows with logs
+  - `tests`: Test runner shell
+- Key features:
+  - Automatically starts Docker Compose services
+  - **Provisions Keycloak and fixtures on startup** (can be skipped with `--skip-provision`)
+  - Automatically starts services if not running
+  - Reattaches to existing services if already running
+  - Exports environment variables to tmux session
+  - Handles nested tmux detection and prompts user appropriately
+
+**Usage:**
+```bash
+# Start full environment (includes provisioning)
+./tmux-dev.sh
+
+# Start minimal environment
+./tmux-dev.sh --minimal
+
+# Skip provisioning if already done (faster startup)
+./tmux-dev.sh --skip-provision
+
+# Attach to existing session
+./tmux-dev.sh --attach-only
+
+# Stop and cleanup
+./tmux-dev.sh --stop
+```
+
+**Note on Provisioning:**
+The script automatically provisions Keycloak and fixtures on first startup, which takes 30-60 seconds. On subsequent runs, use `--skip-provision` to skip this step if you haven't torn down the Docker Compose services. The provisioning commands are generally idempotent but can be slow.
+
+**`tmux-control-panel.sh`** - Status dashboard script:
+- Displays real-time service status (running/stopped)
+- Shows log file paths for all services
+- Lists quick commands and tmux navigation shortcuts
+- Designed to be run with `watch` (updates every 2 seconds)
+- Shows different services based on the MODE environment variable
+
+**`run-local.sh`** - Test runner wrapper:
+- Ensures platform is running before tests
+- Starts additional KAS instances if needed
+- Exports log file paths as environment variables for audit log collection
+- Supports running in tmux sessions (exports vars to tmux environment)
+- Cleanup handler for KAS instances on exit
+- Usage: `./run-local.sh [pytest-args]`
+
+### Workflow for Using Tmux Tools
+
+1. **Start the environment:**
+   ```bash
+   cd xtest
+   ./tmux-dev.sh --full
+   ```
+
+2. **Navigate between windows:**
+   - `Ctrl-b '` - Switch to window by name (type "tests", "platform", etc.)
+   - `Ctrl-b w` - Show window list (interactive)
+   - `Ctrl-b n/p` - Next/previous window
+
+3. **Run tests in the tests window:**
+   ```bash
+   # Switch to tests window (Ctrl-b ')
+   pytest test_tdfs.py -v
+   ./run-local.sh test_abac.py
+   ```
+
+4. **Monitor logs:**
+   - Platform logs: Switch to `platform` window or check `${PLATFORM_DIR}/logs/kas-main.log`
+   - KAS logs: Switch to `kas-alpha`, `kas-beta`, etc., or check `${PLATFORM_DIR}/logs/kas-*.log`
+
+5. **Detach/reattach:**
+   - Detach: `Ctrl-b d` (keeps all services running)
+   - Reattach: `./tmux-dev.sh --attach-only`
+
+6. **Stop everything:**
+   ```bash
+   ./tmux-dev.sh --stop
+   ```
+
+### Debugging with Tmux
+
+When debugging test failures:
+
+1. **Check service status** - Look at the `control` window for service health
+2. **Review logs** - Switch to the relevant service window to see real-time logs
+3. **Run tests interactively** - Use the `tests` window to run specific tests with verbose output
+4. **Monitor audit logs** - Audit log paths are exported by `run-local.sh` and available in test fixtures
+5. **Restart individual services** - Switch to a service window, `Ctrl-c` to stop, up-arrow + Enter to restart
+
+## Pytest 9.x Test Execution Order Changes
+
+### Current Environment
+
+- **Python**: 3.14.0
+- **pytest**: 9.0.2
+
+### Test Execution Order Behavior
+
+Pytest 9.x has changed how it orders parametrized tests. This affects how module-scoped fixtures interact with test execution.
+
+**Previous behavior (pytest < 9.x):**
+- Tests were grouped by test function
+- All parametrizations of one test function ran together
+- Example order:
+  ```
+  test_tdf_assertions_with_keys[go-go]
+  test_tdf_assertions_with_keys[go-js]
+  test_tdf_assertions_with_keys[js-go]
+  test_tdf_assertions_with_keys[js-js]
+  test_other_test[go-go]
+  test_other_test[go-js]
+  ...
+  ```
+
+**Current behavior (pytest 9.x):**
+- Tests are grouped by parametrization values
+- One parametrization of each test runs, then cycles to the next parametrization
+- Example order:
+  ```
+  test_tdf_assertions_with_keys[go-go]
+  test_other_test[go-go]
+  test_another_test[go-go]
+  ...
+  test_tdf_assertions_with_keys[go-js]
+  test_other_test[go-js]
+  test_another_test[go-js]
+  ...
+  ```
+
+### Impact on Module-Scoped Fixtures
+
+**Module-scoped fixtures** (like `assertion_file_rs_and_hs_keys`, `hs256_key`, `rs256_keys`) are still created once per module and reused across all tests. However, the order in which tests access these fixtures has changed.
+
+**Key observations:**
+- Module fixtures are set up before ANY test runs
+- Module fixtures are torn down after ALL tests complete
+- Function fixtures (like `encrypt_sdk`, `decrypt_sdk`) are set up/torn down for each test variant
+- The new ordering groups tests by SDK combination, which can be more efficient for shared resources
+
+### Debugging Test Order Issues
+
+If you suspect test failures are due to execution order:
+
+1. **Run tests in isolation:**
+   ```bash
+   pytest test_tdfs.py::test_tdf_assertions_with_keys -v
+   ```
+
+2. **Use `--setup-show` to see fixture execution:**
+   ```bash
+   pytest test_tdfs.py::test_tdf_assertions_with_keys -v --setup-show
+   ```
+
+3. **Check for test interdependencies:**
+   - Module-scoped fixtures should be stateless or idempotent
+   - Tests should not modify shared fixture state
+   - Use function-scoped fixtures for test-specific setup
+
+4. **Force old test ordering (if needed):**
+   ```bash
+   # Note: This may not fully replicate old behavior but can help debug
+   pytest test_tdfs.py -v --tb=short --capture=no
+   ```
+
+5. **Identify fixture scope issues:**
+   ```python
+   # Check fixture scopes in conftest.py and fixtures/*.py
+   grep -r "@pytest.fixture" xtest/
+   ```
+
+### Common Issues and Solutions
+
+1. **Shared state in module fixtures:**
+   - Problem: Module fixture creates mutable state that tests modify
+   - Solution: Make fixtures stateless or use function scope
+
+2. **Resource conflicts:**
+   - Problem: Tests create conflicting resources (files, database entries)
+   - Solution: Use unique identifiers per test (e.g., include test name in file paths)
+
+3. **Setup/teardown order dependencies:**
+   - Problem: Test assumes specific setup from previous test
+   - Solution: Make each test fully independent with its own setup
+
+4. **Fixture caching issues:**
+   - Problem: Fixture returns cached value that should be fresh
+   - Solution: Check fixture scope and consider using function scope
+
 ## Contributing
 
 All commits must include DCO sign-off:
