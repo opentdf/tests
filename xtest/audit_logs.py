@@ -121,9 +121,7 @@ class AuditLogCollector:
 
         # Filter to existing files
         existing_files = {
-            service: path
-            for service, path in self.log_files.items()
-            if path.exists()
+            service: path for service, path in self.log_files.items() if path.exists()
         }
 
         if not existing_files:
@@ -134,7 +132,9 @@ class AuditLogCollector:
             # Don't disable - files may be created soon by the platform startup
             existing_files = self.log_files
 
-        logger.debug(f"Starting file-based log collection for: {list(existing_files.keys())}")
+        logger.debug(
+            f"Starting file-based log collection for: {list(existing_files.keys())}"
+        )
 
         # Start a thread for each log file to tail
         for service, log_path in existing_files.items():
