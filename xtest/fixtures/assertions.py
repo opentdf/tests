@@ -14,16 +14,17 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from pathlib import Path
 from pydantic_core import to_jsonable_python
+
 import assertions
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def hs256_key() -> str:
     """Generate a random HS256 (HMAC-SHA256) signing key."""
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def rs256_keys() -> tuple[str, str]:
     """Generate an RS256 (RSA-SHA256) key pair.
 
@@ -82,7 +83,7 @@ def write_assertion_verification_keys_to_file(
     return as_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def assertion_file_no_keys(tmp_dir: Path) -> Path:
     """Assertion file with a single handling assertion (no signing key)."""
     assertion_list = [
@@ -103,7 +104,7 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def assertion_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
@@ -146,7 +147,7 @@ def assertion_file_rs_and_hs_keys(
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def assertion_verification_file_rs_and_hs_keys(
     tmp_dir: Path, hs256_key: str, rs256_keys: tuple[str, str]
 ) -> Path:
