@@ -94,6 +94,21 @@ cd sdk && make
 cd sdk && make go
 ```
 
+**Update SDKs:**
+```bash
+# Update main branches only (recommended)
+./sdk/scripts/update-all.sh
+
+# Update all checked-out versions
+./sdk/scripts/update-all.sh --all
+```
+
+What it does:
+- Pulls latest commits for main branches (or all versions with `--all`)
+- Reports SHA changes for each SDK (e.g., `abc1234 → def5678`)
+- Automatically rebuilds only the SDKs that were updated
+- Skips SDKs that don't have main checked out
+
 **Cleanup:**
 ```bash
 # Remove all checked-out versions and build artifacts
