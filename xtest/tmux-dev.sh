@@ -47,7 +47,7 @@ KM1_ROOT_KEY="${OT_ROOT_KEY:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954
 KM2_ROOT_KEY="${OT_ROOT_KEY2:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1}"
 
 # Logging configuration
-LOG_LEVEL="${LOG_LEVEL:-audit}"
+LOG_LEVEL="${LOG_LEVEL:-info}"
 LOG_TYPE="${LOG_TYPE:-json}"
 LOG_DIR="${PLATFORM_DIR}/logs"
 

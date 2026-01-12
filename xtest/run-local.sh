@@ -27,7 +27,7 @@ TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Configuration
 PLATFORM_DIR="${PLATFORM_DIR:-$(cd "${TESTS_DIR}/../platform" && pwd)}"
 START_KAS_INSTANCES="${START_KAS_INSTANCES:-alpha beta gamma delta km1 km2}"
-LOG_LEVEL="${LOG_LEVEL:-audit}"
+LOG_LEVEL="${LOG_LEVEL:-info}"
 LOG_TYPE="${LOG_TYPE:-json}"
 SKIP_KAS_START="${SKIP_KAS_START:-false}"
 
