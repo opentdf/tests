@@ -203,7 +203,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def tmp_dir() -> Path:
     """Create and return temporary directory for test files."""
     dname = Path("tmp/")
