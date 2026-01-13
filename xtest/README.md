@@ -111,12 +111,6 @@ uv sync
 uv sync --extra dev
 ```
 
-#### Using pip (legacy)
-
-```shell
-pip install -r requirements.txt
-```
-
 ### Run Tests
 
 ```shell
