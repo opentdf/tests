@@ -45,3 +45,4 @@ jobs:
           else
             echo -e "## type check passed with warnings\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+        working-directory: xtest
