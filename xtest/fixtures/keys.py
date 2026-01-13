@@ -8,13 +8,15 @@ This module contains fixtures for:
 - Base key configuration
 """
 
-import os
 import json
+import os
 import typing
+from pathlib import Path
+
 import pytest
+
 import abac
 import tdfs
-from pathlib import Path
 from otdfctl import OpentdfCommandLineTool
 
 

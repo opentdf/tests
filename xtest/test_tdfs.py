@@ -1,14 +1,14 @@
 import base64
 import filecmp
-import pytest
 import random
 import re
 import string
 import subprocess
 from pathlib import Path
 
-import tdfs
+import pytest
 
+import tdfs
 
 cipherTexts: dict[str, Path] = {}
 counter = 0
@@ -483,9 +483,9 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
 
 def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
     assert manifest.encryptionInformation.keyAccess
-    manifest.encryptionInformation.keyAccess[0].url = (
-        "http://localhost:8585/malicious/kas"  # nothing running at 8585
-    )
+    manifest.encryptionInformation.keyAccess[
+        0
+    ].url = "http://localhost:8585/malicious/kas"  # nothing running at 8585
     return manifest
 
 
@@ -524,9 +524,9 @@ def assert_tamper_error(
             ]
     # Convert list of byte strings to regex pattern
     pattern = b"|".join(re.escape(err) for err in expected_error_oneof)
-    assert re.search(
-        pattern, exc.output, re.IGNORECASE
-    ), f"Unexpected error output: [{exc.output}]"
+    assert re.search(pattern, exc.output, re.IGNORECASE), (
+        f"Unexpected error output: [{exc.output}]"
+    )
 
 
 ## POLICY TAMPER TESTS

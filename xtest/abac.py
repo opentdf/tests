@@ -1,5 +1,4 @@
 import enum
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -187,7 +186,9 @@ def str_to_kas_public_key_alg(alg_str: str | None) -> int | None:
     try:
         return _STR_TO_KAS_ALG_MAP[alg_str]
     except KeyError:
-        raise ValueError(f"Unknown KAS public key algorithm string: {alg_str}")
+        raise ValueError(
+            f"Unknown KAS public key algorithm string: {alg_str}"
+        ) from None
 
 
 class KasPublicKey(BaseModelIgnoreExtra):
@@ -252,16 +253,16 @@ class ObligationTrigger(BaseModelIgnoreExtra):
     id: str
     action: Action
     attribute_value: AttributeValue
-    obligation_value: Optional["ObligationValue"] = None
+    obligation_value: ObligationValue | None = None
     context: list[ObligationRequestContext] | ObligationRequestContext | None = None
     metadata: Metadata | None = None
 
 
 class ObligationValue(BaseModelIgnoreExtra):
     id: str
-    obligation: Optional["Obligation"] = None
+    obligation: Obligation | None = None
     value: str
-    triggers: Optional[list["ObligationTrigger"]] = None
+    triggers: list[ObligationTrigger] | None = None
     fqn: str | None = None
     metadata: Metadata | None = None
 
@@ -270,6 +271,6 @@ class Obligation(BaseModelIgnoreExtra):
     id: str
     namespace: Namespace
     name: str
-    values: Optional[list["ObligationValue"]] = None
+    values: list[ObligationValue] | None = None
     fqn: str | None = None
     metadata: Metadata | None = None

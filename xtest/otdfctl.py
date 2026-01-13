@@ -5,35 +5,35 @@ interface to the otdfctl CLI tool for managing OpenTDF policies, attributes,
 namespaces, KAS registries, and obligations.
 """
 
+import base64
 import json
 import logging
 import os
 import subprocess
 import sys
-import base64
 
 from abac import (
-    Namespace,
+    Action,
     Attribute,
+    AttributeKey,
     AttributeRule,
     AttributeValue,
-    SubjectConditionSet,
-    SubjectSet,
-    SubjectMapping,
-    Action,
-    Obligation,
-    ObligationValue,
-    ObligationTrigger,
     KasEntry,
+    KasGrantAttribute,
+    KasGrantNamespace,
+    KasGrantValue,
     KasKey,
     KasPublicKey,
-    PublicKey,
+    Namespace,
     NamespaceKey,
-    AttributeKey,
+    Obligation,
+    ObligationTrigger,
+    ObligationValue,
+    PublicKey,
+    SubjectConditionSet,
+    SubjectMapping,
+    SubjectSet,
     ValueKey,
-    KasGrantNamespace,
-    KasGrantAttribute,
-    KasGrantValue,
     kas_public_key_alg_to_str,
 )
 
@@ -96,9 +96,9 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert (
-            process.returncode == 0
-        ), f"otdfctl kas-registry create failed: {err.decode() if err else out.decode()}"
+        assert process.returncode == 0, (
+            f"otdfctl kas-registry create failed: {err.decode() if err else out.decode()}"
+        )
         return KasEntry.model_validate_json(out)
 
     def kas_registry_create_if_not_present(

@@ -4,7 +4,6 @@ import string
 import abac
 from otdfctl import OpentdfCommandLineTool
 
-
 otdfctl = OpentdfCommandLineTool()
 
 

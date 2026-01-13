@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
+from pydantic import BaseModel, ConfigDict, Field
 
 Type = Literal["handling", "other"]
 Scope = Literal["payload", "tdo"]
