@@ -60,12 +60,13 @@
 # ]
 # ```
 
-import sys
 import json
 import re
-from git import Git
-from typing import NotRequired, TypeGuard, TypedDict
+import sys
+from typing import NotRequired, TypedDict, TypeGuard
 from urllib.parse import quote
+
+from git import Git
 
 
 class ResolveSuccess(TypedDict):

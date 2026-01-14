@@ -6,13 +6,14 @@ This module contains fixtures for:
 - Creating assertion verification key files
 """
 
-import pytest
 import base64
-import secrets
 import json
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+import secrets
 from pathlib import Path
+
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_core import to_jsonable_python
 
 import assertions
@@ -58,9 +59,13 @@ def rs256_keys() -> tuple[str, str]:
 
 
 def write_assertion_to_file(
-    tmp_dir: Path, file_name: str, assertion_list: list[assertions.Assertion] = []
+    tmp_dir: Path,
+    file_name: str,
+    assertion_list: list[assertions.Assertion] | None = None,
 ) -> Path:
     """Write assertion list to a JSON file."""
+    if assertion_list is None:
+        assertion_list = []
     as_file = tmp_dir / f"test-assertion-{file_name}.json"
     assertion_json = json.dumps(to_jsonable_python(assertion_list, exclude_none=True))
     with as_file.open("w") as f:

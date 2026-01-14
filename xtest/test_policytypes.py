@@ -1,12 +1,12 @@
 import filecmp
-import pytest
 import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import tdfs
 from abac import Attribute
-
 
 cipherTexts: dict[str, Path] = {}
 
@@ -112,7 +112,9 @@ def decrypt_or_dont(
                 r"forbidden|unable to reconstruct split key",
                 combined_output,
                 re.IGNORECASE,
-            ), f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
+            ), (
+                f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
+            )
 
 
 def test_and_attributes_success(
@@ -188,9 +190,9 @@ def test_hierarchy_attributes_success(
     skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
 
     attrs = attribute_with_hierarchy_type.values
-    assert (
-        attrs and len(attrs) == 3
-    ), "Expected exactly three attributes for HIERARCHY type"
+    assert attrs and len(attrs) == 3, (
+        "Expected exactly three attributes for HIERARCHY type"
+    )
     (alpha, beta, gamma) = attrs
     samples = [
         ([alpha], False),  # Should fail: user has beta, not alpha (higher level)

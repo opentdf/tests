@@ -9,10 +9,11 @@ This module contains fixtures for setting up KAS instances used in testing:
 """
 
 import os
+
 import pytest
+
 import abac
 from otdfctl import OpentdfCommandLineTool
-
 
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
@@ -20,7 +21,7 @@ PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 def load_cached_kas_keys() -> abac.PublicKey:
     """Load RSA and EC public keys from platform directory."""
     keyset: list[abac.KasPublicKey] = []
-    with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
+    with open(f"{PLATFORM_DIR}/kas-cert.pem") as rsaFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048,
@@ -28,7 +29,7 @@ def load_cached_kas_keys() -> abac.PublicKey:
                 pem=rsaFile.read(),
             )
         )
-    with open(f"{PLATFORM_DIR}/kas-ec-cert.pem", "r") as ecFile:
+    with open(f"{PLATFORM_DIR}/kas-ec-cert.pem") as ecFile:
         keyset.append(
             abac.KasPublicKey(
                 alg=abac.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1,
@@ -52,7 +53,7 @@ def cached_kas_keys() -> abac.PublicKey:
 @pytest.fixture(scope="session")
 def kas_public_key_r1() -> abac.KasPublicKey:
     """RSA-2048 public key (kid='r1') for KAS."""
-    with open(f"{PLATFORM_DIR}/kas-cert.pem", "r") as rsaFile:
+    with open(f"{PLATFORM_DIR}/kas-cert.pem") as rsaFile:
         return abac.KasPublicKey(
             algStr="rsa:2048",
             kid="r1",
@@ -63,7 +64,7 @@ def kas_public_key_r1() -> abac.KasPublicKey:
 @pytest.fixture(scope="session")
 def kas_public_key_e1() -> abac.KasPublicKey:
     """EC secp256r1 public key (kid='e1') for KAS."""
-    with open(f"{PLATFORM_DIR}/kas-ec-cert.pem", "r") as ecFile:
+    with open(f"{PLATFORM_DIR}/kas-ec-cert.pem") as ecFile:
         return abac.KasPublicKey(
             algStr="ec:secp256r1",
             kid="e1",

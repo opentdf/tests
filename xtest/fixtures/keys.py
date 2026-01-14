@@ -8,13 +8,15 @@ This module contains fixtures for:
 - Base key configuration
 """
 
-import os
 import json
+import os
 import typing
+from pathlib import Path
+
 import pytest
+
 import abac
 import tdfs
-from pathlib import Path
 from otdfctl import OpentdfCommandLineTool
 
 
@@ -118,7 +120,7 @@ def attribute_allof_with_two_managed_keys(
     otdfctl.key_assign_attr(km1_rsa_key, attr)
     otdfctl.key_assign_attr(km2_ec_key, attr)
 
-    return [attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id]]
+    return (attr, [km1_rsa_key.key.key_id, km2_ec_key.key.key_id])
 
 
 @pytest.fixture(scope="module")

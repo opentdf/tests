@@ -1,20 +1,20 @@
-import json
-import jsonschema
 import base64
+import json
 import logging
 import os
-import pytest
 import re
 import shutil
 import subprocess
 import zipfile
 from collections.abc import Callable
-from pydantic import BaseModel
-from typing import Any, Literal
 from pathlib import Path
+from typing import Any, Literal
+
+import jsonschema
+import pytest
+from pydantic import BaseModel
 
 import assertions as tdfassertions
-
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -58,14 +58,12 @@ policy_type = Literal["plaintext", "encrypted"]
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
     semver: tuple[int, int, int] | None = None
-    features: set[feature_type] = set(
-        [
-            "assertions",
-            "assertion_verification",
-            "autoconfigure",
-            "better-messages-2024",
-        ]
-    )
+    features: set[feature_type] = {
+        "assertions",
+        "assertion_verification",
+        "autoconfigure",
+        "better-messages-2024",
+    }
 
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
@@ -280,7 +278,7 @@ def validate_manifest_schema(tdf_file: Path):
         raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
     elif not os.path.isfile(schema_file_path):
         raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
-    with open(schema_file_path, "r") as schema_file:
+    with open(schema_file_path) as schema_file:
         schema = json.load(schema_file)
 
     ## Load the manifest file directly from the zipfile

@@ -13,16 +13,16 @@ Domain-specific fixtures are organized in the fixtures/ package:
 - fixtures.keys: Key management fixtures
 """
 
+import json
 import os
 import typing
-import pytest
-import json
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 import tdfs
 from otdfctl import OpentdfCommandLineTool
-
 
 # Load all fixture modules
 pytest_plugins = [
@@ -169,7 +169,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             focus = set(typing.get_args(tdfs.sdk_type))
         else:
             focus = cast(set[tdfs.sdk_type], set(list_opt("--focus", tdfs.focus_type)))
-        focused_sdks = set(s for s in subject_sdks if s.sdk in focus)
+        focused_sdks = {s for s in subject_sdks if s.sdk in focus}
         metafunc.parametrize("in_focus", [focused_sdks])
 
     if "container" in metafunc.fixturenames:
@@ -199,7 +199,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     length = (5 * 2**30) if size == "large" else 128
     with pt_file.open("w") as f:
         for i in range(0, length, 16):
-            f.write("{:15,d}\n".format(i))
+            f.write(f"{i:15,d}\n")
     return pt_file
 
 

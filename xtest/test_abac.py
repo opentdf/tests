@@ -1,13 +1,13 @@
 import filecmp
 import re
 import subprocess
-import pytest
 from pathlib import Path
+
+import pytest
 
 import tdfs
 from abac import Attribute, ObligationValue
 from test_policytypes import skip_rts_as_needed
-
 
 cipherTexts: dict[str, Path] = {}
 rewrap_403_pattern = (
@@ -47,15 +47,15 @@ def assert_decrypt_fails_with_patterns(
         combined_output = output + stderr
 
         for pattern in expected_patterns:
-            assert re.search(
-                pattern, combined_output, re.IGNORECASE
-            ), f"Expected pattern '{pattern}' not found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+            assert re.search(pattern, combined_output, re.IGNORECASE), (
+                f"Expected pattern '{pattern}' not found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+            )
 
         if unexpected_patterns:
             for pattern in unexpected_patterns:
-                assert not re.search(
-                    pattern, combined_output, re.IGNORECASE
-                ), f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+                assert not re.search(pattern, combined_output, re.IGNORECASE), (
+                    f"Unexpected pattern '{pattern}' found in output.\nSTDOUT: {output}\nSTDERR: {stderr}"
+                )
 
 
 def test_key_mapping_multiple_mechanisms(
@@ -99,9 +99,7 @@ def test_key_mapping_multiple_mechanisms(
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
     manifest = tdfs.manifest(ct_file)
-    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == set(
-        ["r1", "e1"]
-    )
+    assert {kao.kid for kao in manifest.encryptionInformation.keyAccess} == {"r1", "e1"}
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
@@ -197,9 +195,9 @@ def test_autoconfigure_two_kas_or_standard(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_value1, kas_url_value2]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_value1, kas_url_value2} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -251,9 +249,9 @@ def test_autoconfigure_double_kas_and(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_value1, kas_url_value2]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_value1, kas_url_value2} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -351,9 +349,9 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_attr, kas_url_value1]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_attr, kas_url_value1} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -405,9 +403,9 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_attr, kas_url_value1]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_attr, kas_url_value1} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -505,9 +503,9 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_ns, kas_url_value1]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_ns, kas_url_value1} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -559,9 +557,9 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert set([kas_url_ns, kas_url_value1]) == set(
-        [kao.url for kao in manifest.encryptionInformation.keyAccess]
-    )
+    assert {kas_url_ns, kas_url_value1} == {
+        kao.url for kao in manifest.encryptionInformation.keyAccess
+    }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -596,10 +594,14 @@ def test_obligations_not_entitled(
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations.ztdf"
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
+
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
@@ -639,17 +641,21 @@ def test_obligations_not_fulfillable(
 
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_unscoped_trigger
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
     obligations_pattern = obligation_value.fqn
+    assert obligations_pattern, "Obligation fqn is invalid"
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
@@ -683,13 +689,16 @@ def test_obligations_client_not_scoped(
 
     # Unpack the test setup
     attr, _ = obligation_setup_scs_scoped_trigger_different_client
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
@@ -697,9 +706,9 @@ def test_obligations_client_not_scoped(
     decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=False)
 
     # Assert that the decrypted file matches the original plaintext file
-    assert filecmp.cmp(
-        pt_file, rt_file
-    ), f"Decrypted file {rt_file} does not match original {pt_file}"
+    assert filecmp.cmp(pt_file, rt_file), (
+        f"Decrypted file {rt_file} does not match original {pt_file}"
+    )
 
 
 def test_obligations_client_scoped(
@@ -723,17 +732,21 @@ def test_obligations_client_scoped(
 
     # Unpack the test setup
     attr, obligation_value = obligation_setup_scs_scoped_trigger
+    assert attr.values, "Attribute has no values"
+    attr_val = attr.values[0]
+    assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
     ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
-        attr_values=[attr.values[0].fqn],
+        attr_values=[attr_val.fqn],
         container=container,
     )
 
     obligations_pattern = obligation_value.fqn
+    assert obligations_pattern, "Obligation fqn is invalid"
     rt_file = tmp_dir / "test-obligations-fulfillable.untdf"
     assert_decrypt_fails_with_patterns(
         decrypt_sdk=decrypt_sdk,
@@ -747,7 +760,7 @@ def test_obligations_client_scoped(
 """
 Key management tests
 
-Note: 
+Note:
 These tests should be last, because one sets a default key on the platform
 that cannot currently be unset.
 """
@@ -794,11 +807,11 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2
     # The managed key fixture uses key ids 'km1-rsa' and 'km2-ec'
-    assert set([kao.kid for kao in manifest.encryptionInformation.keyAccess]) == {
+    assert {kao.kid for kao in manifest.encryptionInformation.keyAccess} == {
         attribute_allof_with_two_managed_keys[1][0],
         attribute_allof_with_two_managed_keys[1][1],
     }
-    assert set([kao.url for kao in manifest.encryptionInformation.keyAccess]) == {
+    assert {kao.url for kao in manifest.encryptionInformation.keyAccess} == {
         kas_url_km1,
         kas_url_km2,
     }

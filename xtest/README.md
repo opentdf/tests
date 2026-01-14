@@ -99,8 +99,16 @@ To build all the checked out SDKs, run `make` from the `sdk` folder.
 
 ### Install test harness requirements
 
+#### Using uv (recommended)
+
 ```shell
-pip install -r requirements.txt
+uv sync
+```
+
+#### Development (includes ruff, pyright)
+
+```shell
+uv sync --extra dev
 ```
 
 ### Run Tests

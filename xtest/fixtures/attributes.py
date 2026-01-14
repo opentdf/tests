@@ -8,9 +8,11 @@ This module contains fixtures for setting up various attribute configurations:
 - Mixed grant scenarios (attr + value, ns + value)
 """
 
-import pytest
 import random
 import string
+
+import pytest
+
 import abac
 import tdfs
 from otdfctl import OpentdfCommandLineTool
