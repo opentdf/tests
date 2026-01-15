@@ -244,7 +244,7 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
     # Determine if this is a key management KAS
     extra_args=""
     if [[ "${kas_name}" == "km1" ]]; then
-      extra_args="--key-management=true --root-key=${KM1_ROOT_KEY}"
+      extra_args="--key-management=true --ec-tdf-enabled=true --root-key=${KM1_ROOT_KEY}"
     elif [[ "${kas_name}" == "km2" ]]; then
       extra_args="--key-management=true --ec-tdf-enabled=true --root-key=${KM2_ROOT_KEY}"
     fi
