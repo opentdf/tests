@@ -85,6 +85,7 @@ class AuditLogCollector:
         self.log_file_path: Path | None = None
         self.log_file_written = False
         self._mode: str = "file" if log_files else "docker"
+        self.start_time: datetime | None = None
 
     def start(self) -> None:
         """Start background log collection.
@@ -97,6 +98,9 @@ class AuditLogCollector:
         """
         if self._disabled:
             return
+
+        # Track when collection started (for test timing in error messages)
+        self.start_time = datetime.now()
 
         # Check if platform directory exists
         if not self.platform_dir.exists():
@@ -836,10 +840,28 @@ class AuditLogAsserter:
         if self._collector:
             context.append("Log collection details:")
             context.append(f"  - Total logs collected: {len(all_logs)}")
+
+            # Test timing information
+            if self._collector.start_time:
+                test_duration = datetime.now() - self._collector.start_time
+                context.append(
+                    f"  - Test started: {self._collector.start_time.isoformat()}"
+                )
+                context.append(
+                    f"  - Test duration: {test_duration.total_seconds():.2f}s"
+                )
+
+            # Services and their log file locations
             if self._collector.services:
                 context.append(
                     f"  - Services monitored: {', '.join(self._collector.services)}"
                 )
+
+            if self._collector.log_files:
+                context.append("  - Log file locations:")
+                for service, log_path in sorted(self._collector.log_files.items()):
+                    context.append(f"      {service}: {log_path}")
+
             if self._collector._marks:
                 context.append(
                     f"  - Timestamp marks: {', '.join(self._collector._marks.keys())}"
