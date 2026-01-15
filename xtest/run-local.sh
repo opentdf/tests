@@ -107,7 +107,6 @@ if ! curl -s http://localhost:8080/healthz >/dev/null 2>&1; then
         keys='[{"kid":"e1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"ec1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"r1","alg":"rsa:2048","private":"kas-private.pem","cert":"kas-cert.pem"}]'
 
         while IFS= read -r key_json; do
-            alg="$(jq -r '.alg' <<<"${key_json}")"
             private_pem="$(jq -r '.privateKey' <<<"${key_json}")"
             cert_pem="$(jq -r '.cert' <<<"${key_json}")"
             kid="$(jq -r '.kid' <<<"${key_json}")"
@@ -184,6 +183,7 @@ PLATFORM_STARTED=false
 # Ensure logs directory exists
 mkdir -p "${PLATFORM_DIR}/logs"
 
+# shellcheck disable=SC2329  # Function is invoked via trap
 cleanup_all() {
     echo ""
     echo "Cleaning up..."
@@ -258,11 +258,11 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
         fi
 
         # Determine if this is a key management KAS
-        extra_args=""
+        extra_args=()
         if [[ "${kas_name}" == "km1" ]]; then
-            extra_args="--key-management=true --ec-tdf-enabled=true --root-key=${KM1_ROOT_KEY}"
+            extra_args=(--key-management=true --ec-tdf-enabled=true --root-key="${KM1_ROOT_KEY}")
         elif [[ "${kas_name}" == "km2" ]]; then
-            extra_args="--key-management=true --ec-tdf-enabled=true --root-key=${KM2_ROOT_KEY}"
+            extra_args=(--key-management=true --ec-tdf-enabled=true --root-key="${KM2_ROOT_KEY}")
         fi
 
         log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
@@ -278,7 +278,7 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
         (
             cd "${PLATFORM_DIR}"
             LOG_LEVEL="${LOG_LEVEL}" LOG_TYPE="${LOG_TYPE}" \
-                test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >>"${log_file}" 2>&1
+                test/local/start-kas.sh "${kas_name}" "${port}" "${extra_args[@]}" >>"${log_file}" 2>&1
         ) &
 
         # Wait for KAS to be ready
