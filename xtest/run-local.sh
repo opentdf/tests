@@ -17,7 +17,7 @@
 # Environment Variables:
 #   PLATFORM_DIR          Path to platform repo (default: ../../platform)
 #   START_KAS_INSTANCES   Space-separated KAS names to start (default: "alpha beta gamma delta km1 km2")
-#   LOG_LEVEL             Log level for all services (default: audit)
+#   LOG_LEVEL             Log level for all services (default: debug)
 #   LOG_TYPE              Log format type (default: json)
 #   SKIP_KAS_START        Set to "true" to skip starting additional KAS instances
 
@@ -29,7 +29,7 @@ TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Configuration
 PLATFORM_DIR="${PLATFORM_DIR:-$(cd "${TESTS_DIR}/../platform" && pwd)}"
 START_KAS_INSTANCES="${START_KAS_INSTANCES:-alpha beta gamma delta km1 km2}"
-LOG_LEVEL="${LOG_LEVEL:-audit}"
+LOG_LEVEL="${LOG_LEVEL:-debug}"
 LOG_TYPE="${LOG_TYPE:-json}"
 SKIP_KAS_START="${SKIP_KAS_START:-false}"
 
@@ -92,6 +92,9 @@ echo ""
 declare -a KAS_LOG_FILES=()
 declare -a KAS_PIDS=()
 
+# Ensure logs directory exists
+mkdir -p "${PLATFORM_DIR}/logs"
+
 cleanup_kas() {
   echo ""
   echo "Cleaning up KAS instances..."
@@ -127,13 +130,20 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
       extra_args="--key-management=true --root-key=${KM2_ROOT_KEY}"
     fi
 
+    log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
+
+    # Create log file so it can be tailed immediately
+    touch "${log_file}"
+
     echo "Starting KAS ${kas_name} on port ${port}..."
+    echo "  Log file: ${log_file}"
 
     # Start KAS in background
+    # Redirect output to log file so we can see any startup errors from start-kas.sh itself
     (
       cd "${PLATFORM_DIR}"
       LOG_LEVEL="${LOG_LEVEL}" LOG_TYPE="${LOG_TYPE}" \
-        test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >/dev/null 2>&1
+        test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >>"${log_file}" 2>&1
     ) &
 
     KAS_PIDS+=($!)
@@ -142,13 +152,20 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
     for i in {1..30}; do
       if curl -s "http://localhost:${port}/healthz" >/dev/null 2>&1; then
         echo "  ✓ KAS ${kas_name} ready"
-        log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
         KAS_LOG_FILES+=("${kas_name}:${log_file}")
         break
       fi
       sleep 1
       if [[ $i -eq 30 ]]; then
         echo "  ✗ KAS ${kas_name} failed to start"
+        echo ""
+        echo "=== Last 50 lines of ${log_file} ==="
+        if [[ -f "${log_file}" ]]; then
+          tail -n 50 "${log_file}"
+        else
+          echo "Log file not found: ${log_file}"
+        fi
+        echo "=== End of log ==="
         exit 1
       fi
     done
