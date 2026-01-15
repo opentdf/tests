@@ -44,8 +44,8 @@ declare -A KAS_PORTS=(
 )
 
 # KAS root keys for key management
-KM1_ROOT_KEY="${OT_ROOT_KEY:-Sk5OQ1dLQWExRkMyelFWdz09}"  # Base64 encoded test key
-KM2_ROOT_KEY="${OT_ROOT_KEY2:-U2s1T1EzZExRV0V4UmtNMmVsRldkejA5}"  # Different test key
+KM1_ROOT_KEY="${OT_ROOT_KEY:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1}"
+KM2_ROOT_KEY="${OT_ROOT_KEY2:-a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1}"
 
 echo "=== OpenTDF xtest Local Runner ==="
 echo ""
@@ -127,7 +127,7 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
     if [[ "${kas_name}" == "km1" ]]; then
       extra_args="--key-management=true --root-key=${KM1_ROOT_KEY}"
     elif [[ "${kas_name}" == "km2" ]]; then
-      extra_args="--key-management=true --root-key=${KM2_ROOT_KEY}"
+      extra_args="--key-management=true --ec-tdf-enabled=true --root-key=${KM2_ROOT_KEY}"
     fi
 
     log_file="${PLATFORM_DIR}/logs/kas-${kas_name}.log"
@@ -177,6 +177,8 @@ fi
 # Export environment variables for pytest
 export PLATFORM_DIR="${PLATFORM_DIR}"
 [[ -n "${PLATFORM_LOG_FILE}" ]] && export PLATFORM_LOG_FILE="${PLATFORM_LOG_FILE}"
+export OT_ROOT_KEY="${KM1_ROOT_KEY}"
+export OT_ROOT_KEY2="${KM2_ROOT_KEY}"
 
 # Export KAS log file paths
 for entry in "${KAS_LOG_FILES[@]}"; do
