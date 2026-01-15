@@ -73,7 +73,9 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
       $SED_CMD 's/branch=main/branch=${platform.branch}/g' "$POM_FILE"
       echo "Added platform.branch=$PLATFORM_BRANCH and updated branch references in $POM_FILE"
     else
-      echo "Warning: Could not add platform.branch property to $POM_FILE (no <properties> section?), leaving branch=main as-is"
+      # No <properties> section exists, directly replace branch=main with the actual branch value
+      $SED_CMD "s|branch=main|branch=$PLATFORM_BRANCH|g" "$POM_FILE"
+      echo "No <properties> section, directly replaced branch=main with branch=$PLATFORM_BRANCH in $POM_FILE"
     fi
   fi
 done
