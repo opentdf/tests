@@ -102,24 +102,16 @@ def managed_key_km2_ec(
     kas_entry_km2: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-<<<<<<< HEAD
     """Get or create EC managed key on km2.
 
     Key ID includes a hash of the root key to ensure that if the root key changes,
     a new key will be created instead of reusing an incompatible one.
     """
-=======
-    """Get or create EC managed key on km2."""
->>>>>>> a9be46ca (fixes)
     pfs = tdfs.PlatformFeatureSet()
     if "key_management" not in pfs.features:
         pytest.skip("Key management feature is not enabled")
 
-<<<<<<< HEAD
     key_id = f"km2-ec-{_key_id_suffix(root_key)}"
-=======
-    key_id = "km2-ec"
->>>>>>> a9be46ca (fixes)
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
     key = next((k for k in existing_keys if k.key.key_id == key_id), None)
     if key is None:
