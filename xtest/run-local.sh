@@ -193,15 +193,21 @@ cleanup_all() {
     echo "Cleaning up KAS instances on ports: ${KAS_STARTED_PORTS[*]}"
     for port in "${KAS_STARTED_PORTS[@]}"; do
       echo "Looking for process on port ${port}..."
-      pid=$(lsof -t -i:"${port}" || true)
-      if [[ -n "${pid}" ]]; then
-        echo "Stopping KAS on port ${port} (PID: ${pid})"
-        kill "${pid}" || true
+      # lsof can return multiple PIDs, handle them all
+      pids=$(lsof -t -i:"${port}" 2>/dev/null || true)
+      if [[ -n "${pids}" ]]; then
+        for pid in ${pids}; do
+          echo "Stopping KAS on port ${port} (PID: ${pid})"
+          kill "${pid}" 2>/dev/null || true
+        done
         sleep 1
-        if kill -0 "${pid}" 2>/dev/null; then
-          echo "  Force killing PID: ${pid}"
-          kill -9 "${pid}" || true
-        fi
+        # Force kill any that are still running
+        for pid in ${pids}; do
+          if kill -0 "${pid}" 2>/dev/null; then
+            echo "  Force killing PID: ${pid}"
+            kill -9 "${pid}" 2>/dev/null || true
+          fi
+        done
       else
         echo "No process found on port ${port}"
       fi
@@ -211,17 +217,27 @@ cleanup_all() {
   # Clean up platform if we started it
   if [[ "${PLATFORM_STARTED}" == "true" ]]; then
     echo "Cleaning up platform..."
-    pid=$(lsof -t -i:8080 || true)
-    if [[ -n "${pid}" ]]; then
-      echo "Stopping platform on port 8080 (PID: ${pid})"
-      kill "${pid}" || true
+    pids=$(lsof -t -i:8080 2>/dev/null || true)
+    if [[ -n "${pids}" ]]; then
+      for pid in ${pids}; do
+        echo "Stopping platform on port 8080 (PID: ${pid})"
+        kill "${pid}" 2>/dev/null || true
+      done
       sleep 1
-      if kill -0 "${pid}" 2>/dev/null; then
-        echo "  Force killing PID: ${pid}"
-        kill -9 "${pid}" || true
-      fi
+      # Force kill any that are still running
+      for pid in ${pids}; do
+        if kill -0 "${pid}" 2>/dev/null; then
+          echo "  Force killing PID: ${pid}"
+          kill -9 "${pid}" 2>/dev/null || true
+        fi
+      done
     fi
   fi
+
+  # Kill any remaining watch.sh or opentdf processes that might be orphaned
+  pkill -f "watch.sh.*opentdf" 2>/dev/null || true
+
+  echo "Cleanup complete"
 }
 
 # Set up cleanup trap
