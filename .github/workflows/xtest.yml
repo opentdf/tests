@@ -247,9 +247,10 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.14"
-      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+      - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c # v1.3.0
         with:
-          github_token: ${{ github.token }}
+          setup_only: true
+          token: ${{ secrets.BUF_TOKEN }}
           version: "1.56.0"
 
       - name: Set up JDK
