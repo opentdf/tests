@@ -61,54 +61,173 @@ echo "Platform directory: ${PLATFORM_DIR}"
 echo "Tests directory: ${TESTS_DIR}"
 echo ""
 
-# Check if platform is running
+# Check if platform is running, start it if not
 PLATFORM_LOG_FILE="${PLATFORM_DIR}/logs/kas-main.log"
+
 if ! curl -s http://localhost:8080/healthz >/dev/null 2>&1; then
-  echo "Error: Platform is not running on port 8080"
+  echo "Platform is not running. Starting platform..."
   echo ""
-  echo "Please start the platform first:"
-  echo "  cd ${PLATFORM_DIR}"
-  echo "  docker compose up -d --wait"
-  echo "  go run ./service provision keycloak"
-  echo "  go run ./service provision fixtures"
-  echo "  LOG_LEVEL=${LOG_LEVEL} LOG_TYPE=${LOG_TYPE} test/local/start-platform.sh"
-  echo ""
-  exit 1
+
+  cd "${PLATFORM_DIR}"
+
+  # Check if keys exist, if not run init-temp-keys.sh
+  if [[ ! -f kas-private.pem ]] || [[ ! -f kas-ec-private.pem ]]; then
+    echo "Generating temporary keys..."
+    .github/scripts/init-temp-keys.sh
+  fi
+
+  # Check if docker compose is running
+  if ! docker compose ps | grep -q "postgres.*Up"; then
+    echo "Starting docker compose services..."
+    docker compose up -d --wait
+
+    echo "Provisioning Keycloak..."
+    go run ./service provision keycloak
+
+    echo "Provisioning fixtures..."
+    go run ./service provision fixtures
+  fi
+
+  # Load extra keys and configure opentdf.yaml
+  echo "Configuring platform with extra keys and EC support..."
+  EXTRA_KEYS_FILE="${TESTS_DIR}/xtest/extra-keys.json"
+
+  if [[ ! -f opentdf.yaml ]]; then
+    if [[ -f opentdf-dev.yaml ]]; then
+      cp opentdf-dev.yaml opentdf.yaml
+    else
+      echo "Error: No opentdf.yaml or opentdf-dev.yaml found"
+      exit 1
+    fi
+  fi
+
+  # Add extra keys from extra-keys.json
+  if [[ -f "${EXTRA_KEYS_FILE}" ]]; then
+    keyring='[{"kid":"ec1","alg":"ec:secp256r1"},{"kid":"r1","alg":"rsa:2048"}]'
+    keys='[{"kid":"e1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"ec1","alg":"ec:secp256r1","private":"kas-ec-private.pem","cert":"kas-ec-cert.pem"},{"kid":"r1","alg":"rsa:2048","private":"kas-private.pem","cert":"kas-cert.pem"}]'
+
+    while IFS= read -r key_json; do
+      alg="$(jq -r '.alg' <<< "${key_json}")"
+      private_pem="$(jq -r '.privateKey' <<< "${key_json}")"
+      cert_pem="$(jq -r '.cert' <<< "${key_json}")"
+      kid="$(jq -r '.kid' <<< "${key_json}")"
+
+      if [[ ! "${kid}" =~ ^[-0-9a-zA-Z_]+$ ]]; then
+        echo "Error: Invalid kid: ${kid}"
+        exit 1
+      fi
+
+      private_path="${kid}.pem"
+      cert_path="${kid}-cert.pem"
+
+      echo "${private_pem}" >"${private_path}"
+      echo "${cert_pem}" >"${cert_path}"
+      chmod a+r "${private_path}" "${cert_path}"
+
+      key_obj="$(jq '{kid, alg, private: $private, cert: $cert}' --arg private "${private_path}" --arg cert "${cert_path}" <<< "${key_json}")"
+      keys="$(jq '. + [$key_obj]' --argjson key_obj "${key_obj}" <<< "${keys}")"
+
+      keyring_obj="$(jq '{kid, alg}' <<< "${key_json}")"
+      keyring="$(jq '. + [$keyring_obj]' --argjson keyring_obj "${keyring_obj}" <<< "${keyring}")"
+    done < <(jq -c '.[]' < "${EXTRA_KEYS_FILE}")
+
+    yq_command="$(printf '(.services.kas.keyring = %s) | (.server.cryptoProvider.standard.keys = %s)' "${keyring}" "${keys}")"
+    yq e "${yq_command}" -i opentdf.yaml
+  fi
+
+  # Enable EC TDF support
+  yq e '.services.kas.ec_tdf_enabled = true' -i opentdf.yaml
+
+  # Configure logging
+  yq e "(.logger.level = \"${LOG_LEVEL}\") | (.logger.type = \"${LOG_TYPE}\")" -i opentdf.yaml
+
+  # Start platform using start-platform.sh
+  echo "Starting platform server..."
+  LOG_LEVEL="${LOG_LEVEL}" LOG_TYPE="${LOG_TYPE}" test/local/start-platform.sh &
+
+  # Wait for platform to be ready
+  for i in {1..30}; do
+    if curl -s http://localhost:8080/healthz >/dev/null 2>&1; then
+      echo "✓ Platform is ready"
+      PLATFORM_STARTED=true
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "${PLATFORM_STARTED}" == "false" ]]; then
+    echo "Error: Platform did not become ready"
+    exit 1
+  fi
+
+  cd "${SCRIPT_DIR}"
+else
+  echo "✓ Platform is already running"
 fi
 
 if [[ ! -f "${PLATFORM_LOG_FILE}" ]]; then
   echo "Warning: Platform log file not found: ${PLATFORM_LOG_FILE}"
-  echo "Platform may not have been started with log capture."
   echo "Audit log assertions will be disabled."
   echo ""
   PLATFORM_LOG_FILE=""
+else
+  echo "  Log file: ${PLATFORM_LOG_FILE}"
 fi
 
-echo "✓ Platform is running"
-[[ -n "${PLATFORM_LOG_FILE}" ]] && echo "  Log file: ${PLATFORM_LOG_FILE}"
 echo ""
 
 # Start additional KAS instances if needed
 declare -a KAS_LOG_FILES=()
-declare -a KAS_PIDS=()
+declare -a KAS_STARTED_PORTS=()
+PLATFORM_STARTED=false
 
 # Ensure logs directory exists
 mkdir -p "${PLATFORM_DIR}/logs"
 
-cleanup_kas() {
+cleanup_all() {
   echo ""
-  echo "Cleaning up KAS instances..."
-  for pid in "${KAS_PIDS[@]}"; do
-    if kill -0 "${pid}" 2>/dev/null; then
-      echo "Stopping KAS with PID: ${pid}"
-      kill "${pid}" 2>/dev/null || true
+  echo "Cleaning up..."
+
+  # Clean up KAS instances
+  if [[ ${#KAS_STARTED_PORTS[@]} -gt 0 ]]; then
+    echo "Cleaning up KAS instances on ports: ${KAS_STARTED_PORTS[*]}"
+    for port in "${KAS_STARTED_PORTS[@]}"; do
+      echo "Looking for process on port ${port}..."
+      pid=$(lsof -t -i:"${port}" || true)
+      if [[ -n "${pid}" ]]; then
+        echo "Stopping KAS on port ${port} (PID: ${pid})"
+        kill "${pid}" || true
+        sleep 1
+        if kill -0 "${pid}" 2>/dev/null; then
+          echo "  Force killing PID: ${pid}"
+          kill -9 "${pid}" || true
+        fi
+      else
+        echo "No process found on port ${port}"
+      fi
+    done
+  fi
+
+  # Clean up platform if we started it
+  if [[ "${PLATFORM_STARTED}" == "true" ]]; then
+    echo "Cleaning up platform..."
+    pid=$(lsof -t -i:8080 || true)
+    if [[ -n "${pid}" ]]; then
+      echo "Stopping platform on port 8080 (PID: ${pid})"
+      kill "${pid}" || true
+      sleep 1
+      if kill -0 "${pid}" 2>/dev/null; then
+        echo "  Force killing PID: ${pid}"
+        kill -9 "${pid}" || true
+      fi
     fi
-  done
+  fi
 }
 
-if [[ "${SKIP_KAS_START}" != "true" ]]; then
-  trap cleanup_kas EXIT INT TERM
+# Set up cleanup trap
+trap cleanup_all EXIT INT TERM
 
+if [[ "${SKIP_KAS_START}" != "true" ]]; then
   for kas_name in ${START_KAS_INSTANCES}; do
     port="${KAS_PORTS[$kas_name]}"
 
@@ -146,13 +265,12 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
         test/local/start-kas.sh "${kas_name}" "${port}" ${extra_args} >>"${log_file}" 2>&1
     ) &
 
-    KAS_PIDS+=($!)
-
     # Wait for KAS to be ready
     for i in {1..30}; do
       if curl -s "http://localhost:${port}/healthz" >/dev/null 2>&1; then
         echo "  ✓ KAS ${kas_name} ready"
         KAS_LOG_FILES+=("${kas_name}:${log_file}")
+        KAS_STARTED_PORTS+=("${port}")
         break
       fi
       sleep 1
