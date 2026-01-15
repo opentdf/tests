@@ -37,9 +37,15 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
   $SED_CMD '/<properties>/a \
         <platform.branch>main</platform.branch>' "$POM_FILE"
 
-  # Replace hardcoded branch=main with branch=${platform.branch} in the maven-antrun-plugin configuration
-  # shellcheck disable=SC2016 # Literal $; it is for a variable expansion in the maven file
-  $SED_CMD 's/branch=main/branch=${platform.branch}/g' "$POM_FILE"
+  # Only replace branch=main if the property now exists (sed above may have failed silently if no <properties> section)
+  if grep -q "<platform.branch>" "$POM_FILE"; then
+    # Replace hardcoded branch=main with branch=${platform.branch} in the maven-antrun-plugin configuration
+    # shellcheck disable=SC2016 # Literal $; it is for a variable expansion in the maven file
+    $SED_CMD 's/branch=main/branch=${platform.branch}/g' "$POM_FILE"
+    echo "Updated branch references to use \${platform.branch} in $POM_FILE"
+  else
+    echo "Warning: Could not add platform.branch property to $POM_FILE (no <properties> section?), leaving branch=main as-is"
+  fi
 done
 
 echo "Update complete."
