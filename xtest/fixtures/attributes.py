@@ -420,6 +420,35 @@ def attribute_missing_value_key_mapping(
     return attr, missing_value_fqn, kas_key.key.key_id
 
 
+# Attribute definition with public-key-only mapping when key management is off
+@pytest.fixture(scope="module")
+def attribute_missing_value_public_key_mapping_no_km(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_attr: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, str, str]:
+    """Attribute with attribute-level public-key mapping and a missing value FQN."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" in pfs.features:
+        pytest.skip("Key management enabled; skipping public-key-only mapping fixture")
+
+    attr = otdfctl.attribute_create(
+        temporary_namespace, "missingvalpub", abac.AttributeRule.ANY_OF, ["present"]
+    )
+    assert attr.values
+    value_fqn = attr.values[0].fqn
+    assert value_fqn
+
+    kas_key = otdfctl.kas_registry_create_public_key_only(
+        kas_entry_attr, kas_public_key_r1
+    )
+    otdfctl.key_assign_attr(kas_key, attr)
+
+    missing_value_fqn = value_fqn.rsplit("/", 1)[0] + "/missing"
+    return attr, missing_value_fqn, kas_key.key.key_id
+
+
 # Mixed grant scenarios (namespace + value)
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(

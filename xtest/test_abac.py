@@ -878,6 +878,59 @@ def test_encrypt_with_missing_value_uses_definition_key(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def test_encrypt_with_missing_attr_value_public_key_mapping_no_km(
+    attribute_missing_value_public_key_mapping_no_km: tuple[Attribute, str, str],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_attr: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Encrypts with missing value FQN using public-key-only mapping when KM is off."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" in pfs.features:
+        pytest.skip("Key management enabled; skipping public-key-only mapping test")
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    _, missing_value_fqn, key_id = attribute_missing_value_public_key_mapping_no_km
+
+    sample_name = f"missing-value-def-pub-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=[missing_value_fqn],
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        cipherTexts[sample_name] = ct_file
+
+    manifest = tdfs.manifest(ct_file)
+    policy = manifest.encryptionInformation.policy_object
+    assert policy.body.dataAttributes is not None
+    assert missing_value_fqn in [v.attribute for v in policy.body.dataAttributes]
+
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    kao = manifest.encryptionInformation.keyAccess[0]
+    assert kao.url == kas_url_attr
+    assert kao.kid == key_id
+
+    if kao.type == "ec-wrapped":
+        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 def test_import_legacy_golden_r1_key_and_decrypt_no_split(
     legacy_imported_golden_r1_key,
     decrypt_sdk: tdfs.SDK,
