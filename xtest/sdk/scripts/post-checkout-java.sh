@@ -54,6 +54,16 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
     continue
   fi
 
+  # If we don't have a specific mapping for this version (defaults to "main"),
+  # check if the pom.xml already has a valid protocol/go branch set - don't overwrite it
+  if [[ "$PLATFORM_BRANCH" == "main" ]]; then
+    if grep -q "<platform.branch>protocol/go/" "$POM_FILE"; then
+      EXISTING_BRANCH=$(grep -o "<platform.branch>[^<]*</platform.branch>" "$POM_FILE" | sed 's/<[^>]*>//g')
+      echo "platform.branch already set to $EXISTING_BRANCH in $POM_FILE (no mapping for version $VERSION), skipping."
+      continue
+    fi
+  fi
+
   echo "Updating $POM_FILE (version=$VERSION, platform.branch=$PLATFORM_BRANCH)..."
 
   # Check if platform.branch property exists (possibly with wrong value)
