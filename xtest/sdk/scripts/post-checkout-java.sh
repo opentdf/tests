@@ -15,6 +15,23 @@ else
   SED_CMD="sed -i"
 fi
 
+# Map Java SDK version to compatible platform protocol branch
+# Must match the mappings in resolve-version.py
+get_platform_branch() {
+  local version="$1"
+  case "$version" in
+    0.7.8|0.7.7) echo "protocol/go/v0.2.29" ;;
+    0.7.6)       echo "protocol/go/v0.2.25" ;;
+    0.7.5|0.7.4) echo "protocol/go/v0.2.18" ;;
+    0.7.3|0.7.2) echo "protocol/go/v0.2.17" ;;
+    0.6.1|0.6.0) echo "protocol/go/v0.2.14" ;;
+    0.5.0)       echo "protocol/go/v0.2.13" ;;
+    0.4.0|0.3.0|0.2.0) echo "protocol/go/v0.2.10" ;;
+    0.1.0)       echo "protocol/go/v0.2.3" ;;
+    *)           echo "main" ;;  # Default to main for unknown/newer versions
+  esac
+}
+
 # Loop through all subdirectories in the base directory
 find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read -r SRC_DIR; do
   POM_FILE="$SRC_DIR/sdk/pom.xml"
@@ -31,11 +48,16 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
     continue
   fi
 
-  echo "Updating $POM_FILE..."
+  # Extract version from directory name (e.g., "v0.7.5" -> "0.7.5", "main" -> "main")
+  DIR_NAME=$(basename "$SRC_DIR")
+  VERSION="${DIR_NAME#v}"  # Remove leading 'v' if present
+  PLATFORM_BRANCH=$(get_platform_branch "$VERSION")
+
+  echo "Updating $POM_FILE (version=$VERSION, platform.branch=$PLATFORM_BRANCH)..."
 
   # Add the platform.branch property to the <properties> section
-  $SED_CMD '/<properties>/a \
-        <platform.branch>main</platform.branch>' "$POM_FILE"
+  $SED_CMD "/<properties>/a \\
+        <platform.branch>$PLATFORM_BRANCH</platform.branch>" "$POM_FILE"
 
   # Only replace branch=main if the property now exists (sed above may have failed silently if no <properties> section)
   if grep -q "<platform.branch>" "$POM_FILE"; then
