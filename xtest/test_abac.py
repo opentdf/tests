@@ -7,6 +7,7 @@ import pytest
 
 import tdfs
 from abac import Attribute, ObligationValue
+from audit_logs import AuditLogAsserter
 from test_policytypes import skip_rts_as_needed
 
 cipherTexts: dict[str, Path] = {}
@@ -122,7 +123,7 @@ def test_autoconfigure_one_attribute_standard(
     pt_file: Path,
     kas_url_value1: str,
     in_focus: set[tdfs.SDK],
-    audit_logs,
+    audit_logs: AuditLogAsserter,
 ):
     global counter
 
@@ -594,7 +595,7 @@ def test_obligations_not_entitled(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     container: tdfs.container_type,
-    audit_logs,
+    audit_logs: AuditLogAsserter,
 ):
     """
     Test that no required obligations are returned when the user is not entitled

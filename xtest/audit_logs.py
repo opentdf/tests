@@ -399,7 +399,7 @@ Log Entries:
             self._stop_event.wait(0.5)
 
         try:
-            with open(log_path, "r") as f:
+            with open(log_path) as f:
                 # Seek to end for new logs only
                 f.seek(0, 2)
 

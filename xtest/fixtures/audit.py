@@ -14,9 +14,9 @@ Example:
 
 import logging
 import os
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, Iterator
 
 import pytest
 
