@@ -308,11 +308,45 @@ if [[ "${SKIP_KAS_START}" != "true" ]]; then
   echo ""
 fi
 
+# Detect platform version
+echo "Detecting platform version..."
+PLATFORM_VERSION=""
+
+# Save current directory
+CURRENT_DIR="$(pwd)"
+
+# Try to detect version from platform
+cd "${PLATFORM_DIR}"
+
+# Attempt to run version command (available since v0.4.37)
+if DETECTED_VERSION=$(go run ./service version 2>&1); then
+  # Version command succeeded - validate the output
+  if [[ "${DETECTED_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9a-zA-Z.-]+)?$ ]]; then
+    PLATFORM_VERSION="${DETECTED_VERSION}"
+    echo "✓ Detected platform version: ${PLATFORM_VERSION}"
+  else
+    echo "Warning: Version command output '${DETECTED_VERSION}' does not match expected format"
+    echo "  Using fallback version: 0.4.36"
+    PLATFORM_VERSION="0.4.36"
+  fi
+else
+  # Version command failed - likely older platform (< 0.4.37)
+  echo "Version command failed (expected for platform < 0.4.37)"
+  echo "  Using fallback version: 0.4.36"
+  PLATFORM_VERSION="0.4.36"
+fi
+
+# Return to previous directory
+cd "${CURRENT_DIR}"
+
+echo ""
+
 # Export environment variables for pytest
 export PLATFORM_DIR="${PLATFORM_DIR}"
 [[ -n "${PLATFORM_LOG_FILE}" ]] && export PLATFORM_LOG_FILE="${PLATFORM_LOG_FILE}"
 export OT_ROOT_KEY="${KM1_ROOT_KEY}"
 export OT_ROOT_KEY2="${KM2_ROOT_KEY}"
+export PLATFORM_VERSION="${PLATFORM_VERSION}"
 
 # Export KAS log file paths
 for entry in "${KAS_LOG_FILES[@]}"; do
