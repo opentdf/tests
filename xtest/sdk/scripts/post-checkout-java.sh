@@ -30,6 +30,7 @@ get_platform_branch() {
     0.1.0)       echo "protocol/go/v0.2.3" ;;
     *)           echo "main" ;;  # Default to main for unknown/newer versions
   esac
+  return 0
 }
 
 # Loop through all subdirectories in the base directory
@@ -42,31 +43,38 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
     continue
   fi
 
-  # Check if the platform.branch property is already defined
-  if grep -q "<platform.branch>" "$POM_FILE"; then
-    echo "platform.branch already defined in $POM_FILE, skipping."
-    continue
-  fi
-
   # Extract version from directory name (e.g., "v0.7.5" -> "0.7.5", "main" -> "main")
   DIR_NAME=$(basename "$SRC_DIR")
   VERSION="${DIR_NAME#v}"  # Remove leading 'v' if present
   PLATFORM_BRANCH=$(get_platform_branch "$VERSION")
 
+  # Check if the correct platform.branch is already set
+  if grep -q "<platform.branch>$PLATFORM_BRANCH</platform.branch>" "$POM_FILE"; then
+    echo "platform.branch already set to $PLATFORM_BRANCH in $POM_FILE, skipping."
+    continue
+  fi
+
   echo "Updating $POM_FILE (version=$VERSION, platform.branch=$PLATFORM_BRANCH)..."
 
-  # Add the platform.branch property to the <properties> section
-  $SED_CMD "/<properties>/a \\
+  # Check if platform.branch property exists (possibly with wrong value)
+  if grep -q "<platform.branch>" "$POM_FILE"; then
+    # Replace existing platform.branch value with the correct one
+    $SED_CMD "s|<platform.branch>[^<]*</platform.branch>|<platform.branch>$PLATFORM_BRANCH</platform.branch>|g" "$POM_FILE"
+    echo "Updated existing platform.branch to $PLATFORM_BRANCH in $POM_FILE"
+  else
+    # Add the platform.branch property to the <properties> section
+    $SED_CMD "/<properties>/a \\
         <platform.branch>$PLATFORM_BRANCH</platform.branch>" "$POM_FILE"
 
-  # Only replace branch=main if the property now exists (sed above may have failed silently if no <properties> section)
-  if grep -q "<platform.branch>" "$POM_FILE"; then
-    # Replace hardcoded branch=main with branch=${platform.branch} in the maven-antrun-plugin configuration
-    # shellcheck disable=SC2016 # Literal $; it is for a variable expansion in the maven file
-    $SED_CMD 's/branch=main/branch=${platform.branch}/g' "$POM_FILE"
-    echo "Updated branch references to use \${platform.branch} in $POM_FILE"
-  else
-    echo "Warning: Could not add platform.branch property to $POM_FILE (no <properties> section?), leaving branch=main as-is"
+    # Only replace branch=main if the property now exists (sed above may have failed silently if no <properties> section)
+    if grep -q "<platform.branch>" "$POM_FILE"; then
+      # Replace hardcoded branch=main with branch=${platform.branch} in the maven-antrun-plugin configuration
+      # shellcheck disable=SC2016 # Literal $; it is for a variable expansion in the maven file
+      $SED_CMD 's/branch=main/branch=${platform.branch}/g' "$POM_FILE"
+      echo "Added platform.branch=$PLATFORM_BRANCH and updated branch references in $POM_FILE"
+    else
+      echo "Warning: Could not add platform.branch property to $POM_FILE (no <properties> section?), leaving branch=main as-is"
+    fi
   fi
 done
 
