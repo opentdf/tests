@@ -114,9 +114,7 @@ pytest test_abac.py -v
 
 ```bash
 # Kill all KAS processes
-kill $(lsof -t -i:8080) $(lsof -t -i:8181) $(lsof -t -i:8282) \
-     $(lsof -t -i:8383) $(lsof -t -i:8484) $(lsof -t -i:8585) \
-     $(lsof -t -i:8686)
+kill $(lsof -t -i:8080 -i:8181 -i:8282 -i:8383 -i:8484 -i:8585 -i:8686)
 ```
 
 ## Environment Variables
