@@ -494,8 +494,12 @@ Log Entries:
         # Format: "service_name_1 | <log content>"
         parts = raw_line.split("|", 1)
         if len(parts) == 2:
-            service_name = parts[0].strip().rsplit("_", 1)[0]
+            prefix = parts[0].strip()
             log_content = parts[1].strip()
+            # Find the longest matching service name from the monitored services list.
+            # This is more robust than splitting by a separator.
+            matching = [s for s in self.services if prefix.startswith(s)]
+            service_name = max(matching, key=len) if matching else "unknown"
         else:
             service_name = "unknown"
             log_content = raw_line
