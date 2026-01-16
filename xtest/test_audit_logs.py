@@ -109,9 +109,9 @@ class TestAuditLogCollector:
 
         # Manually add entries to buffer for testing
         now = datetime.now()
-        collector._buffer.append(LogEntry(now, now, "log1", None, "kas"))
-        collector._buffer.append(LogEntry(now, now, "log2", None, "kas-alpha"))
-        collector._buffer.append(LogEntry(now, now, "log3", None, "kas"))
+        collector._buffer.append(LogEntry(now, now, "log1", "kas"))
+        collector._buffer.append(LogEntry(now, now, "log2", "kas-alpha"))
+        collector._buffer.append(LogEntry(now, now, "log3", "kas"))
 
         kas_logs = collector.get_logs(service="kas")
         assert len(kas_logs) == 2
@@ -126,8 +126,8 @@ class TestAuditLogCollector:
         old_time = datetime.now() - timedelta(hours=1)
         now = datetime.now()
 
-        collector._buffer.append(LogEntry(old_time, old_time, "old log", None, "kas"))
-        collector._buffer.append(LogEntry(now, now, "new log", None, "kas"))
+        collector._buffer.append(LogEntry(old_time, old_time, "old log", "kas"))
+        collector._buffer.append(LogEntry(now, now, "new log", "kas"))
 
         # Filter since 30 minutes ago
         since = datetime.now() - timedelta(minutes=30)
@@ -146,15 +146,15 @@ class TestAuditLogCollector:
 
         # Entry with old log_timestamp
         collector._buffer.append(
-            LogEntry(collection_time, log_time_old, "old log event", None, "kas")
+            LogEntry(collection_time, log_time_old, "old log event", "kas")
         )
         # Entry with recent log_timestamp
         collector._buffer.append(
-            LogEntry(collection_time, log_time_recent, "recent log event", None, "kas")
+            LogEntry(collection_time, log_time_recent, "recent log event", "kas")
         )
         # Entry with no log_timestamp
         collector._buffer.append(
-            LogEntry(collection_time, None, "no timestamp log", None, "kas")
+            LogEntry(collection_time, None, "no timestamp log", "kas")
         )
 
         since = datetime.now() - timedelta(hours=1)
@@ -174,7 +174,7 @@ class TestAuditLogCollector:
         collector = AuditLogCollector(platform_dir=tmp_path)
         collector._disabled = True
 
-        collector._buffer.append(LogEntry(datetime.now(), None, "test", None, "kas"))
+        collector._buffer.append(LogEntry(datetime.now(), None, "test", "kas"))
 
         # Even with data in buffer, disabled collector returns empty
         assert collector.get_logs() == []
@@ -184,8 +184,8 @@ class TestAuditLogCollector:
         collector = AuditLogCollector(platform_dir=tmp_path, services=["kas"])
 
         now = datetime.now()
-        collector._buffer.append(LogEntry(now, now, "test log line 1", None, "kas"))
-        collector._buffer.append(LogEntry(now, now, "test log line 2", None, "kas"))
+        collector._buffer.append(LogEntry(now, now, "test log line 1", "kas"))
+        collector._buffer.append(LogEntry(now, now, "test log line 2", "kas"))
         collector.mark("test_mark")
 
         output_file = tmp_path / "audit_logs.txt"
@@ -202,7 +202,7 @@ class TestAuditLogCollector:
         collector = AuditLogCollector(platform_dir=tmp_path)
 
         now = datetime.now()
-        collector._buffer.append(LogEntry(now, now, "test log", None, "kas"))
+        collector._buffer.append(LogEntry(now, now, "test log", "kas"))
         collector.mark("test_mark")
 
         assert len(collector._buffer) == 1
@@ -300,7 +300,9 @@ class TestAuditLogAsserter:
                     parsed = json.loads(line)
                 except json.JSONDecodeError:
                     pass
-            collector._buffer.append(LogEntry(ts, ts, line, parsed, service))
+            collector._buffer.append(
+                LogEntry(ts, ts, line, service, parsed_json=parsed)
+            )
 
         return collector
 
@@ -402,7 +404,7 @@ class TestAuditLogAsserter:
         # Add a new log after the mark
         now = datetime.now()
         collector_with_logs._buffer.append(
-            LogEntry(now, now, '{"msg": "new_log_after_mark"}', None, "kas")
+            LogEntry(now, now, '{"msg": "new_log_after_mark"}', "kas")
         )
 
         # Should find the new log since mark
@@ -539,9 +541,7 @@ class TestAuditLogAsserter:
 
         # Add a log that doesn't match
         now = datetime.now()
-        collector._buffer.append(
-            LogEntry(now, now, '{"msg": "unrelated log"}', None, "kas")
-        )
+        collector._buffer.append(LogEntry(now, now, '{"msg": "unrelated log"}', "kas"))
 
         asserter = AuditLogAsserter(collector)
 
@@ -576,6 +576,297 @@ class TestAuditLogAsserter:
         # Should timeout - need 5 but only have 2
         with pytest.raises(TimeoutError):
             asserter.wait_for_log(r"rewrap", timeout_seconds=0.5, min_count=5)
+
+
+class TestAssertJsonField:
+    """Tests for the assert_json_field method."""
+
+    @pytest.fixture
+    def collector_with_json_logs(self, tmp_path: Path) -> AuditLogCollector:
+        """Create a collector with pre-populated JSON logs for testing."""
+        collector = AuditLogCollector(platform_dir=tmp_path, services=["kas"])
+        collector.start_time = datetime.now()
+
+        now = datetime.now()
+
+        # Add various JSON log entries for testing
+        test_logs = [
+            {"level": "info", "msg": "rewrap", "response": {"status": 200}},
+            {"level": "error", "msg": "failed", "response": {"status": 403}},
+            {"level": "info", "msg": "encrypt", "response": {"status": 200}},
+            {"level": "debug", "msg": "internal", "duration_ms": 50},
+            {"level": "info", "msg": "slow", "duration_ms": 150},
+        ]
+
+        for log_data in test_logs:
+            line = json.dumps(log_data)
+            collector._buffer.append(
+                LogEntry(now, now, line, "kas", parsed_json=log_data)
+            )
+
+        return collector
+
+    def test_assert_json_field_equals(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with equals comparison."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find 2 logs with status 200
+        matches = asserter.assert_json_field("response.status", 200, min_count=2)
+        assert len(matches) == 2
+
+        # Should find 1 log with level "error"
+        matches = asserter.assert_json_field("level", "error")
+        assert len(matches) == 1
+
+    def test_assert_json_field_nested_path(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with nested field path."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find logs with nested response.status
+        matches = asserter.assert_json_field("response.status", 403)
+        assert len(matches) == 1
+
+    def test_assert_json_field_exists(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with exists comparison."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find logs where duration_ms exists
+        matches = asserter.assert_json_field(
+            "duration_ms", None, comparison="exists", min_count=2
+        )
+        assert len(matches) == 2
+
+        # Should find all logs where level exists
+        matches = asserter.assert_json_field("level", None, comparison="exists")
+        assert len(matches) == 5
+
+    def test_assert_json_field_contains(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with contains comparison."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find logs where msg contains "e"
+        matches = asserter.assert_json_field("msg", "e", comparison="contains")
+        assert len(matches) >= 3  # rewrap, encrypt, internal
+
+    def test_assert_json_field_regex(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with regex comparison."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find logs where msg matches regex
+        matches = asserter.assert_json_field("msg", r"^re", comparison="regex")
+        assert len(matches) == 1  # rewrap
+
+    def test_assert_json_field_numeric_comparisons(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field with numeric comparisons."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        # Should find logs where duration_ms < 100
+        matches = asserter.assert_json_field("duration_ms", 100, comparison="lt")
+        assert len(matches) == 1
+        assert '"duration_ms": 50' in matches[0].raw_line
+
+        # Should find logs where duration_ms > 100
+        matches = asserter.assert_json_field("duration_ms", 100, comparison="gt")
+        assert len(matches) == 1
+        assert '"duration_ms": 150' in matches[0].raw_line
+
+        # Should find logs where duration_ms >= 50
+        matches = asserter.assert_json_field(
+            "duration_ms", 50, comparison="gte", min_count=2
+        )
+        assert len(matches) == 2
+
+    def test_assert_json_field_failure(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field raises on missing field."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        with pytest.raises(AssertionError) as exc_info:
+            asserter.assert_json_field("nonexistent.field", "value")
+
+        assert "nonexistent.field" in str(exc_info.value)
+
+    def test_assert_json_field_invalid_comparison(
+        self, collector_with_json_logs: AuditLogCollector
+    ) -> None:
+        """Test assert_json_field raises on invalid comparison mode."""
+        asserter = AuditLogAsserter(collector_with_json_logs)
+
+        with pytest.raises(ValueError) as exc_info:
+            asserter.assert_json_field("level", "info", comparison="invalid")
+
+        assert "Invalid comparison" in str(exc_info.value)
+
+    def test_assert_json_field_with_service_filter(self, tmp_path: Path) -> None:
+        """Test assert_json_field with service filter."""
+        collector = AuditLogCollector(
+            platform_dir=tmp_path, services=["kas", "kas-alpha"]
+        )
+        collector.start_time = datetime.now()
+
+        now = datetime.now()
+        collector._buffer.append(
+            LogEntry(
+                now,
+                now,
+                '{"level": "info", "status": 200}',
+                "kas",
+                parsed_json={"level": "info", "status": 200},
+            )
+        )
+        collector._buffer.append(
+            LogEntry(
+                now,
+                now,
+                '{"level": "error", "status": 500}',
+                "kas-alpha",
+                parsed_json={"level": "error", "status": 500},
+            )
+        )
+
+        asserter = AuditLogAsserter(collector)
+
+        # Should find only kas service
+        matches = asserter.assert_json_field("status", 200, service="kas")
+        assert len(matches) == 1
+
+        # Should find only kas-alpha service
+        matches = asserter.assert_json_field("status", 500, service="kas-alpha")
+        assert len(matches) == 1
+
+
+class TestLogLevelFiltering:
+    """Tests for log level filtering in assertions."""
+
+    @pytest.fixture
+    def collector_with_levels(self, tmp_path: Path) -> AuditLogCollector:
+        """Create a collector with logs at various levels."""
+        collector = AuditLogCollector(platform_dir=tmp_path, services=["kas"])
+        collector.start_time = datetime.now()
+
+        now = datetime.now()
+
+        # Add logs at different levels
+        test_logs = [
+            {"level": "debug", "msg": "debug message"},
+            {"level": "info", "msg": "info message"},
+            {"level": "info", "msg": "another info message"},
+            {"level": "warn", "msg": "warning message"},
+            {"level": "error", "msg": "error message"},
+            {"level": "error", "msg": "another error message"},
+            {"level": "fatal", "msg": "fatal message"},
+        ]
+
+        for log_data in test_logs:
+            line = json.dumps(log_data)
+            collector._buffer.append(
+                LogEntry(now, now, line, "kas", parsed_json=log_data)
+            )
+
+        return collector
+
+    def test_level_exact_match(self, collector_with_levels: AuditLogCollector) -> None:
+        """Test filtering by exact log level."""
+        asserter = AuditLogAsserter(collector_with_levels)
+
+        # Should find exactly 2 error logs
+        matches = asserter.assert_contains(r"message", level="error", min_count=2)
+        assert len(matches) == 2
+
+        # Should find exactly 2 info logs
+        matches = asserter.assert_contains(r"message", level="info", min_count=2)
+        assert len(matches) == 2
+
+        # Should find 1 debug log
+        matches = asserter.assert_contains(r"message", level="debug")
+        assert len(matches) == 1
+
+    def test_level_min_filter(self, collector_with_levels: AuditLogCollector) -> None:
+        """Test filtering by minimum log level."""
+        asserter = AuditLogAsserter(collector_with_levels)
+
+        # error and above: error (2) + fatal (1) = 3
+        matches = asserter.assert_contains(r"message", level_min="error", min_count=3)
+        assert len(matches) == 3
+
+        # warn and above: warn (1) + error (2) + fatal (1) = 4
+        matches = asserter.assert_contains(r"message", level_min="warn", min_count=4)
+        assert len(matches) == 4
+
+        # info and above: info (2) + warn (1) + error (2) + fatal (1) = 6
+        matches = asserter.assert_contains(r"message", level_min="info", min_count=6)
+        assert len(matches) == 6
+
+    def test_level_case_insensitive(
+        self, collector_with_levels: AuditLogCollector
+    ) -> None:
+        """Test that level matching is case-insensitive."""
+        asserter = AuditLogAsserter(collector_with_levels)
+
+        # Should match regardless of case
+        matches = asserter.assert_contains(r"message", level="ERROR", min_count=2)
+        assert len(matches) == 2
+
+        matches = asserter.assert_contains(r"message", level_min="ERROR", min_count=3)
+        assert len(matches) == 3
+
+    def test_level_with_pattern(self, collector_with_levels: AuditLogCollector) -> None:
+        """Test level filtering combined with pattern matching."""
+        asserter = AuditLogAsserter(collector_with_levels)
+
+        # Should find only error-level message with "another"
+        matches = asserter.assert_contains(r"another", level="error")
+        assert len(matches) == 1
+        assert "another error message" in matches[0].raw_line
+
+    def test_level_no_match_raises(
+        self, collector_with_levels: AuditLogCollector
+    ) -> None:
+        """Test that level filter raises when no matches found."""
+        asserter = AuditLogAsserter(collector_with_levels)
+
+        # No panic-level logs
+        with pytest.raises(AssertionError):
+            asserter.assert_contains(r"message", level="panic")
+
+    def test_level_with_non_json_logs(self, tmp_path: Path) -> None:
+        """Test level filtering ignores non-JSON logs."""
+        collector = AuditLogCollector(platform_dir=tmp_path)
+        collector.start_time = datetime.now()
+
+        now = datetime.now()
+        # Add a non-JSON log
+        collector._buffer.append(LogEntry(now, now, "plain text log", "kas"))
+        # Add a JSON log with level
+        collector._buffer.append(
+            LogEntry(
+                now,
+                now,
+                '{"level": "error", "msg": "json log"}',
+                "kas",
+                parsed_json={"level": "error", "msg": "json log"},
+            )
+        )
+
+        asserter = AuditLogAsserter(collector)
+
+        # Should only find the JSON log
+        matches = asserter.assert_contains(r"log", level="error")
+        assert len(matches) == 1
+        assert "json log" in matches[0].raw_line
 
 
 class TestAuditLogIntegration:
@@ -632,12 +923,8 @@ class TestCaseInsensitiveMatching:
         collector.start_time = datetime.now()
         now = datetime.now()
 
-        collector._buffer.append(
-            LogEntry(now, now, "REWRAP request completed", None, "kas")
-        )
-        collector._buffer.append(
-            LogEntry(now, now, "rewrap request started", None, "kas")
-        )
+        collector._buffer.append(LogEntry(now, now, "REWRAP request completed", "kas"))
+        collector._buffer.append(LogEntry(now, now, "rewrap request started", "kas"))
 
         asserter = AuditLogAsserter(collector)
 

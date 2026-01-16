@@ -19,31 +19,81 @@ import subprocess
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger("xtest")
 
 
-@dataclass
 class LogEntry:
-    """Represents a single parsed log entry from docker compose logs."""
+    """Represents a single parsed log entry from docker compose logs.
 
-    timestamp: datetime
-    """When the log was collected by this framework."""
+    Uses __slots__ for ~40-50% memory reduction per entry and lazy JSON
+    parsing to avoid unnecessary CPU work for logs that are never queried.
+    """
 
-    log_timestamp: datetime | None
-    """Timestamp parsed from the log line itself (if available)."""
+    __slots__ = (
+        "timestamp",
+        "log_timestamp",
+        "raw_line",
+        "_raw_json",
+        "_parsed_json",
+        "_json_parsed",
+        "service_name",
+    )
 
-    raw_line: str
-    """The original log line as received from docker compose."""
+    def __init__(
+        self,
+        timestamp: datetime,
+        log_timestamp: datetime | None,
+        raw_line: str,
+        service_name: str,
+        *,
+        raw_json: str | None = None,
+        parsed_json: dict | None = None,
+    ):
+        """Initialize a log entry.
 
-    parsed_json: dict | None
-    """Parsed JSON content if the log is in JSON format, otherwise None."""
+        Args:
+            timestamp: When the log was collected by this framework
+            log_timestamp: Timestamp parsed from the log line (if available)
+            raw_line: The original log line as received
+            service_name: Docker compose service name (e.g., 'kas', 'kas-alpha')
+            raw_json: Raw JSON string for lazy parsing (preferred for memory)
+            parsed_json: Pre-parsed JSON dict (for backward compatibility)
+        """
+        self.timestamp = timestamp
+        self.log_timestamp = log_timestamp
+        self.raw_line = raw_line
+        self.service_name = service_name
+        self._raw_json = raw_json
+        self._parsed_json = parsed_json
+        self._json_parsed = parsed_json is not None
 
-    service_name: str
-    """Docker compose service name (e.g., 'kas', 'kas-alpha')."""
+    @property
+    def parsed_json(self) -> dict | None:
+        """Lazily parse JSON on first access.
+
+        Returns:
+            Parsed JSON dict, or None if not JSON format
+        """
+        if not self._json_parsed:
+            self._json_parsed = True
+            if self._raw_json is not None:
+                try:
+                    self._parsed_json = json.loads(self._raw_json)
+                except json.JSONDecodeError:
+                    self._parsed_json = None
+                    self._raw_json = None  # Clear to save memory
+        return self._parsed_json
+
+    def __repr__(self) -> str:
+        return (
+            f"LogEntry(timestamp={self.timestamp!r}, "
+            f"log_timestamp={self.log_timestamp!r}, "
+            f"raw_line={self.raw_line[:50]!r}..., "
+            f"service_name={self.service_name!r})"
+        )
 
 
 class AuditLogCollector:
@@ -623,6 +673,19 @@ class AuditLogAsserter:
     methods with rich error messages.
     """
 
+    # Log level ordering for level_min filtering (lower index = less severe)
+    LOG_LEVELS = [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "warning",
+        "error",
+        "fatal",
+        "panic",
+    ]
+    """Ordered list of log levels from least to most severe."""
+
     def __init__(self, collector: AuditLogCollector | None):
         """Initialize asserter with log collector.
 
@@ -663,6 +726,8 @@ class AuditLogAsserter:
         since_mark: str | None = None,
         service: str | None = None,
         use_log_timestamp: bool = False,
+        level: str | None = None,
+        level_min: str | None = None,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
@@ -675,6 +740,8 @@ class AuditLogAsserter:
             service: Only check logs from specific service
             use_log_timestamp: If True, filter by log's internal timestamp
                               instead of collection time for more accurate correlation
+            level: Exact log level to match (e.g., "error", "info")
+            level_min: Minimum log level (e.g., "error" matches error, fatal, panic)
 
         Returns:
             Matching log entries
@@ -702,6 +769,14 @@ class AuditLogAsserter:
             regex = pattern
 
         matching = [log for log in logs if regex.search(log.raw_line)]
+
+        # Apply log level filter
+        if level is not None or level_min is not None:
+            matching = [
+                log
+                for log in matching
+                if self._matches_log_level(log, level, level_min)
+            ]
 
         # Check constraints
         count = len(matching)
@@ -983,6 +1058,240 @@ class AuditLogAsserter:
                 last_log_count = len(logs)
 
             time.sleep(poll_interval)
+
+    def assert_json_field(
+        self,
+        field_path: str,
+        expected_value: object,
+        min_count: int = 1,
+        max_count: int | None = None,
+        comparison: str = "equals",
+        within_seconds: float | None = None,
+        since_mark: str | None = None,
+        service: str | None = None,
+        use_log_timestamp: bool = False,
+    ) -> list[LogEntry]:
+        """Assert JSON field value in logs with optional constraints.
+
+        Allows structured assertions on parsed JSON log fields without
+        needing to write regex patterns for JSON data.
+
+        Args:
+            field_path: Dot-separated path to JSON field (e.g., "response.status",
+                       "request.method", "audit.action")
+            expected_value: Value to match against
+            min_count: Minimum number of matching logs (default: 1)
+            max_count: Maximum number of matching logs (optional)
+            comparison: How to compare values:
+                       - "equals": Exact equality (default)
+                       - "contains": expected_value is substring of field value
+                       - "regex": expected_value is regex pattern
+                       - "exists": Field exists (expected_value ignored)
+                       - "gt", "gte", "lt", "lte": Numeric comparisons
+            within_seconds: Only check logs from last N seconds
+            since_mark: Only check logs since marked timestamp
+            service: Only check logs from specific service
+            use_log_timestamp: If True, filter by log's internal timestamp
+
+        Returns:
+            List of matching log entries
+
+        Raises:
+            AssertionError: If constraints not met, with detailed context
+            ValueError: If comparison mode is invalid
+
+        Example:
+            # Assert successful rewrap response
+            audit_logs.assert_json_field("response.status", 200)
+
+            # Assert at least 2 error-level logs
+            audit_logs.assert_json_field("level", "error", min_count=2)
+
+            # Assert audit action exists
+            audit_logs.assert_json_field("audit.action", None, comparison="exists")
+
+            # Assert response time under threshold
+            audit_logs.assert_json_field("duration_ms", 100, comparison="lt")
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning(
+                f"Audit log assertion skipped (collection disabled). "
+                f"Would have asserted field {field_path}={expected_value}"
+            )
+            return []
+
+        valid_comparisons = {
+            "equals",
+            "contains",
+            "regex",
+            "exists",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+        }
+        if comparison not in valid_comparisons:
+            raise ValueError(
+                f"Invalid comparison '{comparison}'. Must be one of: {valid_comparisons}"
+            )
+
+        # Resolve time filter and get logs
+        since = self._resolve_since(since_mark, within_seconds)
+        logs = self._collector.get_logs(
+            since=since, service=service, use_log_timestamp=use_log_timestamp
+        )
+
+        # Find matching logs
+        matching = []
+        for log in logs:
+            if log.parsed_json is None:
+                continue
+
+            # Navigate to field
+            value = self._get_json_field(log.parsed_json, field_path)
+
+            # Apply comparison
+            if self._compare_value(value, expected_value, comparison):
+                matching.append(log)
+
+        # Check constraints
+        count = len(matching)
+        if count < min_count:
+            self._raise_assertion_error(
+                f"Expected field '{field_path}' with value {comparison} '{expected_value}' "
+                f"to appear at least {min_count} time(s), but found {count} occurrence(s).",
+                matching,
+                logs,
+                f"{field_path}={expected_value}",
+            )
+
+        if max_count is not None and count > max_count:
+            self._raise_assertion_error(
+                f"Expected field '{field_path}' with value {comparison} '{expected_value}' "
+                f"to appear at most {max_count} time(s), but found {count} occurrence(s).",
+                matching,
+                logs,
+                f"{field_path}={expected_value}",
+            )
+
+        return matching
+
+    def _get_json_field(self, data: dict, field_path: str) -> object:
+        """Extract a field from nested JSON using dot notation.
+
+        Args:
+            data: JSON dict to extract from
+            field_path: Dot-separated path (e.g., "response.status")
+
+        Returns:
+            Field value, or None if not found
+        """
+        parts = field_path.split(".")
+        current: object = data
+
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+
+        return current
+
+    def _compare_value(self, actual: object, expected: object, comparison: str) -> bool:
+        """Compare values according to comparison mode.
+
+        Args:
+            actual: Actual value from log
+            expected: Expected value
+            comparison: Comparison mode
+
+        Returns:
+            True if comparison succeeds
+        """
+        if comparison == "exists":
+            return actual is not None
+
+        if actual is None:
+            return False
+
+        if comparison == "equals":
+            return actual == expected
+
+        if comparison == "contains":
+            return (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and expected in actual
+            )
+
+        if comparison == "regex":
+            if not isinstance(actual, str) or not isinstance(expected, str):
+                return False
+            return bool(re.search(expected, actual, re.IGNORECASE))
+
+        # Numeric comparisons
+        if comparison in ("gt", "gte", "lt", "lte"):
+            try:
+                actual_num = float(actual)  # type: ignore[arg-type]
+                expected_num = float(expected)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return False
+
+            if comparison == "gt":
+                return actual_num > expected_num
+            if comparison == "gte":
+                return actual_num >= expected_num
+            if comparison == "lt":
+                return actual_num < expected_num
+            if comparison == "lte":
+                return actual_num <= expected_num
+
+        return False
+
+    def _matches_log_level(
+        self,
+        log: LogEntry,
+        level: str | None,
+        level_min: str | None,
+    ) -> bool:
+        """Check if a log entry matches the level filter.
+
+        Args:
+            log: Log entry to check
+            level: Exact level to match (case-insensitive)
+            level_min: Minimum level to match (case-insensitive)
+
+        Returns:
+            True if log matches the level filter
+        """
+        if log.parsed_json is None:
+            return False
+
+        # Get log level from common field names
+        log_level = None
+        for field in ["level", "lvl", "severity", "log.level"]:
+            if field in log.parsed_json:
+                log_level = str(log.parsed_json[field]).lower()
+                break
+
+        if log_level is None:
+            return False
+
+        # Check exact level match
+        if level is not None:
+            return log_level == level.lower()
+
+        # Check minimum level
+        if level_min is not None:
+            try:
+                log_level_idx = self.LOG_LEVELS.index(log_level)
+                min_level_idx = self.LOG_LEVELS.index(level_min.lower())
+                return log_level_idx >= min_level_idx
+            except ValueError:
+                # Unknown log level, don't match
+                return False
+
+        return True
 
     def _resolve_since(
         self,
