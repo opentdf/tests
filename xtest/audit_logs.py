@@ -17,6 +17,7 @@ import logging
 import re
 import subprocess
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -264,16 +265,33 @@ class AuditLogCollector:
             f"Audit log collection stopped. Collected {len(self._buffer)} log entries."
         )
 
+    def reset(self) -> None:
+        """Clear the log buffer and timestamp marks.
+
+        Call between tests to prevent memory accumulation in long test runs.
+        Does not stop collection - new logs will continue to be collected
+        into the now-empty buffer.
+        """
+        self._buffer.clear()
+        self._marks.clear()
+        logger.debug("Audit log buffer and marks cleared")
+
     def get_logs(
         self,
         since: datetime | None = None,
         service: str | None = None,
+        use_log_timestamp: bool = False,
     ) -> list[LogEntry]:
         """Get collected logs, optionally filtered by time and service.
 
         Args:
-            since: Only return logs collected after this timestamp
+            since: Only return logs after this timestamp
             service: Only return logs from this service
+            use_log_timestamp: If True, filter by the log's internal timestamp
+                              (log_timestamp) instead of collection time (timestamp).
+                              More accurate for correlation but requires parseable
+                              timestamps in logs. Logs without parseable timestamps
+                              are excluded when this is True.
 
         Returns:
             List of matching log entries (may be empty)
@@ -284,7 +302,16 @@ class AuditLogCollector:
         logs = list(self._buffer)
 
         if since:
-            logs = [log for log in logs if log.timestamp >= since]
+            if use_log_timestamp:
+                # Filter by log's actual timestamp (more accurate for correlation)
+                logs = [
+                    log
+                    for log in logs
+                    if log.log_timestamp is not None and log.log_timestamp >= since
+                ]
+            else:
+                # Filter by collection timestamp (more reliable, always present)
+                logs = [log for log in logs if log.timestamp >= since]
 
         if service:
             logs = [log for log in logs if log.service_name == service]
@@ -617,6 +644,16 @@ class AuditLogAsserter:
             return datetime.now()
         return self._collector.mark(label)
 
+    def reset(self) -> None:
+        """Clear collected logs and timestamp marks.
+
+        Call between tests to prevent memory accumulation. Collection
+        continues after reset - new logs will be collected into the
+        now-empty buffer.
+        """
+        if self._collector:
+            self._collector.reset()
+
     def assert_contains(
         self,
         pattern: str | re.Pattern,
@@ -625,6 +662,7 @@ class AuditLogAsserter:
         within_seconds: float | None = None,
         since_mark: str | None = None,
         service: str | None = None,
+        use_log_timestamp: bool = False,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
@@ -635,6 +673,8 @@ class AuditLogAsserter:
             within_seconds: Only check logs from last N seconds
             since_mark: Only check logs since marked timestamp
             service: Only check logs from specific service
+            use_log_timestamp: If True, filter by log's internal timestamp
+                              instead of collection time for more accurate correlation
 
         Returns:
             Matching log entries
@@ -649,17 +689,11 @@ class AuditLogAsserter:
             )
             return []
 
-        # Determine time filter
-        since = None
-        if since_mark:
-            since = self._collector.get_mark(since_mark)
-            if not since:
-                raise ValueError(f"Unknown timestamp mark: {since_mark}")
-        elif within_seconds:
-            since = datetime.now() - timedelta(seconds=within_seconds)
-
-        # Get filtered logs
-        logs = self._collector.get_logs(since=since, service=service)
+        # Resolve time filter and get logs
+        since = self._resolve_since(since_mark, within_seconds)
+        logs = self._collector.get_logs(
+            since=since, service=service, use_log_timestamp=use_log_timestamp
+        )
 
         # Find matching logs
         if isinstance(pattern, str):
@@ -698,6 +732,7 @@ class AuditLogAsserter:
         within_seconds: float | None = None,
         since_mark: str | None = None,
         service: str | None = None,
+        use_log_timestamp: bool = False,
     ) -> list[LogEntry]:
         """Assert exact count of pattern occurrences.
 
@@ -707,6 +742,7 @@ class AuditLogAsserter:
             within_seconds: Only check logs from last N seconds
             since_mark: Only check logs since marked timestamp
             service: Only check logs from specific service
+            use_log_timestamp: If True, filter by log's internal timestamp
 
         Returns:
             Matching log entries
@@ -721,6 +757,7 @@ class AuditLogAsserter:
             within_seconds=within_seconds,
             since_mark=since_mark,
             service=service,
+            use_log_timestamp=use_log_timestamp,
         )
 
     def assert_within_time(
@@ -802,6 +839,178 @@ class AuditLogAsserter:
             regex = pattern
 
         return [log for log in logs if regex.search(log.raw_line)]
+
+    def assert_not_contains(
+        self,
+        pattern: str | re.Pattern,
+        within_seconds: float | None = None,
+        since_mark: str | None = None,
+        service: str | None = None,
+        use_log_timestamp: bool = False,
+    ) -> None:
+        """Assert pattern does NOT appear in logs.
+
+        Args:
+            pattern: Regex pattern that should NOT be found
+            within_seconds: Time window to check
+            since_mark: Check logs since marked timestamp
+            service: Filter by service name
+            use_log_timestamp: If True, filter by log's internal timestamp
+
+        Raises:
+            AssertionError: If pattern IS found in logs
+
+        Example:
+            # Verify no errors occurred during operation
+            audit_logs.mark("operation_start")
+            perform_operation()
+            audit_logs.assert_not_contains(r"error|exception", since_mark="operation_start")
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning(
+                f"Audit log assertion skipped (collection disabled). "
+                f"Would have asserted pattern NOT present: {pattern}"
+            )
+            return
+
+        # Resolve time filter and get logs
+        since = self._resolve_since(since_mark, within_seconds)
+        logs = self._collector.get_logs(
+            since=since, service=service, use_log_timestamp=use_log_timestamp
+        )
+
+        # Find matching logs
+        if isinstance(pattern, str):
+            regex = re.compile(pattern, re.IGNORECASE)
+        else:
+            regex = pattern
+
+        matching = [log for log in logs if regex.search(log.raw_line)]
+
+        if matching:
+            self._raise_assertion_error(
+                f"Expected pattern '{pattern}' to NOT appear in logs, "
+                f"but found {len(matching)} occurrence(s).",
+                matching,
+                logs,
+                pattern,
+            )
+
+    def wait_for_log(
+        self,
+        pattern: str | re.Pattern,
+        timeout_seconds: float = 30.0,
+        poll_interval: float = 0.5,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        service: str | None = None,
+    ) -> list[LogEntry]:
+        """Wait for pattern to appear in logs, polling until timeout.
+
+        Useful for async operations where logs may not appear immediately.
+
+        Args:
+            pattern: Regex pattern to wait for
+            timeout_seconds: Maximum time to wait (default: 30s)
+            poll_interval: Time between checks (default: 0.5s)
+            min_count: Minimum occurrences required (default: 1)
+            since_mark: Only consider logs since this mark
+            service: Filter by service name
+
+        Returns:
+            List of matching log entries
+
+        Raises:
+            TimeoutError: If pattern not found within timeout
+
+        Example:
+            # Wait for async operation to complete
+            audit_logs.mark("operation_start")
+            trigger_async_operation()
+            logs = audit_logs.wait_for_log(
+                r"operation completed",
+                timeout_seconds=60,
+                since_mark="operation_start"
+            )
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning("Audit log wait skipped (collection disabled)")
+            return []
+
+        if isinstance(pattern, str):
+            regex = re.compile(pattern, re.IGNORECASE)
+        else:
+            regex = pattern
+
+        since = None
+        if since_mark:
+            since = self._collector.get_mark(since_mark)
+            if not since:
+                raise ValueError(f"Unknown timestamp mark: {since_mark}")
+
+        start_time = time.time()
+        last_log_count = 0
+
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed >= timeout_seconds:
+                # Get final state for error message
+                logs = self._collector.get_logs(since=since, service=service)
+                matching = [log for log in logs if regex.search(log.raw_line)]
+
+                raise TimeoutError(
+                    f"Timeout waiting for pattern '{pattern}' after {timeout_seconds}s. "
+                    f"Found {len(matching)} matches (needed {min_count}). "
+                    f"Total logs checked: {len(logs)}."
+                )
+
+            logs = self._collector.get_logs(since=since, service=service)
+            matching = [log for log in logs if regex.search(log.raw_line)]
+
+            if len(matching) >= min_count:
+                logger.debug(
+                    f"Found {len(matching)} matches for pattern '{pattern}' "
+                    f"after {elapsed:.2f}s"
+                )
+                return matching
+
+            # Log progress if new logs arrived
+            if len(logs) != last_log_count:
+                logger.debug(
+                    f"Waiting for pattern '{pattern}': {len(matching)}/{min_count} matches, "
+                    f"{len(logs)} logs checked, {timeout_seconds - elapsed:.1f}s remaining"
+                )
+                last_log_count = len(logs)
+
+            time.sleep(poll_interval)
+
+    def _resolve_since(
+        self,
+        since_mark: str | None,
+        within_seconds: float | None,
+    ) -> datetime | None:
+        """Resolve time filter from mark name or seconds.
+
+        Args:
+            since_mark: Name of timestamp mark to filter from
+            within_seconds: Number of seconds to look back
+
+        Returns:
+            Resolved datetime to filter from, or None for no filter
+
+        Raises:
+            ValueError: If since_mark is provided but not found
+        """
+        if since_mark:
+            if not self._collector:
+                return None
+            since = self._collector.get_mark(since_mark)
+            if not since:
+                raise ValueError(f"Unknown timestamp mark: {since_mark}")
+            return since
+        elif within_seconds:
+            return datetime.now() - timedelta(seconds=within_seconds)
+        return None
 
     def _raise_assertion_error(
         self,
