@@ -232,17 +232,17 @@ jobs:
 
       - name: Authenticate to Google Cloud
         id: gcp-auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
-          workload_identity_provider: "projects/732091541226/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-          service_account: "github-actions-iam@prj-infra-automation-ktbz.iam.gserviceaccount.com"
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Output GCP secrets
         id: gcp-secrets
         uses: google-github-actions/get-secretmanager-secrets@dc4a1392bad0fd60aee00bb2097e30ef07a1caae # v2.1.3
         with:
           secrets: |-
-            BUF_TOKEN:prj-infra-automation-ktbz/platform_BUF_TOKEN
+            BUF_TOKEN:${{ vars.GCP_PROJECT_ID }}/platform_BUF_TOKEN
 
       - name: load extra keys from file
         id: load-extra-keys
