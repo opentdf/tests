@@ -223,6 +223,7 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
+          persist-credentials: false
 
       - name: load extra keys from file
         id: load-extra-keys
@@ -402,7 +403,7 @@ jobs:
         working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
       - name: Install test dependencies
         run: uv sync
         working-directory: otdftests/xtest
@@ -533,7 +534,7 @@ jobs:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact
         if: success() || failure()
         with:
