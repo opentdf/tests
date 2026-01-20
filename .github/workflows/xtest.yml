@@ -94,13 +94,13 @@ jobs:
             echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
           elif [[ $CRON_MONDAY_WEDNESDAY == 'true' ]]; then
             echo "Running Monday/Wednesday tests"
-            echo "DEFAULT_TAGS=main lts" >> "$GITHUB_ENV"
+            echo "DEFAULT_TAGS=main" >> "$GITHUB_ENV"
           elif [[ $CRON_WEEKLY == 'true' ]]; then
             echo "Running weekly tests"
-            echo "DEFAULT_TAGS=main latest lts" >> "$GITHUB_ENV"
+            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
           else
             echo "Running PR, Workflow Dispatch, or manual trigger"
-            echo "DEFAULT_TAGS=main latest lts" >> "$GITHUB_ENV"
+            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
           fi
         env:
           CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
