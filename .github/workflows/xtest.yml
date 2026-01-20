@@ -215,6 +215,7 @@ jobs:
       packages: read
       checks: write # Needed to publish junit tests
       pull-requests: write # Add comments to PRs
+      id-token: write # Needed for GCP auth to retrieve secrets
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk }}
@@ -228,6 +229,20 @@ jobs:
         with:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
+
+      - name: Authenticate to Google Cloud
+        id: gcp-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/732091541226/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          service_account: "github-actions-iam@prj-infra-automation-ktbz.iam.gserviceaccount.com"
+
+      - name: Output GCP secrets
+        id: gcp-secrets
+        uses: google-github-actions/get-secretmanager-secrets@dc4a1392bad0fd60aee00bb2097e30ef07a1caae # v2.1.3
+        with:
+          secrets: |-
+            BUF_TOKEN:prj-infra-automation-ktbz/platform_BUF_TOKEN
 
       - name: load extra keys from file
         id: load-extra-keys
@@ -250,7 +265,7 @@ jobs:
       - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c # v1.3.0
         with:
           setup_only: true
-          token: ${{ secrets.BUF_TOKEN }}
+          token: ${{ steps.gcp-secrets.outputs.BUF_TOKEN }}
           version: "1.56.0"
 
       - name: Set up JDK
