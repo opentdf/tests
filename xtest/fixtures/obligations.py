@@ -10,6 +10,7 @@ import pytest
 
 import abac
 from otdfctl import OpentdfCommandLineTool
+from xtest import tdfs
 
 
 @pytest.fixture(scope="module")
@@ -58,6 +59,10 @@ def _obligation_setup_helper(
     Creates attribute and optional SCS mapping, obligation definition with a single value,
     and an obligation trigger (optionally scoped to a client id).
     """
+    pfs = tdfs.PlatformFeatureSet()
+    if "obligations" not in pfs.features:
+        pytest.skip("Obligations feature is not enabled")
+
     # Attribute
     attr = otdfctl.attribute_create(
         name=attr_name,
