@@ -11,17 +11,17 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main
+        default: main latest
         description: "The branch or commit to use for otdfctl"
       js-ref:
         required: false
         type: string
-        default: main
+        default: main latest
         description: "The branch or commit to use for the web-sdk"
       java-ref:
         required: false
         type: string
-        default: main
+        default: main latest
         description: "The branch or commit to use for the java-sdk"
       focus-sdk:
         required: false
@@ -37,15 +37,15 @@ on:
       otdfctl-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       js-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       java-ref:
         required: false
         type: string
-        default: main
+        default: main latest
       focus-sdk:
         required: false
         type: string
