@@ -265,7 +265,7 @@ def audit_logs(
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(
-    item: pytest.Item, _call: pytest.CallInfo[None]
+    item: pytest.Item, call: pytest.CallInfo[None]
 ) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """Pytest hook to capture test results for audit log collection.
 
