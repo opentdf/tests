@@ -113,6 +113,7 @@ jobs:
           path: otdf-sdk
           persist-credentials: false
           repository: opentdf/tests
+          ref: ${{ github.head_ref || github.ref }}
           sparse-checkout: xtest/sdk
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
