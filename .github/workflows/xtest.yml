@@ -288,8 +288,28 @@ jobs:
       - name: build and setup the web-sdk cli
         id: build-web-sdk
         run: |
-          make
+          # Use download-artifact.sh for released versions, make for HEAD
+          for row in $(echo "$JS_VERSION_INFO" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            RELEASE=$(echo "$row" | jq -r '.release // empty')
+
+            if [[ "$HEAD" == "true" ]]; then
+              echo "Building $TAG from source (HEAD version)..."
+              VERSIONS="$TAG" make
+            elif [[ -n "$RELEASE" ]]; then
+              VERSION_NUM="${RELEASE#v}"
+              echo "Using npm package for $TAG (release $VERSION_NUM)..."
+              chmod +x ./download-artifact.sh
+              ./download-artifact.sh "$VERSION_NUM" "dist/$TAG"
+            else
+              echo "Building $TAG from source (no release info)..."
+              VERSIONS="$TAG" make
+            fi
+          done
         working-directory: otdftests/xtest/sdk/js
+        env:
+          JS_VERSION_INFO: ${{ needs.resolve-versions.outputs.js }}
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl
@@ -338,9 +358,29 @@ jobs:
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
-        run: |-
-          make
+        run: |
+          # Use download-artifact.sh for released versions, make for HEAD
+          for row in $(echo "$GO_VERSION_INFO" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            RELEASE=$(echo "$row" | jq -r '.release // empty')
+
+            if [[ "$HEAD" == "true" ]]; then
+              echo "Building $TAG from source (HEAD version)..."
+              VERSIONS="$TAG" make
+            elif [[ -n "$RELEASE" ]]; then
+              VERSION_NUM="${RELEASE#v}"
+              echo "Using pre-built binary for $TAG (release $VERSION_NUM)..."
+              chmod +x ./download-artifact.sh
+              ./download-artifact.sh "$VERSION_NUM" "dist/$TAG"
+            else
+              echo "Building $TAG from source (no release info)..."
+              VERSIONS="$TAG" make
+            fi
+          done
         working-directory: otdftests/xtest/sdk/go
+        env:
+          GO_VERSION_INFO: ${{ needs.resolve-versions.outputs.go }}
 
       ####### CHECKOUT JAVA SDK ##############
 
@@ -384,8 +424,28 @@ jobs:
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
         run: |
-          make
+          # Use download-artifact.sh for released versions, make for HEAD
+          for row in $(echo "$JAVA_VERSION_INFO" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            RELEASE=$(echo "$row" | jq -r '.release // empty')
+
+            if [[ "$HEAD" == "true" ]]; then
+              echo "Building $TAG from source (HEAD version)..."
+              VERSIONS="$TAG" make
+            elif [[ -n "$RELEASE" ]]; then
+              VERSION_NUM="${RELEASE#v}"
+              echo "Using optimized build for $TAG (release $VERSION_NUM)..."
+              chmod +x ./download-artifact.sh
+              ./download-artifact.sh "$VERSION_NUM" "dist/$TAG"
+            else
+              echo "Building $TAG from source (no release info)..."
+              VERSIONS="$TAG" make
+            fi
+          done
         working-directory: otdftests/xtest/sdk/java
+        env:
+          JAVA_VERSION_INFO: ${{ needs.resolve-versions.outputs.java }}
 
       ######## Configure test environment #############
       - name: Lookup current platform version
