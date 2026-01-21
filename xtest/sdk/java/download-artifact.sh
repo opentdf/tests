@@ -25,7 +25,8 @@ git clone --depth 1 --branch "v${VERSION}" \
 
 echo "Building cmdline module only (using released SDK from Maven Central)..."
 cd "$WORK_DIR/java-sdk"
-mvn --batch-mode -pl cmdline -am package -DskipTests -Dmaven.javadoc.skip=true
+# No -am flag: fetch sdk dependency from Maven Central instead of building from source
+mvn --batch-mode -pl cmdline package -DskipTests -Dmaven.javadoc.skip=true
 
 cp cmdline/target/cmdline.jar "$DIST_DIR/"
 cp "$SCRIPT_DIR/cli.sh" "$DIST_DIR/"
