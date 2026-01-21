@@ -289,18 +289,18 @@ jobs:
       - name: build and setup the web-sdk cli
         id: build-web-sdk
         run: |
-          # Use download-artifact.sh for released versions, make for HEAD
+          # Use download-artifact.sh for released versions and dev (from dev release)
           for row in $(echo "$JS_VERSION_INFO" | jq -c '.[]'); do
             TAG=$(echo "$row" | jq -r '.tag')
             HEAD=$(echo "$row" | jq -r '.head')
             VERSION=$(echo "$row" | jq -r '.version // empty')
 
+            chmod +x ./download-artifact.sh
             if [[ "$HEAD" == "true" ]]; then
-              echo "Building $TAG from source (HEAD version)..."
-              VERSIONS="$TAG" make
+              echo "Downloading $TAG from dev release..."
+              ./download-artifact.sh dev "dist/$TAG"
             elif [[ -n "$VERSION" ]]; then
               echo "Using npm package for $TAG (version $VERSION)..."
-              chmod +x ./download-artifact.sh
               ./download-artifact.sh "$VERSION" "dist/$TAG"
             else
               echo "Building $TAG from source (no version info)..."
@@ -423,18 +423,18 @@ jobs:
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
         run: |
-          # Use download-artifact.sh for released versions, make for HEAD
+          # Use download-artifact.sh for released versions and dev (from dev release)
           for row in $(echo "$JAVA_VERSION_INFO" | jq -c '.[]'); do
             TAG=$(echo "$row" | jq -r '.tag')
             HEAD=$(echo "$row" | jq -r '.head')
             VERSION=$(echo "$row" | jq -r '.version // empty')
 
+            chmod +x ./download-artifact.sh
             if [[ "$HEAD" == "true" ]]; then
-              echo "Building $TAG from source (HEAD version)..."
-              VERSIONS="$TAG" make
+              echo "Downloading $TAG from dev release..."
+              ./download-artifact.sh dev "dist/$TAG"
             elif [[ -n "$VERSION" ]]; then
               echo "Using optimized build for $TAG (version $VERSION)..."
-              chmod +x ./download-artifact.sh
               ./download-artifact.sh "$VERSION" "dist/$TAG"
             else
               echo "Building $TAG from source (no version info)..."
