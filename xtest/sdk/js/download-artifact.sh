@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
 VERSION="$1"
 DIST_DIR="$2"
 
@@ -16,7 +18,6 @@ cd "$DIST_DIR"
 npm init -y
 npm install "@opentdf/ctl@${VERSION}"
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cp "$SCRIPT_DIR/cli.sh" .
 
 echo "JS artifact v${VERSION} downloaded to ${DIST_DIR}"
