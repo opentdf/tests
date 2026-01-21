@@ -16,6 +16,8 @@ if [ -z "$VERSION" ] || [ -z "$DIST_DIR" ]; then
 fi
 
 mkdir -p "$DIST_DIR"
+# Convert to absolute path before changing directories
+DIST_DIR=$(cd "$DIST_DIR" && pwd)
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 

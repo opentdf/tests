@@ -10,11 +10,13 @@ if [ -z "$VERSION" ] || [ -z "$DIST_DIR" ]; then
   exit 1
 fi
 
-mkdir -p "$DIST_DIR"
-
-GOBIN="$(cd "$DIST_DIR" && pwd)" go install "github.com/opentdf/otdfctl@v${VERSION}"
-
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+mkdir -p "$DIST_DIR"
+# Convert to absolute path
+DIST_DIR=$(cd "$DIST_DIR" && pwd)
+
+GOBIN="$DIST_DIR" go install "github.com/opentdf/otdfctl@v${VERSION}"
 cp "$SCRIPT_DIR/cli.sh" "$DIST_DIR/"
 cp "$SCRIPT_DIR/otdfctl.sh" "$DIST_DIR/"
 cp "$SCRIPT_DIR/opentdfctl.yaml" "$DIST_DIR/"
