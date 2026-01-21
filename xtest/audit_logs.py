@@ -1,8 +1,8 @@
 """KAS audit log collection and assertion framework for pytest tests.
 
-This module provides infrastructure to capture docker compose logs from KAS
-services during test execution and assert on their contents. Logs are collected
-via background subprocess and buffered in memory for fast access.
+This module provides infrastructure to capture logs from KAS services during
+test execution and assert on their contents. Logs are collected via background
+threads tailing log files and buffered in memory for fast access.
 
 Usage:
     def test_rewrap_logged(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
@@ -12,96 +12,50 @@ Usage:
         audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark="before_decrypt")
 """
 
-import json
 import logging
 import re
-import subprocess
 import threading
-import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger("xtest")
 
 
 class LogEntry:
-    """Represents a single parsed log entry from docker compose logs.
-
-    Uses __slots__ for ~40-50% memory reduction per entry and lazy JSON
-    parsing to avoid unnecessary CPU work for logs that are never queried.
-    """
-
-    __slots__ = (
-        "timestamp",
-        "log_timestamp",
-        "raw_line",
-        "_raw_json",
-        "_parsed_json",
-        "_json_parsed",
-        "service_name",
-    )
+    """Represents a single log entry from a KAS service log file."""
 
     def __init__(
         self,
         timestamp: datetime,
-        log_timestamp: datetime | None,
         raw_line: str,
         service_name: str,
-        *,
-        raw_json: str | None = None,
-        parsed_json: dict | None = None,
     ):
         """Initialize a log entry.
 
         Args:
             timestamp: When the log was collected by this framework
-            log_timestamp: Timestamp parsed from the log line (if available)
             raw_line: The original log line as received
-            service_name: Docker compose service name (e.g., 'kas', 'kas-alpha')
-            raw_json: Raw JSON string for lazy parsing (preferred for memory)
-            parsed_json: Pre-parsed JSON dict (for backward compatibility)
+            service_name: Service name (e.g., 'kas', 'kas-alpha')
         """
         self.timestamp = timestamp
-        self.log_timestamp = log_timestamp
         self.raw_line = raw_line
         self.service_name = service_name
-        self._raw_json = raw_json
-        self._parsed_json = parsed_json
-        self._json_parsed = parsed_json is not None
-
-    @property
-    def parsed_json(self) -> dict | None:
-        """Lazily parse JSON on first access.
-
-        Returns:
-            Parsed JSON dict, or None if not JSON format
-        """
-        if not self._json_parsed:
-            self._json_parsed = True
-            if self._raw_json is not None:
-                try:
-                    self._parsed_json = json.loads(self._raw_json)
-                except json.JSONDecodeError:
-                    self._parsed_json = None
-                    self._raw_json = None  # Clear to save memory
-        return self._parsed_json
 
     def __repr__(self) -> str:
         return (
             f"LogEntry(timestamp={self.timestamp!r}, "
-            f"log_timestamp={self.log_timestamp!r}, "
             f"raw_line={self.raw_line[:50]!r}..., "
             f"service_name={self.service_name!r})"
         )
 
 
 class AuditLogCollector:
-    """Collects logs from docker compose services in the background.
+    """Collects logs from KAS service log files in the background.
 
-    Starts a subprocess running `docker compose logs --follow` and reads
-    logs into a thread-safe buffer. Provides methods to query logs and
-    mark timestamps for correlation with test actions.
+    Starts background threads that tail log files and read logs into a
+    thread-safe buffer. Provides methods to query logs and mark timestamps
+    for correlation with test actions.
     """
 
     MAX_BUFFER_SIZE = 10000
@@ -116,44 +70,36 @@ class AuditLogCollector:
         """Initialize collector for log collection.
 
         Args:
-            platform_dir: Path to platform directory containing docker-compose.yaml
+            platform_dir: Path to platform directory
             services: List of service names to monitor (e.g., ['kas', 'kas-alpha']).
                      If None or empty, monitors all services.
-            log_files: Optional dict mapping service names to log file paths.
-                      If provided, reads from files instead of docker compose.
-                      Example: {'kas': Path('logs/kas-main.log'), 'kas-alpha': Path('logs/kas-alpha.log')}
+            log_files: Dict mapping service names to log file paths.
+                      Example: {'kas': Path('logs/kas-main.log')}
         """
         self.platform_dir = platform_dir
         self.services = services or []
         self.log_files = log_files
         self._buffer: deque[LogEntry] = deque(maxlen=self.MAX_BUFFER_SIZE)
         self._marks: dict[str, datetime] = {}
-        self._process: subprocess.Popen | None = None
         self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
         self._disabled = False
         self._error: Exception | None = None
         self.log_file_path: Path | None = None
         self.log_file_written = False
-        self._mode: str = "file" if log_files else "docker"
         self.start_time: datetime | None = None
 
     def start(self) -> None:
         """Start background log collection.
 
-        Supports two modes:
-        - File mode: Tails log files directly (preferred for CI)
-        - Docker mode: Uses docker compose logs (fallback for local dev)
-
-        Gracefully handles errors by disabling collection if resources unavailable.
+        Tails log files directly. Gracefully handles errors by disabling
+        collection if resources are unavailable.
         """
         if self._disabled:
             return
 
-        # Track when collection started (for test timing in error messages)
         self.start_time = datetime.now()
 
-        # Check if platform directory exists
         if not self.platform_dir.exists():
             logger.warning(
                 f"Platform directory not found: {self.platform_dir}. "
@@ -162,19 +108,11 @@ class AuditLogCollector:
             self._disabled = True
             return
 
-        if self._mode == "file":
-            self._start_file_mode()
-        else:
-            self._start_docker_mode()
-
-    def _start_file_mode(self) -> None:
-        """Start log collection from files (tailing)."""
         if not self.log_files:
-            logger.warning("No log files provided for file mode. Disabling collection.")
+            logger.warning("No log files provided. Disabling collection.")
             self._disabled = True
             return
 
-        # Filter to existing files
         existing_files = {
             service: path for service, path in self.log_files.items() if path.exists()
         }
@@ -184,14 +122,12 @@ class AuditLogCollector:
                 f"None of the log files exist yet: {list(self.log_files.values())}. "
                 f"Will wait for them to be created..."
             )
-            # Don't disable - files may be created soon by the platform startup
             existing_files = self.log_files
 
         logger.debug(
             f"Starting file-based log collection for: {list(existing_files.keys())}"
         )
 
-        # Start a thread for each log file to tail
         for service, log_path in existing_files.items():
             thread = threading.Thread(
                 target=self._tail_file,
@@ -202,90 +138,7 @@ class AuditLogCollector:
             self._threads.append(thread)
 
         logger.info(
-            f"Audit log collection started (file mode) for: {', '.join(existing_files.keys())}"
-        )
-
-    def _start_docker_mode(self) -> None:
-        """Start log collection from docker compose."""
-        # Check if docker compose is available
-        try:
-            subprocess.run(
-                ["docker", "compose", "version"],
-                capture_output=True,
-                timeout=2,
-                check=True,
-            )
-        except (
-            subprocess.CalledProcessError,
-            FileNotFoundError,
-            subprocess.TimeoutExpired,
-        ) as e:
-            logger.warning(
-                f"Docker compose not available: {e}. "
-                f"Audit log collection disabled. Tests will continue without log assertions."
-            )
-            self._disabled = True
-            return
-
-        # Get running services to filter
-        running_services = self._get_running_services()
-        if not running_services:
-            logger.warning(
-                "No docker compose services found running. "
-                "Audit log collection disabled."
-            )
-            self._disabled = True
-            return
-
-        # Filter to requested services that are actually running
-        if self.services:
-            filtered_services = [s for s in self.services if s in running_services]
-            if not filtered_services:
-                logger.warning(
-                    f"None of the requested services {self.services} are running. "
-                    f"Available services: {running_services}. "
-                    f"Audit log collection disabled."
-                )
-                self._disabled = True
-                return
-        else:
-            filtered_services = running_services
-
-        # Build docker compose logs command
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(self.platform_dir / "docker-compose.yaml"),
-            "logs",
-            "--follow",
-            "--no-color",
-            "--timestamps",
-        ]
-        cmd.extend(filtered_services)
-
-        logger.debug(f"Starting docker compose log collection: {' '.join(cmd)}")
-
-        try:
-            self._process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=False,
-                bufsize=1,
-            )
-        except Exception as e:
-            logger.error(f"Failed to start docker compose logs subprocess: {e}")
-            self._disabled = True
-            return
-
-        # Start background thread to read logs
-        thread = threading.Thread(target=self._read_docker_logs, daemon=True)
-        thread.start()
-        self._threads.append(thread)
-
-        logger.info(
-            f"Audit log collection started (docker mode) for: {', '.join(filtered_services)}"
+            f"Audit log collection started for: {', '.join(existing_files.keys())}"
         )
 
     def stop(self) -> None:
@@ -294,19 +147,8 @@ class AuditLogCollector:
             return
 
         logger.debug("Stopping audit log collection")
-
         self._stop_event.set()
 
-        # Stop docker compose process if running
-        if self._process:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait()
-
-        # Wait for all threads to finish
         for thread in self._threads:
             if thread.is_alive():
                 thread.join(timeout=2)
@@ -315,33 +157,16 @@ class AuditLogCollector:
             f"Audit log collection stopped. Collected {len(self._buffer)} log entries."
         )
 
-    def reset(self) -> None:
-        """Clear the log buffer and timestamp marks.
-
-        Call between tests to prevent memory accumulation in long test runs.
-        Does not stop collection - new logs will continue to be collected
-        into the now-empty buffer.
-        """
-        self._buffer.clear()
-        self._marks.clear()
-        logger.debug("Audit log buffer and marks cleared")
-
     def get_logs(
         self,
         since: datetime | None = None,
         service: str | None = None,
-        use_log_timestamp: bool = False,
     ) -> list[LogEntry]:
         """Get collected logs, optionally filtered by time and service.
 
         Args:
             since: Only return logs after this timestamp
             service: Only return logs from this service
-            use_log_timestamp: If True, filter by the log's internal timestamp
-                              (log_timestamp) instead of collection time (timestamp).
-                              More accurate for correlation but requires parseable
-                              timestamps in logs. Logs without parseable timestamps
-                              are excluded when this is True.
 
         Returns:
             List of matching log entries (may be empty)
@@ -352,16 +177,7 @@ class AuditLogCollector:
         logs = list(self._buffer)
 
         if since:
-            if use_log_timestamp:
-                # Filter by log's actual timestamp (more accurate for correlation)
-                logs = [
-                    log
-                    for log in logs
-                    if log.log_timestamp is not None and log.log_timestamp >= since
-                ]
-            else:
-                # Filter by collection timestamp (more reliable, always present)
-                logs = [log for log in logs if log.timestamp >= since]
+            logs = [log for log in logs if log.timestamp >= since]
 
         if service:
             logs = [log for log in logs if log.service_name == service]
@@ -432,34 +248,6 @@ Log Entries:
         self.log_file_written = True
         logger.info(f"Wrote {len(self._buffer)} audit log entries to {path}")
 
-    def _get_running_services(self) -> list[str]:
-        """Query docker compose for running services.
-
-        Returns:
-            List of service names currently running
-        """
-        try:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    str(self.platform_dir / "docker-compose.yaml"),
-                    "ps",
-                    "--services",
-                    "--filter",
-                    "status=running",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=True,
-            )
-            return [s.strip() for s in result.stdout.splitlines() if s.strip()]
-        except Exception as e:
-            logger.warning(f"Failed to query running services: {e}")
-            return []
-
     def _tail_file(self, service: str, log_path: Path) -> None:
         """Background thread target that tails a log file.
 
@@ -469,7 +257,6 @@ Log Entries:
         """
         logger.debug(f"Starting to tail {log_path} for service {service}")
 
-        # Wait for file to exist (with timeout)
         wait_start = datetime.now()
         while not log_path.exists():
             if self._stop_event.is_set():
@@ -481,189 +268,22 @@ Log Entries:
 
         try:
             with open(log_path) as f:
-                # Seek to end for new logs only
                 f.seek(0, 2)
 
                 while not self._stop_event.is_set():
                     line = f.readline()
                     if line:
-                        try:
-                            entry = self._parse_file_log_line(service, line.rstrip())
-                            self._buffer.append(entry)
-                        except Exception as e:
-                            logger.debug(f"Error parsing log line from {service}: {e}")
+                        entry = LogEntry(
+                            timestamp=datetime.now(),
+                            raw_line=line.rstrip(),
+                            service_name=service,
+                        )
+                        self._buffer.append(entry)
                     else:
-                        # No new data, wait a bit
                         self._stop_event.wait(0.1)
         except Exception as e:
             logger.error(f"Error tailing log file {log_path}: {e}")
             self._error = e
-
-    def _read_docker_logs(self) -> None:
-        """Background thread target that reads logs from docker compose subprocess."""
-        if not self._process or not self._process.stdout:
-            return
-
-        try:
-            for line in iter(self._process.stdout.readline, b""):
-                if self._stop_event.is_set():
-                    break
-
-                try:
-                    decoded_line = line.decode("utf-8", errors="replace").rstrip()
-                    if decoded_line:
-                        entry = self._parse_docker_log_line(decoded_line)
-                        self._buffer.append(entry)
-                except Exception as e:
-                    logger.debug(f"Error parsing docker log line: {e}")
-                    continue
-        except Exception as e:
-            logger.error(f"Docker log collection subprocess error: {e}")
-            self._error = e
-        finally:
-            if self._process and self._process.stdout:
-                self._process.stdout.close()
-
-    def _parse_file_log_line(self, service: str, raw_line: str) -> LogEntry:
-        """Parse log line from file with format auto-detection.
-
-        Args:
-            service: Service name (e.g., 'kas', 'kas-alpha')
-            raw_line: Raw log line from file
-
-        Returns:
-            Parsed LogEntry
-        """
-        collection_time = datetime.now()
-
-        # Try JSON parsing
-        parsed_json = None
-        log_timestamp = None
-        try:
-            parsed_json = json.loads(raw_line)
-            log_timestamp = self._parse_timestamp_from_json(parsed_json)
-        except (json.JSONDecodeError, ValueError):
-            # Not JSON, try syslog timestamp parsing
-            log_timestamp = self._parse_syslog_timestamp(raw_line)
-
-        return LogEntry(
-            timestamp=collection_time,
-            log_timestamp=log_timestamp,
-            raw_line=raw_line,
-            parsed_json=parsed_json,
-            service_name=service,
-        )
-
-    def _parse_docker_log_line(self, raw_line: str) -> LogEntry:
-        """Parse docker compose log line with format auto-detection.
-
-        Docker compose log format: "service_name_1 | 2026-01-06T10:15:23.456789Z <log content>"
-
-        Args:
-            raw_line: Raw log line from docker compose
-
-        Returns:
-            Parsed LogEntry
-        """
-        collection_time = datetime.now()
-
-        # Extract docker compose metadata
-        # Format: "service_name_1 | <log content>"
-        parts = raw_line.split("|", 1)
-        if len(parts) == 2:
-            prefix = parts[0].strip()
-            log_content = parts[1].strip()
-            # Find the longest matching service name from the monitored services list.
-            # This is more robust than splitting by a separator.
-            matching = [s for s in self.services if prefix.startswith(s)]
-            service_name = max(matching, key=len) if matching else "unknown"
-        else:
-            service_name = "unknown"
-            log_content = raw_line
-
-        # Try JSON parsing
-        parsed_json = None
-        log_timestamp = None
-        try:
-            parsed_json = json.loads(log_content)
-            log_timestamp = self._parse_timestamp_from_json(parsed_json)
-        except (json.JSONDecodeError, ValueError):
-            # Not JSON, try syslog timestamp parsing
-            log_timestamp = self._parse_syslog_timestamp(log_content)
-
-        return LogEntry(
-            timestamp=collection_time,
-            log_timestamp=log_timestamp,
-            raw_line=raw_line,
-            parsed_json=parsed_json,
-            service_name=service_name,
-        )
-
-    def _parse_timestamp_from_json(self, data: dict) -> datetime | None:
-        """Extract timestamp from common JSON log fields.
-
-        Args:
-            data: Parsed JSON log object
-
-        Returns:
-            Parsed datetime or None if not found
-        """
-        for field in ["timestamp", "time", "@timestamp", "ts"]:
-            if field in data:
-                return self._parse_timestamp_string(str(data[field]))
-        return None
-
-    def _parse_syslog_timestamp(self, line: str) -> datetime | None:
-        """Parse timestamp from syslog-format line.
-
-        Args:
-            line: Log line content
-
-        Returns:
-            Parsed datetime or None if not found
-        """
-        patterns = [
-            # RFC3339: 2026-01-06T10:15:23.456Z
-            r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)",
-            # RFC5424: 2026-01-06T10:15:23.456+00:00
-            r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2})",
-            # Simple format: 2026-01-06 10:15:23
-            r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)",
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, line)
-            if match:
-                return self._parse_timestamp_string(match.group(1))
-
-        return None
-
-    def _parse_timestamp_string(self, ts_str: str) -> datetime | None:
-        """Parse timestamp string in various formats.
-
-        Args:
-            ts_str: Timestamp string
-
-        Returns:
-            Parsed datetime or None on error
-        """
-        # Try common formats
-        formats = [
-            "%Y-%m-%dT%H:%M:%S.%fZ",
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%dT%H:%M:%S.%f%z",
-            "%Y-%m-%dT%H:%M:%S%z",
-            "%Y-%m-%d %H:%M:%S.%f",
-            "%Y-%m-%d %H:%M:%S",
-        ]
-
-        for fmt in formats:
-            try:
-                return datetime.strptime(ts_str, fmt)
-            except ValueError:
-                continue
-
-        return None
 
 
 class AuditLogAsserter:
@@ -672,19 +292,6 @@ class AuditLogAsserter:
     This class wraps an AuditLogCollector and provides test-friendly assertion
     methods with rich error messages.
     """
-
-    # Log level ordering for level_min filtering (lower index = less severe)
-    LOG_LEVELS = [
-        "trace",
-        "debug",
-        "info",
-        "warn",
-        "warning",
-        "error",
-        "fatal",
-        "panic",
-    ]
-    """Ordered list of log levels from least to most severe."""
 
     def __init__(self, collector: AuditLogCollector | None):
         """Initialize asserter with log collector.
@@ -707,41 +314,18 @@ class AuditLogAsserter:
             return datetime.now()
         return self._collector.mark(label)
 
-    def reset(self) -> None:
-        """Clear collected logs and timestamp marks.
-
-        Call between tests to prevent memory accumulation. Collection
-        continues after reset - new logs will be collected into the
-        now-empty buffer.
-        """
-        if self._collector:
-            self._collector.reset()
-
     def assert_contains(
         self,
         pattern: str | re.Pattern,
         min_count: int = 1,
-        max_count: int | None = None,
-        within_seconds: float | None = None,
         since_mark: str | None = None,
-        service: str | None = None,
-        use_log_timestamp: bool = False,
-        level: str | None = None,
-        level_min: str | None = None,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
         Args:
             pattern: Regex pattern or substring to search for
             min_count: Minimum number of occurrences (default: 1)
-            max_count: Maximum number of occurrences (optional)
-            within_seconds: Only check logs from last N seconds
             since_mark: Only check logs since marked timestamp
-            service: Only check logs from specific service
-            use_log_timestamp: If True, filter by log's internal timestamp
-                              instead of collection time for more accurate correlation
-            level: Exact log level to match (e.g., "error", "info")
-            level_min: Minimum log level (e.g., "error" matches error, fatal, panic)
 
         Returns:
             Matching log entries
@@ -756,13 +340,9 @@ class AuditLogAsserter:
             )
             return []
 
-        # Resolve time filter and get logs
-        since = self._resolve_since(since_mark, within_seconds)
-        logs = self._collector.get_logs(
-            since=since, service=service, use_log_timestamp=use_log_timestamp
-        )
+        since = self._resolve_since(since_mark)
+        logs = self._collector.get_logs(since=since)
 
-        # Find matching logs
         if isinstance(pattern, str):
             regex = re.compile(pattern, re.IGNORECASE)
         else:
@@ -770,15 +350,6 @@ class AuditLogAsserter:
 
         matching = [log for log in logs if regex.search(log.raw_line)]
 
-        # Apply log level filter
-        if level is not None or level_min is not None:
-            matching = [
-                log
-                for log in matching
-                if self._matches_log_level(log, level, level_min)
-            ]
-
-        # Check constraints
         count = len(matching)
         if count < min_count:
             self._raise_assertion_error(
@@ -786,523 +357,15 @@ class AuditLogAsserter:
                 f"but found {count} occurrence(s).",
                 matching,
                 logs,
-                pattern,
-            )
-
-        if max_count is not None and count > max_count:
-            self._raise_assertion_error(
-                f"Expected pattern '{pattern}' to appear at most {max_count} time(s), "
-                f"but found {count} occurrence(s).",
-                matching,
-                logs,
-                pattern,
             )
 
         return matching
 
-    def assert_count(
-        self,
-        pattern: str | re.Pattern,
-        expected_count: int,
-        within_seconds: float | None = None,
-        since_mark: str | None = None,
-        service: str | None = None,
-        use_log_timestamp: bool = False,
-    ) -> list[LogEntry]:
-        """Assert exact count of pattern occurrences.
-
-        Args:
-            pattern: Regex pattern to search for
-            expected_count: Expected number of occurrences
-            within_seconds: Only check logs from last N seconds
-            since_mark: Only check logs since marked timestamp
-            service: Only check logs from specific service
-            use_log_timestamp: If True, filter by log's internal timestamp
-
-        Returns:
-            Matching log entries
-
-        Raises:
-            AssertionError: If count doesn't match
-        """
-        return self.assert_contains(
-            pattern=pattern,
-            min_count=expected_count,
-            max_count=expected_count,
-            within_seconds=within_seconds,
-            since_mark=since_mark,
-            service=service,
-            use_log_timestamp=use_log_timestamp,
-        )
-
-    def assert_within_time(
-        self,
-        pattern: str | re.Pattern,
-        reference_time: datetime,
-        window_seconds: float = 5.0,
-    ) -> list[LogEntry]:
-        """Assert pattern appears within time window of reference.
-
-        Args:
-            pattern: Regex pattern to search for
-            reference_time: Reference timestamp
-            window_seconds: Time window in seconds (default: 5.0)
-
-        Returns:
-            Matching log entries within time window
-
-        Raises:
-            AssertionError: If no matches within time window
-        """
-        if not self._collector or self._collector._disabled:
-            logger.warning("Audit log assertion skipped (collection disabled)")
-            return []
-
-        # Get all logs
-        logs = self._collector.get_logs()
-
-        # Find matching logs within time window
-        if isinstance(pattern, str):
-            regex = re.compile(pattern, re.IGNORECASE)
-        else:
-            regex = pattern
-
-        start_time = reference_time - timedelta(seconds=window_seconds)
-        end_time = reference_time + timedelta(seconds=window_seconds)
-
-        matching = [
-            log
-            for log in logs
-            if regex.search(log.raw_line) and start_time <= log.timestamp <= end_time
-        ]
-
-        if not matching:
-            self._raise_assertion_error(
-                f"Expected pattern '{pattern}' to appear within {window_seconds}s of {reference_time}, "
-                f"but no matches found in time window.",
-                matching,
-                logs,
-                pattern,
-            )
-
-        return matching
-
-    def get_matching_logs(
-        self,
-        pattern: str | re.Pattern,
-        since: datetime | None = None,
-        service: str | None = None,
-    ) -> list[LogEntry]:
-        """Get all logs matching pattern (non-asserting query).
-
-        Args:
-            pattern: Regex pattern to search for
-            since: Only return logs after this timestamp
-            service: Only return logs from this service
-
-        Returns:
-            List of matching log entries
-        """
-        if not self._collector or self._collector._disabled:
-            return []
-
-        logs = self._collector.get_logs(since=since, service=service)
-
-        if isinstance(pattern, str):
-            regex = re.compile(pattern, re.IGNORECASE)
-        else:
-            regex = pattern
-
-        return [log for log in logs if regex.search(log.raw_line)]
-
-    def assert_not_contains(
-        self,
-        pattern: str | re.Pattern,
-        within_seconds: float | None = None,
-        since_mark: str | None = None,
-        service: str | None = None,
-        use_log_timestamp: bool = False,
-    ) -> None:
-        """Assert pattern does NOT appear in logs.
-
-        Args:
-            pattern: Regex pattern that should NOT be found
-            within_seconds: Time window to check
-            since_mark: Check logs since marked timestamp
-            service: Filter by service name
-            use_log_timestamp: If True, filter by log's internal timestamp
-
-        Raises:
-            AssertionError: If pattern IS found in logs
-
-        Example:
-            # Verify no errors occurred during operation
-            audit_logs.mark("operation_start")
-            perform_operation()
-            audit_logs.assert_not_contains(r"error|exception", since_mark="operation_start")
-        """
-        if not self._collector or self._collector._disabled:
-            logger.warning(
-                f"Audit log assertion skipped (collection disabled). "
-                f"Would have asserted pattern NOT present: {pattern}"
-            )
-            return
-
-        # Resolve time filter and get logs
-        since = self._resolve_since(since_mark, within_seconds)
-        logs = self._collector.get_logs(
-            since=since, service=service, use_log_timestamp=use_log_timestamp
-        )
-
-        # Find matching logs
-        if isinstance(pattern, str):
-            regex = re.compile(pattern, re.IGNORECASE)
-        else:
-            regex = pattern
-
-        matching = [log for log in logs if regex.search(log.raw_line)]
-
-        if matching:
-            self._raise_assertion_error(
-                f"Expected pattern '{pattern}' to NOT appear in logs, "
-                f"but found {len(matching)} occurrence(s).",
-                matching,
-                logs,
-                pattern,
-            )
-
-    def wait_for_log(
-        self,
-        pattern: str | re.Pattern,
-        timeout_seconds: float = 30.0,
-        poll_interval: float = 0.5,
-        min_count: int = 1,
-        since_mark: str | None = None,
-        service: str | None = None,
-    ) -> list[LogEntry]:
-        """Wait for pattern to appear in logs, polling until timeout.
-
-        Useful for async operations where logs may not appear immediately.
-
-        Args:
-            pattern: Regex pattern to wait for
-            timeout_seconds: Maximum time to wait (default: 30s)
-            poll_interval: Time between checks (default: 0.5s)
-            min_count: Minimum occurrences required (default: 1)
-            since_mark: Only consider logs since this mark
-            service: Filter by service name
-
-        Returns:
-            List of matching log entries
-
-        Raises:
-            TimeoutError: If pattern not found within timeout
-
-        Example:
-            # Wait for async operation to complete
-            audit_logs.mark("operation_start")
-            trigger_async_operation()
-            logs = audit_logs.wait_for_log(
-                r"operation completed",
-                timeout_seconds=60,
-                since_mark="operation_start"
-            )
-        """
-        if not self._collector or self._collector._disabled:
-            logger.warning("Audit log wait skipped (collection disabled)")
-            return []
-
-        if isinstance(pattern, str):
-            regex = re.compile(pattern, re.IGNORECASE)
-        else:
-            regex = pattern
-
-        since = None
-        if since_mark:
-            since = self._collector.get_mark(since_mark)
-            if not since:
-                raise ValueError(f"Unknown timestamp mark: {since_mark}")
-
-        start_time = time.time()
-        last_log_count = 0
-
-        while True:
-            elapsed = time.time() - start_time
-            if elapsed >= timeout_seconds:
-                # Get final state for error message
-                logs = self._collector.get_logs(since=since, service=service)
-                matching = [log for log in logs if regex.search(log.raw_line)]
-
-                raise TimeoutError(
-                    f"Timeout waiting for pattern '{pattern}' after {timeout_seconds}s. "
-                    f"Found {len(matching)} matches (needed {min_count}). "
-                    f"Total logs checked: {len(logs)}."
-                )
-
-            logs = self._collector.get_logs(since=since, service=service)
-            matching = [log for log in logs if regex.search(log.raw_line)]
-
-            if len(matching) >= min_count:
-                logger.debug(
-                    f"Found {len(matching)} matches for pattern '{pattern}' "
-                    f"after {elapsed:.2f}s"
-                )
-                return matching
-
-            # Log progress if new logs arrived
-            if len(logs) != last_log_count:
-                logger.debug(
-                    f"Waiting for pattern '{pattern}': {len(matching)}/{min_count} matches, "
-                    f"{len(logs)} logs checked, {timeout_seconds - elapsed:.1f}s remaining"
-                )
-                last_log_count = len(logs)
-
-            time.sleep(poll_interval)
-
-    def assert_json_field(
-        self,
-        field_path: str,
-        expected_value: object,
-        min_count: int = 1,
-        max_count: int | None = None,
-        comparison: str = "equals",
-        within_seconds: float | None = None,
-        since_mark: str | None = None,
-        service: str | None = None,
-        use_log_timestamp: bool = False,
-    ) -> list[LogEntry]:
-        """Assert JSON field value in logs with optional constraints.
-
-        Allows structured assertions on parsed JSON log fields without
-        needing to write regex patterns for JSON data.
-
-        Args:
-            field_path: Dot-separated path to JSON field (e.g., "response.status",
-                       "request.method", "audit.action")
-            expected_value: Value to match against
-            min_count: Minimum number of matching logs (default: 1)
-            max_count: Maximum number of matching logs (optional)
-            comparison: How to compare values:
-                       - "equals": Exact equality (default)
-                       - "contains": expected_value is substring of field value
-                       - "regex": expected_value is regex pattern
-                       - "exists": Field exists (expected_value ignored)
-                       - "gt", "gte", "lt", "lte": Numeric comparisons
-            within_seconds: Only check logs from last N seconds
-            since_mark: Only check logs since marked timestamp
-            service: Only check logs from specific service
-            use_log_timestamp: If True, filter by log's internal timestamp
-
-        Returns:
-            List of matching log entries
-
-        Raises:
-            AssertionError: If constraints not met, with detailed context
-            ValueError: If comparison mode is invalid
-
-        Example:
-            # Assert successful rewrap response
-            audit_logs.assert_json_field("response.status", 200)
-
-            # Assert at least 2 error-level logs
-            audit_logs.assert_json_field("level", "error", min_count=2)
-
-            # Assert audit action exists
-            audit_logs.assert_json_field("audit.action", None, comparison="exists")
-
-            # Assert response time under threshold
-            audit_logs.assert_json_field("duration_ms", 100, comparison="lt")
-        """
-        if not self._collector or self._collector._disabled:
-            logger.warning(
-                f"Audit log assertion skipped (collection disabled). "
-                f"Would have asserted field {field_path}={expected_value}"
-            )
-            return []
-
-        valid_comparisons = {
-            "equals",
-            "contains",
-            "regex",
-            "exists",
-            "gt",
-            "gte",
-            "lt",
-            "lte",
-        }
-        if comparison not in valid_comparisons:
-            raise ValueError(
-                f"Invalid comparison '{comparison}'. Must be one of: {valid_comparisons}"
-            )
-
-        # Resolve time filter and get logs
-        since = self._resolve_since(since_mark, within_seconds)
-        logs = self._collector.get_logs(
-            since=since, service=service, use_log_timestamp=use_log_timestamp
-        )
-
-        # Find matching logs
-        matching = []
-        for log in logs:
-            if log.parsed_json is None:
-                continue
-
-            # Navigate to field
-            value = self._get_json_field(log.parsed_json, field_path)
-
-            # Apply comparison
-            if self._compare_value(value, expected_value, comparison):
-                matching.append(log)
-
-        # Check constraints
-        count = len(matching)
-        if count < min_count:
-            self._raise_assertion_error(
-                f"Expected field '{field_path}' with value {comparison} '{expected_value}' "
-                f"to appear at least {min_count} time(s), but found {count} occurrence(s).",
-                matching,
-                logs,
-                f"{field_path}={expected_value}",
-            )
-
-        if max_count is not None and count > max_count:
-            self._raise_assertion_error(
-                f"Expected field '{field_path}' with value {comparison} '{expected_value}' "
-                f"to appear at most {max_count} time(s), but found {count} occurrence(s).",
-                matching,
-                logs,
-                f"{field_path}={expected_value}",
-            )
-
-        return matching
-
-    def _get_json_field(self, data: dict, field_path: str) -> object:
-        """Extract a field from nested JSON using dot notation.
-
-        Args:
-            data: JSON dict to extract from
-            field_path: Dot-separated path (e.g., "response.status")
-
-        Returns:
-            Field value, or None if not found
-        """
-        parts = field_path.split(".")
-        current: object = data
-
-        for part in parts:
-            if isinstance(current, dict) and part in current:
-                current = current[part]
-            else:
-                return None
-
-        return current
-
-    def _compare_value(self, actual: object, expected: object, comparison: str) -> bool:
-        """Compare values according to comparison mode.
-
-        Args:
-            actual: Actual value from log
-            expected: Expected value
-            comparison: Comparison mode
-
-        Returns:
-            True if comparison succeeds
-        """
-        if comparison == "exists":
-            return actual is not None
-
-        if actual is None:
-            return False
-
-        if comparison == "equals":
-            return actual == expected
-
-        if comparison == "contains":
-            return (
-                isinstance(actual, str)
-                and isinstance(expected, str)
-                and expected in actual
-            )
-
-        if comparison == "regex":
-            if not isinstance(actual, str) or not isinstance(expected, str):
-                return False
-            return bool(re.search(expected, actual, re.IGNORECASE))
-
-        # Numeric comparisons
-        if comparison in ("gt", "gte", "lt", "lte"):
-            try:
-                actual_num = float(actual)  # type: ignore[arg-type]
-                expected_num = float(expected)  # type: ignore[arg-type]
-            except (TypeError, ValueError):
-                return False
-
-            if comparison == "gt":
-                return actual_num > expected_num
-            if comparison == "gte":
-                return actual_num >= expected_num
-            if comparison == "lt":
-                return actual_num < expected_num
-            if comparison == "lte":
-                return actual_num <= expected_num
-
-        return False
-
-    def _matches_log_level(
-        self,
-        log: LogEntry,
-        level: str | None,
-        level_min: str | None,
-    ) -> bool:
-        """Check if a log entry matches the level filter.
-
-        Args:
-            log: Log entry to check
-            level: Exact level to match (case-insensitive)
-            level_min: Minimum level to match (case-insensitive)
-
-        Returns:
-            True if log matches the level filter
-        """
-        if log.parsed_json is None:
-            return False
-
-        # Get log level from common field names
-        log_level = None
-        for field in ["level", "lvl", "severity", "log.level"]:
-            if field in log.parsed_json:
-                log_level = str(log.parsed_json[field]).lower()
-                break
-
-        if log_level is None:
-            return False
-
-        # Check exact level match
-        if level is not None:
-            return log_level == level.lower()
-
-        # Check minimum level
-        if level_min is not None:
-            try:
-                log_level_idx = self.LOG_LEVELS.index(log_level)
-                min_level_idx = self.LOG_LEVELS.index(level_min.lower())
-                return log_level_idx >= min_level_idx
-            except ValueError:
-                # Unknown log level, don't match
-                return False
-
-        return True
-
-    def _resolve_since(
-        self,
-        since_mark: str | None,
-        within_seconds: float | None,
-    ) -> datetime | None:
-        """Resolve time filter from mark name or seconds.
+    def _resolve_since(self, since_mark: str | None) -> datetime | None:
+        """Resolve time filter from mark name.
 
         Args:
             since_mark: Name of timestamp mark to filter from
-            within_seconds: Number of seconds to look back
 
         Returns:
             Resolved datetime to filter from, or None for no filter
@@ -1317,8 +380,6 @@ class AuditLogAsserter:
             if not since:
                 raise ValueError(f"Unknown timestamp mark: {since_mark}")
             return since
-        elif within_seconds:
-            return datetime.now() - timedelta(seconds=within_seconds)
         return None
 
     def _raise_assertion_error(
@@ -1326,7 +387,6 @@ class AuditLogAsserter:
         message: str,
         matching: list[LogEntry],
         all_logs: list[LogEntry],
-        pattern: str | re.Pattern,
     ) -> None:
         """Raise AssertionError with rich context.
 
@@ -1334,7 +394,6 @@ class AuditLogAsserter:
             message: Main error message
             matching: Logs that matched the pattern
             all_logs: All logs that were searched
-            pattern: Pattern that was searched for
         """
         context = [message, ""]
 
@@ -1348,7 +407,6 @@ class AuditLogAsserter:
                 context.append(f"  ... and {len(matching) - 10} more")
             context.append("")
 
-        # Show recent context
         recent_logs = all_logs[-10:] if len(all_logs) > 10 else all_logs
         if recent_logs:
             context.append(f"Recent context (last {len(recent_logs)} lines):")
@@ -1358,12 +416,10 @@ class AuditLogAsserter:
                 )
             context.append("")
 
-        # Collection summary
         if self._collector:
             context.append("Log collection details:")
             context.append(f"  - Total logs collected: {len(all_logs)}")
 
-            # Test timing information
             if self._collector.start_time:
                 test_duration = datetime.now() - self._collector.start_time
                 context.append(
@@ -1373,7 +429,6 @@ class AuditLogAsserter:
                     f"  - Test duration: {test_duration.total_seconds():.2f}s"
                 )
 
-            # Services and their log file locations
             if self._collector.services:
                 context.append(
                     f"  - Services monitored: {', '.join(self._collector.services)}"

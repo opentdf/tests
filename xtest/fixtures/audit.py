@@ -1,8 +1,8 @@
 """Pytest fixtures for KAS audit log collection and assertion.
 
-This module provides fixtures that enable automatic collection of docker compose
-logs from KAS services during test execution. Tests can use the `audit_logs`
-fixture to assert on log contents, counts, and timing.
+This module provides fixtures that enable automatic collection of logs from KAS
+services during test execution. Tests can use the `audit_logs` fixture to
+assert on log contents.
 
 Example:
     def test_rewrap(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
@@ -139,7 +139,6 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
         if log_dir.exists():
             logger.debug(f"No log file env vars found, checking {log_dir}")
             for service in audit_log_config.services:
-                # Map service names to expected filenames
                 if service == "kas":
                     log_file = log_dir / "kas-main.log"
                 else:
@@ -149,10 +148,10 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
                     log_files[service] = log_file
 
     if log_files:
-        logger.info(f"Found {len(log_files)} KAS log files for file-based collection")
+        logger.info(f"Found {len(log_files)} KAS log files for collection")
         return log_files
     else:
-        logger.debug("No KAS log files found, will use docker compose logs")
+        logger.debug("No KAS log files found, audit log collection will be disabled")
         return None
 
 
@@ -161,12 +160,11 @@ def audit_logs(
     request: pytest.FixtureRequest,
     audit_log_config: AuditLogConfig,
     kas_log_files: dict[str, Path] | None,
-    tmp_dir: Path,
 ) -> Iterator[AuditLogAsserter]:
     """Collect and assert on KAS audit logs during test execution.
 
-    This fixture automatically collects docker compose logs from KAS services
-    during test execution and provides assertion methods for validation.
+    This fixture automatically collects logs from KAS services during test
+    execution and provides assertion methods for validation.
 
     The fixture is function-scoped, meaning each test gets its own log collector
     with clean state. Logs are buffered in memory and only written to disk on
@@ -174,16 +172,9 @@ def audit_logs(
 
     Usage:
         def test_rewrap(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
-            # Perform encryption
             ct_file = encrypt_sdk.encrypt(pt_file, ...)
-
-            # Mark timestamp before action
             audit_logs.mark("before_decrypt")
-
-            # Perform action that should generate logs
             decrypt_sdk.decrypt(ct_file, ...)
-
-            # Assert on logs
             audit_logs.assert_contains(
                 r"rewrap.*200",
                 min_count=1,
@@ -198,7 +189,7 @@ def audit_logs(
     Args:
         request: Pytest request fixture
         audit_log_config: Session-scoped configuration
-        tmp_dir: Module-scoped temporary directory fixture
+        kas_log_files: Session-scoped log file paths
 
     Yields:
         AuditLogAsserter: Object for making assertions on collected logs
@@ -274,7 +265,7 @@ def audit_logs(
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo[None]
+    item: pytest.Item, _call: pytest.CallInfo[None]
 ) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """Pytest hook to capture test results for audit log collection.
 
