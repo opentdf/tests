@@ -423,7 +423,7 @@ class SDK:
             return self._supports[feature]
         self._supports[feature] = self._uncached_supports(feature)
         return self._supports[feature]
-    
+
     def skip_if_unsupported(self, *features: feature_type):
         for feature in features:
             if not self.supports(feature):
