@@ -618,6 +618,47 @@ jobs:
               throw err; // Re-throw unexpected errors
             }
 
+  test-artifacts:
+    # Validate that published SDK artifacts can be downloaded
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.24"
+
+      - name: Test Java artifact download
+        run: |
+          chmod +x xtest/sdk/java/download-artifact.sh
+          xtest/sdk/java/download-artifact.sh 0.9.0 /tmp/java-test
+          ls -la /tmp/java-test/
+
+      - name: Test JS artifact download
+        run: |
+          chmod +x xtest/sdk/js/download-artifact.sh
+          xtest/sdk/js/download-artifact.sh 0.4.0 /tmp/js-test
+          ls -la /tmp/js-test/
+
+      - name: Test Go artifact download
+        run: |
+          chmod +x xtest/sdk/go/download-artifact.sh
+          xtest/sdk/go/download-artifact.sh 0.24.0 /tmp/go-test
+          ls -la /tmp/go-test/
+
   xtest:
     # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
     runs-on: ubuntu-latest
