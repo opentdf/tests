@@ -452,7 +452,7 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          uv run pytest --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -461,7 +461,7 @@ jobs:
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          uv run pytest --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html  --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -471,7 +471,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          uv run pytest --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html  --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -561,7 +561,7 @@ jobs:
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
-          uv run pytest --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
+          uv run pytest -n auto --dist loadscope --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
