@@ -17,7 +17,7 @@ fi
 
 mkdir -p "$DIST_DIR"
 WORK_DIR=$(mktemp -d)
-trap "rm -rf $WORK_DIR" EXIT
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "Cloning java-sdk v${VERSION}..."
 git clone --depth 1 --branch "v${VERSION}" \
