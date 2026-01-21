@@ -83,7 +83,9 @@ class ResolveSuccess(TypedDict):
     head: NotRequired[bool]  # True if the tag is a head of a live branch
     pr: NotRequired[str]  # The pull request number associated with the tag
     release: NotRequired[str]  # The release name for the tag (git tag)
-    version: NotRequired[str]  # Clean version number for artifact download (e.g., "0.4.0")
+    version: NotRequired[
+        str
+    ]  # Clean version number for artifact download (e.g., "0.4.0")
     sha: str  # The current git SHA of the tag
     tag: str  # The resolved tag name
 
