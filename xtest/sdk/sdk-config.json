@@ -1,0 +1,35 @@
+{
+  "sdks": {
+    "go": {
+      "repo": "https://github.com/opentdf/otdfctl.git",
+      "lts": "0.24.0",
+      "artifact": {
+        "type": "go-install",
+        "package": "github.com/opentdf/otdfctl"
+      }
+    },
+    "java": {
+      "repo": "https://github.com/opentdf/java-sdk.git",
+      "lts": "0.12.0",
+      "artifact": {
+        "type": "maven-build",
+        "module": "cmdline",
+        "output": "cmdline/target/cmdline.jar"
+      }
+    },
+    "js": {
+      "repo": "https://github.com/opentdf/web-sdk.git",
+      "lts": "0.4.0",
+      "tag_infix": "sdk",
+      "artifact": {
+        "type": "npm",
+        "package": "@opentdf/ctl"
+      }
+    },
+    "platform": {
+      "repo": "https://github.com/opentdf/platform.git",
+      "lts": "0.9.0",
+      "tag_infix": "service"
+    }
+  }
+}

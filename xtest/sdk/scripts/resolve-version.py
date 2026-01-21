@@ -61,12 +61,19 @@
 # ```
 
 import json
+import os
 import re
 import sys
-from typing import NotRequired, TypedDict, TypeGuard
+from typing import Any, NotRequired, TypedDict, TypeGuard
 from urllib.parse import quote
 
 from git import Git
+
+# Load SDK configuration from sdk-config.json
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_config_path = os.path.join(_script_dir, "..", "sdk-config.json")
+with open(_config_path) as f:
+    _sdk_config: dict[str, Any] = json.load(f)
 
 
 class ResolveSuccess(TypedDict):
@@ -75,7 +82,8 @@ class ResolveSuccess(TypedDict):
     env: NotRequired[str]  # Additional options for the SDK
     head: NotRequired[bool]  # True if the tag is a head of a live branch
     pr: NotRequired[str]  # The pull request number associated with the tag
-    release: NotRequired[str]  # The release name for the tag
+    release: NotRequired[str]  # The release name for the tag (git tag)
+    version: NotRequired[str]  # Clean version number for artifact download (e.g., "0.4.0")
     sha: str  # The current git SHA of the tag
     tag: str  # The resolved tag name
 
@@ -99,19 +107,32 @@ def is_resolve_success(val: ResolveResult) -> TypeGuard[ResolveSuccess]:
     return "err" not in val and "sha" in val and "tag" in val
 
 
-sdk_urls = {
-    "go": "https://github.com/opentdf/otdfctl.git",
-    "java": "https://github.com/opentdf/java-sdk.git",
-    "js": "https://github.com/opentdf/web-sdk.git",
-    "platform": "https://github.com/opentdf/platform.git",
-}
+def get_sdk_config(sdk: str) -> dict[str, Any]:
+    """Get configuration for an SDK from sdk-config.json."""
+    return _sdk_config.get("sdks", {}).get(sdk, {})
 
-lts_versions = {
-    "go": "0.24.0",
-    "java": "0.9.0",
-    "js": "0.4.0",
-    "platform": "0.9.0",
-}
+
+def get_sdk_url(sdk: str) -> str:
+    """Get the repository URL for an SDK."""
+    config = get_sdk_config(sdk)
+    return config.get("repo", "")
+
+
+def get_lts_version(sdk: str) -> str:
+    """Get the LTS version for an SDK."""
+    config = get_sdk_config(sdk)
+    return config.get("lts", "")
+
+
+def get_tag_infix(sdk: str) -> str | None:
+    """Get the tag infix for an SDK (e.g., 'sdk' for js)."""
+    config = get_sdk_config(sdk)
+    return config.get("tag_infix")
+
+
+# Keep these for backward compatibility
+sdk_urls = {sdk: get_sdk_url(sdk) for sdk in _sdk_config.get("sdks", {})}
+lts_versions = {sdk: get_lts_version(sdk) for sdk in _sdk_config.get("sdks", {})}
 
 
 merge_queue_regex = r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
@@ -322,10 +343,13 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
         if infix:
             release = f"{infix}/{release}"
         release = quote(release, safe="-_.~")
+        # Extract clean version number (e.g., "0.4.0" from "v0.4.0")
+        clean_version = tag.lstrip("v")
         return {
             "sdk": sdk,
             "alias": alias,
             "release": release,
+            "version": clean_version,
             "sha": sha,
             "tag": tag,
         }
@@ -348,11 +372,9 @@ def main():
     if sdk not in sdk_urls:
         print(f"Unknown SDK: {sdk}", file=sys.stderr)
         sys.exit(2)
-    infix: None | str = None
-    if sdk == "js":
-        infix = "sdk"
-    if sdk == "platform":
-        infix = "service"
+
+    # Get tag infix from config (e.g., "sdk" for js, "service" for platform)
+    infix = get_tag_infix(sdk)
 
     results: list[ResolveResult] = []
     shas: set[str] = set()
