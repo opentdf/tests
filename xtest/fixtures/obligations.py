@@ -6,9 +6,9 @@ This module contains fixtures for testing TDF obligations:
 - Obligation triggers (scoped and unscoped)
 """
 
+import abac
 import pytest
 
-import abac
 from otdfctl import OpentdfCommandLineTool
 from xtest import tdfs
 
