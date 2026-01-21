@@ -204,9 +204,14 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
 
 
 @pytest.fixture(scope="package")
-def tmp_dir() -> Path:
-    """Create and return temporary directory for test files."""
-    dname = Path("tmp/")
+def tmp_dir(request: pytest.FixtureRequest) -> Path:
+    """Create worker-specific temporary directory for test files.
+
+    When running with pytest-xdist, each worker gets its own subdirectory
+    to prevent file collisions between parallel test processes.
+    """
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    dname = Path(f"tmp/{worker_id}/")
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 
