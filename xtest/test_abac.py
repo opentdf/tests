@@ -114,7 +114,7 @@ def test_autoconfigure_one_attribute_standard(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     global counter
@@ -143,7 +143,7 @@ def test_autoconfigure_one_attribute_standard(
         )
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_alpha
 
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
@@ -160,8 +160,8 @@ def test_autoconfigure_two_kas_or_standard(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
-    kas_url_value2: str,
+    kas_url_alpha: str,
+    kas_url_beta: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -195,7 +195,7 @@ def test_autoconfigure_two_kas_or_standard(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_value1, kas_url_value2} == {
+    assert {kas_url_alpha, kas_url_beta} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -213,8 +213,8 @@ def test_autoconfigure_double_kas_and(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
-    kas_url_value2: str,
+    kas_url_alpha: str,
+    kas_url_beta: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -249,7 +249,7 @@ def test_autoconfigure_double_kas_and(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_value1, kas_url_value2} == {
+    assert {kas_url_alpha, kas_url_beta} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -267,7 +267,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
+    kas_url_gamma: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -297,7 +297,7 @@ def test_autoconfigure_one_attribute_attr_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_attr
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_gamma
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -313,8 +313,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
-    kas_url_value1: str,
+    kas_url_gamma: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -349,7 +349,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_attr, kas_url_value1} == {
+    assert {kas_url_gamma, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -367,8 +367,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
-    kas_url_value1: str,
+    kas_url_gamma: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -403,7 +403,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_attr, kas_url_value1} == {
+    assert {kas_url_gamma, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -421,7 +421,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
+    kas_url_delta: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -451,7 +451,7 @@ def test_autoconfigure_one_attribute_ns_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_ns
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_delta
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -467,8 +467,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
-    kas_url_value1: str,
+    kas_url_delta: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -503,7 +503,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_ns, kas_url_value1} == {
+    assert {kas_url_delta, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -521,8 +521,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
-    kas_url_value1: str,
+    kas_url_delta: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -557,7 +557,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_ns, kas_url_value1} == {
+    assert {kas_url_delta, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
