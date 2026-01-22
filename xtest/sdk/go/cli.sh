@@ -83,6 +83,14 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
+    assertion_schema_v2)
+      # V2 assertion schema (urn:opentdf:system:metadata:v2) support
+      # Uses root signature for binding instead of aggregate hash
+      # Introduced in SDK version 0.10.0
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 10)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

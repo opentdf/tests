@@ -297,6 +297,7 @@ def test_tdf_assertions_unkeyed(
     pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
+    target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if not encrypt_sdk.supports("assertions"):
@@ -310,8 +311,10 @@ def test_tdf_assertions_unkeyed(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        target_mode=target_mode,
     )
+    # Check assertion schema compatibility after encryption
+    tdfs.skip_assertion_schema_skew(encrypt_sdk, decrypt_sdk, ct_file)
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
@@ -330,6 +333,7 @@ def test_tdf_assertions_with_keys(
     pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
+    target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if not encrypt_sdk.supports("assertions"):
@@ -343,8 +347,10 @@ def test_tdf_assertions_with_keys(
         tmp_dir,
         scenario="assertions-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        target_mode=target_mode,
     )
+    # Check assertion schema compatibility after encryption
+    tdfs.skip_assertion_schema_skew(encrypt_sdk, decrypt_sdk, ct_file)
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
 
@@ -387,6 +393,8 @@ def test_tdf_assertions_422_format(
         az=assertion_file_rs_and_hs_keys,
         target_mode="4.2.2",
     )
+    # Check assertion schema compatibility after encryption
+    tdfs.skip_assertion_schema_skew(encrypt_sdk, decrypt_sdk, ct_file)
 
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
