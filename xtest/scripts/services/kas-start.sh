@@ -77,14 +77,23 @@ yq e -i ".services.kas.preview.ec_tdf_enabled = true" "$CONFIG_FILE"
 if [ "$KEY_MANAGEMENT" = true ]; then
     yq e -i ".services.kas.preview.key_management = true" "$CONFIG_FILE"
 
-    # Generate and set root key for key management instances
-    ROOT_KEY_FILE="$LOGS_DIR/root_key.txt"
-    if [ ! -f "$ROOT_KEY_FILE" ]; then
-        log_info "Generating shared root key for key management KAS instances"
-        generate_root_key > "$ROOT_KEY_FILE"
+    # Use platform's root key to ensure key derivation matches
+    # This is critical for base_key functionality - km KAS instances must
+    # derive the same keys as the platform
+    PLATFORM_ROOT_KEY=$(yq e '.services.kas.root_key' "$PLATFORM_DIR/opentdf-dev.yaml")
+    if [ -n "$PLATFORM_ROOT_KEY" ] && [ "$PLATFORM_ROOT_KEY" != "null" ]; then
+        log_info "Using platform's root key for key management KAS"
+        yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
+    else
+        # Fall back to generating a new key if platform doesn't have one
+        ROOT_KEY_FILE="$LOGS_DIR/root_key.txt"
+        if [ ! -f "$ROOT_KEY_FILE" ]; then
+            log_info "Generating shared root key for key management KAS instances"
+            generate_root_key > "$ROOT_KEY_FILE"
+        fi
+        ROOT_KEY=$(cat "$ROOT_KEY_FILE")
+        yq e -i ".services.kas.root_key = \"$ROOT_KEY\"" "$CONFIG_FILE"
     fi
-    ROOT_KEY=$(cat "$ROOT_KEY_FILE")
-    yq e -i ".services.kas.root_key = \"$ROOT_KEY\"" "$CONFIG_FILE"
 
     log_info "Key management enabled for $NAME"
 else
