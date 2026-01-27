@@ -134,7 +134,12 @@ def kas_entry_gamma(
     cached_kas_keys: abac.PublicKey,
     kas_url_gamma: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for gamma KAS."""
+    """KAS registry entry for gamma KAS.
+
+    Use this for attribute-scoped key mappings and grants
+    so we can easily verify when a key was assigned from its attribute default,
+    and not a value mapping.
+    """
     return otdfctl.kas_registry_create_if_not_present(kas_url_gamma, cached_kas_keys)
 
 
@@ -151,7 +156,11 @@ def kas_entry_delta(
     cached_kas_keys: abac.PublicKey,
     kas_url_delta: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for delta KAS."""
+    """KAS registry entry for delta KAS.
+
+    Use this for namespace-scoped key mappings and grants
+    so we can easily verify when a key was assigned from its namespace default.
+    """
     return otdfctl.kas_registry_create_if_not_present(kas_url_delta, cached_kas_keys)
 
 
