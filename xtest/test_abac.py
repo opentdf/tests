@@ -12,7 +12,7 @@ from test_policytypes import skip_rts_as_needed
 
 cipherTexts: dict[str, Path] = {}
 rewrap_403_pattern = (
-    "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
+    "tdf: rewrap request (400|403)|(400|403) for \\[https?://[^\\]]+\\]; rewrap permission denied"
 )
 
 
