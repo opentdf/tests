@@ -38,7 +38,7 @@ def temporary_namespace(otdfctl: OpentdfCommandLineTool):
 @pytest.fixture(scope="module")
 def attribute_single_kas_grant(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_value1: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -57,10 +57,10 @@ def attribute_single_kas_grant(
     assert sm.attribute_value.value == "a"
     # Now assign it to the current KAS
     if "key_management" not in pfs.features:
-        otdfctl.grant_assign_value(kas_entry_value1, alpha)
+        otdfctl.grant_assign_value(kas_entry_alpha, alpha)
     else:
         kas_key = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key, alpha)
     return anyof
@@ -70,8 +70,8 @@ def attribute_single_kas_grant(
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_or(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_value1: abac.KasEntry,
-    kas_entry_value2: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
+    kas_entry_beta: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -91,16 +91,16 @@ def attribute_two_kas_grant_or(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_value(kas_entry_value1, alpha)
-        otdfctl.grant_assign_value(kas_entry_value2, beta)
+        otdfctl.grant_assign_value(kas_entry_alpha, alpha)
+        otdfctl.grant_assign_value(kas_entry_beta, beta)
     else:
         kas_key_alph = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_alph, alpha)
 
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value2, kas_public_key_r1
+            kas_entry_beta, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
     return anyof
@@ -109,8 +109,8 @@ def attribute_two_kas_grant_or(
 @pytest.fixture(scope="module")
 def attribute_two_kas_grant_and(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_value1: abac.KasEntry,
-    kas_entry_value2: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
+    kas_entry_beta: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -133,16 +133,16 @@ def attribute_two_kas_grant_and(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_value(kas_entry_value1, alef)
-        otdfctl.grant_assign_value(kas_entry_value2, bet)
+        otdfctl.grant_assign_value(kas_entry_alpha, alef)
+        otdfctl.grant_assign_value(kas_entry_beta, bet)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_alpha, alef)
 
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value2, kas_public_key_r1
+            kas_entry_beta, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, bet)
 
@@ -153,7 +153,7 @@ def attribute_two_kas_grant_and(
 @pytest.fixture(scope="module")
 def one_attribute_attr_kas_grant(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
+    kas_entry_gamma: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -172,10 +172,10 @@ def one_attribute_attr_kas_grant(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, anyof)
+        otdfctl.grant_assign_attr(kas_entry_gamma, anyof)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_gamma, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_alpha, anyof)
     return anyof
@@ -269,8 +269,8 @@ def attribute_with_hierarchy_type(
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_or(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
-    kas_entry_value1: abac.KasEntry,
+    kas_entry_gamma: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -293,16 +293,16 @@ def attr_and_value_kas_grants_or(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, anyof)
-        otdfctl.grant_assign_value(kas_entry_value1, beta)
+        otdfctl.grant_assign_attr(kas_entry_gamma, anyof)
+        otdfctl.grant_assign_value(kas_entry_alpha, beta)
     else:
         kas_key_attr = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_gamma, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_attr, anyof)
 
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
 
@@ -312,8 +312,8 @@ def attr_and_value_kas_grants_or(
 @pytest.fixture(scope="module")
 def attr_and_value_kas_grants_and(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
-    kas_entry_value1: abac.KasEntry,
+    kas_entry_gamma: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -338,16 +338,16 @@ def attr_and_value_kas_grants_and(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_attr(kas_entry_attr, allof)
-        otdfctl.grant_assign_value(kas_entry_value1, beta)
+        otdfctl.grant_assign_attr(kas_entry_gamma, allof)
+        otdfctl.grant_assign_value(kas_entry_alpha, beta)
     else:
         kas_key_attr = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_attr, kas_public_key_r1
+            kas_entry_gamma, kas_public_key_r1
         )
         otdfctl.key_assign_attr(kas_key_attr, allof)
 
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
 
@@ -358,7 +358,7 @@ def attr_and_value_kas_grants_and(
 @pytest.fixture(scope="module")
 def one_attribute_ns_kas_grant(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_ns: abac.KasEntry,
+    kas_entry_delta: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
@@ -376,10 +376,10 @@ def one_attribute_ns_kas_grant(
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_ns(kas_entry_ns, temporary_namespace)
+        otdfctl.grant_assign_ns(kas_entry_delta, temporary_namespace)
     else:
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_ns, kas_public_key_r1
+            kas_entry_delta, kas_public_key_r1
         )
         otdfctl.key_assign_ns(kas_key_ns, temporary_namespace)
 
@@ -390,8 +390,8 @@ def one_attribute_ns_kas_grant(
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_value1: abac.KasEntry,
-    kas_entry_ns: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
+    kas_entry_delta: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
 ) -> abac.Attribute:
@@ -414,16 +414,16 @@ def ns_and_value_kas_grants_or(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_value(kas_entry_value1, beta)
-        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+        otdfctl.grant_assign_value(kas_entry_alpha, beta)
+        otdfctl.grant_assign_ns(kas_entry_delta, temp_namespace)
     else:
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
 
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_ns, kas_public_key_r1
+            kas_entry_delta, kas_public_key_r1
         )
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
@@ -433,8 +433,8 @@ def ns_and_value_kas_grants_or(
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_and(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_value1: abac.KasEntry,
-    kas_entry_ns: abac.KasEntry,
+    kas_entry_alpha: abac.KasEntry,
+    kas_entry_delta: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     otdf_client_scs: abac.SubjectConditionSet,
 ) -> abac.Attribute:
@@ -459,16 +459,16 @@ def ns_and_value_kas_grants_and(
 
     # Now assign it to the current KAS
     if "key_management" not in tdfs.PlatformFeatureSet().features:
-        otdfctl.grant_assign_value(kas_entry_value1, beta)
-        otdfctl.grant_assign_ns(kas_entry_ns, temp_namespace)
+        otdfctl.grant_assign_value(kas_entry_alpha, beta)
+        otdfctl.grant_assign_ns(kas_entry_delta, temp_namespace)
     else:
         kas_key_beta = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_value1, kas_public_key_r1
+            kas_entry_alpha, kas_public_key_r1
         )
         otdfctl.key_assign_value(kas_key_beta, beta)
 
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
-            kas_entry_ns, kas_public_key_r1
+            kas_entry_delta, kas_public_key_r1
         )
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
