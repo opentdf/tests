@@ -108,13 +108,6 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    def skip_if_unsupported(self, *features: feature_type):
-        for feature in features:
-            if feature not in self.features:
-                pytest.skip(
-                    f"platform service {self.version} doesn't yet support [{feature}]"
-                )
-
 
 class DataAttribute(BaseModel):
     attribute: str
@@ -424,11 +417,6 @@ class SDK:
         self._supports[feature] = self._uncached_supports(feature)
         return self._supports[feature]
 
-    def skip_if_unsupported(self, *features: feature_type):
-        for feature in features:
-            if not self.supports(feature):
-                pytest.skip(f"{self} sdk doesn't yet support [{feature}]")
-
     def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
             case ("key_management", "js") if self.version == "v0.2.0":
@@ -469,8 +457,13 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
 
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
     pfs = PlatformFeatureSet()
-    pfs.skip_if_unsupported(*features)
-    sdk.skip_if_unsupported(*features)
+    for feature in features:
+        if not sdk.supports(feature):
+            pytest.skip(f"{sdk} sdk doesn't yet support [{feature}]")
+        if feature not in pfs.features:
+            pytest.skip(
+                f"platform service {pfs.version} doesn't yet support [{feature}]"
+            )
 
 
 def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
