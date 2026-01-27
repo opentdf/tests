@@ -11,9 +11,7 @@ from audit_logs import AuditLogAsserter
 from test_policytypes import skip_rts_as_needed
 
 cipherTexts: dict[str, Path] = {}
-rewrap_403_pattern = (
-    "tdf: rewrap request (400|403)|(400|403) for \\[https?://[^\\]]+\\]; rewrap permission denied"
-)
+rewrap_403_pattern = "tdf: rewrap request (400|403)|(400|403) for \\[https?://[^\\]]+\\]; rewrap permission denied"
 
 
 dspx1153Fails = []
