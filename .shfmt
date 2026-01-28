@@ -1,0 +1,20 @@
+# Language variant
+language_dialect: bash
+
+# Indentation (2 spaces)
+indent: 2
+
+# Binary operators at start of line
+binary_next_line: false
+
+# Switch case indentation
+switch_case_indent: true
+
+# Redirect operators with space
+space_redirects: true
+
+# Keep column alignment
+keep_padding: true
+
+# Function brace on same line
+function_next_line: false

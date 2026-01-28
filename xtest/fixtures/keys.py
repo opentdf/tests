@@ -252,7 +252,8 @@ def legacy_imported_golden_r1_key(
     golden_key = extra_keys["golden-r1"]
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
     for key in existing_keys:
-        if key.key.key_id == golden_key["kid"]:
+        # Check for "r1" which is the actual key_id used when importing (line 262)
+        if key.key.key_id == "r1":
             return key
 
     return otdfctl.kas_registry_import_key(
