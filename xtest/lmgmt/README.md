@@ -206,12 +206,14 @@ lmgmt/
 
 ## Comparison with Shell Scripts
 
-This CLI replaces the functionality of:
-- `scripts/local-test.sh` → `lmgmt up`, `lmgmt down`, `lmgmt status`
+This CLI replaces the functionality of these scripts (now removed):
+- `scripts/local-test.sh` (removed) → `lmgmt up`, `lmgmt down`, `lmgmt status`
+- `scripts/cleanup.sh` (removed) → `lmgmt clean`
+
+And deprecates these service scripts (still present but deprecated):
 - `scripts/services/docker-up.sh` → `lmgmt up --services docker`
 - `scripts/services/platform-start.sh` → `lmgmt up --services platform`
 - `scripts/services/kas-start.sh` → `lmgmt up --services kas`
-- `scripts/cleanup.sh` → `lmgmt clean`
 
 Benefits over shell scripts:
 - Type-safe configuration with Pydantic

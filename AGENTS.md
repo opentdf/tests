@@ -38,9 +38,9 @@ uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
 
 **RECOMMENDED**: Use `lmgmt` Python CLI for all environment management tasks.
 
-### lmgmt - Python CLI (Preferred)
+### lmgmt - Python CLI
 
-The `lmgmt` tool provides a modern, type-safe interface for managing the test environment with better error handling, health checks, and user experience than shell scripts.
+The `lmgmt` tool provides a type-safe interface for managing the test environment with error handling and health checks.
 
 **Location**: `tests/xtest/lmgmt/`
 
@@ -81,32 +81,9 @@ uv run lmgmt down
 
 See `tests/xtest/lmgmt/README.md` for full documentation.
 
-### Shell Script Library (Fallback)
-
-The test environment also includes a modular, well-tested shell script library for service management.
-
-**Key locations:**
-- `scripts/` - Main controller scripts (local-test.sh, cleanup.sh, etc.)
-- `scripts/lib/` - Modular library with 55 unit tests
-- `scripts/lib/README.md` - Full API reference and documentation
-- `scripts/lib/QUICK_REFERENCE.md` - Quick command lookup
-
-**Important for agents:**
-- All library code is tested with BATS (55 passing tests)
-- Library files never set shell options (no `set -e`)
-- Functions have explicit error checking and return codes
-- Works in both bash and zsh
-- Comprehensive documentation available in `scripts/lib/README.md`
-
-**When modifying scripts:**
-1. Read `scripts/lib/README.md` first for API reference
-2. Follow existing patterns (check return codes explicitly)
-3. Use logging functions (`log_info`, `log_error`) not echo
-4. Test changes with `bats scripts/lib/**/*.bats`
-
 ## Local Test Environment
 
-The local test environment can be managed using either `lmgmt` (recommended) or the shell scripts (fallback).
+The local test environment can be managed using `lmgmt`
 
 ### Quick Start with lmgmt (Recommended)
 
@@ -126,76 +103,43 @@ uv run lmgmt logs -f
 uv run lmgmt down --clean
 ```
 
-### Quick Start with Shell Scripts (Fallback)
-
-```bash
-# Start all services
-./scripts/local-test.sh start
-
-# View service status
-./scripts/local-test.sh status
-
-# Attach to tmux session to view logs
-./scripts/local-test.sh attach
-
-# Stop all services and cleanup
-./scripts/local-test.sh stop
-```
-
-### Tmux Session Layout
-
-Session name: `xtest`
-
-Window layout:
-- **0: control** - Status and commands
-- **1: platform** - Main OpenTDF platform (port 8080)
-- **2: kas-alpha** - KAS instance (port 8181)
-- **3: kas-beta** - KAS instance (port 8282)
-- **4: kas-gamma** - KAS instance (port 8383)
-- **5: kas-delta** - KAS instance (port 8484)
-- **6: kas-km1** - Key management KAS (port 8585)
-- **7: kas-km2** - Key management KAS (port 8686)
-- **8: docker** - Docker logs (keycloak, postgres)
-- **9: tests** - Test execution window
 
 ### Available Commands
 
-**Main Controller** (`scripts/local-test.sh`):
+Use `lmgmt` for all environment management:
+
 ```bash
-./scripts/local-test.sh start    # Start all services (docker, platform, KAS instances)
-./scripts/local-test.sh stop     # Stop everything and clean up
-./scripts/local-test.sh status   # Show service health status
-./scripts/local-test.sh attach   # Attach to tmux session
-./scripts/local-test.sh logs     # View combined logs
-./scripts/local-test.sh help     # Show help message
-```
+cd tests/xtest/lmgmt
 
-**Individual Service Scripts**:
-```bash
-# Start Docker services (keycloak, postgres)
-./scripts/services/docker-up.sh start
-./scripts/services/docker-up.sh stop
+# Start/stop environment
+uv run lmgmt up                    # Start all services
+uv run lmgmt down                  # Stop all services
+uv run lmgmt down --clean          # Stop and clean logs
 
-# Start main platform
-./scripts/services/platform-start.sh [config-file]
+# Check status
+uv run lmgmt status                # Show health status
+uv run lmgmt status --watch        # Live status updates
+uv run lmgmt ls                    # List running services
 
-# Start individual KAS instance
-./scripts/services/kas-start.sh <name> <port> [--key-management]
-# Examples:
-./scripts/services/kas-start.sh alpha 8181
-./scripts/services/kas-start.sh km1 8585 --key-management
+# View logs
+uv run lmgmt logs -f               # Follow all logs
+uv run lmgmt logs platform -f      # Follow specific service
+uv run lmgmt logs --grep error     # Filter logs
 
-# Provision Keycloak and fixtures
-./scripts/services/provision.sh [all|keycloak|fixtures]
+# Restart services
+uv run lmgmt restart platform      # Restart specific service
+uv run lmgmt restart kas-alpha
 
-# Initialize cryptographic keys
-./scripts/setup/init-keys.sh [--force]
+# Provisioning
+uv run lmgmt provision             # Run all provisioning
+uv run lmgmt provision keycloak    # Provision keycloak only
 
-# Trust certificates (macOS only)
-./scripts/setup/trust-cert.sh [add|remove|status]
+# Cleanup
+uv run lmgmt clean                 # Clean logs and configs
+uv run lmgmt clean --keep-logs     # Clean only configs
 
-# Cleanup environment
-./scripts/cleanup.sh [--keep-logs]
+# Attach to tmux session (if using tmux)
+tmux attach -t xtest
 ```
 
 ### Viewing Service Logs
@@ -227,112 +171,14 @@ tail -f xtest/logs/kas-alpha.log
 tail -f xtest/logs/kas-km1.log
 ```
 
-### Script Library Structure
-
-All controller scripts use a modular library located in `scripts/lib/`:
-
-**Core Modules:**
-- `core/logging.sh` - Enhanced logging with levels (quiet/error/warning/info/debug/trace)
-- `core/platform.sh` - Platform detection (macOS/Linux/WSL)
-- `core/paths.sh` - Path resolution utilities
-
-**Health Modules:**
-- `health/checks.sh` - Prerequisites and health checks
-- `health/waits.sh` - Port waiting and availability
-
-**Service Modules:**
-- `services/tmux.sh` - Tmux session management
-- `services/kas-utils.sh` - KAS configuration utilities
-- `config/yaml.sh` - YAML manipulation with yq
-
-**Task-Specific Bundles:**
-- `bundles/service-manager.sh` - For service start/stop scripts
-- `bundles/test-runner.sh` - For test execution scripts
-- `bundles/dev-setup.sh` - For setup scripts
-
-**Documentation:**
-- `lib/README.md` - Full API reference
-- `lib/QUICK_REFERENCE.md` - Quick lookup guide
-
 ### Environment Variables
 
-Control logging verbosity:
-```bash
-# Set log level for scripts
-export XTEST_LOGLEVEL=debug    # Show debug messages
-export XTEST_LOGLEVEL=trace    # Show all messages including traces
-export XTEST_LOGLEVEL=quiet    # Suppress all output
-
-# Default is 'info' (shows info, warnings, and errors)
-```
-
-Service ports (auto-configured by scripts):
+Service ports (auto-configured):
 ```bash
 KEYCLOAK_PORT=8888
 POSTGRES_PORT=5432
 PLATFORM_PORT=8080
 # KAS ports: alpha=8181, beta=8282, gamma=8383, delta=8484, km1=8585, km2=8686
-```
-
-### Understanding the Script Library
-
-The controller scripts use a modular bash/zsh library that follows these principles:
-
-**Key Design Rules:**
-1. **No shell options in libraries** - Library files never set `set -e` or `set -o pipefail`
-2. **Consumer scripts control error handling** - Each script decides its own error behavior
-3. **Explicit error checking** - All functions return meaningful exit codes
-4. **Cross-shell compatible** - Works in both bash and zsh
-
-**When modifying scripts:**
-- Always source bundles, not individual modules (unless you have specific needs)
-- Use `log_info`, `log_warn`, `log_error` instead of echo for output
-- Check command availability with `check_command` before using
-- Use `wait_for_health` and `wait_for_port` for service readiness
-- All paths available via `get_*_dir()` functions
-
-**Example script pattern:**
-```bash
-#!/usr/bin/env bash
-set -euo pipefail  # Consumer controls error handling
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../lib/bundles/service-manager.sh"
-
-# Now you have access to:
-# - Logging: log_info, log_warn, log_error, log_success
-# - Health: check_prerequisites, wait_for_health, wait_for_port
-# - Paths: XTEST_DIR, PLATFORM_DIR, LOGS_DIR
-# - Config: KAS_CONFIG array, service ports
-# - KAS utils: get_kas_config_path, is_km_kas, generate_root_key
-# - YAML: yq_set, yq_get, update_yaml_port
-
-log_info "Starting service..."
-check_prerequisites || exit 1
-# ... rest of script
-```
-
-### Platform Configuration Files
-
-**CRITICAL**: The platform may load different config files depending on how it's started:
-- `platform/opentdf.yaml` - Primary config file
-- `platform/opentdf-dev.yaml` - Development config (used by local-test.sh)
-
-**Always check which file is actually being used** when debugging configuration issues.
-
-Key configuration sections:
-```yaml
-services:
-  kas:
-    root_key: "a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1"
-    preview:
-      ec_tdf_enabled: true  # Required for EC wrapping tests
-      key_management: true  # For key management KAS instances
-
-configuration:
-  base_key:
-    public_key: "..." # If set, SDK automatically uses EC wrapping
-    kid: "e1"
 ```
 
 ## Key Concepts
@@ -352,21 +198,9 @@ configuration:
 
 **Base Key Behavior**:
 - When platform advertises a `base_key` in `.well-known/opentdf-configuration`
-- SDK **automatically** uses EC wrapping, regardless of user's choice
-- Tests must check `pfs.has_base_key` to determine expected KAO type
-
-### Key Management and Root Keys
-
-**Critical Rule**: All KAS instances that participate in EC wrapping must share the same root key.
-
-Why:
-1. EC wrapping derives keys from root_key + base_key
-2. If KAS instances have different root_keys, they derive different keys
-3. Encryption with one key, decryption with another = "cipher: message authentication failed"
 
 **Ensuring Key Consistency**:
 ```bash
-# In scripts/services/kas-start.sh
 # km instances must use platform's root_key:
 PLATFORM_ROOT_KEY=$(yq e '.services.kas.root_key' "$PLATFORM_DIR/opentdf-dev.yaml")
 yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
@@ -374,58 +208,7 @@ yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 
 ## Common Test Failures and Debugging
 
-### 1. 'ec-wrapped' vs 'wrapped' Assertion Errors
-
-**Symptom**: Test expects "wrapped" but gets "ec-wrapped" (or vice versa)
-
-**Root Cause**: Platform has `base_key` configured, forcing SDK to use EC wrapping
-
-**Debug**:
-```bash
-# Check platform configuration
-curl http://localhost:8080/.well-known/opentdf-configuration | jq '.configuration.base_key'
-```
-
-**Fix**: Update test code to check for base_key:
-```python
-pfs = tdfs.PlatformFeatureSet()
-expect_ec_wrapped = use_ecwrap or pfs.has_base_key
-if expect_ec_wrapped:
-    assert kao.type == "ec-wrapped"
-else:
-    assert kao.type == "wrapped"
-```
-
-### 2. Decrypt Failures: "cipher: message authentication failed"
-
-**Symptom**: Encryption succeeds, but decrypt fails with GCM authentication error
-
-**Root Cause**: Key mismatch - KAS instances have different root_keys
-
-**Debug**:
-```bash
-# Check KAS logs for which key was used
-tmux attach -t local-test
-# Navigate to km1 window, look for root_key in startup logs
-
-# Check platform root_key
-yq e '.services.kas.root_key' platform/opentdf-dev.yaml
-```
-
-**Fix**: Ensure all KAS instances use the same root_key (see scripts/services/kas-start.sh)
-
-### 3. "ec rewrap not enabled" Errors
-
-**Symptom**: EC rewrap tests fail with "not enabled" message
-
-**Root Cause**: `ec_tdf_enabled: false` in platform config
-
-**Debug**:
-```bash
-# Check both config files
-yq e '.services.kas.preview.ec_tdf_enabled' platform/opentdf.yaml
-yq e '.services.kas.preview.ec_tdf_enabled' platform/opentdf-dev.yaml
-```
+### EC Wrapping Test Failures: "EC wrapping not supported"
 
 **Fix**:
 ```bash
@@ -439,10 +222,11 @@ uv run lmgmt restart platform
 
 # Or restart manually
 pkill -9 -f "go.*service.*start"
-./local-test.sh
+sleep 2
+cd platform && go run ./service start
 ```
 
-### 4. ABAC Test Failures: Decrypt Errors
+### ABAC Test Failures: Decrypt Errors
 
 **Symptom**: ABAC autoconfigure tests fail during decrypt
 
@@ -460,7 +244,7 @@ curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_s
 # - http://localhost:8484/kas (delta)
 ```
 
-**Fix**: Ensure local-test.sh properly registers all KAS instances during startup
+**Fix**: Ensure all KAS instances are properly registered in the platform during startup (this is handled by `lmgmt up`)
 
 ### 5. Legacy Test Failures: "cipher: message authentication failed"
 
@@ -578,58 +362,26 @@ go run ./service start
 
 ### When Modifying Controller Scripts
 
-**Before modifying scripts in `scripts/` or `scripts/lib/`:**
+**DEPRECATED**: The shell scripts in `scripts/lib/` are being phased out. Use `lmgmt` for all environment management instead.
 
-1. **Read the library documentation first**:
-   ```bash
-   cat scripts/lib/README.md          # Full API reference
-   cat scripts/lib/QUICK_REFERENCE.md # Quick lookup
-   ```
+**For new automation**:
+- Extend the `lmgmt` Python CLI tool instead of creating new shell scripts
+- See `tests/xtest/lmgmt/README.md` for architecture and development guide
+- The lmgmt codebase uses Python with Pydantic for type safety and better error handling
 
-2. **Understand the bundle system**:
-   - Service scripts use `bundles/service-manager.sh`
-   - Test scripts use `bundles/test-runner.sh`
-   - Setup scripts use `bundles/dev-setup.sh`
+**For testing changes**:
+```bash
+# Test the full workflow with lmgmt
+cd tests/xtest/lmgmt
+uv run lmgmt down
+uv run lmgmt up
 
-3. **Follow the design rules**:
-   - Never add `set -e` or `set -o pipefail` to library files
-   - Always return explicit exit codes from functions
-   - Use logging functions instead of echo
-   - Check function return codes explicitly
+# Check service status
+uv run lmgmt status
 
-4. **Test your changes**:
-   ```bash
-   # Syntax check
-   bash -n scripts/services/your-script.sh
-
-   # Run library tests
-   cd scripts/lib
-   bats core/*.bats health/*.bats services/*.bats config/*.bats
-
-   # Test the full workflow
-   ./scripts/local-test.sh stop
-   ./scripts/local-test.sh start
-   ```
-
-5. **Common patterns to use**:
-   ```bash
-   # Check prerequisites
-   check_prerequisites || exit 1
-
-   # Wait for service
-   wait_for_health "$PLATFORM_HEALTH" "Platform" 60
-   wait_for_port 8080 "Platform" 30
-
-   # Ensure directories exist
-   ensure_logs_dir
-
-   # YAML manipulation
-   yq_set "$config_file" ".server.port" "8080"
-
-   # KAS utilities
-   config_path="$(get_kas_config_path "alpha")"
-   is_km_kas "km1" && log_info "Key management enabled"
-   ```
+# View logs
+uv run lmgmt logs -f
+```
 
 ## Test File Organization
 
@@ -677,35 +429,23 @@ uv run lmgmt restart kas-km1
 uv run lmgmt restart docker
 ```
 
-### Full Environment Restart with Scripts (Fallback)
-```bash
-# Stop everything cleanly
-./scripts/local-test.sh stop
-
-# Wait a moment for cleanup
-sleep 2
-
-# Start everything fresh
-./scripts/local-test.sh start
-```
-
 ### Manual Restart (Emergency)
 ```bash
 # Kill all services
 pkill -9 -f "go.*service.*start"
 pkill -9 -f "opentdf-kas"
-./scripts/services/docker-up.sh stop
 
-# Kill tmux session (if using scripts)
-tmux kill-session -t xtest
+# Kill tmux session if it exists
+tmux kill-session -t xtest 2>/dev/null || true
+
+# Kill docker containers
+cd platform && docker compose down 2>/dev/null || true
 
 # Wait for ports to free
 sleep 5
 
 # Restart everything
 cd tests/xtest/lmgmt && uv run lmgmt up
-# OR
-./scripts/local-test.sh start
 ```
 
 ### Platform Only Restart
@@ -722,7 +462,9 @@ Ctrl-B 1
 
 # Or manually
 pkill -9 -f "go.*service.*start"
-./scripts/services/platform-start.sh
+sleep 2  # Wait a moment for port to free
+cd platform
+go run ./service start
 ```
 
 ### Individual KAS Restart
@@ -745,20 +487,12 @@ tmux attach -t xtest
 
 # Stop: Ctrl-C
 # Restart: Up arrow + Enter
-
-# Or manually restart a specific instance
-./scripts/services/kas-start.sh alpha 8181
-./scripts/services/kas-start.sh km1 8585 --key-management
 ```
 
 ### Docker Services Restart
 ```bash
 # Using lmgmt (recommended)
 cd tests/xtest/lmgmt && uv run lmgmt restart docker
-
-# Using scripts
-./scripts/services/docker-up.sh stop
-./scripts/services/docker-up.sh start
 
 # Or via tmux window 8 (docker logs)
 tmux attach -t xtest
@@ -767,14 +501,9 @@ Ctrl-B 8  # Navigate to docker window
 
 ### Cleanup
 ```bash
-# Using lmgmt (recommended)
 cd tests/xtest/lmgmt
 uv run lmgmt clean              # Clean logs and configs
 uv run lmgmt clean --keep-logs  # Clean only configs
-
-# Using scripts
-./scripts/cleanup.sh
-./scripts/cleanup.sh --keep-logs
 ```
 
 ## Common Pitfalls
@@ -824,27 +553,6 @@ uv run lmgmt clean
 uv run lmgmt clean --keep-logs
 ```
 
-### Service Management with Scripts (Fallback)
-```bash
-# Start/stop environment
-./scripts/local-test.sh start
-./scripts/local-test.sh stop
-./scripts/local-test.sh status
-
-# View logs via tmux
-./scripts/local-test.sh attach
-
-# Individual services
-./scripts/services/docker-up.sh start
-./scripts/services/platform-start.sh
-./scripts/services/kas-start.sh alpha 8181
-./scripts/services/provision.sh
-
-# Cleanup
-./scripts/cleanup.sh
-./scripts/cleanup.sh --keep-logs
-```
-
 ### Testing
 ```bash
 # Run all tests with Go SDK
@@ -852,10 +560,6 @@ uv run pytest --sdks go -v
 
 # Run specific test file
 uv run pytest test_tdfs.py --sdks go -v
-
-# Run with debug output from scripts
-export XTEST_LOGLEVEL=debug
-./scripts/local-test.sh start
 ```
 
 ### Platform Inspection
@@ -906,7 +610,6 @@ tail -f tests/xtest/logs/kas-alpha.log
 
 # Kill stuck processes
 pkill -9 -f "go.*service.*start"
-./scripts/services/docker-up.sh stop
 
 # Check port availability
 lsof -i :8080   # Platform
