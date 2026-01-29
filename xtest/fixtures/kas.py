@@ -2,9 +2,7 @@
 
 This module contains fixtures for setting up KAS instances used in testing:
 - Default KAS (localhost:8080)
-- Value-specific KAS instances (value1, value2)
-- Attribute-level KAS (attr)
-- Namespace-level KAS (ns)
+- Named KAS instances matching CI workflow (alpha, beta, gamma, delta)
 - Key management KAS instances (km1, km2)
 """
 
@@ -89,72 +87,81 @@ def kas_entry_default(
     return otdfctl.kas_registry_create_if_not_present(kas_url_default, cached_kas_keys)
 
 
-# Value1 KAS (localhost:8181)
+# Alpha KAS (localhost:8181) - KASURL1
 @pytest.fixture(scope="session")
-def kas_url_value1():
-    """URL for value1 KAS instance."""
+def kas_url_alpha():
+    """URL for alpha KAS instance."""
     return os.getenv("KASURL1", "http://localhost:8181/kas")
 
 
 @pytest.fixture(scope="module")
-def kas_entry_value1(
+def kas_entry_alpha(
     otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
-    kas_url_value1: str,
+    kas_url_alpha: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for value1 KAS."""
-    return otdfctl.kas_registry_create_if_not_present(kas_url_value1, cached_kas_keys)
+    """KAS registry entry for alpha KAS."""
+    return otdfctl.kas_registry_create_if_not_present(kas_url_alpha, cached_kas_keys)
 
 
-# Value2 KAS (localhost:8282)
+# Beta KAS (localhost:8282) - KASURL2
 @pytest.fixture(scope="session")
-def kas_url_value2():
-    """URL for value2 KAS instance."""
+def kas_url_beta():
+    """URL for beta KAS instance."""
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
 @pytest.fixture(scope="module")
-def kas_entry_value2(
+def kas_entry_beta(
     otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
-    kas_url_value2: str,
+    kas_url_beta: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for value2 KAS."""
-    return otdfctl.kas_registry_create_if_not_present(kas_url_value2, cached_kas_keys)
+    """KAS registry entry for beta KAS."""
+    return otdfctl.kas_registry_create_if_not_present(kas_url_beta, cached_kas_keys)
 
 
-# Attribute-level KAS (localhost:8383)
+# Gamma KAS (localhost:8383) - KASURL3, used for attribute-level grants
 @pytest.fixture(scope="session")
-def kas_url_attr():
-    """URL for attribute-level KAS instance."""
+def kas_url_gamma():
+    """URL for gamma KAS instance."""
     return os.getenv("KASURL3", "http://localhost:8383/kas")
 
 
 @pytest.fixture(scope="module")
-def kas_entry_attr(
+def kas_entry_gamma(
     otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
-    kas_url_attr: str,
+    kas_url_gamma: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for attribute-level KAS."""
-    return otdfctl.kas_registry_create_if_not_present(kas_url_attr, cached_kas_keys)
+    """KAS registry entry for gamma KAS.
+
+    Use this for attribute-scoped key mappings and grants
+    so we can easily verify when a key was assigned from its attribute default,
+    and not a value mapping.
+    """
+    return otdfctl.kas_registry_create_if_not_present(kas_url_gamma, cached_kas_keys)
 
 
-# Namespace-level KAS (localhost:8484)
+# Delta KAS (localhost:8484) - KASURL4, used for namespace-level grants
 @pytest.fixture(scope="session")
-def kas_url_ns():
-    """URL for namespace-level KAS instance."""
+def kas_url_delta():
+    """URL for delta KAS instance."""
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
 @pytest.fixture(scope="module")
-def kas_entry_ns(
+def kas_entry_delta(
     otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
-    kas_url_ns: str,
+    kas_url_delta: str,
 ) -> abac.KasEntry:
-    """KAS registry entry for namespace-level KAS."""
-    return otdfctl.kas_registry_create_if_not_present(kas_url_ns, cached_kas_keys)
+    """KAS registry entry for delta KAS.
+
+    Use this for namespace-scoped key mappings and grants
+    so we can easily verify when a key was assigned from its namespace default.
+    """
+    return otdfctl.kas_registry_create_if_not_present(kas_url_delta, cached_kas_keys)
 
 
 # Key management KAS instances
