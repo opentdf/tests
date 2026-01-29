@@ -31,6 +31,7 @@ pytest_plugins = [
     "fixtures.assertions",
     "fixtures.obligations",
     "fixtures.keys",
+    "fixtures.audit",
 ]
 
 
