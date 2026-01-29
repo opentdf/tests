@@ -24,6 +24,35 @@ def _find_xtest_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent.parent
 
 
+def _find_platform_dir(xtest_root: Path) -> Path:
+    """Find the platform directory by searching for a sibling of an ancestor.
+
+    Searches up the directory tree from xtest_root looking for a 'platform' directory
+    that has the expected shape (contains docker-compose.yaml and opentdf-dev.yaml).
+
+    Raises:
+        FileNotFoundError: If platform directory is not found with expected shape.
+    """
+    # Start from xtest_root and walk up
+    current = xtest_root
+    while current != current.parent:
+        # Check siblings at this level
+        platform_candidate = current.parent / "platform"
+        if platform_candidate.exists() and platform_candidate.is_dir():
+            # Verify it has the expected shape
+            has_compose = (platform_candidate / "docker-compose.yaml").exists()
+            has_config = (platform_candidate / "opentdf-dev.yaml").exists()
+            if has_compose and has_config:
+                return platform_candidate
+        current = current.parent
+
+    # If we get here, we didn't find it
+    raise FileNotFoundError(
+        f"Could not find platform directory with expected shape "
+        f"(docker-compose.yaml and opentdf-dev.yaml) searching from {xtest_root}"
+    )
+
+
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
@@ -35,11 +64,14 @@ class Settings(BaseSettings):
 
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
+    _platform_dir: Path | None = None
 
     @property
     def platform_dir(self) -> Path:
         """Platform source directory."""
-        return self.xtest_root.parent / "platform"
+        if self._platform_dir is None:
+            self._platform_dir = _find_platform_dir(self.xtest_root)
+        return self._platform_dir
 
     @property
     def logs_dir(self) -> Path:
