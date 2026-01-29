@@ -34,9 +34,56 @@ uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
   - `OT_ROOT_KEY`: Root key for key management tests
   - `SCHEMA_FILE`: Path to manifest schema file
 
-## Controller Script Library
+## Environment Management Tools
 
-**NEW**: The test environment uses a modular, well-tested shell script library for all service management.
+**RECOMMENDED**: Use `lmgmt` Python CLI for all environment management tasks.
+
+### lmgmt - Python CLI (Preferred)
+
+The `lmgmt` tool provides a modern, type-safe interface for managing the test environment with better error handling, health checks, and user experience than shell scripts.
+
+**Location**: `tests/xtest/lmgmt/`
+
+**Quick Start**:
+```bash
+cd tests/xtest/lmgmt
+uv sync  # First time only
+
+# Start all services
+uv run lmgmt up
+
+# Check status
+uv run lmgmt status
+
+# View logs
+uv run lmgmt logs -f
+
+# Stop all services
+uv run lmgmt down
+```
+
+**Key Features**:
+- Rich terminal output with tables and progress indicators
+- Comprehensive health checks and wait utilities
+- Structured log aggregation with filtering
+- JSON output for scripting
+- Type-safe configuration with Pydantic
+
+**Available Commands**:
+- `lmgmt up` - Start environment with automatic health checks
+- `lmgmt down` - Stop all services
+- `lmgmt ls` - List services with status (table or JSON)
+- `lmgmt status` - Show detailed health status (supports `--watch`)
+- `lmgmt logs [service]` - View/tail/filter logs (`-f` to follow)
+- `lmgmt restart <service>` - Restart specific service
+- `lmgmt provision` - Run provisioning
+- `lmgmt clean` - Clean generated files
+
+See `tests/xtest/lmgmt/README.md` for full documentation.
+
+### Shell Script Library (Fallback)
+
+The test environment also includes a modular, well-tested shell script library for service management.
 
 **Key locations:**
 - `scripts/` - Main controller scripts (local-test.sh, cleanup.sh, etc.)
@@ -59,9 +106,27 @@ uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
 
 ## Local Test Environment
 
-The local test environment uses a modular tmux-based controller system for managing all services.
+The local test environment can be managed using either `lmgmt` (recommended) or the shell scripts (fallback).
 
-### Quick Start
+### Quick Start with lmgmt (Recommended)
+
+```bash
+cd tests/xtest/lmgmt
+
+# Start all services
+uv run lmgmt up
+
+# View service status
+uv run lmgmt status
+
+# View logs
+uv run lmgmt logs -f
+
+# Stop all services and cleanup
+uv run lmgmt down --clean
+```
+
+### Quick Start with Shell Scripts (Fallback)
 
 ```bash
 # Start all services
@@ -368,7 +433,11 @@ yq e '.services.kas.preview.ec_tdf_enabled' platform/opentdf-dev.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
 
-# Restart platform
+# Restart platform using lmgmt (recommended)
+cd tests/xtest/lmgmt
+uv run lmgmt restart platform
+
+# Or restart manually
 pkill -9 -f "go.*service.*start"
 ./local-test.sh
 ```
@@ -438,11 +507,19 @@ curl http://localhost:8080/healthz
 
 ### Step 4: Check Service Logs
 ```bash
-# Attach to tmux and navigate to relevant window
-tmux attach -t local-test
+# Using lmgmt (recommended)
+cd tests/xtest/lmgmt
+uv run lmgmt logs platform -f          # Follow platform logs
+uv run lmgmt logs kas-alpha -f         # Follow KAS logs
+uv run lmgmt logs --grep "error" -f    # Filter for errors
 
-# For decrypt failures, check KAS logs
+# Using tmux (if environment was started with scripts)
+tmux attach -t local-test
 # Navigate to the KAS window mentioned in the error
+
+# Using log files directly
+tail -f tests/xtest/logs/platform.log
+tail -f tests/xtest/logs/kas-alpha.log
 ```
 
 ### Step 5: Manual Reproduction
@@ -482,13 +559,13 @@ ls -la dist/main/cli.sh
 ### When Modifying Platform Code
 
 ```bash
-# Restart platform after changes
+# Restart platform after changes using lmgmt (recommended)
+cd tests/xtest/lmgmt
+uv run lmgmt restart platform
+
+# Or manually
 pkill -9 -f "go.*service.*start"
-
-# Wait a moment for port to free
-sleep 2
-
-# Restart via local-test.sh or manually
+sleep 2  # Wait a moment for port to free
 cd platform
 go run ./service start
 ```
@@ -572,7 +649,35 @@ go run ./service start
 
 ## Restart Procedures
 
-### Full Environment Restart (Recommended)
+### Full Environment Restart with lmgmt (Recommended)
+```bash
+cd tests/xtest/lmgmt
+
+# Stop and restart everything
+uv run lmgmt down
+uv run lmgmt up
+
+# Or with cleanup
+uv run lmgmt down --clean
+uv run lmgmt up
+```
+
+### Service-Specific Restart with lmgmt
+```bash
+cd tests/xtest/lmgmt
+
+# Restart platform
+uv run lmgmt restart platform
+
+# Restart specific KAS instance
+uv run lmgmt restart kas-alpha
+uv run lmgmt restart kas-km1
+
+# Restart Docker services
+uv run lmgmt restart docker
+```
+
+### Full Environment Restart with Scripts (Fallback)
 ```bash
 # Stop everything cleanly
 ./scripts/local-test.sh stop
@@ -584,26 +689,31 @@ sleep 2
 ./scripts/local-test.sh start
 ```
 
-### Full Environment Restart (Manual)
+### Manual Restart (Emergency)
 ```bash
 # Kill all services
 pkill -9 -f "go.*service.*start"
 pkill -9 -f "opentdf-kas"
 ./scripts/services/docker-up.sh stop
 
-# Kill tmux session
+# Kill tmux session (if using scripts)
 tmux kill-session -t xtest
 
 # Wait for ports to free
 sleep 5
 
 # Restart everything
+cd tests/xtest/lmgmt && uv run lmgmt up
+# OR
 ./scripts/local-test.sh start
 ```
 
 ### Platform Only Restart
 ```bash
-# Via tmux session
+# Using lmgmt (recommended)
+cd tests/xtest/lmgmt && uv run lmgmt restart platform
+
+# Via tmux session (if using scripts)
 tmux attach -t xtest
 # Navigate to window 1 (platform)
 Ctrl-B 1
@@ -617,7 +727,12 @@ pkill -9 -f "go.*service.*start"
 
 ### Individual KAS Restart
 ```bash
-# Via tmux session
+# Using lmgmt (recommended)
+cd tests/xtest/lmgmt
+uv run lmgmt restart kas-alpha
+uv run lmgmt restart kas-km1
+
+# Via tmux session (if using scripts)
 tmux attach -t xtest
 
 # Navigate to KAS window:
@@ -638,7 +753,10 @@ tmux attach -t xtest
 
 ### Docker Services Restart
 ```bash
-# Stop and start
+# Using lmgmt (recommended)
+cd tests/xtest/lmgmt && uv run lmgmt restart docker
+
+# Using scripts
 ./scripts/services/docker-up.sh stop
 ./scripts/services/docker-up.sh start
 
@@ -647,11 +765,16 @@ tmux attach -t xtest
 Ctrl-B 8  # Navigate to docker window
 ```
 
-### Cleanup Without Stopping
+### Cleanup
 ```bash
-# Remove logs and configs but keep services running
-./scripts/cleanup.sh --keep-logs   # Keeps logs
-rm -rf xtest/logs/*.yaml           # Remove only configs
+# Using lmgmt (recommended)
+cd tests/xtest/lmgmt
+uv run lmgmt clean              # Clean logs and configs
+uv run lmgmt clean --keep-logs  # Clean only configs
+
+# Using scripts
+./scripts/cleanup.sh
+./scripts/cleanup.sh --keep-logs
 ```
 
 ## Common Pitfalls
@@ -665,7 +788,43 @@ rm -rf xtest/logs/*.yaml           # Remove only configs
 
 ## Quick Reference Commands
 
-### Service Management
+### Service Management with lmgmt (Recommended)
+```bash
+cd tests/xtest/lmgmt
+
+# Start/stop environment
+uv run lmgmt up
+uv run lmgmt down
+uv run lmgmt down --clean
+
+# View status
+uv run lmgmt status
+uv run lmgmt status --watch  # Live updates
+uv run lmgmt ls              # List running services
+uv run lmgmt ls --all        # List all services
+
+# View logs
+uv run lmgmt logs -f                    # Follow all logs
+uv run lmgmt logs platform              # Platform logs
+uv run lmgmt logs kas-alpha -f          # Follow KAS logs
+uv run lmgmt logs --grep error          # Filter logs
+
+# Restart services
+uv run lmgmt restart platform
+uv run lmgmt restart kas-alpha
+uv run lmgmt restart docker
+
+# Provisioning
+uv run lmgmt provision          # All
+uv run lmgmt provision keycloak
+uv run lmgmt provision fixtures
+
+# Cleanup
+uv run lmgmt clean
+uv run lmgmt clean --keep-logs
+```
+
+### Service Management with Scripts (Fallback)
 ```bash
 # Start/stop environment
 ./scripts/local-test.sh start
@@ -731,13 +890,23 @@ q              # Exit scroll mode
 
 ### Troubleshooting
 ```bash
+# Check service status
+cd tests/xtest/lmgmt
+uv run lmgmt status         # See what's running
+uv run lmgmt ls --all       # List all services
+
+# View service logs
+uv run lmgmt logs platform -f
+uv run lmgmt logs kas-alpha -f
+uv run lmgmt logs --grep error    # Find errors
+
+# Or check log files directly
+tail -f tests/xtest/logs/platform.log
+tail -f tests/xtest/logs/kas-alpha.log
+
 # Kill stuck processes
 pkill -9 -f "go.*service.*start"
 ./scripts/services/docker-up.sh stop
-
-# View service logs
-tail -f xtest/logs/platform.log
-tail -f xtest/logs/kas-alpha.log
 
 # Check port availability
 lsof -i :8080   # Platform
@@ -754,13 +923,24 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 
 ## Summary
 
-When debugging test failures:
+### Preferred Workflow
+
+1. **Use lmgmt for environment management** - It provides better error handling, health checks, and logs
+2. **Start environment**: `cd tests/xtest/lmgmt && uv run lmgmt up`
+3. **Check status**: `uv run lmgmt status`
+4. **View logs**: `uv run lmgmt logs -f`
+5. **Run tests**: `uv run pytest --sdks go -v` from xtest directory
+6. **Restart services**: `uv run lmgmt restart <service>` after config changes
+
+### When Debugging Test Failures
+
 1. Read error messages carefully - they guide you to the root cause
 2. Check platform configuration matches expected test behavior
 3. Verify all KAS instances have consistent keys
-4. Ensure services are running and healthy
-5. Reproduce issues manually when possible
-6. Always restart services after config changes
-7. Read before writing - understand existing code patterns
+4. Ensure services are running and healthy (`lmgmt status`)
+5. Check service logs (`lmgmt logs <service> -f`)
+6. Reproduce issues manually when possible
+7. Always restart services after config changes (`lmgmt restart <service>`)
+8. Read before writing - understand existing code patterns
 
 The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect.
