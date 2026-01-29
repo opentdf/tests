@@ -59,12 +59,7 @@ def do_encrypt_with(
         assert manifest.payload.isEncrypted
         assert len(manifest.encryptionInformation.keyAccess) == 1
         kao = manifest.encryptionInformation.keyAccess[0]
-
-        # Check if base_key is enabled on platform - forces EC wrapping
-        pfs = tdfs.PlatformFeatureSet()
-        expect_ec_wrapped = use_ecwrap or pfs.has_base_key
-
-        if expect_ec_wrapped:
+        if use_ecwrap:
             assert kao.type == "ec-wrapped"
             assert kao.ephemeralPublicKey is not None
         else:
@@ -135,10 +130,7 @@ def test_tdf_roundtrip(
 
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
-
-    # When base_key is enabled, bypass KAS allowlist (SDK bug: allowlist not respected with base_key)
-    ignore_allowlist = pfs.has_base_key
-    decrypt_sdk.decrypt(ct_file, rt_file, container, ignore_kas_allowlist=ignore_allowlist)
+    decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
 
     if (

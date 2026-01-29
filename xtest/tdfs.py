@@ -108,34 +108,6 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    @property
-    def has_base_key(self) -> bool:
-        """Check if platform has base_key configured.
-
-        When base_key is present, SDKs automatically use EC wrapping.
-        """
-        return self.base_key_kas_uri is not None
-
-    @property
-    def base_key_kas_uri(self) -> str | None:
-        """Get the KAS URI from the platform's base_key configuration.
-
-        Returns None if base_key is not configured.
-        """
-        import json
-        import urllib.request
-
-        platformurl = os.getenv("PLATFORMURL", "http://localhost:8080")
-        try:
-            with urllib.request.urlopen(f"{platformurl}/.well-known/opentdf-configuration", timeout=5) as response:
-                config = json.loads(response.read().decode())
-                base_key = config.get("configuration", {}).get("base_key")
-                if base_key:
-                    return base_key.get("kas_uri")
-                return None
-        except Exception:
-            return None
-
     def skip_if_unsupported(self, *features: feature_type):
         for feature in features:
             if feature not in self.features:
