@@ -203,21 +203,3 @@ lmgmt/
     ├── test_health.py      # Unit tests
     └── test_integration.py # Integration tests
 ```
-
-## Comparison with Shell Scripts
-
-This CLI replaces the functionality of these scripts (now removed):
-- `scripts/local-test.sh` (removed) → `lmgmt up`, `lmgmt down`, `lmgmt status`
-- `scripts/cleanup.sh` (removed) → `lmgmt clean`
-
-And deprecates these service scripts (still present but deprecated):
-- `scripts/services/docker-up.sh` → `lmgmt up --services docker`
-- `scripts/services/platform-start.sh` → `lmgmt up --services platform`
-- `scripts/services/kas-start.sh` → `lmgmt up --services kas`
-
-Benefits over shell scripts:
-- Type-safe configuration with Pydantic
-- Better error handling and reporting
-- Rich terminal output with progress indicators
-- Structured logging and log aggregation
-- Easier to test and maintain
