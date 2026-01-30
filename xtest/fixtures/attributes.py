@@ -473,3 +473,74 @@ def ns_and_value_kas_grants_and(
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
     return allof
+
+
+@pytest.fixture(scope="module")
+def attribute_keytype(
+    otdfctl: OpentdfCommandLineTool,
+    managed_key_rsa_2048_default: abac.KasKey,
+    managed_key_rsa_4096_default: abac.KasKey,
+    managed_key_ec_secp256r1_default: abac.KasKey,
+    managed_key_ec_secp384r1_default: abac.KasKey,
+    managed_key_ec_secp521r1_default: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+) -> dict[str, abac.AttributeValue]:
+    """
+    Create a 'keytype' attribute with values for each supported key type.
+    Each value is mapped to the client SCS and assigned to the corresponding key.
+    This allows tests to explicitly request a specific wrapping type by using
+    the appropriate attribute value.
+
+    Returns a dict mapping key type names to their attribute values:
+    - "rsa-2048" -> attribute value for RSA 2048
+    - "rsa-4096" -> attribute value for RSA 4096
+    - "ec-256" -> attribute value for EC secp256r1
+    - "ec-384" -> attribute value for EC secp384r1
+    - "ec-521" -> attribute value for EC secp521r1
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled for keytype attribute")
+
+    # Create a namespace that persists for the session
+    try:
+        keytype_ns = otdfctl.namespace_create("opentdf-keytype-tests.com")
+    except AssertionError:
+        # Namespace may already exist, that's fine
+        namespaces = otdfctl.namespace_list()
+        keytype_ns = next(
+            (ns for ns in namespaces if ns.name == "opentdf-keytype-tests.com"),
+            None,
+        )
+        if keytype_ns is None:
+            raise
+
+    # Create attribute with values for each key type
+    attr = otdfctl.attribute_create(
+        keytype_ns,
+        "keytype",
+        abac.AttributeRule.ANY_OF,
+        ["rsa-2048", "rsa-4096", "ec-256", "ec-384", "ec-521"],
+    )
+
+    assert attr.values and len(attr.values) == 5
+    rsa_2048_val, rsa_4096_val, ec_256_val, ec_384_val, ec_521_val = attr.values
+
+    # Map each value to the client SCS
+    for val in attr.values:
+        otdfctl.scs_map(otdf_client_scs, val)
+
+    # Assign each key to its corresponding value
+    otdfctl.key_assign_value(managed_key_rsa_2048_default, rsa_2048_val)
+    otdfctl.key_assign_value(managed_key_rsa_4096_default, rsa_4096_val)
+    otdfctl.key_assign_value(managed_key_ec_secp256r1_default, ec_256_val)
+    otdfctl.key_assign_value(managed_key_ec_secp384r1_default, ec_384_val)
+    otdfctl.key_assign_value(managed_key_ec_secp521r1_default, ec_521_val)
+
+    return {
+        "rsa-2048": rsa_2048_val,
+        "rsa-4096": rsa_4096_val,
+        "ec-256": ec_256_val,
+        "ec-384": ec_384_val,
+        "ec-521": ec_521_val,
+    }

@@ -223,7 +223,7 @@ def attribute_with_different_kids(
 
     for attr in [ar1, ae1]:
         # Then assign it to all clientIds = opentdf-sdk
-        sm = otdfctl.scs_map(otdf_client_scs, attr)
+        sm: abac.SubjectMapping = otdfctl.scs_map(otdf_client_scs, attr)
         assert sm.attribute_value.value == attr.value
 
     # Assign kas key to the attribute values
@@ -265,6 +265,136 @@ def legacy_imported_golden_r1_key(
         wrapping_key_id="root",
         algorithm=golden_key["alg"],
     )
+
+
+@pytest.fixture(scope="module")
+def managed_key_rsa_2048_default(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create RSA 2048 managed key on default KAS (session-scoped)."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"default-rsa-2048-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="rsa:2048",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
+def managed_key_rsa_4096_default(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create RSA 4096 managed key on default KAS (session-scoped)."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"default-rsa-4096-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="rsa:4096",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
+def managed_key_ec_secp256r1_default(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create EC secp256r1 managed key on default KAS (session-scoped)."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"default-ec-256-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp256r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
+def managed_key_ec_secp384r1_default(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create EC secp384r1 managed key on default KAS (session-scoped)."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"default-ec-384-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp384r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
+def managed_key_ec_secp521r1_default(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create EC secp521r1 managed key on default KAS (session-scoped)."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"default-ec-521-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_default)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_default,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp521r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
 
 
 @pytest.fixture(scope="module")
