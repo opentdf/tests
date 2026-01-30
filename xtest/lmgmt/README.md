@@ -13,11 +13,10 @@ uv sync
 
 For convenience, you can install `lmgmt` globally and enable tab completion:
 
-### Option 1: Install with uv tool (Recommended)
-
 ```bash
 cd tests/xtest/lmgmt
 uv tool install --editable .
+lmgmt --install-completion
 ```
 
 This makes `lmgmt` available globally. You can now run `lmgmt` from any directory.
@@ -25,52 +24,6 @@ This makes `lmgmt` available globally. You can now run `lmgmt` from any director
 To uninstall:
 ```bash
 uv tool uninstall lmgmt
-```
-
-### Option 2: Add to PATH
-
-Add the following to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
-
-```bash
-export PATH="/Users/yourusername/Documents/GitHub/tmux-extensions/tests/xtest/lmgmt/.venv/bin:$PATH"
-```
-
-Replace the path with your actual installation path.
-
-### Enable Tab Completion
-
-**Automatic Installation (Easiest):**
-```bash
-lmgmt --install-completion
-```
-
-This automatically detects your shell and installs completion. Restart your shell or source your profile after installation.
-
-**Manual Installation:**
-
-If automatic installation doesn't work, you can manually add completion:
-
-**Bash:**
-```bash
-# Add to ~/.bashrc
-eval "$(_LMGMT_COMPLETE=bash_source lmgmt)"
-```
-
-**Zsh:**
-```bash
-# Add to ~/.zshrc
-eval "$(_LMGMT_COMPLETE=zsh_source lmgmt)"
-```
-
-**Fish:**
-```fish
-# Add to ~/.config/fish/config.fish
-_LMGMT_COMPLETE=fish_source lmgmt | source
-```
-
-After installation, reload your shell:
-```bash
-source ~/.bashrc  # or ~/.zshrc
 ```
 
 **Using Tab Completion:**
@@ -108,9 +61,6 @@ lmgmt up
 
 # Start only Docker services
 lmgmt up --services docker
-
-# Start without waiting for health checks
-lmgmt up --no-wait
 
 # Start without running provisioning
 lmgmt up --no-provision
