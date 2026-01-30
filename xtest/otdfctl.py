@@ -226,6 +226,7 @@ class OpentdfCommandLineTool:
         wrapping_key_id: str,
         algorithm: str,
     ):
+        kas_entry = kas if isinstance(kas, KasEntry) else None
         kas_id = kas.uri if isinstance(kas, KasEntry) else kas
         cmd = self.otdfctl + "policy kas-registry key import".split()
         cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
@@ -240,13 +241,44 @@ class OpentdfCommandLineTool:
             cmd += [f"--legacy={legacy}"]
 
         logger.info(f"kas-registry key-import [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert process.returncode == 0
+
+        # Handle race condition: if key already exists, verify it matches and return it
+        if process.returncode != 0:
+            err_str = (err.decode() if err else "") + (out.decode() if out else "")
+            if "already_exists" in err_str or "unique field violation" in err_str:
+                logger.info(
+                    f"Key {key_id} already exists on {kas_id}, verifying it matches"
+                )
+                # Query existing keys and find the one we tried to import
+                if kas_entry is None:
+                    # Can't query without KasEntry object, re-raise
+                    raise AssertionError(
+                        f"Key import failed with 'already_exists' error but cannot verify "
+                        f"(kas was passed as string). Error: {err_str}"
+                    )
+                existing_keys = self.kas_registry_keys_list(kas_entry)
+                for existing_key in existing_keys:
+                    if existing_key.key.key_id == key_id:
+                        # Key exists and matches what we tried to import
+                        logger.info(
+                            f"Key {key_id} already exists with matching properties, returning it"
+                        )
+                        return existing_key
+                # Key not found in list (shouldn't happen)
+                raise AssertionError(
+                    f"Key import failed with 'already_exists' error, but key {key_id} "
+                    f"not found when querying existing keys. This suggests a conflict. "
+                    f"Error: {err_str}"
+                )
+            # Different error, raise it
+            assert False, f"Key import failed: {err_str}"
+
         return KasKey.model_validate_json(out)
 
     def set_base_key(self, key: KasKey | str, kas: KasEntry | str):
