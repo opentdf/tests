@@ -452,7 +452,7 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -566,7 +566,7 @@ jobs:
           -ra
           -v
           --numprocesses auto
-          --dist loadscope
+          --dist worksteal
           --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
           --self-contained-html
           --audit-log-dir test-results/audit-logs
