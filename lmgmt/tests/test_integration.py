@@ -9,9 +9,6 @@ import time
 
 import pytest
 
-# Mark all tests in this module as integration tests
-pytestmark = pytest.mark.integration
-
 
 def run_lmgmt(*args, timeout=60) -> subprocess.CompletedProcess:
     """Run lmgmt CLI command."""
@@ -57,7 +54,6 @@ class TestCLIBasic:
         assert isinstance(data, list)
 
 
-@pytest.mark.slow
 class TestServiceLifecycle:
     """Service lifecycle tests (start/stop).
 

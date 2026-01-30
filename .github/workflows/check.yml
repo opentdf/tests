@@ -46,3 +46,9 @@ jobs:
             echo -e "## type check passed with warnings\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
         working-directory: xtest
+      - name: Lint lmgmt
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+        working-directory: lmgmt
