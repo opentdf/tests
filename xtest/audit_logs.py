@@ -15,6 +15,7 @@ Usage:
 import logging
 import re
 import threading
+import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -319,6 +320,7 @@ class AuditLogAsserter:
         pattern: str | re.Pattern,
         min_count: int = 1,
         since_mark: str | None = None,
+        timeout: float = 5.0,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
@@ -326,6 +328,7 @@ class AuditLogAsserter:
             pattern: Regex pattern or substring to search for
             min_count: Minimum number of occurrences (default: 1)
             since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait for pattern in seconds (default: 5.0)
 
         Returns:
             Matching log entries
@@ -341,20 +344,38 @@ class AuditLogAsserter:
             return []
 
         since = self._resolve_since(since_mark)
-        logs = self._collector.get_logs(since=since)
 
         if isinstance(pattern, str):
             regex = re.compile(pattern, re.IGNORECASE)
         else:
             regex = pattern
 
-        matching = [log for log in logs if regex.search(log.raw_line)]
+        # Wait up to timeout for pattern to appear
+        start_time = time.time()
+        matching: list[LogEntry] = []
+        logs: list[LogEntry] = []
 
+        while time.time() - start_time < timeout:
+            logs = self._collector.get_logs(since=since)
+            matching = [log for log in logs if regex.search(log.raw_line)]
+
+            count = len(matching)
+            if count >= min_count:
+                logger.debug(
+                    f"Found {count} matches for pattern '{pattern}' "
+                    f"after {time.time() - start_time:.3f}s"
+                )
+                return matching
+
+            # Sleep briefly before checking again
+            time.sleep(0.1)
+
+        # Timeout expired, raise error if we don't have enough matches
         count = len(matching)
         if count < min_count:
             self._raise_assertion_error(
                 f"Expected pattern '{pattern}' to appear at least {min_count} time(s), "
-                f"but found {count} occurrence(s).",
+                f"but found {count} occurrence(s) after waiting {timeout}s.",
                 matching,
                 logs,
             )
