@@ -51,7 +51,7 @@ def wait_for_health(
     url: str,
     timeout: float = 60.0,
     poll_interval: float = 1.0,
-service_name: str = "service",
+    service_name: str = "service",
     expected_status: int | tuple[int, ...] = 200,
 ) -> bool:
     """Wait for an HTTP health endpoint to return healthy.

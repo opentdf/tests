@@ -81,9 +81,7 @@ def update_yaml_file(path: Path, updates: dict[str, Any]) -> None:
     save_yaml(path, data)
 
 
-def copy_yaml_with_updates(
-    source: Path, dest: Path, updates: dict[str, Any]
-) -> None:
+def copy_yaml_with_updates(source: Path, dest: Path, updates: dict[str, Any]) -> None:
     """Copy a YAML file and apply updates to the copy.
 
     Args:

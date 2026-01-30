@@ -51,6 +51,7 @@ class TestCLIBasic:
         assert result.returncode == 0
         # Should be valid JSON
         import json
+
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 

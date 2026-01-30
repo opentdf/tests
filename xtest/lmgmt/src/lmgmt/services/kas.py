@@ -65,9 +65,7 @@ class KASService(Service):
             updates["services.kas.preview.key_management"] = True
             updates["services.kas.preview.ec_tdf_enabled"] = True
             # registered_kas_uri should NOT have /kas suffix
-            updates["services.kas.registered_kas_uri"] = (
-                f"http://localhost:{self.port}"
-            )
+            updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
 
         copy_yaml_with_updates(template_path, config_path, updates)
         return config_path

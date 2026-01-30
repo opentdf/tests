@@ -379,7 +379,9 @@ def _print_log_entry(entry) -> None:
     timestamp = ""
     if entry.timestamp:
         timestamp = entry.timestamp.strftime("%H:%M:%S")
-    console.print(f"[dim]{timestamp}[/dim] [cyan]{entry.service}[/cyan] {entry.message}")
+    console.print(
+        f"[dim]{timestamp}[/dim] [cyan]{entry.service}[/cyan] {entry.message}"
+    )
 
 
 @app.command()
@@ -502,7 +504,9 @@ def restart(
         return
 
     print_error(f"Unknown service: {service}")
-    print_info("Valid services: docker, platform, kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2")
+    print_info(
+        "Valid services: docker, platform, kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2"
+    )
     raise typer.Exit(1)
 
 

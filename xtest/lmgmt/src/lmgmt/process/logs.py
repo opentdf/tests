@@ -97,9 +97,7 @@ class LogReader:
         )
         if std_match and timestamp is None:
             try:
-                timestamp = datetime.strptime(
-                    std_match.group(1), "%Y/%m/%d %H:%M:%S"
-                )
+                timestamp = datetime.strptime(std_match.group(1), "%Y/%m/%d %H:%M:%S")
                 line = std_match.group(2)
             except ValueError:
                 pass

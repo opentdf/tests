@@ -421,7 +421,9 @@ class AuditLogAsserter:
         # Use lookahead assertions to match all parts regardless of order
         pattern = "".join(f"(?=.*{part})" for part in pattern_parts)
 
-        matches = self.assert_contains(pattern, min_count=min_count, since_mark=since_mark)
+        matches = self.assert_contains(
+            pattern, min_count=min_count, since_mark=since_mark
+        )
 
         # If attr_fqn is specified, verify it appears in the matching logs
         if attr_fqn and matches:
