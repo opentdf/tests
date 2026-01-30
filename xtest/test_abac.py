@@ -148,7 +148,7 @@ def test_autoconfigure_one_attribute_standard(
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_alpha
 
     # Mark timestamp before decrypt for audit log correlation
-    audit_logs.mark("before_decrypt")
+    mark = audit_logs.mark("before_decrypt")
 
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
@@ -162,7 +162,7 @@ def test_autoconfigure_one_attribute_standard(
     audit_logs.assert_contains(
         r"rewrap",
         min_count=1,
-        since_mark="before_decrypt",
+        since_mark=mark,
     )
 
 

@@ -7,9 +7,9 @@ threads tailing log files and buffered in memory for fast access.
 Usage:
     def test_rewrap_logged(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
         ct_file = encrypt_sdk.encrypt(pt_file, ...)
-        audit_logs.mark("before_decrypt")
+        mark = audit_logs.mark("before_decrypt")
         decrypt_sdk.decrypt(ct_file, ...)
-        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark="before_decrypt")
+        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
 """
 
 import logging
@@ -82,6 +82,7 @@ class AuditLogCollector:
         self.log_files = log_files
         self._buffer: deque[LogEntry] = deque(maxlen=self.MAX_BUFFER_SIZE)
         self._marks: dict[str, datetime] = {}
+        self._mark_counter = 0
         self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
         self._disabled = False
@@ -185,19 +186,23 @@ class AuditLogCollector:
 
         return logs
 
-    def mark(self, label: str) -> datetime:
+    def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation with log entries.
 
+        Automatically generates a unique mark name by appending a counter suffix.
+
         Args:
-            label: Name for this timestamp (e.g., 'before_decrypt')
+            label: Base name for this timestamp (e.g., 'before_decrypt')
 
         Returns:
-            The marked timestamp
+            The unique mark name that was created
         """
+        self._mark_counter += 1
+        unique_label = f"{label}_{self._mark_counter}"
         now = datetime.now()
-        self._marks[label] = now
-        logger.debug(f"Marked timestamp '{label}' at {now}")
-        return now
+        self._marks[unique_label] = now
+        logger.debug(f"Marked timestamp '{unique_label}' at {now}")
+        return unique_label
 
     def get_mark(self, label: str) -> datetime | None:
         """Retrieve a previously marked timestamp.
@@ -302,17 +307,20 @@ class AuditLogAsserter:
         """
         self._collector = collector
 
-    def mark(self, label: str) -> datetime:
+    def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation.
 
+        Automatically generates a unique mark name by appending a counter suffix.
+
         Args:
-            label: Name for this timestamp
+            label: Base name for this timestamp
 
         Returns:
-            The marked timestamp
+            The unique mark name that was created
         """
         if not self._collector or self._collector._disabled:
-            return datetime.now()
+            # Generate a fake unique mark for disabled collectors
+            return f"{label}_noop"
         return self._collector.mark(label)
 
     def assert_contains(
