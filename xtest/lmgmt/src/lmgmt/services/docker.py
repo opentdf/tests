@@ -28,7 +28,7 @@ class DockerService(Service):
         return ServiceType.DOCKER
 
     @property
-    def health_url(self) -> str | None:
+    def health_url(self) -> str:
         return f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master"
 
     def start(self) -> bool:

@@ -1,5 +1,6 @@
 """Pydantic settings for lmgmt configuration."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -141,4 +142,6 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings()
+    platform_url = os.environ.get("LMGMT_PLATFORM_URL", "http://localhost:8080")
+    keycloak_url = os.environ.get("LMGMT_KEYCLOAK_URL", "http://localhost:8888")
+    return Settings(platform_url=platform_url, keycloak_url=keycloak_url)

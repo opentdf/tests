@@ -63,9 +63,10 @@ class Service(ABC):
         ...
 
     @property
-    def health_url(self) -> str | None:
+    @abstractmethod
+    def health_url(self) -> str:
         """Health check URL, if applicable."""
-        return None
+        pass
 
     @abstractmethod
     def start(self) -> bool:

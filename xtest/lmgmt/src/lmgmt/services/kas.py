@@ -37,7 +37,7 @@ class KASService(Service):
         return ServiceType.SUBPROCESS
 
     @property
-    def health_url(self) -> str | None:
+    def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
     @property
