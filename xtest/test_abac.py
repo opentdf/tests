@@ -7,6 +7,7 @@ import pytest
 
 import tdfs
 from abac import Attribute, ObligationValue
+from audit_logs import AuditLogAsserter
 from test_policytypes import skip_rts_as_needed
 
 cipherTexts: dict[str, Path] = {}
@@ -116,6 +117,7 @@ def test_autoconfigure_one_attribute_standard(
     pt_file: Path,
     kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     global counter
 
@@ -145,6 +147,9 @@ def test_autoconfigure_one_attribute_standard(
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_alpha
 
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -152,6 +157,13 @@ def test_autoconfigure_one_attribute_standard(
     rt_file = tmp_dir / f"test-abac-one-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged in audit logs
+    audit_logs.assert_contains(
+        r"rewrap",
+        min_count=1,
+        since_mark=mark,
+    )
 
 
 def test_autoconfigure_two_kas_or_standard(
