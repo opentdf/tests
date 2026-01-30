@@ -65,8 +65,7 @@ class LogReader:
         """Continuously yield new log entries."""
         while True:
             entries = self.read_new()
-            for entry in entries:
-                yield entry
+            yield from entries
             if not entries:
                 time.sleep(poll_interval)
 

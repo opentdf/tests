@@ -110,7 +110,7 @@ def up(
                 )
             except WaitTimeoutError as e:
                 print_error(str(e))
-                raise typer.Exit(1)
+                raise typer.Exit(1) from e
         print_success("Keycloak is ready")
 
         print_info("Waiting for PostgreSQL...")
@@ -123,7 +123,7 @@ def up(
             )
         except WaitTimeoutError as e:
             print_error(str(e))
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
         print_success("PostgreSQL is ready")
 
         if not no_provision:
@@ -151,7 +151,7 @@ def up(
                 )
             except WaitTimeoutError as e:
                 print_error(str(e))
-                raise typer.Exit(1)
+                raise typer.Exit(1) from e
         print_success("Platform is ready")
 
     # Step 3: Provision
