@@ -106,9 +106,7 @@ class TestAuditLogAsserter:
             LogEntry(now, '{"msg": "new_log_after_mark"}', "kas")
         )
 
-        matches = asserter.assert_contains(
-            r"new_log_after_mark", since_mark=mark
-        )
+        matches = asserter.assert_contains(r"new_log_after_mark", since_mark=mark)
         assert len(matches) == 1
 
     def test_asserter_with_disabled_collector(self, tmp_path: Path) -> None:
