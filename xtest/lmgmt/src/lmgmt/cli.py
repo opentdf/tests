@@ -1,8 +1,7 @@
 """Typer CLI for lmgmt - OpenTDF test environment management."""
 
 import json
-import sys
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.live import Live
@@ -10,12 +9,10 @@ from rich.live import Live
 from lmgmt import __version__
 from lmgmt.config.ports import Ports
 from lmgmt.config.settings import get_settings
-from lmgmt.health.checks import check_http_health
 from lmgmt.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
 from lmgmt.process.logs import LogAggregator
 from lmgmt.services import (
     Provisioner,
-    ServiceType,
     get_docker_service,
     get_kas_manager,
     get_platform_service,
@@ -67,7 +64,7 @@ def main(
 @app.command()
 def up(
     services: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--services",
             "-s",
@@ -328,7 +325,7 @@ def status(
 @app.command()
 def logs(
     service: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Service name (platform, kas-alpha, etc.)"),
     ] = None,
     follow: Annotated[
@@ -340,7 +337,7 @@ def logs(
         typer.Option("--lines", "-n", help="Number of lines to show"),
     ] = 50,
     grep: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--grep", "-g", help="Filter by regex pattern"),
     ] = None,
 ) -> None:

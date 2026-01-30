@@ -1,12 +1,9 @@
 """Tests for health check utilities."""
 
-import socket
 import threading
-import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
-
 from lmgmt.health.checks import check_http_health, check_port, get_service_status
 from lmgmt.health.waits import (
     WaitTimeoutError,

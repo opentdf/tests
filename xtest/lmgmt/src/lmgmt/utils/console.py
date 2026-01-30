@@ -1,12 +1,13 @@
 """Rich console helpers for formatted output."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.style import Style
-from contextlib import contextmanager
-from typing import Iterator
+from rich.table import Table
 
 # Global console instance
 console = Console()

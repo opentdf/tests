@@ -1,7 +1,6 @@
 """Docker compose service management."""
 
 import subprocess
-from pathlib import Path
 
 from lmgmt.config.ports import Ports
 from lmgmt.config.settings import Settings

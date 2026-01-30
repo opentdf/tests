@@ -1,7 +1,6 @@
 """Provisioning service for Keycloak and fixtures."""
 
 import subprocess
-from pathlib import Path
 
 from lmgmt.config.settings import Settings
 
@@ -75,7 +74,6 @@ class Provisioner:
         This ensures the platform knows about all the KAS instances
         for autoconfigure/ABAC tests.
         """
-        from lmgmt.config.ports import Ports
 
         # For each KAS, register it with the platform's KAS registry
         # This typically requires an admin token and API calls

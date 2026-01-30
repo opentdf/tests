@@ -1,7 +1,7 @@
 """Wait-for-ready utilities for services."""
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from lmgmt.health.checks import check_http_health, check_port
 

@@ -4,9 +4,10 @@ These tests require Docker to be available and will start/stop real services.
 They are marked as integration tests and can be skipped with: pytest -m "not integration"
 """
 
-import pytest
 import subprocess
 import time
+
+import pytest
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
