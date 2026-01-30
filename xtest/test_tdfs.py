@@ -24,7 +24,6 @@ def do_encrypt_with(
     az: str = "",
     scenario: str = "",
     target_mode: tdfs.container_version | None = None,
-    keytype_attrs: dict[str, str] | None = None,
 ) -> Path:
     """
     Encrypt a file with the given SDK and container type, and return the path to the ciphertext file.
@@ -32,11 +31,6 @@ def do_encrypt_with(
     Scenario is used to create a unique filename for the ciphertext file.
 
     If targetmode is set, asserts that the manifest is in the correct format for that target.
-
-    keytype_attrs is a dict mapping keytype names (rsa-2048, ec-256, etc.) to their FQNs.
-    If provided, uses the appropriate attribute value based on the container type:
-    - For ztdf-ecwrap: uses an EC attribute (e.g., ec-256)
-    - For ztdf: uses an RSA attribute (e.g., rsa-2048)
     """
     global counter
     counter = (counter or 0) + 1
@@ -49,23 +43,11 @@ def do_encrypt_with(
     ct_file = tmp_dir / f"test-{encrypt_sdk}-{scenario}{c}.{container}"
 
     use_ecwrap = container == "ztdf-ecwrap"
-
-    # Determine which attribute value to use based on container type
-    attr_values = None
-    if keytype_attrs:
-        if use_ecwrap:
-            # Use EC attribute for ecwrap tests
-            attr_values = [keytype_attrs["ec-256"]]
-        else:
-            # Use RSA attribute for normal ztdf tests
-            attr_values = [keytype_attrs["rsa-2048"]]
-
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
         mime_type="text/plain",
         container=container,
-        attr_values=attr_values,
         assert_value=az,
         target_mode=target_mode,
     )
@@ -78,19 +60,11 @@ def do_encrypt_with(
         assert len(manifest.encryptionInformation.keyAccess) == 1
         kao = manifest.encryptionInformation.keyAccess[0]
         if use_ecwrap:
-            assert (
-                kao.type == "ec-wrapped"
-            ), f"Expected ec-wrapped KAO for ztdf-ecwrap, but got: type={kao.type}, ephemeralPublicKey={kao.ephemeralPublicKey is not None}, url={kao.url}"
-            assert (
-                kao.ephemeralPublicKey is not None
-            ), f"Expected ephemeralPublicKey for ec-wrapped KAO, but got None: {kao}"
+            assert kao.type == "ec-wrapped"
+            assert kao.ephemeralPublicKey is not None
         else:
-            assert (
-                kao.type == "wrapped"
-            ), f"Expected wrapped KAO for ztdf, but got: type={kao.type}, ephemeralPublicKey={kao.ephemeralPublicKey is not None}, url={kao.url}"
-            assert (
-                kao.ephemeralPublicKey is None
-            ), f"Expected no ephemeralPublicKey for RSA-wrapped KAO, but got: {kao.ephemeralPublicKey}"
+            assert kao.type == "wrapped"
+            assert kao.ephemeralPublicKey is None
         if target_mode == "4.2.2":
             looks_like_422(manifest)
         elif target_mode == "4.3.0":
@@ -124,7 +98,6 @@ def test_tdf_roundtrip(
     tmp_dir: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if container == "ztdf" and decrypt_sdk in dspx1153Fails:
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
@@ -153,7 +126,6 @@ def test_tdf_roundtrip(
         container,
         tmp_dir,
         target_mode=target_mode,
-        keytype_attrs=attribute_keytype,
     )
 
     fname = ct_file.stem
@@ -177,7 +149,6 @@ def test_tdf_spec_target_422(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
@@ -197,7 +168,6 @@ def test_tdf_spec_target_422(
         tmp_dir,
         scenario="target-422",
         target_mode="4.2.2",
-        keytype_attrs=attribute_keytype,
     )
 
     fname = ct_file.stem
@@ -282,17 +252,10 @@ def test_manifest_validity(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
-    ct_file = do_encrypt_with(
-        pt_file,
-        encrypt_sdk,
-        "ztdf",
-        tmp_dir,
-        keytype_attrs=attribute_keytype,
-    )
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
 
     tdfs.validate_manifest_schema(ct_file)
 
@@ -303,7 +266,6 @@ def test_manifest_validity_with_assertions(
     tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
@@ -316,7 +278,6 @@ def test_manifest_validity_with_assertions(
         tmp_dir,
         scenario="assertions",
         az=assertion_file_no_keys,
-        keytype_attrs=attribute_keytype,
     )
 
     tdfs.validate_manifest_schema(ct_file)
@@ -332,7 +293,6 @@ def test_tdf_assertions_unkeyed(
     tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -351,7 +311,6 @@ def test_tdf_assertions_unkeyed(
         scenario="assertions",
         az=assertion_file_no_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
@@ -367,7 +326,6 @@ def test_tdf_assertions_with_keys(
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     pfs = tdfs.PlatformFeatureSet()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -386,7 +344,6 @@ def test_tdf_assertions_with_keys(
         scenario="assertions-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
@@ -408,7 +365,6 @@ def test_tdf_assertions_422_format(
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -430,7 +386,6 @@ def test_tdf_assertions_422_format(
         scenario="assertions-422-keys-roundtrip",
         az=assertion_file_rs_and_hs_keys,
         target_mode="4.2.2",
-        keytype_attrs=attribute_keytype,
     )
 
     fname = ct_file.stem
@@ -583,7 +538,6 @@ def test_tdf_with_unbound_policy(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -596,7 +550,6 @@ def test_tdf_with_unbound_policy(
         "ztdf",
         tmp_dir,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
     fname = b_file.stem
@@ -614,20 +567,13 @@ def test_tdf_with_altered_policy_binding(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    ct_file = do_encrypt_with(
-        pt_file,
-        encrypt_sdk,
-        "ztdf",
-        tmp_dir,
-        keytype_attrs=attribute_keytype,
-    )
+    ct_file = do_encrypt_with(pt_file, encrypt_sdk, "ztdf", tmp_dir)
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
     )
@@ -649,7 +595,6 @@ def test_tdf_with_altered_root_sig(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -662,7 +607,6 @@ def test_tdf_with_altered_root_sig(
         "ztdf",
         tmp_dir,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
     fname = b_file.stem
@@ -680,7 +624,6 @@ def test_tdf_with_altered_seg_sig_wrong(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -693,7 +636,6 @@ def test_tdf_with_altered_seg_sig_wrong(
         "ztdf",
         tmp_dir,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
     fname = b_file.stem
@@ -716,7 +658,6 @@ def test_tdf_with_altered_enc_seg_size(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -729,7 +670,6 @@ def test_tdf_with_altered_enc_seg_size(
         "ztdf",
         tmp_dir,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
@@ -753,7 +693,6 @@ def test_tdf_with_altered_assertion_statement(
     tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -772,7 +711,6 @@ def test_tdf_with_altered_assertion_statement(
         scenario="assertions",
         az=assertion_file_no_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
@@ -794,7 +732,6 @@ def test_tdf_with_altered_assertion_with_keys(
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -813,7 +750,6 @@ def test_tdf_with_altered_assertion_with_keys(
         scenario="assertions-keys-roundtrip-altered",
         az=assertion_file_rs_and_hs_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
@@ -842,7 +778,6 @@ def test_tdf_altered_payload_end(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    attribute_keytype: dict[str, str],
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -857,7 +792,6 @@ def test_tdf_altered_payload_end(
         "ztdf",
         tmp_dir,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        keytype_attrs=attribute_keytype,
     )
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
     fname = b_file.stem
