@@ -1,6 +1,5 @@
 """Platform service management."""
 
-
 from lmgmt.config.ports import Ports
 from lmgmt.config.settings import Settings
 from lmgmt.health.checks import check_http_health, check_port
