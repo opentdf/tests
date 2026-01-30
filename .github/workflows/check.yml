@@ -24,6 +24,8 @@ jobs:
           python-version: '3.14'
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: false
       - name: Install dependencies
         run: uv sync --extra dev
         working-directory: xtest
@@ -48,6 +50,7 @@ jobs:
         working-directory: xtest
       - name: Lint lmgmt
         run: |
+          uv sync --extra dev
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
