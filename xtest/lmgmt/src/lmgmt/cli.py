@@ -14,6 +14,7 @@ from lmgmt.health.checks import check_http_health
 from lmgmt.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
 from lmgmt.process.logs import LogAggregator
 from lmgmt.services import (
+    Provisioner,
     ServiceType,
     get_docker_service,
     get_kas_manager,
@@ -73,10 +74,6 @@ def up(
             help="Comma-separated list of services to start (docker,platform,kas)",
         ),
     ] = None,
-    no_wait: Annotated[
-        bool,
-        typer.Option("--no-wait", help="Don't wait for services to be healthy"),
-    ] = False,
     no_provision: Annotated[
         bool,
         typer.Option("--no-provision", help="Skip provisioning step"),
@@ -107,18 +104,38 @@ def up(
             print_error("Failed to start Docker services")
             raise typer.Exit(1)
 
-        if not no_wait:
-            with status_spinner("Waiting for Keycloak..."):
-                try:
-                    wait_for_health(
-                        f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master",
-                        timeout=120,
-                        service_name="Keycloak",
-                    )
-                except WaitTimeoutError as e:
-                    print_error(str(e))
-                    raise typer.Exit(1)
-            print_success("Keycloak is ready")
+        with status_spinner("Waiting for Keycloak..."):
+            try:
+                wait_for_health(
+                    f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master",
+                    timeout=120,
+                    service_name="Keycloak",
+                )
+            except WaitTimeoutError as e:
+                print_error(str(e))
+                raise typer.Exit(1)
+        print_success("Keycloak is ready")
+
+        print_info("Waiting for PostgreSQL...")
+        try:
+            wait_for_port(
+                Ports.POSTGRES,
+                "localhost",
+                timeout=60,
+                service_name="PostgreSQL",
+            )
+        except WaitTimeoutError as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+        print_success("PostgreSQL is ready")
+
+        if not no_provision:
+            print_info("Provisioning Keycloak...")
+            provisioner: Provisioner = get_provisioner(settings)
+            if not provisioner.provision_keycloak():
+                print_error("Keycloak provisioning failed")
+                raise typer.Exit(1)
+            print_success("Keycloak provisioned")
 
     # Step 2: Start Platform
     if start_platform:
@@ -128,24 +145,23 @@ def up(
             print_error("Failed to start Platform")
             raise typer.Exit(1)
 
-        if not no_wait:
-            with status_spinner("Waiting for Platform..."):
-                try:
-                    wait_for_health(
-                        f"http://localhost:{Ports.PLATFORM}/healthz",
-                        timeout=120,
-                        service_name="Platform",
-                    )
-                except WaitTimeoutError as e:
-                    print_error(str(e))
-                    raise typer.Exit(1)
-            print_success("Platform is ready")
+        with status_spinner("Waiting for Platform..."):
+            try:
+                wait_for_health(
+                    f"http://localhost:{Ports.PLATFORM}/healthz",
+                    timeout=120,
+                    service_name="Platform",
+                )
+            except WaitTimeoutError as e:
+                print_error(str(e))
+                raise typer.Exit(1)
+        print_success("Platform is ready")
 
     # Step 3: Provision
     if start_platform and not no_provision:
-        print_info("Running provisioning...")
+        print_info("Provisioning fixtures...")
         provisioner = get_provisioner(settings)
-        if not provisioner.provision_all():
+        if not provisioner.provision_fixtures():
             print_warning("Provisioning may have had issues - continuing anyway")
         else:
             print_success("Provisioning complete")
@@ -161,19 +177,18 @@ def up(
             print_error(f"Failed to start KAS instances: {', '.join(failed)}")
             raise typer.Exit(1)
 
-        if not no_wait:
-            with status_spinner("Waiting for KAS instances..."):
-                for kas_name in Ports.all_kas_names():
-                    port = Ports.get_kas_port(kas_name)
-                    try:
-                        wait_for_health(
-                            f"http://localhost:{port}/healthz",
-                            timeout=60,
-                            service_name=f"KAS {kas_name}",
-                        )
-                    except WaitTimeoutError as e:
-                        print_warning(str(e))
-            print_success("KAS instances are ready")
+        with status_spinner("Waiting for KAS instances..."):
+            for kas_name in Ports.all_kas_names():
+                port = Ports.get_kas_port(kas_name)
+                try:
+                    wait_for_health(
+                        f"http://localhost:{port}/healthz",
+                        timeout=60,
+                        service_name=f"KAS {kas_name}",
+                    )
+                except WaitTimeoutError as e:
+                    print_warning(str(e))
+        print_success("KAS instances are ready")
 
     print_success("Environment is up!")
 

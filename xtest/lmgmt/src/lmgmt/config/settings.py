@@ -76,17 +76,17 @@ class Settings(BaseSettings):
     @property
     def logs_dir(self) -> Path:
         """Logs directory."""
-        return self.xtest_root / "logs"
+        return self.xtest_root / "tmp" / "logs"
 
     @property
     def keys_dir(self) -> Path:
         """Keys directory."""
-        return self.xtest_root / "keys"
+        return self.xtest_root / "tmp" / "keys"
 
     @property
     def config_dir(self) -> Path:
         """Generated config files directory."""
-        return self.xtest_root / "config"
+        return self.xtest_root / "tmp" / "config"
 
     @property
     def platform_config(self) -> Path:

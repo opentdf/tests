@@ -71,7 +71,7 @@ class TestServiceLifecycle:
     def test_up_down_cycle(self):
         """Test basic up/down cycle with Docker only."""
         # Start just Docker services
-        result = run_lmgmt("up", "--services", "docker", "--no-wait", timeout=120)
+        result = run_lmgmt("up", "--services", "docker", timeout=120)
         # May fail if Docker isn't available, which is okay for CI
         if result.returncode != 0:
             pytest.skip("Docker not available")

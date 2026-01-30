@@ -89,7 +89,7 @@ class KASService(Service):
             "run",
             "./service",
             "start",
-            "--config",
+            "--config-file",
             str(config_path),
         ]
 

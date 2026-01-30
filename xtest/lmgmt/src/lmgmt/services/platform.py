@@ -51,7 +51,7 @@ class PlatformService(Service):
             "run",
             "./service",
             "start",
-            "--config",
+            "--config-file",
             str(self.settings.platform_config),
         ]
 

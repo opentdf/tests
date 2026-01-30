@@ -26,24 +26,7 @@ class Provisioner:
         - Client credentials
         - Users for testing
         """
-        script_path = self.settings.xtest_root.parent / "scripts" / "provision-keycloak"
-
-        # Check if script exists
-        if not script_path.exists():
-            # Try alternative path
-            script_path = self.settings.platform_dir / "scripts" / "provision-keycloak"
-
-        if not script_path.exists():
-            # No provisioning script found - this may be okay
-            return True
-
-        result = subprocess.run(
-            [str(script_path)],
-            capture_output=True,
-            text=True,
-            cwd=self.settings.platform_dir,
-        )
-        return result.returncode == 0
+        return self._provision_("keycloak")
 
     def provision_fixtures(self) -> bool:
         """Provision test fixtures.
@@ -53,37 +36,23 @@ class Provisioner:
         - Entitlements
         - KAS registrations
         """
-        script_path = self.settings.xtest_root.parent / "scripts" / "provision-fixtures"
+        return self._provision_("fixtures")
 
-        # Check if script exists
-        if not script_path.exists():
-            # Try alternative path
-            script_path = (
-                self.settings.platform_dir / "scripts" / "provision-fixtures"
-            )
+    def _provision_(self, mode: str) -> bool:
+        """Provision test fixtures.
 
-        if not script_path.exists():
-            # Try the go-based provisioning
-            return self._provision_fixtures_via_go()
-
-        result = subprocess.run(
-            [str(script_path)],
-            capture_output=True,
-            text=True,
-            cwd=self.settings.platform_dir,
-        )
-        return result.returncode == 0
-
-    def _provision_fixtures_via_go(self) -> bool:
-        """Run fixture provisioning via go command."""
-        # Try using the platform's built-in provisioning
+        This runs the provision-fixtures script to set up:
+        - Attributes
+        - Entitlements
+        - KAS registrations
+        """
         cmd = [
             "go",
             "run",
             "./service",
             "provision",
-            "fixtures",
-            "--config",
+            mode,
+            "--config-file",
             str(self.settings.platform_config),
         ]
 
