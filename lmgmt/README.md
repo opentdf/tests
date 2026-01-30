@@ -5,7 +5,7 @@ A Python CLI for managing the OpenTDF test environment, providing a cleaner alte
 ## Installation
 
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv sync
 ```
 
@@ -14,7 +14,7 @@ uv sync
 For convenience, you can install `lmgmt` globally and enable tab completion:
 
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv tool install --editable .
 lmgmt --install-completion
 ```

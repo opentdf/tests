@@ -42,11 +42,11 @@ uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
 
 The `lmgmt` tool provides a type-safe interface for managing the test environment with error handling and health checks.
 
-**Location**: `tests/xtest/lmgmt/`
+**Location**: `tests/lmgmt/`
 
 **Quick Start**:
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv sync  # First time only
 
 # Start all services
@@ -79,7 +79,7 @@ uv run lmgmt down
 - `lmgmt provision` - Run provisioning
 - `lmgmt clean` - Clean generated files
 
-See `tests/xtest/lmgmt/README.md` for full documentation.
+See `tests/lmgmt/README.md` for full documentation.
 
 ## Local Test Environment
 
@@ -88,7 +88,7 @@ The local test environment can be managed using `lmgmt`
 ### Quick Start with lmgmt (Recommended)
 
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 
 # Start all services
 uv run lmgmt up
@@ -109,7 +109,7 @@ uv run lmgmt down --clean
 Use `lmgmt` for all environment management:
 
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 
 # Start/stop environment
 uv run lmgmt up                    # Start all services
@@ -217,7 +217,7 @@ yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
 
 # Restart platform using lmgmt (recommended)
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt restart platform
 
 # Or restart manually
@@ -292,7 +292,7 @@ curl http://localhost:8080/healthz
 ### Step 4: Check Service Logs
 ```bash
 # Using lmgmt (recommended)
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt logs platform -f          # Follow platform logs
 uv run lmgmt logs kas-alpha -f         # Follow KAS logs
 uv run lmgmt logs --grep "error" -f    # Filter for errors
@@ -344,7 +344,7 @@ ls -la dist/main/cli.sh
 
 ```bash
 # Restart platform after changes using lmgmt (recommended)
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt restart platform
 
 # Or manually
@@ -366,13 +366,13 @@ go run ./service start
 
 **For new automation**:
 - Extend the `lmgmt` Python CLI tool instead of creating new shell scripts
-- See `tests/xtest/lmgmt/README.md` for architecture and development guide
+- See `tests/lmgmt/README.md` for architecture and development guide
 - The lmgmt codebase uses Python with Pydantic for type safety and better error handling
 
 **For testing changes**:
 ```bash
 # Test the full workflow with lmgmt
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt down
 uv run lmgmt up
 
@@ -403,7 +403,7 @@ uv run lmgmt logs -f
 
 ### Full Environment Restart with lmgmt (Recommended)
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 
 # Stop and restart everything
 uv run lmgmt down
@@ -416,7 +416,7 @@ uv run lmgmt up
 
 ### Service-Specific Restart with lmgmt
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 
 # Restart platform
 uv run lmgmt restart platform
@@ -445,13 +445,13 @@ cd platform && docker compose down 2>/dev/null || true
 sleep 5
 
 # Restart everything
-cd tests/xtest/lmgmt && uv run lmgmt up
+cd tests/lmgmt && uv run lmgmt up
 ```
 
 ### Platform Only Restart
 ```bash
 # Using lmgmt (recommended)
-cd tests/xtest/lmgmt && uv run lmgmt restart platform
+cd tests/lmgmt && uv run lmgmt restart platform
 
 # Via tmux session (if using scripts)
 tmux attach -t xtest
@@ -470,7 +470,7 @@ go run ./service start
 ### Individual KAS Restart
 ```bash
 # Using lmgmt (recommended)
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt restart kas-alpha
 uv run lmgmt restart kas-km1
 
@@ -492,7 +492,7 @@ tmux attach -t xtest
 ### Docker Services Restart
 ```bash
 # Using lmgmt (recommended)
-cd tests/xtest/lmgmt && uv run lmgmt restart docker
+cd tests/lmgmt && uv run lmgmt restart docker
 
 # Or via tmux window 8 (docker logs)
 tmux attach -t xtest
@@ -501,7 +501,7 @@ Ctrl-B 8  # Navigate to docker window
 
 ### Cleanup
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt clean              # Clean logs and configs
 uv run lmgmt clean --keep-logs  # Clean only configs
 ```
@@ -519,7 +519,7 @@ uv run lmgmt clean --keep-logs  # Clean only configs
 
 ### Service Management with lmgmt (Recommended)
 ```bash
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 
 # Start/stop environment
 uv run lmgmt up
@@ -595,7 +595,7 @@ q              # Exit scroll mode
 ### Troubleshooting
 ```bash
 # Check service status
-cd tests/xtest/lmgmt
+cd tests/lmgmt
 uv run lmgmt status         # See what's running
 uv run lmgmt ls --all       # List all services
 
@@ -629,7 +629,7 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 ### Preferred Workflow
 
 1. **Use lmgmt for environment management** - It provides better error handling, health checks, and logs
-2. **Start environment**: `cd tests/xtest/lmgmt && uv run lmgmt up`
+2. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
 3. **Check status**: `uv run lmgmt status`
 4. **View logs**: `uv run lmgmt logs -f`
 5. **Run tests**: `uv run pytest --sdks go -v` from xtest directory

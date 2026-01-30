@@ -12,17 +12,21 @@ from lmgmt.config.ports import Ports
 
 
 def _find_xtest_root() -> Path:
-    """Find the xtest root directory by walking up from this file."""
+    """Find the xtest/tests root directory by walking up from this file."""
     current = Path(__file__).resolve()
     while current != current.parent:
+        # Check if we're in the lmgmt package within tests
+        if (current / "lmgmt").exists() and current.name == "tests":
+            return current
+        # Legacy: check for xtest directory
         if (current / "conftest.py").exists() and current.name == "xtest":
             return current
         # Also check if we're in the lmgmt package within xtest
         if (current / "lmgmt").exists() and (current.parent / "conftest.py").exists():
             return current.parent
         current = current.parent
-    # Fallback to assuming we're in tests/xtest/lmgmt
-    return Path(__file__).resolve().parent.parent.parent.parent.parent
+    # Fallback to assuming we're in tests/lmgmt
+    return Path(__file__).resolve().parent.parent.parent.parent
 
 
 def _find_platform_dir(xtest_root: Path) -> Path:
