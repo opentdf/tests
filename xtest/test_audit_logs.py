@@ -23,7 +23,7 @@ from audit_logs import (
     AuditLogAsserter,
     AuditLogCollector,
     LogEntry,
-    ParsedAuditEvent,
+    ParsedAuditEvent,  # noqa: F401 - Used in TestParsedAuditEvent class
 )
 
 
@@ -442,9 +442,7 @@ class TestParsedAuditEvent:
 
         # Should match with correct criteria
         assert event.matches_policy_crud(result="success", action_type="create")
-        assert event.matches_policy_crud(
-            result="success", object_type="namespace"
-        )
+        assert event.matches_policy_crud(result="success", object_type="namespace")
         assert event.matches_policy_crud(result="success", object_id="ns-abc")
         # Should not match with wrong criteria
         assert not event.matches_policy_crud(result="failure")
@@ -500,7 +498,10 @@ class TestAuditLogAsserterEnhanced:
                             },
                             "action": {"type": "rewrap", "result": "success"},
                             "actor": {"id": "actor-1", "attributes": []},
-                            "eventMetaData": {"keyID": "key-1", "algorithm": "AES-256-GCM"},
+                            "eventMetaData": {
+                                "keyID": "key-1",
+                                "algorithm": "AES-256-GCM",
+                            },
                             "clientInfo": {"platform": "kas"},
                             "requestId": "req-1",
                         },
