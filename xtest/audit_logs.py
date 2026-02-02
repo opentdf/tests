@@ -7,14 +7,15 @@ threads tailing log files and buffered in memory for fast access.
 Usage:
     def test_rewrap_logged(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
         ct_file = encrypt_sdk.encrypt(pt_file, ...)
-        audit_logs.mark("before_decrypt")
+        mark = audit_logs.mark("before_decrypt")
         decrypt_sdk.decrypt(ct_file, ...)
-        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark="before_decrypt")
+        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
 """
 
 import logging
 import re
 import threading
+import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -81,6 +82,7 @@ class AuditLogCollector:
         self.log_files = log_files
         self._buffer: deque[LogEntry] = deque(maxlen=self.MAX_BUFFER_SIZE)
         self._marks: dict[str, datetime] = {}
+        self._mark_counter = 0
         self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
         self._disabled = False
@@ -184,19 +186,23 @@ class AuditLogCollector:
 
         return logs
 
-    def mark(self, label: str) -> datetime:
+    def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation with log entries.
 
+        Automatically generates a unique mark name by appending a counter suffix.
+
         Args:
-            label: Name for this timestamp (e.g., 'before_decrypt')
+            label: Base name for this timestamp (e.g., 'before_decrypt')
 
         Returns:
-            The marked timestamp
+            The unique mark name that was created
         """
+        self._mark_counter += 1
+        unique_label = f"{label}_{self._mark_counter}"
         now = datetime.now()
-        self._marks[label] = now
-        logger.debug(f"Marked timestamp '{label}' at {now}")
-        return now
+        self._marks[unique_label] = now
+        logger.debug(f"Marked timestamp '{unique_label}' at {now}")
+        return unique_label
 
     def get_mark(self, label: str) -> datetime | None:
         """Retrieve a previously marked timestamp.
@@ -301,17 +307,20 @@ class AuditLogAsserter:
         """
         self._collector = collector
 
-    def mark(self, label: str) -> datetime:
+    def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation.
 
+        Automatically generates a unique mark name by appending a counter suffix.
+
         Args:
-            label: Name for this timestamp
+            label: Base name for this timestamp
 
         Returns:
-            The marked timestamp
+            The unique mark name that was created
         """
         if not self._collector or self._collector._disabled:
-            return datetime.now()
+            # Generate a fake unique mark for disabled collectors
+            return f"{label}_noop"
         return self._collector.mark(label)
 
     def assert_contains(
@@ -319,6 +328,7 @@ class AuditLogAsserter:
         pattern: str | re.Pattern,
         min_count: int = 1,
         since_mark: str | None = None,
+        timeout: float = 5.0,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
@@ -326,6 +336,7 @@ class AuditLogAsserter:
             pattern: Regex pattern or substring to search for
             min_count: Minimum number of occurrences (default: 1)
             since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait for pattern in seconds (default: 5.0)
 
         Returns:
             Matching log entries
@@ -341,20 +352,38 @@ class AuditLogAsserter:
             return []
 
         since = self._resolve_since(since_mark)
-        logs = self._collector.get_logs(since=since)
 
         if isinstance(pattern, str):
             regex = re.compile(pattern, re.IGNORECASE)
         else:
             regex = pattern
 
-        matching = [log for log in logs if regex.search(log.raw_line)]
+        # Wait up to timeout for pattern to appear
+        start_time = time.time()
+        matching: list[LogEntry] = []
+        logs: list[LogEntry] = []
 
+        while time.time() - start_time < timeout:
+            logs = self._collector.get_logs(since=since)
+            matching = [log for log in logs if regex.search(log.raw_line)]
+
+            count = len(matching)
+            if count >= min_count:
+                logger.debug(
+                    f"Found {count} matches for pattern '{pattern}' "
+                    f"after {time.time() - start_time:.3f}s"
+                )
+                return matching
+
+            # Sleep briefly before checking again
+            time.sleep(0.1)
+
+        # Timeout expired, raise error if we don't have enough matches
         count = len(matching)
         if count < min_count:
             self._raise_assertion_error(
                 f"Expected pattern '{pattern}' to appear at least {min_count} time(s), "
-                f"but found {count} occurrence(s).",
+                f"but found {count} occurrence(s) after waiting {timeout}s.",
                 matching,
                 logs,
             )
@@ -381,6 +410,113 @@ class AuditLogAsserter:
                 raise ValueError(f"Unknown timestamp mark: {since_mark}")
             return since
         return None
+
+    def assert_decision(
+        self,
+        result: str,
+        attr_fqn: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+    ) -> list[LogEntry]:
+        """Assert on authorization decision audit log entries.
+
+        Looks for audit log entries with:
+        - level=AUDIT
+        - msg=decision
+        - audit.action.result=<result>
+        - Optionally, the presence of an attribute FQN
+
+        Args:
+            result: Expected decision result ('failure' or 'success')
+            attr_fqn: Optional attribute FQN that should appear in the log
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+
+        Returns:
+            Matching log entries
+
+        Raises:
+            AssertionError: If constraints not met
+        """
+        # Build pattern to match decision audit logs
+        # Pattern: level=AUDIT ... msg=decision ... audit.action.result=<result>
+        pattern_parts = [
+            r"level=AUDIT",
+            r"msg=decision",
+            rf"audit\.action\.result={result}",
+        ]
+
+        # Combine into a pattern that matches all parts (in any order on the line)
+        # Use lookahead assertions to match all parts regardless of order
+        pattern = "".join(f"(?=.*{part})" for part in pattern_parts)
+
+        matches = self.assert_contains(
+            pattern, min_count=min_count, since_mark=since_mark
+        )
+
+        # If attr_fqn is specified, verify it appears in the matching logs
+        if attr_fqn and matches:
+            attr_matches = [m for m in matches if attr_fqn in m.raw_line]
+            if len(attr_matches) < min_count:
+                self._raise_assertion_error(
+                    f"Expected attribute FQN '{attr_fqn}' in decision audit logs, "
+                    f"but found only {len(attr_matches)} matching entries (need {min_count}).",
+                    attr_matches,
+                    matches,
+                )
+            return attr_matches
+
+        return matches
+
+    def assert_decision_failure(
+        self,
+        attr_fqn: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+    ) -> list[LogEntry]:
+        """Assert a failed authorization decision was logged.
+
+        Convenience method for assert_decision(result='failure', ...).
+
+        Args:
+            attr_fqn: Optional attribute FQN that should appear in the log
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+
+        Returns:
+            Matching log entries
+        """
+        return self.assert_decision(
+            result="failure",
+            attr_fqn=attr_fqn,
+            min_count=min_count,
+            since_mark=since_mark,
+        )
+
+    def assert_decision_success(
+        self,
+        attr_fqn: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+    ) -> list[LogEntry]:
+        """Assert a successful authorization decision was logged.
+
+        Convenience method for assert_decision(result='success', ...).
+
+        Args:
+            attr_fqn: Optional attribute FQN that should appear in the log
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+
+        Returns:
+            Matching log entries
+        """
+        return self.assert_decision(
+            result="success",
+            attr_fqn=attr_fqn,
+            min_count=min_count,
+            since_mark=since_mark,
+        )
 
     def _raise_assertion_error(
         self,

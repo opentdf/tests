@@ -11,7 +11,6 @@ Domain-specific fixtures are organized in the fixtures/ package:
 - fixtures.assertions: TDF assertion fixtures
 - fixtures.obligations: Obligation and trigger fixtures
 - fixtures.keys: Key management fixtures
-- fixtures.audit: Audit log collection and assertion fixtures
 """
 
 import json
@@ -60,19 +59,39 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
-        "--large",
-        action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
+        "--audit-log-dir",
+        help="directory to write audit logs on test failure (default: tmp/audit-logs)",
+        type=Path,
     )
     parser.addoption(
-        "--sdks",
-        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
+        "--audit-log-services",
+        help="comma-separated list of docker compose services to monitor for audit logs",
+        type=list[str],
+    )
+    parser.addoption(
+        "--containers",
+        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
+        type=is_type_or_list_of_types(tdfs.container_type),
     )
     parser.addoption(
         "--focus",
         help="skips tests which don't use the requested sdk",
         type=is_type_or_list_of_types(tdfs.focus_type),
+    )
+    parser.addoption(
+        "--large",
+        action="store_true",
+        help="generate a large (greater than 4 GiB) file for testing",
+    )
+    parser.addoption(
+        "--no-audit-logs",
+        action="store_true",
+        help="disable automatic KAS audit log collection",
+    )
+    parser.addoption(
+        "--sdks",
+        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
+        type=is_type_or_list_of_types(tdfs.sdk_type),
     )
     parser.addoption(
         "--sdks-decrypt",
@@ -83,24 +102,6 @@ def pytest_addoption(parser: pytest.Parser):
         "--sdks-encrypt",
         help="select which sdks to run for encrypt only",
         type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
-        type=is_type_or_list_of_types(tdfs.container_type),
-    )
-    parser.addoption(
-        "--no-audit-logs",
-        action="store_true",
-        help="disable automatic KAS audit log collection",
-    )
-    parser.addoption(
-        "--audit-log-services",
-        help="comma-separated list of docker compose services to monitor for audit logs",
-    )
-    parser.addoption(
-        "--audit-log-dir",
-        help="directory to write audit logs on test failure (default: tmp/audit-logs)",
     )
 
 

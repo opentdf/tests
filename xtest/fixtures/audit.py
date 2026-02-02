@@ -7,9 +7,9 @@ assert on log contents.
 Example:
     def test_rewrap(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
         ct_file = encrypt_sdk.encrypt(pt_file, ...)
-        audit_logs.mark("before_decrypt")
+        mark = audit_logs.mark("before_decrypt")
         decrypt_sdk.decrypt(ct_file, ...)
-        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark="before_decrypt")
+        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
 """
 
 import logging
@@ -173,12 +173,12 @@ def audit_logs(
     Usage:
         def test_rewrap(encrypt_sdk, decrypt_sdk, pt_file, tmp_dir, audit_logs):
             ct_file = encrypt_sdk.encrypt(pt_file, ...)
-            audit_logs.mark("before_decrypt")
+            mark = audit_logs.mark("before_decrypt")
             decrypt_sdk.decrypt(ct_file, ...)
             audit_logs.assert_contains(
                 r"rewrap.*200",
                 min_count=1,
-                since_mark="before_decrypt"
+                since_mark=mark
             )
 
     Opt-out for specific test:

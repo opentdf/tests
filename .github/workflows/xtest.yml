@@ -561,8 +561,18 @@ jobs:
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --audit-log-dir=test-results/audit-logs --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
+        run: >-
+          uv run pytest
+          -ra
+          -v
+          --numprocesses auto
+          --dist loadscope
+          --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
+          --self-contained-html
+          --audit-log-dir test-results/audit-logs
+          --sdks-encrypt "${ENCRYPT_SDK}"
+          --focus "$FOCUS_SDK"
+          test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"

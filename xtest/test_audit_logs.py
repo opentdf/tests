@@ -47,11 +47,19 @@ class TestAuditLogCollector:
         collector = AuditLogCollector(platform_dir=tmp_path)
 
         before = datetime.now()
-        marked = collector.mark("test_mark")
+        unique_mark = collector.mark("test_mark")
         after = datetime.now()
 
-        assert before <= marked <= after
-        assert collector.get_mark("test_mark") == marked
+        # Mark should return a unique name with counter suffix
+        assert unique_mark == "test_mark_1"
+
+        # Get the timestamp for the unique mark
+        marked_time = collector.get_mark(unique_mark)
+        assert marked_time is not None
+        assert before <= marked_time <= after
+
+        # Original label without counter should not exist
+        assert collector.get_mark("test_mark") is None
         assert collector.get_mark("nonexistent") is None
 
 
@@ -91,16 +99,14 @@ class TestAuditLogAsserter:
         """Test assert_contains with timestamp mark."""
         asserter = AuditLogAsserter(collector_with_logs)
 
-        asserter.mark("after_existing_logs")
+        mark = asserter.mark("after_existing_logs")
 
         now = datetime.now()
         collector_with_logs._buffer.append(
             LogEntry(now, '{"msg": "new_log_after_mark"}', "kas")
         )
 
-        matches = asserter.assert_contains(
-            r"new_log_after_mark", since_mark="after_existing_logs"
-        )
+        matches = asserter.assert_contains(r"new_log_after_mark", since_mark=mark)
         assert len(matches) == 1
 
     def test_asserter_with_disabled_collector(self, tmp_path: Path) -> None:
