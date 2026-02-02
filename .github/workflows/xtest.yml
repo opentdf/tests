@@ -566,7 +566,7 @@ jobs:
           -ra
           -v
           --numprocesses auto
-          --dist worksteal
+          --dist loadscope
           --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
           --self-contained-html
           --audit-log-dir test-results/audit-logs
