@@ -23,7 +23,6 @@ import tdfs
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
 
-
 # ============================================================================
 # Rewrap Audit Tests
 # ============================================================================
@@ -159,8 +158,7 @@ class TestRewrapAudit:
         # Check manifest to verify we have 2 KAOs
         manifest = tdfs.manifest(ct_file)
         if any(
-            kao.type == "ec-wrapped"
-            for kao in manifest.encryptionInformation.keyAccess
+            kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
         ):
             tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
 
@@ -378,9 +376,7 @@ class TestEdgeCases:
                 import base64
 
                 altered = base64.b64encode(b"tampered" + base64.b64decode(pb)[:8])
-                manifest.encryptionInformation.keyAccess[0].policyBinding = str(
-                    altered
-                )
+                manifest.encryptionInformation.keyAccess[0].policyBinding = str(altered)
             return manifest
 
         tampered_file = tdfs.update_manifest(
