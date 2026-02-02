@@ -9,18 +9,291 @@ Usage:
         ct_file = encrypt_sdk.encrypt(pt_file, ...)
         mark = audit_logs.mark("before_decrypt")
         decrypt_sdk.decrypt(ct_file, ...)
-        audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
+        audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
+
+    def test_policy_crud(otdfctl, audit_logs):
+        mark = audit_logs.mark("before_create")
+        ns = otdfctl.namespace_create(name)
+        audit_logs.assert_policy_create(
+            object_type="namespace",
+            object_id=ns.id,
+            since_mark=mark,
+        )
 """
 
+from __future__ import annotations
+
+import json
 import logging
 import re
 import threading
 import time
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Literal
 
 logger = logging.getLogger("xtest")
+
+
+# Audit event constants from platform/service/logger/audit/constants.go
+OBJECT_TYPES = frozenset(
+    {
+        "subject_mapping",
+        "resource_mapping",
+        "attribute_definition",
+        "attribute_value",
+        "obligation_definition",
+        "obligation_value",
+        "obligation_trigger",
+        "namespace",
+        "condition_set",
+        "kas_registry",
+        "kas_attribute_namespace_assignment",
+        "kas_attribute_definition_assignment",
+        "kas_attribute_value_assignment",
+        "key_object",
+        "entity_object",
+        "resource_mapping_group",
+        "public_key",
+        "action",
+        "registered_resource",
+        "registered_resource_value",
+        "key_management_provider_config",
+        "kas_registry_keys",
+        "kas_attribute_definition_key_assignment",
+        "kas_attribute_value_key_assignment",
+        "kas_attribute_namespace_key_assignment",
+        "namespace_certificate",
+    }
+)
+
+ACTION_TYPES = frozenset({"create", "read", "update", "delete", "rewrap", "rotate"})
+
+ACTION_RESULTS = frozenset(
+    {"success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"}
+)
+
+# Audit log message verbs
+VERB_DECISION = "decision"
+VERB_POLICY_CRUD = "policy crud"
+VERB_REWRAP = "rewrap"
+
+
+@dataclass
+class ParsedAuditEvent:
+    """Structured representation of a parsed audit log event.
+
+    This class extracts and provides typed access to audit event fields
+    from the JSON log structure.
+    """
+
+    timestamp: str
+    """RFC3339 timestamp from the audit event."""
+
+    level: str
+    """Log level (typically 'AUDIT')."""
+
+    msg: str
+    """Audit verb: 'rewrap', 'policy crud', or 'decision'."""
+
+    audit: dict[str, Any]
+    """The full audit payload from the log entry."""
+
+    raw_entry: LogEntry
+    """The original LogEntry this was parsed from."""
+
+    @property
+    def action_type(self) -> str | None:
+        """Get the action type (create, read, update, delete, rewrap, rotate)."""
+        action = self.audit.get("action", {})
+        return action.get("type")
+
+    @property
+    def action_result(self) -> str | None:
+        """Get the action result (success, failure, error, cancel, etc.)."""
+        action = self.audit.get("action", {})
+        return action.get("result")
+
+    @property
+    def object_type(self) -> str | None:
+        """Get the object type (namespace, attribute_definition, key_object, etc.)."""
+        obj = self.audit.get("object", {})
+        return obj.get("type")
+
+    @property
+    def object_id(self) -> str | None:
+        """Get the object ID (UUID or composite ID)."""
+        obj = self.audit.get("object", {})
+        return obj.get("id")
+
+    @property
+    def object_name(self) -> str | None:
+        """Get the object name if present."""
+        obj = self.audit.get("object", {})
+        return obj.get("name")
+
+    @property
+    def object_attrs(self) -> list[str]:
+        """Get the attribute FQNs from the object attributes."""
+        obj = self.audit.get("object", {})
+        attrs = obj.get("attributes", {})
+        return attrs.get("attrs", [])
+
+    @property
+    def actor_id(self) -> str | None:
+        """Get the actor ID."""
+        actor = self.audit.get("actor", {})
+        return actor.get("id")
+
+    @property
+    def request_id(self) -> str | None:
+        """Get the request ID."""
+        return self.audit.get("requestId")
+
+    @property
+    def event_metadata(self) -> dict[str, Any]:
+        """Get the event metadata dictionary."""
+        return self.audit.get("eventMetaData", {})
+
+    @property
+    def client_platform(self) -> str | None:
+        """Get the client platform (kas, policy, authorization, authorization.v2)."""
+        client = self.audit.get("clientInfo", {})
+        return client.get("platform")
+
+    @property
+    def key_id(self) -> str | None:
+        """Get the key ID from rewrap event metadata."""
+        return self.event_metadata.get("keyID")
+
+    @property
+    def algorithm(self) -> str | None:
+        """Get the algorithm from rewrap event metadata."""
+        return self.event_metadata.get("algorithm")
+
+    @property
+    def tdf_format(self) -> str | None:
+        """Get the TDF format from rewrap event metadata."""
+        return self.event_metadata.get("tdfFormat")
+
+    @property
+    def policy_binding(self) -> str | None:
+        """Get the policy binding from rewrap event metadata."""
+        return self.event_metadata.get("policyBinding")
+
+    @property
+    def cancellation_error(self) -> str | None:
+        """Get the cancellation error if event was cancelled."""
+        return self.event_metadata.get("cancellation_error")
+
+    @property
+    def original(self) -> dict[str, Any] | None:
+        """Get the original state for policy CRUD events."""
+        return self.audit.get("original")
+
+    @property
+    def updated(self) -> dict[str, Any] | None:
+        """Get the updated state for policy CRUD events."""
+        return self.audit.get("updated")
+
+    def matches_rewrap(
+        self,
+        result: str | None = None,
+        policy_uuid: str | None = None,
+        key_id: str | None = None,
+        algorithm: str | None = None,
+        attr_fqns: list[str] | None = None,
+    ) -> bool:
+        """Check if this event matches rewrap criteria.
+
+        Args:
+            result: Expected action result (success, failure, error, cancel)
+            policy_uuid: Expected policy UUID (object ID)
+            key_id: Expected key ID from metadata
+            algorithm: Expected algorithm from metadata
+            attr_fqns: Expected attribute FQNs (all must be present)
+
+        Returns:
+            True if event matches all specified criteria
+        """
+        if self.msg != VERB_REWRAP:
+            return False
+        if result is not None and self.action_result != result:
+            return False
+        if policy_uuid is not None and self.object_id != policy_uuid:
+            return False
+        if key_id is not None and self.key_id != key_id:
+            return False
+        if algorithm is not None and self.algorithm != algorithm:
+            return False
+        if attr_fqns is not None:
+            event_attrs = set(self.object_attrs)
+            if not all(fqn in event_attrs for fqn in attr_fqns):
+                return False
+        return True
+
+    def matches_policy_crud(
+        self,
+        result: str | None = None,
+        action_type: str | None = None,
+        object_type: str | None = None,
+        object_id: str | None = None,
+    ) -> bool:
+        """Check if this event matches policy CRUD criteria.
+
+        Args:
+            result: Expected action result (success, failure, error, cancel)
+            action_type: Expected action type (create, read, update, delete)
+            object_type: Expected object type (namespace, attribute_definition, etc.)
+            object_id: Expected object ID
+
+        Returns:
+            True if event matches all specified criteria
+        """
+        if self.msg != VERB_POLICY_CRUD:
+            return False
+        if result is not None and self.action_result != result:
+            return False
+        if action_type is not None and self.action_type != action_type:
+            return False
+        if object_type is not None and self.object_type != object_type:
+            return False
+        if object_id is not None and self.object_id != object_id:
+            return False
+        return True
+
+    def matches_decision(
+        self,
+        result: str | None = None,
+        entity_id: str | None = None,
+        action_name: str | None = None,
+    ) -> bool:
+        """Check if this event matches decision criteria.
+
+        Args:
+            result: Expected action result (success, failure)
+            entity_id: Expected entity/actor ID
+            action_name: Expected action name (from object name or ID)
+
+        Returns:
+            True if event matches all specified criteria
+        """
+        if self.msg != VERB_DECISION:
+            return False
+        if result is not None and self.action_result != result:
+            return False
+        if entity_id is not None and self.actor_id != entity_id:
+            return False
+        if action_name is not None:
+            # Action name appears in object ID as "entityId-actionName"
+            # or in object name as "decisionRequest-actionName"
+            obj_id = self.object_id or ""
+            obj_name = self.object_name or ""
+            if action_name not in obj_id and action_name not in obj_name:
+                return False
+        return True
 
 
 class LogEntry:
@@ -517,6 +790,503 @@ class AuditLogAsserter:
             min_count=min_count,
             since_mark=since_mark,
         )
+
+    # ========================================================================
+    # Structured audit event assertion methods
+    # ========================================================================
+
+    def parse_audit_log(self, entry: LogEntry) -> ParsedAuditEvent | None:
+        """Parse a log entry into a structured audit event.
+
+        Attempts to parse JSON log entries that contain audit events.
+        Returns None if the entry is not a valid audit log.
+
+        Args:
+            entry: The log entry to parse
+
+        Returns:
+            ParsedAuditEvent if successfully parsed, None otherwise
+        """
+        try:
+            data = json.loads(entry.raw_line)
+        except json.JSONDecodeError:
+            return None
+
+        # Check for required audit log fields
+        if "level" not in data or "msg" not in data or "audit" not in data:
+            return None
+
+        # Verify it's an AUDIT level log
+        if data.get("level") != "AUDIT":
+            return None
+
+        # Verify msg is one of the known audit verbs
+        msg = data.get("msg", "")
+        if msg not in (VERB_DECISION, VERB_POLICY_CRUD, VERB_REWRAP):
+            return None
+
+        return ParsedAuditEvent(
+            timestamp=data.get("time", ""),
+            level=data.get("level", ""),
+            msg=msg,
+            audit=data.get("audit", {}),
+            raw_entry=entry,
+        )
+
+    def get_parsed_audit_logs(
+        self,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Get all parsed audit events from collected logs.
+
+        Args:
+            since_mark: Only return logs since this mark
+            timeout: Maximum time to wait for logs
+
+        Returns:
+            List of parsed audit events
+        """
+        if not self._collector or self._collector._disabled:
+            return []
+
+        since = self._resolve_since(since_mark)
+
+        # Wait a bit for logs to arrive
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            logs = self._collector.get_logs(since=since)
+            parsed = []
+            for entry in logs:
+                event = self.parse_audit_log(entry)
+                if event:
+                    parsed.append(event)
+            if parsed:
+                return parsed
+            time.sleep(0.1)
+
+        return []
+
+    def assert_rewrap(
+        self,
+        result: Literal["success", "failure", "error", "cancel"],
+        policy_uuid: str | None = None,
+        key_id: str | None = None,
+        algorithm: str | None = None,
+        attr_fqns: list[str] | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert on rewrap audit log entries with structured field validation.
+
+        Looks for audit log entries with:
+        - msg='rewrap'
+        - action.result=<result>
+        - Optionally matching policy_uuid, key_id, algorithm, attr_fqns
+
+        Args:
+            result: Expected action result ('success', 'failure', 'error', 'cancel')
+            policy_uuid: Expected policy UUID (object.id)
+            key_id: Expected key ID from eventMetaData.keyID
+            algorithm: Expected algorithm from eventMetaData.algorithm
+            attr_fqns: Expected attribute FQNs (all must be present)
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait in seconds (default: 5.0)
+
+        Returns:
+            List of matching ParsedAuditEvent objects
+
+        Raises:
+            AssertionError: If constraints not met
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning(
+                f"Audit log assertion skipped (collection disabled). "
+                f"Would have asserted rewrap result={result}"
+            )
+            return []
+
+        since = self._resolve_since(since_mark)
+
+        start_time = time.time()
+        matching: list[ParsedAuditEvent] = []
+        all_logs: list[LogEntry] = []
+
+        while time.time() - start_time < timeout:
+            all_logs = self._collector.get_logs(since=since)
+            matching = []
+
+            for entry in all_logs:
+                event = self.parse_audit_log(entry)
+                if event and event.matches_rewrap(
+                    result=result,
+                    policy_uuid=policy_uuid,
+                    key_id=key_id,
+                    algorithm=algorithm,
+                    attr_fqns=attr_fqns,
+                ):
+                    matching.append(event)
+
+            if len(matching) >= min_count:
+                logger.debug(
+                    f"Found {len(matching)} rewrap events with result={result} "
+                    f"after {time.time() - start_time:.3f}s"
+                )
+                return matching
+
+            time.sleep(0.1)
+
+        # Build detailed error message
+        criteria = [f"result={result}"]
+        if policy_uuid:
+            criteria.append(f"policy_uuid={policy_uuid}")
+        if key_id:
+            criteria.append(f"key_id={key_id}")
+        if algorithm:
+            criteria.append(f"algorithm={algorithm}")
+        if attr_fqns:
+            criteria.append(f"attr_fqns={attr_fqns}")
+
+        self._raise_assertion_error(
+            f"Expected at least {min_count} rewrap audit event(s) matching "
+            f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
+            [m.raw_entry for m in matching],
+            all_logs,
+        )
+        return []  # Never reached, but satisfies type checker
+
+    def assert_rewrap_success(
+        self,
+        policy_uuid: str | None = None,
+        key_id: str | None = None,
+        algorithm: str | None = None,
+        attr_fqns: list[str] | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a successful rewrap was logged.
+
+        Convenience method for assert_rewrap(result='success', ...).
+        """
+        return self.assert_rewrap(
+            result="success",
+            policy_uuid=policy_uuid,
+            key_id=key_id,
+            algorithm=algorithm,
+            attr_fqns=attr_fqns,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_rewrap_failure(
+        self,
+        policy_uuid: str | None = None,
+        key_id: str | None = None,
+        algorithm: str | None = None,
+        attr_fqns: list[str] | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a failed rewrap was logged.
+
+        Convenience method for assert_rewrap(result='failure', ...).
+        Note: Use 'error' result for errors during rewrap processing.
+        """
+        return self.assert_rewrap(
+            result="failure",
+            policy_uuid=policy_uuid,
+            key_id=key_id,
+            algorithm=algorithm,
+            attr_fqns=attr_fqns,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_rewrap_error(
+        self,
+        policy_uuid: str | None = None,
+        key_id: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a rewrap error was logged.
+
+        Convenience method for assert_rewrap(result='error', ...).
+        """
+        return self.assert_rewrap(
+            result="error",
+            policy_uuid=policy_uuid,
+            key_id=key_id,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_rewrap_cancelled(
+        self,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a cancelled rewrap was logged.
+
+        Convenience method for assert_rewrap(result='cancel', ...).
+        Cancelled events occur when the request context is cancelled.
+        """
+        return self.assert_rewrap(
+            result="cancel",
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_policy_crud(
+        self,
+        result: Literal["success", "failure", "error", "cancel"],
+        action_type: Literal["create", "read", "update", "delete"] | None = None,
+        object_type: str | None = None,
+        object_id: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert on policy CRUD audit log entries with structured field validation.
+
+        Looks for audit log entries with:
+        - msg='policy crud'
+        - action.result=<result>
+        - Optionally matching action_type, object_type, object_id
+
+        Args:
+            result: Expected action result ('success', 'failure', 'error', 'cancel')
+            action_type: Expected action type ('create', 'read', 'update', 'delete')
+            object_type: Expected object type (e.g., 'namespace', 'attribute_definition')
+            object_id: Expected object ID (UUID)
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait in seconds (default: 5.0)
+
+        Returns:
+            List of matching ParsedAuditEvent objects
+
+        Raises:
+            AssertionError: If constraints not met
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning(
+                f"Audit log assertion skipped (collection disabled). "
+                f"Would have asserted policy crud result={result}"
+            )
+            return []
+
+        since = self._resolve_since(since_mark)
+
+        start_time = time.time()
+        matching: list[ParsedAuditEvent] = []
+        all_logs: list[LogEntry] = []
+
+        while time.time() - start_time < timeout:
+            all_logs = self._collector.get_logs(since=since)
+            matching = []
+
+            for entry in all_logs:
+                event = self.parse_audit_log(entry)
+                if event and event.matches_policy_crud(
+                    result=result,
+                    action_type=action_type,
+                    object_type=object_type,
+                    object_id=object_id,
+                ):
+                    matching.append(event)
+
+            if len(matching) >= min_count:
+                logger.debug(
+                    f"Found {len(matching)} policy crud events with result={result} "
+                    f"after {time.time() - start_time:.3f}s"
+                )
+                return matching
+
+            time.sleep(0.1)
+
+        # Build detailed error message
+        criteria = [f"result={result}"]
+        if action_type:
+            criteria.append(f"action_type={action_type}")
+        if object_type:
+            criteria.append(f"object_type={object_type}")
+        if object_id:
+            criteria.append(f"object_id={object_id}")
+
+        self._raise_assertion_error(
+            f"Expected at least {min_count} policy crud audit event(s) matching "
+            f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
+            [m.raw_entry for m in matching],
+            all_logs,
+        )
+        return []  # Never reached, but satisfies type checker
+
+    def assert_policy_create(
+        self,
+        object_type: str,
+        object_id: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a successful policy create operation was logged.
+
+        Convenience method for assert_policy_crud with action_type='create'.
+
+        Args:
+            object_type: Expected object type (e.g., 'namespace', 'attribute_definition')
+            object_id: Expected object ID (UUID)
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait in seconds (default: 5.0)
+        """
+        return self.assert_policy_crud(
+            result="success",
+            action_type="create",
+            object_type=object_type,
+            object_id=object_id,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_policy_update(
+        self,
+        object_type: str,
+        object_id: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a successful policy update operation was logged.
+
+        Convenience method for assert_policy_crud with action_type='update'.
+        """
+        return self.assert_policy_crud(
+            result="success",
+            action_type="update",
+            object_type=object_type,
+            object_id=object_id,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_policy_delete(
+        self,
+        object_type: str,
+        object_id: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert a successful policy delete operation was logged.
+
+        Convenience method for assert_policy_crud with action_type='delete'.
+        """
+        return self.assert_policy_crud(
+            result="success",
+            action_type="delete",
+            object_type=object_type,
+            object_id=object_id,
+            min_count=min_count,
+            since_mark=since_mark,
+            timeout=timeout,
+        )
+
+    def assert_decision_v2(
+        self,
+        result: Literal["success", "failure"],
+        entity_id: str | None = None,
+        action_name: str | None = None,
+        min_count: int = 1,
+        since_mark: str | None = None,
+        timeout: float = 5.0,
+    ) -> list[ParsedAuditEvent]:
+        """Assert on GetDecision v2 audit log entries.
+
+        Looks for audit log entries with:
+        - msg='decision'
+        - clientInfo.platform='authorization.v2'
+        - action.result=<result>
+        - Optionally matching entity_id, action_name
+
+        Args:
+            result: Expected action result ('success' for permit, 'failure' for deny)
+            entity_id: Expected entity/actor ID
+            action_name: Expected action name
+            min_count: Minimum number of matching entries (default: 1)
+            since_mark: Only check logs since marked timestamp
+            timeout: Maximum time to wait in seconds (default: 5.0)
+
+        Returns:
+            List of matching ParsedAuditEvent objects
+
+        Raises:
+            AssertionError: If constraints not met
+        """
+        if not self._collector or self._collector._disabled:
+            logger.warning(
+                f"Audit log assertion skipped (collection disabled). "
+                f"Would have asserted decision v2 result={result}"
+            )
+            return []
+
+        since = self._resolve_since(since_mark)
+
+        start_time = time.time()
+        matching: list[ParsedAuditEvent] = []
+        all_logs: list[LogEntry] = []
+
+        while time.time() - start_time < timeout:
+            all_logs = self._collector.get_logs(since=since)
+            matching = []
+
+            for entry in all_logs:
+                event = self.parse_audit_log(entry)
+                if event and event.matches_decision(
+                    result=result,
+                    entity_id=entity_id,
+                    action_name=action_name,
+                ):
+                    # Additional check for v2 platform
+                    if event.client_platform == "authorization.v2":
+                        matching.append(event)
+
+            if len(matching) >= min_count:
+                logger.debug(
+                    f"Found {len(matching)} decision v2 events with result={result} "
+                    f"after {time.time() - start_time:.3f}s"
+                )
+                return matching
+
+            time.sleep(0.1)
+
+        # Build detailed error message
+        criteria = [f"result={result}", "platform=authorization.v2"]
+        if entity_id:
+            criteria.append(f"entity_id={entity_id}")
+        if action_name:
+            criteria.append(f"action_name={action_name}")
+
+        self._raise_assertion_error(
+            f"Expected at least {min_count} decision v2 audit event(s) matching "
+            f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
+            [m.raw_entry for m in matching],
+            all_logs,
+        )
+        return []  # Never reached, but satisfies type checker
 
     def _raise_assertion_error(
         self,

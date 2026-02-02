@@ -158,9 +158,9 @@ def test_autoconfigure_one_attribute_standard(
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
-    # Verify rewrap was logged in audit logs
-    audit_logs.assert_contains(
-        r"rewrap",
+    # Verify rewrap was logged with expected attribute FQNs
+    audit_logs.assert_rewrap_success(
+        attr_fqns=attribute_single_kas_grant.value_fqns,
         min_count=1,
         since_mark=mark,
     )
@@ -175,6 +175,7 @@ def test_autoconfigure_two_kas_or_standard(
     kas_url_alpha: str,
     kas_url_beta: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -214,9 +215,17 @@ def test_autoconfigure_two_kas_or_standard(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     rt_file = tmp_dir / f"test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged - for OR policy, SDK only needs one KAS to succeed
+    # so we expect at least 1 rewrap event (may be 2 if SDK tries both)
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
 
 def test_autoconfigure_double_kas_and(
@@ -228,6 +237,7 @@ def test_autoconfigure_double_kas_and(
     kas_url_alpha: str,
     kas_url_beta: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -268,9 +278,17 @@ def test_autoconfigure_double_kas_and(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     rt_file = tmp_dir / f"test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged - for AND policy, SDK must contact both KASes
+    # so we expect 2 rewrap success events
+    audit_logs.assert_rewrap_success(min_count=2, since_mark=mark)
 
 
 def test_autoconfigure_one_attribute_attr_grant(
