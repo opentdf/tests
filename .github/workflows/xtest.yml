@@ -245,6 +245,7 @@ jobs:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
 
       - name: Set up Python 3.14
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
@@ -504,6 +505,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: alpha
           kas-port: 8181
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -514,6 +516,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: beta
           kas-port: 8282
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -524,6 +527,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: gamma
           kas-port: 8383
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -533,8 +537,8 @@ jobs:
         with:
           ec-tdf-enabled: true
           kas-port: 8484
-          key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: delta
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km1)
@@ -546,6 +550,7 @@ jobs:
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: km1
           kas-port: 8585
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km2)
@@ -557,6 +562,7 @@ jobs:
           kas-name: km2
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-port: 8686
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Run attribute based configuration tests
@@ -662,4 +668,4 @@ jobs:
       - name: Success summary
         if: ${{ needs.xct.result == 'success' }}
         run: |-
-          echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"
+           echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"
