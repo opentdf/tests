@@ -31,7 +31,52 @@
 - Tests assume a platform backend is reachable (Docker + Keycloak). Use `xtest/test.env` as a template:
   - `cd xtest && set -a && source test.env && set +a`
 
-## Commit & Pull Request Guidelines
+### Custom pytest Options
+- `--sdks`: Specify which SDKs to test (go, java, js)
+- `--containers`: Specify TDF container types (ztdf, ztdf-ecwrap)
+- `--no-audit-logs`: Disable audit log assertions globally
+- Environment variables:
+  - `PLATFORMURL`: Platform endpoint (default: http://localhost:8080)
+  - `OT_ROOT_KEY`: Root key for key management tests
+  - `SCHEMA_FILE`: Path to manifest schema file
+  - `DISABLE_AUDIT_ASSERTIONS`: Set to `1`, `true`, or `yes` to disable audit log assertions
+
+### Audit Log Assertions
+
+**IMPORTANT**: Audit log assertions are **REQUIRED by default**. Tests will fail during setup if KAS log files are not available.
+
+**Why Required by Default:**
+- Ensures comprehensive test coverage of audit logging functionality
+- Catches regressions in audit event generation
+- Validates clock skew handling between test machine and services
+
+**Disabling Audit Assertions:**
+
+Only disable when:
+- Running tests without services (unit tests only)
+- Debugging non-audit-related issues
+- CI environments where audit logs aren't available
+
+To disable, use either:
+```bash
+# Environment variable (preferred for CI)
+DISABLE_AUDIT_ASSERTIONS=1 uv run pytest --sdks go -v
+
+# CLI flag (preferred for local dev)
+uv run pytest --sdks go --no-audit-logs -v
+```
+
+**Setting Up Log Files:**
+
+Audit log collection requires KAS log files. Set paths via environment variables:
+```bash
+export PLATFORM_LOG_FILE=/path/to/platform.log
+export KAS_ALPHA_LOG_FILE=/path/to/kas-alpha.log
+export KAS_BETA_LOG_FILE=/path/to/kas-beta.log
+# ... etc for kas-gamma, kas-delta, kas-km1, kas-km2
+```
+
+Or ensure services are running with logs in `../../platform/logs/` (auto-discovered).
 
 - Use semantic commit/PR titles (enforced by CI): `feat(xtest): ...`, `fix(vulnerability): ...`, `docs: ...` (types: `fix|feat|chore|docs`; scopes include `xtest`, `vulnerability`, `go`, `java`, `web`, `ci`).
 - DCO sign-off is required: `git commit -s -m "feat(xtest): ..."` (see `CONTRIBUTING.md`).

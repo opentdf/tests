@@ -52,18 +52,28 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
     This session-scoped fixture reads CLI options and environment variables
     to configure audit log collection behavior.
 
+    **IMPORTANT**: Audit log assertions are REQUIRED by default. Tests will
+    fail if log files are not available. Use one of these options to disable:
+
     CLI Options:
         --no-audit-logs: Disable audit log collection globally
         --audit-log-services: Comma-separated list of services to monitor
         --audit-log-dir: Directory for audit logs on failure
 
     Environment Variables:
+        DISABLE_AUDIT_ASSERTIONS: Set to any truthy value to disable (1, true, yes)
         PLATFORM_DIR: Path to platform directory (default: ../../platform)
         PLATFORM_LOG_FILE: Path to main KAS log file
         KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Paths to additional KAS log files
     """
-    # Check if disabled via CLI
-    enabled = not request.config.getoption("--no-audit-logs", default=False)
+    # Check if disabled via CLI or environment variable
+    cli_disabled = request.config.getoption("--no-audit-logs", default=False)
+    env_disabled = os.getenv("DISABLE_AUDIT_ASSERTIONS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    enabled = not (cli_disabled or env_disabled)
 
     # Get platform directory from environment
     platform_dir = Path(os.getenv("PLATFORM_DIR", "../../platform"))
@@ -106,6 +116,10 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
 
     Checks for log file paths set by GitHub Actions or other automation.
     Returns dict mapping service names to log file paths.
+
+    **IMPORTANT**: If audit logs are enabled (default), this will raise an
+    exception if no log files are found. Use DISABLE_AUDIT_ASSERTIONS=1 or
+    --no-audit-logs to skip audit assertions.
 
     Environment Variables:
         PLATFORM_LOG_FILE: Main KAS/platform log
@@ -151,6 +165,22 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
         logger.info(f"Found {len(log_files)} KAS log files for collection")
         return log_files
     else:
+        # If audit logs are enabled, fail hard - tests should not pass without audit assertions
+        if audit_log_config.enabled:
+            error_msg = (
+                "Audit log assertions are REQUIRED but no KAS log files were found.\n"
+                f"Searched locations:\n"
+                f"  - Environment variables: PLATFORM_LOG_FILE, KAS_*_LOG_FILE\n"
+                f"  - Default directory: {audit_log_config.platform_dir / 'logs'}\n"
+                f"\n"
+                f"To disable audit log assertions, use one of:\n"
+                f"  - Environment variable: DISABLE_AUDIT_ASSERTIONS=1\n"
+                f"  - CLI flag: --no-audit-logs\n"
+                f"\n"
+                f"Or ensure services are running with logs in the expected location."
+            )
+            raise FileNotFoundError(error_msg)
+
         logger.debug("No KAS log files found, audit log collection will be disabled")
         return None
 
