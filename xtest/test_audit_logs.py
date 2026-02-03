@@ -615,3 +615,239 @@ class TestAuditLogAsserterEnhanced:
         )
         assert len(events) == 1
         assert events[0].object_id == "ns-uuid-1"
+
+
+class TestClockSkewEstimation:
+    """Tests for clock skew estimation between test machine and services."""
+
+    def test_parse_rfc3339_basic(self) -> None:
+        """Test RFC3339 timestamp parsing."""
+        from audit_logs import parse_rfc3339
+
+        # Test Z suffix (UTC)
+        dt = parse_rfc3339("2024-01-15T10:30:00Z")
+        assert dt is not None
+        assert dt.year == 2024
+        assert dt.month == 1
+        assert dt.day == 15
+        assert dt.hour == 10
+        assert dt.minute == 30
+
+        # Test with microseconds
+        dt = parse_rfc3339("2024-01-15T10:30:00.123456Z")
+        assert dt is not None
+        assert dt.microsecond == 123456
+
+        # Test with explicit timezone
+        dt = parse_rfc3339("2024-01-15T10:30:00+00:00")
+        assert dt is not None
+
+        # Test invalid returns None
+        dt = parse_rfc3339("not a timestamp")
+        assert dt is None
+
+        dt = parse_rfc3339("")
+        assert dt is None
+
+    def test_clock_skew_estimate_properties(self) -> None:
+        """Test ClockSkewEstimate calculations."""
+        from audit_logs import ClockSkewEstimate
+
+        # Empty estimate
+        est = ClockSkewEstimate("test-service")
+        assert est.sample_count == 0
+        assert est.min_skew is None
+        assert est.max_skew is None
+        assert est.mean_skew is None
+        assert est.safe_skew_adjustment() == 0.1  # Default margin
+
+        # Add samples
+        est.samples = [0.5, 1.0, 1.5, 2.0]
+        assert est.sample_count == 4
+        assert est.min_skew == 0.5
+        assert est.max_skew == 2.0
+        assert est.mean_skew == 1.25
+        assert est.median_skew == 1.25
+
+        # Safe adjustment when test machine is ahead (positive skew)
+        # Should return just the confidence margin
+        assert est.safe_skew_adjustment() == 0.1
+
+    def test_clock_skew_estimate_negative_skew(self) -> None:
+        """Test ClockSkewEstimate with negative skew (service ahead)."""
+        from audit_logs import ClockSkewEstimate
+
+        est = ClockSkewEstimate("test-service")
+        # Negative skew means service clock is ahead
+        est.samples = [-0.3, -0.1, 0.1, 0.2]
+        assert est.min_skew == -0.3
+
+        # Safe adjustment should account for negative skew
+        adj = est.safe_skew_adjustment()
+        assert adj >= 0.3 + 0.1  # abs(min_skew) + margin
+
+    def test_clock_skew_estimator_record_and_retrieve(self) -> None:
+        """Test ClockSkewEstimator recording and retrieval."""
+        from datetime import timezone
+
+        from audit_logs import ClockSkewEstimator
+
+        estimator = ClockSkewEstimator()
+
+        # Record some samples
+        collection_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=timezone.utc)
+        event_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+        estimator.record_sample("kas-alpha", collection_time, event_time)
+
+        # Check service-specific estimate
+        est = estimator.get_estimate("kas-alpha")
+        assert est is not None
+        assert est.sample_count == 1
+        assert est.min_skew == 1.0  # 1 second difference
+
+        # Check global estimate
+        global_est = estimator.get_global_estimate()
+        assert global_est.sample_count == 1
+
+        # Add sample from different service
+        estimator.record_sample(
+            "platform",
+            datetime(2024, 1, 15, 10, 30, 2, tzinfo=timezone.utc),
+            datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
+        )
+
+        global_est = estimator.get_global_estimate()
+        assert global_est.sample_count == 2
+        assert global_est.min_skew == 1.0
+        assert global_est.max_skew == 2.0
+
+    def test_parsed_audit_event_skew_properties(self) -> None:
+        """Test ParsedAuditEvent skew-related properties."""
+        from audit_logs import AuditLogAsserter, LogEntry
+
+        # Create a log entry with known timestamps
+        now = datetime.now()
+        raw_line = json.dumps(
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "level": "AUDIT",
+                "msg": "rewrap",
+                "audit": {
+                    "object": {"type": "key_object", "id": "test-id"},
+                    "action": {"type": "rewrap", "result": "success"},
+                    "actor": {"id": "test-actor"},
+                    "clientInfo": {"platform": "kas"},
+                    "requestId": "req-1",
+                },
+            }
+        )
+        entry = LogEntry(timestamp=now, raw_line=raw_line, service_name="kas")
+
+        asserter = AuditLogAsserter(None)
+        event = asserter.parse_audit_log(entry, record_skew=False)
+
+        assert event is not None
+        assert event.event_time is not None
+        assert event.event_time.year == 2024
+        assert event.collection_time == now
+        assert event.observed_skew is not None
+
+    def test_asserter_skew_methods(self, tmp_path: Path) -> None:
+        """Test AuditLogAsserter skew accessor methods."""
+        from audit_logs import AuditLogAsserter, AuditLogCollector
+
+        collector = AuditLogCollector(platform_dir=tmp_path)
+        collector.start_time = datetime.now()
+        asserter = AuditLogAsserter(collector)
+
+        # Initially no samples
+        summary = asserter.get_skew_summary()
+        assert summary == {}
+
+        # Default adjustment
+        adj = asserter.get_skew_adjustment()
+        assert adj == 0.1  # Default margin
+
+        # Skew estimator should be accessible
+        assert asserter.skew_estimator is not None
+
+    def test_asserter_skew_methods_disabled(self) -> None:
+        """Test AuditLogAsserter skew methods with disabled collector."""
+        from audit_logs import AuditLogAsserter
+
+        asserter = AuditLogAsserter(None)
+
+        assert asserter.skew_estimator is None
+        assert asserter.get_skew_summary() == {}
+        assert asserter.get_skew_adjustment() == 0.1
+
+    def test_skew_recorded_on_parse(self, tmp_path: Path) -> None:
+        """Test that parsing audit logs records skew samples."""
+        from audit_logs import AuditLogAsserter, AuditLogCollector, LogEntry
+
+        collector = AuditLogCollector(platform_dir=tmp_path)
+        collector.start_time = datetime.now()
+        asserter = AuditLogAsserter(collector)
+
+        # Create and parse a log entry
+        now = datetime.now()
+        raw_line = json.dumps(
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "level": "AUDIT",
+                "msg": "rewrap",
+                "audit": {
+                    "object": {"type": "key_object", "id": "test-id"},
+                    "action": {"type": "rewrap", "result": "success"},
+                    "actor": {"id": "test-actor"},
+                    "clientInfo": {"platform": "kas"},
+                    "requestId": "req-1",
+                },
+            }
+        )
+        entry = LogEntry(timestamp=now, raw_line=raw_line, service_name="kas-alpha")
+
+        # Parse with skew recording enabled (default)
+        event = asserter.parse_audit_log(entry)
+        assert event is not None
+
+        # Verify skew was recorded
+        est = collector.skew_estimator.get_estimate("kas-alpha")
+        assert est is not None
+        assert est.sample_count == 1
+
+    def test_resolve_since_applies_skew_adjustment(self, tmp_path: Path) -> None:
+        """Test that _resolve_since applies clock skew adjustment."""
+        from datetime import timezone
+
+        from audit_logs import AuditLogAsserter, AuditLogCollector
+
+        collector = AuditLogCollector(platform_dir=tmp_path)
+        collector.start_time = datetime.now()
+        asserter = AuditLogAsserter(collector)
+
+        # Record a sample with negative skew (service clock ahead)
+
+        collection_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        event_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=timezone.utc)  # 1s ahead
+        collector.skew_estimator.record_sample("kas", collection_time, event_time)
+
+        # The skew is -1.0 (service ahead), so adjustment should be ~1.1s
+        adj = asserter.get_skew_adjustment()
+        assert adj >= 1.0
+
+        # Create a mark
+        mark = collector.mark("test")
+        mark_time = collector.get_mark(mark)
+        assert mark_time is not None
+
+        # Resolve with adjustment
+        resolved = asserter._resolve_since(mark, apply_skew_adjustment=True)
+        assert resolved is not None
+        assert resolved < mark_time  # Should be earlier due to adjustment
+
+        # Resolve without adjustment
+        resolved_no_adj = asserter._resolve_since(mark, apply_skew_adjustment=False)
+        assert resolved_no_adj is not None
+        assert resolved_no_adj == mark_time

@@ -26,15 +26,245 @@ from __future__ import annotations
 import json
 import logging
 import re
+import statistics
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
 logger = logging.getLogger("xtest")
+
+
+def parse_rfc3339(timestamp_str: str) -> datetime | None:
+    """Parse an RFC3339 timestamp string into a timezone-aware datetime.
+
+    Handles common variations:
+    - 2024-01-15T10:30:00Z
+    - 2024-01-15T10:30:00.123Z
+    - 2024-01-15T10:30:00+00:00
+    - 2024-01-15T10:30:00.123456+00:00
+
+    Args:
+        timestamp_str: RFC3339 formatted timestamp string
+
+    Returns:
+        Timezone-aware datetime in UTC, or None if parsing fails
+    """
+    if not timestamp_str:
+        return None
+
+    # Normalize 'Z' suffix to '+00:00' for consistent parsing
+    ts = timestamp_str.replace("Z", "+00:00")
+
+    # Try parsing with fractional seconds
+    formats = [
+        "%Y-%m-%dT%H:%M:%S.%f%z",  # With microseconds
+        "%Y-%m-%dT%H:%M:%S%z",  # Without microseconds
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(ts, fmt)
+        except ValueError:
+            continue
+
+    # Fallback: try fromisoformat (Python 3.11+)
+    try:
+        return datetime.fromisoformat(timestamp_str)
+    except ValueError:
+        return None
+
+
+@dataclass
+class ClockSkewEstimate:
+    """Estimated clock skew between test machine and a service.
+
+    The skew is calculated as: collection_time - event_time
+    - Positive skew: test machine clock is ahead OR there's I/O delay
+    - Negative skew: service clock is ahead of test machine
+
+    The minimum observed delta approximates true clock skew (removing I/O delay).
+    """
+
+    service_name: str
+    """Name of the service this estimate is for."""
+
+    samples: list[float] = field(default_factory=list)
+    """Individual skew samples in seconds (collection_time - event_time)."""
+
+    @property
+    def sample_count(self) -> int:
+        """Number of samples collected."""
+        return len(self.samples)
+
+    @property
+    def min_skew(self) -> float | None:
+        """Minimum observed skew (best estimate of true clock skew).
+
+        The minimum delta removes I/O delay, leaving only clock difference.
+        Returns None if no samples.
+        """
+        return min(self.samples) if self.samples else None
+
+    @property
+    def max_skew(self) -> float | None:
+        """Maximum observed skew (includes worst-case I/O delay)."""
+        return max(self.samples) if self.samples else None
+
+    @property
+    def mean_skew(self) -> float | None:
+        """Mean skew across all samples."""
+        return statistics.mean(self.samples) if self.samples else None
+
+    @property
+    def median_skew(self) -> float | None:
+        """Median skew (robust to outliers)."""
+        return statistics.median(self.samples) if self.samples else None
+
+    @property
+    def stdev(self) -> float | None:
+        """Standard deviation of skew samples."""
+        return statistics.stdev(self.samples) if len(self.samples) >= 2 else None
+
+    def safe_skew_adjustment(self, confidence_margin: float = 0.1) -> float:
+        """Get a safe adjustment value for filtering.
+
+        Returns a value that can be subtracted from marks to account for
+        clock skew, with a confidence margin for safety.
+
+        Args:
+            confidence_margin: Extra seconds to add for safety (default 0.1s)
+
+        Returns:
+            Adjustment in seconds. Subtract this from mark timestamps.
+            Returns confidence_margin if no samples available.
+        """
+        if not self.samples:
+            return confidence_margin
+
+        # Use minimum skew (best estimate of true clock difference)
+        # If negative (service ahead), we need to look further back in time
+        # Add margin for safety
+        min_s = self.min_skew
+        if min_s is None:
+            return confidence_margin
+
+        # If service clock is ahead (negative skew), return abs value + margin
+        # If test clock is ahead (positive skew), small margin is enough
+        if min_s < 0:
+            return abs(min_s) + confidence_margin
+        return confidence_margin
+
+    def __repr__(self) -> str:
+        if not self.samples:
+            return f"ClockSkewEstimate({self.service_name!r}, no samples)"
+        return (
+            f"ClockSkewEstimate({self.service_name!r}, "
+            f"n={self.sample_count}, "
+            f"min={self.min_skew:.3f}s, "
+            f"max={self.max_skew:.3f}s, "
+            f"median={self.median_skew:.3f}s)"
+        )
+
+
+class ClockSkewEstimator:
+    """Tracks and estimates clock skew between test machine and services.
+
+    Collects samples by comparing LogEntry.timestamp (collection time on test
+    machine) with ParsedAuditEvent.timestamp (event time from service clock).
+    """
+
+    def __init__(self) -> None:
+        self._estimates: dict[str, ClockSkewEstimate] = {}
+        self._lock = threading.Lock()
+
+    def record_sample(
+        self,
+        service_name: str,
+        collection_time: datetime,
+        event_time: datetime,
+    ) -> None:
+        """Record a skew sample from a parsed audit event.
+
+        Args:
+            service_name: Name of the service that generated the event
+            collection_time: When the log was read (test machine clock)
+            event_time: When the event occurred (service clock, from JSON)
+        """
+        # Convert both to UTC for comparison
+        if collection_time.tzinfo is None:
+            # Assume local time, convert to UTC
+            collection_utc = collection_time.astimezone(timezone.utc)
+        else:
+            collection_utc = collection_time.astimezone(timezone.utc)
+
+        if event_time.tzinfo is None:
+            # Assume UTC if no timezone (common for service logs)
+            event_utc = event_time.replace(tzinfo=timezone.utc)
+        else:
+            event_utc = event_time.astimezone(timezone.utc)
+
+        skew_seconds = (collection_utc - event_utc).total_seconds()
+
+        with self._lock:
+            if service_name not in self._estimates:
+                self._estimates[service_name] = ClockSkewEstimate(service_name)
+            self._estimates[service_name].samples.append(skew_seconds)
+
+    def get_estimate(self, service_name: str) -> ClockSkewEstimate | None:
+        """Get the skew estimate for a specific service."""
+        with self._lock:
+            return self._estimates.get(service_name)
+
+    def get_global_estimate(self) -> ClockSkewEstimate:
+        """Get a combined estimate across all services.
+
+        Useful when you don't know which service will generate an event.
+        """
+        with self._lock:
+            combined = ClockSkewEstimate("_global")
+            for estimate in self._estimates.values():
+                combined.samples.extend(estimate.samples)
+            return combined
+
+    def get_safe_adjustment(self, service_name: str | None = None) -> float:
+        """Get a safe time adjustment for mark-based filtering.
+
+        Args:
+            service_name: Specific service, or None for global estimate
+
+        Returns:
+            Seconds to subtract from mark timestamps for safe filtering
+        """
+        if service_name:
+            estimate = self.get_estimate(service_name)
+            if estimate:
+                return estimate.safe_skew_adjustment()
+
+        return self.get_global_estimate().safe_skew_adjustment()
+
+    def summary(self) -> dict[str, Any]:
+        """Get a summary of all skew estimates."""
+        with self._lock:
+            result = {}
+            for name, est in self._estimates.items():
+                result[name] = {
+                    "samples": est.sample_count,
+                    "min_skew": est.min_skew,
+                    "max_skew": est.max_skew,
+                    "median_skew": est.median_skew,
+                    "safe_adjustment": est.safe_skew_adjustment(),
+                }
+            return result
+
+    def __repr__(self) -> str:
+        with self._lock:
+            services = list(self._estimates.keys())
+            total = sum(e.sample_count for e in self._estimates.values())
+            return f"ClockSkewEstimator(services={services}, total_samples={total})"
 
 
 # Audit event constants from platform/service/logger/audit/constants.go
@@ -103,6 +333,46 @@ class ParsedAuditEvent:
 
     raw_entry: LogEntry
     """The original LogEntry this was parsed from."""
+
+    @property
+    def event_time(self) -> datetime | None:
+        """Parse and return the event timestamp as a timezone-aware datetime.
+
+        Returns:
+            Parsed datetime in UTC, or None if parsing fails
+        """
+        return parse_rfc3339(self.timestamp)
+
+    @property
+    def collection_time(self) -> datetime:
+        """Get when this log entry was collected (test machine time)."""
+        return self.raw_entry.timestamp
+
+    @property
+    def observed_skew(self) -> float | None:
+        """Get the observed skew for this specific event (collection - event time).
+
+        Returns:
+            Skew in seconds, or None if event time cannot be parsed.
+            Positive means test machine collected later than event occurred.
+        """
+        event_t = self.event_time
+        if not event_t:
+            return None
+
+        # Convert collection time to UTC for comparison
+        collection_t = self.collection_time
+        if collection_t.tzinfo is None:
+            collection_utc = collection_t.astimezone(timezone.utc)
+        else:
+            collection_utc = collection_t.astimezone(timezone.utc)
+
+        if event_t.tzinfo is None:
+            event_utc = event_t.replace(tzinfo=timezone.utc)
+        else:
+            event_utc = event_t.astimezone(timezone.utc)
+
+        return (collection_utc - event_utc).total_seconds()
 
     @property
     def action_type(self) -> str | None:
@@ -363,6 +633,7 @@ class AuditLogCollector:
         self.log_file_path: Path | None = None
         self.log_file_written = False
         self.start_time: datetime | None = None
+        self.skew_estimator = ClockSkewEstimator()
 
     def start(self) -> None:
         """Start background log collection.
@@ -596,6 +867,39 @@ class AuditLogAsserter:
             return f"{label}_noop"
         return self._collector.mark(label)
 
+    @property
+    def skew_estimator(self) -> ClockSkewEstimator | None:
+        """Get the clock skew estimator, or None if collection is disabled."""
+        if not self._collector or self._collector._disabled:
+            return None
+        return self._collector.skew_estimator
+
+    def get_skew_summary(self) -> dict[str, Any]:
+        """Get a summary of clock skew estimates across all services.
+
+        Returns:
+            Dict with per-service skew statistics, or empty dict if disabled
+        """
+        if not self._collector or self._collector._disabled:
+            return {}
+        return self._collector.skew_estimator.summary()
+
+    def get_skew_adjustment(self, service_name: str | None = None) -> float:
+        """Get the recommended time adjustment for a service.
+
+        This is the amount of time (in seconds) that should be subtracted
+        from mark timestamps to account for clock skew.
+
+        Args:
+            service_name: Specific service, or None for global estimate
+
+        Returns:
+            Adjustment in seconds (always >= 0.1 for safety margin)
+        """
+        if not self._collector or self._collector._disabled:
+            return 0.1  # Default safety margin
+        return self._collector.skew_estimator.get_safe_adjustment(service_name)
+
     def assert_contains(
         self,
         pattern: str | re.Pattern,
@@ -666,11 +970,18 @@ class AuditLogAsserter:
 
         return matching
 
-    def _resolve_since(self, since_mark: str | None) -> datetime | None:
-        """Resolve time filter from mark name.
+    def _resolve_since(
+        self, since_mark: str | None, apply_skew_adjustment: bool = True
+    ) -> datetime | None:
+        """Resolve time filter from mark name, optionally adjusting for clock skew.
+
+        When apply_skew_adjustment is True (default), the returned timestamp
+        is adjusted backwards by the estimated clock skew to avoid missing
+        events due to clock differences between test machine and services.
 
         Args:
             since_mark: Name of timestamp mark to filter from
+            apply_skew_adjustment: Whether to apply clock skew adjustment
 
         Returns:
             Resolved datetime to filter from, or None for no filter
@@ -684,6 +995,15 @@ class AuditLogAsserter:
             since = self._collector.get_mark(since_mark)
             if not since:
                 raise ValueError(f"Unknown timestamp mark: {since_mark}")
+
+            # Apply clock skew adjustment to avoid missing events
+            if apply_skew_adjustment:
+                adjustment = self._collector.skew_estimator.get_safe_adjustment()
+                since = since - timedelta(seconds=adjustment)
+                logger.debug(
+                    f"Adjusted since time by -{adjustment:.3f}s for clock skew"
+                )
+
             return since
         return None
 
@@ -801,14 +1121,20 @@ class AuditLogAsserter:
     # Structured audit event assertion methods
     # ========================================================================
 
-    def parse_audit_log(self, entry: LogEntry) -> ParsedAuditEvent | None:
+    def parse_audit_log(
+        self, entry: LogEntry, record_skew: bool = True
+    ) -> ParsedAuditEvent | None:
         """Parse a log entry into a structured audit event.
 
         Attempts to parse JSON log entries that contain audit events.
         Returns None if the entry is not a valid audit log.
 
+        Also records clock skew samples when parsing succeeds, comparing
+        the log entry's collection timestamp with the event's internal timestamp.
+
         Args:
             entry: The log entry to parse
+            record_skew: Whether to record a skew sample (default True)
 
         Returns:
             ParsedAuditEvent if successfully parsed, None otherwise
@@ -831,13 +1157,25 @@ class AuditLogAsserter:
         if msg not in (VERB_DECISION, VERB_POLICY_CRUD, VERB_REWRAP):
             return None
 
-        return ParsedAuditEvent(
+        event = ParsedAuditEvent(
             timestamp=data.get("time", ""),
             level=data.get("level", ""),
             msg=msg,
             audit=data.get("audit", {}),
             raw_entry=entry,
         )
+
+        # Record skew sample for clock synchronization estimation
+        if record_skew and self._collector and event.timestamp:
+            event_time = parse_rfc3339(event.timestamp)
+            if event_time:
+                self._collector.skew_estimator.record_sample(
+                    service_name=entry.service_name,
+                    collection_time=entry.timestamp,
+                    event_time=event_time,
+                )
+
+        return event
 
     def get_parsed_audit_logs(
         self,
@@ -1413,6 +1751,28 @@ class AuditLogAsserter:
             if self._collector._marks:
                 context.append(
                     f"  - Timestamp marks: {', '.join(self._collector._marks.keys())}"
+                )
+
+            # Add clock skew information
+            skew_summary = self._collector.skew_estimator.summary()
+            if skew_summary:
+                context.append("  - Clock skew estimates:")
+                for svc, stats in skew_summary.items():
+                    if stats["samples"] > 0:
+                        context.append(
+                            f"      {svc}: min={stats['min_skew']:.3f}s, "
+                            f"max={stats['max_skew']:.3f}s, "
+                            f"median={stats['median_skew']:.3f}s "
+                            f"(n={stats['samples']}, adj={stats['safe_adjustment']:.3f}s)"
+                        )
+                global_est = self._collector.skew_estimator.get_global_estimate()
+                if global_est.sample_count > 0:
+                    context.append(
+                        f"      (global adjustment: {global_est.safe_skew_adjustment():.3f}s)"
+                    )
+            else:
+                context.append(
+                    "  - Clock skew: no samples collected (no audit events parsed yet)"
                 )
 
         raise AssertionError("\n".join(context))
