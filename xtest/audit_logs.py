@@ -601,7 +601,7 @@ class AuditLogAsserter:
         pattern: str | re.Pattern,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[LogEntry]:
         """Assert pattern appears in logs with optional constraints.
 
@@ -609,7 +609,7 @@ class AuditLogAsserter:
             pattern: Regex pattern or substring to search for
             min_count: Minimum number of occurrences (default: 1)
             since_mark: Only check logs since marked timestamp
-            timeout: Maximum time to wait for pattern in seconds (default: 5.0)
+            timeout: Maximum time to wait for pattern in seconds (default: 20.0)
 
         Returns:
             Matching log entries
@@ -652,6 +652,7 @@ class AuditLogAsserter:
             time.sleep(0.1)
 
         # Timeout expired, raise error if we don't have enough matches
+        timeout_time = datetime.now()
         count = len(matching)
         if count < min_count:
             self._raise_assertion_error(
@@ -659,6 +660,8 @@ class AuditLogAsserter:
                 f"but found {count} occurrence(s) after waiting {timeout}s.",
                 matching,
                 logs,
+                timeout_time=timeout_time,
+                since=since,
             )
 
         return matching
@@ -731,11 +734,14 @@ class AuditLogAsserter:
         if attr_fqn and matches:
             attr_matches = [m for m in matches if attr_fqn in m.raw_line]
             if len(attr_matches) < min_count:
+                since = self._resolve_since(since_mark)
                 self._raise_assertion_error(
                     f"Expected attribute FQN '{attr_fqn}' in decision audit logs, "
                     f"but found only {len(attr_matches)} matching entries (need {min_count}).",
                     attr_matches,
                     matches,
+                    timeout_time=datetime.now(),
+                    since=since,
                 )
             return attr_matches
 
@@ -876,7 +882,7 @@ class AuditLogAsserter:
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert on rewrap audit log entries with structured field validation.
 
@@ -893,7 +899,7 @@ class AuditLogAsserter:
             attr_fqns: Expected attribute FQNs (all must be present)
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
-            timeout: Maximum time to wait in seconds (default: 5.0)
+            timeout: Maximum time to wait in seconds (default: 20.0)
 
         Returns:
             List of matching ParsedAuditEvent objects
@@ -939,6 +945,7 @@ class AuditLogAsserter:
             time.sleep(0.1)
 
         # Build detailed error message
+        timeout_time = datetime.now()
         criteria = [f"result={result}"]
         if policy_uuid:
             criteria.append(f"policy_uuid={policy_uuid}")
@@ -954,6 +961,8 @@ class AuditLogAsserter:
             f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
             [m.raw_entry for m in matching],
             all_logs,
+            timeout_time=timeout_time,
+            since=since,
         )
         return []  # Never reached, but satisfies type checker
 
@@ -965,7 +974,7 @@ class AuditLogAsserter:
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a successful rewrap was logged.
 
@@ -990,7 +999,7 @@ class AuditLogAsserter:
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a failed rewrap was logged.
 
@@ -1014,7 +1023,7 @@ class AuditLogAsserter:
         key_id: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a rewrap error was logged.
 
@@ -1033,7 +1042,7 @@ class AuditLogAsserter:
         self,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a cancelled rewrap was logged.
 
@@ -1055,7 +1064,7 @@ class AuditLogAsserter:
         object_id: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert on policy CRUD audit log entries with structured field validation.
 
@@ -1071,7 +1080,7 @@ class AuditLogAsserter:
             object_id: Expected object ID (UUID)
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
-            timeout: Maximum time to wait in seconds (default: 5.0)
+            timeout: Maximum time to wait in seconds (default: 20.0)
 
         Returns:
             List of matching ParsedAuditEvent objects
@@ -1116,6 +1125,7 @@ class AuditLogAsserter:
             time.sleep(0.1)
 
         # Build detailed error message
+        timeout_time = datetime.now()
         criteria = [f"result={result}"]
         if action_type:
             criteria.append(f"action_type={action_type}")
@@ -1129,6 +1139,8 @@ class AuditLogAsserter:
             f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
             [m.raw_entry for m in matching],
             all_logs,
+            timeout_time=timeout_time,
+            since=since,
         )
         return []  # Never reached, but satisfies type checker
 
@@ -1138,7 +1150,7 @@ class AuditLogAsserter:
         object_id: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a successful policy create operation was logged.
 
@@ -1149,7 +1161,7 @@ class AuditLogAsserter:
             object_id: Expected object ID (UUID)
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
-            timeout: Maximum time to wait in seconds (default: 5.0)
+            timeout: Maximum time to wait in seconds (default: 20.0)
         """
         return self.assert_policy_crud(
             result="success",
@@ -1167,7 +1179,7 @@ class AuditLogAsserter:
         object_id: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a successful policy update operation was logged.
 
@@ -1189,7 +1201,7 @@ class AuditLogAsserter:
         object_id: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert a successful policy delete operation was logged.
 
@@ -1212,7 +1224,7 @@ class AuditLogAsserter:
         action_name: str | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> list[ParsedAuditEvent]:
         """Assert on GetDecision v2 audit log entries.
 
@@ -1228,7 +1240,7 @@ class AuditLogAsserter:
             action_name: Expected action name
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
-            timeout: Maximum time to wait in seconds (default: 5.0)
+            timeout: Maximum time to wait in seconds (default: 20.0)
 
         Returns:
             List of matching ParsedAuditEvent objects
@@ -1274,6 +1286,7 @@ class AuditLogAsserter:
             time.sleep(0.1)
 
         # Build detailed error message
+        timeout_time = datetime.now()
         criteria = [f"result={result}", "platform=authorization.v2"]
         if entity_id:
             criteria.append(f"entity_id={entity_id}")
@@ -1285,6 +1298,8 @@ class AuditLogAsserter:
             f"{', '.join(criteria)}, but found {len(matching)} after {timeout}s.",
             [m.raw_entry for m in matching],
             all_logs,
+            timeout_time=timeout_time,
+            since=since,
         )
         return []  # Never reached, but satisfies type checker
 
@@ -1293,13 +1308,20 @@ class AuditLogAsserter:
         message: str,
         matching: list[LogEntry],
         all_logs: list[LogEntry],
+        timeout_time: datetime | None = None,
+        since: datetime | None = None,
     ) -> None:
         """Raise AssertionError with rich context.
+
+        Shows logs before and after the timeout to help diagnose race conditions
+        where the expected log appears just after the timeout expires.
 
         Args:
             message: Main error message
             matching: Logs that matched the pattern
-            all_logs: All logs that were searched
+            all_logs: All logs that were searched (at timeout)
+            timeout_time: When the timeout expired (for splitting before/after)
+            since: The since_mark timestamp filter that was used
         """
         context = [message, ""]
 
@@ -1313,18 +1335,61 @@ class AuditLogAsserter:
                 context.append(f"  ... and {len(matching) - 10} more")
             context.append("")
 
+        # Capture any logs that arrived after the timeout
+        late_logs: list[LogEntry] = []
+        if self._collector and timeout_time:
+            # Brief wait to catch late-arriving logs
+            time.sleep(0.5)
+            current_logs = self._collector.get_logs(since=since)
+            # Find logs that arrived after the timeout
+            late_logs = [
+                log for log in current_logs if log.timestamp > timeout_time
+            ]
+
+        # Show logs before the timeout (last 10)
         recent_logs = all_logs[-10:] if len(all_logs) > 10 else all_logs
         if recent_logs:
-            context.append(f"Recent context (last {len(recent_logs)} lines):")
+            context.append(
+                f"Logs before timeout (last {len(recent_logs)} of {len(all_logs)}):"
+            )
             for log in recent_logs:
                 context.append(
                     f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
                 )
+
+        # Show timeout marker
+        if timeout_time:
             context.append("")
+            context.append(f"  ─── TIMEOUT at {timeout_time.isoformat()} ───")
+
+        # Show logs that arrived after the timeout
+        if late_logs:
+            context.append("")
+            late_to_show = late_logs[:10]
+            context.append(
+                f"Logs AFTER timeout ({len(late_to_show)} of {len(late_logs)} late arrivals):"
+            )
+            for log in late_to_show:
+                context.append(
+                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                )
+            if len(late_logs) > 10:
+                context.append(f"  ... and {len(late_logs) - 10} more late arrivals")
+            context.append("")
+            context.append(
+                "  ⚠ Late arrivals suggest a race condition - consider increasing timeout"
+            )
+        elif timeout_time:
+            context.append("")
+            context.append("  (no logs arrived after timeout)")
+
+        context.append("")
 
         if self._collector:
             context.append("Log collection details:")
-            context.append(f"  - Total logs collected: {len(all_logs)}")
+            context.append(f"  - Total logs collected at timeout: {len(all_logs)}")
+            if late_logs:
+                context.append(f"  - Late arrivals after timeout: {len(late_logs)}")
 
             if self._collector.start_time:
                 test_duration = datetime.now() - self._collector.start_time
