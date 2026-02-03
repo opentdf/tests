@@ -31,7 +31,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -197,15 +197,15 @@ class ClockSkewEstimator:
         # Convert both to UTC for comparison
         if collection_time.tzinfo is None:
             # Assume local time, convert to UTC
-            collection_utc = collection_time.astimezone(timezone.utc)
+            collection_utc = collection_time.astimezone(UTC)
         else:
-            collection_utc = collection_time.astimezone(timezone.utc)
+            collection_utc = collection_time.astimezone(UTC)
 
         if event_time.tzinfo is None:
             # Assume UTC if no timezone (common for service logs)
-            event_utc = event_time.replace(tzinfo=timezone.utc)
+            event_utc = event_time.replace(tzinfo=UTC)
         else:
-            event_utc = event_time.astimezone(timezone.utc)
+            event_utc = event_time.astimezone(UTC)
 
         skew_seconds = (collection_utc - event_utc).total_seconds()
 
@@ -363,14 +363,14 @@ class ParsedAuditEvent:
         # Convert collection time to UTC for comparison
         collection_t = self.collection_time
         if collection_t.tzinfo is None:
-            collection_utc = collection_t.astimezone(timezone.utc)
+            collection_utc = collection_t.astimezone(UTC)
         else:
-            collection_utc = collection_t.astimezone(timezone.utc)
+            collection_utc = collection_t.astimezone(UTC)
 
         if event_t.tzinfo is None:
-            event_utc = event_t.replace(tzinfo=timezone.utc)
+            event_utc = event_t.replace(tzinfo=UTC)
         else:
-            event_utc = event_t.astimezone(timezone.utc)
+            event_utc = event_t.astimezone(UTC)
 
         return (collection_utc - event_utc).total_seconds()
 
@@ -1680,9 +1680,7 @@ class AuditLogAsserter:
             time.sleep(0.5)
             current_logs = self._collector.get_logs(since=since)
             # Find logs that arrived after the timeout
-            late_logs = [
-                log for log in current_logs if log.timestamp > timeout_time
-            ]
+            late_logs = [log for log in current_logs if log.timestamp > timeout_time]
 
         # Show logs before the timeout (last 10)
         recent_logs = all_logs[-10:] if len(all_logs) > 10 else all_logs

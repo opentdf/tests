@@ -8,7 +8,7 @@ Run with: pytest test_audit_logs.py -v
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -688,15 +688,14 @@ class TestClockSkewEstimation:
 
     def test_clock_skew_estimator_record_and_retrieve(self) -> None:
         """Test ClockSkewEstimator recording and retrieval."""
-        from datetime import timezone
 
         from audit_logs import ClockSkewEstimator
 
         estimator = ClockSkewEstimator()
 
         # Record some samples
-        collection_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=timezone.utc)
-        event_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        collection_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=UTC)
+        event_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         estimator.record_sample("kas-alpha", collection_time, event_time)
 
@@ -713,8 +712,8 @@ class TestClockSkewEstimation:
         # Add sample from different service
         estimator.record_sample(
             "platform",
-            datetime(2024, 1, 15, 10, 30, 2, tzinfo=timezone.utc),
-            datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
+            datetime(2024, 1, 15, 10, 30, 2, tzinfo=UTC),
+            datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC),
         )
 
         global_est = estimator.get_global_estimate()
@@ -819,7 +818,6 @@ class TestClockSkewEstimation:
 
     def test_resolve_since_applies_skew_adjustment(self, tmp_path: Path) -> None:
         """Test that _resolve_since applies clock skew adjustment."""
-        from datetime import timezone
 
         from audit_logs import AuditLogAsserter, AuditLogCollector
 
@@ -829,8 +827,8 @@ class TestClockSkewEstimation:
 
         # Record a sample with negative skew (service clock ahead)
 
-        collection_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
-        event_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=timezone.utc)  # 1s ahead
+        collection_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
+        event_time = datetime(2024, 1, 15, 10, 30, 1, tzinfo=UTC)  # 1s ahead
         collector.skew_estimator.record_sample("kas", collection_time, event_time)
 
         # The skew is -1.0 (service ahead), so adjustment should be ~1.1s
