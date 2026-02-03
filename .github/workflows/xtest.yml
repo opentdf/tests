@@ -245,6 +245,7 @@ jobs:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
 
       - name: Set up Python 3.14
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
@@ -444,7 +445,7 @@ jobs:
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
-          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py
+          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py test_audit_logs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
@@ -452,7 +453,7 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -504,6 +505,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: alpha
           kas-port: 8181
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -514,6 +516,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: beta
           kas-port: 8282
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -524,6 +527,7 @@ jobs:
           ec-tdf-enabled: true
           kas-name: gamma
           kas-port: 8383
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -534,6 +538,7 @@ jobs:
           ec-tdf-enabled: true
           kas-port: 8484
           kas-name: delta
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km1)
@@ -545,6 +550,7 @@ jobs:
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: km1
           kas-port: 8585
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km2)
@@ -556,16 +562,34 @@ jobs:
           kas-name: km2
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-port: 8686
+          log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_abac.py
+        run: >-
+          uv run pytest
+          -ra
+          -v
+          --numprocesses auto
+          --dist loadscope
+          --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
+          --self-contained-html
+          --audit-log-dir test-results/audit-logs
+          --sdks-encrypt "${ENCRYPT_SDK}"
+          --focus "$FOCUS_SDK"
+          test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
+          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
+          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
+          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
+          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
+          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -574,6 +598,14 @@ jobs:
         with:
           name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
           path: otdftests/xtest/test-results/*.html
+
+      - name: Upload audit logs on failure
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: failure()
+        with:
+          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          path: otdftests/xtest/test-results/audit-logs/*.log
+          if-no-files-found: ignore
 
   publish-results:
     runs-on: ubuntu-latest
@@ -636,4 +668,4 @@ jobs:
       - name: Success summary
         if: ${{ needs.xct.result == 'success' }}
         run: |-
-          echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"
+           echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"

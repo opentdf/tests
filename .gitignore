@@ -29,3 +29,4 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
+/tmp
