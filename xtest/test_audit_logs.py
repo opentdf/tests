@@ -14,12 +14,6 @@ from pathlib import Path
 import pytest
 
 from audit_logs import (
-    ACTION_RESULTS,
-    ACTION_TYPES,
-    OBJECT_TYPES,
-    VERB_DECISION,
-    VERB_POLICY_CRUD,
-    VERB_REWRAP,
     AuditLogAsserter,
     AuditLogCollector,
     LogEntry,
@@ -136,41 +130,6 @@ class TestAuditLogAsserter:
 
         result = asserter.assert_contains("anything")
         assert result == []
-
-
-class TestAuditConstants:
-    """Tests for audit log constants."""
-
-    def test_object_types_not_empty(self) -> None:
-        """Test that OBJECT_TYPES contains expected values."""
-        assert len(OBJECT_TYPES) > 0
-        assert "namespace" in OBJECT_TYPES
-        assert "attribute_definition" in OBJECT_TYPES
-        assert "attribute_value" in OBJECT_TYPES
-        assert "key_object" in OBJECT_TYPES
-
-    def test_action_types_not_empty(self) -> None:
-        """Test that ACTION_TYPES contains expected values."""
-        assert len(ACTION_TYPES) > 0
-        assert "create" in ACTION_TYPES
-        assert "read" in ACTION_TYPES
-        assert "update" in ACTION_TYPES
-        assert "delete" in ACTION_TYPES
-        assert "rewrap" in ACTION_TYPES
-
-    def test_action_results_not_empty(self) -> None:
-        """Test that ACTION_RESULTS contains expected values."""
-        assert len(ACTION_RESULTS) > 0
-        assert "success" in ACTION_RESULTS
-        assert "failure" in ACTION_RESULTS
-        assert "error" in ACTION_RESULTS
-        assert "cancel" in ACTION_RESULTS
-
-    def test_verbs_defined(self) -> None:
-        """Test that verb constants are defined."""
-        assert VERB_DECISION == "decision"
-        assert VERB_POLICY_CRUD == "policy crud"
-        assert VERB_REWRAP == "rewrap"
 
 
 class TestParsedAuditEvent:

@@ -265,47 +265,43 @@ class ClockSkewEstimator:
 
 
 # Audit event constants from platform/service/logger/audit/constants.go
-OBJECT_TYPES = frozenset(
-    {
-        "subject_mapping",
-        "resource_mapping",
-        "attribute_definition",
-        "attribute_value",
-        "obligation_definition",
-        "obligation_value",
-        "obligation_trigger",
-        "namespace",
-        "condition_set",
-        "kas_registry",
-        "kas_attribute_namespace_assignment",
-        "kas_attribute_definition_assignment",
-        "kas_attribute_value_assignment",
-        "key_object",
-        "entity_object",
-        "resource_mapping_group",
-        "public_key",
-        "action",
-        "registered_resource",
-        "registered_resource_value",
-        "key_management_provider_config",
-        "kas_registry_keys",
-        "kas_attribute_definition_key_assignment",
-        "kas_attribute_value_key_assignment",
-        "kas_attribute_namespace_key_assignment",
-        "namespace_certificate",
-    }
-)
+# These are defined as Literal types for static type checking
+ObjectType = Literal[
+    "subject_mapping",
+    "resource_mapping",
+    "attribute_definition",
+    "attribute_value",
+    "obligation_definition",
+    "obligation_value",
+    "obligation_trigger",
+    "namespace",
+    "condition_set",
+    "kas_registry",
+    "kas_attribute_namespace_assignment",
+    "kas_attribute_definition_assignment",
+    "kas_attribute_value_assignment",
+    "key_object",
+    "entity_object",
+    "resource_mapping_group",
+    "public_key",
+    "action",
+    "registered_resource",
+    "registered_resource_value",
+    "key_management_provider_config",
+    "kas_registry_keys",
+    "kas_attribute_definition_key_assignment",
+    "kas_attribute_value_key_assignment",
+    "kas_attribute_namespace_key_assignment",
+    "namespace_certificate",
+]
 
-ACTION_TYPES = frozenset({"create", "read", "update", "delete", "rewrap", "rotate"})
+ActionType = Literal["create", "read", "update", "delete", "rewrap", "rotate"]
 
-ACTION_RESULTS = frozenset(
-    {"success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"}
-)
+ActionResult = Literal[
+    "success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"
+]
 
-# Audit log message verbs
-VERB_DECISION = "decision"
-VERB_POLICY_CRUD = "policy crud"
-VERB_REWRAP = "rewrap"
+AuditVerb = Literal["decision", "policy crud", "rewrap"]
 
 
 @dataclass
@@ -483,7 +479,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != VERB_REWRAP:
+        if self.msg != "rewrap":
             return False
         if result is not None and self.action_result != result:
             return False
@@ -517,7 +513,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != VERB_POLICY_CRUD:
+        if self.msg != "policy crud":
             return False
         if result is not None and self.action_result != result:
             return False
@@ -545,7 +541,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != VERB_DECISION:
+        if self.msg != "decision":
             return False
         if result is not None and self.action_result != result:
             return False
@@ -1145,7 +1141,7 @@ class AuditLogAsserter:
 
         # Verify msg is one of the known audit verbs
         msg = data.get("msg", "")
-        if msg not in (VERB_DECISION, VERB_POLICY_CRUD, VERB_REWRAP):
+        if msg not in ("decision", "policy crud", "rewrap"):
             return None
 
         event = ParsedAuditEvent(
