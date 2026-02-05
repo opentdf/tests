@@ -195,11 +195,8 @@ class ClockSkewEstimator:
             event_time: When the event occurred (service clock, from JSON)
         """
         # Convert both to UTC for comparison
-        if collection_time.tzinfo is None:
-            # Assume local time, convert to UTC
-            collection_utc = collection_time.astimezone(UTC)
-        else:
-            collection_utc = collection_time.astimezone(UTC)
+        # astimezone() handles both naive (assumes local) and aware datetimes
+        collection_utc = collection_time.astimezone(UTC)
 
         if event_time.tzinfo is None:
             # Assume UTC if no timezone (common for service logs)
@@ -361,11 +358,9 @@ class ParsedAuditEvent:
             return None
 
         # Convert collection time to UTC for comparison
+        # astimezone() handles both naive (assumes local) and aware datetimes
         collection_t = self.collection_time
-        if collection_t.tzinfo is None:
-            collection_utc = collection_t.astimezone(UTC)
-        else:
-            collection_utc = collection_t.astimezone(UTC)
+        collection_utc = collection_t.astimezone(UTC)
 
         if event_t.tzinfo is None:
             event_utc = event_t.replace(tzinfo=UTC)
