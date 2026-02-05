@@ -24,25 +24,14 @@ jobs:
           python-version: '3.14'
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: false
       - name: Install dependencies
         run: uv sync --extra dev
         working-directory: xtest
-      - name: Lint with ruff
+      - name: Lint xtest python
         run: |
           uv run ruff check .
           uv run ruff format --check .
-        working-directory: xtest
-      - name: Run Pyright and summarize errors if any
-        run: |
-          set +e
-          OUTPUT=$(uv run pyright 2>&1)
-          STATUS=$?
-          if [ $STATUS -ne 0 ]; then
-            echo -e "## type check error\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
-            exit $STATUS
-          elif [[ -z "$OUTPUT" || "$OUTPUT" == '0 errors, 0 warnings, 0 informations'* ]]; then
-            echo "No type errors found."
-          else
-            echo -e "## type check passed with warnings\n\`\`\`\n$OUTPUT\n\`\`\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          uv run pyright
         working-directory: xtest
