@@ -659,19 +659,19 @@ class TestClockSkewEstimation:
         assert est.min_skew is None
         assert est.max_skew is None
         assert est.mean_skew is None
-        assert est.safe_skew_adjustment() == 0.1  # Default margin
+        assert est.safe_skew_adjustment() == pytest.approx(0.1)  # Default margin
 
         # Add samples
         est.samples = [0.5, 1.0, 1.5, 2.0]
         assert est.sample_count == 4
-        assert est.min_skew == 0.5
-        assert est.max_skew == 2.0
-        assert est.mean_skew == 1.25
-        assert est.median_skew == 1.25
+        assert est.min_skew == pytest.approx(0.5)
+        assert est.max_skew == pytest.approx(2.0)
+        assert est.mean_skew == pytest.approx(1.25)
+        assert est.median_skew == pytest.approx(1.25)
 
         # Safe adjustment when test machine is ahead (positive skew)
         # Should return just the confidence margin
-        assert est.safe_skew_adjustment() == 0.1
+        assert est.safe_skew_adjustment() == pytest.approx(0.1)
 
     def test_clock_skew_estimate_negative_skew(self) -> None:
         """Test ClockSkewEstimate with negative skew (service ahead)."""
@@ -680,7 +680,7 @@ class TestClockSkewEstimation:
         est = ClockSkewEstimate("test-service")
         # Negative skew means service clock is ahead
         est.samples = [-0.3, -0.1, 0.1, 0.2]
-        assert est.min_skew == -0.3
+        assert est.min_skew == pytest.approx(-0.3)
 
         # Safe adjustment should account for negative skew
         adj = est.safe_skew_adjustment()
@@ -703,7 +703,7 @@ class TestClockSkewEstimation:
         est = estimator.get_estimate("kas-alpha")
         assert est is not None
         assert est.sample_count == 1
-        assert est.min_skew == 1.0  # 1 second difference
+        assert est.min_skew == pytest.approx(1.0)  # 1 second difference
 
         # Check global estimate
         global_est = estimator.get_global_estimate()
@@ -718,8 +718,8 @@ class TestClockSkewEstimation:
 
         global_est = estimator.get_global_estimate()
         assert global_est.sample_count == 2
-        assert global_est.min_skew == 1.0
-        assert global_est.max_skew == 2.0
+        assert global_est.min_skew == pytest.approx(1.0)
+        assert global_est.max_skew == pytest.approx(2.0)
 
     def test_parsed_audit_event_skew_properties(self) -> None:
         """Test ParsedAuditEvent skew-related properties."""
@@ -766,7 +766,7 @@ class TestClockSkewEstimation:
 
         # Default adjustment
         adj = asserter.get_skew_adjustment()
-        assert adj == 0.1  # Default margin
+        assert adj == pytest.approx(0.1)  # Default margin
 
         # Skew estimator should be accessible
         assert asserter.skew_estimator is not None
@@ -779,7 +779,7 @@ class TestClockSkewEstimation:
 
         assert asserter.skew_estimator is None
         assert asserter.get_skew_summary() == {}
-        assert asserter.get_skew_adjustment() == 0.1
+        assert asserter.get_skew_adjustment() == pytest.approx(0.1)
 
     def test_skew_recorded_on_parse(self, tmp_path: Path) -> None:
         """Test that parsing audit logs records skew samples."""
