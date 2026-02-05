@@ -659,22 +659,18 @@ class AuditLogCollector:
             self._disabled = True
             return
 
-        existing_files = {
-            service: path for service, path in self.log_files.items() if path.exists()
-        }
-
-        if not existing_files:
+        any_file_exists = any(path.exists() for path in self.log_files.values())
+        if not any_file_exists:
             logger.warning(
                 f"None of the log files exist yet: {list(self.log_files.values())}. "
                 f"Will wait for them to be created..."
             )
-            existing_files = self.log_files
 
         logger.debug(
-            f"Starting file-based log collection for: {list(existing_files.keys())}"
+            f"Starting file-based log collection for: {list(self.log_files.keys())}"
         )
 
-        for service, log_path in existing_files.items():
+        for service, log_path in self.log_files.items():
             thread = threading.Thread(
                 target=self._tail_file,
                 args=(service, log_path),
@@ -684,7 +680,7 @@ class AuditLogCollector:
             self._threads.append(thread)
 
         logger.info(
-            f"Audit log collection started for: {', '.join(existing_files.keys())}"
+            f"Audit log collection started for: {', '.join(self.log_files.keys())}"
         )
 
     def stop(self) -> None:

@@ -66,7 +66,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--audit-log-services",
         help="comma-separated list of docker compose services to monitor for audit logs",
-        type=list[str],
+        type=str,
     )
     parser.addoption(
         "--containers",
