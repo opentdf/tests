@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import tdfs
+from audit_logs import AuditLogAsserter
 
 cipherTexts: dict[str, Path] = {}
 counter = 0
@@ -98,6 +99,7 @@ def test_tdf_roundtrip(
     tmp_dir: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     if container == "ztdf" and decrypt_sdk in dspx1153Fails:
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
@@ -130,8 +132,15 @@ def test_tdf_roundtrip(
 
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     decrypt_sdk.decrypt(ct_file, rt_file, container)
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged in audit logs
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
     if (
         container.startswith("ztdf")
@@ -139,8 +148,11 @@ def test_tdf_roundtrip(
         and "ecwrap" in pfs.features
     ):
         ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
+        ec_mark = audit_logs.mark("before_ecwrap_decrypt")
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
+        # Verify ecwrap rewrap was also logged
+        audit_logs.assert_rewrap_success(min_count=1, since_mark=ec_mark)
 
 
 def test_tdf_spec_target_422(
@@ -538,6 +550,7 @@ def test_tdf_with_unbound_policy(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -554,11 +567,19 @@ def test_tdf_with_unbound_policy(
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
+
+    # Mark timestamp before tampered decrypt for audit log correlation
+    # mark = audit_logs.mark("before_tampered_decrypt")
+
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "wrap", decrypt_sdk)
+
+    # Verify rewrap failure was logged (policy binding mismatch)
+    # FIXME: Audit logs are not present on failed bindings
+    # audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
 
 
 def test_tdf_with_altered_policy_binding(
@@ -567,6 +588,7 @@ def test_tdf_with_altered_policy_binding(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -579,11 +601,19 @@ def test_tdf_with_altered_policy_binding(
     )
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
+
+    # Mark timestamp before tampered decrypt for audit log correlation
+    # mark = audit_logs.mark("before_tampered_decrypt")
+
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "wrap", decrypt_sdk)
+
+    # Verify rewrap failure was logged (policy binding mismatch)
+    # FIXME: Audit logs are not present on failed bindings
+    # audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
 
 
 ## INTEGRITY TAMPER TESTS
@@ -812,6 +842,7 @@ def test_tdf_with_malicious_kao(
     pt_file: Path,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -824,6 +855,11 @@ def test_tdf_with_malicious_kao(
     b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
     fname = b_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
+
+    # Mark timestamp - note: this test may not generate a rewrap audit event
+    # because the SDK should reject the malicious KAO before calling the KAS
+    _mark = audit_logs.mark("before_malicious_kao_decrypt")
+
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -833,3 +869,6 @@ def test_tdf_with_malicious_kao(
             exc.output,
             re.IGNORECASE | re.MULTILINE,
         ), f"Unexpected error output: [{exc.output}]"
+
+    # Note: We don't assert on audit logs here because the SDK should reject
+    # the malicious KAO client-side before making a rewrap request to the KAS
