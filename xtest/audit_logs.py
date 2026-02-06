@@ -195,8 +195,11 @@ class ClockSkewEstimator:
             event_time: When the event occurred (service clock, from JSON)
         """
         # Convert both to UTC for comparison
-        # astimezone() handles both naive (assumes local) and aware datetimes
-        collection_utc = collection_time.astimezone(UTC)
+        if collection_time.tzinfo is None:
+            # Assume local time, convert to UTC
+            collection_utc = collection_time.astimezone(UTC)
+        else:
+            collection_utc = collection_time.astimezone(UTC)
 
         if event_time.tzinfo is None:
             # Assume UTC if no timezone (common for service logs)
@@ -265,43 +268,47 @@ class ClockSkewEstimator:
 
 
 # Audit event constants from platform/service/logger/audit/constants.go
-# These are defined as Literal types for static type checking
-ObjectType = Literal[
-    "subject_mapping",
-    "resource_mapping",
-    "attribute_definition",
-    "attribute_value",
-    "obligation_definition",
-    "obligation_value",
-    "obligation_trigger",
-    "namespace",
-    "condition_set",
-    "kas_registry",
-    "kas_attribute_namespace_assignment",
-    "kas_attribute_definition_assignment",
-    "kas_attribute_value_assignment",
-    "key_object",
-    "entity_object",
-    "resource_mapping_group",
-    "public_key",
-    "action",
-    "registered_resource",
-    "registered_resource_value",
-    "key_management_provider_config",
-    "kas_registry_keys",
-    "kas_attribute_definition_key_assignment",
-    "kas_attribute_value_key_assignment",
-    "kas_attribute_namespace_key_assignment",
-    "namespace_certificate",
-]
+OBJECT_TYPES = frozenset(
+    {
+        "subject_mapping",
+        "resource_mapping",
+        "attribute_definition",
+        "attribute_value",
+        "obligation_definition",
+        "obligation_value",
+        "obligation_trigger",
+        "namespace",
+        "condition_set",
+        "kas_registry",
+        "kas_attribute_namespace_assignment",
+        "kas_attribute_definition_assignment",
+        "kas_attribute_value_assignment",
+        "key_object",
+        "entity_object",
+        "resource_mapping_group",
+        "public_key",
+        "action",
+        "registered_resource",
+        "registered_resource_value",
+        "key_management_provider_config",
+        "kas_registry_keys",
+        "kas_attribute_definition_key_assignment",
+        "kas_attribute_value_key_assignment",
+        "kas_attribute_namespace_key_assignment",
+        "namespace_certificate",
+    }
+)
 
-ActionType = Literal["create", "read", "update", "delete", "rewrap", "rotate"]
+ACTION_TYPES = frozenset({"create", "read", "update", "delete", "rewrap", "rotate"})
 
-ActionResult = Literal[
-    "success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"
-]
+ACTION_RESULTS = frozenset(
+    {"success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"}
+)
 
-AuditVerb = Literal["decision", "policy crud", "rewrap"]
+# Audit log message verbs
+VERB_DECISION = "decision"
+VERB_POLICY_CRUD = "policy crud"
+VERB_REWRAP = "rewrap"
 
 
 @dataclass
@@ -354,9 +361,11 @@ class ParsedAuditEvent:
             return None
 
         # Convert collection time to UTC for comparison
-        # astimezone() handles both naive (assumes local) and aware datetimes
         collection_t = self.collection_time
-        collection_utc = collection_t.astimezone(UTC)
+        if collection_t.tzinfo is None:
+            collection_utc = collection_t.astimezone(UTC)
+        else:
+            collection_utc = collection_t.astimezone(UTC)
 
         if event_t.tzinfo is None:
             event_utc = event_t.replace(tzinfo=UTC)
@@ -479,7 +488,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "rewrap":
+        if self.msg != VERB_REWRAP:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -513,7 +522,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "policy crud":
+        if self.msg != VERB_POLICY_CRUD:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -541,7 +550,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "decision":
+        if self.msg != VERB_DECISION:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -650,18 +659,22 @@ class AuditLogCollector:
             self._disabled = True
             return
 
-        any_file_exists = any(path.exists() for path in self.log_files.values())
-        if not any_file_exists:
+        existing_files = {
+            service: path for service, path in self.log_files.items() if path.exists()
+        }
+
+        if not existing_files:
             logger.warning(
                 f"None of the log files exist yet: {list(self.log_files.values())}. "
                 f"Will wait for them to be created..."
             )
+            existing_files = self.log_files
 
         logger.debug(
-            f"Starting file-based log collection for: {list(self.log_files.keys())}"
+            f"Starting file-based log collection for: {list(existing_files.keys())}"
         )
 
-        for service, log_path in self.log_files.items():
+        for service, log_path in existing_files.items():
             thread = threading.Thread(
                 target=self._tail_file,
                 args=(service, log_path),
@@ -671,7 +684,7 @@ class AuditLogCollector:
             self._threads.append(thread)
 
         logger.info(
-            f"Audit log collection started for: {', '.join(self.log_files.keys())}"
+            f"Audit log collection started for: {', '.join(existing_files.keys())}"
         )
 
     def stop(self) -> None:
@@ -1141,7 +1154,7 @@ class AuditLogAsserter:
 
         # Verify msg is one of the known audit verbs
         msg = data.get("msg", "")
-        if msg not in ("decision", "policy crud", "rewrap"):
+        if msg not in (VERB_DECISION, VERB_POLICY_CRUD, VERB_REWRAP):
             return None
 
         event = ParsedAuditEvent(
