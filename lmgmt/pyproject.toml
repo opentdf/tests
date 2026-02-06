@@ -1,0 +1,35 @@
+[project]
+name = "lmgmt"
+version = "0.1.0"
+description = "Local management CLI for OpenTDF test environment"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "docker>=7.0.0",
+    "httpx>=0.27.0",
+    "pydantic-settings>=2.2.0",
+    "rich>=13.7.0",
+    "ruamel.yaml>=0.18.0",
+    "typer>=0.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
+]
+
+[project.scripts]
+lmgmt = "lmgmt.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.9.28"]
+build-backend = "uv_build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lmgmt"]
+
+[tool.pytest.ini_options]
+pythonpath = "src"
+testpaths = ["tests"]
