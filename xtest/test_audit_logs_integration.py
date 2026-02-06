@@ -8,6 +8,9 @@ These tests verify that audit events are properly generated for:
 Run with:
     cd tests/xtest
     uv run pytest test_audit_logs_integration.py --sdks go -v
+
+Note: These tests require audit log collection to be enabled. They will be
+skipped when running with --no-audit-logs.
 """
 
 import filecmp
@@ -22,6 +25,13 @@ import abac
 import tdfs
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
+
+
+@pytest.fixture(autouse=True)
+def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
+    """Skip all tests in this module if audit log collection is disabled."""
+    if not audit_logs.is_enabled:
+        pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
 # ============================================================================
 # Rewrap Audit Tests

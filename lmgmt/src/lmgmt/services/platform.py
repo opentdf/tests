@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from lmgmt.config.features import PlatformFeatures
 from lmgmt.config.ports import Ports
 from lmgmt.config.settings import Settings
 from lmgmt.health.checks import check_http_health, check_port
@@ -43,10 +44,17 @@ class PlatformService(Service):
         config_path = self.settings.platform_config
         template_path = self.settings.platform_template_config
 
+        # Detect platform features to determine supported config options
+        features = PlatformFeatures.detect(self.settings.platform_dir)
+
+        # Use stderr if supported, otherwise stdout (v0.9.0 only supports stdout)
+        logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
+
         # Updates for platform config
         updates = {
             "logger.level": "debug",
             "logger.type": "json",
+            "logger.output": logger_output,
         }
 
         copy_yaml_with_updates(template_path, config_path, updates)

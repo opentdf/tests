@@ -851,6 +851,15 @@ class AuditLogAsserter:
         """
         self._collector = collector
 
+    @property
+    def is_enabled(self) -> bool:
+        """Check if audit log collection is enabled.
+
+        Returns:
+            True if collection is active, False if disabled or no collector
+        """
+        return self._collector is not None and not self._collector._disabled
+
     def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation.
 

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from lmgmt.config.features import PlatformFeatures
 from lmgmt.config.ports import Ports
 from lmgmt.config.settings import Settings
 from lmgmt.health.checks import check_http_health, check_port
@@ -54,9 +55,16 @@ class KASService(Service):
         platform_config = load_yaml(self.settings.platform_config)
         root_key = get_nested(platform_config, "services.kas.root_key", "")
 
+        # Detect platform features to determine supported config options
+        features = PlatformFeatures.detect(self.settings.platform_dir)
+
+        # Use stderr if supported, otherwise stdout (v0.9.0 only supports stdout)
+        logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
+
         # Base updates for all KAS instances
         updates = {
             "logger.type": "json",
+            "logger.output": logger_output,
             "server.port": self.port,
             "services.kas.root_key": root_key,
         }
