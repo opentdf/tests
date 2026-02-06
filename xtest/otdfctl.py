@@ -65,14 +65,13 @@ class OpentdfCommandLineTool:
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()
         logger.info(f"kr-ls [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         o = json.loads(out)
         if not o:
             return []
@@ -90,7 +89,7 @@ class OpentdfCommandLineTool:
         if public_key:
             cmd += [f"--public-keys={public_key.model_dump_json()}"]
         logger.info(f"kr-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -113,13 +112,14 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy kas-registry key list".split()
         cmd += [f"--kas={kas.uri}"]
         logger.info(f"kr-keys-ls [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
-            return []
         if out:
             print(out)
+        if process.returncode != 0 and err.find(b"not found") >= 0:
+            return []
         assert process.returncode == 0
         o = json.loads(out)
         if not o:
@@ -131,6 +131,7 @@ class OpentdfCommandLineTool:
     def kas_registry_create_public_key_only(
         self, kas: KasEntry, public_key: KasPublicKey
     ) -> KasKey:
+        # Check if key already exists before attempting to create
         for k in self.kas_registry_keys_list(kas):
             if k.key.key_id == public_key.kid and k.kas_uri == kas.uri:
                 return k
@@ -145,14 +146,40 @@ class OpentdfCommandLineTool:
             f"--key-id={public_key.kid}",
             f"--algorithm={public_key.algStr}",
         ]
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        logger.info(f"kas-registry public-key-create [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
         logger.debug(f"Raw output from kas_registry_create_public_key_only: {out}")
-        assert process.returncode == 0
+
+        # Handle race condition: if key already exists, verify it matches and return it
+        if process.returncode != 0:
+            err_str = (err.decode() if err else "") + (out.decode() if out else "")
+            if "already_exists" in err_str or "unique field violation" in err_str:
+                logger.info(
+                    f"Key {public_key.kid} already exists on {kas.uri}, verifying it matches"
+                )
+                # Query existing keys and find the one we tried to create
+                existing_keys = self.kas_registry_keys_list(kas)
+                for existing_key in existing_keys:
+                    if existing_key.key.key_id == public_key.kid:
+                        # Key exists and matches what we tried to create
+                        logger.info(
+                            f"Key {public_key.kid} already exists with matching properties, returning it"
+                        )
+                        return existing_key
+                # Key not found in list (shouldn't happen)
+                raise AssertionError(
+                    f"Key creation failed with 'already_exists' error, but key {public_key.kid} "
+                    f"not found when querying existing keys. This suggests a conflict. "
+                    f"Error: {err_str}"
+                )
+            # Different error, raise it
+            assert False, f"Key creation failed: {err_str}"
+
         return KasKey.model_validate_json(out)
 
     def kas_registry_create_key(
@@ -206,7 +233,7 @@ class OpentdfCommandLineTool:
             cmd += [f"--wrapping-key-id={wrapping_key_id}"]
 
         logger.info(f"kas-registry key-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -226,6 +253,7 @@ class OpentdfCommandLineTool:
         wrapping_key_id: str,
         algorithm: str,
     ):
+        kas_entry = kas if isinstance(kas, KasEntry) else None
         kas_id = kas.uri if isinstance(kas, KasEntry) else kas
         cmd = self.otdfctl + "policy kas-registry key import".split()
         cmd += [f"--kas={kas_id}", f"--key-id={key_id}"]
@@ -240,13 +268,44 @@ class OpentdfCommandLineTool:
             cmd += [f"--legacy={legacy}"]
 
         logger.info(f"kas-registry key-import [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert process.returncode == 0
+
+        # Handle race condition: if key already exists, verify it matches and return it
+        if process.returncode != 0:
+            err_str = (err.decode() if err else "") + (out.decode() if out else "")
+            if "already_exists" in err_str or "unique field violation" in err_str:
+                logger.info(
+                    f"Key {key_id} already exists on {kas_id}, verifying it matches"
+                )
+                # Query existing keys and find the one we tried to import
+                if kas_entry is None:
+                    # Can't query without KasEntry object, re-raise
+                    raise AssertionError(
+                        f"Key import failed with 'already_exists' error but cannot verify "
+                        f"(kas was passed as string). Error: {err_str}"
+                    )
+                existing_keys = self.kas_registry_keys_list(kas_entry)
+                for existing_key in existing_keys:
+                    if existing_key.key.key_id == key_id:
+                        # Key exists and matches what we tried to import
+                        logger.info(
+                            f"Key {key_id} already exists with matching properties, returning it"
+                        )
+                        return existing_key
+                # Key not found in list (shouldn't happen)
+                raise AssertionError(
+                    f"Key import failed with 'already_exists' error, but key {key_id} "
+                    f"not found when querying existing keys. This suggests a conflict. "
+                    f"Error: {err_str}"
+                )
+            # Different error, raise it
+            assert False, f"Key import failed: {err_str}"
+
         return KasKey.model_validate_json(out)
 
     def set_base_key(self, key: KasKey | str, kas: KasEntry | str):
@@ -255,7 +314,7 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy kas-registry key base set".split()
         cmd += [f"--key={key_id}", f"--kas={kas_id}"]
         logger.info(f"kas-registry base key set [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -270,7 +329,7 @@ class OpentdfCommandLineTool:
             f"--namespace={ns.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -287,14 +346,13 @@ class OpentdfCommandLineTool:
             f"--namespace-id={ns.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantNamespace.model_validate_json(out)
 
     def key_assign_attr(self, key: KasKey, attr: Attribute) -> AttributeKey:
@@ -304,7 +362,7 @@ class OpentdfCommandLineTool:
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -321,14 +379,13 @@ class OpentdfCommandLineTool:
             f"--attribute-id={attr.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantAttribute.model_validate_json(out)
 
     def key_assign_value(self, key: KasKey, val: AttributeValue) -> ValueKey:
@@ -338,7 +395,7 @@ class OpentdfCommandLineTool:
             f"--value={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -355,14 +412,13 @@ class OpentdfCommandLineTool:
             f"--value-id={val.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantValue.model_validate_json(out)
 
     def key_unassign_ns(self, key: KasKey, ns: Namespace) -> NamespaceKey:
@@ -372,14 +428,13 @@ class OpentdfCommandLineTool:
             f"--namespace={ns.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return NamespaceKey.model_validate_json(out)
 
     # Deprecated in otdfctl 0.22
@@ -390,14 +445,13 @@ class OpentdfCommandLineTool:
             f"--namespace-id={ns.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantNamespace.model_validate_json(out)
 
     def key_unassign_attr(self, key: KasKey, attr: Attribute) -> AttributeKey:
@@ -407,7 +461,7 @@ class OpentdfCommandLineTool:
             f"--attribute={attr.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -424,14 +478,13 @@ class OpentdfCommandLineTool:
             f"--attribute-id={attr.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantAttribute.model_validate_json(out)
 
     def key_unassign_value(self, key: KasKey, val: AttributeValue) -> ValueKey:
@@ -441,7 +494,7 @@ class OpentdfCommandLineTool:
             f"--value={val.id}",
         ]
         logger.info(f"key-assign [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
@@ -458,27 +511,25 @@ class OpentdfCommandLineTool:
             f"--value-id={val.id}",
         ]
         logger.info(f"grant-update [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert code == 0
+        assert process.returncode == 0
         return KasGrantValue.model_validate_json(out)
 
     def namespace_list(self) -> list[Namespace]:
         cmd = self.otdfctl + "policy attributes namespaces list".split()
         logger.info(f"ns-ls [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         o = json.loads(out)
         if not o:
             return []
@@ -491,14 +542,13 @@ class OpentdfCommandLineTool:
         cmd = self.otdfctl + "policy attributes namespaces create".split()
         cmd += [f"--name={name}"]
         logger.info(f"ns-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return Namespace.model_validate_json(out)
 
     def attribute_create(
@@ -514,14 +564,13 @@ class OpentdfCommandLineTool:
         if values:
             cmd += [f"--value={','.join(values)}"]
         logger.info(f"attr-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return Attribute.model_validate_json(out)
 
     def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
@@ -530,14 +579,13 @@ class OpentdfCommandLineTool:
         cmd += [f"--subject-sets=[{','.join([s.model_dump_json() for s in scs])}]"]
 
         logger.info(f"scs-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return SubjectConditionSet.model_validate_json(out)
 
     def scs_map(
@@ -561,22 +609,21 @@ class OpentdfCommandLineTool:
         ]
 
         logger.info(f"sm-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err, file=sys.stderr)
         if out:
             print(out)
         if (
-            code != 0
+            process.returncode != 0
             and not self.flag_scs_map_action_standard
             and err.find(b"--action-standard") >= 0
         ):
             self.flag_scs_map_action_standard = True
             return self.scs_map(sc, value)
 
-        assert code == 0
+        assert process.returncode == 0
         return SubjectMapping.model_validate_json(out)
 
     def obligation_def_create(
@@ -590,14 +637,13 @@ class OpentdfCommandLineTool:
         if value:
             cmd += [f"--value={','.join(value)}"]
         logger.info(f"obligation-def-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return Obligation.model_validate_json(out)
 
     def obligation_value_create(
@@ -619,14 +665,13 @@ class OpentdfCommandLineTool:
         if triggers:
             cmd += [f"--triggers=[{','.join([t.model_dump_json() for t in triggers])}]"]
         logger.info(f"obligation-value-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return ObligationValue.model_validate_json(out)
 
     def obligation_triggers_create(
@@ -645,12 +690,11 @@ class OpentdfCommandLineTool:
         if client_id:
             cmd += [f"--client-id={client_id}"]
         logger.info(f"obligation-triggers-create [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        code = process.wait()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
-            print(err, file=sys.stderr, flush=code != 0)
+            print(err, file=sys.stderr, flush=process.returncode != 0)
         if out:
-            print(out, flush=code != 0)
-        assert code == 0
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
         return ObligationTrigger.model_validate_json(out)
