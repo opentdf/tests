@@ -33,6 +33,7 @@ container_type = Literal[
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    "audit_logging",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -72,6 +73,7 @@ class PlatformFeatureSet(BaseModel):
             print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")
             v = "0.9.0"
 
+        self.version = v
         ver_match = _version_re.match(v)
         if not ver_match:
             print(f"PLATFORM_VERSION '{v}' does not match the expected format.")
@@ -101,6 +103,11 @@ class PlatformFeatureSet(BaseModel):
 
         if self.semver >= (0, 6, 0):
             self.features.add("key_management")
+
+        # Audit logging was added in platform v0.10.0
+        # Version 0.9.0 and earlier do not emit audit logs
+        if self.semver >= (0, 10, 0):
+            self.features.add("audit_logging")
 
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):

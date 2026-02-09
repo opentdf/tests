@@ -66,6 +66,13 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
         PLATFORM_LOG_FILE: Path to main KAS log file
         KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Paths to additional KAS log files
     """
+    # Import here to avoid circular dependency
+    from tdfs import PlatformFeatureSet
+
+    # Check if platform version supports audit logging
+    pfs = PlatformFeatureSet()
+    platform_supports_audit = "audit_logging" in pfs.features
+
     # Check if disabled via CLI or environment variable
     cli_disabled = request.config.getoption("--no-audit-logs", default=False)
     env_disabled = os.getenv("DISABLE_AUDIT_ASSERTIONS", "").lower() in (
@@ -73,7 +80,16 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
         "true",
         "yes",
     )
-    enabled = not (cli_disabled or env_disabled)
+
+    # Disable if platform doesn't support audit logging (version <= 0.9.0)
+    if not platform_supports_audit:
+        logger.info(
+            f"Platform version {pfs.version or '0.9.0'} does not support audit logging. "
+            f"Audit log assertions will be skipped."
+        )
+        enabled = False
+    else:
+        enabled = not (cli_disabled or env_disabled)
 
     # Get platform directory from environment
     platform_dir = Path(os.getenv("PLATFORM_DIR", "../../platform"))
