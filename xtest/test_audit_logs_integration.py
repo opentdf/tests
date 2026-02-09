@@ -23,6 +23,7 @@ import pytest
 
 import abac
 import tdfs
+from abac import Attribute
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
 
@@ -49,6 +50,7 @@ class TestRewrapAudit:
         tmp_dir: Path,
         audit_logs: AuditLogAsserter,
         in_focus: set[tdfs.SDK],
+        attribute_default_rsa: Attribute,
     ):
         """Verify all expected fields in successful rewrap audit."""
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -62,6 +64,7 @@ class TestRewrapAudit:
             pt_file,
             ct_file,
             container="ztdf",
+            attr_values=attribute_default_rsa.value_fqns,
         )
 
         mark = audit_logs.mark("before_decrypt")
@@ -353,6 +356,7 @@ class TestEdgeCases:
         tmp_dir: Path,
         audit_logs: AuditLogAsserter,
         in_focus: set[tdfs.SDK],
+        attribute_default_rsa: Attribute,
     ):
         """Verify audit logs written even when decrypt fails due to tampering.
 
@@ -371,6 +375,7 @@ class TestEdgeCases:
             pt_file,
             ct_file,
             container="ztdf",
+            attr_values=attribute_default_rsa.value_fqns,
         )
 
         # Tamper with the policy binding
@@ -414,6 +419,7 @@ class TestEdgeCases:
         tmp_dir: Path,
         audit_logs: AuditLogAsserter,
         in_focus: set[tdfs.SDK],
+        attribute_default_rsa: Attribute,
     ):
         """Verify audit logs complete under sequential decrypt load.
 
@@ -434,6 +440,7 @@ class TestEdgeCases:
             pt_file,
             ct_file,
             container="ztdf",
+            attr_values=attribute_default_rsa.value_fqns,
         )
 
         mark = audit_logs.mark("before_load_test")
