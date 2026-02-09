@@ -1,8 +1,24 @@
 """Provisioning service for Keycloak and fixtures."""
 
 import subprocess
+from dataclasses import dataclass
 
 from lmgmt.config.settings import Settings
+
+
+@dataclass
+class ProvisionResult:
+    """Result of a provisioning operation."""
+
+    success: bool
+    error_message: str | None = None
+    stdout: str = ""
+    stderr: str = ""
+    return_code: int = 0
+
+    def __bool__(self) -> bool:
+        """Allow boolean checks for backward compatibility."""
+        return self.success
 
 
 class Provisioner:
@@ -11,13 +27,21 @@ class Provisioner:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def provision_all(self) -> bool:
+    def provision_all(self) -> ProvisionResult:
         """Run all provisioning steps."""
-        keycloak_ok = self.provision_keycloak()
-        fixtures_ok = self.provision_fixtures()
-        return keycloak_ok and fixtures_ok
+        keycloak_result = self.provision_keycloak()
+        fixtures_result = self.provision_fixtures()
 
-    def provision_keycloak(self) -> bool:
+        # If both succeeded, return success
+        if keycloak_result and fixtures_result:
+            return ProvisionResult(success=True)
+
+        # Otherwise, return failure with first error
+        if not keycloak_result:
+            return keycloak_result
+        return fixtures_result
+
+    def provision_keycloak(self) -> ProvisionResult:
         """Provision Keycloak with required configuration.
 
         This runs the provision-keycloak script to set up:
@@ -27,7 +51,7 @@ class Provisioner:
         """
         return self._provision_("keycloak")
 
-    def provision_fixtures(self) -> bool:
+    def provision_fixtures(self) -> ProvisionResult:
         """Provision test fixtures.
 
         This runs the provision-fixtures script to set up:
@@ -37,13 +61,14 @@ class Provisioner:
         """
         return self._provision_("fixtures")
 
-    def _provision_(self, mode: str) -> bool:
-        """Provision test fixtures.
+    def _provision_(self, mode: str) -> ProvisionResult:
+        """Execute a provisioning operation.
 
-        This runs the provision-fixtures script to set up:
-        - Attributes
-        - Entitlements
-        - KAS registrations
+        Args:
+            mode: The provisioning mode ("keycloak" or "fixtures")
+
+        Returns:
+            ProvisionResult with success status and error details
         """
         cmd = [
             "go",
@@ -64,9 +89,33 @@ class Provisioner:
 
         # If the provision command doesn't exist, that's okay
         if result.returncode != 0 and "unknown command" in result.stderr.lower():
-            return True
+            return ProvisionResult(
+                success=True,
+                error_message="Provisioning command not available on this platform version",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                return_code=result.returncode,
+            )
 
-        return result.returncode == 0
+        # If provisioning failed, extract error message from stderr
+        if result.returncode != 0:
+            error_lines = result.stderr.strip().split('\n')
+            error_message = error_lines[-1] if error_lines else "Unknown error"
+            return ProvisionResult(
+                success=False,
+                error_message=error_message,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                return_code=result.returncode,
+            )
+
+        # Success
+        return ProvisionResult(
+            success=True,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            return_code=result.returncode,
+        )
 
     def register_kas_instances(self) -> bool:
         """Register all KAS instances with the platform.

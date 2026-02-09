@@ -13,6 +13,7 @@ from lmgmt.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
 from lmgmt.process.logs import LogAggregator
 from lmgmt.services import (
     Provisioner,
+    ProvisionResult,
     get_docker_service,
     get_kas_manager,
     get_platform_service,
@@ -36,6 +37,18 @@ app = typer.Typer(
     help="Local management CLI for OpenTDF test environment",
     no_args_is_help=True,
 )
+
+
+def _show_provision_error(result: ProvisionResult, target: str) -> None:
+    """Display provisioning error with stderr details."""
+    print_error(f"{target} provisioning failed (exit code {result.return_code})")
+
+    if result.stderr:
+        # Show last 15 lines of stderr
+        lines = result.stderr.strip().split('\n')[-15:]
+        console.print("\n[dim]Error output:[/dim]")
+        for line in lines:
+            console.print(f"  {line}")
 
 
 def version_callback(value: bool) -> None:
@@ -130,8 +143,9 @@ def up(
         if not no_provision:
             print_info("Provisioning Keycloak...")
             provisioner: Provisioner = get_provisioner(settings)
-            if not provisioner.provision_keycloak():
-                print_error("Keycloak provisioning failed")
+            result = provisioner.provision_keycloak()
+            if not result:
+                _show_provision_error(result, "Keycloak")
                 raise typer.Exit(1)
             print_success("Keycloak provisioned")
 
@@ -159,8 +173,10 @@ def up(
     if start_platform and not no_provision:
         print_info("Provisioning fixtures...")
         provisioner = get_provisioner(settings)
-        if not provisioner.provision_fixtures():
-            print_warning("Provisioning may have had issues - continuing anyway")
+        result = provisioner.provision_fixtures()
+        if not result:
+            _show_provision_error(result, "Fixtures")
+            print_warning("Provisioning had issues - continuing anyway")
         else:
             print_success("Provisioning complete")
 
@@ -423,24 +439,27 @@ def provision(
 
     if target == "all":
         print_info("Running all provisioning...")
-        if provisioner.provision_all():
+        result = provisioner.provision_all()
+        if result:
             print_success("Provisioning complete")
         else:
-            print_error("Provisioning failed")
+            _show_provision_error(result, "Provisioning")
             raise typer.Exit(1)
     elif target == "keycloak":
         print_info("Provisioning Keycloak...")
-        if provisioner.provision_keycloak():
+        result = provisioner.provision_keycloak()
+        if result:
             print_success("Keycloak provisioning complete")
         else:
-            print_error("Keycloak provisioning failed")
+            _show_provision_error(result, "Keycloak")
             raise typer.Exit(1)
     elif target == "fixtures":
         print_info("Provisioning fixtures...")
-        if provisioner.provision_fixtures():
+        result = provisioner.provision_fixtures()
+        if result:
             print_success("Fixtures provisioning complete")
         else:
-            print_error("Fixtures provisioning failed")
+            _show_provision_error(result, "Fixtures")
             raise typer.Exit(1)
     else:
         print_error(f"Unknown target: {target}")
