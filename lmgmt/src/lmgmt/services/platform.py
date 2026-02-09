@@ -8,7 +8,8 @@ from lmgmt.config.settings import Settings
 from lmgmt.health.checks import check_http_health, check_port
 from lmgmt.process.manager import ManagedProcess, ProcessManager, kill_process_on_port
 from lmgmt.services.base import Service, ServiceInfo, ServiceType
-from lmgmt.utils.yaml import copy_yaml_with_updates
+from lmgmt.utils.keys import get_golden_keyring_entries, setup_golden_keys
+from lmgmt.utils.yaml import append_to_list, copy_yaml_with_updates, load_yaml, save_yaml
 
 
 class PlatformService(Service):
@@ -58,7 +59,38 @@ class PlatformService(Service):
         }
 
         copy_yaml_with_updates(template_path, config_path, updates)
+
+        # Set up golden keys for legacy TDF tests
+        self._setup_golden_keys(config_path)
+
         return config_path
+
+    def _setup_golden_keys(self, config_path: Path) -> None:
+        """Add golden keys to platform config for legacy TDF decryption.
+
+        Extracts keys from extra-keys.json and adds them to the platform config
+        so legacy golden TDFs can be decrypted.
+        """
+        # Set up golden key files and get their config entries
+        golden_keys = setup_golden_keys(
+            self.settings.xtest_root,
+            self.settings.platform_dir,
+        )
+
+        if not golden_keys:
+            return
+
+        # Load config, append golden keys, and save
+        data = load_yaml(config_path)
+
+        # Add keys to cryptoProvider.standard.keys
+        append_to_list(data, "server.cryptoProvider.standard.keys", golden_keys)
+
+        # Add keyring entries for legacy decryption
+        keyring_entries = get_golden_keyring_entries()
+        append_to_list(data, "services.kas.keyring", keyring_entries)
+
+        save_yaml(config_path, data)
 
     def start(self) -> bool:
         """Start the platform service."""

@@ -1,5 +1,6 @@
 """Cryptographic key generation utilities."""
 
+import json
 import secrets
 import subprocess
 from pathlib import Path
@@ -135,3 +136,74 @@ def ensure_keys_exist(key_dir: Path, force: bool = False) -> bool:
     generate_rsa_keypair(key_dir, "kas")
     generate_ec_keypair(key_dir, "kas-ec")
     return True
+
+
+def setup_golden_keys(
+    xtest_root: Path,
+    platform_dir: Path,
+) -> list[dict]:
+    """Extract and install golden keys for legacy TDF decryption.
+
+    Reads extra-keys.json from the xtest directory and copies the key files
+    to the platform directory for use by the platform service.
+
+    Args:
+        xtest_root: Root directory of xtest (contains xtest/extra-keys.json)
+        platform_dir: Platform source directory
+
+    Returns:
+        List of key configurations to add to cryptoProvider.standard.keys
+    """
+    extra_keys_file = xtest_root / "xtest" / "extra-keys.json"
+    if not extra_keys_file.exists():
+        return []
+
+    with open(extra_keys_file) as f:
+        extra_keys = json.load(f)
+
+    keys_config = []
+    for key_entry in extra_keys:
+        kid = key_entry.get("kid", "")
+        alg = key_entry.get("alg", "")
+        private_key = key_entry.get("privateKey", "")
+        cert = key_entry.get("cert", "")
+
+        if not all([kid, alg, private_key, cert]):
+            continue
+
+        # Map algorithm to platform format
+        if alg == "rsa:2048":
+            platform_alg = "rsa:2048"
+        elif alg == "ec:secp256r1":
+            platform_alg = "ec:secp256r1"
+        else:
+            continue
+
+        # Write key files to platform directory
+        private_path = platform_dir / f"{kid}-private.pem"
+        cert_path = platform_dir / f"{kid}-cert.pem"
+
+        private_path.write_text(private_key)
+        cert_path.write_text(cert)
+
+        keys_config.append(
+            {
+                "kid": kid,
+                "alg": platform_alg,
+                "private": f"{kid}-private.pem",
+                "cert": f"{kid}-cert.pem",
+            }
+        )
+
+    return keys_config
+
+
+def get_golden_keyring_entries() -> list[dict]:
+    """Get keyring entries for golden keys.
+
+    Returns:
+        List of keyring entries to add to services.kas.keyring
+    """
+    return [
+        {"kid": "golden-r1", "alg": "rsa:2048", "legacy": True},
+    ]

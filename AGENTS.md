@@ -21,8 +21,8 @@ cd ../xtest
 # Run with specific SDK
 uv run pytest --sdks go -v
 
-# Run with multiple SDKs
-uv run pytest --sdks go,java,js -v
+# Run with multiple SDKs (space-separated)
+uv run pytest --sdks "go java js" -v
 
 # Run specific test file
 uv run pytest test_tdfs.py --sdks go -v
@@ -290,13 +290,58 @@ curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_s
 
 **Fix**: Ensure all KAS instances are properly registered in the platform during startup (this is handled by `lmgmt up`)
 
-### 5. Legacy Test Failures: "cipher: message authentication failed"
+### 5. Legacy/Golden TDF Test Configuration
 
-**Symptom**: Legacy golden TDF decrypt tests fail
+**Symptom**: Legacy golden TDF decrypt tests fail with "cipher: message authentication failed"
 
-**Root Cause**: Golden TDFs were created with different keys than current environment
+**Root Cause**: Golden TDFs were created with specific keys that must be loaded by the platform.
 
-**Solution**: These tests require the exact keys used when creating the golden TDFs. Not a bug, just needs proper key configuration.
+**Automatic Configuration**:
+
+When using `lmgmt up` or `lmgmt restart platform`, golden keys are automatically configured:
+1. `lmgmt` reads `tests/xtest/extra-keys.json` containing the `golden-r1` key
+2. Key files are extracted to `platform/golden-r1-private.pem` and `platform/golden-r1-cert.pem`
+3. The key is added to `cryptoProvider.standard.keys` in the platform config
+4. A legacy keyring entry is added to `services.kas.keyring`
+
+**Manual Configuration** (if not using lmgmt):
+
+If you need to configure golden keys manually, add to `platform/opentdf-dev.yaml`:
+
+```yaml
+services:
+  kas:
+    keyring:
+      # ... existing entries ...
+      - kid: golden-r1
+        alg: rsa:2048
+        legacy: true
+
+server:
+  cryptoProvider:
+    standard:
+      keys:
+        # ... existing entries ...
+        - kid: golden-r1
+          alg: rsa:2048
+          private: golden-r1-private.pem
+          cert: golden-r1-cert.pem
+```
+
+And extract the key files from `tests/xtest/extra-keys.json`:
+```bash
+jq -r '.[0].privateKey' tests/xtest/extra-keys.json > platform/golden-r1-private.pem
+jq -r '.[0].cert' tests/xtest/extra-keys.json > platform/golden-r1-cert.pem
+```
+
+**Running Golden File Tests**:
+```bash
+cd tests/lmgmt
+uv run lmgmt up  # or restart platform
+eval $(uv run lmgmt env)
+cd ../xtest
+uv run pytest test_legacy.py --sdks go -v --no-audit-logs
+```
 
 ### 6. Missing Environment Variables
 
@@ -433,7 +478,7 @@ uv run lmgmt logs -f
 
 - `test_tdfs.py` - Core TDF roundtrip, manifest validation, tampering tests
 - `test_abac.py` - ABAC policy, autoconfigure, key management tests
-- `test_legacy.py` - Backward compatibility with golden TDFs
+- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key, auto-configured by lmgmt)
 - `test_policytypes.py` - Policy type tests (OR, AND, hierarchy)
 - `test_self.py` - Platform API tests (namespaces, attributes, SCS)
 

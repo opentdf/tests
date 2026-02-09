@@ -81,6 +81,33 @@ def update_yaml_file(path: Path, updates: dict[str, Any]) -> None:
     save_yaml(path, data)
 
 
+def append_to_list(data: dict[str, Any], path: str, items: list[Any]) -> None:
+    """Append items to a list at a nested path.
+
+    Args:
+        data: The dictionary to modify
+        path: Dot-separated path to the list
+        items: Items to append
+    """
+    current_list = get_nested(data, path, [])
+    if not isinstance(current_list, list):
+        current_list = []
+
+    # Check for duplicates by kid if items are dicts with kid
+    existing_kids = {
+        item.get("kid") for item in current_list if isinstance(item, dict) and "kid" in item
+    }
+    for item in items:
+        if isinstance(item, dict) and "kid" in item:
+            if item["kid"] not in existing_kids:
+                current_list.append(item)
+                existing_kids.add(item["kid"])
+        else:
+            current_list.append(item)
+
+    set_nested(data, path, current_list)
+
+
 def copy_yaml_with_updates(source: Path, dest: Path, updates: dict[str, Any]) -> None:
     """Copy a YAML file and apply updates to the copy.
 
