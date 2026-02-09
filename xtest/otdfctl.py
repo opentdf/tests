@@ -103,16 +103,23 @@ class OpentdfCommandLineTool:
     def _verify_kas_entry_keys(
         self, entry: KasEntry, expected_key: PublicKey | None
     ) -> None:
-        """Assert that an existing KAS entry's public keys match expectations."""
+        """Assert that an existing KAS entry's public keys match expectations.
+
+        Only performs verification if the entry has public_key field populated.
+        This allows for entries registered without keys to be returned safely.
+        """
         if expected_key is None:
             return
         if expected_key.cached is None:
             return
-        existing_pks = (
-            entry.public_key.PublicKey.cached.keys
-            if entry.public_key and entry.public_key.PublicKey and entry.public_key.PublicKey.cached
-            else []
-        )
+        # Only verify if entry actually has public keys registered
+        if not entry.public_key or not entry.public_key.PublicKey or not entry.public_key.PublicKey.cached:
+            logger.warning(
+                f"KAS {entry.uri} has no public keys registered yet, "
+                "skipping key verification (will be added later with kas_registry_create_public_key_only)"
+            )
+            return
+        existing_pks = entry.public_key.PublicKey.cached.keys
         existing_by_kid = {k.kid: k for k in existing_pks}
         for expected in expected_key.cached.keys:
             found = existing_by_kid.get(expected.kid)
