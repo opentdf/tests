@@ -100,13 +100,68 @@ class OpentdfCommandLineTool:
         )
         return KasEntry.model_validate_json(out)
 
+    def _verify_kas_entry_keys(
+        self, entry: KasEntry, expected_key: PublicKey | None
+    ) -> None:
+        """Assert that an existing KAS entry's public keys match expectations."""
+        if expected_key is None:
+            return
+        if expected_key.cached is None:
+            return
+        existing_pks = (
+            entry.public_key.PublicKey.cached.keys
+            if entry.public_key and entry.public_key.PublicKey and entry.public_key.PublicKey.cached
+            else []
+        )
+        existing_by_kid = {k.kid: k for k in existing_pks}
+        for expected in expected_key.cached.keys:
+            found = existing_by_kid.get(expected.kid)
+            assert found is not None, (
+                f"KAS {entry.uri}: expected key kid={expected.kid} not present. "
+                f"Existing kids: {list(existing_by_kid.keys())}"
+            )
+            assert found.pem.strip() == expected.pem.strip(), (
+                f"KAS {entry.uri}: key kid={expected.kid} PEM mismatch"
+            )
+
     def kas_registry_create_if_not_present(
         self, uri: str, key: PublicKey | None = None
     ) -> KasEntry:
         for e in self.kas_registry_list():
             if e.uri == uri:
+                self._verify_kas_entry_keys(e, key)
                 return e
-        return self.kas_registry_create(uri, key)
+        # Try to create; handle race where another worker created it first
+        cmd = self.otdfctl + "policy kas-registry create".split()
+        cmd += [f"--uri={uri}"]
+        if key:
+            cmd += [f"--public-keys={key.model_dump_json()}"]
+        logger.info(f"kr-create-if-not-present [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr)
+        if out:
+            print(out)
+        if process.returncode == 0:
+            return KasEntry.model_validate_json(out)
+        # Creation failed — check if it was a conflict
+        err_str = (err.decode() if err else "") + (out.decode() if out else "")
+        if "already_exists" in err_str or "unique field violation" in err_str:
+            logger.info(
+                f"KAS {uri} already exists (race condition), fetching existing entry"
+            )
+            for e in self.kas_registry_list():
+                if e.uri == uri:
+                    self._verify_kas_entry_keys(e, key)
+                    return e
+            raise AssertionError(
+                f"KAS registry create for {uri} failed with 'already_exists' but "
+                f"entry not found in subsequent list. Error: {err_str}"
+            )
+        raise AssertionError(
+            f"otdfctl kas-registry create failed: {err_str}"
+        )
 
     def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
         cmd = self.otdfctl + "policy kas-registry key list".split()
