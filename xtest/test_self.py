@@ -54,18 +54,17 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
         object_id=ns.id,
         since_mark=mark,
     )
-    # Attribute definition creations (2 attributes)
-    audit_logs.assert_policy_create(
+    # Attribute definition creations (2 attributes, values embedded in each event)
+    attr_events = audit_logs.assert_policy_create(
         object_type="attribute_definition",
         min_count=2,
         since_mark=mark,
     )
-    # Attribute value creations (3 values per attribute = 6 total)
-    audit_logs.assert_policy_create(
-        object_type="attribute_value",
-        min_count=6,
-        since_mark=mark,
+    # Platform embeds created values in the attribute_definition event
+    total_values = sum(
+        len(e.original.get("values", [])) for e in attr_events if e.original
     )
+    assert total_values == 6, f"Expected 6 values across attribute_definition events, got {total_values}"
 
 
 def test_scs_create(audit_logs: AuditLogAsserter) -> None:

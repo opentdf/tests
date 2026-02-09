@@ -234,21 +234,18 @@ class TestPolicyCRUDAudit:
             since_mark=mark,
         )
 
-        # Verify attribute definition creation
+        # Verify attribute definition creation (values are embedded in the event)
         events = audit_logs.assert_policy_create(
             object_type="attribute_definition",
             object_id=attr.id,
             since_mark=mark,
         )
         assert len(events) >= 1
-
-        # Verify attribute values creation (2 values)
-        value_events = audit_logs.assert_policy_create(
-            object_type="attribute_value",
-            min_count=2,
-            since_mark=mark,
-        )
-        assert len(value_events) >= 2
+        # Platform embeds created values in the attribute_definition event
+        original = events[0].original
+        assert original is not None
+        values = original.get("values", [])
+        assert len(values) == 2, f"Expected 2 values in attribute_definition event, got {len(values)}"
 
     def test_subject_mapping_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter

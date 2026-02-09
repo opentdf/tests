@@ -628,6 +628,7 @@ class AuditLogCollector:
         self._mark_counter = 0
         self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
+        self._new_data = threading.Condition()
         self._disabled = False
         self._error: Exception | None = None
         self.log_file_path: Path | None = None
@@ -694,6 +695,9 @@ class AuditLogCollector:
 
         logger.debug("Stopping audit log collection")
         self._stop_event.set()
+        # Wake any threads waiting on new data so they can exit promptly
+        with self._new_data:
+            self._new_data.notify_all()
 
         for thread in self._threads:
             if thread.is_alive():
@@ -798,6 +802,22 @@ Log Entries:
         self.log_file_written = True
         logger.info(f"Wrote {len(self._buffer)} audit log entries to {path}")
 
+    def wait_for_new_data(self, timeout: float = 0.1) -> bool:
+        """Wait for new log data to arrive.
+
+        Blocks until new data is appended by a tail thread, or until timeout.
+        More efficient than polling with time.sleep() since it wakes up
+        immediately when data arrives.
+
+        Args:
+            timeout: Maximum time to wait in seconds (default: 0.1)
+
+        Returns:
+            True if woken by new data, False if timed out
+        """
+        with self._new_data:
+            return self._new_data.wait(timeout=timeout)
+
     def _tail_file(self, service: str, log_path: Path) -> None:
         """Background thread target that tails a log file.
 
@@ -821,14 +841,23 @@ Log Entries:
                 f.seek(0, 2)
 
                 while not self._stop_event.is_set():
-                    line = f.readline()
-                    if line:
+                    # Batch-read all available lines before notifying
+                    got_data = False
+                    while True:
+                        line = f.readline()
+                        if not line:
+                            break
                         entry = LogEntry(
                             timestamp=datetime.now(),
                             raw_line=line.rstrip(),
                             service_name=service,
                         )
                         self._buffer.append(entry)
+                        got_data = True
+
+                    if got_data:
+                        with self._new_data:
+                            self._new_data.notify_all()
                     else:
                         self._stop_event.wait(0.1)
         except Exception as e:
@@ -949,7 +978,7 @@ class AuditLogAsserter:
         matching: list[LogEntry] = []
         logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             logs = self._collector.get_logs(since=since)
             matching = [log for log in logs if regex.search(log.raw_line)]
 
@@ -961,8 +990,11 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            # Sleep briefly before checking again
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            # Wait for new data or timeout
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Timeout expired, raise error if we don't have enough matches
         timeout_time = datetime.now()
@@ -1207,7 +1239,7 @@ class AuditLogAsserter:
 
         # Wait a bit for logs to arrive
         start_time = time.time()
-        while time.time() - start_time < timeout:
+        while True:
             logs = self._collector.get_logs(since=since)
             parsed = []
             for entry in logs:
@@ -1216,7 +1248,11 @@ class AuditLogAsserter:
                     parsed.append(event)
             if parsed:
                 return parsed
-            time.sleep(0.1)
+
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         return []
 
@@ -1267,7 +1303,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1289,7 +1325,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
@@ -1448,7 +1487,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1469,7 +1508,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
@@ -1608,7 +1650,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1630,7 +1672,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
