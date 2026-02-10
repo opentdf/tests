@@ -60,11 +60,12 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
         min_count=2,
         since_mark=mark,
     )
-    # Platform embeds created values in the attribute_definition event
+    # Platform embeds created values in the attribute_definition event.
+    # With xdist, other workers may create attributes concurrently, so use >=.
     total_values = sum(
         len(e.original.get("values", [])) for e in attr_events if e.original
     )
-    assert total_values == 6, f"Expected 6 values across attribute_definition events, got {total_values}"
+    assert total_values >= 6, f"Expected at least 6 values across attribute_definition events, got {total_values}"
 
 
 def test_scs_create(audit_logs: AuditLogAsserter) -> None:

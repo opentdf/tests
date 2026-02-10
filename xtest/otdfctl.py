@@ -301,7 +301,33 @@ class OpentdfCommandLineTool:
             print(err, file=sys.stderr)
         if out:
             print(out)
-        assert process.returncode == 0
+
+        # Handle race condition: if key already exists, return the existing one
+        if process.returncode != 0:
+            err_str = (err.decode() if err else "") + (out.decode() if out else "")
+            if "already_exists" in err_str or "unique field violation" in err_str:
+                logger.info(
+                    f"Key {key_id} already exists on {kas_id} (race condition), fetching existing key"
+                )
+                kas_entry = kas if isinstance(kas, KasEntry) else None
+                if kas_entry is None:
+                    raise AssertionError(
+                        f"Key creation failed with 'already_exists' error but cannot verify "
+                        f"(kas was passed as string). Error: {err_str}"
+                    )
+                existing_keys = self.kas_registry_keys_list(kas_entry)
+                for existing_key in existing_keys:
+                    if existing_key.key.key_id == key_id:
+                        logger.info(
+                            f"Key {key_id} already exists with matching key_id, returning it"
+                        )
+                        return existing_key
+                raise AssertionError(
+                    f"Key creation failed with 'already_exists' error, but key {key_id} "
+                    f"not found when querying existing keys. Error: {err_str}"
+                )
+            assert False, f"Key creation failed: {err_str}"
+
         return KasKey.model_validate_json(out)
 
     def kas_registry_import_key(
