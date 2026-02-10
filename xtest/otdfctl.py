@@ -113,7 +113,11 @@ class OpentdfCommandLineTool:
         if expected_key.cached is None:
             return
         # Only verify if entry actually has public keys registered
-        if not entry.public_key or not entry.public_key.PublicKey or not entry.public_key.PublicKey.cached:
+        if (
+            not entry.public_key
+            or not entry.public_key.PublicKey
+            or not entry.public_key.PublicKey.cached
+        ):
             logger.warning(
                 f"KAS {entry.uri} has no public keys registered yet, "
                 "skipping key verification (will be added later with kas_registry_create_public_key_only)"
@@ -166,9 +170,7 @@ class OpentdfCommandLineTool:
                 f"KAS registry create for {uri} failed with 'already_exists' but "
                 f"entry not found in subsequent list. Error: {err_str}"
             )
-        raise AssertionError(
-            f"otdfctl kas-registry create failed: {err_str}"
-        )
+        raise AssertionError(f"otdfctl kas-registry create failed: {err_str}")
 
     def kas_registry_keys_list(self, kas: KasEntry) -> list[KasKey]:
         cmd = self.otdfctl + "policy kas-registry key list".split()
@@ -307,7 +309,8 @@ class OpentdfCommandLineTool:
             err_str = (err.decode() if err else "") + (out.decode() if out else "")
             if "already_exists" in err_str or "unique field violation" in err_str:
                 logger.info(
-                    f"Key {key_id} already exists on {kas_id} (race condition), fetching existing key"
+                    f"Key {key_id} already exists on {kas_id}, fetching existing key "
+                    "(race condition detected)"
                 )
                 kas_entry = kas if isinstance(kas, KasEntry) else None
                 if kas_entry is None:
@@ -319,12 +322,12 @@ class OpentdfCommandLineTool:
                 for existing_key in existing_keys:
                     if existing_key.key.key_id == key_id:
                         logger.info(
-                            f"Key {key_id} already exists with matching key_id, returning it"
+                            f"Key {key_id} already exists, returning existing key"
                         )
                         return existing_key
                 raise AssertionError(
-                    f"Key creation failed with 'already_exists' error, but key {key_id} "
-                    f"not found when querying existing keys. Error: {err_str}"
+                    f"Key creation failed with 'already_exists' error, but key "
+                    f"{key_id} not found when querying existing keys. Error: {err_str}"
                 )
             assert False, f"Key creation failed: {err_str}"
 

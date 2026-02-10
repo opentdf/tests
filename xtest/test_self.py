@@ -32,7 +32,7 @@ def test_namespace_create(audit_logs: AuditLogAsserter) -> None:
 
 
 def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
-    """Test attribute creation and verify audit logs for namespace, attribute, and values."""
+    """Test attribute creation and verify audit logs for namespace and attributes."""
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
 
     # Mark timestamp before creates
@@ -65,7 +65,9 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
     total_values = sum(
         len(e.original.get("values", [])) for e in attr_events if e.original
     )
-    assert total_values >= 6, f"Expected at least 6 values across attribute_definition events, got {total_values}"
+    assert total_values >= 6, (
+        f"Expected at least 6 values in attribute_definition events. Got {total_values}"
+    )
 
 
 def test_scs_create(audit_logs: AuditLogAsserter) -> None:
