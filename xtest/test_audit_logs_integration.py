@@ -34,6 +34,7 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
     if not audit_logs.is_enabled:
         pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
+
 # ============================================================================
 # Rewrap Audit Tests
 # ============================================================================
@@ -245,7 +246,9 @@ class TestPolicyCRUDAudit:
         original = events[0].original
         assert original is not None
         values = original.get("values", [])
-        assert len(values) == 2, f"Expected 2 values in attribute_definition event, got {len(values)}"
+        assert len(values) == 2, (
+            f"Expected 2 values in attribute_definition event, got {len(values)}"
+        )
 
     def test_subject_mapping_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
