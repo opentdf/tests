@@ -95,7 +95,9 @@ def append_to_list(data: dict[str, Any], path: str, items: list[Any]) -> None:
 
     # Check for duplicates by kid if items are dicts with kid
     existing_kids = {
-        item.get("kid") for item in current_list if isinstance(item, dict) and "kid" in item
+        item.get("kid")
+        for item in current_list
+        if isinstance(item, dict) and "kid" in item
     }
     for item in items:
         if isinstance(item, dict) and "kid" in item:

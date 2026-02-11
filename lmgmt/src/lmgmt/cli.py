@@ -45,7 +45,7 @@ def _show_provision_error(result: ProvisionResult, target: str) -> None:
 
     if result.stderr:
         # Show last 15 lines of stderr
-        lines = result.stderr.strip().split('\n')[-15:]
+        lines = result.stderr.strip().split("\n")[-15:]
         console.print("\n[dim]Error output:[/dim]")
         for line in lines:
             console.print(f"  {line}")

@@ -51,9 +51,7 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
         pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
 
-def _build_decrypt_command(
-    sdk: tdfs.SDK, ct_file: Path, rt_file: Path
-) -> list[str]:
+def _build_decrypt_command(sdk: tdfs.SDK, ct_file: Path, rt_file: Path) -> list[str]:
     """Build the decrypt command for a given SDK, suitable for subprocess.Popen."""
     return [
         sdk.path,
@@ -87,12 +85,14 @@ def _launch_and_kill_staggered(
         proc = subprocess.Popen(
             proc_cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        procs.append({
-            "proc": proc,
-            "kill_delay": kill_delays[i],
-            "launch_time": time.monotonic(),
-            "index": i,
-        })
+        procs.append(
+            {
+                "proc": proc,
+                "kill_delay": kill_delays[i],
+                "launch_time": time.monotonic(),
+                "index": i,
+            }
+        )
 
     # Kill each process at its scheduled time
     start = time.monotonic()
@@ -227,9 +227,7 @@ class TestDeferredAuditGuarantees:
         mark = audit_logs.mark("before_cancel_barrage")
 
         # Build base command (rt_file will be replaced per-process)
-        base_cmd = _build_decrypt_command(
-            decrypt_sdk, ct_file, tmp_dir / "placeholder"
-        )
+        base_cmd = _build_decrypt_command(decrypt_sdk, ct_file, tmp_dir / "placeholder")
         env = dict(os.environ)
 
         proc_results = _launch_and_kill_staggered(
@@ -247,7 +245,7 @@ class TestDeferredAuditGuarantees:
         logger.info(
             f"Cancel barrage: {killed_count} killed, {completed_count} "
             f"completed before kill. Kill times: "
-            f"{[f'{p['kill_time']:.3f}s' for p in proc_results]}"
+            f"{[f'{p["kill_time"]:.3f}s' for p in proc_results]}"
         )
 
         # Collect rewrap events. We expect at least one event for every
@@ -314,9 +312,7 @@ class TestDeferredAuditGuarantees:
 
         mark = audit_logs.mark("before_metadata_barrage")
 
-        base_cmd = _build_decrypt_command(
-            decrypt_sdk, ct_file, tmp_dir / "placeholder"
-        )
+        base_cmd = _build_decrypt_command(decrypt_sdk, ct_file, tmp_dir / "placeholder")
         env = dict(os.environ)
 
         _launch_and_kill_staggered(

@@ -9,7 +9,12 @@ from lmgmt.health.checks import check_http_health, check_port
 from lmgmt.process.manager import ManagedProcess, ProcessManager, kill_process_on_port
 from lmgmt.services.base import Service, ServiceInfo, ServiceType
 from lmgmt.utils.keys import get_golden_keyring_entries, setup_golden_keys
-from lmgmt.utils.yaml import append_to_list, copy_yaml_with_updates, load_yaml, save_yaml
+from lmgmt.utils.yaml import (
+    append_to_list,
+    copy_yaml_with_updates,
+    load_yaml,
+    save_yaml,
+)
 
 
 class PlatformService(Service):

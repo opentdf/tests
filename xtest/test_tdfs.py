@@ -130,7 +130,9 @@ def test_tdf_roundtrip(
 
     target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     # Use explicit RSA attribute when not using EC wrapping to avoid base_key interference
-    attr_values = None if container == "ztdf-ecwrap" else attribute_default_rsa.value_fqns
+    attr_values = (
+        None if container == "ztdf-ecwrap" else attribute_default_rsa.value_fqns
+    )
     ct_file = do_encrypt_with(
         pt_file,
         encrypt_sdk,

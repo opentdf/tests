@@ -99,7 +99,7 @@ class Provisioner:
 
         # If provisioning failed, extract error message from stderr
         if result.returncode != 0:
-            error_lines = result.stderr.strip().split('\n')
+            error_lines = result.stderr.strip().split("\n")
             error_message = error_lines[-1] if error_lines else "Unknown error"
             return ProvisionResult(
                 success=False,
