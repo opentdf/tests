@@ -7,9 +7,42 @@ This guide provides essential knowledge for AI agents (particularly Haiku LLM) p
 ### Structure
 - **Test Directory**: `tests/xtest/` - pytest-based integration tests
 - **SDK Distributions**: `sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
+- **SDK Configuration**: `sdk/scripts/configure.py` - installs SDK CLIs from released artifacts or delegates to source builds
 - **SDK Version Lookup**: `sdk/scripts/list-versions.py` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
 - **Platform**: `platform/` - OpenTDF platform service
 - **Test Runner**: pytest with custom CLI options
+
+### Configuring SDK Artifacts
+
+SDK CLIs can be installed from **released artifacts** (fast, deterministic) or built from **source** (for branch/PR testing). Both modes produce the same `sdk/{go,java,js}/dist/{version}/` directory structure.
+
+```bash
+cd tests/xtest/sdk/scripts
+
+# Install latest stable releases for all SDKs (recommended for local testing)
+python3 configure.py stable
+
+# Install LTS versions (go:0.24.0, java:0.9.0, js:0.4.0)
+python3 configure.py lts
+
+# Install specific released versions
+python3 configure.py release go:v0.24.0 js:0.4.0 java:v0.9.0
+
+# Build from source (checkout main + make)
+python3 configure.py tip
+python3 configure.py tip go    # Single SDK
+
+# Install a single version (used by CI)
+python3 configure.py install --sdk go --version v0.24.0
+python3 configure.py install --sdk go --version v0.24.0 --dist-name my-tag
+```
+
+**How release installs work per SDK:**
+- **Go**: Writes a `.version` file; `cli.sh`/`otdfctl.sh` use `go run github.com/opentdf/otdfctl@{version}` (no local compilation needed, Go caches the binary)
+- **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
+- **Java**: Downloads `cmdline.jar` from GitHub Releases; `cli.sh` uses `java -jar cmdline.jar`
+
+**Source builds** (`tip` mode) delegate to `checkout-sdk-branch.sh` + `make`, which checks out source to `sdk/{lang}/src/` and compiles to `sdk/{lang}/dist/`.
 
 ### Running Tests
 
@@ -422,12 +455,21 @@ sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
 ### When Modifying SDK Code
 
 ```bash
-# After changes, rebuild SDK distribution
+# After changes to SDK source, rebuild from source
+cd tests/xtest/sdk/scripts
+python3 configure.py tip go   # or java, js
+
+# Or manually: checkout + make
 cd sdk/go  # or sdk/java, sdk/js
-./build.sh  # or appropriate build command
+make
 
 # Verify build worked
 ls -la dist/main/cli.sh
+```
+
+For testing against a released SDK version (no source changes needed):
+```bash
+python3 sdk/scripts/configure.py release go:v0.24.0
 ```
 
 ### When Modifying Platform Code
@@ -716,6 +758,20 @@ lsof -i :8181   # KAS alpha
 lsof -i :8888   # Keycloak
 ```
 
+### SDK Configuration
+```bash
+cd tests/xtest/sdk/scripts
+
+# Install released artifacts (fast, no compilation)
+python3 configure.py stable                              # Latest stable for all SDKs
+python3 configure.py lts                                 # LTS versions for all SDKs
+python3 configure.py release go:v0.24.0 js:0.4.0        # Specific versions
+
+# Build from source (checkout + compile)
+python3 configure.py tip                                 # All SDKs from main
+python3 configure.py tip go                              # Single SDK from main
+```
+
 ### Manual SDK Operations
 ```bash
 # Encrypt/decrypt
@@ -728,12 +784,13 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 ### Preferred Workflow
 
 1. **Use lmgmt for environment management** - It provides better error handling, health checks, and logs
-2. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
-3. **Check status**: `uv run lmgmt status`
-4. **Configure shell environment**: `eval $(uv run lmgmt env)` - Sets up environment variables for pytest
-5. **View logs**: `uv run lmgmt logs -f`
-6. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
-7. **Restart services**: `cd ../lmgmt && uv run lmgmt restart <service>` after config changes
+2. **Configure SDK artifacts**: `cd tests/xtest/sdk/scripts && python3 configure.py stable` (or `lts`, `tip`, `release`)
+3. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
+4. **Check status**: `uv run lmgmt status`
+5. **Configure shell environment**: `eval $(uv run lmgmt env)` - Sets up environment variables for pytest
+6. **View logs**: `uv run lmgmt logs -f`
+7. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
+8. **Restart services**: `cd ../lmgmt && uv run lmgmt restart <service>` after config changes
 
 ### When Debugging Test Failures
 
