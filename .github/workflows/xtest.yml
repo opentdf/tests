@@ -387,6 +387,9 @@ jobs:
         run: |
           make
         working-directory: otdftests/xtest/sdk/java
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       ######## Configure test environment #############
       - name: Lookup current platform version
