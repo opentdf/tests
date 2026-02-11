@@ -7,6 +7,7 @@ This guide provides essential knowledge for AI agents (particularly Haiku LLM) p
 ### Structure
 - **Test Directory**: `tests/xtest/` - pytest-based integration tests
 - **SDK Distributions**: `sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
+- **SDK Version Lookup**: `sdk/scripts/list-versions.py` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
 - **Platform**: `platform/` - OpenTDF platform service
 - **Test Runner**: pytest with custom CLI options
 
