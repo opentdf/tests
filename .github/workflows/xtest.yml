@@ -387,6 +387,8 @@ jobs:
         run: |
           make
         working-directory: otdftests/xtest/sdk/java
+        env:
+          BUF_TOKEN: "${{ secrets.BUF_TOKEN }}"
 
       ######## Configure test environment #############
       - name: Lookup current platform version
