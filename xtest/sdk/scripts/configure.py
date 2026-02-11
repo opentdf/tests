@@ -29,6 +29,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from importlib import import_module
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -39,8 +40,6 @@ JAVA_DIR = SDK_DIR / "java"
 
 # Import version helpers from list-versions.py
 sys.path.insert(0, str(SCRIPTS_DIR))
-from importlib import import_module
-
 _lv = import_module("list-versions")
 list_go_versions = _lv.list_go_versions
 list_js_versions = _lv.list_js_versions
@@ -80,7 +79,9 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         text=True,
     )
     if result.returncode != 0:
-        print(f"  Warning: go install pre-warm failed (will retry at runtime): {result.stderr.strip()}")
+        print(
+            f"  Warning: go install pre-warm failed (will retry at runtime): {result.stderr.strip()}"
+        )
     print(f"  Go release {tag} installed to {dist_dir}")
 
 
@@ -110,8 +111,13 @@ def install_java_release(version: str, dist_dir: Path) -> None:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             print(f"  Error: cmdline.jar not found for {tag}.", file=sys.stderr)
-            print(f"  The release {tag} may not include a CLI artifact.", file=sys.stderr)
-            print(f"  Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}", file=sys.stderr)
+            print(
+                f"  The release {tag} may not include a CLI artifact.", file=sys.stderr
+            )
+            print(
+                f"  Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}",
+                file=sys.stderr,
+            )
             sys.exit(1)
         raise
     print(f"  Java release {tag} installed to {dist_dir}")
@@ -142,7 +148,10 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
         Path to the created dist directory
     """
     if sdk not in INSTALLERS:
-        print(f"Error: Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}", file=sys.stderr)
+        print(
+            f"Error: Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     name = dist_name or normalize_version(version)
@@ -212,7 +221,10 @@ def cmd_release(specs: list[str]) -> None:
     """Install specific released versions from sdk:version specs."""
     for spec in specs:
         if ":" not in spec:
-            print(f"Error: Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)", file=sys.stderr)
+            print(
+                f"Error: Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)",
+                file=sys.stderr,
+            )
             sys.exit(1)
         sdk, version = spec.split(":", 1)
         print(f"Installing {sdk} {version} from registry...")
@@ -261,7 +273,9 @@ def main() -> None:
     )
 
     # release
-    p_release = subparsers.add_parser("release", help="Install specific released versions")
+    p_release = subparsers.add_parser(
+        "release", help="Install specific released versions"
+    )
     p_release.add_argument(
         "specs",
         nargs="+",
@@ -270,10 +284,14 @@ def main() -> None:
     )
 
     # install (single SDK, used by CI)
-    p_install = subparsers.add_parser("install", help="Install a single SDK version (CI)")
+    p_install = subparsers.add_parser(
+        "install", help="Install a single SDK version (CI)"
+    )
     p_install.add_argument("--sdk", required=True, choices=["go", "js", "java"])
     p_install.add_argument("--version", required=True, help="Version to install")
-    p_install.add_argument("--dist-name", default=None, help="Override dist directory name")
+    p_install.add_argument(
+        "--dist-name", default=None, help="Override dist directory name"
+    )
 
     args = parser.parse_args()
 
