@@ -127,6 +127,66 @@ def managed_key_km2_ec(
 
 
 @pytest.fixture(scope="module")
+def managed_key_km2_ec_p384(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km2: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create EC P-384 managed key on km2.
+
+    Reproduces issue #3070: EC P-384/P-521 keys fail during ECDH rewrap
+    because UncompressECPubKey hardcodes P-256.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"km2-ec384-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_km2,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp384r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
+def managed_key_km2_ec_p521(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km2: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create EC P-521 managed key on km2.
+
+    Reproduces issue #3070: EC P-384/P-521 keys fail during ECDH rewrap
+    because UncompressECPubKey hardcodes P-256.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled")
+
+    key_id = f"km2-ec521-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_km2,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp521r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+@pytest.fixture(scope="module")
 def attribute_allof_with_two_managed_keys(
     otdfctl: OpentdfCommandLineTool,
     managed_key_km1_rsa: abac.KasKey,
@@ -290,6 +350,68 @@ def base_key_e1(
             key_id=key_id,
             mode="local",
             algorithm="ec:secp256r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+
+    return otdfctl.set_base_key(key, kas_entry_km1)
+
+
+@pytest.fixture(scope="module")
+def base_key_ec384(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> None:
+    """Ensure a managed EC P-384 key exists and is set as the base key.
+
+    Reproduces issue #3070: EC P-384 keys fail during ECDH rewrap
+    because UncompressECPubKey hardcodes P-256.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled; skipping base key fixture")
+
+    key_id = f"ec384-base-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_km1,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp384r1",
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+
+    return otdfctl.set_base_key(key, kas_entry_km1)
+
+
+@pytest.fixture(scope="module")
+def base_key_ec521(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> None:
+    """Ensure a managed EC P-521 key exists and is set as the base key.
+
+    Reproduces issue #3070: EC P-521 keys fail during ECDH rewrap
+    because UncompressECPubKey hardcodes P-256.
+    """
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management feature is not enabled; skipping base key fixture")
+
+    key_id = f"ec521-base-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry_km1,
+            key_id=key_id,
+            mode="local",
+            algorithm="ec:secp521r1",
             wrapping_key=root_key,
             wrapping_key_id="root",
         )

@@ -905,3 +905,79 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container=container)
     assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_encrypt_decrypt_with_base_key_ec384(
+    base_key_ec384,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+):
+    """Reproduces issue #3070: EC P-384 decrypt fails because UncompressECPubKey
+    hardcodes elliptic.P256() instead of using the actual curve parameter.
+
+    This test creates a P-384 base key, encrypts with ec-wrap, and attempts
+    to decrypt. With the bug present, decrypt fails with:
+        "ecdh failure: ecdsa: invalid public key"
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "ecwrap")
+    tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"base-ec384-{encrypt_sdk}"
+    ct_file = tmp_dir / f"{sample_name}.tdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        container="ztdf-ecwrap",
+    )
+
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf-ecwrap")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_encrypt_decrypt_with_base_key_ec521(
+    base_key_ec521,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+):
+    """Reproduces issue #3070: EC P-521 decrypt fails because UncompressECPubKey
+    hardcodes elliptic.P256() instead of using the actual curve parameter.
+
+    This test creates a P-521 base key, encrypts with ec-wrap, and attempts
+    to decrypt. With the bug present, decrypt fails with:
+        "ecdh failure: ecdsa: invalid public key"
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "ecwrap")
+    tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"base-ec521-{encrypt_sdk}"
+    ct_file = tmp_dir / f"{sample_name}.tdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        container="ztdf-ecwrap",
+    )
+
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf-ecwrap")
+    assert filecmp.cmp(pt_file, rt_file)
