@@ -6,7 +6,6 @@ import json
 import re
 import sys
 from typing import NotRequired, TypedDict, TypeGuard
-from urllib.parse import quote
 
 from git import Git
 
@@ -231,7 +230,6 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
         release = tag
         if infix:
             release = f"{infix}/{release}"
-        release = quote(release, safe="-_.~")
         return {
             "sdk": sdk,
             "alias": alias,

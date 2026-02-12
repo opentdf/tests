@@ -50,7 +50,8 @@ def install_js_release(version: str, dist_dir: Path) -> None:
     """Install a JS CLI release from npm registry."""
     dist_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(JS_DIR / "cli.sh", dist_dir / "cli.sh")
-    v = version.lstrip("v")
+    # Strip infix prefix (e.g., "sdk/v0.4.0" -> "v0.4.0") for npm install
+    v = version.split("/")[-1].lstrip("v")
     print(f"  Installing @opentdf/ctl@{v} from npm...")
     subprocess.check_call(
         ["npm", "install", f"@opentdf/ctl@{v}"],
