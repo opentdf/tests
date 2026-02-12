@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
-from lmgmt.config.settings import Settings
+from otdf_local.config.settings import Settings
 
 
 class ServiceType(str, Enum):
@@ -97,7 +97,7 @@ class Service(ABC):
         Returns:
             True if healthy, False if unhealthy, None if health check not available
         """
-        from lmgmt.health.checks import check_http_health
+        from otdf_local.health.checks import check_http_health
 
         if not self.is_running():
             return None

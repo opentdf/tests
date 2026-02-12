@@ -3,7 +3,7 @@
 import subprocess
 from dataclasses import dataclass
 
-from lmgmt.config.settings import Settings
+from otdf_local.config.settings import Settings
 
 
 @dataclass
@@ -142,7 +142,7 @@ class Provisioner:
 def get_provisioner(settings: Settings | None = None) -> Provisioner:
     """Get a Provisioner instance."""
     if settings is None:
-        from lmgmt.config.settings import get_settings
+        from otdf_local.config.settings import get_settings
 
         settings = get_settings()
     return Provisioner(settings)

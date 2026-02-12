@@ -1,5 +1,5 @@
 [project]
-name = "lmgmt"
+name = "otdf-local"
 version = "0.1.0"
 description = "Local management CLI for OpenTDF test environment"
 readme = "README.md"
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-lmgmt = "lmgmt.cli:app"
+otdf-local = "otdf_local.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.9.28"]

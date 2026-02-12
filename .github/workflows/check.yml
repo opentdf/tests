@@ -32,13 +32,13 @@ jobs:
           uv run ruff format --check .
           uv run pyright
         working-directory: xtest
-      - name: Lint lmgmt
+      - name: Lint otdf-local
         run: |
           uv sync
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
-        working-directory: lmgmt
+        working-directory: otdf-local
       - name: Lint otdf-sdk-mgr
         run: |
           uv sync

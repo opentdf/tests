@@ -2,13 +2,17 @@
 
 from pathlib import Path
 
-from lmgmt.config.features import PlatformFeatures
-from lmgmt.config.ports import Ports
-from lmgmt.config.settings import Settings
-from lmgmt.health.checks import check_http_health, check_port
-from lmgmt.process.manager import ManagedProcess, ProcessManager, kill_process_on_port
-from lmgmt.services.base import Service, ServiceInfo, ServiceType
-from lmgmt.utils.yaml import copy_yaml_with_updates, get_nested, load_yaml
+from otdf_local.config.features import PlatformFeatures
+from otdf_local.config.ports import Ports
+from otdf_local.config.settings import Settings
+from otdf_local.health.checks import check_http_health, check_port
+from otdf_local.process.manager import (
+    ManagedProcess,
+    ProcessManager,
+    kill_process_on_port,
+)
+from otdf_local.services.base import Service, ServiceInfo, ServiceType
+from otdf_local.utils.yaml import copy_yaml_with_updates, get_nested, load_yaml
 
 
 class KASService(Service):
@@ -216,7 +220,7 @@ def get_kas_manager(settings: Settings | None = None) -> KASManager:
         _kas_process_manager = ProcessManager()
 
     if settings is None:
-        from lmgmt.config.settings import get_settings
+        from otdf_local.config.settings import get_settings
 
         settings = get_settings()
 

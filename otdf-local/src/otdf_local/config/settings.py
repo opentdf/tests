@@ -1,4 +1,4 @@
-"""Pydantic settings for lmgmt configuration."""
+"""Pydantic settings for otdf_local configuration."""
 
 import os
 from functools import lru_cache
@@ -8,24 +8,26 @@ from typing import Annotated
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from lmgmt.config.ports import Ports
+from otdf_local.config.ports import Ports
 
 
 def _find_xtest_root() -> Path:
     """Find the xtest/tests root directory by walking up from this file."""
     current = Path(__file__).resolve()
     while current != current.parent:
-        # Check if we're in the lmgmt package within tests
-        if (current / "lmgmt").exists() and current.name == "tests":
+        # Check if we're in the otdf_local package within tests
+        if (current / "otdf_local").exists() and current.name == "tests":
             return current
         # Legacy: check for xtest directory
         if (current / "conftest.py").exists() and current.name == "xtest":
             return current
-        # Also check if we're in the lmgmt package within xtest
-        if (current / "lmgmt").exists() and (current.parent / "conftest.py").exists():
+        # Also check if we're in the otdf_local package within xtest
+        if (current / "otdf_local").exists() and (
+            current.parent / "conftest.py"
+        ).exists():
             return current.parent
         current = current.parent
-    # Fallback to assuming we're in tests/lmgmt
+    # Fallback to assuming we're in tests/otdf-local
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
@@ -62,7 +64,7 @@ class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
     model_config = SettingsConfigDict(
-        env_prefix="LMGMT_",
+        env_prefix="OTDF_LOCAL_",
         env_file=".env",
         extra="ignore",
     )
@@ -151,6 +153,6 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    platform_url = os.environ.get("LMGMT_PLATFORM_URL", "http://localhost:8080")
-    keycloak_url = os.environ.get("LMGMT_KEYCLOAK_URL", "http://localhost:8888")
+    platform_url = os.environ.get("OTDF_LOCAL_PLATFORM_URL", "http://localhost:8080")
+    keycloak_url = os.environ.get("OTDF_LOCAL_KEYCLOAK_URL", "http://localhost:8888")
     return Settings(platform_url=platform_url, keycloak_url=keycloak_url)

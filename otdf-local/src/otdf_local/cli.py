@@ -1,4 +1,4 @@
-"""Typer CLI for lmgmt - OpenTDF test environment management."""
+"""Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
 from typing import Annotated
@@ -6,12 +6,12 @@ from typing import Annotated
 import typer
 from rich.live import Live
 
-from lmgmt import __version__
-from lmgmt.config.ports import Ports
-from lmgmt.config.settings import get_settings
-from lmgmt.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
-from lmgmt.process.logs import LogAggregator
-from lmgmt.services import (
+from otdf_local import __version__
+from otdf_local.config.ports import Ports
+from otdf_local.config.settings import get_settings
+from otdf_local.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
+from otdf_local.process.logs import LogAggregator
+from otdf_local.services import (
     Provisioner,
     ProvisionResult,
     get_docker_service,
@@ -19,7 +19,7 @@ from lmgmt.services import (
     get_platform_service,
     get_provisioner,
 )
-from lmgmt.utils.console import (
+from otdf_local.utils.console import (
     console,
     create_service_table,
     format_health,
@@ -30,10 +30,10 @@ from lmgmt.utils.console import (
     print_warning,
     status_spinner,
 )
-from lmgmt.utils.yaml import get_nested, load_yaml
+from otdf_local.utils.yaml import get_nested, load_yaml
 
 app = typer.Typer(
-    name="lmgmt",
+    name="otdf-local",
     help="Local management CLI for OpenTDF test environment",
     no_args_is_help=True,
 )
@@ -54,7 +54,7 @@ def _show_provision_error(result: ProvisionResult, target: str) -> None:
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        console.print(f"lmgmt version {__version__}")
+        console.print(f"otdf-local version {__version__}")
         raise typer.Exit()
 
 
@@ -542,11 +542,11 @@ def env(
 
     Use this command to configure your shell environment for running tests:
 
-        eval $(lmgmt env)
+        eval $(otdf-local env)
 
     Or source it directly:
 
-        . <(lmgmt env)
+        . <(otdf-local env)
 
     This sets variables like PLATFORM_LOG_FILE, KAS_*_LOG_FILE, PLATFORMURL, OT_ROOT_KEY, etc.
     """

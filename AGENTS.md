@@ -26,8 +26,8 @@ otdf-sdk-mgr install tip go    # Build from source
 
 ```bash
 # Configure environment for pytest (recommended)
-cd tests/lmgmt
-eval $(uv run lmgmt env)
+cd tests/otdf-local
+eval $(uv run otdf-local env)
 cd ../xtest
 
 # Run with specific SDK
@@ -92,11 +92,11 @@ Or ensure services are running with logs in `../../platform/logs/` (auto-discove
 
 ## Environment Management
 
-Use `lmgmt` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting). See:
-- `lmgmt/README.md` - command reference and installation
-- `lmgmt/CLAUDE.md` - operational procedures (restarts, tmux navigation, golden key config, troubleshooting)
+Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting). See:
+- `otdf-local/README.md` - command reference and installation
+- `otdf-local/CLAUDE.md` - operational procedures (restarts, tmux navigation, golden key config, troubleshooting)
 
-Quick start: `cd tests/lmgmt && uv run lmgmt up`
+Quick start: `cd tests/otdf-local && uv run otdf-local up`
 
 ## Key Concepts
 
@@ -131,7 +131,7 @@ yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 ```bash
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
-cd tests/lmgmt && uv run lmgmt restart platform
+cd tests/otdf-local && uv run otdf-local restart platform
 ```
 
 ### ABAC Test Failures: Decrypt Errors
@@ -146,18 +146,18 @@ curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_s
 # Expected: alpha=8181, beta=8282, gamma=8383, delta=8484
 ```
 
-**Fix**: Ensure all KAS instances are properly registered during startup (`lmgmt up` handles this).
+**Fix**: Ensure all KAS instances are properly registered during startup (`otdf-local up` handles this).
 
 ### Legacy/Golden TDF Test Failures
 
 **Symptom**: "cipher: message authentication failed"
 
-**Root Cause**: Golden TDFs require specific keys loaded by the platform. `lmgmt up` auto-configures these. See `lmgmt/CLAUDE.md` for manual configuration details.
+**Root Cause**: Golden TDFs require specific keys loaded by the platform. `otdf-local up` auto-configures these. See `otdf-local/CLAUDE.md` for manual configuration details.
 
 ```bash
-cd tests/lmgmt
-uv run lmgmt up  # or restart platform
-eval $(uv run lmgmt env)
+cd tests/otdf-local
+uv run otdf-local up  # or restart platform
+eval $(uv run otdf-local env)
 cd ../xtest
 uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 ```
@@ -182,13 +182,13 @@ export SCHEMA_FILE=/path/to/schema.json
    curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq
    curl http://localhost:8080/healthz
    ```
-4. **Check service logs**: `cd tests/lmgmt && uv run lmgmt logs --grep "error" -f`
+4. **Check service logs**: `cd tests/otdf-local && uv run otdf-local logs --grep "error" -f`
 5. **Manual reproduction**:
    ```bash
    sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
    sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
    ```
-6. **Fix and verify**: Make changes, restart services if needed (`lmgmt restart <service>`), re-run failing test, then run full suite
+6. **Fix and verify**: Make changes, restart services if needed (`otdf-local restart <service>`), re-run failing test, then run full suite
 
 ## Code Modification Best Practices
 
@@ -206,7 +206,7 @@ After changes to SDK source, rebuild with `otdf-sdk-mgr install tip go` (or java
 ### When Modifying Platform Code
 
 ```bash
-cd tests/lmgmt && uv run lmgmt restart platform
+cd tests/otdf-local && uv run otdf-local restart platform
 ```
 
 ### When Modifying Test Code
@@ -221,7 +221,7 @@ cd tests/lmgmt && uv run lmgmt restart platform
 
 - `test_tdfs.py` - Core TDF roundtrip, manifest validation, tampering tests
 - `test_abac.py` - ABAC policy, autoconfigure, key management tests
-- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key, auto-configured by lmgmt)
+- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key, auto-configured by otdf-local)
 - `test_policytypes.py` - Policy type tests (OR, AND, hierarchy)
 - `test_self.py` - Platform API tests (namespaces, attributes, SCS)
 
@@ -259,18 +259,18 @@ See `otdf-sdk-mgr/README.md` for full command reference.
 ### Preferred Workflow
 
 1. **Configure SDK artifacts**: `cd tests/otdf-sdk-mgr && otdf-sdk-mgr install stable`
-2. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
-3. **Configure shell**: `eval $(uv run lmgmt env)`
+2. **Start environment**: `cd tests/otdf-local && uv run otdf-local up`
+3. **Configure shell**: `eval $(uv run otdf-local env)`
 4. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
-5. **Restart after config changes**: `cd ../lmgmt && uv run lmgmt restart <service>`
+5. **Restart after config changes**: `cd ../otdf-local && uv run otdf-local restart <service>`
 
 ### When Debugging Test Failures
 
 1. Read error messages carefully - they guide you to the root cause
 2. Check platform configuration matches expected test behavior
 3. Verify all KAS instances have consistent keys
-4. Ensure services are running and healthy (`lmgmt status`)
-5. Check service logs (`lmgmt logs <service> -f`)
+4. Ensure services are running and healthy (`otdf-local status`)
+5. Check service logs (`otdf-local logs <service> -f`)
 6. Reproduce issues manually when possible
 7. Always restart services after config changes
 8. Read before writing - understand existing code patterns

@@ -4,8 +4,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
-from lmgmt.health.checks import check_http_health, check_port, get_service_status
-from lmgmt.health.waits import (
+from otdf_local.health.checks import check_http_health, check_port, get_service_status
+from otdf_local.health.waits import (
     WaitTimeoutError,
     wait_for_condition,
     wait_for_health,

@@ -1,52 +1,52 @@
-# lmgmt - OpenTDF Test Environment Manager
+# otdf-local - OpenTDF Test Environment Manager
 
 A Python CLI for managing the OpenTDF test environment, providing a cleaner alternative to the existing shell scripts.
 
 ## Installation
 
 ```bash
-cd tests/lmgmt
+cd tests/otdf-local
 uv sync
 ```
 
 ## Global Installation with Tab Completion
 
-For convenience, you can install `lmgmt` globally and enable tab completion:
+For convenience, you can install `otdf-local` globally and enable tab completion:
 
 ```bash
-cd tests/lmgmt
+cd tests/otdf-local
 uv tool install --editable .
-lmgmt --install-completion
+otdf-local --install-completion
 ```
 
-This makes `lmgmt` available globally. You can now run `lmgmt` from any directory.
+This makes `otdf-local` available globally. You can now run `otdf-local` from any directory.
 
 To uninstall:
 ```bash
-uv tool uninstall lmgmt
+uv tool uninstall otdf-local
 ```
 
 **Using Tab Completion:**
 ```bash
-lmgmt <TAB>          # Shows available commands
-lmgmt logs <TAB>     # Shows service names
-lmgmt restart <TAB>  # Shows restartable services
+otdf-local <TAB>          # Shows available commands
+otdf-local logs <TAB>     # Shows service names
+otdf-local restart <TAB>  # Shows restartable services
 ```
 
 ## Quick Start
 
 ```bash
 # Start all services
-uv run lmgmt up
+uv run otdf-local up
 
 # Check status
-uv run lmgmt status
+uv run otdf-local status
 
 # View logs
-uv run lmgmt logs -f
+uv run otdf-local logs -f
 
 # Stop all services
-uv run lmgmt down
+uv run otdf-local down
 ```
 
 ## Commands
@@ -57,95 +57,95 @@ Start all or specific services.
 
 ```bash
 # Start everything (docker, platform, all KAS instances)
-lmgmt up
+otdf-local up
 
 # Start only Docker services
-lmgmt up --services docker
+otdf-local up --services docker
 
 # Start without running provisioning
-lmgmt up --no-provision
+otdf-local up --no-provision
 ```
 
 ### `down` - Stop Environment
 
 ```bash
 # Stop all services
-lmgmt down
+otdf-local down
 
 # Stop and clean up logs/configs
-lmgmt down --clean
+otdf-local down --clean
 ```
 
 ### `ls` - List Services
 
 ```bash
 # List running services
-lmgmt ls
+otdf-local ls
 
 # List all services (including stopped)
-lmgmt ls --all
+otdf-local ls --all
 
 # Output as JSON
-lmgmt ls --json
+otdf-local ls --json
 ```
 
 ### `status` - Show Status
 
 ```bash
 # Show current status with health checks
-lmgmt status
+otdf-local status
 
 # Output as JSON
-lmgmt status --json
+otdf-local status --json
 
 # Watch mode (updates every second)
-lmgmt status --watch
+otdf-local status --watch
 ```
 
 ### `logs` - View Logs
 
 ```bash
 # Show recent logs from all services
-lmgmt logs
+otdf-local logs
 
 # Follow logs (like tail -f)
-lmgmt logs -f
+otdf-local logs -f
 
 # Show logs from specific service
-lmgmt logs platform
-lmgmt logs kas-alpha
+otdf-local logs platform
+otdf-local logs kas-alpha
 
 # Show more lines
-lmgmt logs -n 100
+otdf-local logs -n 100
 
 # Filter by pattern
-lmgmt logs --grep error
+otdf-local logs --grep error
 ```
 
 ### `restart` - Restart Service
 
 ```bash
 # Restart platform
-lmgmt restart platform
+otdf-local restart platform
 
 # Restart a KAS instance
-lmgmt restart kas-alpha
+otdf-local restart kas-alpha
 
 # Restart Docker services
-lmgmt restart docker
+otdf-local restart docker
 ```
 
 ### `provision` - Run Provisioning
 
 ```bash
 # Run all provisioning
-lmgmt provision
+otdf-local provision
 
 # Provision only Keycloak
-lmgmt provision keycloak
+otdf-local provision keycloak
 
 # Provision only fixtures
-lmgmt provision fixtures
+otdf-local provision fixtures
 ```
 
 ### `env` - Configure Shell for pytest
@@ -154,25 +154,25 @@ Export environment variables needed by pytest (log file paths, etc.):
 
 ```bash
 # Set up environment for running tests
-eval $(lmgmt env)
+eval $(otdf-local env)
 
 # Output as JSON
-lmgmt env --format json
+otdf-local env --format json
 ```
 
 ### `clean` - Clean Up
 
 ```bash
 # Clean generated configs and logs
-lmgmt clean
+otdf-local clean
 
 # Clean but keep logs
-lmgmt clean --keep-logs
+otdf-local clean --keep-logs
 ```
 
 ## Tmux Session
 
-`lmgmt up` creates a tmux session named `xtest` with each service in its own window:
+`otdf-local up` creates a tmux session named `xtest` with each service in its own window:
 
 | Window | Service |
 |--------|---------|
@@ -224,10 +224,10 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LMGMT_PLATFORM_URL` | http://localhost:8080 | Platform URL |
-| `LMGMT_KEYCLOAK_URL` | http://localhost:8888 | Keycloak URL |
-| `LMGMT_HEALTH_TIMEOUT` | 60 | Health check timeout (seconds) |
-| `LMGMT_LOG_LEVEL` | info | Log level |
+| `OTDF_LOCAL_PLATFORM_URL` | http://localhost:8080 | Platform URL |
+| `OTDF_LOCAL_KEYCLOAK_URL` | http://localhost:8888 | Keycloak URL |
+| `OTDF_LOCAL_HEALTH_TIMEOUT` | 60 | Health check timeout (seconds) |
+| `OTDF_LOCAL_LOG_LEVEL` | info | Log level |
 
 ## Development
 
@@ -244,8 +244,8 @@ uv run pytest tests/test_integration.py -v -m integration
 ## Project Structure
 
 ```
-lmgmt/
-├── src/lmgmt/
+otdf-local/
+├── src/otdf_local/
 │   ├── cli.py              # Typer CLI commands
 │   ├── config/
 │   │   ├── ports.py        # Port constants

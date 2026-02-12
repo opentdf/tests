@@ -2,10 +2,10 @@
 
 import subprocess
 
-from lmgmt.config.ports import Ports
-from lmgmt.config.settings import Settings
-from lmgmt.health.checks import check_http_health, check_port
-from lmgmt.services.base import Service, ServiceInfo, ServiceType
+from otdf_local.config.ports import Ports
+from otdf_local.config.settings import Settings
+from otdf_local.health.checks import check_http_health, check_port
+from otdf_local.services.base import Service, ServiceInfo, ServiceType
 
 
 class DockerService(Service):
@@ -144,7 +144,7 @@ class DockerService(Service):
 def get_docker_service(settings: Settings | None = None) -> DockerService:
     """Get a DockerService instance."""
     if settings is None:
-        from lmgmt.config.settings import get_settings
+        from otdf_local.config.settings import get_settings
 
         settings = get_settings()
     return DockerService(settings)
