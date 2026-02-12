@@ -5,12 +5,22 @@ from __future__ import annotations
 from pathlib import Path
 
 # Discover the tests/ directory by walking up from this package
+# In CI, the checkout may be named otdftests/ instead of tests/
+# Look for the xtest/sdk structure to identify the root
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _TESTS_DIR = _PACKAGE_DIR
-while _TESTS_DIR.name != "tests" and _TESTS_DIR != _TESTS_DIR.parent:
+while _TESTS_DIR != _TESTS_DIR.parent:
+    if (_TESTS_DIR / "xtest" / "sdk").exists():
+        break
     _TESTS_DIR = _TESTS_DIR.parent
 
 SDK_DIR = _TESTS_DIR / "xtest" / "sdk"
+if not SDK_DIR.exists():
+    raise RuntimeError(
+        f"Could not locate xtest/sdk directory. "
+        f"Started from {_PACKAGE_DIR}, walked up to {_TESTS_DIR}. "
+        f"Expected to find xtest/sdk structure in repository root."
+    )
 GO_DIR = SDK_DIR / "go"
 JS_DIR = SDK_DIR / "js"
 JAVA_DIR = SDK_DIR / "java"
