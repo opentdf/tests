@@ -185,9 +185,7 @@ def list_java_github_releases() -> list[dict[str, Any]]:
         try:
             releases = fetch_json(url)
         except urllib.error.URLError as e:
-            print(
-                f"Warning: failed to fetch GitHub releases: {e}", file=sys.stderr
-            )
+            print(f"Warning: failed to fetch GitHub releases: {e}", file=sys.stderr)
             break
         if not releases:
             break
