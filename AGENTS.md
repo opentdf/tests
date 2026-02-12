@@ -1,6 +1,6 @@
 # Agent Guide: Working with OpenTDF Tests and Debugging
 
-This guide provides essential knowledge for AI agents (particularly Haiku LLM) performing updates, refactorings, and debugging of OpenTDF libraries and applications under test.
+This guide provides essential knowledge for AI agents performing updates, refactorings, and debugging of OpenTDF libraries and applications under test.
 
 ## Test Framework Overview
 
@@ -128,152 +128,13 @@ export KAS_BETA_LOG_FILE=/path/to/kas-beta.log
 
 Or ensure services are running with logs in `../../platform/logs/` (auto-discovered).
 
-## Environment Management Tools
+## Environment Management
 
-**RECOMMENDED**: Use `lmgmt` Python CLI for all environment management tasks.
+Use `lmgmt` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting). See:
+- `lmgmt/README.md` - command reference and installation
+- `lmgmt/CLAUDE.md` - operational procedures (restarts, tmux navigation, golden key config, troubleshooting)
 
-### lmgmt - Python CLI
-
-The `lmgmt` tool provides a type-safe interface for managing the test environment with error handling and health checks.
-
-**Location**: `tests/lmgmt/`
-
-**Quick Start**:
-```bash
-cd tests/lmgmt
-uv sync  # First time only
-
-# Start all services
-uv run lmgmt up
-
-# Check status
-uv run lmgmt status
-
-# View logs
-uv run lmgmt logs -f
-
-# Stop all services
-uv run lmgmt down
-```
-
-**Key Features**:
-- Rich terminal output with tables and progress indicators
-- Comprehensive health checks and wait utilities
-- Structured log aggregation with filtering
-- JSON output for scripting
-- Type-safe configuration with Pydantic
-
-**Available Commands**:
-- `lmgmt up` - Start environment with automatic health checks
-- `lmgmt down` - Stop all services
-- `lmgmt ls` - List services with status (table or JSON)
-- `lmgmt status` - Show detailed health status (supports `--watch`)
-- `lmgmt logs [service]` - View/tail/filter logs (`-f` to follow)
-- `lmgmt restart <service>` - Restart specific service
-- `lmgmt provision` - Run provisioning
-- `lmgmt clean` - Clean generated files
-
-See `tests/lmgmt/README.md` for full documentation.
-
-## Local Test Environment
-
-The local test environment can be managed using `lmgmt`
-
-### Quick Start with lmgmt (Recommended)
-
-```bash
-cd tests/lmgmt
-
-# Start all services
-uv run lmgmt up
-
-# View service status
-uv run lmgmt status
-
-# View logs
-uv run lmgmt logs -f
-
-# Stop all services and cleanup
-uv run lmgmt down --clean
-```
-
-
-### Available Commands
-
-Use `lmgmt` for all environment management:
-
-```bash
-cd tests/lmgmt
-
-# Start/stop environment
-uv run lmgmt up                    # Start all services
-uv run lmgmt down                  # Stop all services
-uv run lmgmt down --clean          # Stop and clean logs
-
-# Check status
-uv run lmgmt status                # Show health status
-uv run lmgmt status --watch        # Live status updates
-uv run lmgmt ls                    # List running services
-
-# View logs
-uv run lmgmt logs -f               # Follow all logs
-uv run lmgmt logs platform -f      # Follow specific service
-uv run lmgmt logs --grep error     # Filter logs
-
-# Restart services
-uv run lmgmt restart platform      # Restart specific service
-uv run lmgmt restart kas-alpha
-
-# Provisioning
-uv run lmgmt provision             # Run all provisioning
-uv run lmgmt provision keycloak    # Provision keycloak only
-
-# Cleanup
-uv run lmgmt clean                 # Clean logs and configs
-uv run lmgmt clean --keep-logs     # Clean only configs
-
-# Attach to tmux session (if using tmux)
-tmux attach -t xtest
-```
-
-### Viewing Service Logs
-
-**Via tmux session:**
-```bash
-# Attach to session
-tmux attach -t xtest
-
-# Navigate between windows
-Ctrl-B then number (0-9)  # Switch to window by number
-Ctrl-B w                   # Show window list
-Ctrl-B n                   # Next window
-Ctrl-B p                   # Previous window
-
-# Scroll through logs
-Ctrl-B [                   # Enter scroll mode
-q                          # Exit scroll mode
-
-# Detach from session
-Ctrl-B d
-```
-
-**Via log files:**
-```bash
-# All services log to xtest/logs/
-tail -f xtest/logs/platform.log
-tail -f xtest/logs/kas-alpha.log
-tail -f xtest/logs/kas-km1.log
-```
-
-### Environment Variables
-
-Service ports (auto-configured):
-```bash
-KEYCLOAK_PORT=8888
-POSTGRES_PORT=5432
-PLATFORM_PORT=8080
-# KAS ports: alpha=8181, beta=8282, gamma=8383, delta=8484, km1=8585, km2=8686
-```
+Quick start: `cd tests/lmgmt && uv run lmgmt up`
 
 ## Key Concepts
 
@@ -306,18 +167,9 @@ yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 
 **Fix**:
 ```bash
-# Update config
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
-
-# Restart platform using lmgmt (recommended)
-cd tests/lmgmt
-uv run lmgmt restart platform
-
-# Or restart manually
-pkill -9 -f "go.*service.*start"
-sleep 2
-cd platform && go run ./service start
+cd tests/lmgmt && uv run lmgmt restart platform
 ```
 
 ### ABAC Test Failures: Decrypt Errors
@@ -328,63 +180,18 @@ cd platform && go run ./service start
 
 **Debug**:
 ```bash
-# Check registered KAS instances
 curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_servers[].uri'
-
-# Expected to see:
-# - http://localhost:8181/kas (alpha)
-# - http://localhost:8282/kas (beta)
-# - http://localhost:8383/kas (gamma)
-# - http://localhost:8484/kas (delta)
+# Expected: alpha=8181, beta=8282, gamma=8383, delta=8484
 ```
 
-**Fix**: Ensure all KAS instances are properly registered in the platform during startup (this is handled by `lmgmt up`)
+**Fix**: Ensure all KAS instances are properly registered during startup (`lmgmt up` handles this).
 
-### 5. Legacy/Golden TDF Test Configuration
+### Legacy/Golden TDF Test Failures
 
-**Symptom**: Legacy golden TDF decrypt tests fail with "cipher: message authentication failed"
+**Symptom**: "cipher: message authentication failed"
 
-**Root Cause**: Golden TDFs were created with specific keys that must be loaded by the platform.
+**Root Cause**: Golden TDFs require specific keys loaded by the platform. `lmgmt up` auto-configures these. See `lmgmt/CLAUDE.md` for manual configuration details.
 
-**Automatic Configuration**:
-
-When using `lmgmt up` or `lmgmt restart platform`, golden keys are automatically configured:
-1. `lmgmt` reads `tests/xtest/extra-keys.json` containing the `golden-r1` key
-2. Key files are extracted to `platform/golden-r1-private.pem` and `platform/golden-r1-cert.pem`
-3. The key is added to `cryptoProvider.standard.keys` in the platform config
-4. A legacy keyring entry is added to `services.kas.keyring`
-
-**Manual Configuration** (if not using lmgmt):
-
-If you need to configure golden keys manually, add to `platform/opentdf-dev.yaml`:
-
-```yaml
-services:
-  kas:
-    keyring:
-      # ... existing entries ...
-      - kid: golden-r1
-        alg: rsa:2048
-        legacy: true
-
-server:
-  cryptoProvider:
-    standard:
-      keys:
-        # ... existing entries ...
-        - kid: golden-r1
-          alg: rsa:2048
-          private: golden-r1-private.pem
-          cert: golden-r1-cert.pem
-```
-
-And extract the key files from `tests/xtest/extra-keys.json`:
-```bash
-jq -r '.[0].privateKey' tests/xtest/extra-keys.json > platform/golden-r1-private.pem
-jq -r '.[0].cert' tests/xtest/extra-keys.json > platform/golden-r1-cert.pem
-```
-
-**Running Golden File Tests**:
 ```bash
 cd tests/lmgmt
 uv run lmgmt up  # or restart platform
@@ -393,71 +200,33 @@ cd ../xtest
 uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 ```
 
-### 6. Missing Environment Variables
+### Missing Environment Variables
 
-**Symptom**: Tests error with "OT_ROOT_KEY environment variable is not set"
+**Symptom**: "OT_ROOT_KEY environment variable is not set"
 
 **Fix**:
 ```bash
-# Set required environment variables
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
 export SCHEMA_FILE=/path/to/schema.json
 ```
 
 ## Debugging Workflow
 
-### Step 1: Run Tests and Capture Output
-```bash
-uv run pytest --sdks go -v 2>&1 | tee test_output.log
-```
-
-### Step 2: Analyze Failures
-- Read error messages carefully - they usually point to root cause
-- Check which test category is failing (ABAC, legacy, TDF roundtrip, etc.)
-- Look for patterns across multiple failures
-
-### Step 3: Inspect Platform State
-```bash
-# Check platform configuration
-curl http://localhost:8080/.well-known/opentdf-configuration | jq
-
-# Check registered KAS instances
-curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq
-
-# Verify platform is healthy
-curl http://localhost:8080/healthz
-```
-
-### Step 4: Check Service Logs
-```bash
-# Using lmgmt (recommended)
-cd tests/lmgmt
-uv run lmgmt logs platform -f          # Follow platform logs
-uv run lmgmt logs kas-alpha -f         # Follow KAS logs
-uv run lmgmt logs --grep "error" -f    # Filter for errors
-
-# Using tmux (if environment was started with scripts)
-tmux attach -t local-test
-# Navigate to the KAS window mentioned in the error
-
-# Using log files directly
-tail -f tests/xtest/logs/platform.log
-tail -f tests/xtest/logs/kas-alpha.log
-```
-
-### Step 5: Manual Reproduction
-```bash
-# Try to reproduce with CLI directly
-sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
-
-sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
-```
-
-### Step 6: Fix and Verify
-- Make necessary changes to code or config
-- Restart services if config changed
-- Re-run the specific failing test
-- If passes, run full suite
+1. **Run tests**: `uv run pytest --sdks go -v 2>&1 | tee test_output.log`
+2. **Analyze failures**: Read error messages, check which test category is failing, look for patterns
+3. **Inspect platform state**:
+   ```bash
+   curl http://localhost:8080/.well-known/opentdf-configuration | jq
+   curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq
+   curl http://localhost:8080/healthz
+   ```
+4. **Check service logs**: `cd tests/lmgmt && uv run lmgmt logs --grep "error" -f`
+5. **Manual reproduction**:
+   ```bash
+   sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
+   sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
+   ```
+6. **Fix and verify**: Make changes, restart services if needed (`lmgmt restart <service>`), re-run failing test, then run full suite
 
 ## Code Modification Best Practices
 
@@ -491,15 +260,7 @@ cd tests/otdf-sdk-mgr && uv run otdf-sdk-mgr install release go:v0.24.0
 ### When Modifying Platform Code
 
 ```bash
-# Restart platform after changes using lmgmt (recommended)
-cd tests/lmgmt
-uv run lmgmt restart platform
-
-# Or manually
-pkill -9 -f "go.*service.*start"
-sleep 2  # Wait a moment for port to free
-cd platform
-go run ./service start
+cd tests/lmgmt && uv run lmgmt restart platform
 ```
 
 ### When Modifying Test Code
@@ -507,29 +268,6 @@ go run ./service start
 - **Test fixtures**: Changes affect all tests using that fixture
 - **Helper functions**: Used across multiple test files
 - **Conftest.py**: Session-scoped fixtures, careful with modifications
-
-### When Modifying Controller Scripts
-
-**DEPRECATED**: The shell scripts in `scripts/lib/` are being phased out. Use `lmgmt` for all environment management instead.
-
-**For new automation**:
-- Extend the `lmgmt` Python CLI tool instead of creating new shell scripts
-- See `tests/lmgmt/README.md` for architecture and development guide
-- The lmgmt codebase uses Python with Pydantic for type safety and better error handling
-
-**For testing changes**:
-```bash
-# Test the full workflow with lmgmt
-cd tests/lmgmt
-uv run lmgmt down
-uv run lmgmt up
-
-# Check service status
-uv run lmgmt status
-
-# View logs
-uv run lmgmt logs -f
-```
 
 ## Test File Organization
 
@@ -547,113 +285,6 @@ uv run lmgmt logs -f
 - `fixtures/` - pytest fixtures (attributes, keys, SDKs, etc.)
 - `conftest.py` - pytest configuration and shared fixtures
 
-## Restart Procedures
-
-### Full Environment Restart with lmgmt (Recommended)
-```bash
-cd tests/lmgmt
-
-# Stop and restart everything
-uv run lmgmt down
-uv run lmgmt up
-
-# Or with cleanup
-uv run lmgmt down --clean
-uv run lmgmt up
-```
-
-### Service-Specific Restart with lmgmt
-```bash
-cd tests/lmgmt
-
-# Restart platform
-uv run lmgmt restart platform
-
-# Restart specific KAS instance
-uv run lmgmt restart kas-alpha
-uv run lmgmt restart kas-km1
-
-# Restart Docker services
-uv run lmgmt restart docker
-```
-
-### Manual Restart (Emergency)
-```bash
-# Kill all services
-pkill -9 -f "go.*service.*start"
-pkill -9 -f "opentdf-kas"
-
-# Kill tmux session if it exists
-tmux kill-session -t xtest 2>/dev/null || true
-
-# Kill docker containers
-cd platform && docker compose down 2>/dev/null || true
-
-# Wait for ports to free
-sleep 5
-
-# Restart everything
-cd tests/lmgmt && uv run lmgmt up
-```
-
-### Platform Only Restart
-```bash
-# Using lmgmt (recommended)
-cd tests/lmgmt && uv run lmgmt restart platform
-
-# Via tmux session (if using scripts)
-tmux attach -t xtest
-# Navigate to window 1 (platform)
-Ctrl-B 1
-# Stop: Ctrl-C
-# Restart: Up arrow + Enter
-
-# Or manually
-pkill -9 -f "go.*service.*start"
-sleep 2  # Wait a moment for port to free
-cd platform
-go run ./service start
-```
-
-### Individual KAS Restart
-```bash
-# Using lmgmt (recommended)
-cd tests/lmgmt
-uv run lmgmt restart kas-alpha
-uv run lmgmt restart kas-km1
-
-# Via tmux session (if using scripts)
-tmux attach -t xtest
-
-# Navigate to KAS window:
-# Ctrl-B 2  (kas-alpha)
-# Ctrl-B 3  (kas-beta)
-# Ctrl-B 4  (kas-gamma)
-# Ctrl-B 5  (kas-delta)
-# Ctrl-B 6  (kas-km1)
-# Ctrl-B 7  (kas-km2)
-
-# Stop: Ctrl-C
-# Restart: Up arrow + Enter
-```
-
-### Docker Services Restart
-```bash
-# Using lmgmt (recommended)
-cd tests/lmgmt && uv run lmgmt restart docker
-
-# Or via tmux window 8 (docker logs)
-tmux attach -t xtest
-Ctrl-B 8  # Navigate to docker window
-```
-
-### Cleanup
-```bash
-cd tests/lmgmt
-uv run lmgmt clean              # Clean logs and configs
-uv run lmgmt clean --keep-logs  # Clean only configs
-```
-
 ## Common Pitfalls
 
 1. **Forgetting to rebuild SDK** after code changes
@@ -663,142 +294,33 @@ uv run lmgmt clean --keep-logs  # Clean only configs
 5. **Port conflicts** from old processes still running
 6. **Assuming SDK behavior** without checking platform configuration
 
-## Quick Reference Commands
-
-### Service Management with lmgmt (Recommended)
-```bash
-cd tests/lmgmt
-
-# Start/stop environment
-uv run lmgmt up
-uv run lmgmt down
-uv run lmgmt down --clean
-
-# Configure environment for pytest
-eval $(uv run lmgmt env)         # Sets PLATFORM_LOG_FILE, KAS_*_LOG_FILE, etc.
-uv run lmgmt env --format json   # Output as JSON
-
-# View status
-uv run lmgmt status
-uv run lmgmt status --watch  # Live updates
-uv run lmgmt ls              # List running services
-uv run lmgmt ls --all        # List all services
-
-# View logs
-uv run lmgmt logs -f                    # Follow all logs
-uv run lmgmt logs platform              # Platform logs
-uv run lmgmt logs kas-alpha -f          # Follow KAS logs
-uv run lmgmt logs --grep error          # Filter logs
-
-# Restart services
-uv run lmgmt restart platform
-uv run lmgmt restart kas-alpha
-uv run lmgmt restart docker
-
-# Provisioning
-uv run lmgmt provision          # All
-uv run lmgmt provision keycloak
-uv run lmgmt provision fixtures
-
-# Cleanup
-uv run lmgmt clean
-uv run lmgmt clean --keep-logs
-```
-
-### Testing
-```bash
-# Configure environment (from tests/lmgmt directory)
-cd tests/lmgmt
-eval $(uv run lmgmt env)
-cd ../xtest
-
-# Run all tests with Go SDK
-uv run pytest --sdks go -v
-
-# Run specific test file
-uv run pytest test_tdfs.py --sdks go -v
-```
+## Quick Reference
 
 ### Platform Inspection
 ```bash
-# Check platform config
 curl localhost:8080/.well-known/opentdf-configuration | jq
-
-# View KAS registry
 curl localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_servers[].uri'
-
-# Check platform health
 curl localhost:8080/healthz
-
-# Get platform root key
 yq e '.services.kas.root_key' platform/opentdf-dev.yaml
-```
-
-### Tmux Navigation
-```bash
-# Attach to session
-tmux attach -t xtest
-
-# Navigate windows
-Ctrl-B 0-9     # Switch to window by number
-Ctrl-B w       # Show window list
-Ctrl-B d       # Detach
-
-# View logs in session
-Ctrl-B [       # Enter scroll mode
-q              # Exit scroll mode
-```
-
-### Troubleshooting
-```bash
-# Check service status
-cd tests/lmgmt
-uv run lmgmt status         # See what's running
-uv run lmgmt ls --all       # List all services
-
-# View service logs
-uv run lmgmt logs platform -f
-uv run lmgmt logs kas-alpha -f
-uv run lmgmt logs --grep error    # Find errors
-
-# Or check log files directly
-tail -f tests/xtest/logs/platform.log
-tail -f tests/xtest/logs/kas-alpha.log
-
-# Kill stuck processes
-pkill -9 -f "go.*service.*start"
-
-# Check port availability
-lsof -i :8080   # Platform
-lsof -i :8181   # KAS alpha
-lsof -i :8888   # Keycloak
 ```
 
 ### SDK Configuration
 ```bash
 cd tests/otdf-sdk-mgr
 
-# Install released artifacts (fast, no compilation)
 otdf-sdk-mgr install stable                              # Latest stable for all SDKs
-otdf-sdk-mgr install lts                                 # LTS versions for all SDKs
+otdf-sdk-mgr install lts                                 # LTS versions
 otdf-sdk-mgr install release go:v0.24.0 js:0.4.0        # Specific versions
-
-# Build from source (checkout + compile)
 otdf-sdk-mgr install tip                                 # All SDKs from main
 otdf-sdk-mgr install tip go                              # Single SDK from main
-
-# Query versions
 otdf-sdk-mgr versions list go --stable --latest 3 --table
 otdf-sdk-mgr versions resolve go main latest
-
-# Checkout source, clean up
 otdf-sdk-mgr checkout go main
 otdf-sdk-mgr clean
 ```
 
 ### Manual SDK Operations
 ```bash
-# Encrypt/decrypt
 sdk/go/dist/main/cli.sh encrypt input.txt output.tdf --attr <fqn>
 sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 ```
@@ -807,14 +329,11 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 
 ### Preferred Workflow
 
-1. **Use lmgmt for environment management** - It provides better error handling, health checks, and logs
-2. **Configure SDK artifacts**: `cd tests/otdf-sdk-mgr && otdf-sdk-mgr install stable` (or `lts`, `tip`, `release`)
-3. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
-4. **Check status**: `uv run lmgmt status`
-5. **Configure shell environment**: `eval $(uv run lmgmt env)` - Sets up environment variables for pytest
-6. **View logs**: `uv run lmgmt logs -f`
-7. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
-8. **Restart services**: `cd ../lmgmt && uv run lmgmt restart <service>` after config changes
+1. **Configure SDK artifacts**: `cd tests/otdf-sdk-mgr && otdf-sdk-mgr install stable`
+2. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
+3. **Configure shell**: `eval $(uv run lmgmt env)`
+4. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
+5. **Restart after config changes**: `cd ../lmgmt && uv run lmgmt restart <service>`
 
 ### When Debugging Test Failures
 
@@ -824,7 +343,7 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 4. Ensure services are running and healthy (`lmgmt status`)
 5. Check service logs (`lmgmt logs <service> -f`)
 6. Reproduce issues manually when possible
-7. Always restart services after config changes (`lmgmt restart <service>`)
+7. Always restart services after config changes
 8. Read before writing - understand existing code patterns
 
 The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect.

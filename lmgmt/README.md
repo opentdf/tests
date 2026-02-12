@@ -148,6 +148,18 @@ lmgmt provision keycloak
 lmgmt provision fixtures
 ```
 
+### `env` - Configure Shell for pytest
+
+Export environment variables needed by pytest (log file paths, etc.):
+
+```bash
+# Set up environment for running tests
+eval $(lmgmt env)
+
+# Output as JSON
+lmgmt env --format json
+```
+
 ### `clean` - Clean Up
 
 ```bash
@@ -157,6 +169,40 @@ lmgmt clean
 # Clean but keep logs
 lmgmt clean --keep-logs
 ```
+
+## Tmux Session
+
+`lmgmt up` creates a tmux session named `xtest` with each service in its own window:
+
+| Window | Service |
+|--------|---------|
+| 0 | docker |
+| 1 | platform |
+| 2 | kas-alpha |
+| 3 | kas-beta |
+| 4 | kas-gamma |
+| 5 | kas-delta |
+| 6 | kas-km1 |
+| 7 | kas-km2 |
+
+```bash
+# Attach to session
+tmux attach -t xtest
+
+# Navigate windows
+Ctrl-B 0-9     # Switch by number
+Ctrl-B w       # Window list
+Ctrl-B n/p     # Next/previous
+
+# Scroll logs in a window
+Ctrl-B [       # Enter scroll mode
+q              # Exit scroll mode
+
+# Detach
+Ctrl-B d
+```
+
+Log files are also written to `tests/xtest/logs/` (e.g., `platform.log`, `kas-alpha.log`).
 
 ## Services Managed
 
