@@ -43,9 +43,7 @@ def post_checkout_java_fixup(base_dir: Path | None = None) -> None:
 
         # Check if the correct platform.branch is already set
         if f"<platform.branch>{platform_branch}</platform.branch>" in pom_content:
-            print(
-                f"platform.branch already set to {platform_branch} in {pom_file}, skipping."
-            )
+            print(f"platform.branch already set to {platform_branch} in {pom_file}, skipping.")
             continue
 
         # If we don't have a specific mapping (defaults to "main"),
@@ -76,9 +74,7 @@ def post_checkout_java_fixup(base_dir: Path | None = None) -> None:
                 f"<properties>\n        <platform.branch>{platform_branch}</platform.branch>",
             )
             # Replace hardcoded branch=main with branch=${platform.branch}
-            pom_content = pom_content.replace(
-                "branch=main", "branch=${platform.branch}"
-            )
+            pom_content = pom_content.replace("branch=main", "branch=${platform.branch}")
             print(
                 f"Added platform.branch={platform_branch} "
                 f"and updated branch references in {pom_file}"

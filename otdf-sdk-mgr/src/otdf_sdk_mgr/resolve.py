@@ -10,7 +10,12 @@ from urllib.parse import quote
 
 from git import Git
 
-from otdf_sdk_mgr.config import JAVA_PLATFORM_BRANCH_MAP, LTS_VERSIONS, SDK_GIT_URLS, SDK_TAG_INFIXES
+from otdf_sdk_mgr.config import (
+    JAVA_PLATFORM_BRANCH_MAP,
+    LTS_VERSIONS,
+    SDK_GIT_URLS,
+    SDK_TAG_INFIXES,
+)
 
 
 class ResolveSuccess(TypedDict):
@@ -68,9 +73,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
     try:
         repo = Git()
         if version == "main" or version == "refs/heads/main":
-            all_heads = [
-                r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
-            ]
+            all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
             return {
                 "sdk": sdk,
@@ -82,9 +85,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
 
         if re.match(SHA_REGEX, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
-            matching_tags = [
-                (sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)
-            ]
+            matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
                 return {
                     "sdk": sdk,
@@ -161,9 +162,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
 
         if version.startswith("refs/pull/"):
             merge_heads = [
-                r.split("\t")
-                for r in repo.ls_remote(sdk_url).split("\n")
-                if r.endswith(version)
+                r.split("\t") for r in repo.ls_remote(sdk_url).split("\n") if r.endswith(version)
             ]
             pr_number = version.split("/")[2]
             if not merge_heads:
@@ -184,9 +183,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
 
         remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
-            (sha, tag.split("refs/tags/")[-1])
-            for (sha, tag) in remote_tags
-            if "refs/tags/" in tag
+            (sha, tag.split("refs/tags/")[-1]) for (sha, tag) in remote_tags if "refs/tags/" in tag
         ]
 
         all_listed_branches = {
@@ -216,9 +213,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                 if f"{infix}/" in tag
             ]
         semver_regex = r"v?\d+\.\d+\.\d+$"
-        listed_tags = [
-            (sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)
-        ]
+        listed_tags = [(sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)]
         listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
         alias = version
         matching_tags = []
@@ -228,9 +223,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
             if version == "lts":
                 version = LTS_VERSIONS[sdk]
             matching_tags = [
-                (sha, tag)
-                for (sha, tag) in listed_tags
-                if tag in [version, f"v{version}"]
+                (sha, tag) for (sha, tag) in listed_tags if tag in [version, f"v{version}"]
             ]
         if not matching_tags:
             raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")

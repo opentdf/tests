@@ -39,3 +39,10 @@ jobs:
           uv run ruff format --check .
           uv run pyright
         working-directory: lmgmt
+      - name: Lint otdf-sdk-mgr
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+        working-directory: otdf-sdk-mgr

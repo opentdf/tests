@@ -50,21 +50,25 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
 
     if worktree_path.exists():
         print(f"Worktree for branch '{branch}' already exists at {worktree_path}. Updating...")
-        _run([
-            "git",
-            f"--git-dir={bare_repo_path}",
-            f"--work-tree={worktree_path}",
-            "pull",
-            "origin",
-            branch,
-        ])
+        _run(
+            [
+                "git",
+                f"--git-dir={bare_repo_path}",
+                f"--work-tree={worktree_path}",
+                "pull",
+                "origin",
+                branch,
+            ]
+        )
     else:
         print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
-        _run([
-            "git",
-            f"--git-dir={bare_repo_path}",
-            "worktree",
-            "add",
-            str(worktree_path),
-            branch,
-        ])
+        _run(
+            [
+                "git",
+                f"--git-dir={bare_repo_path}",
+                "worktree",
+                "add",
+                str(worktree_path),
+                branch,
+            ]
+        )

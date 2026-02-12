@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
+from otdf_sdk_mgr.resolve import ResolveResult
 
 versions_app = typer.Typer(help="Query SDK version registries.")
 
@@ -27,9 +28,7 @@ def list_versions(
     releases: Annotated[
         bool, typer.Option("--releases", help="Include GitHub Releases info for Java")
     ] = False,
-    output_json: Annotated[
-        bool, typer.Option("--json", help="JSON output (default)")
-    ] = False,
+    output_json: Annotated[bool, typer.Option("--json", help="JSON output (default)")] = False,
     output_table: Annotated[
         bool, typer.Option("--table", help="Human-readable Rich table output")
     ] = False,
@@ -55,14 +54,10 @@ def list_versions(
             all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
         elif s == "java":
             maven_entries = list_java_maven_versions()
-            all_entries.extend(
-                apply_filters(maven_entries, stable_only=stable, latest_n=latest)
-            )
+            all_entries.extend(apply_filters(maven_entries, stable_only=stable, latest_n=latest))
             if releases:
                 gh_entries = list_java_github_releases()
-                all_entries.extend(
-                    apply_filters(gh_entries, stable_only=stable, latest_n=latest)
-                )
+                all_entries.extend(apply_filters(gh_entries, stable_only=stable, latest_n=latest))
 
     if output_table:
         _print_rich_table(all_entries)
@@ -118,7 +113,7 @@ def resolve_versions(
         raise typer.Exit(2)
     infix = SDK_TAG_INFIXES.get(sdk)
 
-    results: list[dict[str, Any]] = []
+    results: list[ResolveResult] = []
     shas: set[str] = set()
     for version in tags:
         v = resolve(sdk, version, infix)

@@ -28,12 +28,8 @@ def checkout(
         Optional[str],
         typer.Argument(help="SDK to checkout (go, js, java)"),
     ] = None,
-    branch: Annotated[
-        str, typer.Argument(help="Branch to checkout")
-    ] = "main",
-    all_sdks: Annotated[
-        bool, typer.Option("--all", help="Checkout all SDKs")
-    ] = False,
+    branch: Annotated[str, typer.Argument(help="Branch to checkout")] = "main",
+    all_sdks: Annotated[bool, typer.Option("--all", help="Checkout all SDKs")] = False,
 ) -> None:
     """Clone bare repo and create/update worktree for an SDK branch."""
     from otdf_sdk_mgr.checkout import checkout_sdk_branch

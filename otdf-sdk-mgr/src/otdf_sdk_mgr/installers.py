@@ -10,7 +10,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from otdf_sdk_mgr.config import ALL_SDKS, GO_DIR, JAVA_DIR, JS_DIR, LTS_VERSIONS, SDK_DIRS, SCRIPTS_DIR
+from otdf_sdk_mgr.config import (
+    ALL_SDKS,
+    GO_DIR,
+    JAVA_DIR,
+    JS_DIR,
+    LTS_VERSIONS,
+    SDK_DIRS,
+    SCRIPTS_DIR,
+)
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
 from otdf_sdk_mgr.semver import normalize_version
 
@@ -198,14 +206,10 @@ def configure_main() -> None:
     )
 
     p_lts = subparsers.add_parser("lts", help="Install LTS versions")
-    p_lts.add_argument(
-        "sdks", nargs="*", default=ALL_SDKS, help="SDKs to install (default: all)"
-    )
+    p_lts.add_argument("sdks", nargs="*", default=ALL_SDKS, help="SDKs to install (default: all)")
 
     p_tip = subparsers.add_parser("tip", help="Source checkout + build from main")
-    p_tip.add_argument(
-        "sdks", nargs="*", default=ALL_SDKS, help="SDKs to build (default: all)"
-    )
+    p_tip.add_argument("sdks", nargs="*", default=ALL_SDKS, help="SDKs to build (default: all)")
 
     p_release = subparsers.add_parser("release", help="Install specific released versions")
     p_release.add_argument(
