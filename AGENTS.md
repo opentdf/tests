@@ -14,51 +14,13 @@ This guide provides essential knowledge for AI agents performing updates, refact
 
 ### Configuring SDK Artifacts
 
-SDK CLIs can be installed from **released artifacts** (fast, deterministic) or built from **source** (for branch/PR testing). Both modes produce the same `sdk/{go,java,js}/dist/{version}/` directory structure.
-
-**Primary tool**: `otdf-sdk-mgr` (uv-managed CLI in `tests/otdf-sdk-mgr/`)
+Use `otdf-sdk-mgr` (uv-managed CLI in `tests/otdf-sdk-mgr/`) to install SDK CLIs from released artifacts or source. See `otdf-sdk-mgr/README.md` for full command reference.
 
 ```bash
 cd tests/otdf-sdk-mgr && uv tool install --editable .
-
-# Install latest stable releases for all SDKs (recommended for local testing)
-otdf-sdk-mgr install stable
-
-# Install LTS versions
-otdf-sdk-mgr install lts
-
-# Install specific released versions
-otdf-sdk-mgr install release go:v0.24.0 js:0.4.0 java:v0.9.0
-
-otdf-sdk-mgr install tip
-otdf-sdk-mgr install tip go    # Single SDK
-
-# Install a published version with optional dist name (defaults to version tag)
-otdf-sdk-mgr install artifact --sdk go --version v0.24.0
-otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
-
-# List available versions
-otdf-sdk-mgr versions list go --stable --latest 3 --table
-
-# Resolve version tags to SHAs
-otdf-sdk-mgr versions resolve go main latest
-
-# Checkout SDK source
-otdf-sdk-mgr checkout go main
-
-# Clean dist and source directories
-otdf-sdk-mgr clean
-
-# Fix Java pom.xml after source checkout
-otdf-sdk-mgr java-fixup
+otdf-sdk-mgr install stable    # Latest stable releases (recommended)
+otdf-sdk-mgr install tip go    # Build from source
 ```
-
-**How release installs work per SDK:**
-- **Go**: Writes a `.version` file; `cli.sh`/`otdfctl.sh` use `go run github.com/opentdf/otdfctl@{version}` (no local compilation needed, Go caches the binary)
-- **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
-- **Java**: Downloads `cmdline.jar` from GitHub Releases; `cli.sh` uses `java -jar cmdline.jar`
-
-**Source builds** (`tip` mode) delegate to `checkout-sdk-branch.sh` + `make`, which checks out source to `sdk/{lang}/src/` and compiles to `sdk/{lang}/dist/`.
 
 ### Running Tests
 
@@ -239,23 +201,7 @@ export SCHEMA_FILE=/path/to/schema.json
 
 ### When Modifying SDK Code
 
-```bash
-# After changes to SDK source, rebuild from source
-cd tests/otdf-sdk-mgr
-uv run otdf-sdk-mgr install tip go   # or java, js
-
-# Or manually: checkout + make
-cd sdk/go  # or sdk/java, sdk/js
-make
-
-# Verify build worked
-ls -la dist/main/cli.sh
-```
-
-For testing against a released SDK version (no source changes needed):
-```bash
-cd tests/otdf-sdk-mgr && uv run otdf-sdk-mgr install release go:v0.24.0
-```
+After changes to SDK source, rebuild with `otdf-sdk-mgr install tip go` (or java, js). For testing against a released version: `otdf-sdk-mgr install release go:v0.24.0`. See `otdf-sdk-mgr/README.md` for details.
 
 ### When Modifying Platform Code
 
@@ -305,25 +251,8 @@ yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 ```
 
 ### SDK Configuration
-```bash
-cd tests/otdf-sdk-mgr
 
-otdf-sdk-mgr install stable                              # Latest stable for all SDKs
-otdf-sdk-mgr install lts                                 # LTS versions
-otdf-sdk-mgr install release go:v0.24.0 js:0.4.0        # Specific versions
-otdf-sdk-mgr install tip                                 # All SDKs from main
-otdf-sdk-mgr install tip go                              # Single SDK from main
-otdf-sdk-mgr versions list go --stable --latest 3 --table
-otdf-sdk-mgr versions resolve go main latest
-otdf-sdk-mgr checkout go main
-otdf-sdk-mgr clean
-```
-
-### Manual SDK Operations
-```bash
-sdk/go/dist/main/cli.sh encrypt input.txt output.tdf --attr <fqn>
-sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
-```
+See `otdf-sdk-mgr/README.md` for full command reference.
 
 ## Summary
 
