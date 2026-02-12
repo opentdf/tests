@@ -61,23 +61,48 @@ def install_js_release(version: str, dist_dir: Path) -> None:
 
 
 def install_java_release(version: str, dist_dir: Path) -> None:
-    """Install a Java CLI release by downloading cmdline.jar from GitHub Releases."""
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(JAVA_DIR / "cli.sh", dist_dir / "cli.sh")
+    """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
+
+    Falls back gracefully if the artifact is not available - the caller can
+    then build from source instead.
+    """
     tag = normalize_version(version)
     url = f"https://github.com/opentdf/java-sdk/releases/download/{tag}/cmdline.jar"
+
+    # Check if artifact exists before trying to download
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        urllib.request.urlopen(req, timeout=10)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"  Warning: cmdline.jar not found for {tag}.", file=sys.stderr)
+            print(f"  The release {tag} does not include a CLI artifact.", file=sys.stderr)
+            print("  This version will need to be built from source.", file=sys.stderr)
+            print(
+                f"  Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}",
+                file=sys.stderr,
+            )
+            # Clean up partial dist dir if it was created
+            if dist_dir.exists():
+                shutil.rmtree(dist_dir)
+            # Exit with error so caller knows to fall back to source build
+            sys.exit(1)
+        raise
+    except Exception as e:
+        print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
+        # Proceed with download attempt anyway
+        pass
+
+    # Artifact exists, proceed with download
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(JAVA_DIR / "cli.sh", dist_dir / "cli.sh")
     jar_path = dist_dir / "cmdline.jar"
     print(f"  Downloading cmdline.jar from {url}...")
     try:
         urllib.request.urlretrieve(url, jar_path)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"  Error: cmdline.jar not found for {tag}.", file=sys.stderr)
-            print(f"  The release {tag} may not include a CLI artifact.", file=sys.stderr)
-            print(
-                f"  Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}",
-                file=sys.stderr,
-            )
+            print(f"  Error: cmdline.jar not found for {tag} (race condition?).", file=sys.stderr)
             sys.exit(1)
         raise
     print(f"  Java release {tag} installed to {dist_dir}")

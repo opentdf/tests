@@ -86,9 +86,13 @@ runs:
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
             echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
-            uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
+            if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
-              --dist-name "$tag"
+              --dist-name "$tag"; then
+              echo "  Warning: Artifact installation failed for ${{ inputs.sdk }} $tag"
+              echo "  Will fall back to building from source"
+              echo "BUILD_FROM_SOURCE_$tag=true" >> "$GITHUB_ENV"
+            fi
           fi
         done
       env:
