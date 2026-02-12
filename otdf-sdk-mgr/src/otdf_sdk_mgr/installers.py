@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import subprocess
 import sys
@@ -11,7 +10,6 @@ import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
-    ALL_SDKS,
     GO_DIR,
     JAVA_DIR,
     JS_DIR,
@@ -190,49 +188,3 @@ def cmd_install(sdk: str, version: str, dist_name: str | None = None) -> None:
     """Install a single SDK version (used by CI action)."""
     print(f"Installing {sdk} {version}...")
     install_release(sdk, version, dist_name=dist_name)
-
-
-def configure_main() -> None:
-    """Backward-compatible argparse CLI entry point for scripts/configure.py wrapper."""
-    parser = argparse.ArgumentParser(
-        description="Configure SDK artifacts for xtest.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    p_stable = subparsers.add_parser("stable", help="Install latest stable releases")
-    p_stable.add_argument(
-        "sdks", nargs="*", default=ALL_SDKS, help="SDKs to install (default: all)"
-    )
-
-    p_lts = subparsers.add_parser("lts", help="Install LTS versions")
-    p_lts.add_argument("sdks", nargs="*", default=ALL_SDKS, help="SDKs to install (default: all)")
-
-    p_tip = subparsers.add_parser("tip", help="Source checkout + build from main")
-    p_tip.add_argument("sdks", nargs="*", default=ALL_SDKS, help="SDKs to build (default: all)")
-
-    p_release = subparsers.add_parser("release", help="Install specific released versions")
-    p_release.add_argument(
-        "specs",
-        nargs="+",
-        metavar="SDK:VERSION",
-        help="Version specs (e.g., go:v0.24.0 js:0.4.0 java:v0.9.0)",
-    )
-
-    p_install = subparsers.add_parser("install", help="Install a single SDK version (CI)")
-    p_install.add_argument("--sdk", required=True, choices=ALL_SDKS)
-    p_install.add_argument("--version", required=True, help="Version to install")
-    p_install.add_argument("--dist-name", default=None, help="Override dist directory name")
-
-    args = parser.parse_args()
-
-    if args.command == "stable":
-        cmd_stable(args.sdks)
-    elif args.command == "lts":
-        cmd_lts(args.sdks)
-    elif args.command == "tip":
-        cmd_tip(args.sdks)
-    elif args.command == "release":
-        cmd_release(args.specs)
-    elif args.command == "install":
-        cmd_install(args.sdk, args.version, dist_name=args.dist_name)

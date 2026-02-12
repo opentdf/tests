@@ -19,7 +19,7 @@ SDK CLIs can be installed from **released artifacts** (fast, deterministic) or b
 **Primary tool**: `otdf-sdk-mgr` (uv-managed CLI in `tests/otdf-sdk-mgr/`)
 
 ```bash
-cd tests/otdf-sdk-mgr && uv pip install -e .
+cd tests/otdf-sdk-mgr && uv tool install --editable .
 
 # Install latest stable releases for all SDKs (recommended for local testing)
 otdf-sdk-mgr install stable

@@ -3,11 +3,20 @@
 
 Also re-exports key functions for any code that imports this module directly.
 """
+
 import sys
 from pathlib import Path
 
 # tests/otdf-sdk-mgr/src/ is three levels up from xtest/sdk/scripts/
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "otdf-sdk-mgr" / "src"))
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parent.parent.parent.parent / "otdf-sdk-mgr" / "src"),
+)
+
+# Backward-compat: list-versions.py main() with argparse
+import argparse  # noqa: E402
+import json  # noqa: E402
+from typing import Any  # noqa: E402
 
 from otdf_sdk_mgr.registry import (  # noqa: E402, F401
     apply_filters,
@@ -16,12 +25,11 @@ from otdf_sdk_mgr.registry import (  # noqa: E402, F401
     list_java_maven_versions,
     list_js_versions,
 )
-from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key  # noqa: E402, F401
-
-# Backward-compat: list-versions.py main() with argparse
-import argparse  # noqa: E402
-import json  # noqa: E402
-from typing import Any  # noqa: E402
+from otdf_sdk_mgr.semver import (  # noqa: E402, F401
+    is_stable,
+    parse_semver,
+    semver_sort_key,
+)
 
 
 def print_table(entries: list[dict[str, Any]]) -> None:
