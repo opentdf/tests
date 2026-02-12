@@ -26,13 +26,13 @@ This works by aliasing or checking out the source code for the different client 
 To check out the current head versions of the sdks under test, run:
 
 ```sh
-  ./sdk/scripts/checkout-all.sh
+  uv tool install --editable otdf-sdk-mgr && otdf-sdk-mgr install main 
 ```
 
 #### Download another tag of a specific sdk
 
 ```sh
-  ./sdk/scripts/checkout-sdk-branch.sh go v0.19.0
+  uv tool install --editable otdf-sdk-mgr && otdf-sdk-mgr install release go:v0.19.0
 ```
 
 
@@ -45,7 +45,7 @@ use a symbolic link to pull in your working tree:
 ```shell
 mkdir -p sdk/{go,java,js}/src
 GH_ORG_DIR=$(cd ../..; pwd)
-ln -s "$GH_ORG_DIR/otcfctl" sdk/go/src/local
+ln -s "$GH_ORG_DIR/otdfctl" sdk/go/src/local
 ln -s "$GH_ORG_DIR/java-sdk" sdk/java/src/local
 ln -s "$GH_ORG_DIR/web-sdk" sdk/js/src/local
 ```

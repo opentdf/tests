@@ -13,6 +13,7 @@ vulnerability/tilt_modules/
 /xtest/node_modules/
 /xtest/tilt_modules/
 /xtest/tmp/
+/xtest/logs/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
@@ -29,5 +30,4 @@ xtest/sdk/java/cmdline.jar
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
 /xtest/otdfctl/
-
-/tmp/
+/tmp

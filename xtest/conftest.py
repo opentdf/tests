@@ -14,6 +14,7 @@ Domain-specific fixtures are organized in the fixtures/ package:
 """
 
 import json
+import logging
 import os
 import typing
 from pathlib import Path
@@ -23,6 +24,8 @@ import pytest
 
 import tdfs
 from otdfctl import OpentdfCommandLineTool
+
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
 # Load all fixture modules
 pytest_plugins = [
@@ -66,7 +69,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--audit-log-services",
         help="comma-separated list of docker compose services to monitor for audit logs",
-        type=str,
+        type=list[str],
     )
     parser.addoption(
         "--containers",
