@@ -5,10 +5,10 @@ This guide provides essential knowledge for AI agents (particularly Haiku LLM) p
 ## Test Framework Overview
 
 ### Structure
-- **Test Directory**: `tests/xtest/` - pytest-based integration tests
+- **Test Directory**: `xtest/` - pytest-based integration tests
 - **SDK Distributions**: `sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
-- **SDK Configuration**: `sdk/scripts/configure.py` - installs SDK CLIs from released artifacts or delegates to source builds
-- **SDK Version Lookup**: `sdk/scripts/list-versions.py` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
+- **SDK Configuration**: `otdf-sdk-mgr install` - installs SDK CLIs from released artifacts or delegates to source builds
+- **SDK Version Lookup**: `otdf-sdk-mgr versions list` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
 - **Platform**: `platform/` - OpenTDF platform service
 - **Test Runner**: pytest with custom CLI options
 
@@ -19,48 +19,38 @@ SDK CLIs can be installed from **released artifacts** (fast, deterministic) or b
 **Primary tool**: `otdf-sdk-mgr` (uv-managed CLI in `tests/otdf-sdk-mgr/`)
 
 ```bash
-cd tests/otdf-sdk-mgr
+cd tests/otdf-sdk-mgr && uv pip install -e .
 
 # Install latest stable releases for all SDKs (recommended for local testing)
-uv run otdf-sdk-mgr install stable
+otdf-sdk-mgr install stable
 
-# Install LTS versions (go:0.24.0, java:0.9.0, js:0.4.0)
-uv run otdf-sdk-mgr install lts
+# Install LTS versions
+otdf-sdk-mgr install lts
 
 # Install specific released versions
-uv run otdf-sdk-mgr install release go:v0.24.0 js:0.4.0 java:v0.9.0
+otdf-sdk-mgr install release go:v0.24.0 js:0.4.0 java:v0.9.0
 
-# Build from source (checkout main + make)
-uv run otdf-sdk-mgr install tip
-uv run otdf-sdk-mgr install tip go    # Single SDK
+otdf-sdk-mgr install tip
+otdf-sdk-mgr install tip go    # Single SDK
 
-# Install a single version (used by CI)
-uv run otdf-sdk-mgr install artifact --sdk go --version v0.24.0
-uv run otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
+# Install a published version with optional dist name (defaults to version tag)
+otdf-sdk-mgr install artifact --sdk go --version v0.24.0
+otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
 
 # List available versions
-uv run otdf-sdk-mgr versions list go --stable --latest 3 --table
+otdf-sdk-mgr versions list go --stable --latest 3 --table
 
 # Resolve version tags to SHAs
-uv run otdf-sdk-mgr versions resolve go main latest
+otdf-sdk-mgr versions resolve go main latest
 
 # Checkout SDK source
-uv run otdf-sdk-mgr checkout go main
+otdf-sdk-mgr checkout go main
 
 # Clean dist and source directories
-uv run otdf-sdk-mgr clean
+otdf-sdk-mgr clean
 
 # Fix Java pom.xml after source checkout
-uv run otdf-sdk-mgr java-fixup
-```
-
-**Backward-compatible wrappers** exist in `xtest/sdk/scripts/` and are used by CI:
-```bash
-cd tests/xtest/sdk/scripts
-python3 configure.py stable            # -> otdf-sdk-mgr install stable
-python3 configure.py install --sdk go --version v0.24.0  # -> otdf-sdk-mgr install artifact
-python3 resolve-version.py go main     # -> otdf-sdk-mgr versions resolve
-python3 list-versions.py go --stable   # -> otdf-sdk-mgr versions list
+otdf-sdk-mgr java-fixup
 ```
 
 **How release installs work per SDK:**
@@ -482,8 +472,8 @@ sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
 
 ```bash
 # After changes to SDK source, rebuild from source
-cd tests/xtest/sdk/scripts
-python3 configure.py tip go   # or java, js
+cd tests/otdf-sdk-mgr
+uv run otdf-sdk-mgr install tip go   # or java, js
 
 # Or manually: checkout + make
 cd sdk/go  # or sdk/java, sdk/js
@@ -789,21 +779,21 @@ lsof -i :8888   # Keycloak
 cd tests/otdf-sdk-mgr
 
 # Install released artifacts (fast, no compilation)
-uv run otdf-sdk-mgr install stable                              # Latest stable for all SDKs
-uv run otdf-sdk-mgr install lts                                 # LTS versions for all SDKs
-uv run otdf-sdk-mgr install release go:v0.24.0 js:0.4.0        # Specific versions
+otdf-sdk-mgr install stable                              # Latest stable for all SDKs
+otdf-sdk-mgr install lts                                 # LTS versions for all SDKs
+otdf-sdk-mgr install release go:v0.24.0 js:0.4.0        # Specific versions
 
 # Build from source (checkout + compile)
-uv run otdf-sdk-mgr install tip                                 # All SDKs from main
-uv run otdf-sdk-mgr install tip go                              # Single SDK from main
+otdf-sdk-mgr install tip                                 # All SDKs from main
+otdf-sdk-mgr install tip go                              # Single SDK from main
 
 # Query versions
-uv run otdf-sdk-mgr versions list go --stable --latest 3 --table
-uv run otdf-sdk-mgr versions resolve go main latest
+otdf-sdk-mgr versions list go --stable --latest 3 --table
+otdf-sdk-mgr versions resolve go main latest
 
 # Checkout source, clean up
-uv run otdf-sdk-mgr checkout go main
-uv run otdf-sdk-mgr clean
+otdf-sdk-mgr checkout go main
+otdf-sdk-mgr clean
 ```
 
 ### Manual SDK Operations
@@ -818,7 +808,7 @@ sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
 ### Preferred Workflow
 
 1. **Use lmgmt for environment management** - It provides better error handling, health checks, and logs
-2. **Configure SDK artifacts**: `cd tests/otdf-sdk-mgr && uv run otdf-sdk-mgr install stable` (or `lts`, `tip`, `release`)
+2. **Configure SDK artifacts**: `cd tests/otdf-sdk-mgr && otdf-sdk-mgr install stable` (or `lts`, `tip`, `release`)
 3. **Start environment**: `cd tests/lmgmt && uv run lmgmt up`
 4. **Check status**: `uv run lmgmt status`
 5. **Configure shell environment**: `eval $(uv run lmgmt env)` - Sets up environment variables for pytest

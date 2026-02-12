@@ -79,13 +79,14 @@ runs:
     - name: install released versions
       shell: bash
       run: |
+        SDK_MGR_DIR="$(cd "${{ inputs.path }}/../.." && pwd)/otdf-sdk-mgr"
         for row in $(echo "${version_info}" | jq -c '.[]'); do
           tag=$(echo "$row" | jq -r '.tag')
           head=$(echo "$row" | jq -r '.head // false')
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
             echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
-            python3 "${{ inputs.path }}/scripts/configure.py" install \
+            uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
               --dist-name "$tag"
           fi
@@ -140,7 +141,8 @@ runs:
     - name: post checkout cleanups
       if: inputs.sdk == 'java'
       run: |
-        ${{ inputs.path }}/scripts/post-checkout-java.sh
+        SDK_MGR_DIR="$(cd "${{ inputs.path }}/../.." && pwd)/otdf-sdk-mgr"
+        uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr java-fixup
       shell: bash
 
     - name: save env from version-info
