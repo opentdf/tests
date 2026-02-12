@@ -305,7 +305,7 @@ def attribute_allof_with_extended_mechanisms(
         temporary_namespace,
         "mechanism-select",
         abac.AttributeRule.ALL_OF,
-        ["ec-secp256r1", "ec-secp384r1", "ec-secp521r1", "rsa:2048", "rsa:4096"],
+        ["ec-secp256r1", "ec-secp384r1", "ec-secp521r1", "rsa-2048", "rsa-4096"],
     )
     assert attr.values and len(attr.values) == 5
     v_e256, v_e384, v_e521, v_r2048, v_r4096 = attr.values
