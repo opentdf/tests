@@ -121,8 +121,8 @@ def test_key_mapping_extended_mechanisms(
 ):
     """Test encryption and decryption with extended cryptographic mechanisms.
 
-    This test verifies support for ec:secp384r1, ec:secp521r1, and rsa:4096
-    key types by encrypting with all three mechanisms and successfully decrypting.
+    This test verifies support for ec:secp256r1, ec:secp384r1, ec:secp521r1, rsa:2048, and rsa:4096
+    key types by encrypting with all five mechanisms and successfully decrypting.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
