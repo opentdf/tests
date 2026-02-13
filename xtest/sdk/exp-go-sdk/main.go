@@ -198,28 +198,41 @@ func doEncrypt(args []string) error {
 		return fmt.Errorf("creating writer: %w", err)
 	}
 
-	// Read input and write segments
+	// Read input and write segments, collecting segment TDF data
 	data, err := os.ReadFile(f.inputFile)
 	if err != nil {
 		return fmt.Errorf("reading input file: %w", err)
 	}
 
+	var segmentChunks [][]byte
 	segIdx := 0
 	for offset := 0; offset < len(data); offset += segmentSize {
 		end := offset + segmentSize
 		if end > len(data) {
 			end = len(data)
 		}
-		if _, err := writer.WriteSegment(ctx, segIdx, data[offset:end]); err != nil {
+		segResult, err := writer.WriteSegment(ctx, segIdx, data[offset:end])
+		if err != nil {
 			return fmt.Errorf("writing segment %d: %w", segIdx, err)
 		}
+		segData, err := io.ReadAll(segResult.TDFData)
+		if err != nil {
+			return fmt.Errorf("reading segment %d TDF data: %w", segIdx, err)
+		}
+		segmentChunks = append(segmentChunks, segData)
 		segIdx++
 	}
 	// Handle empty file: write one empty segment
 	if len(data) == 0 {
-		if _, err := writer.WriteSegment(ctx, 0, []byte{}); err != nil {
+		segResult, err := writer.WriteSegment(ctx, 0, []byte{})
+		if err != nil {
 			return fmt.Errorf("writing empty segment: %w", err)
 		}
+		segData, err := io.ReadAll(segResult.TDFData)
+		if err != nil {
+			return fmt.Errorf("reading empty segment TDF data: %w", err)
+		}
+		segmentChunks = append(segmentChunks, segData)
 	}
 
 	// Build finalize options
@@ -236,15 +249,26 @@ func doEncrypt(args []string) error {
 		finalizeOpts = append(finalizeOpts, exptdf.WithPayloadMimeType(f.mimeType))
 	}
 
-	// Finalize
+	// Finalize — returns manifest + trailer bytes
 	result, err := writer.Finalize(ctx, finalizeOpts...)
 	if err != nil {
 		return fmt.Errorf("finalizing TDF: %w", err)
 	}
 
-	// Write output
-	if err := os.WriteFile(f.output, result.Data, 0o644); err != nil {
-		return fmt.Errorf("writing output: %w", err)
+	// Write output: segment data + finalize trailer = complete TDF zip
+	outFile, err := os.Create(f.output)
+	if err != nil {
+		return fmt.Errorf("creating output file: %w", err)
+	}
+	defer outFile.Close()
+
+	for i, chunk := range segmentChunks {
+		if _, err := outFile.Write(chunk); err != nil {
+			return fmt.Errorf("writing segment %d to output: %w", i, err)
+		}
+	}
+	if _, err := outFile.Write(result.Data); err != nil {
+		return fmt.Errorf("writing finalize data to output: %w", err)
 	}
 
 	return nil
@@ -460,6 +484,11 @@ func resolveAttributes(ctx context.Context, client *sdk.SDK, attrStr string) ([]
 		v := av.GetValue()
 		if v == nil {
 			return nil, fmt.Errorf("no value for attribute: %s", fqn)
+		}
+		// Ensure the Value has its parent Attribute definition set
+		// (the experimental writer's boolean expression builder requires it)
+		if v.GetAttribute() == nil && av.GetAttribute() != nil {
+			v.Attribute = av.GetAttribute()
 		}
 		values = append(values, v)
 	}
