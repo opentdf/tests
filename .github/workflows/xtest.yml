@@ -27,7 +27,7 @@ on:
         required: false
         type: string
         default: all
-        description: "The SDK to focus on (go, js, java, all)"
+        description: "The SDK to focus on (go, js, java, exp-go-sdk, all)"
   workflow_call:
     inputs:
       platform-ref:
@@ -84,8 +84,8 @@ jobs:
         env:
           FOCUS_SDK_INPUT: ${{ inputs.focus-sdk }}
         run: |-
-          if [[ ! "all go java js" =~ (^|[[:space:]])${FOCUS_SDK_INPUT}($|[[:space:]]) ]]; then
-            echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
+          if [[ ! "all go java js exp-go-sdk" =~ (^|[[:space:]])${FOCUS_SDK_INPUT}($|[[:space:]]) ]]; then
+            echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js, exp-go-sdk." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
       - name: Default Versions depend on context
@@ -224,7 +224,7 @@ jobs:
       fail-fast: false
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
-        sdk: ["go", "java", "js"]
+        sdk: ["go", "java", "js", "exp-go-sdk"]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -340,6 +340,23 @@ jobs:
         run: |-
           make
         working-directory: otdftests/xtest/sdk/go
+
+      ######## SETUP EXP-GO-SDK #############
+      - name: Replace exp-go-sdk go.mod packages
+        if: contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        env:
+          PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+        run: |-
+          PLATFORM_DIR_ABS="$(pwd)/${PLATFORM_WORKING_DIR}"
+          cd otdftests/xtest/sdk/exp-go-sdk
+          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+            go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
+          done
+          go mod tidy
+
+      - name: Build exp-go-sdk
+        run: make
+        working-directory: otdftests/xtest/sdk/exp-go-sdk
 
       ####### CHECKOUT JAVA SDK ##############
 

@@ -21,7 +21,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-sdk_type = Literal["go", "java", "js"]
+sdk_type = Literal["go", "java", "js", "exp-go-sdk"]
 
 focus_type = Literal[sdk_type, "all"]
 
@@ -441,11 +441,11 @@ class SDK:
             case ("key_management", "js") if self.version == "v0.2.0":
                 # JS SDK v0.2.0 incorrectly reports support for key_management.
                 return False
-            case ("autoconfigure", ("go" | "java")):
+            case ("autoconfigure", ("go" | "java" | "exp-go-sdk")):
                 return True
             case ("better-messages-2024", ("js" | "java")):
                 return True
-            case ("ns_grants", ("go" | "java")):
+            case ("ns_grants", ("go" | "java" | "exp-go-sdk")):
                 return True
             case _:
                 pass
