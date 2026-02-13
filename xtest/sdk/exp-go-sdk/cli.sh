@@ -69,6 +69,10 @@ if [ "$1" == "encrypt" ]; then
     args+=(--assertions "$XT_WITH_ASSERTIONS")
   fi
 
+  if [ "$XT_WITH_ECWRAP" == "true" ]; then
+    args+=(--ecwrap)
+  fi
+
   echo "$cmd" encrypt "${args[@]}" "$2"
   "$cmd" encrypt "${args[@]}" "$2"
 elif [ "$1" == "decrypt" ]; then
@@ -78,8 +82,8 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)
   fi
-  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
-    args+=(--kas-allowlist "$XT_WITH_KAS_ALLOW_LIST")
+  if [ -n "$XT_WITH_KAS_ALLOWLIST" ]; then
+    args+=(--kas-allowlist "$XT_WITH_KAS_ALLOWLIST")
   fi
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--ignore-kas-allowlist)

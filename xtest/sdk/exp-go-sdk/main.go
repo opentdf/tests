@@ -86,6 +86,7 @@ type encryptFlags struct {
 	policyMode        string
 	targetMode        string
 	tlsNoVerify       bool
+	ecwrap            bool
 }
 
 func parseEncryptFlags(args []string) (*encryptFlags, error) {
@@ -129,6 +130,8 @@ func parseEncryptFlags(args []string) (*encryptFlags, error) {
 			f.targetMode = args[i]
 		case "--tls-no-verify":
 			f.tlsNoVerify = true
+		case "--ecwrap":
+			f.ecwrap = true
 		default:
 			if f.inputFile == "" && !strings.HasPrefix(args[i], "-") {
 				f.inputFile = args[i]
@@ -163,9 +166,15 @@ func doEncrypt(args []string) error {
 
 	// Get base KAS key — try well-known config first, fall back to direct KAS query
 	baseKey, err := client.GetBaseKey(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetBaseKey failed (%v), falling back to direct KAS public key fetch\n", err)
-		baseKey, err = fetchKASPublicKey(f.platformEndpoint, f.tlsNoVerify)
+	if err != nil || (f.ecwrap && baseKey.GetPublicKey().GetAlgorithm() == policy.Algorithm_ALGORITHM_RSA_2048) {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "GetBaseKey failed (%v), falling back to direct KAS public key fetch\n", err)
+		}
+		algo := "rsa:2048"
+		if f.ecwrap {
+			algo = "ec:secp256r1"
+		}
+		baseKey, err = fetchKASPublicKey(f.platformEndpoint, f.tlsNoVerify, algo)
 		if err != nil {
 			return fmt.Errorf("fetching KAS public key: %w", err)
 		}
@@ -425,9 +434,9 @@ type kasPublicKeyResponse struct {
 	KID       string `json:"kid"`
 }
 
-func fetchKASPublicKey(platformEndpoint string, tlsNoVerify bool) (*policy.SimpleKasKey, error) {
+func fetchKASPublicKey(platformEndpoint string, tlsNoVerify bool, algorithm string) (*policy.SimpleKasKey, error) {
 	kasURL := strings.TrimSuffix(platformEndpoint, "/") + "/kas"
-	pubKeyURL := kasURL + "/v2/kas_public_key?algorithm=rsa:2048"
+	pubKeyURL := kasURL + "/v2/kas_public_key?algorithm=" + algorithm
 
 	httpClient := &http.Client{}
 	if tlsNoVerify {
@@ -452,10 +461,15 @@ func fetchKASPublicKey(platformEndpoint string, tlsNoVerify bool) (*policy.Simpl
 		return nil, fmt.Errorf("decoding KAS public key response: %w", err)
 	}
 
+	alg := policy.Algorithm_ALGORITHM_RSA_2048
+	if strings.HasPrefix(algorithm, "ec:") {
+		alg = policy.Algorithm_ALGORITHM_EC_P256
+	}
+
 	return &policy.SimpleKasKey{
 		KasUri: kasURL,
 		PublicKey: &policy.SimpleKasPublicKey{
-			Algorithm: policy.Algorithm_ALGORITHM_RSA_2048,
+			Algorithm: alg,
 			Kid:       pkResp.KID,
 			Pem:       pkResp.PublicKey,
 		},
@@ -650,7 +664,7 @@ func loadAssertionVerificationKeys(input string) (sdk.AssertionVerificationKeys,
 func loadSDKAssertionKey(alg, keyData string) (sdk.AssertionKey, error) {
 	switch sdk.AssertionKeyAlg(alg) {
 	case sdk.AssertionKeyAlgRS256:
-		key, err := parseRSAPrivateKey(keyData)
+		key, err := parseRSAKey(keyData)
 		if err != nil {
 			return sdk.AssertionKey{}, err
 		}
@@ -659,5 +673,43 @@ func loadSDKAssertionKey(alg, keyData string) (sdk.AssertionKey, error) {
 		return sdk.AssertionKey{Alg: sdk.AssertionKeyAlgHS256, Key: []byte(keyData)}, nil
 	default:
 		return sdk.AssertionKey{}, fmt.Errorf("unsupported verification algorithm: %s", alg)
+	}
+}
+
+// parseRSAKey parses a PEM-encoded RSA key, accepting both private and public key formats.
+// For verification, the test fixtures use public keys (-----BEGIN PUBLIC KEY-----).
+func parseRSAKey(keyData string) (any, error) {
+	// Try as file path first
+	if data, err := os.ReadFile(keyData); err == nil {
+		keyData = string(data)
+	}
+	block, _ := pem.Decode([]byte(keyData))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+	switch block.Type {
+	case "PUBLIC KEY":
+		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PKIX public key: %w", err)
+		}
+		return pub, nil
+	case "RSA PUBLIC KEY":
+		pub, err := x509.ParsePKCS1PublicKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PKCS1 public key: %w", err)
+		}
+		return pub, nil
+	default:
+		// Try as private key (PRIVATE KEY or RSA PRIVATE KEY)
+		key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			key2, err2 := x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err2 != nil {
+				return nil, fmt.Errorf("failed to parse key (PKCS8: %v, PKCS1: %v)", err, err2)
+			}
+			return key2, nil
+		}
+		return key, nil
 	}
 }
