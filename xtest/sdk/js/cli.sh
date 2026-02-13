@@ -51,7 +51,7 @@ if [ "$1" == "supports" ]; then
     ecwrap)
       if npx $CTL help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
-        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 2) exit 0; else exit 1; }'
+        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
         exit $?
       else
         echo "ecwrap not supported"
@@ -65,6 +65,11 @@ if [ "$1" == "supports" ]; then
       ;;
     hexaflexible)
       npx $CTL help | grep tdfSpecVersion
+      exit $?
+      ;;
+    key_management)
+      # Advanced key management from SDK version >= 0.8.0
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
       exit $?
       ;;
     obligations)
