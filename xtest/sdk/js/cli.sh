@@ -19,74 +19,74 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
 CTL=@opentdf/ctl
 if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
-	CTL=@opentdf/cli
+  CTL=@opentdf/cli
 fi
 
 if [ "$1" == "supports" ]; then
-	if ! cd "$SCRIPT_DIR"; then
-		echo "failed: [cd $SCRIPT_DIR]"
-		exit 1
-	fi
-	case "$2" in
-	assertions)
-		npx $CTL help | grep assertions
-		exit $?
-		;;
-	assertion_verification)
-		npx $CTL help | grep assertionVerificationKeys
-		exit $?
-		;;
-	autoconfigure | ns_grants)
-		npx $CTL help | grep autoconfigure
-		exit $?
-		;;
-	kasallowlist)
-		npx $CTL help | grep 'from "/key-access-servers" endpoint'
-		exit $?
-		;;
-	ecwrap)
-		if npx $CTL help | grep encapKeyType; then
-			# Claims to support ecwrap, but maybe with old salt? Look up version
-			npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 2) exit 0; else exit 1; }'
-			exit $?
-		else
-			echo "ecwrap not supported"
-			exit 1
-		fi
-		;;
-	hexless)
-		set -o pipefail
-		npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
-		exit $?
-		;;
-	hexaflexible)
-		npx $CTL help | grep tdfSpecVersion
-		exit $?
-		;;
-	obligations)
-		# Obligations support from SDK version >= 0.6.0
-		set -o pipefail
-		npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
-		exit $?
-		;;
-	*)
-		echo "Unknown feature: $2"
-		exit 2
-		;;
-	esac
+  if ! cd "$SCRIPT_DIR"; then
+    echo "failed: [cd $SCRIPT_DIR]"
+    exit 1
+  fi
+  case "$2" in
+    assertions)
+      npx $CTL help | grep assertions
+      exit $?
+      ;;
+    assertion_verification)
+      npx $CTL help | grep assertionVerificationKeys
+      exit $?
+      ;;
+    autoconfigure | ns_grants)
+      npx $CTL help | grep autoconfigure
+      exit $?
+      ;;
+    kasallowlist)
+      npx $CTL help | grep 'from "/key-access-servers" endpoint'
+      exit $?
+      ;;
+    ecwrap)
+      if npx $CTL help | grep encapKeyType; then
+        # Claims to support ecwrap, but maybe with old salt? Look up version
+        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 2) exit 0; else exit 1; }'
+        exit $?
+      else
+        echo "ecwrap not supported"
+        exit 1
+      fi
+      ;;
+    hexless)
+      set -o pipefail
+      npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    hexaflexible)
+      npx $CTL help | grep tdfSpecVersion
+      exit $?
+      ;;
+    obligations)
+      # Obligations support from SDK version >= 0.6.0
+      set -o pipefail
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    *)
+      echo "Unknown feature: $2"
+      exit 2
+      ;;
+  esac
 fi
 
 XTEST_DIR=$SCRIPT_DIR
 while [ "$XTEST_DIR" != "/" ]; do
-	if [ -d "$XTEST_DIR/xtest" ]; then
-		XTEST_DIR="$XTEST_DIR/xtest"
-		break
-	fi
-	XTEST_DIR=$(dirname "$XTEST_DIR")
+  if [ -d "$XTEST_DIR/xtest" ]; then
+    XTEST_DIR="$XTEST_DIR/xtest"
+    break
+  fi
+  XTEST_DIR=$(dirname "$XTEST_DIR")
 done
 
 # shellcheck disable=SC1091
@@ -96,105 +96,105 @@ src_file=$(realpath "$2")
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 
 args=(
-	--output "$dst_file"
-	--kasEndpoint "$KASURL"
-	--oidcEndpoint "$KCFULLURL"
-	--auth opentdf:secret
+  --output "$dst_file"
+  --kasEndpoint "$KASURL"
+  --oidcEndpoint "$KCFULLURL"
+  --auth opentdf:secret
 )
 
 args+=(--containerType tdf3)
 
 if [ -n "$XT_WITH_ATTRIBUTES" ]; then
-	attributes="$XT_WITH_ATTRIBUTES"
-	if [ -f "$attributes" ]; then
-		attributes=$(realpath "$attributes")
-		echo "Attributes are a file: $attributes"
-		args+=(--attributes "$attributes")
-	else
-		# Attributes are a comma separated list
-		echo "Attributes are: $attributes"
-		args+=(--attributes "$attributes")
-	fi
+  attributes="$XT_WITH_ATTRIBUTES"
+  if [ -f "$attributes" ]; then
+    attributes=$(realpath "$attributes")
+    echo "Attributes are a file: $attributes"
+    args+=(--attributes "$attributes")
+  else
+    # Attributes are a comma separated list
+    echo "Attributes are: $attributes"
+    args+=(--attributes "$attributes")
+  fi
 fi
 
 if [ -n "$XT_WITH_ASSERTIONS" ]; then
-	assertions="$XT_WITH_ASSERTIONS"
-	if [ -f "$assertions" ]; then
-		assertions=$(realpath "$assertions")
-		echo "Assertions are a file: $assertions"
-		args+=(--assertions "$assertions")
-	elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
-		# Assertions are plain json
-		echo "Assertions are plain json: $assertions"
-		args+=(--assertions "$assertions")
-	else
-		echo "Invalid or missing assertion file: $assertions"
-		exit 1
-	fi
+  assertions="$XT_WITH_ASSERTIONS"
+  if [ -f "$assertions" ]; then
+    assertions=$(realpath "$assertions")
+    echo "Assertions are a file: $assertions"
+    args+=(--assertions "$assertions")
+  elif [ "$(echo "$assertions" | jq -e . > /dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+    # Assertions are plain json
+    echo "Assertions are plain json: $assertions"
+    args+=(--assertions "$assertions")
+  else
+    echo "Invalid or missing assertion file: $assertions"
+    exit 1
+  fi
 fi
 
 if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
-	verification_keys="$XT_WITH_ASSERTION_VERIFICATION_KEYS"
-	if [ -f "$verification_keys" ]; then
-		verification_keys=$(realpath "$verification_keys")
-		echo "Verification keys are a file: $verification_keys"
-		args+=(--assertionVerificationKeys "$verification_keys")
-	else
-		echo "Invalid or missing verification keys file: $verification_keys"
-		exit 1
-	fi
+  verification_keys="$XT_WITH_ASSERTION_VERIFICATION_KEYS"
+  if [ -f "$verification_keys" ]; then
+    verification_keys=$(realpath "$verification_keys")
+    echo "Verification keys are a file: $verification_keys"
+    args+=(--assertionVerificationKeys "$verification_keys")
+  else
+    echo "Invalid or missing verification keys file: $verification_keys"
+    exit 1
+  fi
 fi
 
 if ! cd "$SCRIPT_DIR"; then
-	echo "failed: [cd $SCRIPT_DIR]"
-	exit 1
+  echo "failed: [cd $SCRIPT_DIR]"
+  exit 1
 fi
 
 if [ "$1" == "encrypt" ]; then
-	if npx $CTL help | grep autoconfigure; then
-		args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
-	fi
-	if [ -n "$XT_WITH_ECDSA_BINDING" ]; then
-		if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
-			args+=(--policyBinding ecdsa)
-		fi
-	fi
-	if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-		args+=(--encapKeyType "ec:secp256r1")
-	fi
+  if npx $CTL help | grep autoconfigure; then
+    args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
+  fi
+  if [ -n "$XT_WITH_ECDSA_BINDING" ]; then
+    if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
+      args+=(--policyBinding ecdsa)
+    fi
+  fi
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
+    args+=(--encapKeyType "ec:secp256r1")
+  fi
 
-	if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
-		args+=(--policyType plaintext)
-	fi
-	if [ -n "$XT_WITH_TARGET_MODE" ]; then
-		args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
-	fi
+  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+    args+=(--policyType plaintext)
+  fi
+  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+    args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
+  fi
 
-	echo npx $CTL encrypt "$src_file" "${args[@]}"
-	npx $CTL encrypt "$src_file" "${args[@]}"
+  echo npx $CTL encrypt "$src_file" "${args[@]}"
+  npx $CTL encrypt "$src_file" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
-	if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
-		args+=(--noVerifyAssertions)
-	fi
-	if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-		args+=(--rewrapKeyType "ec:secp256r1")
-	fi
-	if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
-		args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")
-	fi
-	if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
-		args+=(--ignoreAllowList)
-	fi
-	# only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-	if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
-		args+=(--policyEndpoint "$PLATFORMURL")
-	else
-		args+=(--ignoreAllowList)
-	fi
+  if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
+    args+=(--noVerifyAssertions)
+  fi
+  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
+    args+=(--rewrapKeyType "ec:secp256r1")
+  fi
+  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+    args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")
+  fi
+  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+    args+=(--ignoreAllowList)
+  fi
+  # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
+  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+    args+=(--policyEndpoint "$PLATFORMURL")
+  else
+    args+=(--ignoreAllowList)
+  fi
 
-	echo npx $CTL decrypt "$src_file" "${args[@]}"
-	npx $CTL decrypt "$src_file" "${args[@]}"
+  echo npx $CTL decrypt "$src_file" "${args[@]}"
+  npx $CTL decrypt "$src_file" "${args[@]}"
 else
-	echo "Incorrect argument provided"
-	exit 1
+  echo "Incorrect argument provided"
+  exit 1
 fi

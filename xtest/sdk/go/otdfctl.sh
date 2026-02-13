@@ -5,11 +5,11 @@
 #
 # Usage: ./otdfctl.sh [otdfctl options]
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
-	XTEST_DIR=$(dirname "$XTEST_DIR")
+  XTEST_DIR=$(dirname "$XTEST_DIR")
 done
 
 # shellcheck source=../../test.env
@@ -17,7 +17,7 @@ source "$XTEST_DIR/test.env"
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-	cmd=(go run github.com/opentdf/otdfctl@latest)
+  cmd=(go run github.com/opentdf/otdfctl@latest)
 fi
 
 cmd+=(--json)
