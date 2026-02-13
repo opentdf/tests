@@ -5,7 +5,7 @@
 #
 # Usage: ./otdfctl.sh [otdfctl options]
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do

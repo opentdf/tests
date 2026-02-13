@@ -5,7 +5,7 @@
 # on older branches that do not have it defined.
 
 # Base directory for the script
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 BASE_DIR="$SCRIPT_DIR/../java/src"
 
 # Detect the operating system to use the correct sed syntax
@@ -20,15 +20,15 @@ fi
 get_platform_branch() {
   local version="$1"
   case "$version" in
-    0.7.8|0.7.7) echo "protocol/go/v0.2.29" ;;
-    0.7.6)       echo "protocol/go/v0.2.25" ;;
-    0.7.5|0.7.4) echo "protocol/go/v0.2.18" ;;
-    0.7.3|0.7.2) echo "protocol/go/v0.2.17" ;;
-    0.6.1|0.6.0) echo "protocol/go/v0.2.14" ;;
-    0.5.0)       echo "protocol/go/v0.2.13" ;;
-    0.4.0|0.3.0|0.2.0) echo "protocol/go/v0.2.10" ;;
-    0.1.0)       echo "protocol/go/v0.2.3" ;;
-    *)           echo "main" ;;  # Default to main for unknown/newer versions
+    0.7.8 | 0.7.7) echo "protocol/go/v0.2.29" ;;
+    0.7.6) echo "protocol/go/v0.2.25" ;;
+    0.7.5 | 0.7.4) echo "protocol/go/v0.2.18" ;;
+    0.7.3 | 0.7.2) echo "protocol/go/v0.2.17" ;;
+    0.6.1 | 0.6.0) echo "protocol/go/v0.2.14" ;;
+    0.5.0) echo "protocol/go/v0.2.13" ;;
+    0.4.0 | 0.3.0 | 0.2.0) echo "protocol/go/v0.2.10" ;;
+    0.1.0) echo "protocol/go/v0.2.3" ;;
+    *) echo "main" ;; # Default to main for unknown/newer versions
   esac
   return 0
 }
@@ -45,7 +45,7 @@ find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -not -name "*.git" | while read
 
   # Extract version from directory name (e.g., "v0.7.5" -> "0.7.5", "main" -> "main")
   DIR_NAME=$(basename "$SRC_DIR")
-  VERSION="${DIR_NAME#v}"  # Remove leading 'v' if present
+  VERSION="${DIR_NAME#v}" # Remove leading 'v' if present
   PLATFORM_BRANCH=$(get_platform_branch "$VERSION")
 
   # Check if the correct platform.branch is already set
