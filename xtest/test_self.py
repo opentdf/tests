@@ -32,7 +32,7 @@ def test_namespace_create(audit_logs: AuditLogAsserter) -> None:
 
 
 def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
-    """Test attribute creation and verify audit logs for namespace, attribute, and values."""
+    """Test attribute creation and verify audit logs for namespace and attributes."""
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
 
     # Mark timestamp before creates
@@ -54,17 +54,19 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
         object_id=ns.id,
         since_mark=mark,
     )
-    # Attribute definition creations (2 attributes)
-    audit_logs.assert_policy_create(
+    # Attribute definition creations (2 attributes, values embedded in each event)
+    attr_events = audit_logs.assert_policy_create(
         object_type="attribute_definition",
         min_count=2,
         since_mark=mark,
     )
-    # Attribute value creations (3 values per attribute = 6 total)
-    audit_logs.assert_policy_create(
-        object_type="attribute_value",
-        min_count=6,
-        since_mark=mark,
+    # Platform embeds created values in the attribute_definition event.
+    # With xdist, other workers may create attributes concurrently, so use >=.
+    total_values = sum(
+        len(e.original.get("values", [])) for e in attr_events if e.original
+    )
+    assert total_values >= 6, (
+        f"Expected at least 6 values in attribute_definition events. Got {total_values}"
     )
 
 
