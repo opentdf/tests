@@ -33,22 +33,27 @@ if [ "$1" == "supports" ]; then
   fi
   case "$2" in
     assertions)
+      set -o pipefail
       npx $CTL help | grep assertions
       exit $?
       ;;
     assertion_verification)
+      set -o pipefail
       npx $CTL help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
+      set -o pipefail
       npx $CTL help | grep autoconfigure
       exit $?
       ;;
     kasallowlist)
+      set -o pipefail
       npx $CTL help | grep 'from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
+      set -o pipefail
       if npx $CTL help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
         npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
@@ -64,11 +69,13 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     hexaflexible)
+      set -o pipefail
       npx $CTL help | grep tdfSpecVersion
       exit $?
       ;;
     key_management)
       # Advanced key management from SDK version >= 0.8.0
+      set -o pipefail
       npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
       exit $?
       ;;
