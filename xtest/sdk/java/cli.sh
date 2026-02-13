@@ -51,6 +51,11 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist
       exit $?
       ;;
+    key_management)
+      # Advanced key management from SDK version >= 0.10.0
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 10)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     ecwrap)
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
         # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later
