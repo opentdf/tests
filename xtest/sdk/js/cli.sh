@@ -139,7 +139,7 @@ if [ -n "$XT_WITH_ASSERTIONS" ]; then
     assertions=$(realpath "$assertions")
     echo "Assertions are a file: $assertions"
     args+=(--assertions "$assertions")
-  elif [ "$(echo "$assertions" | jq -e . >/dev/null  2>&1 && echo valid || echo invalid)" == "valid" ]; then
+  elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
     # Assertions are plain json
     echo "Assertions are plain json: $assertions"
     args+=(--assertions "$assertions")

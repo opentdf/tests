@@ -117,9 +117,7 @@ jobs:
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.14"
-      - run: |-
-          pip install -r scripts/requirements.txt
-        working-directory: otdf-sdk/xtest/sdk
+      - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
       - id: version-info
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
         with:
@@ -134,8 +132,7 @@ jobs:
             const { execSync } = require('child_process');
             const path = require('path');
 
-            const workingDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/xtest/sdk');
-            const resolveVersionScript = path.join(workingDir, 'scripts/resolve-version.py');
+            const sdkMgrDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk/otdf-sdk-mgr');
             const defaultTags = process.env.DEFAULT_TAGS || 'main';
             core.setOutput('default-tags', defaultTags);
 
@@ -150,7 +147,7 @@ jobs:
 
             for (const [sdkType, ref] of Object.entries(refs)) {
               try {
-                const output = execSync(`python3 ${resolveVersionScript} ${sdkType} ${ref}`, { cwd: workingDir }).toString();
+                const output = execSync(`uv run --project ${sdkMgrDir} otdf-sdk-mgr versions resolve ${sdkType} ${ref}`, { cwd: sdkMgrDir }).toString();
                 const ojson = JSON.parse(output);
                 if (!!ojson.err) {
                   throw new Error(ojson.err);
@@ -269,6 +266,7 @@ jobs:
 
       ######### CHECKOUT JS CLI #############
       - name: Configure js-sdk
+        id: configure-js
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
@@ -276,6 +274,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       - name: Cache npm
+        if: fromJson(steps.configure-js.outputs.heads)[0] != null
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ~/.npm
@@ -286,6 +285,7 @@ jobs:
       ######## SETUP THE JS CLI #############
       - name: build and setup the web-sdk cli
         id: build-web-sdk
+        if: fromJson(steps.configure-js.outputs.heads)[0] != null
         run: |
           make
         working-directory: otdftests/xtest/sdk/js
@@ -300,6 +300,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.go }}"
 
       - name: Cache Go modules
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: |
@@ -311,13 +312,14 @@ jobs:
 
       - name: Resolve otdfctl heads
         id: resolve-otdfctl-heads
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
         run: |-
           echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
         env:
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null && env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
         run: |-
@@ -337,6 +339,7 @@ jobs:
 
       ######## SETUP THE GO CLI #############
       - name: Prepare go cli
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
         run: |-
           make
         working-directory: otdftests/xtest/sdk/go
@@ -344,6 +347,7 @@ jobs:
       ####### CHECKOUT JAVA SDK ##############
 
       - name: Configure java-sdk
+        id: configure-java
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
@@ -351,6 +355,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.java }}"
 
       - name: Cache Maven repository
+        if: fromJson(steps.configure-java.outputs.heads)[0] != null
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ~/.m2/repository
@@ -359,8 +364,10 @@ jobs:
             maven-${{ runner.os }}-
 
       - name: pre-release protocol buffers for java-sdk
-        if: |
-          (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java') && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        if: >-
+          fromJson(steps.configure-java.outputs.heads)[0] != null
+          && (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java')
+          && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing .env files for java-sdk..."
           echo "Platform tag: $platform_tag"
@@ -382,6 +389,7 @@ jobs:
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
+        if: fromJson(steps.configure-java.outputs.heads)[0] != null
         run: |
           make
         working-directory: otdftests/xtest/sdk/java

@@ -34,11 +34,11 @@ jobs:
           uv run ruff format --check .
           uv run pyright
         working-directory: xtest
-      - name: Lint and test otdf-local
+      - name: Lint and test otdf-sdk-mgr
         run: |
           uv sync
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
           uv run pytest --maxfail=1 --disable-warnings -v --tb=short -m "not integration"
-        working-directory: otdf-local
+        working-directory: otdf-sdk-mgr
