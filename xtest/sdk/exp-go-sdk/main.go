@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -159,10 +161,14 @@ func doEncrypt(args []string) error {
 	}
 	defer client.Close()
 
-	// Get base KAS key
+	// Get base KAS key — try well-known config first, fall back to direct KAS query
 	baseKey, err := client.GetBaseKey(ctx)
 	if err != nil {
-		return fmt.Errorf("getting base key: %w", err)
+		fmt.Fprintf(os.Stderr, "GetBaseKey failed (%v), falling back to direct KAS public key fetch\n", err)
+		baseKey, err = fetchKASPublicKey(f.platformEndpoint, f.tlsNoVerify)
+		if err != nil {
+			return fmt.Errorf("fetching KAS public key: %w", err)
+		}
 	}
 
 	// Resolve attributes if specified
@@ -387,6 +393,49 @@ func newSDKClient(endpoint, clientID, clientSecret, tokenEndpoint string, tlsNoV
 		opts = append(opts, sdk.WithInsecurePlaintextConn())
 	}
 	return sdk.New(endpoint, opts...)
+}
+
+// kasPublicKeyResponse matches the JSON returned by the KAS /kas/v2/kas_public_key endpoint.
+type kasPublicKeyResponse struct {
+	PublicKey string `json:"publicKey"`
+	KID       string `json:"kid"`
+}
+
+func fetchKASPublicKey(platformEndpoint string, tlsNoVerify bool) (*policy.SimpleKasKey, error) {
+	kasURL := strings.TrimSuffix(platformEndpoint, "/") + "/kas"
+	pubKeyURL := kasURL + "/v2/kas_public_key?algorithm=rsa:2048"
+
+	httpClient := &http.Client{}
+	if tlsNoVerify {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true}, //nolint:gosec // user-requested TLS skip
+		}
+	}
+
+	resp, err := httpClient.Get(pubKeyURL) //nolint:gosec // URL is from trusted platform endpoint
+	if err != nil {
+		return nil, fmt.Errorf("GET %s: %w", pubKeyURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GET %s returned %d: %s", pubKeyURL, resp.StatusCode, string(body))
+	}
+
+	var pkResp kasPublicKeyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pkResp); err != nil {
+		return nil, fmt.Errorf("decoding KAS public key response: %w", err)
+	}
+
+	return &policy.SimpleKasKey{
+		KasUri: kasURL,
+		PublicKey: &policy.SimpleKasPublicKey{
+			Algorithm: policy.Algorithm_ALGORITHM_RSA_2048,
+			Kid:       pkResp.KID,
+			Pem:       pkResp.PublicKey,
+		},
+	}, nil
 }
 
 func resolveAttributes(ctx context.Context, client *sdk.SDK, attrStr string) ([]*policy.Value, error) {

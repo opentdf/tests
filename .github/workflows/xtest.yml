@@ -343,7 +343,6 @@ jobs:
 
       ######## SETUP EXP-GO-SDK #############
       - name: Replace exp-go-sdk go.mod packages
-        if: contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
         run: |-
