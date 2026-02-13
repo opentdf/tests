@@ -21,9 +21,6 @@ jobs:
               $(find . -type f -exec grep -m1 -l -E '^#!.*sh.*' {} \; | grep -v '/.git/')
       - name: Check shell script formatting with shfmt
         run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" mvdan/shfmt:v3 -d .
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: '3.14'
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
         with:
