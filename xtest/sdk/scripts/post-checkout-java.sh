@@ -5,7 +5,7 @@
 # on older branches that do not have it defined.
 
 # Base directory for the script
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 BASE_DIR="$SCRIPT_DIR/../java/src"
 
 # Detect the operating system to use the correct sed syntax

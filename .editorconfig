@@ -18,9 +18,6 @@ binary_next_line = false
 # Switch case indentation
 switch_case_indent = true
 
-# Redirect operators with space
-space_redirects = true
-
 # Keep column alignment
 keep_padding = true
 

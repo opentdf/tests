@@ -18,7 +18,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then

@@ -19,7 +19,7 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
@@ -150,4 +150,4 @@ if [ -n "$XT_WITH_TARGET_MODE" ]; then
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
-java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" > "$3"
+java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" >"$3"
