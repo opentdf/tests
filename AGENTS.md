@@ -95,10 +95,13 @@ Or ensure services are running with logs in `../../platform/logs/` (auto-discove
 - When platform advertises a `base_key` in `.well-known/opentdf-configuration`
 
 **Ensuring Key Consistency**:
+
+`PLATFORM_DIR` defaults to `../../platform` (relative to `xtest/`). When updating a KAS instance config, set its `root_key` to match the platform's:
 ```bash
-# km instances must use platform's root_key:
+PLATFORM_DIR="${PLATFORM_DIR:-../../platform}"
 PLATFORM_ROOT_KEY=$(yq e '.services.kas.root_key' "$PLATFORM_DIR/opentdf-dev.yaml")
-yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
+# Update each KAS instance config to use the same root key:
+yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$PLATFORM_DIR/opentdf-dev.yaml"
 ```
 
 ## Common Test Failures and Debugging
@@ -144,7 +147,7 @@ uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 **Fix**:
 ```bash
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
-export SCHEMA_FILE=/path/to/schema.json
+export SCHEMA_FILE=manifest.schema.json
 ```
 
 ## Debugging Workflow
@@ -160,6 +163,7 @@ export SCHEMA_FILE=/path/to/schema.json
 4. **Check service logs**: Look at platform and KAS log files for errors
 5. **Manual reproduction**:
    ```bash
+   echo "hello tdf" > test.txt
    sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
    sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
    ```
