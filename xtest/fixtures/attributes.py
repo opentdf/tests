@@ -473,3 +473,41 @@ def ns_and_value_kas_grants_and(
         otdfctl.key_assign_ns(kas_key_ns, temp_namespace)
 
     return allof
+
+
+# Default KAS RSA key fixture for tests that need explicit RSA wrapping
+@pytest.fixture(scope="module")
+def attribute_default_rsa(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_default: abac.KasEntry,
+    kas_public_key_r1: abac.KasPublicKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> abac.Attribute:
+    """Attribute with RSA key mapping on default KAS.
+
+    Use this fixture when tests need to ensure RSA wrapping is used,
+    regardless of what base_key may be configured on the platform.
+    This prevents test order sensitivity when base_key tests run.
+    """
+    anyof = otdfctl.attribute_create(
+        temporary_namespace, "defaultrsa", abac.AttributeRule.ANY_OF, ["wrapped"]
+    )
+    assert anyof.values
+    (wrapped,) = anyof.values
+    assert wrapped.value == "wrapped"
+
+    # Assign to all clientIds = opentdf-sdk
+    sm = otdfctl.scs_map(otdf_client_scs, wrapped)
+    assert sm.attribute_value.value == "wrapped"
+
+    # Assign RSA key on default KAS
+    if "key_management" not in tdfs.PlatformFeatureSet().features:
+        otdfctl.grant_assign_value(kas_entry_default, wrapped)
+    else:
+        kas_key = otdfctl.kas_registry_create_public_key_only(
+            kas_entry_default, kas_public_key_r1
+        )
+        otdfctl.key_assign_value(kas_key, wrapped)
+
+    return anyof
