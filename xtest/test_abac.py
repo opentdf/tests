@@ -32,7 +32,7 @@ def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
 
 
 def skip_dspx2457(encrypt_sdk: tdfs.SDK):
-    if encrypt_sdk == "java":
+    if encrypt_sdk.sdk == "java":
         pytest.skip(
             "DSPX-2457 Java SDK unable to handle KAS grants with different types"
         )
