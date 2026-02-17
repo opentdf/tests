@@ -214,6 +214,7 @@ otdf-local/
 ├── src/otdf_local/
 │   ├── cli.py              # Typer CLI commands
 │   ├── config/
+│   │   ├── features.py     # Platform feature detection
 │   │   ├── ports.py        # Port constants
 │   │   └── settings.py     # Pydantic settings
 │   ├── services/

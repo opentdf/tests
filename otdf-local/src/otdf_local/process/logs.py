@@ -71,7 +71,8 @@ class LogReader:
 
     def _parse_line(self, line: str) -> LogEntry:
         """Parse a log line to extract timestamp and message."""
-        line = line.rstrip("\n")
+        raw = line.rstrip("\n")
+        message = raw
 
         # Try to parse common timestamp formats
         timestamp = None
@@ -79,33 +80,33 @@ class LogReader:
         # ISO format: 2024-01-15T10:30:45.123Z
         iso_match = re.match(
             r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s*(.*)",
-            line,
+            message,
         )
         if iso_match:
             try:
                 ts_str = iso_match.group(1).rstrip("Z")
                 timestamp = datetime.fromisoformat(ts_str)
-                line = iso_match.group(2)
+                message = iso_match.group(2)
             except ValueError:
                 pass
 
         # Standard format: 2024/01/15 10:30:45
         std_match = re.match(
             r"(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s*(.*)",
-            line,
+            message,
         )
         if std_match and timestamp is None:
             try:
                 timestamp = datetime.strptime(std_match.group(1), "%Y/%m/%d %H:%M:%S")
-                line = std_match.group(2)
+                message = std_match.group(2)
             except ValueError:
                 pass
 
         return LogEntry(
             timestamp=timestamp,
             service=self.service_name,
-            message=line,
-            raw=line,
+            message=message,
+            raw=raw,
         )
 
 

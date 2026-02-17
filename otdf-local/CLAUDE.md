@@ -72,9 +72,9 @@ uv run otdf-local logs --grep "error" -f     # Filter
 
 **Via log files:**
 ```bash
-tail -f tests/xtest/logs/platform.log
-tail -f tests/xtest/logs/kas-alpha.log
-tail -f tests/xtest/logs/kas-km1.log
+tail -f tests/tmp/logs/platform.log
+tail -f tests/tmp/logs/kas-alpha.log
+tail -f tests/tmp/logs/kas-km1.log
 ```
 
 ## Golden Key Auto-Configuration
@@ -126,11 +126,11 @@ uv run otdf-local logs kas-alpha -f
 uv run otdf-local logs --grep error
 
 # Or check log files directly
-tail -f tests/xtest/logs/platform.log
-tail -f tests/xtest/logs/kas-alpha.log
+tail -f tests/tmp/logs/platform.log
+tail -f tests/tmp/logs/kas-alpha.log
 
 # Kill stuck processes
-pkill -9 -f "go.*service.*start"
+pkill -9 -f "go run ./service start"
 
 # Check port availability
 lsof -i :8080   # Platform
