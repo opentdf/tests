@@ -590,27 +590,25 @@ def env(
         root_key = get_nested(platform_config, "services.kas.root_key")
         if root_key:
             env_vars["OT_ROOT_KEY"] = root_key
-    except Exception:
-        # If we can't read the config, just skip the root key
-        pass
+    except Exception as e:
+        print_warning(f"Could not read root key from platform config: {e}")
 
     # Try to get platform version from API
     try:
-        import requests
+        import httpx
 
         platform = get_platform_service(settings)
         if platform.is_running():
-            resp = requests.get(
+            resp = httpx.get(
                 f"{settings.platform_url}/.well-known/opentdf-configuration",
                 timeout=5,
             )
-            if resp.ok:
+            if resp.status_code == 200:
                 config = resp.json()
                 if "version" in config:
                     env_vars["PLATFORM_VERSION"] = config["version"]
-    except Exception:
-        # If we can't get the version, that's okay
-        pass
+    except Exception as e:
+        print_warning(f"Could not get platform version: {e}")
 
     # Output in requested format
     if format == "json":

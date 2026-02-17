@@ -67,7 +67,7 @@ def get_health_url(service: str, port: int) -> str:
         return f"http://localhost:{port}/healthz"
 
 
-ServiceStatus = Literal["running", "stopped", "unhealthy", "unknown"]
+ServiceStatus = Literal["running", "stopped", "unhealthy"]
 
 
 def get_service_status(
