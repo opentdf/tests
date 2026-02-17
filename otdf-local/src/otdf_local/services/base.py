@@ -125,4 +125,6 @@ class Service(ABC):
             True if restarted successfully
         """
         self.stop()
+        if self.is_running():
+            return False
         return self.start()
