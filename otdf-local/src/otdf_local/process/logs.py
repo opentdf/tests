@@ -2,6 +2,7 @@
 
 import re
 import time
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,11 +43,10 @@ class LogReader:
         if not self.log_file.exists():
             return []
 
-        # Simple tail implementation
         with open(self.log_file) as f:
-            lines = f.readlines()
+            tail = deque(f, maxlen=n)
 
-        return [self._parse_line(line) for line in lines[-n:]]
+        return [self._parse_line(line) for line in tail]
 
     def read_new(self) -> list[LogEntry]:
         """Read new lines since last read."""
