@@ -40,6 +40,7 @@ def generate_rsa_keypair(key_dir: Path, name: str = "kas") -> tuple[Path, Path]:
         check=True,
         capture_output=True,
     )
+    private_key.chmod(0o600)
 
     # Generate self-signed certificate
     subprocess.run(
@@ -93,6 +94,7 @@ def generate_ec_keypair(key_dir: Path, name: str = "kas-ec") -> tuple[Path, Path
         check=True,
         capture_output=True,
     )
+    private_key.chmod(0o600)
 
     # Generate self-signed certificate
     subprocess.run(
@@ -184,6 +186,7 @@ def setup_golden_keys(
         cert_path = platform_dir / f"{kid}-cert.pem"
 
         private_path.write_text(private_key)
+        private_path.chmod(0o600)
         cert_path.write_text(cert)
 
         keys_config.append(
