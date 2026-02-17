@@ -30,3 +30,4 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 pythonpath = "src"
 testpaths = ["tests"]
+markers = ["integration: marks tests requiring Docker and running services"]
