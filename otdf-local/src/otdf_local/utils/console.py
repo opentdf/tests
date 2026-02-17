@@ -6,18 +6,10 @@ from contextlib import contextmanager
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.style import Style
 from rich.table import Table
 
 # Global console instance
 console = Console()
-
-# Status styles
-STYLE_SUCCESS = Style(color="green", bold=True)
-STYLE_ERROR = Style(color="red", bold=True)
-STYLE_WARNING = Style(color="yellow")
-STYLE_INFO = Style(color="blue")
-STYLE_DIM = Style(dim=True)
 
 
 def print_success(message: str) -> None:

@@ -170,40 +170,6 @@ otdf-local clean
 otdf-local clean --keep-logs
 ```
 
-## Tmux Session
-
-`otdf-local up` creates a tmux session named `xtest` with each service in its own window:
-
-| Window | Service |
-|--------|---------|
-| 0 | docker |
-| 1 | platform |
-| 2 | kas-alpha |
-| 3 | kas-beta |
-| 4 | kas-gamma |
-| 5 | kas-delta |
-| 6 | kas-km1 |
-| 7 | kas-km2 |
-
-```bash
-# Attach to session
-tmux attach -t xtest
-
-# Navigate windows
-Ctrl-B 0-9     # Switch by number
-Ctrl-B w       # Window list
-Ctrl-B n/p     # Next/previous
-
-# Scroll logs in a window
-Ctrl-B [       # Enter scroll mode
-q              # Exit scroll mode
-
-# Detach
-Ctrl-B d
-```
-
-Log files are also written to `tests/xtest/logs/` (e.g., `platform.log`, `kas-alpha.log`).
-
 ## Services Managed
 
 | Service | Port | Type | Description |

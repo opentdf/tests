@@ -1,7 +1,6 @@
 """Integration tests for otdf-local CLI.
 
 These tests require Docker to be available and will start/stop real services.
-They are marked as integration tests and can be skipped with: pytest -m "not integration"
 """
 
 import subprocess

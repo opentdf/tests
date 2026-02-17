@@ -47,9 +47,8 @@ uv run otdf-local restart docker
 Only use when otdf-local itself is broken or unresponsive:
 
 ```bash
-pkill -9 -f "go.*service.*start"
+pkill -9 -f "go run ./service start"
 pkill -9 -f "opentdf-kas"
-tmux kill-session -t xtest 2>/dev/null || true
 cd platform && docker compose down 2>/dev/null || true
 sleep 5
 cd tests/otdf-local && uv run otdf-local up
@@ -57,22 +56,9 @@ cd tests/otdf-local && uv run otdf-local up
 
 ### Platform Only (Manual)
 ```bash
-# Via tmux session
-tmux attach -t xtest
-# Navigate to window 1 (platform)
-# Ctrl-B 1 → Ctrl-C → Up arrow + Enter
-
-# Or via kill + restart
-pkill -9 -f "go.*service.*start"
+pkill -9 -f "go run ./service start"
 sleep 2
 cd platform && go run ./service start
-```
-
-### Individual KAS (Manual)
-```bash
-tmux attach -t xtest
-# Window numbers: kas-alpha=2, beta=3, gamma=4, delta=5, km1=6, km2=7
-# Ctrl-B <number> → Ctrl-C → Up arrow + Enter
 ```
 
 ## Viewing Service Logs
@@ -82,23 +68,6 @@ tmux attach -t xtest
 uv run otdf-local logs -f                    # Follow all
 uv run otdf-local logs platform -f           # Follow specific service
 uv run otdf-local logs --grep "error" -f     # Filter
-```
-
-**Via tmux session:**
-```bash
-tmux attach -t xtest
-
-# Navigate windows
-Ctrl-B 0-9     # Switch to window by number
-Ctrl-B w       # Show window list
-Ctrl-B n/p     # Next/previous window
-
-# Scroll logs
-Ctrl-B [       # Enter scroll mode
-q              # Exit scroll mode
-
-# Detach
-Ctrl-B d
 ```
 
 **Via log files:**

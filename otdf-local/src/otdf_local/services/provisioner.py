@@ -117,27 +117,6 @@ class Provisioner:
             return_code=result.returncode,
         )
 
-    def register_kas_instances(self) -> bool:
-        """Register all KAS instances with the platform.
-
-        This ensures the platform knows about all the KAS instances
-        for autoconfigure/ABAC tests.
-        """
-
-        # For each KAS, register it with the platform's KAS registry
-        # This typically requires an admin token and API calls
-        # For now, we rely on fixtures to do this
-
-        # The fixtures should register KAS instances at:
-        # - http://localhost:8181/kas (alpha)
-        # - http://localhost:8282/kas (beta)
-        # - http://localhost:8383/kas (gamma)
-        # - http://localhost:8484/kas (delta)
-        # - http://localhost:8585 (km1 - no /kas suffix for key management)
-        # - http://localhost:8686 (km2 - no /kas suffix for key management)
-
-        return True
-
 
 def get_provisioner(settings: Settings | None = None) -> Provisioner:
     """Get a Provisioner instance."""
