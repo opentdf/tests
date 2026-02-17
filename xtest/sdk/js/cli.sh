@@ -19,7 +19,7 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 
 CTL=@opentdf/ctl
 if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
@@ -135,7 +135,7 @@ if [ -n "$XT_WITH_ASSERTIONS" ]; then
     assertions=$(realpath "$assertions")
     echo "Assertions are a file: $assertions"
     args+=(--assertions "$assertions")
-  elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+  elif [ "$(echo "$assertions" | jq -e . >/dev/null  2>&1 && echo valid || echo invalid)" == "valid" ]; then
     # Assertions are plain json
     echo "Assertions are plain json: $assertions"
     args+=(--assertions "$assertions")
