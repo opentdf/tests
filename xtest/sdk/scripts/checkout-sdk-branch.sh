@@ -5,8 +5,8 @@
 # Example: ./checkout-sdk-branch.sh js main
 
 # Resolve script directory
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-XTEST_DIR=$(cd -- "$SCRIPT_DIR/../../" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
+XTEST_DIR=$(cd -- "$SCRIPT_DIR/../../" &>/dev/null  && pwd)
 
 # Parse arguments
 LANGUAGE=${1:-js}

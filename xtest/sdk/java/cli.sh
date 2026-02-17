@@ -19,7 +19,7 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
@@ -40,23 +40,28 @@ if [ "$1" == "supports" ]; then
       exit 0
       ;;
     assertions)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
       exit $?
       ;;
     assertion_verification)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
     kasallowlist)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist
       exit $?
       ;;
     key_management)
       # Advanced key management from SDK version >= 0.10.0
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 10)) exit 0; else exit 1; }'
       exit $?
       ;;
     ecwrap)
+      set -o pipefail
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
         # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later
         java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }'
@@ -74,6 +79,7 @@ if [ "$1" == "supports" ]; then
       ;;
 
     hexaflexible)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;

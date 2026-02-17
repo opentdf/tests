@@ -31,6 +31,13 @@ def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
         pytest.skip("dspx1153 fails with this SDK version combination")
 
 
+def skip_dspx2457(encrypt_sdk: tdfs.SDK):
+    if encrypt_sdk.sdk == "java":
+        pytest.skip(
+            "DSPX-2457 Java SDK unable to handle KAS grants with different types"
+        )
+
+
 def assert_decrypt_fails_with_patterns(
     decrypt_sdk: tdfs.SDK,
     ct_file: Path,
@@ -71,6 +78,7 @@ def test_key_mapping_multiple_mechanisms(
     global counter
 
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    skip_dspx2457(encrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -1018,6 +1026,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_dspx2457(encrypt_sdk)
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
