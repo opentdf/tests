@@ -87,16 +87,6 @@ class Provisioner:
             cwd=self.settings.platform_dir,
         )
 
-        # If the provision command doesn't exist, that's okay
-        if result.returncode != 0 and "unknown command" in result.stderr.lower():
-            return ProvisionResult(
-                success=True,
-                error_message="Provisioning command not available on this platform version",
-                stdout=result.stdout,
-                stderr=result.stderr,
-                return_code=result.returncode,
-            )
-
         # If provisioning failed, extract error message from stderr
         if result.returncode != 0:
             error_lines = result.stderr.strip().split("\n")
