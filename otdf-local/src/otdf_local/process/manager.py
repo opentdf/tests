@@ -118,17 +118,22 @@ class ProcessManager:
         log_handle = None
         if log_file:
             log_file.parent.mkdir(parents=True, exist_ok=True)
-            log_handle = open(log_file, "w")
+            log_handle = open(log_file, "a")
 
         # Start process
-        process = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            env=process_env,
-            stdout=log_handle or subprocess.DEVNULL,
-            stderr=subprocess.STDOUT if log_handle else subprocess.DEVNULL,
-            start_new_session=True,  # Detach from parent
-        )
+        try:
+            process = subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                env=process_env,
+                stdout=log_handle or subprocess.DEVNULL,
+                stderr=subprocess.STDOUT if log_handle else subprocess.DEVNULL,
+                start_new_session=True,  # Detach from parent
+            )
+        except Exception:
+            if log_handle:
+                log_handle.close()
+            raise
 
         # Write PID file
         if pid_file:
