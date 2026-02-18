@@ -7,27 +7,27 @@ on:
         required: false
         type: string
         default: main
-        description: "The branch or commit to use for the platform"
+        description: "platform ref: branch, tag (e.g. service/v0.12.0), commit SHA, 'latest', or 'lts'"
       otdfctl-ref:
         required: false
         type: string
         default: main
-        description: "The branch or commit to use for otdfctl"
+        description: "otdfctl ref: branch, tag (e.g. v0.29.0), commit SHA, 'latest', or 'lts'"
       js-ref:
         required: false
         type: string
         default: main
-        description: "The branch or commit to use for the web-sdk"
+        description: "web-sdk ref: branch, tag (e.g. sdk/0.9.0 or 0.9.0-beta.84), commit SHA, 'latest', or 'lts'"
       java-ref:
         required: false
         type: string
         default: main
-        description: "The branch or commit to use for the java-sdk"
+        description: "java-sdk ref: branch, tag (e.g. v0.12.0), commit SHA, 'latest', or 'lts'"
       focus-sdk:
         required: false
         type: string
         default: all
-        description: "The SDK to focus on (go, js, java, all)"
+        description: "SDK to focus on (go, js, java, all)"
   workflow_call:
     inputs:
       platform-ref:

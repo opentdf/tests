@@ -11,6 +11,7 @@ from otdf_sdk_mgr.config import (
     JAVA_PLATFORM_BRANCH_MAP,
     LTS_VERSIONS,
     SDK_GIT_URLS,
+    SDK_NPM_PACKAGES,
 )
 
 
@@ -49,6 +50,53 @@ MERGE_QUEUE_REGEX = (
 )
 
 SHA_REGEX = r"^[a-f0-9]{7,40}$"
+
+
+def _try_resolve_js_npm(
+    sdk: str,
+    version: str,
+    alias: str,
+    infix_stripped_tags: list[tuple[str, str]],
+    infix: str | None,
+) -> ResolveSuccess | None:
+    """Try to resolve a JS version from the npm registry.
+
+    Returns a ResolveSuccess if the version exists on npm, None otherwise.
+    The sha is populated from git tags on a best-effort basis (empty string if not found),
+    since it is only needed for source checkouts which are skipped for artifact installs.
+    """
+    from otdf_sdk_mgr.registry import fetch_json
+
+    package = SDK_NPM_PACKAGES.get(sdk)
+    if not package:
+        return None
+
+    npm_version = version.lstrip("v")
+    try:
+        data = fetch_json(f"https://registry.npmjs.org/{package}/{npm_version}")
+    except Exception:
+        return None
+
+    # npm may resolve a dist-tag (e.g. "next") to a concrete version
+    resolved_version = data.get("version", npm_version)
+    tag = resolved_version
+
+    # Look up SHA from git tags (best-effort; not required for artifact installs)
+    sha = ""
+    candidates = {resolved_version, f"v{resolved_version}"}
+    for (s, t) in infix_stripped_tags:
+        if t in candidates:
+            sha = s
+            break
+
+    release = f"{infix}/{tag}" if infix else tag
+    return {
+        "sdk": sdk,
+        "alias": alias,
+        "release": release,
+        "sha": sha,
+        "tag": tag,
+    }
 
 
 def lookup_additional_options(sdk: str, version: str) -> str | None:
@@ -208,9 +256,17 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                 for (sha, tag) in listed_tags
                 if f"{infix}/" in tag
             ]
+
+        # For JS: explicit version refs resolve via npm first so that pre-release and
+        # dist-tag refs (e.g. "0.9.0-beta.84", "next") work without a matching git tag.
+        if sdk in SDK_NPM_PACKAGES and version not in ("latest", "lts"):
+            npm_result = _try_resolve_js_npm(sdk, version, version, listed_tags, infix)
+            if npm_result is not None:
+                return npm_result
+
         semver_regex = r"v?\d+\.\d+\.\d+$"
-        listed_tags = [(sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)]
-        listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
+        stable_tags = [(sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)]
+        stable_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
         alias = version
         matching_tags = []
         if version == "latest":
@@ -226,12 +282,12 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                     latest_with_cli_tag = versions_with_cli[-1]["version"]
                     matching_tags = [
                         (sha, tag)
-                        for (sha, tag) in listed_tags
+                        for (sha, tag) in stable_tags
                         if tag in [latest_with_cli_tag, latest_with_cli_tag.lstrip("v")]
                     ]
                 if not matching_tags:
                     # No versions with CLI found, fall back to building latest from source
-                    sha, tag = listed_tags[-1]
+                    sha, tag = stable_tags[-1]
                     return {
                         "sdk": sdk,
                         "alias": alias,
@@ -240,7 +296,7 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                         "tag": tag,
                     }
             else:
-                matching_tags = listed_tags[-1:]
+                matching_tags = stable_tags[-1:]
         else:
             if version == "lts":
                 if sdk not in LTS_VERSIONS:
@@ -250,8 +306,13 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                     )
                 version = LTS_VERSIONS[sdk]
             matching_tags = [
-                (sha, tag) for (sha, tag) in listed_tags if tag in [version, f"v{version}"]
+                (sha, tag) for (sha, tag) in stable_tags if tag in [version, f"v{version}"]
             ]
+            # If not found in stable tags, also search all tags (supports pre-release versions)
+            if not matching_tags:
+                matching_tags = [
+                    (sha, tag) for (sha, tag) in listed_tags if tag in [version, f"v{version}"]
+                ]
         if not matching_tags:
             raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
         sha, tag = matching_tags[-1]
