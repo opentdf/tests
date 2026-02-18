@@ -2,9 +2,8 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from otdf_local.config.ports import Ports
@@ -70,13 +69,9 @@ class Settings(BaseSettings):
 
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
-    platform_dir: Path | None = Field(default=None)
-
-    @model_validator(mode="after")
-    def _resolve_platform_dir(self) -> "Settings":
-        if self.platform_dir is None:
-            self.platform_dir = _find_platform_dir(self.xtest_root)
-        return self
+    platform_dir: Path = Field(
+        default_factory=lambda: _find_platform_dir(_find_xtest_root())
+    )
 
     @property
     def logs_dir(self) -> Path:
@@ -119,8 +114,8 @@ class Settings(BaseSettings):
     platform_port: int = Ports.PLATFORM
 
     # URLs
-    platform_url: Annotated[str, Field(default="http://localhost:8080")]
-    keycloak_url: Annotated[str, Field(default="http://localhost:8888")]
+    platform_url: str = "http://localhost:8080"
+    keycloak_url: str = "http://localhost:8888"
 
     # Timeouts (seconds)
     health_timeout: int = 60
