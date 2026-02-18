@@ -6,7 +6,7 @@ This guide provides essential knowledge for AI agents performing updates, refact
 
 ### Structure
 - **Test Directory**: `xtest/` - pytest-based integration tests
-- **SDK Distributions**: `sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
+- **SDK Distributions**: `xtest/sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
 - **SDK Configuration**: `otdf-sdk-mgr install` - installs SDK CLIs from released artifacts or delegates to source builds
 - **SDK Version Lookup**: `otdf-sdk-mgr versions list` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
 - **Platform**: `platform/` - OpenTDF platform service
