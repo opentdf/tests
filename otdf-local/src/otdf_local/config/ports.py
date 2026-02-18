@@ -1,6 +1,7 @@
 """Port constants for all services."""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class Ports:
     KAS_KM2: int = 8686
 
     # Mapping from KAS name to class attribute name
-    _KAS_NAMES: dict[str, str] = {
+    _KAS_NAMES: ClassVar[dict[str, str]] = {
         "alpha": "KAS_ALPHA",
         "beta": "KAS_BETA",
         "gamma": "KAS_GAMMA",
