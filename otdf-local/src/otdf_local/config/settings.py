@@ -9,18 +9,34 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from otdf_local.config.ports import Ports
 
 
+def _pyproject_has_name(path: Path, project_name: str) -> bool:
+    """Return True if path/pyproject.toml contains the given project name."""
+    pyproject = path / "pyproject.toml"
+    if not pyproject.is_file():
+        return False
+    try:
+        return f'name = "{project_name}"' in pyproject.read_text()
+    except OSError:
+        return False
+
+
 def _find_project_root(project_name: str, start: Path) -> Path | None:
-    """Walk up from start looking for a pyproject.toml with the given project name."""
+    """Walk up from start looking for a directory whose pyproject.toml has the given name.
+
+    Checks both the current directory and immediate subdirectories at each level,
+    so sibling projects (e.g. xtest alongside otdf-local) are discovered correctly.
+    """
     current = start.resolve()
     while current != current.parent:
-        pyproject = current / "pyproject.toml"
-        if pyproject.is_file():
-            try:
-                content = pyproject.read_text()
-                if f'name = "{project_name}"' in content:
-                    return current
-            except OSError:
-                pass
+        if _pyproject_has_name(current, project_name):
+            return current
+        # Check immediate subdirectories (finds sibling projects via common parent)
+        try:
+            for child in current.iterdir():
+                if child.is_dir() and _pyproject_has_name(child, project_name):
+                    return child
+        except OSError:
+            pass
         current = current.parent
     return None
 
