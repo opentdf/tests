@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from otdf_sdk_mgr.config import JAVA_DIR, JAVA_PLATFORM_BRANCH_MAP
+from otdf_sdk_mgr.config import JAVA_PLATFORM_BRANCH_MAP, get_sdk_dir
 
 
 def _get_platform_branch(version: str) -> str:
@@ -16,7 +16,7 @@ def _get_platform_branch(version: str) -> str:
 def post_checkout_java_fixup(base_dir: Path | None = None) -> None:
     """Fix pom.xml platform.branch property in Java SDK source trees."""
     if base_dir is None:
-        base_dir = JAVA_DIR / "src"
+        base_dir = get_sdk_dir() / "java" / "src"
 
     if not base_dir.exists():
         print(f"Base directory {base_dir} does not exist, nothing to fix.")

@@ -243,6 +243,11 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
                 matching_tags = listed_tags[-1:]
         else:
             if version == "lts":
+                if sdk not in LTS_VERSIONS:
+                    raise ValueError(
+                        f"No LTS version defined for SDK '{sdk}'. "
+                        f"Add it to LTS_VERSIONS in config.py."
+                    )
                 version = LTS_VERSIONS[sdk]
             matching_tags = [
                 (sha, tag) for (sha, tag) in listed_tags if tag in [version, f"v{version}"]

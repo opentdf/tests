@@ -5,20 +5,23 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
-    GO_DIR,
-    JAVA_DIR,
-    JS_DIR,
     LTS_VERSIONS,
-    SDK_DIRS,
+    get_sdk_dir,
+    get_sdk_dirs,
 )
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
 from otdf_sdk_mgr.semver import normalize_version
+
+
+class InstallError(Exception):
+    """Raised when SDK installation fails."""
 
 
 def install_go_release(version: str, dist_dir: Path) -> None:
@@ -27,12 +30,13 @@ def install_go_release(version: str, dist_dir: Path) -> None:
     The cli.sh and otdfctl.sh wrappers read .version and use
     `go run github.com/opentdf/otdfctl@{version}` instead of a local binary.
     """
+    go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
     tag = normalize_version(version)
     (dist_dir / ".version").write_text(f"{tag}\n")
-    shutil.copy(GO_DIR / "cli.sh", dist_dir / "cli.sh")
-    shutil.copy(GO_DIR / "otdfctl.sh", dist_dir / "otdfctl.sh")
-    shutil.copy(GO_DIR / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
+    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
+    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
+    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
     print(f"  Pre-warming Go cache for otdfctl@{tag}...")
     result = subprocess.run(
         ["go", "install", f"github.com/opentdf/otdfctl@{tag}"],
@@ -48,8 +52,9 @@ def install_go_release(version: str, dist_dir: Path) -> None:
 
 def install_js_release(version: str, dist_dir: Path) -> None:
     """Install a JS CLI release from npm registry."""
+    js_dir = get_sdk_dir() / "js"
     dist_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(JS_DIR / "cli.sh", dist_dir / "cli.sh")
+    shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
     # Strip infix prefix (e.g., "sdk/v0.4.0" -> "v0.4.0") for npm install
     v = version.split("/")[-1].lstrip("v")
     print(f"  Installing @opentdf/ctl@{v} from npm...")
@@ -63,9 +68,10 @@ def install_js_release(version: str, dist_dir: Path) -> None:
 def install_java_release(version: str, dist_dir: Path) -> None:
     """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
 
-    Falls back gracefully if the artifact is not available - the caller can
-    then build from source instead.
+    Raises InstallError if the artifact is not available or download fails,
+    so the caller can fall back to building from source.
     """
+    java_dir = get_sdk_dir() / "java"
     tag = normalize_version(version)
     url = f"https://github.com/opentdf/java-sdk/releases/download/{tag}/cmdline.jar"
 
@@ -75,36 +81,47 @@ def install_java_release(version: str, dist_dir: Path) -> None:
         urllib.request.urlopen(req, timeout=10)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"  Warning: cmdline.jar not found for {tag}.", file=sys.stderr)
-            print(f"  The release {tag} does not include a CLI artifact.", file=sys.stderr)
-            print("  This version will need to be built from source.", file=sys.stderr)
-            print(
-                f"  Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}",
-                file=sys.stderr,
+            raise InstallError(
+                f"cmdline.jar not found for {tag}. "
+                f"The release {tag} does not include a CLI artifact. "
+                f"This version will need to be built from source. "
+                f"Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}"
             )
-            # Clean up partial dist dir if it was created
-            if dist_dir.exists():
-                shutil.rmtree(dist_dir)
-            # Exit with error so caller knows to fall back to source build
-            sys.exit(1)
         raise
     except Exception as e:
         print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
         # Proceed with download attempt anyway
-        pass
 
-    # Artifact exists, proceed with download
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(JAVA_DIR / "cli.sh", dist_dir / "cli.sh")
-    jar_path = dist_dir / "cmdline.jar"
-    print(f"  Downloading cmdline.jar from {url}...")
+    # Download to a temp file first to avoid partial writes
+    tmp_path: Path | None = None
     try:
-        urllib.request.urlretrieve(url, jar_path)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            print(f"  Error: cmdline.jar not found for {tag} (race condition?).", file=sys.stderr)
-            sys.exit(1)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jar") as tmp:
+            tmp_path = Path(tmp.name)
+        print(f"  Downloading cmdline.jar from {url}...")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:
+                with open(tmp_path, "wb") as f:
+                    shutil.copyfileobj(response, f)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise InstallError(
+                    f"cmdline.jar not found for {tag} (race condition?). "
+                    f"Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}"
+                )
+            raise
+
+        # Download succeeded — now create dist_dir and move files into place
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(java_dir / "cli.sh", dist_dir / "cli.sh")
+        shutil.move(str(tmp_path), str(dist_dir / "cmdline.jar"))
+        tmp_path = None  # Ownership transferred; don't clean up
+    except BaseException:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        if dist_dir.exists() and not (dist_dir / "cmdline.jar").exists():
+            shutil.rmtree(dist_dir, ignore_errors=True)
         raise
+
     print(f"  Java release {tag} installed to {dist_dir}")
 
 
@@ -125,16 +142,18 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
 
     Returns:
         Path to the created dist directory
+
+    Raises:
+        InstallError: If the SDK is unknown or installation fails.
     """
     if sdk not in INSTALLERS:
-        print(
-            f"Error: Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}",
-            file=sys.stderr,
+        raise InstallError(
+            f"Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}"
         )
-        sys.exit(1)
 
+    sdk_dirs = get_sdk_dirs()
     name = dist_name or normalize_version(version)
-    dist_dir = SDK_DIRS[sdk] / "dist" / name
+    dist_dir = sdk_dirs[sdk] / "dist" / name
     if dist_dir.exists():
         print(f"  Dist directory already exists: {dist_dir} (skipping)")
         return dist_dir
@@ -187,10 +206,11 @@ def cmd_lts(sdks: list[str]) -> None:
 
 def cmd_tip(sdks: list[str]) -> None:
     """Delegate to source checkout + make for head builds."""
+    sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
         print(f"Checking out and building {sdk} from source...")
         checkout_sdk_branch(sdk, "main")
-        make_dir = SDK_DIRS[sdk]
+        make_dir = sdk_dirs[sdk]
         subprocess.check_call(["make"], cwd=make_dir)
         print(f"  {sdk} built from source")
 
@@ -199,11 +219,9 @@ def cmd_release(specs: list[str]) -> None:
     """Install specific released versions from sdk:version specs."""
     for spec in specs:
         if ":" not in spec:
-            print(
-                f"Error: Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)",
-                file=sys.stderr,
+            raise InstallError(
+                f"Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)"
             )
-            sys.exit(1)
         sdk, version = spec.split(":", 1)
         print(f"Installing {sdk} {version} from registry...")
         install_release(sdk, version)

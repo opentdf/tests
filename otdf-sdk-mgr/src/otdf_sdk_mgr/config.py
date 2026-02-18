@@ -2,35 +2,49 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-# Discover the tests/ directory by walking up from this package
-# In CI, the checkout may be named otdftests/ instead of tests/
-# Look for the xtest/sdk structure to identify the root
-_PACKAGE_DIR = Path(__file__).resolve().parent
-_TESTS_DIR = _PACKAGE_DIR
-while _TESTS_DIR != _TESTS_DIR.parent:
-    if (_TESTS_DIR / "xtest" / "sdk").exists():
-        break
-    _TESTS_DIR = _TESTS_DIR.parent
 
-SDK_DIR = _TESTS_DIR / "xtest" / "sdk"
-if not SDK_DIR.exists():
-    raise RuntimeError(
-        f"Could not locate xtest/sdk directory. "
-        f"Started from {_PACKAGE_DIR}, walked up to {_TESTS_DIR}. "
-        f"Expected to find xtest/sdk structure in repository root."
-    )
-GO_DIR = SDK_DIR / "go"
-JS_DIR = SDK_DIR / "js"
-JAVA_DIR = SDK_DIR / "java"
-SCRIPTS_DIR = SDK_DIR / "scripts"
+def _find_sdk_dir() -> Path | None:
+    """Walk up from this package directory to find xtest/sdk."""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "xtest" / "sdk").exists():
+            return current / "xtest" / "sdk"
+        current = current.parent
+    return None
 
-SDK_DIRS: dict[str, Path] = {
-    "go": GO_DIR,
-    "js": JS_DIR,
-    "java": JAVA_DIR,
-}
+
+def get_sdk_dir() -> Path:
+    """Return the SDK directory.
+
+    Checks OTDF_SDK_DIR env var first, then walks up the directory tree
+    to find xtest/sdk.  Raises RuntimeError if not found.
+    """
+    env_dir = os.environ.get("OTDF_SDK_DIR")
+    if env_dir:
+        return Path(env_dir)
+    found = _find_sdk_dir()
+    if found is None:
+        pkg_dir = Path(__file__).resolve().parent
+        raise RuntimeError(
+            f"Could not locate xtest/sdk directory. "
+            f"Started from {pkg_dir}, walked up to filesystem root. "
+            f"Set OTDF_SDK_DIR env var to override."
+        )
+    return found
+
+
+def get_sdk_dirs() -> dict[str, Path]:
+    """Return per-SDK directories keyed by SDK name."""
+    sdk_dir = get_sdk_dir()
+    return {
+        "go": sdk_dir / "go",
+        "js": sdk_dir / "js",
+        "java": sdk_dir / "java",
+    }
+
 
 # Git repository URLs
 SDK_GIT_URLS: dict[str, str] = {

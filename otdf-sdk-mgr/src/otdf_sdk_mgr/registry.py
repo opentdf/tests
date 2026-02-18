@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -19,11 +21,45 @@ from otdf_sdk_mgr.config import (
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
 
 
+def _github_headers() -> dict[str, str]:
+    """Return headers for GitHub API requests, including auth if GITHUB_TOKEN is set."""
+    headers: dict[str, str] = {"Accept": "application/json"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def fetch_json(url: str) -> Any:
     """Fetch JSON from a URL."""
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
+    headers = {"Accept": "application/json"}
+    if url.startswith("https://api.github.com/"):
+        headers = _github_headers()
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 429) and url.startswith("https://api.github.com/"):
+            reset_ts = e.headers.get("X-RateLimit-Reset")
+            if reset_ts:
+                reset_time = time.strftime(
+                    "%Y-%m-%d %H:%M:%S UTC", time.gmtime(int(reset_ts))
+                )
+                print(
+                    f"Warning: GitHub API rate limit exceeded. "
+                    f"Rate limit resets at {reset_time}. "
+                    f"Set GITHUB_TOKEN to increase rate limits.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"Warning: GitHub API returned {e.code}. "
+                    f"Set GITHUB_TOKEN to authenticate requests.",
+                    file=sys.stderr,
+                )
+            raise
+        raise
 
 
 def fetch_text(url: str) -> str:

@@ -6,7 +6,7 @@ import subprocess
 import sys
 from typing import Any
 
-from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_DIRS, SDK_GIT_URLS
+from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
 
 
 def _run(cmd: list[str], **kwargs: Any) -> None:
@@ -19,15 +19,16 @@ def _run(cmd: list[str], **kwargs: Any) -> None:
 
 def checkout_sdk_branch(language: str, branch: str) -> None:
     """Clone bare repo and create/update a worktree for the given branch."""
-    if language not in SDK_DIRS:
+    sdk_dirs = get_sdk_dirs()
+    if language not in sdk_dirs:
         print(
             f"Error: Unsupported language '{language}'. "
-            f"Supported values are: {', '.join(SDK_DIRS)}",
+            f"Supported values are: {', '.join(sdk_dirs)}",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    sdk_dir = SDK_DIRS[language]
+    sdk_dir = sdk_dirs[language]
     bare_repo_name = SDK_BARE_REPOS[language]
     # Strip .git suffix to get the base URL for git clone
     repo_url = SDK_GIT_URLS[language].removesuffix(".git")
@@ -47,16 +48,7 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
 
     if worktree_path.exists():
         print(f"Worktree for branch '{branch}' already exists at {worktree_path}. Updating...")
-        _run(
-            [
-                "git",
-                f"--git-dir={bare_repo_path}",
-                f"--work-tree={worktree_path}",
-                "pull",
-                "origin",
-                branch,
-            ]
-        )
+        _run(["git", "-C", str(worktree_path), "pull", "origin", branch])
     else:
         print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
         _run(

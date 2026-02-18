@@ -86,13 +86,46 @@ runs:
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
             echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
+            # Sanitize tag for use as an env var name (replace . with _)
+            tag_sanitized="${tag//./_}"
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
               --dist-name "$tag"; then
               echo "  Warning: Artifact installation failed for ${{ inputs.sdk }} $tag"
               echo "  Will fall back to building from source"
-              echo "BUILD_FROM_SOURCE_$tag=true" >> "$GITHUB_ENV"
+              echo "BUILD_FROM_SOURCE_${tag_sanitized}=true" >> "$GITHUB_ENV"
             fi
+          fi
+        done
+      env:
+        version_info: ${{ inputs.version-info }}
+
+    - name: determine source checkout needs
+      id: check-source
+      shell: bash
+      run: |
+        # Determine which version slots need source checkout.
+        # A slot needs checkout if it is a head version OR if artifact install failed
+        # (BUILD_FROM_SOURCE_<tag_sanitized> was set in the previous step).
+        for slot in a b c d; do
+          case "$slot" in
+            a) row=$(echo "${version_info}" | jq -rc '.[0] // empty') ;;
+            b) row=$(echo "${version_info}" | jq -rc '.[1] // empty') ;;
+            c) row=$(echo "${version_info}" | jq -rc '.[2] // empty') ;;
+            d) row=$(echo "${version_info}" | jq -rc '.[3] // empty') ;;
+          esac
+          if [[ -z "$row" ]]; then
+            echo "needs-source-${slot}=false" >> "$GITHUB_OUTPUT"
+            continue
+          fi
+          tag=$(echo "$row" | jq -r '.tag')
+          head=$(echo "$row" | jq -r '.head // false')
+          tag_sanitized="${tag//./_}"
+          build_from_source_var="BUILD_FROM_SOURCE_${tag_sanitized}"
+          if [[ "$head" == "true" || "${!build_from_source_var}" == "true" ]]; then
+            echo "needs-source-${slot}=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs-source-${slot}=false" >> "$GITHUB_OUTPUT"
           fi
         done
       env:
@@ -102,7 +135,7 @@ runs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
         steps.resolve.outputs.version-a != ''
-        && fromJson(steps.resolve.outputs.version-a).head == true
+        && steps.check-source.outputs.needs-source-a == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
         persist-credentials: false
@@ -113,7 +146,7 @@ runs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
         steps.resolve.outputs.version-b != ''
-        && fromJson(steps.resolve.outputs.version-b).head == true
+        && steps.check-source.outputs.needs-source-b == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
         persist-credentials: false
@@ -124,7 +157,7 @@ runs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
         steps.resolve.outputs.version-c != ''
-        && fromJson(steps.resolve.outputs.version-c).head == true
+        && steps.check-source.outputs.needs-source-c == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
         persist-credentials: false
@@ -135,7 +168,7 @@ runs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
         steps.resolve.outputs.version-d != ''
-        && fromJson(steps.resolve.outputs.version-d).head == true
+        && steps.check-source.outputs.needs-source-d == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
         persist-credentials: false

@@ -10,7 +10,7 @@ import typer
 
 from otdf_sdk_mgr.cli_install import install_app
 from otdf_sdk_mgr.cli_versions import versions_app
-from otdf_sdk_mgr.config import ALL_SDKS, SDK_DIRS
+from otdf_sdk_mgr.config import ALL_SDKS, get_sdk_dirs
 
 app = typer.Typer(
     name="otdf-sdk-mgr",
@@ -57,8 +57,9 @@ def clean(
     remove_dist = not src_only
     remove_src = not dist_only
 
+    sdk_dirs = get_sdk_dirs()
     for sdk in ALL_SDKS:
-        sdk_dir = SDK_DIRS[sdk]
+        sdk_dir = sdk_dirs[sdk]
         if remove_dist:
             dist_dir = sdk_dir / "dist"
             if dist_dir.exists():

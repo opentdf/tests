@@ -58,23 +58,28 @@ def release(
     ],
 ) -> None:
     """Install specific released versions."""
-    from otdf_sdk_mgr.installers import cmd_release
+    from otdf_sdk_mgr.installers import InstallError, cmd_release
 
-    cmd_release(specs)
+    try:
+        cmd_release(specs)
+    except InstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @install_app.command()
 def artifact(
-    sdk: Annotated[str, typer.Option(help="SDK to install")] = "",
-    version: Annotated[str, typer.Option(help="Version to install")] = "",
+    sdk: Annotated[str, typer.Option(help="SDK to install")],
+    version: Annotated[str, typer.Option(help="Version to install")],
     dist_name: Annotated[
         Optional[str], typer.Option("--dist-name", help="Override dist directory name")
     ] = None,
 ) -> None:
     """Install a single SDK version (used by CI)."""
-    if not sdk or not version:
-        typer.echo("Error: --sdk and --version are required", err=True)
-        raise typer.Exit(1)
-    from otdf_sdk_mgr.installers import cmd_install
+    from otdf_sdk_mgr.installers import InstallError, cmd_install
 
-    cmd_install(sdk, version, dist_name=dist_name)
+    try:
+        cmd_install(sdk, version, dist_name=dist_name)
+    except InstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
