@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-import sys
 from typing import NotRequired, TypedDict, TypeGuard
 
 from git import Git
@@ -13,7 +11,6 @@ from otdf_sdk_mgr.config import (
     JAVA_PLATFORM_BRANCH_MAP,
     LTS_VERSIONS,
     SDK_GIT_URLS,
-    SDK_TAG_INFIXES,
 )
 
 
