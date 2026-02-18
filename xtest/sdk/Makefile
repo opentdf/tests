@@ -1,9 +1,9 @@
 # Makefile
 
 # Targets
-.PHONY: all js go java
+.PHONY: all js go java exp-go-sdk
 
-all: js go java
+all: js go java exp-go-sdk
 	@echo "Setup all sdk clis"
 
 js:
@@ -20,3 +20,8 @@ java:
 	@echo "Building Java SDK..."
 	@cd java && make all
 	@echo "Java SDK built successfully"
+
+exp-go-sdk:
+	@echo "Building Experimental Go SDK..."
+	@cd exp-go-sdk && make all
+	@echo "Experimental Go SDK built successfully"
