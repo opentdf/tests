@@ -50,12 +50,14 @@ class TestCLIBasic:
         assert result.returncode == 0
         assert "OpenTDF test environment" in result.stdout
 
+    @pytest.mark.integration
     def test_ls_no_services(self):
         """Test ls command when no services running."""
         result = run_otdf_local("ls")
         # Should succeed even with no services
         assert result.returncode == 0
 
+    @pytest.mark.integration
     def test_ls_json(self):
         """Test ls command with JSON output."""
         result = run_otdf_local("ls", "--json", "--all")
@@ -79,6 +81,7 @@ class TestServiceLifecycle:
         yield
         run_otdf_local("down", timeout=30)
 
+    @pytest.mark.integration
     def test_up_down_cycle(self):
         """Test basic up/down cycle with Docker only."""
         # Start just Docker services
@@ -98,6 +101,7 @@ class TestServiceLifecycle:
         result = run_otdf_local("down", timeout=60)
         assert result.returncode == 0
 
+    @pytest.mark.integration
     def test_clean_command(self):
         """Test clean command."""
         result = run_otdf_local("clean")

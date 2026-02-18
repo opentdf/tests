@@ -34,7 +34,14 @@ jobs:
           uv run ruff format --check .
           uv run pyright
         working-directory: xtest
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: opentdf/platform
+          path: platform
+          persist-credentials: false
       - name: Lint and test otdf-local
+        env:
+          OTDF_LOCAL_PLATFORM_DIR: ${{ github.workspace }}/platform
         run: |
           uv sync
           uv run ruff check .
