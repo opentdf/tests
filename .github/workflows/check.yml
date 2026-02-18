@@ -34,10 +34,11 @@ jobs:
           uv run ruff format --check .
           uv run pyright
         working-directory: xtest
-      - name: Lint otdf-local
+      - name: Lint and test otdf-local
         run: |
           uv sync
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
+          uv run pytest --maxfail=1 --disable-warnings -v --tb=short
         working-directory: otdf-local
