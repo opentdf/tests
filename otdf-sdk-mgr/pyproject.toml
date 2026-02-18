@@ -23,9 +23,6 @@ otdf-sdk-mgr = "otdf_sdk_mgr.cli:app"
 requires = ["uv_build>=0.9.28"]
 build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/otdf_sdk_mgr"]
-
 [tool.ruff]
 target-version = "py311"
 line-length = 100

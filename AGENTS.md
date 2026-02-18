@@ -14,10 +14,10 @@ This guide provides essential knowledge for AI agents performing updates, refact
 
 ### Configuring SDK Artifacts
 
-Use `otdf-sdk-mgr` (uv-managed CLI in `tests/otdf-sdk-mgr/`) to install SDK CLIs from released artifacts or source. See `otdf-sdk-mgr/README.md` for full command reference.
+Use `otdf-sdk-mgr` (uv-managed CLI in `otdf-sdk-mgr/`) to install SDK CLIs from released artifacts or source. See `otdf-sdk-mgr/README.md` for full command reference.
 
 ```bash
-cd tests/otdf-sdk-mgr && uv tool install --editable .
+cd otdf-sdk-mgr && uv tool install --editable .
 otdf-sdk-mgr install stable    # Latest stable releases (recommended)
 otdf-sdk-mgr install tip go    # Build from source
 ```

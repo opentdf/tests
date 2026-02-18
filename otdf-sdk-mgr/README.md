@@ -5,7 +5,7 @@ SDK artifact management CLI for OpenTDF cross-client tests. Installs SDK CLIs fr
 ## Installation
 
 ```bash
-cd tests/otdf-sdk-mgr && uv tool install --editable .
+cd otdf-sdk-mgr && uv tool install --editable .
 ```
 
 ## Commands

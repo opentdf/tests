@@ -1,3 +1,0 @@
-# Minimal dependencies for backward-compatible wrappers.
-# The canonical source is tests/otdf-sdk-mgr/pyproject.toml.
-GitPython==3.1.46
