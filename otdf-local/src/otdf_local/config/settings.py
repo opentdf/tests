@@ -1,11 +1,10 @@
 """Pydantic settings for otdf_local configuration."""
 
-import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from otdf_local.config.ports import Ports
@@ -71,14 +70,13 @@ class Settings(BaseSettings):
 
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
-    _platform_dir: Path | None = None
+    platform_dir: Path | None = Field(default=None)
 
-    @property
-    def platform_dir(self) -> Path:
-        """Platform source directory."""
-        if self._platform_dir is None:
-            self._platform_dir = _find_platform_dir(self.xtest_root)
-        return self._platform_dir
+    @model_validator(mode="after")
+    def _resolve_platform_dir(self) -> "Settings":
+        if self.platform_dir is None:
+            self.platform_dir = _find_platform_dir(self.xtest_root)
+        return self
 
     @property
     def logs_dir(self) -> Path:
@@ -153,6 +151,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    platform_url = os.environ.get("OTDF_LOCAL_PLATFORM_URL", "http://localhost:8080")
-    keycloak_url = os.environ.get("OTDF_LOCAL_KEYCLOAK_URL", "http://localhost:8888")
-    return Settings(platform_url=platform_url, keycloak_url=keycloak_url)
+    return Settings()
