@@ -80,7 +80,7 @@ Or ensure services are running with logs in `../../platform/logs/` (auto-discove
 
 Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting).
 
-Quick start: `cd tests/otdf-local && uv run otdf-local up`
+Quick start: `cd otdf-local && uv run otdf-local up`
 
 ## Key Concepts
 

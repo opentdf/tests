@@ -46,7 +46,7 @@ def _find_xtest_root() -> Path:
     found = _find_project_root("xtest", Path(__file__))
     if found is not None:
         return found
-    # Fallback to assuming we're in tests/otdf-local
+    # Fallback to assuming we're in otdf-local folder and xtest is a sibling
     return Path(__file__).resolve().parent.parent.parent.parent
 
 

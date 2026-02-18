@@ -5,7 +5,7 @@ A Python CLI for managing the OpenTDF test environment, providing a cleaner alte
 ## Installation
 
 ```bash
-cd tests/otdf-local
+cd otdf-local
 uv sync
 ```
 
@@ -14,7 +14,7 @@ uv sync
 For convenience, you can install `otdf-local` globally and enable tab completion:
 
 ```bash
-cd tests/otdf-local
+cd otdf-local
 uv tool install --editable .
 otdf-local --install-completion
 ```
