@@ -134,7 +134,7 @@ jobs:
             const { execSync } = require('child_process');
             const path = require('path');
 
-            const sdkMgrDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk-mgr');
+            const sdkMgrDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk', 'otdf-sdk-mgr');
             const defaultTags = process.env.DEFAULT_TAGS || 'main';
             core.setOutput('default-tags', defaultTags);
 
