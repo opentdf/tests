@@ -94,12 +94,16 @@ fi
 
 XTEST_DIR=$SCRIPT_DIR
 while [ "$XTEST_DIR" != "/" ]; do
-  if [ -d "$XTEST_DIR/xtest" ]; then
-    XTEST_DIR="$XTEST_DIR/xtest"
+  if [ -f "$XTEST_DIR/pyproject.toml" ] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
     break
   fi
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
+
+if [ "$XTEST_DIR" = "/" ]; then
+  echo "xtest root (pyproject.toml with name = \"xtest\") not found."
+  exit 1
+fi
 
 # shellcheck disable=SC1091
 source "$XTEST_DIR"/test.env

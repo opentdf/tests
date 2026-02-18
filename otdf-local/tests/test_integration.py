@@ -5,8 +5,20 @@ These tests require Docker to be available and will start/stop real services.
 
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
+
+
+def _find_otdf_local_root() -> Path:
+    """Find the otdf-local root by locating pyproject.toml with name = 'otdf-local'."""
+    current = Path(__file__).resolve()
+    while current != current.parent:
+        pyproject = current / "pyproject.toml"
+        if pyproject.is_file() and 'name = "otdf-local"' in pyproject.read_text():
+            return current
+        current = current.parent
+    raise FileNotFoundError("otdf-local root (pyproject.toml with name = 'otdf-local') not found")
 
 
 def run_otdf_local(*args, timeout=60) -> subprocess.CompletedProcess:
@@ -17,7 +29,7 @@ def run_otdf_local(*args, timeout=60) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=timeout,
-        cwd=str(__file__).rsplit("/tests/", 1)[0],
+        cwd=_find_otdf_local_root(),
     )
 
 

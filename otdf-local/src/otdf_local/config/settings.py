@@ -9,22 +9,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from otdf_local.config.ports import Ports
 
 
-def _find_xtest_root() -> Path:
-    """Find the xtest/tests root directory by walking up from this file."""
-    current = Path(__file__).resolve()
+def _find_project_root(project_name: str, start: Path) -> Path | None:
+    """Walk up from start looking for a pyproject.toml with the given project name."""
+    current = start.resolve()
     while current != current.parent:
-        # Check if we're in the otdf_local package within tests
-        if (current / "otdf_local").exists() and current.name == "tests":
-            return current
-        # Legacy: check for xtest directory
-        if (current / "conftest.py").exists() and current.name == "xtest":
-            return current
-        # Also check if we're in the otdf_local package within xtest
-        if (current / "otdf_local").exists() and (
-            current.parent / "conftest.py"
-        ).exists():
-            return current.parent
+        pyproject = current / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                content = pyproject.read_text()
+                if f'name = "{project_name}"' in content:
+                    return current
+            except OSError:
+                pass
         current = current.parent
+    return None
+
+
+def _find_xtest_root() -> Path:
+    """Find the xtest root directory by locating pyproject.toml with name = 'xtest'."""
+    found = _find_project_root("xtest", Path(__file__))
+    if found is not None:
+        return found
     # Fallback to assuming we're in tests/otdf-local
     return Path(__file__).resolve().parent.parent.parent.parent
 
