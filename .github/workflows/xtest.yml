@@ -449,6 +449,15 @@ jobs:
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
+      - name: Validate otdf-local integration tests
+        if: ${{ !inputs }}
+        run: |-
+          uv sync
+          uv run pytest --maxfail=1 --disable-warnings -v --tb=short -m integration
+        working-directory: otdftests/otdf-local
+        env:
+          OTDF_LOCAL_PLATFORM_DIR: ${{ github.workspace }}/${{ steps.run-platform.outputs.platform-working-dir }}
+
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-

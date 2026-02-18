@@ -47,5 +47,5 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
-          uv run pytest --maxfail=1 --disable-warnings -v --tb=short
+          uv run pytest --maxfail=1 --disable-warnings -v --tb=short -m "not integration"
         working-directory: otdf-local
