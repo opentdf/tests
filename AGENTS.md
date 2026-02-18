@@ -76,6 +76,12 @@ export KAS_BETA_LOG_FILE=/path/to/kas-beta.log
 
 Or ensure services are running with logs in `../../platform/logs/` (auto-discovered).
 
+## Environment Management
+
+Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting).
+
+Quick start: `cd otdf-local && uv run otdf-local up`
+
 ## Key Concepts
 
 ### TDF Wrapping Algorithms
@@ -95,13 +101,10 @@ Or ensure services are running with logs in `../../platform/logs/` (auto-discove
 - When platform advertises a `base_key` in `.well-known/opentdf-configuration`
 
 **Ensuring Key Consistency**:
-
-`PLATFORM_DIR` defaults to `../../platform` (relative to `xtest/`). When updating a KAS instance config, set its `root_key` to match the platform's:
 ```bash
-PLATFORM_DIR="${PLATFORM_DIR:-../../platform}"
+# km instances must use platform's root_key:
 PLATFORM_ROOT_KEY=$(yq e '.services.kas.root_key' "$PLATFORM_DIR/opentdf-dev.yaml")
-# Update each KAS instance config to use the same root key:
-yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$PLATFORM_DIR/opentdf-dev.yaml"
+yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 ```
 
 ## Common Test Failures and Debugging
