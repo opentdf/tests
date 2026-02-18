@@ -147,9 +147,7 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
         InstallError: If the SDK is unknown or installation fails.
     """
     if sdk not in INSTALLERS:
-        raise InstallError(
-            f"Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}"
-        )
+        raise InstallError(f"Unknown SDK '{sdk}'. Must be one of: {', '.join(INSTALLERS)}")
 
     sdk_dirs = get_sdk_dirs()
     name = dist_name or normalize_version(version)
@@ -219,9 +217,7 @@ def cmd_release(specs: list[str]) -> None:
     """Install specific released versions from sdk:version specs."""
     for spec in specs:
         if ":" not in spec:
-            raise InstallError(
-                f"Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)"
-            )
+            raise InstallError(f"Invalid spec '{spec}'. Use format sdk:version (e.g., go:v0.24.0)")
         sdk, version = spec.split(":", 1)
         print(f"Installing {sdk} {version} from registry...")
         install_release(sdk, version)

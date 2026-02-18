@@ -43,9 +43,7 @@ def fetch_json(url: str) -> Any:
         if e.code in (403, 429) and url.startswith("https://api.github.com/"):
             reset_ts = e.headers.get("X-RateLimit-Reset")
             if reset_ts:
-                reset_time = time.strftime(
-                    "%Y-%m-%d %H:%M:%S UTC", time.gmtime(int(reset_ts))
-                )
+                reset_time = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(int(reset_ts)))
                 print(
                     f"Warning: GitHub API rate limit exceeded. "
                     f"Rate limit resets at {reset_time}. "
