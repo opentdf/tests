@@ -1,5 +1,6 @@
 """Docker compose service management."""
 
+import json
 import subprocess
 
 from otdf_local.config.ports import Ports
@@ -94,8 +95,6 @@ class DockerService(Service):
             return {}
 
         # Parse JSON output (one object per line)
-        import json
-
         containers = {}
         for line in result.stdout.strip().split("\n"):
             if line:

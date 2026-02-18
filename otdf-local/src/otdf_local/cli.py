@@ -1,10 +1,12 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import shutil
 import sys
 import time
 from typing import Annotated
 
+import httpx
 import typer
 from rich.live import Live
 
@@ -12,7 +14,7 @@ from otdf_local import __version__
 from otdf_local.config.ports import Ports
 from otdf_local.config.settings import get_settings
 from otdf_local.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
-from otdf_local.process.logs import LogAggregator
+from otdf_local.process.logs import LogAggregator, LogEntry
 from otdf_local.services import (
     Provisioner,
     ProvisionResult,
@@ -389,7 +391,7 @@ def logs(
             _print_log_entry(entry)
 
 
-def _print_log_entry(entry) -> None:
+def _print_log_entry(entry: LogEntry) -> None:
     """Format and print a log entry."""
     timestamp = ""
     if entry.timestamp:
@@ -414,8 +416,6 @@ def clean(
 
 def _do_clean(settings, keep_logs: bool) -> None:
     """Perform cleanup."""
-    import shutil
-
     # Clean config directory
     if settings.config_dir.exists():
         shutil.rmtree(settings.config_dir)
@@ -596,8 +596,6 @@ def env(
 
     # Try to get platform version from API
     try:
-        import httpx
-
         platform = get_platform_service(settings)
         if platform.is_running():
             resp = httpx.get(
@@ -616,8 +614,6 @@ def env(
         console.print_json(json.dumps(env_vars, indent=2))
     else:
         # Shell export format - use plain print to avoid line wrapping
-        import sys
-
         for key, value in env_vars.items():
             # Escape single quotes in value for shell safety
             escaped_value = value.replace("'", "'\\''")

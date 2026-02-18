@@ -46,8 +46,9 @@ def _find_xtest_root() -> Path:
     found = _find_project_root("xtest", Path(__file__))
     if found is not None:
         return found
-    # Fallback to assuming we're in otdf-local folder and xtest is a sibling
-    return Path(__file__).resolve().parent.parent.parent.parent
+    # Fallback: assume xtest is a sibling of otdf-local in the same repo
+    # __file__ is at otdf-local/src/otdf_local/config/settings.py (4 parents = otdf-local/)
+    return Path(__file__).resolve().parent.parent.parent.parent.parent / "xtest"
 
 
 def _find_platform_dir(xtest_root: Path) -> Path:
@@ -161,7 +162,7 @@ class Settings(BaseSettings):
         """Create all required directories."""
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        self.keys_dir.mkdir(parents=True, exist_ok=True)
+        self.keys_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 @lru_cache
