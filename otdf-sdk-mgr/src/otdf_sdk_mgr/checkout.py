@@ -3,30 +3,26 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from typing import Any
 
 from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
 
 
 def _run(cmd: list[str], **kwargs: Any) -> None:
-    """Run a command, exiting on failure."""
+    """Run a command, raising on failure."""
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
-        print(f"Error: Command '{' '.join(cmd)}' failed.", file=sys.stderr)
-        sys.exit(result.returncode)
+        raise subprocess.CalledProcessError(result.returncode, cmd)
 
 
 def checkout_sdk_branch(language: str, branch: str) -> None:
     """Clone bare repo and create/update a worktree for the given branch."""
     sdk_dirs = get_sdk_dirs()
     if language not in sdk_dirs:
-        print(
-            f"Error: Unsupported language '{language}'. "
-            f"Supported values are: {', '.join(sdk_dirs)}",
-            file=sys.stderr,
+        raise ValueError(
+            f"Unsupported language '{language}'. "
+            f"Supported values are: {', '.join(sdk_dirs)}"
         )
-        sys.exit(1)
 
     sdk_dir = sdk_dirs[language]
     bare_repo_name = SDK_BARE_REPOS[language]

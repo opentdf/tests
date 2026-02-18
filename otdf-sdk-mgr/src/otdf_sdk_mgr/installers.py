@@ -78,7 +78,8 @@ def install_java_release(version: str, dist_dir: Path) -> None:
     # Check if artifact exists before trying to download
     try:
         req = urllib.request.Request(url, method="HEAD")
-        urllib.request.urlopen(req, timeout=10)
+        with urllib.request.urlopen(req, timeout=10):
+            pass
     except urllib.error.HTTPError as e:
         if e.code == 404:
             raise InstallError(
@@ -88,7 +89,7 @@ def install_java_release(version: str, dist_dir: Path) -> None:
                 f"Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}"
             )
         raise
-    except Exception as e:
+    except (urllib.error.URLError, OSError) as e:
         print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
         # Proceed with download attempt anyway
 

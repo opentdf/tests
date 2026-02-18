@@ -28,7 +28,6 @@ def list_versions(
     releases: Annotated[
         bool, typer.Option("--releases", help="Include GitHub Releases info for Java")
     ] = False,
-    output_json: Annotated[bool, typer.Option("--json", help="JSON output (default)")] = False,
     output_table: Annotated[
         bool, typer.Option("--table", help="Human-readable Rich table output")
     ] = False,

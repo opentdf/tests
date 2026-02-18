@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -34,14 +35,18 @@ def checkout(
     """Clone bare repo and create/update worktree for an SDK branch."""
     from otdf_sdk_mgr.checkout import checkout_sdk_branch
 
-    if all_sdks:
-        for s in ALL_SDKS:
-            checkout_sdk_branch(s, branch)
-    elif sdk:
-        checkout_sdk_branch(sdk, branch)
-    else:
-        typer.echo("Error: provide an SDK name or use --all", err=True)
-        raise typer.Exit(1)
+    try:
+        if all_sdks:
+            for s in ALL_SDKS:
+                checkout_sdk_branch(s, branch)
+        elif sdk:
+            checkout_sdk_branch(sdk, branch)
+        else:
+            typer.echo("Error: provide an SDK name or use --all", err=True)
+            raise typer.Exit(1)
+    except (ValueError, subprocess.CalledProcessError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1) from e
 
 
 @app.command()

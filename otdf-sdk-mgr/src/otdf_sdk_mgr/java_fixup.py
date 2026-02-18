@@ -33,7 +33,7 @@ def post_checkout_java_fixup(base_dir: Path | None = None) -> None:
 
         # Extract version from directory name (e.g., "v0.7.5" -> "0.7.5")
         dir_name = src_dir.name
-        version = dir_name.lstrip("v")
+        version = dir_name.removeprefix("v")
         platform_branch = _get_platform_branch(version)
 
         pom_content = pom_file.read_text()

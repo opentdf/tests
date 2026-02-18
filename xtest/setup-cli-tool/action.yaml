@@ -80,14 +80,14 @@ runs:
       shell: bash
       run: |
         SDK_MGR_DIR="$(cd "${{ inputs.path }}/../.." && pwd)/otdf-sdk-mgr"
-        for row in $(echo "${version_info}" | jq -c '.[]'); do
+        echo "${version_info}" | jq -c '.[]' | while IFS= read -r row; do
           tag=$(echo "$row" | jq -r '.tag')
           head=$(echo "$row" | jq -r '.head // false')
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
             echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
-            # Sanitize tag for use as an env var name (replace . with _)
-            tag_sanitized="${tag//./_}"
+            # Sanitize tag for use as an env var name (replace non-alphanumeric/underscore with _)
+            tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
               --dist-name "$tag"; then
