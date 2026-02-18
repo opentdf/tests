@@ -1,6 +1,7 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import time
 from typing import Annotated
 
 import typer
@@ -325,8 +326,6 @@ def status(
         return table
 
     if watch:
-        import time
-
         with Live(get_status_table(), refresh_per_second=1, console=console) as live:
             while True:
                 time.sleep(1)

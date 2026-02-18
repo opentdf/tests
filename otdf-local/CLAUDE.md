@@ -5,7 +5,7 @@ This guide covers operational procedures for managing the test environment with 
 ## Environment Setup for pytest
 
 ```bash
-cd tests/otdf-local
+cd otdf-local
 eval $(uv run otdf-local env)         # Sets PLATFORM_LOG_FILE, KAS_*_LOG_FILE, etc.
 uv run otdf-local env --format json   # Output as JSON
 cd ../xtest
@@ -22,7 +22,7 @@ Auto-configured by otdf-local:
 
 ### Full Environment Restart
 ```bash
-cd tests/otdf-local
+cd otdf-local
 
 uv run otdf-local down
 uv run otdf-local up
@@ -34,7 +34,7 @@ uv run otdf-local up
 
 ### Service-Specific Restart
 ```bash
-cd tests/otdf-local
+cd otdf-local
 
 uv run otdf-local restart platform
 uv run otdf-local restart kas-alpha
@@ -51,7 +51,7 @@ pkill -9 -f "go run ./service start"
 pkill -9 -f "opentdf-kas"
 cd platform && docker compose down 2>/dev/null || true
 sleep 5
-cd tests/otdf-local && uv run otdf-local up
+cd otdf-local && uv run otdf-local up
 ```
 
 ### Platform Only (Manual)
@@ -72,15 +72,15 @@ uv run otdf-local logs --grep "error" -f     # Filter
 
 **Via log files:**
 ```bash
-tail -f tests/tmp/logs/platform.log
-tail -f tests/tmp/logs/kas-alpha.log
-tail -f tests/tmp/logs/kas-km1.log
+tail -f tmp/logs/platform.log
+tail -f tmp/logs/kas-alpha.log
+tail -f tmp/logs/kas-km1.log
 ```
 
 ## Golden Key Auto-Configuration
 
 When using `otdf-local up` or `otdf-local restart platform`, golden keys are automatically configured:
-1. `otdf-local` reads `tests/xtest/extra-keys.json` containing the `golden-r1` key
+1. `otdf-local` reads `xtest/extra-keys.json` containing the `golden-r1` key
 2. Key files are extracted to `platform/golden-r1-private.pem` and `platform/golden-r1-cert.pem`
 3. The key is added to `cryptoProvider.standard.keys` in the platform config
 4. A legacy keyring entry is added to `services.kas.keyring`
@@ -107,14 +107,14 @@ server:
 
 Extract key files:
 ```bash
-jq -r '.[0].privateKey' tests/xtest/extra-keys.json > platform/golden-r1-private.pem
-jq -r '.[0].cert' tests/xtest/extra-keys.json > platform/golden-r1-cert.pem
+jq -r '.[0].privateKey' xtest/extra-keys.json > platform/golden-r1-private.pem
+jq -r '.[0].cert' xtest/extra-keys.json > platform/golden-r1-cert.pem
 ```
 
 ## Troubleshooting
 
 ```bash
-cd tests/otdf-local
+cd otdf-local
 
 # Check service status
 uv run otdf-local status
@@ -126,8 +126,8 @@ uv run otdf-local logs kas-alpha -f
 uv run otdf-local logs --grep error
 
 # Or check log files directly
-tail -f tests/tmp/logs/platform.log
-tail -f tests/tmp/logs/kas-alpha.log
+tail -f tmp/logs/platform.log
+tail -f tmp/logs/kas-alpha.log
 
 # Kill stuck processes
 pkill -9 -f "go run ./service start"
@@ -147,7 +147,7 @@ The shell scripts in `scripts/lib/` are deprecated. For new automation:
 
 To test changes:
 ```bash
-cd tests/otdf-local
+cd otdf-local
 uv run otdf-local down
 uv run otdf-local up
 uv run otdf-local status

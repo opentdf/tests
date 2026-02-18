@@ -11,6 +11,23 @@ def generate_root_key() -> str:
     return secrets.token_hex(32)
 
 
+def validate_alg(alg: str) -> bool:
+    """Validate that the alg is a supported crypto mechanism."""
+    supported_algs = {
+        "ec:secp256r1",
+        "ec:secp384r1",
+        "ec:secp521r1",
+        "rsa:2048",
+        "rsa:4096",
+    }
+    return alg in supported_algs
+
+
+def validate_kid(kid: str) -> bool:
+    """Validate that the kid is a non-empty, less than 33 characters, and alphanumeric."""
+    return 0 < len(kid) < 33 and kid.isalnum()
+
+
 def generate_rsa_keypair(key_dir: Path, name: str = "kas") -> tuple[Path, Path]:
     """Generate an RSA keypair for KAS.
 
@@ -166,20 +183,19 @@ def setup_golden_keys(
     keys_config = []
     for key_entry in extra_keys:
         kid = key_entry.get("kid", "")
+        if not validate_kid(kid):
+            raise ValueError(f"Invalid kid in extra-keys.json: {kid}")
         alg = key_entry.get("alg", "")
+        if not validate_alg(alg):
+            raise ValueError(f"Invalid alg in extra-keys.json for kid {kid}: {alg}")
         private_key = key_entry.get("privateKey", "")
+
         cert = key_entry.get("cert", "")
 
         if not all([kid, alg, private_key, cert]):
-            continue
-
-        # Map algorithm to platform format
-        if alg == "rsa:2048":
-            platform_alg = "rsa:2048"
-        elif alg == "ec:secp256r1":
-            platform_alg = "ec:secp256r1"
-        else:
-            continue
+            raise ValueError(
+                f"Missing required fields in extra-keys.json for kid: {kid}"
+            )
 
         # Write key files to platform directory
         private_path = platform_dir / f"{kid}-private.pem"
@@ -192,7 +208,7 @@ def setup_golden_keys(
         keys_config.append(
             {
                 "kid": kid,
-                "alg": platform_alg,
+                "alg": alg,
                 "private": f"{kid}-private.pem",
                 "cert": f"{kid}-cert.pem",
             }
