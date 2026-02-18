@@ -1,6 +1,7 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import sys
 import time
 from typing import Annotated
 
@@ -37,6 +38,7 @@ app = typer.Typer(
     name="otdf-local",
     help="Local management CLI for OpenTDF test environment",
     no_args_is_help=True,
+    pretty_exceptions_enable=sys.stderr.isatty(),
 )
 
 
