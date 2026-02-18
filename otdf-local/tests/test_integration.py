@@ -18,7 +18,9 @@ def _find_otdf_local_root() -> Path:
         if pyproject.is_file() and 'name = "otdf-local"' in pyproject.read_text():
             return current
         current = current.parent
-    raise FileNotFoundError("otdf-local root (pyproject.toml with name = 'otdf-local') not found")
+    raise FileNotFoundError(
+        "otdf-local root (pyproject.toml with name = 'otdf-local') not found"
+    )
 
 
 def run_otdf_local(*args, timeout=60) -> subprocess.CompletedProcess:
