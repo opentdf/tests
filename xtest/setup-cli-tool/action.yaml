@@ -120,7 +120,7 @@ runs:
           fi
           tag=$(echo "$row" | jq -r '.tag')
           head=$(echo "$row" | jq -r '.head // false')
-          tag_sanitized="${tag//./_}"
+          tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
           build_from_source_var="BUILD_FROM_SOURCE_${tag_sanitized}"
           if [[ "$head" == "true" || "${!build_from_source_var}" == "true" ]]; then
             echo "needs-source-${slot}=true" >> "$GITHUB_OUTPUT"
