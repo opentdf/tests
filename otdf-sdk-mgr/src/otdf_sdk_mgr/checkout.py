@@ -20,8 +20,7 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
     sdk_dirs = get_sdk_dirs()
     if language not in sdk_dirs:
         raise ValueError(
-            f"Unsupported language '{language}'. "
-            f"Supported values are: {', '.join(sdk_dirs)}"
+            f"Unsupported language '{language}'. Supported values are: {', '.join(sdk_dirs)}"
         )
 
     sdk_dir = sdk_dirs[language]
