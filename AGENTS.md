@@ -78,9 +78,7 @@ Or ensure services are running with logs in `../../platform/logs/` (auto-discove
 
 ## Environment Management
 
-Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting). See:
-- `otdf-local/README.md` - command reference and installation
-- `otdf-local/CLAUDE.md` - operational procedures (restarts, tmux navigation, golden key config, troubleshooting)
+Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting).
 
 Quick start: `cd tests/otdf-local && uv run otdf-local up`
 
