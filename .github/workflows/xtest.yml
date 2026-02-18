@@ -170,10 +170,28 @@ jobs:
 
             core.summary.addHeading('Versions under Test', 3);
 
+            function artifactLink(sdkType, tag, release, head) {
+              if (head || !release) return '';
+              const v = tag.replace(/^v/, '');
+              if (sdkType === 'js') {
+                const url = `https://www.npmjs.com/package/@opentdf/ctl/v/${encodeURIComponent(v)}`;
+                return `<a href="${htmlEscape(url)}">npmjs</a>`;
+              }
+              if (sdkType === 'java') {
+                const url = `https://central.sonatype.com/artifact/io.opentdf.platform/sdk/${encodeURIComponent(v)}`;
+                return `<a href="${htmlEscape(url)}">Maven Central</a>`;
+              }
+              if (sdkType === 'go') {
+                const url = `https://pkg.go.dev/github.com/opentdf/otdfctl@${encodeURIComponent(tag)}`;
+                return `<a href="${htmlEscape(url)}">pkg.go.dev</a>`;
+              }
+              return '';
+            }
+
             let errorCount = 0;
             const table = [];
             const th = (data) => ({ data, header: true });
-            table.push([th('Library'), th('Tag'), th('SHA'), th('Alias'), th('Error')]);
+            table.push([th('Library'), th('Tag'), th('SHA'), th('Alias'), th('Artifact'), th('Error')]);
 
             for (const [sdkType, refInfo] of Object.entries(versionData)) {
               const tagList = [];
@@ -185,9 +203,10 @@ jobs:
                 const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
                 const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
                 const tagLink = (release && tag)
-                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>` 
+                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>`
                   : tag ? htmlEscape(tag) : 'N/A';
-                table.push([sdkLink, tagLink, commitLink, alias || 'N/A', err || 'N/A']);
+                const artifactCell = artifactLink(sdkType, tag, release, head);
+                table.push([sdkLink, tagLink, commitLink, alias || 'N/A', artifactCell || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
                   continue;
