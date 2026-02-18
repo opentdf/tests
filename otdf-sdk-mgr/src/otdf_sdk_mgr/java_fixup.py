@@ -14,10 +14,7 @@ def _get_platform_branch(version: str) -> str:
 
 
 def post_checkout_java_fixup(base_dir: Path | None = None) -> None:
-    """Fix pom.xml platform.branch property in Java SDK source trees.
-
-    Python port of post-checkout-java.sh.
-    """
+    """Fix pom.xml platform.branch property in Java SDK source trees."""
     if base_dir is None:
         base_dir = JAVA_DIR / "src"
 

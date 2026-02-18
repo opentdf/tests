@@ -6,7 +6,7 @@ inputs:
   sdk:
     description: The SDK to configure; one of go, java, js
   version-info:
-    description: JSON-encoded output of resolve-version.py
+    description: JSON-encoded output of otdf-sdk-mgr versions resolve
     required: true
 outputs:
   version-a:

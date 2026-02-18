@@ -269,33 +269,3 @@ def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
             "alias": version,
             "err": f"Error resolving version {version} for {sdk}: {e}",
         }
-
-
-def main() -> None:
-    """CLI entry point for backward-compatible resolve-version.py wrapper."""
-    if len(sys.argv) < 3:
-        print("Usage: python resolve_version.py <sdk> <tag...>", file=sys.stderr)
-        sys.exit(1)
-
-    sdk = sys.argv[1]
-    versions = sys.argv[2:]
-
-    if sdk not in SDK_GIT_URLS:
-        print(f"Unknown SDK: {sdk}", file=sys.stderr)
-        sys.exit(2)
-    infix = SDK_TAG_INFIXES.get(sdk)
-
-    results: list[ResolveResult] = []
-    shas: set[str] = set()
-    for version in versions:
-        v = resolve(sdk, version, infix)
-        if is_resolve_success(v):
-            env = lookup_additional_options(sdk, v["tag"])
-            if env:
-                v["env"] = env
-            if v["sha"] in shas:
-                continue
-            shas.add(v["sha"])
-        results.append(v)
-
-    print(json.dumps(results))

@@ -32,7 +32,7 @@ SDK_DIRS: dict[str, Path] = {
     "java": JAVA_DIR,
 }
 
-# Git repository URLs (unified from resolve-version.py sdk_urls + list-versions.py sdk_git_urls)
+# Git repository URLs
 SDK_GIT_URLS: dict[str, str] = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
@@ -66,7 +66,7 @@ LTS_VERSIONS: dict[str, str] = {
 }
 
 # Java SDK version -> compatible platform protocol branch
-# Must stay in sync with resolve-version.py lookup_additional_options
+# Must stay in sync with otdf-sdk-mgr versions resolve's lookup_additional_options
 JAVA_PLATFORM_BRANCH_MAP: dict[str, str] = {
     "0.7.8": "protocol/go/v0.2.29",
     "0.7.7": "protocol/go/v0.2.29",

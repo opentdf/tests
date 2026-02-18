@@ -18,10 +18,7 @@ def _run(cmd: list[str], **kwargs: Any) -> None:
 
 
 def checkout_sdk_branch(language: str, branch: str) -> None:
-    """Clone bare repo and create/update a worktree for the given branch.
-
-    Python port of checkout-sdk-branch.sh.
-    """
+    """Clone bare repo and create/update a worktree for the given branch."""
     if language not in SDK_DIRS:
         print(
             f"Error: Unsupported language '{language}'. "

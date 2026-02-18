@@ -15,8 +15,8 @@ from otdf_sdk_mgr.config import (
     JS_DIR,
     LTS_VERSIONS,
     SDK_DIRS,
-    SCRIPTS_DIR,
 )
+from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
 from otdf_sdk_mgr.semver import normalize_version
 
@@ -189,8 +189,7 @@ def cmd_tip(sdks: list[str]) -> None:
     """Delegate to source checkout + make for head builds."""
     for sdk in sdks:
         print(f"Checking out and building {sdk} from source...")
-        checkout_script = SCRIPTS_DIR / "checkout-sdk-branch.sh"
-        subprocess.check_call([str(checkout_script), sdk, "main"])
+        checkout_sdk_branch(sdk, "main")
         make_dir = SDK_DIRS[sdk]
         subprocess.check_call(["make"], cwd=make_dir)
         print(f"  {sdk} built from source")

@@ -62,9 +62,10 @@ otdf-sdk-mgr java-fixup
 
 ## Source Builds
 
-Source builds (`tip` mode) delegate to `checkout-sdk-branch.sh` + `make`, which checks out source to `sdk/{lang}/src/` and compiles to `sdk/{lang}/dist/`.
+Source builds (`tip` mode) check out source to `sdk/{lang}/src/` and compile via `make` to `sdk/{lang}/dist/`.
 
 After changes to SDK source, rebuild:
+
 ```bash
 otdf-sdk-mgr install tip go   # or java, js
 
