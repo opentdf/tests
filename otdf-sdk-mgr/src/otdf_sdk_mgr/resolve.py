@@ -84,7 +84,7 @@ def _try_resolve_js_npm(
     # Look up SHA from git tags (best-effort; not required for artifact installs)
     sha = ""
     candidates = {resolved_version, f"v{resolved_version}"}
-    for (s, t) in infix_stripped_tags:
+    for s, t in infix_stripped_tags:
         if t in candidates:
             sha = s
             break
