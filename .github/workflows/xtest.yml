@@ -113,7 +113,9 @@ jobs:
           path: otdf-sdk
           persist-credentials: false
           repository: opentdf/tests
-          sparse-checkout: xtest/sdk
+          sparse-checkout: |
+            xtest/sdk
+            otdf-sdk-mgr
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.14"
