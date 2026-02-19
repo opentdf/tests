@@ -14,6 +14,7 @@ SHA40 = "a" * 40
 SHA64 = "b" * 64
 SHA7 = "c" * 7
 
+
 # A realistic ls_remote output (tab-separated "sha\tref" per line)
 def make_ls_remote(*entries):
     """Build a ls_remote string from (sha, ref) pairs."""
@@ -30,6 +31,7 @@ def patch_git(ls_remote_output):
 # Type guards
 # ---------------------------------------------------------------------------
 
+
 class TestTypeGuards:
     def test_is_resolve_error(self):
         err = {"sdk": "go", "alias": "x", "err": "oops"}
@@ -45,6 +47,7 @@ class TestTypeGuards:
 # ---------------------------------------------------------------------------
 # resolve() — "main"
 # ---------------------------------------------------------------------------
+
 
 class TestResolveMain:
     def test_main_returns_head(self):
@@ -67,6 +70,7 @@ class TestResolveMain:
 # ---------------------------------------------------------------------------
 # resolve() — SHA inputs
 # ---------------------------------------------------------------------------
+
 
 class TestResolveSHA:
     def test_sha_no_matches_returns_sha_as_tag(self):
@@ -146,6 +150,7 @@ class TestResolveSHA:
 # resolve() — refs/pull/NNN
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePR:
     def test_pr_found(self):
         # The code filters rows where r.endswith(version), so the ref must end with "refs/pull/123"
@@ -168,6 +173,7 @@ class TestResolvePR:
 # resolve() — branch name
 # ---------------------------------------------------------------------------
 
+
 class TestResolveBranch:
     def test_exact_branch_match(self):
         ls = make_ls_remote(
@@ -184,6 +190,7 @@ class TestResolveBranch:
 # ---------------------------------------------------------------------------
 # resolve() — version tags
 # ---------------------------------------------------------------------------
+
 
 class TestResolveVersionTags:
     def test_exact_stable_version(self):
@@ -208,6 +215,7 @@ class TestResolveVersionTags:
 
     def test_lts_resolves_to_config_version(self):
         from otdf_sdk_mgr.config import LTS_VERSIONS
+
         lts_ver = LTS_VERSIONS["go"]
         ls = make_ls_remote(
             (SHA40, f"refs/tags/v{lts_ver}"),
@@ -226,6 +234,7 @@ class TestResolveVersionTags:
 # ---------------------------------------------------------------------------
 # resolve() — "latest"
 # ---------------------------------------------------------------------------
+
 
 class TestResolveLatest:
     def test_non_java_returns_last_stable(self):
@@ -248,8 +257,9 @@ class TestResolveLatest:
             {"version": "v0.1.0", "has_cli": False},
             {"version": "v0.2.0", "has_cli": True},
         ]
-        with patch_git(ls), patch(
-            "otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases
+        with (
+            patch_git(ls),
+            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
         ):
             result = resolve("java", "latest", None)
         assert is_resolve_success(result)
@@ -264,8 +274,9 @@ class TestResolveLatest:
             {"version": "v0.1.0", "has_cli": False},
             {"version": "v0.2.0", "has_cli": False},
         ]
-        with patch_git(ls), patch(
-            "otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases
+        with (
+            patch_git(ls),
+            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
         ):
             result = resolve("java", "latest", None)
         assert is_resolve_success(result)
@@ -275,6 +286,7 @@ class TestResolveLatest:
 # ---------------------------------------------------------------------------
 # _try_resolve_js_npm()
 # ---------------------------------------------------------------------------
+
 
 class TestTryResolveJsNpm:
     def test_npm_concrete_version(self):
