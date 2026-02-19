@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
+SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$")
 
 
 def parse_semver(version: str) -> tuple[int, int, int, str | None] | None:

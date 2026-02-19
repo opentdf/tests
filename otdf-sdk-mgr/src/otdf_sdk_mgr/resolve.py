@@ -49,7 +49,7 @@ MERGE_QUEUE_REGEX = (
     r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
 )
 
-SHA_REGEX = r"^[a-f0-9]{7,40}$"
+SHA_REGEX = r"^[a-f0-9]{7,64}$"
 
 
 def _try_resolve_js_npm(
@@ -113,8 +113,8 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
 
 def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
     """Resolve a version spec to a concrete SHA and tag."""
-    sdk_url = SDK_GIT_URLS[sdk]
     try:
+        sdk_url = SDK_GIT_URLS[sdk]
         repo = Git()
         if version == "main" or version == "refs/heads/main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
