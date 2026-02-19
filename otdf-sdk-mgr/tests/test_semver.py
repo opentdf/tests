@@ -1,6 +1,5 @@
 """Tests for semver.py — pure functions, no mocking needed."""
 
-import pytest
 
 from otdf_sdk_mgr.semver import is_stable, normalize_version, parse_semver, semver_sort_key
 

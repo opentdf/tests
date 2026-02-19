@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from otdf_sdk_mgr.resolve import (
     _try_resolve_js_npm,
@@ -110,7 +109,6 @@ class TestResolveSHA:
         assert result["tag"] == "v1.2.3"
 
     def test_multiple_matches_pr_takes_priority(self):
-        other_sha = "e" * 40
         ls = make_ls_remote(
             (SHA40, "refs/pull/99/head"),
             (SHA40, "refs/heads/some-branch"),
