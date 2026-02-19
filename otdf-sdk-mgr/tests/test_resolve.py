@@ -1,9 +1,10 @@
 """Tests for resolve.py — mocks git.Git to avoid network calls."""
 
+from typing import cast
 from unittest.mock import MagicMock, patch
 
-
 from otdf_sdk_mgr.resolve import (
+    ResolveResult,
     _try_resolve_js_npm,
     is_resolve_error,
     is_resolve_success,
@@ -34,12 +35,12 @@ def patch_git(ls_remote_output):
 
 class TestTypeGuards:
     def test_is_resolve_error(self):
-        err = {"sdk": "go", "alias": "x", "err": "oops"}
+        err = cast(ResolveResult, {"sdk": "go", "alias": "x", "err": "oops"})
         assert is_resolve_error(err) is True
         assert is_resolve_success(err) is False
 
     def test_is_resolve_success(self):
-        ok = {"sdk": "go", "alias": "x", "sha": SHA40, "tag": "v1.0.0"}
+        ok = cast(ResolveResult, {"sdk": "go", "alias": "x", "sha": SHA40, "tag": "v1.0.0"})
         assert is_resolve_success(ok) is True
         assert is_resolve_error(ok) is False
 
@@ -55,7 +56,7 @@ class TestResolveMain:
         with patch_git(ls):
             result = resolve("go", "main", None)
         assert is_resolve_success(result)
-        assert result["head"] is True
+        assert result.get("head") is True
         assert result["tag"] == "main"
         assert result["sha"] == SHA40
 
@@ -110,6 +111,7 @@ class TestResolveSHA:
         ls = make_ls_remote((SHA40, "refs/tags/v1.2.3"))
         with patch_git(ls):
             result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
         assert result["tag"] == "v1.2.3"
 
     def test_multiple_matches_pr_takes_priority(self):
@@ -132,7 +134,7 @@ class TestResolveSHA:
             result = resolve("go", SHA40, None)
         assert is_resolve_success(result)
         assert result["tag"] == "mq-main-42"
-        assert result["pr"] == "42"
+        assert result.get("pr") == "42"
 
     def test_multiple_matches_branch_only(self):
         ls = make_ls_remote(
@@ -142,7 +144,7 @@ class TestResolveSHA:
         with patch_git(ls):
             result = resolve("go", SHA40, None)
         assert is_resolve_success(result)
-        assert result["head"] is True
+        assert result.get("head") is True
         assert result["tag"] == "feature--my-branch"
 
 
@@ -158,9 +160,9 @@ class TestResolvePR:
         with patch_git(ls):
             result = resolve("go", "refs/pull/123", None)
         assert is_resolve_success(result)
-        assert result["pr"] == "123"
+        assert result.get("pr") == "123"
         assert result["tag"] == "pull-123"
-        assert result["head"] is True
+        assert result.get("head") is True
 
     def test_pr_not_found(self):
         ls = make_ls_remote((SHA40, "refs/heads/main"))
@@ -183,7 +185,7 @@ class TestResolveBranch:
         with patch_git(ls):
             result = resolve("go", "my-feature", None)
         assert is_resolve_success(result)
-        assert result["head"] is True
+        assert result.get("head") is True
         assert result["tag"] == "my-feature"
 
 
