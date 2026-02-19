@@ -26,15 +26,14 @@ This works by aliasing or checking out the source code for the different client 
 To check out the current head versions of the sdks under test, run:
 
 ```sh
-  ./sdk/scripts/checkout-all.sh
+  uv run --project otdf-sdk-mgr otdf-sdk-mgr checkout --all
 ```
 
 #### Download another tag of a specific sdk
 
 ```sh
-  ./sdk/scripts/checkout-sdk-branch.sh go v0.19.0
+  uv run --project otdf-sdk-mgr otdf-sdk-mgr checkout go v0.19.0
 ```
-
 
 #### Using locally checked out SDKs
 

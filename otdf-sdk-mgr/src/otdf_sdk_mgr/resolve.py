@@ -1,89 +1,35 @@
-#!/usr/bin/env python3
-# Use: python3 resolve-version.py <sdk> <tag...>
-#
-#    Tag can be:
-#       main: the main branch
-#       latest: the latest release of the app (last tag)
-#       lts: one of a list of hard-coded 'supported' versions
-#       <sha>: a git SHA
-#       v0.1.2: a git tag that is a semantic version
-#       refs/pull/1234: a pull request ref
-#
-#   The script will resolve the tags to their git SHAs and return it and other metadata in a JSON formatted list of objects.
-#   Fields of the object will be:
-#     sdk: the SDK name
-#     alias: the tag that was requested
-#     head: true if the tag is a head of a live branch
-#     tag: the resolved tag or branch name, if found
-#     sha: the current git SHA of the tag
-#     err: an error message if the tag could not be resolved, or resolved to multiple items
-#     pr: if set, the pr number associated with the tag
-#     release: if set, the release page for the tag
-#
-#   The script will also check for duplicate SHAs and remove them from the output.
-#
-# Sample Input:
-#
-#    python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
-#
-# Sample Output:
-# ```json
-# [
-#   {
-#     "sdk": "go",
-#     "alias": "0.15.0",
-#     "env": "ADDITIONAL_OPTION=per build metadata",
-#     "release": "v0.15.0",
-#     "sha": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
-#     "tag": "v0.15.0"
-#   },
-#   {
-#     "sdk": "go",
-#     "alias": "latest",
-#     "release": "v0.15.1",
-#     "sha": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2",
-#     "tag": "v0.15.1"
-#   },
-#   {
-#     "sdk": "go",
-#     "alias": "decaf01",
-#     "head": true,
-#     "pr": "1234",
-#     "sha": "decaf016g7h8i9j0k1l2m3n4o5p6q7r8s9t0a1b2",
-#     "tag": "refs/pull/1234/head"
-#   },
-#   {
-#     "sdk": "go",
-#     "err": "not found",
-#     "tag": "unreleased-name"
-#   }
-# ]
-# ```
+"""Version resolution for SDK tags/branches/SHAs."""
 
-import json
+from __future__ import annotations
+
 import re
-import sys
 from typing import NotRequired, TypedDict, TypeGuard
-from urllib.parse import quote
 
 from git import Git
 
+from otdf_sdk_mgr.config import (
+    JAVA_PLATFORM_BRANCH_MAP,
+    LTS_VERSIONS,
+    SDK_GIT_URLS,
+    SDK_NPM_PACKAGES,
+)
+
 
 class ResolveSuccess(TypedDict):
-    sdk: str  # The SDK name
-    alias: str  # The tag that was requested
-    env: NotRequired[str]  # Additional options for the SDK
-    head: NotRequired[bool]  # True if the tag is a head of a live branch
-    pr: NotRequired[str]  # The pull request number associated with the tag
-    release: NotRequired[str]  # The release name for the tag
-    sha: str  # The current git SHA of the tag
-    tag: str  # The resolved tag name
+    sdk: str
+    alias: str
+    env: NotRequired[str]
+    head: NotRequired[bool]
+    pr: NotRequired[str]
+    release: NotRequired[str]
+    sha: str
+    tag: str
 
 
 class ResolveError(TypedDict):
-    sdk: str  # The SDK name
-    alias: str  # The tag that was requested
-    err: str  # The error message
+    sdk: str
+    alias: str
+    err: str
 
 
 ResolveResult = ResolveSuccess | ResolveError
@@ -99,60 +45,79 @@ def is_resolve_success(val: ResolveResult) -> TypeGuard[ResolveSuccess]:
     return "err" not in val and "sha" in val and "tag" in val
 
 
-sdk_urls = {
-    "go": "https://github.com/opentdf/otdfctl.git",
-    "java": "https://github.com/opentdf/java-sdk.git",
-    "js": "https://github.com/opentdf/web-sdk.git",
-    "platform": "https://github.com/opentdf/platform.git",
-}
+MERGE_QUEUE_REGEX = (
+    r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
+)
 
-lts_versions = {
-    "go": "0.24.0",
-    "java": "0.9.0",
-    "js": "0.4.0",
-    "platform": "0.9.0",
-}
+SHA_REGEX = r"^[a-f0-9]{7,64}$"
 
 
-merge_queue_regex = r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_number>\d+)-(?P<sha>[a-f0-9]{40})$"
+def _try_resolve_js_npm(
+    sdk: str,
+    version: str,
+    alias: str,
+    infix_stripped_tags: list[tuple[str, str]],
+    infix: str | None,
+) -> ResolveSuccess | None:
+    """Try to resolve a JS version from the npm registry.
 
-sha_regex = r"^[a-f0-9]{7,40}$"
+    Returns a ResolveSuccess if the version exists on npm, None otherwise.
+    The sha is populated from git tags on a best-effort basis (empty string if not found),
+    since it is only needed for source checkouts which are skipped for artifact installs.
+    """
+    from otdf_sdk_mgr.registry import fetch_json
+
+    package = SDK_NPM_PACKAGES.get(sdk)
+    if not package:
+        return None
+
+    npm_version = version.lstrip("v")
+    try:
+        data = fetch_json(f"https://registry.npmjs.org/{package}/{npm_version}")
+    except Exception:
+        return None
+
+    # npm may resolve a dist-tag (e.g. "next") to a concrete version
+    resolved_version = data.get("version", npm_version)
+    tag = resolved_version
+
+    # Look up SHA from git tags (best-effort; not required for artifact installs)
+    sha = ""
+    candidates = {resolved_version, f"v{resolved_version}"}
+    for s, t in infix_stripped_tags:
+        if t in candidates:
+            sha = s
+            break
+
+    release = f"{infix}/{tag}" if infix else tag
+    return {
+        "sdk": sdk,
+        "alias": alias,
+        "release": release,
+        "sha": sha,
+        "tag": tag,
+    }
 
 
 def lookup_additional_options(sdk: str, version: str) -> str | None:
+    """Look up additional build options for a given SDK version."""
     if sdk != "java":
         return None
     if version.startswith("v"):
         version = version[1:]
-    match version:
-        case "0.7.8" | "0.7.7":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.29"
-        case "0.7.6":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.25"
-        case "0.7.5" | "0.7.4":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.18"
-        case "0.7.3" | "0.7.2":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.17"
-        case "0.6.1" | "0.6.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.14"
-        case "0.5.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.13"
-        case "0.4.0" | "0.3.0" | "0.2.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.10"
-        case "0.1.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.3"
-        case _:
-            return None
+    branch = JAVA_PLATFORM_BRANCH_MAP.get(version)
+    if branch:
+        return f"PLATFORM_BRANCH={branch}"
+    return None
 
 
-def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
-    sdk_url = sdk_urls[sdk]
+def resolve(sdk: str, version: str, infix: str | None) -> ResolveResult:
+    """Resolve a version spec to a concrete SHA and tag."""
     try:
+        sdk_url = SDK_GIT_URLS[sdk]
         repo = Git()
         if version == "main" or version == "refs/heads/main":
-            all_heads = [
-                r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")
-            ]
+            all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
             return {
                 "sdk": sdk,
@@ -162,13 +127,10 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 "tag": "main",
             }
 
-        if re.match(sha_regex, version):
+        if re.match(SHA_REGEX, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
-            matching_tags = [
-                (sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)
-            ]
+            matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
-                # Not a head; maybe another commit has pushed to this branch since the job started
                 return {
                     "sdk": sdk,
                     "alias": version[:7],
@@ -176,8 +138,6 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                     "tag": version,
                 }
             if len(matching_tags) > 1:
-                # If multiple tags point to the same SHA, check for pull requests
-                # and return the first one.
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
                         pr_number = tag.split("/")[2]
@@ -188,9 +148,8 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                             "sha": sha,
                             "tag": f"pull-{pr_number}",
                         }
-                # No pull request, probably a feature branch or release branch
                 for sha, tag in matching_tags:
-                    mq_match = re.match(merge_queue_regex, tag)
+                    mq_match = re.match(MERGE_QUEUE_REGEX, tag)
                     if mq_match:
                         to_branch = mq_match.group("branch")
                         pr_number = mq_match.group("pr_number")
@@ -228,7 +187,10 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 return {
                     "sdk": sdk,
                     "alias": version,
-                    "err": f"SHA {version} points to multiple tags, unable to differentiate: {', '.join(tag for _, tag in matching_tags)}",
+                    "err": (
+                        f"SHA {version} points to multiple tags, unable to differentiate: "
+                        f"{', '.join(tag for _, tag in matching_tags)}"
+                    ),
                 }
             (sha, tag) = matching_tags[0]
             if tag.startswith("refs/tags/"):
@@ -244,9 +206,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
 
         if version.startswith("refs/pull/"):
             merge_heads = [
-                r.split("\t")
-                for r in repo.ls_remote(sdk_url).split("\n")
-                if r.endswith(version)
+                r.split("\t") for r in repo.ls_remote(sdk_url).split("\n") if r.endswith(version)
             ]
             pr_number = version.split("/")[2]
             if not merge_heads:
@@ -267,9 +227,7 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
 
         remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
-            (sha, tag.split("refs/tags/")[-1])
-            for (sha, tag) in remote_tags
-            if "refs/tags/" in tag
+            (sha, tag.split("refs/tags/")[-1]) for (sha, tag) in remote_tags if "refs/tags/" in tag
         ]
 
         all_listed_branches = {
@@ -298,30 +256,69 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
                 for (sha, tag) in listed_tags
                 if f"{infix}/" in tag
             ]
+
+        # For JS: explicit version refs resolve via npm first so that pre-release and
+        # dist-tag refs (e.g. "0.9.0-beta.84", "next") work without a matching git tag.
+        if sdk in SDK_NPM_PACKAGES and version not in ("latest", "lts"):
+            npm_result = _try_resolve_js_npm(sdk, version, version, listed_tags, infix)
+            if npm_result is not None:
+                return npm_result
+
         semver_regex = r"v?\d+\.\d+\.\d+$"
-        listed_tags = [
-            (sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)
-        ]
-        listed_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
+        stable_tags = [(sha, tag) for (sha, tag) in listed_tags if re.search(semver_regex, tag)]
+        stable_tags.sort(key=lambda item: list(map(int, item[1].strip("v").split("."))))
         alias = version
         matching_tags = []
         if version == "latest":
-            matching_tags = listed_tags[-1:]
+            # For Java, check if CLI artifacts are available and fall back to source build if not
+            if sdk == "java":
+                from otdf_sdk_mgr.registry import list_java_github_releases
+
+                gh_releases = list_java_github_releases()
+                # Find the latest version with CLI artifact
+                versions_with_cli = [r for r in gh_releases if r.get("has_cli", False)]
+                if versions_with_cli:
+                    # Use the latest version that has CLI
+                    latest_with_cli_tag = versions_with_cli[-1]["version"]
+                    matching_tags = [
+                        (sha, tag)
+                        for (sha, tag) in stable_tags
+                        if tag in [latest_with_cli_tag, latest_with_cli_tag.lstrip("v")]
+                    ]
+                if not matching_tags:
+                    # No versions with CLI found, fall back to building latest from source
+                    sha, tag = stable_tags[-1]
+                    return {
+                        "sdk": sdk,
+                        "alias": alias,
+                        "head": True,  # Mark as head to trigger source checkout
+                        "sha": sha,
+                        "tag": tag,
+                    }
+            else:
+                matching_tags = stable_tags[-1:]
         else:
             if version == "lts":
-                version = lts_versions[sdk]
+                if sdk not in LTS_VERSIONS:
+                    raise ValueError(
+                        f"No LTS version defined for SDK '{sdk}'. "
+                        f"Add it to LTS_VERSIONS in config.py."
+                    )
+                version = LTS_VERSIONS[sdk]
             matching_tags = [
-                (sha, tag)
-                for (sha, tag) in listed_tags
-                if tag in [version, f"v{version}"]
+                (sha, tag) for (sha, tag) in stable_tags if tag in [version, f"v{version}"]
             ]
+            # If not found in stable tags, also search all tags (supports pre-release versions)
+            if not matching_tags:
+                matching_tags = [
+                    (sha, tag) for (sha, tag) in listed_tags if tag in [version, f"v{version}"]
+                ]
         if not matching_tags:
             raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
         sha, tag = matching_tags[-1]
         release = tag
         if infix:
             release = f"{infix}/{release}"
-        release = quote(release, safe="-_.~")
         return {
             "sdk": sdk,
             "alias": alias,
@@ -335,40 +332,3 @@ def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:
             "alias": version,
             "err": f"Error resolving version {version} for {sdk}: {e}",
         }
-
-
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: python resolve_version.py <sdk> <tag...>", file=sys.stderr)
-        sys.exit(1)
-
-    sdk = sys.argv[1]
-    versions = sys.argv[2:]
-
-    if sdk not in sdk_urls:
-        print(f"Unknown SDK: {sdk}", file=sys.stderr)
-        sys.exit(2)
-    infix: None | str = None
-    if sdk == "js":
-        infix = "sdk"
-    if sdk == "platform":
-        infix = "service"
-
-    results: list[ResolveResult] = []
-    shas: set[str] = set()
-    for version in versions:
-        v = resolve(sdk, version, infix)
-        if is_resolve_success(v):
-            env = lookup_additional_options(sdk, v["tag"])
-            if env:
-                v["env"] = env
-            if v["sha"] in shas:
-                continue
-            shas.add(v["sha"])
-        results.append(v)
-
-    print(json.dumps(results))
-
-
-if __name__ == "__main__":
-    main()

@@ -6,7 +6,7 @@ These tests verify that audit events are properly generated for:
 - Authorization decisions
 
 Run with:
-    cd tests/xtest
+    cd xtest
     uv run pytest test_audit_logs_integration.py --sdks go -v
 """
 

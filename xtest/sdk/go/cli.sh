@@ -18,11 +18,16 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null  && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run "github.com/opentdf/otdfctl@latest")
+  if [ -f "$SCRIPT_DIR/.version" ]; then
+    OTDFCTL_VERSION=$(tr -d '[:space:]' <"$SCRIPT_DIR/.version")
+    cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_VERSION}")
+  else
+    cmd=(go run "github.com/opentdf/otdfctl@latest")
+  fi
 fi
 
 if [ "$1" == "supports" ]; then
