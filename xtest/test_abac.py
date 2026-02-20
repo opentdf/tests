@@ -914,3 +914,109 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container=container)
     assert filecmp.cmp(pt_file, rt_file)
+
+
+@pytest.mark.parametrize(
+    "curve",
+    ["ec384", "ec521"],
+    ids=["P-384", "P-521"],
+)
+def test_encrypt_decrypt_all_containers_with_base_key_ec_curve(
+    curve: str,
+    request: pytest.FixtureRequest,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    container: tdfs.container_type,
+):
+    """Reproduces issue #3070: EC P-384/P-521 decrypt fails because
+    UncompressECPubKey hardcodes elliptic.P256() instead of using the
+    actual curve parameter.
+
+    Each parametrized variant creates a base key for the given curve,
+    encrypts across all container types, and attempts to decrypt.
+    With the bug present, ztdf-ecwrap decrypt fails with:
+        "ecdh failure: ecdsa: invalid public key"
+    """
+    request.getfixturevalue(f"base_key_{curve}")
+
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    sample_name = f"base-{curve}-{container}-{encrypt_sdk}"
+    ct_file = tmp_dir / f"{sample_name}.tdf"
+    encrypt_sdk.encrypt(
+        pt_file,
+        ct_file,
+        container=container,
+    )
+
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container=container)
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_autoconfigure_key_management_ec384_ec521(
+    attribute_allof_with_ec384_and_ec521_keys: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Reproduces issue #3070 in multi-KAS scenario: ALL_OF attribute with
+    EC P-384 (km1) and EC P-521 (km2) keys.
+
+    Encrypts with autoconfigure, verifies the manifest has two keyAccess
+    entries with the correct KIDs and KAS URLs, then decrypts. With the
+    bug present, decrypt fails because UncompressECPubKey hardcodes P-256
+    for both curves.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_allof_with_ec384_and_ec521_keys
+    sample_name = f"km-ec384-ec521-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attr.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        cipherTexts[sample_name] = ct_file
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 2
+    assert {kao.kid for kao in manifest.encryptionInformation.keyAccess} == set(key_ids)
+    assert {kao.url for kao in manifest.encryptionInformation.keyAccess} == {
+        kas_url_km1,
+        kas_url_km2,
+    }
+
+    if any(
+        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
+    ):
+        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    rt_file = tmp_dir / f"{sample_name}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
