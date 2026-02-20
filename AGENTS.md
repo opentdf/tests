@@ -25,14 +25,16 @@ otdf-sdk-mgr install tip go    # Build from source
 ### Running Tests
 
 ```bash
-# Configure environment
-cd xtest && set -a && source test.env && set +a
+# Configure environment for pytest (recommended)
+cd otdf-local
+eval $(uv run otdf-local env)
+cd ../xtest
 
 # Run with specific SDK
 uv run pytest --sdks go -v
 
-# Run with multiple SDKs (space-separated)
-uv run pytest --sdks "go java js" -v
+# Run with multiple SDKs
+uv run pytest --sdks go,java,js -v
 
 # Run specific test file
 uv run pytest test_tdfs.py --sdks go -v
@@ -127,7 +129,7 @@ yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 ```bash
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
 yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
-# Restart the platform service
+cd otdf-local && uv run otdf-local restart platform
 ```
 
 ### ABAC Test Failures: Decrypt Errors
@@ -142,16 +144,19 @@ curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_s
 # Expected: alpha=8181, beta=8282, gamma=8383, delta=8484
 ```
 
-**Fix**: Ensure all KAS instances are properly registered during startup.
+**Fix**: Ensure all KAS instances are properly registered during startup (`otdf-local up` handles this).
 
 ### Legacy/Golden TDF Test Failures
 
 **Symptom**: "cipher: message authentication failed"
 
-**Root Cause**: Golden TDFs require specific keys loaded by the platform. Ensure the platform is configured with the correct golden keys.
+**Root Cause**: Golden TDFs require specific keys loaded by the platform. `otdf-local up` auto-configures these. See `otdf-local/CLAUDE.md` for manual configuration details.
 
 ```bash
-cd xtest
+cd otdf-local
+uv run otdf-local up  # or restart platform
+eval $(uv run otdf-local env)
+cd ../xtest
 uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 ```
 
@@ -162,7 +167,7 @@ uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 **Fix**:
 ```bash
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
-export SCHEMA_FILE=manifest.schema.json
+export SCHEMA_FILE=/path/to/schema.json
 ```
 
 ## Debugging Workflow
@@ -175,14 +180,13 @@ export SCHEMA_FILE=manifest.schema.json
    curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq
    curl http://localhost:8080/healthz
    ```
-4. **Check service logs**: Look at platform and KAS log files for errors
+4. **Check service logs**: `cd otdf-local && uv run otdf-local logs --grep "error" -f`
 5. **Manual reproduction**:
    ```bash
-   echo "hello tdf" > test.txt
    sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
    sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
    ```
-6. **Fix and verify**: Make changes, restart services if needed, re-run failing test, then run full suite
+6. **Fix and verify**: Make changes, restart services if needed (`otdf-local restart <service>`), re-run failing test, then run full suite
 
 ## Code Modification Best Practices
 
@@ -195,11 +199,20 @@ export SCHEMA_FILE=manifest.schema.json
 
 ### When Modifying SDK Code
 
-After changes to SDK source, rebuild with `cd xtest/sdk && make`.
+```bash
+# After changes, rebuild SDK distribution
+cd sdk/go  # or sdk/java, sdk/js
+./build.sh  # or appropriate build command
+
+# Verify build worked
+ls -la dist/main/cli.sh
+```
 
 ### When Modifying Platform Code
 
-Restart the platform service after making changes.
+```bash
+cd otdf-local && uv run otdf-local restart platform
+```
 
 ### When Modifying Test Code
 
@@ -213,7 +226,7 @@ Restart the platform service after making changes.
 
 - `test_tdfs.py` - Core TDF roundtrip, manifest validation, tampering tests
 - `test_abac.py` - ABAC policy, autoconfigure, key management tests
-- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key)
+- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key, auto-configured by otdf-local)
 - `test_policytypes.py` - Policy type tests (OR, AND, hierarchy)
 - `test_self.py` - Platform API tests (namespaces, attributes, SCS)
 
@@ -242,22 +255,71 @@ curl localhost:8080/healthz
 yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 ```
 
+### Tmux Navigation
+```bash
+# Attach to session
+tmux attach -t xtest
+
+# Navigate windows
+Ctrl-B 0-9     # Switch to window by number
+Ctrl-B w       # Show window list
+Ctrl-B d       # Detach
+
+# View logs in session
+Ctrl-B [       # Enter scroll mode
+q              # Exit scroll mode
+```
+
+### Troubleshooting
+```bash
+# Check service status
+cd otdf-local
+uv run otdf-local status         # See what's running
+uv run otdf-local ls --all       # List all services
+
+# View service logs
+uv run otdf-local logs platform -f
+uv run otdf-local logs kas-alpha -f
+uv run otdf-local logs --grep error    # Find errors
+
+# Or check log files directly
+tail -f xtest/logs/platform.log
+tail -f xtest/logs/kas-alpha.log
+
+# Kill stuck processes
+pkill -9 -f "go.*service.*start"
+
+# Check port availability
+lsof -i :8080   # Platform
+lsof -i :8181   # KAS alpha
+lsof -i :8888   # Keycloak
+```
+
+### Manual SDK Operations
+```bash
+sdk/go/dist/main/cli.sh encrypt input.txt output.tdf --attr <fqn>
+sdk/go/dist/main/cli.sh decrypt output.tdf decrypted.txt
+```
+
 ## Summary
 
 ### Preferred Workflow
 
-1. **Build SDK CLIs**: `cd xtest/sdk && make`
-2. **Configure environment**: `cd xtest && set -a && source test.env && set +a`
-3. **Run tests**: `uv run pytest --sdks go -v`
-4. **Restart after config changes**: Restart the affected platform/KAS services
+1. **Use otdf-local for environment management** - It provides better error handling, health checks, and logs
+2. **Start environment**: `cd otdf-local && uv run otdf-local up`
+3. **Check status**: `uv run otdf-local status`
+4. **Configure shell environment**: `eval $(uv run otdf-local env)` - Sets up environment variables for pytest
+5. **View logs**: `uv run otdf-local logs -f`
+6. **Run tests**: `cd ../xtest && uv run pytest --sdks go -v`
+7. **Restart services**: `cd ../otdf-local && uv run otdf-local restart <service>` after config changes
 
 ### When Debugging Test Failures
 
 1. Read error messages carefully - they guide you to the root cause
 2. Check platform configuration matches expected test behavior
 3. Verify all KAS instances have consistent keys
-4. Ensure services are running and healthy
-5. Check service logs for errors
+4. Ensure services are running and healthy (`otdf-local status`)
+5. Check service logs (`otdf-local logs <service> -f`)
 6. Reproduce issues manually when possible
 7. Always restart services after config changes
 8. Read before writing - understand existing code patterns
