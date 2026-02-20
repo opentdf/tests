@@ -14,6 +14,12 @@ from pathlib import Path
 import pytest
 
 from audit_logs import (
+    ACTION_RESULTS,
+    ACTION_TYPES,
+    OBJECT_TYPES,
+    VERB_DECISION,
+    VERB_POLICY_CRUD,
+    VERB_REWRAP,
     AuditLogAsserter,
     AuditLogCollector,
     LogEntry,
@@ -130,6 +136,41 @@ class TestAuditLogAsserter:
 
         result = asserter.assert_contains("anything")
         assert result == []
+
+
+class TestAuditConstants:
+    """Tests for audit log constants."""
+
+    def test_object_types_not_empty(self) -> None:
+        """Test that OBJECT_TYPES contains expected values."""
+        assert len(OBJECT_TYPES) > 0
+        assert "namespace" in OBJECT_TYPES
+        assert "attribute_definition" in OBJECT_TYPES
+        assert "attribute_value" in OBJECT_TYPES
+        assert "key_object" in OBJECT_TYPES
+
+    def test_action_types_not_empty(self) -> None:
+        """Test that ACTION_TYPES contains expected values."""
+        assert len(ACTION_TYPES) > 0
+        assert "create" in ACTION_TYPES
+        assert "read" in ACTION_TYPES
+        assert "update" in ACTION_TYPES
+        assert "delete" in ACTION_TYPES
+        assert "rewrap" in ACTION_TYPES
+
+    def test_action_results_not_empty(self) -> None:
+        """Test that ACTION_RESULTS contains expected values."""
+        assert len(ACTION_RESULTS) > 0
+        assert "success" in ACTION_RESULTS
+        assert "failure" in ACTION_RESULTS
+        assert "error" in ACTION_RESULTS
+        assert "cancel" in ACTION_RESULTS
+
+    def test_verbs_defined(self) -> None:
+        """Test that verb constants are defined."""
+        assert VERB_DECISION == "decision"
+        assert VERB_POLICY_CRUD == "policy crud"
+        assert VERB_REWRAP == "rewrap"
 
 
 class TestParsedAuditEvent:
@@ -618,19 +659,19 @@ class TestClockSkewEstimation:
         assert est.min_skew is None
         assert est.max_skew is None
         assert est.mean_skew is None
-        assert est.safe_skew_adjustment() == pytest.approx(0.1)  # Default margin
+        assert est.safe_skew_adjustment() == 0.1  # Default margin
 
         # Add samples
         est.samples = [0.5, 1.0, 1.5, 2.0]
         assert est.sample_count == 4
-        assert est.min_skew == pytest.approx(0.5)
-        assert est.max_skew == pytest.approx(2.0)
-        assert est.mean_skew == pytest.approx(1.25)
-        assert est.median_skew == pytest.approx(1.25)
+        assert est.min_skew == 0.5
+        assert est.max_skew == 2.0
+        assert est.mean_skew == 1.25
+        assert est.median_skew == 1.25
 
         # Safe adjustment when test machine is ahead (positive skew)
         # Should return just the confidence margin
-        assert est.safe_skew_adjustment() == pytest.approx(0.1)
+        assert est.safe_skew_adjustment() == 0.1
 
     def test_clock_skew_estimate_negative_skew(self) -> None:
         """Test ClockSkewEstimate with negative skew (service ahead)."""
@@ -639,7 +680,7 @@ class TestClockSkewEstimation:
         est = ClockSkewEstimate("test-service")
         # Negative skew means service clock is ahead
         est.samples = [-0.3, -0.1, 0.1, 0.2]
-        assert est.min_skew == pytest.approx(-0.3)
+        assert est.min_skew == -0.3
 
         # Safe adjustment should account for negative skew
         adj = est.safe_skew_adjustment()
@@ -662,7 +703,7 @@ class TestClockSkewEstimation:
         est = estimator.get_estimate("kas-alpha")
         assert est is not None
         assert est.sample_count == 1
-        assert est.min_skew == pytest.approx(1.0)  # 1 second difference
+        assert est.min_skew == 1.0  # 1 second difference
 
         # Check global estimate
         global_est = estimator.get_global_estimate()
@@ -677,8 +718,8 @@ class TestClockSkewEstimation:
 
         global_est = estimator.get_global_estimate()
         assert global_est.sample_count == 2
-        assert global_est.min_skew == pytest.approx(1.0)
-        assert global_est.max_skew == pytest.approx(2.0)
+        assert global_est.min_skew == 1.0
+        assert global_est.max_skew == 2.0
 
     def test_parsed_audit_event_skew_properties(self) -> None:
         """Test ParsedAuditEvent skew-related properties."""
@@ -725,7 +766,7 @@ class TestClockSkewEstimation:
 
         # Default adjustment
         adj = asserter.get_skew_adjustment()
-        assert adj == pytest.approx(0.1)  # Default margin
+        assert adj == 0.1  # Default margin
 
         # Skew estimator should be accessible
         assert asserter.skew_estimator is not None
@@ -738,7 +779,7 @@ class TestClockSkewEstimation:
 
         assert asserter.skew_estimator is None
         assert asserter.get_skew_summary() == {}
-        assert asserter.get_skew_adjustment() == pytest.approx(0.1)
+        assert asserter.get_skew_adjustment() == 0.1
 
     def test_skew_recorded_on_parse(self, tmp_path: Path) -> None:
         """Test that parsing audit logs records skew samples."""

@@ -66,7 +66,7 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
         len(e.original.get("values", [])) for e in attr_events if e.original
     )
     assert total_values >= 6, (
-        f"Expected at least 6 values in attribute_definition events. Got {total_values}"
+        f"Expected at least 6 values across attribute_definition events, got {total_values}"
     )
 
 

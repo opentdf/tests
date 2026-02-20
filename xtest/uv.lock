@@ -642,7 +642,7 @@ requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.4.4" },
     { name = "construct", specifier = ">=2.10.70" },
     { name = "construct-typing", specifier = ">=0.7.0" },
-    { name = "cryptography", specifier = ">=46.0.3" },
+    { name = "cryptography", specifier = ">=46.0.5" },
     { name = "gitdb", specifier = ">=4.0.12" },
     { name = "gitpython", specifier = ">=3.1.46" },
     { name = "idna", specifier = ">=3.11" },

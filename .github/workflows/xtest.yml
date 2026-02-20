@@ -271,7 +271,9 @@ jobs:
           log-type: json
 
       - name: Install uv
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+        with:
+          python-version: "3.14"
       - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c # v1.3.0
         with:
           setup_only: true
@@ -472,6 +474,8 @@ jobs:
           fi
         working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
       - name: Install test dependencies
         run: uv sync
         working-directory: otdftests/xtest
@@ -504,7 +508,7 @@ jobs:
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -514,7 +518,7 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -614,7 +618,7 @@ jobs:
           -ra
           -v
           --numprocesses auto
-          --dist loadscope
+          --dist worksteal
           --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
           --self-contained-html
           --audit-log-dir test-results/audit-logs

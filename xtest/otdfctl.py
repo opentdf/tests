@@ -308,7 +308,8 @@ class OpentdfCommandLineTool:
             err_str = (err.decode() if err else "") + (out.decode() if out else "")
             if "already_exists" in err_str or "unique field violation" in err_str:
                 logger.info(
-                    f"Key {key_id} already exists on {kas_id} (race condition), returning existing key"
+                    f"Key {key_id} already exists on {kas_id}, fetching existing key "
+                    "(race condition detected)"
                 )
                 kas_entry = kas if isinstance(kas, KasEntry) else None
                 if kas_entry is None:
@@ -320,7 +321,7 @@ class OpentdfCommandLineTool:
                 for existing_key in existing_keys:
                     if existing_key.key.key_id == key_id:
                         logger.info(
-                            f"Key {key_id} found in existing keys, returning it"
+                            f"Key {key_id} already exists, returning existing key"
                         )
                         return existing_key
                 raise AssertionError(
@@ -369,7 +370,7 @@ class OpentdfCommandLineTool:
             err_str = (err.decode() if err else "") + (out.decode() if out else "")
             if "already_exists" in err_str or "unique field violation" in err_str:
                 logger.info(
-                    f"Key {key_id} already exists on {kas_id} (race condition), returning existing key"
+                    f"Key {key_id} already exists on {kas_id}, returning existing key"
                 )
                 # Query existing keys and find the one we tried to import
                 if kas_entry is None:
