@@ -195,7 +195,6 @@ class ClockSkewEstimator:
             event_time: When the event occurred (service clock, from JSON)
         """
         # Convert both to UTC for comparison
-        # astimezone() handles both naive (assumes local) and aware datetimes
         collection_utc = collection_time.astimezone(UTC)
 
         if event_time.tzinfo is None:
@@ -265,43 +264,47 @@ class ClockSkewEstimator:
 
 
 # Audit event constants from platform/service/logger/audit/constants.go
-# These are defined as Literal types for static type checking
-ObjectType = Literal[
-    "subject_mapping",
-    "resource_mapping",
-    "attribute_definition",
-    "attribute_value",
-    "obligation_definition",
-    "obligation_value",
-    "obligation_trigger",
-    "namespace",
-    "condition_set",
-    "kas_registry",
-    "kas_attribute_namespace_assignment",
-    "kas_attribute_definition_assignment",
-    "kas_attribute_value_assignment",
-    "key_object",
-    "entity_object",
-    "resource_mapping_group",
-    "public_key",
-    "action",
-    "registered_resource",
-    "registered_resource_value",
-    "key_management_provider_config",
-    "kas_registry_keys",
-    "kas_attribute_definition_key_assignment",
-    "kas_attribute_value_key_assignment",
-    "kas_attribute_namespace_key_assignment",
-    "namespace_certificate",
-]
+OBJECT_TYPES = frozenset(
+    {
+        "subject_mapping",
+        "resource_mapping",
+        "attribute_definition",
+        "attribute_value",
+        "obligation_definition",
+        "obligation_value",
+        "obligation_trigger",
+        "namespace",
+        "condition_set",
+        "kas_registry",
+        "kas_attribute_namespace_assignment",
+        "kas_attribute_definition_assignment",
+        "kas_attribute_value_assignment",
+        "key_object",
+        "entity_object",
+        "resource_mapping_group",
+        "public_key",
+        "action",
+        "registered_resource",
+        "registered_resource_value",
+        "key_management_provider_config",
+        "kas_registry_keys",
+        "kas_attribute_definition_key_assignment",
+        "kas_attribute_value_key_assignment",
+        "kas_attribute_namespace_key_assignment",
+        "namespace_certificate",
+    }
+)
 
-ActionType = Literal["create", "read", "update", "delete", "rewrap", "rotate"]
+ACTION_TYPES = frozenset({"create", "read", "update", "delete", "rewrap", "rotate"})
 
-ActionResult = Literal[
-    "success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"
-]
+ACTION_RESULTS = frozenset(
+    {"success", "failure", "error", "encrypt", "block", "ignore", "override", "cancel"}
+)
 
-AuditVerb = Literal["decision", "policy crud", "rewrap"]
+# Audit log message verbs
+VERB_DECISION = "decision"
+VERB_POLICY_CRUD = "policy crud"
+VERB_REWRAP = "rewrap"
 
 
 @dataclass
@@ -354,7 +357,6 @@ class ParsedAuditEvent:
             return None
 
         # Convert collection time to UTC for comparison
-        # astimezone() handles both naive (assumes local) and aware datetimes
         collection_t = self.collection_time
         collection_utc = collection_t.astimezone(UTC)
 
@@ -479,7 +481,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "rewrap":
+        if self.msg != VERB_REWRAP:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -513,7 +515,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "policy crud":
+        if self.msg != VERB_POLICY_CRUD:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -541,7 +543,7 @@ class ParsedAuditEvent:
         Returns:
             True if event matches all specified criteria
         """
-        if self.msg != "decision":
+        if self.msg != VERB_DECISION:
             return False
         if result is not None and self.action_result != result:
             return False
@@ -619,6 +621,7 @@ class AuditLogCollector:
         self._mark_counter = 0
         self._threads: list[threading.Thread] = []
         self._stop_event = threading.Event()
+        self._new_data = threading.Condition()
         self._disabled = False
         self._error: Exception | None = None
         self.log_file_path: Path | None = None
@@ -650,8 +653,11 @@ class AuditLogCollector:
             self._disabled = True
             return
 
-        any_file_exists = any(path.exists() for path in self.log_files.values())
-        if not any_file_exists:
+        existing_files = {
+            service: path for service, path in self.log_files.items() if path.exists()
+        }
+
+        if not existing_files:
             logger.warning(
                 f"None of the log files exist yet: {list(self.log_files.values())}. "
                 f"Will wait for them to be created..."
@@ -681,6 +687,9 @@ class AuditLogCollector:
 
         logger.debug("Stopping audit log collection")
         self._stop_event.set()
+        # Wake any threads waiting on new data so they can exit promptly
+        with self._new_data:
+            self._new_data.notify_all()
 
         for thread in self._threads:
             if thread.is_alive():
@@ -785,6 +794,22 @@ Log Entries:
         self.log_file_written = True
         logger.info(f"Wrote {len(self._buffer)} audit log entries to {path}")
 
+    def wait_for_new_data(self, timeout: float = 0.1) -> bool:
+        """Wait for new log data to arrive.
+
+        Blocks until new data is appended by a tail thread, or until timeout.
+        More efficient than polling with time.sleep() since it wakes up
+        immediately when data arrives.
+
+        Args:
+            timeout: Maximum time to wait in seconds (default: 0.1)
+
+        Returns:
+            True if woken by new data, False if timed out
+        """
+        with self._new_data:
+            return self._new_data.wait(timeout=timeout)
+
     def _tail_file(self, service: str, log_path: Path) -> None:
         """Background thread target that tails a log file.
 
@@ -808,14 +833,23 @@ Log Entries:
                 f.seek(0, 2)
 
                 while not self._stop_event.is_set():
-                    line = f.readline()
-                    if line:
+                    # Batch-read all available lines before notifying
+                    got_data = False
+                    while True:
+                        line = f.readline()
+                        if not line:
+                            break
                         entry = LogEntry(
                             timestamp=datetime.now(),
                             raw_line=line.rstrip(),
                             service_name=service,
                         )
                         self._buffer.append(entry)
+                        got_data = True
+
+                    if got_data:
+                        with self._new_data:
+                            self._new_data.notify_all()
                     else:
                         self._stop_event.wait(0.1)
         except Exception as e:
@@ -837,6 +871,15 @@ class AuditLogAsserter:
             collector: AuditLogCollector instance, or None for no-op mode
         """
         self._collector = collector
+
+    @property
+    def is_enabled(self) -> bool:
+        """Check if audit log collection is enabled.
+
+        Returns:
+            True if collection is active, False if disabled or no collector
+        """
+        return self._collector is not None and not self._collector._disabled
 
     def mark(self, label: str) -> str:
         """Mark a timestamp for later correlation.
@@ -927,7 +970,7 @@ class AuditLogAsserter:
         matching: list[LogEntry] = []
         logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             logs = self._collector.get_logs(since=since)
             matching = [log for log in logs if regex.search(log.raw_line)]
 
@@ -939,8 +982,11 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            # Sleep briefly before checking again
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            # Wait for new data or timeout
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Timeout expired, raise error if we don't have enough matches
         timeout_time = datetime.now()
@@ -1141,7 +1187,7 @@ class AuditLogAsserter:
 
         # Verify msg is one of the known audit verbs
         msg = data.get("msg", "")
-        if msg not in ("decision", "policy crud", "rewrap"):
+        if msg not in (VERB_DECISION, VERB_POLICY_CRUD, VERB_REWRAP):
             return None
 
         event = ParsedAuditEvent(
@@ -1185,7 +1231,7 @@ class AuditLogAsserter:
 
         # Wait a bit for logs to arrive
         start_time = time.time()
-        while time.time() - start_time < timeout:
+        while True:
             logs = self._collector.get_logs(since=since)
             parsed = []
             for entry in logs:
@@ -1194,7 +1240,11 @@ class AuditLogAsserter:
                     parsed.append(event)
             if parsed:
                 return parsed
-            time.sleep(0.1)
+
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         return []
 
@@ -1245,7 +1295,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1267,7 +1317,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
@@ -1426,7 +1479,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1447,7 +1500,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
@@ -1586,7 +1642,7 @@ class AuditLogAsserter:
         matching: list[ParsedAuditEvent] = []
         all_logs: list[LogEntry] = []
 
-        while time.time() - start_time < timeout:
+        while True:
             all_logs = self._collector.get_logs(since=since)
             matching = []
 
@@ -1608,7 +1664,10 @@ class AuditLogAsserter:
                 )
                 return matching
 
-            time.sleep(0.1)
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+            self._collector.wait_for_new_data(timeout=min(remaining, 1.0))
 
         # Build detailed error message
         timeout_time = datetime.now()
