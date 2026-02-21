@@ -15,6 +15,7 @@ skipped when running with --no-audit-logs.
 
 import base64
 import filecmp
+import logging
 import random
 import string
 import subprocess
@@ -27,6 +28,8 @@ import tdfs
 from abac import Attribute
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(autouse=True)
@@ -337,8 +340,9 @@ class TestDecisionAudit:
                 timeout=2.0,
             )
         except AssertionError:
-            # Decision logs may not always be present depending on platform config
-            pass
+            logger.warning(
+                "Decision audit logs not found; may not be present depending on platform config"
+            )
 
 
 # ============================================================================
