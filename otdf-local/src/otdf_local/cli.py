@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import subprocess
 import sys
 import time
 from typing import Annotated
@@ -607,7 +608,30 @@ def env(
                 if "version" in config:
                     env_vars["PLATFORM_VERSION"] = config["version"]
     except Exception as e:
-        print_warning(f"Could not get platform version: {e}")
+        print_warning(f"Could not get platform version from API: {e}")
+
+    # Fall back to git describe if API didn't provide version
+    if "PLATFORM_VERSION" not in env_vars:
+        try:
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--match", "service/v*"],
+                capture_output=True,
+                text=True,
+                cwd=settings.platform_dir,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                # Parse "service/v0.13.0" or "service/v0.13.0-1-gabcdef"
+                tag = result.stdout.strip()
+                if tag.startswith("service/v"):
+                    version = tag[len("service/v") :]
+                    # Strip git describe suffix (e.g. "-1-gabcdef")
+                    parts = version.split("-")
+                    if len(parts) >= 3 and parts[-1].startswith("g"):
+                        version = "-".join(parts[:-2])
+                    env_vars["PLATFORM_VERSION"] = version
+        except Exception as e:
+            print_warning(f"Could not get platform version from git: {e}")
 
     # Output in requested format
     if format == "json":
