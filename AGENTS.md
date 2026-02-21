@@ -25,8 +25,8 @@ otdf-sdk-mgr install tip go    # Build from source
 ### Running Tests
 
 ```bash
-# Configure environment
-cd xtest && set -a && source test.env && set +a
+# Generate local environment from otdf-local and configure
+cd xtest && uv run ../otdf-local env > local.env && set -a && source local.env && set +a
 
 # Run with specific SDK
 uv run pytest --sdks go -v
@@ -247,7 +247,7 @@ yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 ### Preferred Workflow
 
 1. **Build SDK CLIs**: `cd xtest/sdk && make`
-2. **Configure environment**: `cd xtest && set -a && source test.env && set +a`
+2. **Configure environment**: `cd xtest && uv run ../otdf-local env > local.env && set -a && source local.env && set +a`
 3. **Run tests**: `uv run pytest --sdks go -v`
 4. **Restart after config changes**: Restart the affected platform/KAS services
 
