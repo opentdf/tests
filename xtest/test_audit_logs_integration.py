@@ -13,6 +13,7 @@ Note: These tests require audit log collection to be enabled. They will be
 skipped when running with --no-audit-logs.
 """
 
+import base64
 import filecmp
 import random
 import string
@@ -87,7 +88,7 @@ class TestRewrapAudit:
         # eventMetaData fields
         assert event.key_id is not None or event.algorithm is not None
 
-    def test_rewrap_failure_access_denied(
+    def test_rewrap_success_with_attributes(
         self,
         attribute_single_kas_grant: abac.Attribute,
         encrypt_sdk: tdfs.SDK,
@@ -97,10 +98,10 @@ class TestRewrapAudit:
         audit_logs: AuditLogAsserter,
         in_focus: set[tdfs.SDK],
     ):
-        """Verify rewrap failure audited when access denied due to policy.
+        """Verify rewrap success audited with attribute FQNs.
 
-        This test creates a TDF with an attribute the client is not entitled to,
-        then attempts to decrypt, which should fail and be audited.
+        This test creates a TDF with an attribute the client has access to,
+        decrypts successfully, and verifies the audit event includes attribute FQNs.
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
@@ -197,10 +198,10 @@ class TestPolicyCRUDAudit:
         """Get otdfctl instance for policy operations."""
         return OpentdfCommandLineTool()
 
-    def test_namespace_crud_audit(
+    def test_namespace_create_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
     ):
-        """Test namespace create/update/delete audit trail."""
+        """Test namespace creation audit trail."""
         random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
 
         # Test create
@@ -214,7 +215,7 @@ class TestPolicyCRUDAudit:
         assert len(events) >= 1
         assert events[0].action_type == "create"
 
-    def test_attribute_crud_audit(
+    def test_attribute_create_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
     ):
         """Test attribute and value creation audit trail."""
@@ -250,10 +251,10 @@ class TestPolicyCRUDAudit:
             f"Expected 2 values in attribute_definition event, got {len(values)}"
         )
 
-    def test_subject_mapping_audit(
+    def test_subject_condition_set_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
     ):
-        """Test SCS and subject mapping audit trail."""
+        """Test subject condition set creation audit trail."""
         c = abac.Condition(
             subject_external_selector_value=".clientId",
             operator=abac.SubjectMappingOperatorEnum.IN,
@@ -382,14 +383,10 @@ class TestEdgeCases:
         def tamper_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
             pb = manifest.encryptionInformation.keyAccess[0].policyBinding
             if isinstance(pb, tdfs.PolicyBinding):
-                import base64
-
                 h = pb.hash
                 altered = base64.b64encode(b"tampered" + base64.b64decode(h)[:8])
                 pb.hash = str(altered)
             else:
-                import base64
-
                 altered = base64.b64encode(b"tampered" + base64.b64decode(pb)[:8])
                 manifest.encryptionInformation.keyAccess[0].policyBinding = str(altered)
             return manifest

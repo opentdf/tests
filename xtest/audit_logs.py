@@ -195,11 +195,7 @@ class ClockSkewEstimator:
             event_time: When the event occurred (service clock, from JSON)
         """
         # Convert both to UTC for comparison
-        if collection_time.tzinfo is None:
-            # Assume local time, convert to UTC
-            collection_utc = collection_time.astimezone(UTC)
-        else:
-            collection_utc = collection_time.astimezone(UTC)
+        collection_utc = collection_time.astimezone(UTC)
 
         if event_time.tzinfo is None:
             # Assume UTC if no timezone (common for service logs)
@@ -362,10 +358,7 @@ class ParsedAuditEvent:
 
         # Convert collection time to UTC for comparison
         collection_t = self.collection_time
-        if collection_t.tzinfo is None:
-            collection_utc = collection_t.astimezone(UTC)
-        else:
-            collection_utc = collection_t.astimezone(UTC)
+        collection_utc = collection_t.astimezone(UTC)
 
         if event_t.tzinfo is None:
             event_utc = event_t.replace(tzinfo=UTC)
@@ -669,13 +662,12 @@ class AuditLogCollector:
                 f"None of the log files exist yet: {list(self.log_files.values())}. "
                 f"Will wait for them to be created..."
             )
-            existing_files = self.log_files
 
         logger.debug(
-            f"Starting file-based log collection for: {list(existing_files.keys())}"
+            f"Starting file-based log collection for: {list(self.log_files.keys())}"
         )
 
-        for service, log_path in existing_files.items():
+        for service, log_path in self.log_files.items():
             thread = threading.Thread(
                 target=self._tail_file,
                 args=(service, log_path),
@@ -685,7 +677,7 @@ class AuditLogCollector:
             self._threads.append(thread)
 
         logger.info(
-            f"Audit log collection started for: {', '.join(existing_files.keys())}"
+            f"Audit log collection started for: {', '.join(self.log_files.keys())}"
         )
 
     def stop(self) -> None:
