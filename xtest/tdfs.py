@@ -46,6 +46,10 @@ feature_type = Literal[
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
+    # Support for encrypting with RSA-4096 managed keys.
+    "mechanism-rsa-4096",
+    # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
+    "mechanism-ec-curves-384-521",
     "ns_grants",
     "obligations",
 ]
@@ -447,6 +451,14 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
+            case ("mechanism-rsa-4096", "go"):
+                return True
+            case ("mechanism-rsa-4096", "java"):
+                return False
+            case ("mechanism-ec-curves-384-521", "go"):
+                return True
+            case ("mechanism-ec-curves-384-521", ("java" | "js")):
+                return False
             case _:
                 pass
 
