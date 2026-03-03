@@ -459,8 +459,6 @@ class SDK:
                 return True
             case ("mechanism-rsa-4096", "go"):
                 return True
-            case ("mechanism-rsa-4096", "java"):
-                return False
             case ("mechanism-ec-curves-384-521", "go"):
                 return True
             case ("mechanism-ec-curves-384-521", ("java" | "js")):
