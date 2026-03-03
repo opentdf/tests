@@ -117,6 +117,12 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
 
+        # In ocrypto < 0.10.0, there was a bug that hardcoded to P256 on uncompressing the EC public key,
+        # even if the key was actually P384 or P521. This was fixed in ocrypto 0.10.0, so we can only support EC
+        # wrapping with those curves on platforms v0.13.0 and later.
+        if self.semver >= (0, 13, 0):
+            self.features.add("mechanism-ec-curves-384-521")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
     def skip_if_unsupported(self, *features: feature_type):
