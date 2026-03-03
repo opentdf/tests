@@ -134,11 +134,9 @@ def test_key_mapping_extended_mechanisms(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
-    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    # check against both sdk and platform
-    tdfs.skip_if_unsupported(encrypt_sdk, "mechanism-ec-curves-384-521")
-    encrypt_sdk.skip_if_unsupported("mechanism-rsa-4096")
+    pfs = tdfs.PlatformFeatureSet()
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-ec-curves-384-521")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure", "mechanism-rsa-4096", "mechanism-ec-curves-384-521")
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -205,10 +203,9 @@ def test_key_mapping_extended_ec_mechanisms(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
-    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    tdfs.skip_if_unsupported(encrypt_sdk, "mechanism-ec-curves-384-521")
     pfs = tdfs.PlatformFeatureSet()
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-ec-curves-384-521")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure", "mechanism-ec-curves-384-521")
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
