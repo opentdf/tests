@@ -461,7 +461,7 @@ class SDK:
                 return True
             case ("mechanism-ec-curves-384-521", "go"):
                 return True
-            case ("mechanism-ec-curves-384-521", ("java" | "js")):
+            case ("mechanism-ec-curves-384-521", "js"):
                 return False
             case _:
                 pass
