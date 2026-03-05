@@ -386,6 +386,42 @@ def one_attribute_ns_kas_grant(
     return anyof
 
 
+# Attribute definition with key mapping only (missing value FQN)
+@pytest.fixture(scope="module")
+def attribute_missing_value_key_mapping(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_gamma: abac.KasEntry,
+    temporary_namespace: abac.Namespace,
+    root_key: str,
+) -> tuple[str, str]:
+    """Attribute with attribute-level managed key mapping and a missing value FQN."""
+    pfs = tdfs.PlatformFeatureSet()
+    if "key_management" not in pfs.features:
+        pytest.skip("Key management not supported by platform")
+
+    attr = otdfctl.attribute_create(
+        temporary_namespace,
+        "missingval",
+        abac.AttributeRule.ANY_OF,
+        ["present"],
+        allow_traversal=True,
+    )
+    assert attr.fqn, "Attribute FQN is missing"
+
+    kas_key = otdfctl.kas_registry_create_key(
+        kas_entry_gamma,
+        key_id="missing-value-def",
+        mode="local",
+        algorithm="rsa:2048",
+        wrapping_key=root_key,
+        wrapping_key_id="root",
+    )
+    otdfctl.key_assign_attr(kas_key, attr)
+
+    missing_value_fqn = f"{attr.fqn}/value/missing"
+    return missing_value_fqn, kas_key.key.key_id
+
+
 # Mixed grant scenarios (namespace + value)
 @pytest.fixture(scope="module")
 def ns_and_value_kas_grants_or(

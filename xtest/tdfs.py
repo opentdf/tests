@@ -33,6 +33,7 @@ container_type = Literal[
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    "attribute_traversal",
     "audit_logging",
     "autoconfigure",
     "better-messages-2024",
@@ -117,6 +118,9 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
 
+        # Included in platform v0.12.0
+        if self.semver >= (0, 12, 0):
+            self.features.add("attribute_traversal")
         # In ocrypto < 0.10.0, there was a bug that hardcoded to P256 on uncompressing the EC public key,
         # even if the key was actually P384 or P521. This was fixed in ocrypto 0.10.0, so we can only support EC
         # wrapping with those curves on platforms v0.13.0 and later.
