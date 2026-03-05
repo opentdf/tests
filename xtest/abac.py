@@ -53,6 +53,7 @@ class Attribute(BaseModelIgnoreExtra):
     fqn: str | None
     active: BoolValue | None = None
     metadata: Metadata | None = None
+    allow_traversal: bool | None = None
 
     @property
     def value_fqns(self) -> list[str]:

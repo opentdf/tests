@@ -33,6 +33,7 @@ container_type = Literal[
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    "attribute_traversal",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -105,6 +106,10 @@ class PlatformFeatureSet(BaseModel):
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
+
+        # Included in platform v0.12.0
+        if self.semver >= (0, 12, 0):
+            self.features.add("attribute_traversal")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 

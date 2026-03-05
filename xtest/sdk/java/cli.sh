@@ -72,6 +72,10 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
+    attribute_traversal)
+      echo "attribute_traversal not supported"
+      exit 1
+      ;;
 
     *)
       echo "Unknown feature: $2"

@@ -393,18 +393,20 @@ def attribute_missing_value_key_mapping(
     kas_entry_attr: abac.KasEntry,
     temporary_namespace: abac.Namespace,
     root_key: str,
-) -> tuple[abac.Attribute, str, str]:
+) -> tuple[str, str]:
     """Attribute with attribute-level managed key mapping and a missing value FQN."""
     pfs = tdfs.PlatformFeatureSet()
     if "key_management" not in pfs.features:
         pytest.skip("Key management not supported by platform")
 
     attr = otdfctl.attribute_create(
-        temporary_namespace, "missingval", abac.AttributeRule.ANY_OF, ["present"]
+        temporary_namespace,
+        "missingval",
+        abac.AttributeRule.ANY_OF,
+        ["present"],
+        allow_traversal=True,
     )
-    assert attr.values
-    value_fqn = attr.values[0].fqn
-    assert value_fqn
+    assert attr.fqn, "Attribute FQN is missing"
 
     kas_key = otdfctl.kas_registry_create_key(
         kas_entry_attr,
@@ -416,8 +418,8 @@ def attribute_missing_value_key_mapping(
     )
     otdfctl.key_assign_attr(kas_key, attr)
 
-    missing_value_fqn = value_fqn.rsplit("/", 1)[0] + "/missing"
-    return attr, missing_value_fqn, kas_key.key.key_id
+    missing_value_fqn = f"{attr.fqn}/value/missing"
+    return missing_value_fqn, kas_key.key.key_id
 
 
 # Attribute definition with public-key-only mapping when key management is off
@@ -427,26 +429,28 @@ def attribute_missing_value_public_key_mapping_no_km(
     kas_entry_attr: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     temporary_namespace: abac.Namespace,
-) -> tuple[abac.Attribute, str, str]:
+) -> tuple[str, str]:
     """Attribute with attribute-level public-key mapping and a missing value FQN."""
     pfs = tdfs.PlatformFeatureSet()
     if "key_management" in pfs.features:
         pytest.skip("Key management enabled; skipping public-key-only mapping fixture")
 
     attr = otdfctl.attribute_create(
-        temporary_namespace, "missingvalpub", abac.AttributeRule.ANY_OF, ["present"]
+        temporary_namespace,
+        "missingvalpub",
+        abac.AttributeRule.ANY_OF,
+        ["present"],
+        allow_traversal=True,
     )
-    assert attr.values
-    value_fqn = attr.values[0].fqn
-    assert value_fqn
+    assert attr.fqn, "Attribute FQN is missing"
 
     kas_key = otdfctl.kas_registry_create_public_key_only(
         kas_entry_attr, kas_public_key_r1
     )
     otdfctl.key_assign_attr(kas_key, attr)
 
-    missing_value_fqn = value_fqn.rsplit("/", 1)[0] + "/missing"
-    return attr, missing_value_fqn, kas_key.key.key_id
+    missing_value_fqn = f"{attr.fqn}/value/missing"
+    return missing_value_fqn, kas_key.key.key_id
 
 
 # Mixed grant scenarios (namespace + value)
