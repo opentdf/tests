@@ -14,6 +14,7 @@ Domain-specific fixtures are organized in the fixtures/ package:
 """
 
 import json
+import logging
 import os
 import typing
 from pathlib import Path
@@ -24,6 +25,8 @@ import pytest
 import tdfs
 from otdfctl import OpentdfCommandLineTool
 
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+
 # Load all fixture modules
 pytest_plugins = [
     "fixtures.kas",
@@ -31,6 +34,7 @@ pytest_plugins = [
     "fixtures.assertions",
     "fixtures.obligations",
     "fixtures.keys",
+    "fixtures.audit",
 ]
 
 
@@ -58,19 +62,39 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
-        "--large",
-        action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
+        "--audit-log-dir",
+        help="directory to write audit logs on test failure (default: tmp/audit-logs)",
+        type=Path,
     )
     parser.addoption(
-        "--sdks",
-        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
+        "--audit-log-services",
+        help="comma-separated list of docker compose services to monitor for audit logs",
+        type=lambda s: [s.strip() for s in s.split(",")],
+    )
+    parser.addoption(
+        "--containers",
+        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
+        type=is_type_or_list_of_types(tdfs.container_type),
     )
     parser.addoption(
         "--focus",
         help="skips tests which don't use the requested sdk",
         type=is_type_or_list_of_types(tdfs.focus_type),
+    )
+    parser.addoption(
+        "--large",
+        action="store_true",
+        help="generate a large (greater than 4 GiB) file for testing",
+    )
+    parser.addoption(
+        "--no-audit-logs",
+        action="store_true",
+        help="disable automatic KAS audit log collection",
+    )
+    parser.addoption(
+        "--sdks",
+        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
+        type=is_type_or_list_of_types(tdfs.sdk_type),
     )
     parser.addoption(
         "--sdks-decrypt",
@@ -81,11 +105,6 @@ def pytest_addoption(parser: pytest.Parser):
         "--sdks-encrypt",
         help="select which sdks to run for encrypt only",
         type=is_type_or_list_of_types(tdfs.sdk_type),
-    )
-    parser.addoption(
-        "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
-        type=is_type_or_list_of_types(tdfs.container_type),
     )
 
 
@@ -204,9 +223,14 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
 
 
 @pytest.fixture(scope="package")
-def tmp_dir() -> Path:
-    """Create and return temporary directory for test files."""
-    dname = Path("tmp/")
+def tmp_dir(request: pytest.FixtureRequest) -> Path:
+    """Create worker-specific temporary directory for test files.
+
+    When running with pytest-xdist, each worker gets its own subdirectory
+    to prevent file collisions between parallel test processes.
+    """
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    dname = Path(f"tmp/{worker_id}/")
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 

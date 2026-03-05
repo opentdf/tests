@@ -34,6 +34,7 @@ feature_type = Literal[
     "assertions",
     "assertion_verification",
     "attribute_traversal",
+    "audit_logging",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -46,6 +47,10 @@ feature_type = Literal[
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
+    # Support for encrypting with RSA-4096 managed keys.
+    "mechanism-rsa-4096",
+    # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
+    "mechanism-ec-curves-384-521",
     "ns_grants",
     "obligations",
 ]
@@ -73,6 +78,7 @@ class PlatformFeatureSet(BaseModel):
             print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")
             v = "0.9.0"
 
+        self.version = v
         ver_match = _version_re.match(v)
         if not ver_match:
             print(f"PLATFORM_VERSION '{v}' does not match the expected format.")
@@ -103,6 +109,11 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 6, 0):
             self.features.add("key_management")
 
+        # Audit logging was added in platform v0.10.0
+        # Version 0.9.0 and earlier do not emit audit logs
+        if self.semver >= (0, 10, 0):
+            self.features.add("audit_logging")
+
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
@@ -110,8 +121,20 @@ class PlatformFeatureSet(BaseModel):
         # Included in platform v0.12.0
         if self.semver >= (0, 12, 0):
             self.features.add("attribute_traversal")
+        # In ocrypto < 0.10.0, there was a bug that hardcoded to P256 on uncompressing the EC public key,
+        # even if the key was actually P384 or P521. This was fixed in ocrypto 0.10.0, so we can only support EC
+        # wrapping with those curves on platforms v0.13.0 and later.
+        if self.semver >= (0, 13, 0):
+            self.features.add("mechanism-ec-curves-384-521")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
+
+    def skip_if_unsupported(self, *features: feature_type):
+        for feature in features:
+            if feature not in self.features:
+                pytest.skip(
+                    f"platform service {self.version} doesn't yet support [{feature}]"
+                )
 
 
 class DataAttribute(BaseModel):
@@ -422,6 +445,11 @@ class SDK:
         self._supports[feature] = self._uncached_supports(feature)
         return self._supports[feature]
 
+    def skip_if_unsupported(self, *features: feature_type):
+        for feature in features:
+            if not self.supports(feature):
+                pytest.skip(f"{self} sdk doesn't yet support [{feature}]")
+
     def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
             case ("key_management", "js") if self.version == "v0.2.0":
@@ -433,6 +461,12 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
+            case ("mechanism-rsa-4096", "go"):
+                return True
+            case ("mechanism-ec-curves-384-521", "go"):
+                return True
+            case ("mechanism-ec-curves-384-521", "js"):
+                return False
             case _:
                 pass
 
@@ -462,13 +496,8 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
 
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
     pfs = PlatformFeatureSet()
-    for feature in features:
-        if not sdk.supports(feature):
-            pytest.skip(f"{sdk} sdk doesn't yet support [{feature}]")
-        if feature not in pfs.features:
-            pytest.skip(
-                f"platform service {pfs.version} doesn't yet support [{feature}]"
-            )
+    pfs.skip_if_unsupported(*features)
+    sdk.skip_if_unsupported(*features)
 
 
 def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):

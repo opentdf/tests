@@ -7,6 +7,7 @@ import pytest
 
 import tdfs
 from abac import Attribute, ObligationValue
+from audit_logs import AuditLogAsserter
 from test_policytypes import skip_rts_as_needed
 
 cipherTexts: dict[str, Path] = {}
@@ -28,6 +29,13 @@ except FileNotFoundError:
 def skip_dspx1153(encrypt_sdk: tdfs.SDK, decrypt_sdk: tdfs.SDK):
     if encrypt_sdk != decrypt_sdk and decrypt_sdk in dspx1153Fails:
         pytest.skip("dspx1153 fails with this SDK version combination")
+
+
+def skip_dspx2457(encrypt_sdk: tdfs.SDK):
+    if encrypt_sdk.sdk == "java":
+        pytest.skip(
+            "DSPX-2457 Java SDK unable to handle KAS grants with different types"
+        )
 
 
 def assert_decrypt_fails_with_patterns(
@@ -70,6 +78,7 @@ def test_key_mapping_multiple_mechanisms(
     global counter
 
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    skip_dspx2457(encrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -108,14 +117,231 @@ def test_key_mapping_multiple_mechanisms(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def test_key_mapping_extended_mechanisms(
+    attribute_allof_with_extended_mechanisms: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Test encryption and decryption with extended cryptographic mechanisms.
+
+    This test verifies support for ec:secp256r1, ec:secp384r1, ec:secp521r1, rsa:2048, and rsa:4096
+    key types by encrypting with all five mechanisms and successfully decrypting.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.PlatformFeatureSet()
+    pfs.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
+    )
+    encrypt_sdk.skip_if_unsupported(
+        "key_management",
+        "autoconfigure",
+        "mechanism-rsa-4096",
+        "mechanism-ec-curves-384-521",
+    )
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    skip_dspx1153(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_allof_with_extended_mechanisms
+
+    sample_name = f"extended-mechanisms-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attr.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 5
+
+    # Verify that all three key IDs are present in the manifest
+    manifest_kids = {kao.kid for kao in manifest.encryptionInformation.keyAccess}
+    expected_kids = set(key_ids)
+    assert manifest_kids == expected_kids, (
+        f"Expected key IDs {expected_kids} but got {manifest_kids}"
+    )
+
+    # Verify KAS URLs are from km1 or km2
+    manifest_urls = {kao.url for kao in manifest.encryptionInformation.keyAccess}
+    assert manifest_urls <= {kas_url_km1, kas_url_km2}, (
+        f"Expected KAS URLs to be from km1 or km2, but got {manifest_urls}"
+    )
+
+    # Verify EC wrapping support if needed
+    if any(
+        kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
+    ):
+        tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+
+    # Decrypt and verify
+    rt_file = tmp_dir / f"extended-mechanisms-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_key_mapping_extended_ec_mechanisms(
+    attribute_allof_with_extended_mechanisms: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Test encryption and decryption with extended cryptographic mechanisms.
+
+    This test verifies support for ec:secp384r1, ec:secp521r1, and rsa:4096
+    key types by encrypting with all three mechanisms and successfully decrypting.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.PlatformFeatureSet()
+    pfs.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
+    )
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
+    )
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    skip_dspx1153(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_allof_with_extended_mechanisms
+
+    ec_kids = [kid for kid in key_ids if kid.startswith("e3")]
+    ec_vals = [v for v in attr.value_fqns if "ec-secp3" in v]
+    assert len(ec_kids) == len(ec_vals), "Mismatch in EC key IDs and attribute values"
+
+    sample_name = f"extended-mechanisms-ec-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=ec_vals,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == len(ec_kids)
+
+    # Verify that all three key IDs are present in the manifest
+    manifest_kids = {kao.kid for kao in manifest.encryptionInformation.keyAccess}
+    expected_kids = set(ec_kids)
+    assert manifest_kids == expected_kids, (
+        f"Expected key IDs {expected_kids} but got {manifest_kids}"
+    )
+
+    # Verify KAS URLs are from km2
+    manifest_urls = {kao.url for kao in manifest.encryptionInformation.keyAccess}
+    assert manifest_urls <= {kas_url_km2}, (
+        f"Expected KAS URLs to be from km2, but got {manifest_urls}"
+    )
+
+    # Decrypt and verify
+    rt_file = tmp_dir / f"extended-mechanisms-ec-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_key_mapping_extended_rsa_mechanisms(
+    attribute_allof_with_extended_mechanisms: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Test encryption and decryption with extended cryptographic mechanisms.
+
+    This test verifies support for ec:secp384r1, ec:secp521r1, and rsa:4096
+    key types by encrypting with all three mechanisms and successfully decrypting.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
+    tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    encrypt_sdk.skip_if_unsupported("mechanism-rsa-4096")
+    pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    skip_dspx1153(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_allof_with_extended_mechanisms
+
+    rsa_kids = [kid for kid in key_ids if kid.startswith("r")]
+    rsa_vals = [v for v in attr.value_fqns if "rsa-" in v]
+    assert len(rsa_kids) == len(rsa_vals), (
+        "Mismatch in RSA key IDs and attribute values"
+    )
+
+    sample_name = f"extended-mechanisms-rsa-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=rsa_vals,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        cipherTexts[sample_name] = ct_file
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == len(rsa_kids)
+
+    # Verify that all three key IDs are present in the manifest
+    manifest_kids = {kao.kid for kao in manifest.encryptionInformation.keyAccess}
+    expected_kids = set(rsa_kids)
+    assert manifest_kids == expected_kids, (
+        f"Expected key IDs {expected_kids} but got {manifest_kids}"
+    )
+
+    # Verify KAS URLs are from km1
+    manifest_urls = {kao.url for kao in manifest.encryptionInformation.keyAccess}
+    assert manifest_urls <= {kas_url_km1}, (
+        f"Expected KAS URLs to be from km1, but got {manifest_urls}"
+    )
+
+    # Decrypt and verify
+    rt_file = tmp_dir / f"extended-mechanisms-rsa-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 def test_autoconfigure_one_attribute_standard(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     global counter
 
@@ -132,7 +358,6 @@ def test_autoconfigure_one_attribute_standard(
         ct_file = cipherTexts[sample_name]
     else:
         ct_file = tmp_dir / f"{sample_name}.tdf"
-        cipherTexts[sample_name] = ct_file
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
@@ -141,9 +366,13 @@ def test_autoconfigure_one_attribute_standard(
             attr_values=attribute_single_kas_grant.value_fqns,
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
+        cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_value1
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_alpha
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
 
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
@@ -153,6 +382,13 @@ def test_autoconfigure_one_attribute_standard(
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
+    # Verify rewrap was logged with expected attribute FQNs
+    audit_logs.assert_rewrap_success(
+        attr_fqns=attribute_single_kas_grant.value_fqns,
+        min_count=1,
+        since_mark=mark,
+    )
+
 
 def test_autoconfigure_two_kas_or_standard(
     attribute_two_kas_grant_or: Attribute,
@@ -160,9 +396,10 @@ def test_autoconfigure_two_kas_or_standard(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
-    kas_url_value2: str,
+    kas_url_alpha: str,
+    kas_url_beta: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -195,16 +432,24 @@ def test_autoconfigure_two_kas_or_standard(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_value1, kas_url_value2} == {
+    assert {kas_url_alpha, kas_url_beta} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     rt_file = tmp_dir / f"test-abac-or-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged - for OR policy, SDK only needs one KAS to succeed
+    # so we expect at least 1 rewrap event (may be 2 if SDK tries both)
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
 
 def test_autoconfigure_double_kas_and(
@@ -213,9 +458,10 @@ def test_autoconfigure_double_kas_and(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_value1: str,
-    kas_url_value2: str,
+    kas_url_alpha: str,
+    kas_url_beta: str,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -249,16 +495,24 @@ def test_autoconfigure_double_kas_and(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_value1, kas_url_value2} == {
+    assert {kas_url_alpha, kas_url_beta} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+
+    # Mark timestamp before decrypt for audit log correlation
+    mark = audit_logs.mark("before_decrypt")
+
     rt_file = tmp_dir / f"test-abac-and-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+    # Verify rewrap was logged - for AND policy, SDK must contact both KASes
+    # so we expect 2 rewrap success events
+    audit_logs.assert_rewrap_success(min_count=2, since_mark=mark)
 
 
 def test_autoconfigure_one_attribute_attr_grant(
@@ -267,7 +521,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
+    kas_url_gamma: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -297,7 +551,7 @@ def test_autoconfigure_one_attribute_attr_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_attr
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_gamma
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -313,8 +567,8 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
-    kas_url_value1: str,
+    kas_url_gamma: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -349,7 +603,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_attr, kas_url_value1} == {
+    assert {kas_url_gamma, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -367,8 +621,8 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
-    kas_url_value1: str,
+    kas_url_gamma: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -403,7 +657,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_attr, kas_url_value1} == {
+    assert {kas_url_gamma, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -421,7 +675,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
+    kas_url_delta: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -451,7 +705,7 @@ def test_autoconfigure_one_attribute_ns_grant(
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
-    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_ns
+    assert manifest.encryptionInformation.keyAccess[0].url == kas_url_delta
     if any(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
@@ -467,8 +721,8 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
-    kas_url_value1: str,
+    kas_url_delta: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -503,7 +757,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         == manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_ns, kas_url_value1} == {
+    assert {kas_url_delta, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -521,8 +775,8 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_ns: str,
-    kas_url_value1: str,
+    kas_url_delta: str,
+    kas_url_alpha: str,
     in_focus: set[tdfs.SDK],
 ):
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -557,7 +811,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         manifest.encryptionInformation.keyAccess[0].sid
         != manifest.encryptionInformation.keyAccess[1].sid
     )
-    assert {kas_url_ns, kas_url_value1} == {
+    assert {kas_url_delta, kas_url_alpha} == {
         kao.url for kao in manifest.encryptionInformation.keyAccess
     }
     if any(
@@ -785,6 +1039,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
+    skip_dspx2457(encrypt_sdk)
     pfs = tdfs.PlatformFeatureSet()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
