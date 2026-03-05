@@ -390,7 +390,7 @@ def one_attribute_ns_kas_grant(
 @pytest.fixture(scope="module")
 def attribute_missing_value_key_mapping(
     otdfctl: OpentdfCommandLineTool,
-    kas_entry_attr: abac.KasEntry,
+    kas_entry_delta: abac.KasEntry,
     temporary_namespace: abac.Namespace,
     root_key: str,
 ) -> tuple[str, str]:
@@ -409,7 +409,7 @@ def attribute_missing_value_key_mapping(
     assert attr.fqn, "Attribute FQN is missing"
 
     kas_key = otdfctl.kas_registry_create_key(
-        kas_entry_attr,
+        kas_entry_delta,
         key_id="missing-value-def",
         mode="local",
         algorithm="rsa:2048",
