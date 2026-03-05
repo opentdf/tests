@@ -1086,7 +1086,7 @@ def test_encrypt_with_missing_value_uses_definition_key(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
-    kas_url_attr: str,
+    kas_url_gamma: str,
     in_focus: set[tdfs.SDK],
 ):
     """Encrypts with a missing value FQN and verifies definition-level key mapping."""
@@ -1125,7 +1125,7 @@ def test_encrypt_with_missing_value_uses_definition_key(
 
     assert len(manifest.encryptionInformation.keyAccess) == 1
     kao = manifest.encryptionInformation.keyAccess[0]
-    assert kao.url == kas_url_attr
+    assert kao.url == kas_url_gamma
     assert kao.kid == key_id
 
 
