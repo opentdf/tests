@@ -44,7 +44,7 @@ if [ "$1" == "supports" ]; then
     attribute_traversal)
       # Attribute traversal support from go-sdk version >= 0.12.0
       set -o pipefail
-      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && ($2 > 12 || ($2 == 12 && $3 >= 0)))) exit 0; else exit 1; }'
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 12)) exit 0; else exit 1; }'
       exit $?
       ;;
     assertions | assertion_verification)
