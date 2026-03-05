@@ -88,7 +88,7 @@ if [ "$1" == "supports" ]; then
     attribute_traversal)
       # Attribute traversal support from web-sdk version >= 0.9.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && ($2 > 9 || ($2 == 9 && $3 >= 0)))) exit 0; else exit 1; }'
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
       exit $?
       ;;
     *)
