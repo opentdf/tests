@@ -1,6 +1,6 @@
 import enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class BaseModelIgnoreExtra(BaseModel):
@@ -54,6 +54,15 @@ class Attribute(BaseModelIgnoreExtra):
     active: BoolValue | None = None
     metadata: Metadata | None = None
     allow_traversal: BoolValue | None = None
+
+    @field_validator("allow_traversal", mode="before")
+    @classmethod
+    def empty_allow_traversal_to_false(cls, value: object) -> object:
+        # Some policy service versions return `{}` for unset allow_traversal.
+        # Normalize that shape to an explicit false BoolValue payload.
+        if isinstance(value, dict) and len(value) == 0:
+            return {"value": False}
+        return value
 
     @property
     def value_fqns(self) -> list[str]:
