@@ -41,6 +41,12 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 10) || ($1 == 0 && $2 == 10 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;
+    attribute_traversal)
+      # Attribute traversal support from go-sdk version >= 0.12.0
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 12)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     assertions | assertion_verification)
       "${cmd[@]}" help decrypt | grep with-assertion-verification-keys
       exit $?
