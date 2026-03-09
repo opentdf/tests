@@ -1083,23 +1083,17 @@ def test_autoconfigure_key_management_two_kas_two_keys(
 def test_encrypt_with_missing_value_uses_definition_key(
     attribute_missing_value_key_mapping: tuple[str, str],
     encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     pt_file: Path,
     kas_url_gamma: str,
     in_focus: set[tdfs.SDK],
 ):
     """Encrypts with a missing value FQN and verifies definition-level key mapping."""
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+    if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(
         encrypt_sdk, "key_management", "autoconfigure", "attribute_traversal"
     )
-    tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
-
-    pfs = tdfs.PlatformFeatureSet()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
     missing_value_fqn, key_id = attribute_missing_value_key_mapping
 
@@ -1114,7 +1108,6 @@ def test_encrypt_with_missing_value_uses_definition_key(
             mime_type="text/plain",
             container="ztdf",
             attr_values=[missing_value_fqn],
-            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
         cipherTexts[sample_name] = ct_file
 
