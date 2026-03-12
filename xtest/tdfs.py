@@ -507,6 +507,12 @@ def skip_if_unsupported(sdk: SDK, *features: feature_type):
     sdk.skip_if_unsupported(*features)
 
 
+def skip_if_otdfctl_namespaced_policy_required() -> None:
+    pfs = PlatformFeatureSet()
+    if "namespaced_policy" in pfs.features:
+        pytest.skip("otdfctl does not support namespaced_policy rn")
+
+
 def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
     if encrypt_sdk.supports("hexaflexible"):
         return

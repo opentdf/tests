@@ -42,15 +42,8 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
 def skip_if_namespaced_subject_policy_requires_newer_otdfctl(
     otdfctl: OpentdfCommandLineTool,
 ):
-    pfs = tdfs.PlatformFeatureSet()
-    if (
-        "namespaced_policy" in pfs.features
-        and not otdfctl.supports_namespaced_subject_policy()
-    ):
-        pytest.skip(
-            "platform requires namespaced subject mappings/SCS, but current otdfctl "
-            "cannot create them"
-        )
+    _ = otdfctl
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
 
 
 # ============================================================================

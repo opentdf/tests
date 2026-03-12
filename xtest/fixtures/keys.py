@@ -299,6 +299,7 @@ def attribute_allof_with_extended_mechanisms(
         pytest.skip(
             "Key management feature is not enabled; skipping key assignment fixture"
         )
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
 
     # Create attribute with three values under ALL_OF
     attr = otdfctl.attribute_create(
@@ -366,6 +367,7 @@ def attribute_allof_with_two_managed_keys(
         pytest.skip(
             "Key management feature is not enabled; skipping key assignment fixture"
         )
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
 
     # Create attribute with two values under ALL_OF
     attr = otdfctl.attribute_create(
@@ -430,6 +432,7 @@ def attribute_with_different_kids(
         pytest.skip(
             "Key management feature is not enabled, skipping test for multiple KAS keys"
         )
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     allof = otdfctl.attribute_create(
         temporary_namespace,
         "multikeys",
