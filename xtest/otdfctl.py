@@ -50,7 +50,6 @@ class OpentdfCommandLineTool:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]
-        self._supports_namespaced_subject_policy: bool | None = None
 
     def _b64_pem(self, pem: str | None) -> str | None:
         if pem is None:
@@ -69,36 +68,6 @@ class OpentdfCommandLineTool:
         return [
             f"--namespace={namespace if isinstance(namespace, str) else namespace.id}"
         ]
-
-    def supports_namespaced_subject_policy(self) -> bool:
-        if self._supports_namespaced_subject_policy is not None:
-            return self._supports_namespaced_subject_policy
-
-        required_commands = [
-            "policy subject-condition-sets create --help".split(),
-            "policy subject-mappings create --help".split(),
-        ]
-
-        for subcommand in required_commands:
-            process = subprocess.Popen(
-                self.otdfctl + subcommand,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            out, err = process.communicate()
-            help_text = b"".join(part for part in (out, err) if part).decode(
-                errors="replace"
-            )
-            if "--namespace" not in help_text:
-                logger.info(
-                    "otdfctl does not expose namespaced subject policy support on [%s]",
-                    " ".join(subcommand[:-1]),
-                )
-                self._supports_namespaced_subject_policy = False
-                return False
-
-        self._supports_namespaced_subject_policy = True
-        return True
 
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()

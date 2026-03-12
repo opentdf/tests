@@ -47,10 +47,6 @@ if [ "$1" == "supports" ]; then
     autoconfigure | ns_grants)
       exit 0
       ;;
-    namespaced_policy)
-      echo "namespaced_policy not supported"
-      exit 1
-      ;;
     assertions)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions

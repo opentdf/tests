@@ -38,7 +38,6 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
     if not audit_logs.is_enabled:
         pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
-
 # TODO: Remove this when otdfctl supports this in main.
 def skip_if_namespaced_subject_policy_requires_newer_otdfctl(
     otdfctl: OpentdfCommandLineTool,
@@ -270,7 +269,9 @@ class TestPolicyCRUDAudit:
         )
 
     def test_subject_condition_set_audit(
-        self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
+        self,
+        otdfctl: OpentdfCommandLineTool,
+        audit_logs: AuditLogAsserter,
     ):
         """Test subject condition set creation audit trail."""
         skip_if_namespaced_subject_policy_requires_newer_otdfctl(otdfctl)
@@ -286,7 +287,9 @@ class TestPolicyCRUDAudit:
 
         mark = audit_logs.mark("before_scs_create")
 
-        scs = otdfctl.scs_create([abac.SubjectSet(condition_groups=[cg])])
+        scs = otdfctl.scs_create(
+            [abac.SubjectSet(condition_groups=[cg])],
+        )
 
         # Verify condition set creation
         events = audit_logs.assert_policy_create(
