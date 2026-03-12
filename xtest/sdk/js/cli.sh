@@ -47,6 +47,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep autoconfigure
       exit $?
       ;;
+    namespaced_policy)
+      echo "namespaced_policy not supported"
+      exit 1
+      ;;
     kasallowlist)
       set -o pipefail
       npx $CTL help | grep 'from "/key-access-servers" endpoint'

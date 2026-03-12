@@ -35,6 +35,10 @@ if [ "$1" == "supports" ]; then
     autoconfigure | ns_grants)
       exit 0
       ;;
+    namespaced_policy)
+      echo "namespaced_policy not supported"
+      exit 1
+      ;;
     obligations)
       # Obligations support from SDK version 0.10.0
       set -o pipefail

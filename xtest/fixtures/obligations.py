@@ -22,6 +22,16 @@ def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet
     Returns:
         abac.SubjectConditionSet: The created subject condition set
     """
+    pfs = tdfs.PlatformFeatureSet()
+    if (
+        "namespaced_policy" in pfs.features
+        and not otdfctl.supports_namespaced_subject_policy()
+    ):
+        pytest.skip(
+            "platform requires namespaced subject mappings/SCS, but current otdfctl "
+            "cannot create them"
+        )
+
     sc: abac.SubjectConditionSet = otdfctl.scs_create(
         [
             abac.SubjectSet(

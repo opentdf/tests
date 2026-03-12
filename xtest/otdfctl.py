@@ -50,6 +50,7 @@ class OpentdfCommandLineTool:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]
+        self._supports_namespaced_subject_policy: bool | None = None
 
     def _b64_pem(self, pem: str | None) -> str | None:
         if pem is None:
@@ -61,6 +62,41 @@ class OpentdfCommandLineTool:
             return s
         except Exception:
             return base64.b64encode(s.encode("utf-8")).decode("utf-8")
+
+    def _namespace_arg(self, namespace: str | Namespace | None) -> list[str]:
+        if namespace is None:
+            return []
+        return [f"--namespace={namespace if isinstance(namespace, str) else namespace.id}"]
+
+    def supports_namespaced_subject_policy(self) -> bool:
+        if self._supports_namespaced_subject_policy is not None:
+            return self._supports_namespaced_subject_policy
+
+        required_commands = [
+            "policy subject-condition-sets create --help".split(),
+            "policy subject-mappings create --help".split(),
+        ]
+
+        for subcommand in required_commands:
+            process = subprocess.Popen(
+                self.otdfctl + subcommand,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            out, err = process.communicate()
+            help_text = b"".join(part for part in (out, err) if part).decode(
+                errors="replace"
+            )
+            if "--namespace" not in help_text:
+                logger.info(
+                    "otdfctl does not expose namespaced subject policy support on [%s]",
+                    " ".join(subcommand[:-1]),
+                )
+                self._supports_namespaced_subject_policy = False
+                return False
+
+        self._supports_namespaced_subject_policy = True
+        return True
 
     def kas_registry_list(self) -> list[KasEntry]:
         cmd = self.otdfctl + "policy kas-registry list".split()
@@ -668,10 +704,15 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return Attribute.model_validate_json(out)
 
-    def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
+    def scs_create(
+        self,
+        scs: list[SubjectSet],
+        namespace: str | Namespace | None = None,
+    ) -> SubjectConditionSet:
         cmd = self.otdfctl + "policy subject-condition-sets create".split()
 
         cmd += [f"--subject-sets=[{','.join([s.model_dump_json() for s in scs])}]"]
+        cmd += self._namespace_arg(namespace)
 
         logger.info(f"scs-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -688,6 +729,7 @@ class OpentdfCommandLineTool:
         sc: str | SubjectConditionSet,
         value: str | AttributeValue,
         action: str | Action = "read",
+        namespace: str | Namespace | None = None,
     ) -> SubjectMapping:
         cmd: list[str] = self.otdfctl + "policy subject-mappings create".split()
 
@@ -702,6 +744,7 @@ class OpentdfCommandLineTool:
             f"--attribute-value-id={value if isinstance(value, str) else value.id}",
             f"--subject-condition-set-id={sc if isinstance(sc, str) else sc.id}",
         ]
+        cmd += self._namespace_arg(namespace)
 
         logger.info(f"sm-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -716,7 +759,7 @@ class OpentdfCommandLineTool:
             and err.find(b"--action-standard") >= 0
         ):
             self.flag_scs_map_action_standard = True
-            return self.scs_map(sc, value)
+            return self.scs_map(sc, value, action=action, namespace=namespace)
 
         assert process.returncode == 0
         return SubjectMapping.model_validate_json(out)

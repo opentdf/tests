@@ -38,6 +38,20 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
     if not audit_logs.is_enabled:
         pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
+# TODO: Remove this when otdfctl supports this in main.
+def skip_if_namespaced_subject_policy_requires_newer_otdfctl(
+    otdfctl: OpentdfCommandLineTool,
+):
+    pfs = tdfs.PlatformFeatureSet()
+    if (
+        "namespaced_policy" in pfs.features
+        and not otdfctl.supports_namespaced_subject_policy()
+    ):
+        pytest.skip(
+            "platform requires namespaced subject mappings/SCS, but current otdfctl "
+            "cannot create them"
+        )
+
 
 # ============================================================================
 # Rewrap Audit Tests
@@ -258,6 +272,8 @@ class TestPolicyCRUDAudit:
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
     ):
         """Test subject condition set creation audit trail."""
+        skip_if_namespaced_subject_policy_requires_newer_otdfctl(otdfctl)
+
         c = abac.Condition(
             subject_external_selector_value=".clientId",
             operator=abac.SubjectMappingOperatorEnum.IN,
