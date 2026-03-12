@@ -1,8 +1,6 @@
 import random
 import string
 
-import pytest
-
 import abac
 import tdfs
 from audit_logs import AuditLogAsserter

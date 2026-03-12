@@ -129,7 +129,7 @@ class PlatformFeatureSet(BaseModel):
             self.features.add("mechanism-ec-curves-384-521")
 
         # Included in platform v0.14.0
-        if self.semver >= (0, 14, 0):
+        if self.semver >= (0, 13, 0):
             self.features.add("namespaced_policy")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")

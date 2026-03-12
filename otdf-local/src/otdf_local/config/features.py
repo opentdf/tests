@@ -116,7 +116,7 @@ def _compute_features(semver: tuple[int, int, int]) -> set[FeatureType]:
         features.add("obligations")
 
     # Namespaced policy objects (service v0.14.0)
-    if semver >= (0, 14, 0):
+    if semver >= (0, 13, 0):
         features.add("namespaced_policy")
 
     # Logger stderr output support (added after v0.9.0)
