@@ -45,6 +45,7 @@ def attribute_single_kas_grant(
 ):
     """Attribute with single KAS grant on value 'a'."""
     pfs = tdfs.PlatformFeatureSet()
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "letter", abac.AttributeRule.ANY_OF, ["a"]
     )
@@ -77,6 +78,7 @@ def attribute_two_kas_grant_or(
     temporary_namespace: abac.Namespace,
 ):
     """Attribute with ANY_OF rule and two KAS grants (alpha on kas1, beta on kas2)."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "letra", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
     )
@@ -116,6 +118,7 @@ def attribute_two_kas_grant_and(
     temporary_namespace: abac.Namespace,
 ):
     """Attribute with ALL_OF rule and two KAS grants (alef on kas1, bet on kas2)."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     allof = otdfctl.attribute_create(
         temporary_namespace, "ot", abac.AttributeRule.ALL_OF, ["alef", "bet", "gimmel"]
     )
@@ -159,6 +162,7 @@ def one_attribute_attr_kas_grant(
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
     """Attribute with attribute-level KAS grant."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "attrgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
@@ -194,6 +198,7 @@ def attribute_with_or_type(
     The user only has permission to access the attribute if they have the "alpha" value.
     Files with both will be accessible to the user, but files with only "beta" will not.
     """
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "or", abac.AttributeRule.ANY_OF, ["alpha", "beta"]
     )
@@ -220,6 +225,7 @@ def attribute_with_and_type(
     The attribute will have a rule of ALL_OF with values "alpha" and "beta".
     The user only has alpha assigned, so will be able to access files that do not have beta applied.
     """
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     allof = otdfctl.attribute_create(
         temporary_namespace, "and", abac.AttributeRule.ALL_OF, ["alpha", "beta"]
     )
@@ -246,6 +252,7 @@ def attribute_with_hierarchy_type(
     The attribute will have a rule of HIERARCHY with values "alpha", "beta" and "gamma".
     The user only has "beta" assigned, so will be able to access files that have "gamma" or "beta" but not "alpha".
     """
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     hierarchy_attr = otdfctl.attribute_create(
         temporary_namespace,
         "hierarchy",
@@ -276,6 +283,7 @@ def attr_and_value_kas_grants_or(
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
     """Attribute with ANY_OF rule and mixed attr+value KAS grants."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace,
         "attrorvalgrant",
@@ -319,6 +327,7 @@ def attr_and_value_kas_grants_and(
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
     """Attribute with ALL_OF rule and mixed attr+value KAS grants."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     allof = otdfctl.attribute_create(
         temporary_namespace,
         "attrandvalgrant",
@@ -364,6 +373,7 @@ def one_attribute_ns_kas_grant(
     temporary_namespace: abac.Namespace,
 ) -> abac.Attribute:
     """Attribute with namespace-level KAS grant."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "nsgrant", abac.AttributeRule.ANY_OF, ["alpha"]
     )
@@ -432,6 +442,7 @@ def ns_and_value_kas_grants_or(
     otdf_client_scs: abac.SubjectConditionSet,
 ) -> abac.Attribute:
     """Attribute with ANY_OF rule and mixed ns+value KAS grants."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     temp_namespace = create_temp_namesapce(otdfctl)
     anyof = otdfctl.attribute_create(
         temp_namespace,
@@ -475,6 +486,7 @@ def ns_and_value_kas_grants_and(
     otdf_client_scs: abac.SubjectConditionSet,
 ) -> abac.Attribute:
     """Attribute with ALL_OF rule and mixed ns+value KAS grants."""
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     temp_namespace = create_temp_namesapce(otdfctl)
     allof = otdfctl.attribute_create(
         temp_namespace,
@@ -526,6 +538,7 @@ def attribute_default_rsa(
     regardless of what base_key may be configured on the platform.
     This prevents test order sensitivity when base_key tests run.
     """
+    tdfs.skip_if_otdfctl_namespaced_policy_required()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "defaultrsa", abac.AttributeRule.ANY_OF, ["wrapped"]
     )
