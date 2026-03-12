@@ -1,8 +1,9 @@
 import random
 import string
 
-import abac
 import pytest
+
+import abac
 import tdfs
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool

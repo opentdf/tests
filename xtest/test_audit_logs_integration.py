@@ -38,6 +38,7 @@ def skip_if_audit_disabled(audit_logs: AuditLogAsserter):
     if not audit_logs.is_enabled:
         pytest.skip("Audit log collection is disabled (--no-audit-logs)")
 
+
 # TODO: Remove this when otdfctl supports this in main.
 def skip_if_namespaced_subject_policy_requires_newer_otdfctl(
     otdfctl: OpentdfCommandLineTool,

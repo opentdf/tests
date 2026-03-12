@@ -66,7 +66,9 @@ class OpentdfCommandLineTool:
     def _namespace_arg(self, namespace: str | Namespace | None) -> list[str]:
         if namespace is None:
             return []
-        return [f"--namespace={namespace if isinstance(namespace, str) else namespace.id}"]
+        return [
+            f"--namespace={namespace if isinstance(namespace, str) else namespace.id}"
+        ]
 
     def supports_namespaced_subject_policy(self) -> bool:
         if self._supports_namespaced_subject_policy is not None:
