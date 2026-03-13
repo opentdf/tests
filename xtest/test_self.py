@@ -2,15 +2,10 @@ import random
 import string
 
 import abac
-import tdfs
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
 
 otdfctl = OpentdfCommandLineTool()
-
-
-def skip_if_namespaced_subject_policy_requires_newer_otdfctl() -> None:
-    tdfs.skip_if_otdfctl_namespaced_policy_required()
 
 
 def test_namespaces_list() -> None:
@@ -77,8 +72,6 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
 
 def test_scs_create(audit_logs: AuditLogAsserter) -> None:
     """Test subject condition set creation and verify audit log."""
-    skip_if_namespaced_subject_policy_requires_newer_otdfctl()
-
     c = abac.Condition(
         subject_external_selector_value=".clientId",
         operator=abac.SubjectMappingOperatorEnum.IN,

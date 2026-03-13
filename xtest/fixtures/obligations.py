@@ -22,8 +22,6 @@ def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet
     Returns:
         abac.SubjectConditionSet: The created subject condition set
     """
-    tdfs.skip_if_otdfctl_namespaced_policy_required()
-
     sc: abac.SubjectConditionSet = otdfctl.scs_create(
         [
             abac.SubjectSet(
@@ -64,7 +62,6 @@ def _obligation_setup_helper(
     pfs = tdfs.PlatformFeatureSet()
     if "obligations" not in pfs.features:
         pytest.skip("Obligations feature is not enabled")
-    tdfs.skip_if_otdfctl_namespaced_policy_required()
 
     # Attribute
     attr = otdfctl.attribute_create(
