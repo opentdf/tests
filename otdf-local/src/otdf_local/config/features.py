@@ -20,7 +20,6 @@ FeatureType = Literal[
     "hexaflexible",
     "kasallowlist",
     "key_management",
-    "namespaced_policy",
     "ns_grants",
     "obligations",
     "logger_stderr",  # Support for logger.output: stderr
@@ -114,10 +113,6 @@ def _compute_features(semver: tuple[int, int, int]) -> set[FeatureType]:
     # Obligations support (service v0.11.0)
     if semver >= (0, 11, 0):
         features.add("obligations")
-
-    # Namespaced policy objects (service v0.14.0)
-    if semver >= (0, 13, 0):
-        features.add("namespaced_policy")
 
     # Logger stderr output support (added after v0.9.0)
     # v0.9.0 only supports stdout

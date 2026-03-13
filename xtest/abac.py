@@ -102,7 +102,6 @@ class SubjectSet(BaseModelIgnoreExtra):
 class SubjectConditionSet(BaseModelIgnoreExtra):
     id: str
     subject_sets: list[SubjectSet]
-    namespace: Namespace | None = None
     active: BoolValue | None = None
     metadata: Metadata | None = None
 
@@ -121,7 +120,6 @@ class Action(BaseModelIgnoreExtra):
     Value: SubjectAction | None = None
     id: str | None = None
     name: str | None = None
-    namespace: Namespace | None = None
 
 
 class SubjectMapping(BaseModelIgnoreExtra):
@@ -129,7 +127,6 @@ class SubjectMapping(BaseModelIgnoreExtra):
     attribute_value: AttributeValue
     subject_condition_set: SubjectConditionSet
     actions: list[Action]
-    namespace: Namespace | None = None
     metadata: Metadata | None = None
 
 

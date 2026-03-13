@@ -49,7 +49,6 @@ feature_type = Literal[
     "key_management",
     # Support for encrypting with RSA-4096 managed keys.
     "mechanism-rsa-4096",
-    "namespaced_policy",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
     "mechanism-ec-curves-384-521",
     "ns_grants",
@@ -127,10 +126,6 @@ class PlatformFeatureSet(BaseModel):
         # wrapping with those curves on platforms v0.13.0 and later.
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
-
-        # Included in platform v0.14.0
-        if self.semver >= (0, 13, 0):
-            self.features.add("namespaced_policy")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
@@ -466,8 +461,6 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
-            case ("namespaced_policy", _):
-                return False
             case ("mechanism-rsa-4096", "go"):
                 return True
             case ("mechanism-ec-curves-384-521", "go"):
@@ -505,12 +498,6 @@ def skip_if_unsupported(sdk: SDK, *features: feature_type):
     pfs = PlatformFeatureSet()
     pfs.skip_if_unsupported(*features)
     sdk.skip_if_unsupported(*features)
-
-
-def skip_if_otdfctl_namespaced_policy_required() -> None:
-    pfs = PlatformFeatureSet()
-    if "namespaced_policy" in pfs.features:
-        pytest.skip("otdfctl does not support namespaced_policy rn")
 
 
 def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
