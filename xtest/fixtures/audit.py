@@ -97,7 +97,7 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
     # Get services to monitor from CLI or use defaults
     services_opt = request.config.getoption("--audit-log-services", default=None)
     if services_opt:
-        services = [s.strip() for s in services_opt.split(",")]
+        services = services_opt
     else:
         # Default KAS services
         services = [

@@ -22,15 +22,23 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 XTEST_DIR="$SCRIPT_DIR"
-while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
+while [ "$XTEST_DIR" != "/" ]; do
+  if [ -f "$XTEST_DIR/pyproject.toml" ] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
+    break
+  fi
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
+
+if [ "$XTEST_DIR" = "/" ]; then
+  echo "xtest root (pyproject.toml with name = \"xtest\") not found."
+  exit 1
+fi
 
 if [ -f "$XTEST_DIR/test.env" ]; then
   # shellcheck disable=SC1091
   source "$XTEST_DIR/test.env"
 else
-  echo "test.env not found, stopping at xtest directory."
+  echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
 
@@ -40,18 +48,28 @@ if [ "$1" == "supports" ]; then
       exit 0
       ;;
     assertions)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-assertions
       exit $?
       ;;
     assertion_verification)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
     kasallowlist)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist
       exit $?
       ;;
+    key_management)
+      # Advanced key management from SDK version >= 0.10.0
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 10)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     ecwrap)
+      set -o pipefail
       if java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep encap-key; then
         # versions 0.7.6 and earlier used an older value for EC HKDF salt; check for 0.7.7 or later
         java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }'
@@ -69,10 +87,21 @@ if [ "$1" == "supports" ]; then
       ;;
 
     hexaflexible)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
+    attribute_traversal)
+      echo "attribute_traversal not supported"
+      exit 1
+      ;;
 
+    mechanism-rsa-4096 | mechanism-ec-curves-384-521)
+       # rsa4096 support in >= 0.13.0
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

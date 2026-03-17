@@ -22,7 +22,12 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  cmd=(go run "github.com/opentdf/otdfctl@latest")
+  if [ -f "$SCRIPT_DIR/.version" ]; then
+    OTDFCTL_VERSION=$(tr -d '[:space:]' <"$SCRIPT_DIR/.version")
+    cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_VERSION}")
+  else
+    cmd=(go run "github.com/opentdf/otdfctl@latest")
+  fi
 fi
 
 if [ "$1" == "supports" ]; then
@@ -34,6 +39,12 @@ if [ "$1" == "supports" ]; then
       # Obligations support from SDK version 0.10.0
       set -o pipefail
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 10) || ($1 == 0 && $2 == 10 && $3 >= 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    attribute_traversal)
+      # Attribute traversal support from go-sdk version >= 0.12.0
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 12)) exit 0; else exit 1; }'
       exit $?
       ;;
     assertions | assertion_verification)
@@ -91,15 +102,23 @@ if [ "$1" == "supports" ]; then
 fi
 
 XTEST_DIR="$SCRIPT_DIR"
-while [ ! -f "$XTEST_DIR/test.env" ] && [ "$(basename "$XTEST_DIR")" != "xtest" ]; do
+while [ "$XTEST_DIR" != "/" ]; do
+  if [ -f "$XTEST_DIR/pyproject.toml" ] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
+    break
+  fi
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
+
+if [ "$XTEST_DIR" = "/" ]; then
+  echo "xtest root (pyproject.toml with name = \"xtest\") not found."
+  exit 1
+fi
 
 if [ -f "$XTEST_DIR/test.env" ]; then
   # shellcheck disable=SC1091
   source "$XTEST_DIR/test.env"
 else
-  echo "test.env not found, stopping at xtest directory."
+  echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
 

@@ -33,6 +33,7 @@ container_type = Literal[
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    "attribute_traversal",
     "audit_logging",
     "autoconfigure",
     "better-messages-2024",
@@ -46,6 +47,10 @@ feature_type = Literal[
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
+    # Support for encrypting with RSA-4096 managed keys.
+    "mechanism-rsa-4096",
+    # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
+    "mechanism-ec-curves-384-521",
     "ns_grants",
     "obligations",
 ]
@@ -112,6 +117,15 @@ class PlatformFeatureSet(BaseModel):
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
+
+        # Included in platform v0.12.0
+        if self.semver >= (0, 12, 0):
+            self.features.add("attribute_traversal")
+        # In ocrypto < 0.10.0, there was a bug that hardcoded to P256 on uncompressing the EC public key,
+        # even if the key was actually P384 or P521. This was fixed in ocrypto 0.10.0, so we can only support EC
+        # wrapping with those curves on platforms v0.13.0 and later.
+        if self.semver >= (0, 13, 0):
+            self.features.add("mechanism-ec-curves-384-521")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
@@ -447,6 +461,12 @@ class SDK:
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
+            case ("mechanism-rsa-4096", "go"):
+                return True
+            case ("mechanism-ec-curves-384-521", "go"):
+                return True
+            case ("mechanism-ec-curves-384-521", "js"):
+                return False
             case _:
                 pass
 

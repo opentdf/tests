@@ -1,0 +1,25 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Shell scripts
+[*.sh]
+# Language variant
+shell_variant = bash
+
+# Indentation (2 spaces)
+indent_style = space
+indent_size = 2
+
+# Binary operators at start of line
+binary_next_line = false
+
+# Switch case indentation
+switch_case_indent = true
+
+# Keep column alignment
+keep_padding = true
+
+# Function brace on same line
+function_next_line = false

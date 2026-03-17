@@ -50,8 +50,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pyright>=1.1.408",
     "ruff>=0.9.0",
-    "pyright>=1.1.380",
 ]
 
 # Note: This is a test suite, not a distributable package.
