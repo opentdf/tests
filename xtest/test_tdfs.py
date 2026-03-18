@@ -546,6 +546,17 @@ def assert_policy_tamper_error(
     leaking information about secret key computations, and the SDK
     classifies this as a tamper error.
     """
+    if decrypt_sdk.supports("tamper-error-split"):
+        # SDK distinguishes tamper from misconfiguration — assert tamper specifically
+        assert re.search(b"tamper", exc.output, re.IGNORECASE), (
+            f"Expected tamper error, got: [{exc.output}]"
+        )
+        assert not re.search(b"KAS request error", exc.output, re.IGNORECASE), (
+            f"Policy binding failure must not be classified as KAS request error: [{exc.output}]"
+        )
+        return
+
+    # Older SDKs: accept any plausible error output
     expected_patterns = [
         b"tamper",
         b"bad request",
