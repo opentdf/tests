@@ -116,6 +116,19 @@ uv sync --extra dev
 pytest
 ```
 
+### Running xtests against a platform feature branch (CI)
+
+To validate platform changes against the xtest suite without merging:
+
+1. Go to the **Actions** tab in [opentdf/tests](https://github.com/opentdf/tests/actions)
+2. Find the **xtest** workflow
+3. Click the **"Run workflow"** dropdown on the right
+4. Set **"Use workflow from"** to the xtest branch you want to run (e.g. `main`, or a companion xtest branch)
+5. Set **"platform ref branch"** to the HEAD commit SHA of your platform feature branch
+6. Click **Run workflow**
+
+This builds the platform from your commit and runs the full xtest suite against it. Use this to validate SDK or KAS changes before merging.
+
 #### Run TDF Tests
 
 ```shell
