@@ -633,6 +633,30 @@ jobs:
           KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
 
+      - name: Run audit cancel tests
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        run: >-
+          uv run pytest
+          -ra
+          -v
+          --html test-results/audit-cancel-${FOCUS_SDK}-${PLATFORM_TAG}.html
+          --self-contained-html
+          --audit-log-dir test-results/audit-logs
+          --sdks-encrypt "${ENCRYPT_SDK}"
+          --focus "$FOCUS_SDK"
+          test_audit_cancel.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
+          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
+          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
+          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
+          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
+          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
+
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact

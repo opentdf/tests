@@ -13,6 +13,7 @@ vulnerability/tilt_modules/
 /xtest/node_modules/
 /xtest/tilt_modules/
 /xtest/tmp/
+/xtest/local.env
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
