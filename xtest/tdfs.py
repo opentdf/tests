@@ -129,12 +129,31 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
+    def require(self, *features: feature_type):
+        """Skip the current test if any of the given features are unsupported."""
+        for feature in features:
+            if feature not in self.features:
+                pytest.skip(
+                    f"platform service {self.version} doesn't yet support [{feature}]"
+                )
+
     def skip_if_unsupported(self, *features: feature_type):
         for feature in features:
             if feature not in self.features:
                 pytest.skip(
                     f"platform service {self.version} doesn't yet support [{feature}]"
                 )
+
+
+_cached_pfs: PlatformFeatureSet | None = None
+
+
+def get_platform_features() -> PlatformFeatureSet:
+    """Return a cached PlatformFeatureSet singleton."""
+    global _cached_pfs
+    if _cached_pfs is None:
+        _cached_pfs = PlatformFeatureSet()
+    return _cached_pfs
 
 
 class DataAttribute(BaseModel):

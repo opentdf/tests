@@ -34,6 +34,71 @@ def _key_id_suffix(wrapping_key: str) -> str:
     return hashlib.sha256(wrapping_key.encode()).hexdigest()[:8]
 
 
+def _get_or_create_key(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry: abac.KasEntry,
+    key_id_prefix: str,
+    algorithm: abac.kas_algorithm_type,
+    root_key: str,
+    *required_features: tdfs.feature_type,
+) -> abac.KasKey:
+    """Get or create a managed key, skipping if required platform features are missing.
+
+    Key ID is "{prefix}-{root_key_hash}" to ensure uniqueness across root key changes.
+    """
+    pfs = tdfs.get_platform_features()
+    pfs.require("key_management", *required_features)
+
+    key_id = f"{key_id_prefix}-{_key_id_suffix(root_key)}"
+    existing_keys = otdfctl.kas_registry_keys_list(kas_entry)
+    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
+    if key is None:
+        key = otdfctl.kas_registry_create_key(
+            kas_entry,
+            key_id=key_id,
+            mode="local",
+            algorithm=algorithm,
+            wrapping_key=root_key,
+            wrapping_key_id="root",
+        )
+    return key
+
+
+def _create_keyed_attribute(
+    otdfctl: OpentdfCommandLineTool,
+    namespace: abac.Namespace,
+    attr_name: str,
+    value_key_pairs: list[tuple[str, abac.KasKey]],
+    scs: abac.SubjectConditionSet,
+    *required_features: tdfs.feature_type,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute, SCS-map each value, and assign keys at value level.
+
+    Returns (attribute, [key_id, ...]).
+    """
+    pfs = tdfs.get_platform_features()
+    pfs.require("key_management", *required_features)
+
+    value_names = [name for name, _ in value_key_pairs]
+    attr = otdfctl.attribute_create(
+        namespace, attr_name, abac.AttributeRule.ALL_OF, value_names
+    )
+    assert attr.values and len(attr.values) == len(value_key_pairs)
+
+    for val, (expected_name, key) in zip(attr.values, value_key_pairs):
+        assert val.value == expected_name
+        sm = otdfctl.scs_map(scs, val)
+        assert sm.attribute_value.value == val.value
+        otdfctl.key_assign_value(key, val)
+
+    return (attr, [key.key.key_id for _, key in value_key_pairs])
+
+
+# ---------------------------------------------------------------------------
+# Extra keys (loaded from JSON)
+# ---------------------------------------------------------------------------
+
+
 class ExtraKey(typing.TypedDict):
     """TypedDict for extra keys in extra-keys.json"""
 
@@ -66,34 +131,19 @@ def pick_extra_key(extra_keys: dict[str, ExtraKey], kid: str) -> abac.KasPublicK
     )
 
 
+# ---------------------------------------------------------------------------
+# Managed key fixtures
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture(scope="module")
 def managed_key_km1_rsa(
     otdfctl: OpentdfCommandLineTool,
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create RSA managed key on km1.
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"km1-rsa-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km1,
-            key_id=key_id,
-            mode="local",
-            algorithm="rsa:2048",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create RSA managed key on km1."""
+    return _get_or_create_key(otdfctl, kas_entry_km1, "km1-rsa", "rsa:2048", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -102,28 +152,8 @@ def managed_key_km2_ec(
     kas_entry_km2: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create EC managed key on km2.
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"km2-ec-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km2,
-            key_id=key_id,
-            mode="local",
-            algorithm="ec:secp256r1",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create EC managed key on km2."""
+    return _get_or_create_key(otdfctl, kas_entry_km2, "km2-ec", "ec:secp256r1", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -132,28 +162,8 @@ def key_e256(
     kas_entry_km2: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create EC secp256r1 managed key on km2.
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"e256-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km2,
-            key_id=key_id,
-            mode="local",
-            algorithm="ec:secp256r1",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create EC secp256r1 managed key on km2."""
+    return _get_or_create_key(otdfctl, kas_entry_km2, "e256", "ec:secp256r1", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -162,28 +172,8 @@ def key_e384(
     kas_entry_km2: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create EC secp384r1 managed key on km2
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"e384-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km2,
-            key_id=key_id,
-            mode="local",
-            algorithm="ec:secp384r1",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create EC secp384r1 managed key on km2."""
+    return _get_or_create_key(otdfctl, kas_entry_km2, "e384", "ec:secp384r1", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -192,28 +182,8 @@ def key_e521(
     kas_entry_km2: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create EC secp521r1 managed key on km2.
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"e521-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km2,
-            key_id=key_id,
-            mode="local",
-            algorithm="ec:secp521r1",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create EC secp521r1 managed key on km2."""
+    return _get_or_create_key(otdfctl, kas_entry_km2, "e521", "ec:secp521r1", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -222,28 +192,8 @@ def key_r2048(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create RSA 2048 managed key on km1.
-
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
-
-    key_id = f"r2048-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km1,
-            key_id=key_id,
-            mode="local",
-            algorithm="rsa:2048",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+    """Get or create RSA 2048 managed key on km1."""
+    return _get_or_create_key(otdfctl, kas_entry_km1, "r2048", "rsa:2048", root_key)
 
 
 @pytest.fixture(scope="module")
@@ -252,28 +202,13 @@ def key_r4096(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create RSA 4096 managed key on km1.
+    """Get or create RSA 4096 managed key on km1."""
+    return _get_or_create_key(otdfctl, kas_entry_km1, "r4096", "rsa:4096", root_key)
 
-    Key ID includes a hash of the root key to ensure that if the root key changes,
-    a new key will be created instead of reusing an incompatible one.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled")
 
-    key_id = f"r4096-{_key_id_suffix(root_key)}"
-    existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
-    key = next((k for k in existing_keys if k.key.key_id == key_id), None)
-    if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry_km1,
-            key_id=key_id,
-            mode="local",
-            algorithm="rsa:4096",
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
-    return key
+# ---------------------------------------------------------------------------
+# Attribute + key assignment fixtures (value-level)
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
@@ -287,63 +222,44 @@ def attribute_allof_with_extended_mechanisms(
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, list[str]]:
-    """Create an ALL_OF attribute and assign extended mechanism keys to it.
-
-    - Uses ec:secp256r1, ec:secp384r1, ec:secp521r1, and rsa:2048, rsa:4096 keys
-    - Reuses existing managed keys
-    - Assigns all keys to attribute values (value-level assignment)
-    - Maps all attribute values to the client SCS
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip(
-            "Key management feature is not enabled; skipping key assignment fixture"
-        )
-
-    # Create attribute with three values under ALL_OF
-    attr = otdfctl.attribute_create(
+    """Create an ALL_OF attribute and assign extended mechanism keys to it."""
+    return _create_keyed_attribute(
+        otdfctl,
         temporary_namespace,
         "mechanism-select",
-        abac.AttributeRule.ALL_OF,
-        ["ec-secp256r1", "ec-secp384r1", "ec-secp521r1", "rsa-2048", "rsa-4096"],
-    )
-    assert attr.values and len(attr.values) == 5
-    v_e256, v_e384, v_e521, v_r2048, v_r4096 = attr.values
-    assert v_e256.value == "ec-secp256r1"
-    assert v_e384.value == "ec-secp384r1"
-    assert v_e521.value == "ec-secp521r1"
-    assert v_r2048.value == "rsa-2048"
-    assert v_r4096.value == "rsa-4096"
-
-    # Ensure client has access to all values
-    sm1 = otdfctl.scs_map(otdf_client_scs, v_e256)
-    assert sm1.attribute_value.value == v_e256.value
-    sm2 = otdfctl.scs_map(otdf_client_scs, v_e384)
-    assert sm2.attribute_value.value == v_e384.value
-    sm3 = otdfctl.scs_map(otdf_client_scs, v_e521)
-    assert sm3.attribute_value.value == v_e521.value
-    sm4 = otdfctl.scs_map(otdf_client_scs, v_r2048)
-    assert sm4.attribute_value.value == v_r2048.value
-    sm5 = otdfctl.scs_map(otdf_client_scs, v_r4096)
-    assert sm5.attribute_value.value == v_r4096.value
-
-    # Assign keys to corresponding attribute values
-    otdfctl.key_assign_value(key_e256, v_e256)
-    otdfctl.key_assign_value(key_e384, v_e384)
-    otdfctl.key_assign_value(key_e521, v_e521)
-    otdfctl.key_assign_value(key_r2048, v_r2048)
-    otdfctl.key_assign_value(key_r4096, v_r4096)
-
-    return (
-        attr,
         [
-            key_e256.key.key_id,
-            key_e384.key.key_id,
-            key_e521.key.key_id,
-            key_r2048.key.key_id,
-            key_r4096.key.key_id,
+            ("ec-secp256r1", key_e256),
+            ("ec-secp384r1", key_e384),
+            ("ec-secp521r1", key_e521),
+            ("rsa-2048", key_r2048),
+            ("rsa-4096", key_r4096),
         ],
+        otdf_client_scs,
     )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_different_kids(
+    otdfctl: OpentdfCommandLineTool,
+    temporary_namespace: abac.Namespace,
+    public_key_kas_default_kid_r1: abac.KasKey,
+    public_key_kas_default_kid_e1: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+) -> abac.Attribute:
+    """Create an attribute with different KAS public keys (value-level assignment)."""
+    attr, _ = _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "multikeys",
+        [("r1", public_key_kas_default_kid_r1), ("e1", public_key_kas_default_kid_e1)],
+        otdf_client_scs,
+    )
+    return attr
+
+
+# ---------------------------------------------------------------------------
+# Attribute + key assignment fixture (attribute-level)
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
@@ -354,20 +270,9 @@ def attribute_allof_with_two_managed_keys(
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, list[str]]:
-    """Create an ALL_OF attribute and assign two managed keys (RSA and EC) to it.
+    """Create an ALL_OF attribute and assign two managed keys at attribute level."""
+    tdfs.get_platform_features().require("key_management")
 
-    - Uses km1 (rsa:2048) and km2 (ec:secp256r1)
-    - Reuses existing managed keys
-    - Assigns both keys to the same attribute (attribute-level assignment)
-    - Maps both attribute values to the client SCS
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip(
-            "Key management feature is not enabled; skipping key assignment fixture"
-        )
-
-    # Create attribute with two values under ALL_OF
     attr = otdfctl.attribute_create(
         temporary_namespace, "kmallof", abac.AttributeRule.ALL_OF, ["r1", "e1"]
     )
@@ -376,17 +281,19 @@ def attribute_allof_with_two_managed_keys(
     assert r1.value == "r1"
     assert e1.value == "e1"
 
-    # Ensure client has access to both values
-    sm1 = otdfctl.scs_map(otdf_client_scs, r1)
-    assert sm1.attribute_value.value == r1.value
-    sm2 = otdfctl.scs_map(otdf_client_scs, e1)
-    assert sm2.attribute_value.value == e1.value
+    for val in [r1, e1]:
+        sm = otdfctl.scs_map(otdf_client_scs, val)
+        assert sm.attribute_value.value == val.value
 
-    # Assign both keys to the attribute
     otdfctl.key_assign_attr(managed_key_km1_rsa, attr)
     otdfctl.key_assign_attr(managed_key_km2_ec, attr)
 
     return (attr, [managed_key_km1_rsa.key.key_id, managed_key_km2_ec.key.key_id])
+
+
+# ---------------------------------------------------------------------------
+# Public key registration fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
@@ -413,44 +320,9 @@ def public_key_kas_default_kid_e1(
     )
 
 
-@pytest.fixture(scope="module")
-def attribute_with_different_kids(
-    otdfctl: OpentdfCommandLineTool,
-    temporary_namespace: abac.Namespace,
-    public_key_kas_default_kid_r1: abac.KasKey,
-    public_key_kas_default_kid_e1: abac.KasKey,
-    otdf_client_scs: abac.SubjectConditionSet,
-):
-    """
-    Create an attribute with different KAS public keys.
-    This is used to test the handling of multiple KAS public keys with different mechanisms.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip(
-            "Key management feature is not enabled, skipping test for multiple KAS keys"
-        )
-    allof = otdfctl.attribute_create(
-        temporary_namespace,
-        "multikeys",
-        abac.AttributeRule.ALL_OF,
-        ["r1", "e1"],
-    )
-    assert allof.values
-    (ar1, ae1) = allof.values
-    assert ar1.value == "r1"
-    assert ae1.value == "e1"
-
-    for attr in [ar1, ae1]:
-        # Then assign it to all clientIds = opentdf-sdk
-        sm = otdfctl.scs_map(otdf_client_scs, attr)
-        assert sm.attribute_value.value == attr.value
-
-    # Assign kas key to the attribute values
-    otdfctl.key_assign_value(public_key_kas_default_kid_e1, ae1)
-    otdfctl.key_assign_value(public_key_kas_default_kid_r1, ar1)
-
-    return allof
+# ---------------------------------------------------------------------------
+# Legacy and base key fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
@@ -460,14 +332,8 @@ def legacy_imported_golden_r1_key(
     extra_keys: dict[str, ExtraKey],
     root_key: str,
 ) -> abac.KasKey:
-    """
-    Import (or reuse) the legacy 'golden-r1' key for decrypting golden TDFs.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip(
-            "Key management feature is not enabled; skipping legacy key import fixture"
-        )
+    """Import (or reuse) the legacy 'golden-r1' key for decrypting golden TDFs."""
+    tdfs.get_platform_features().require("key_management")
 
     golden_key = extra_keys["golden-r1"]
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
@@ -493,13 +359,8 @@ def base_key_e1(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> None:
-    """
-    Ensure a managed key with key_id 'e1' exists on the default KAS
-    and is configured as the base key.
-    """
-    pfs = tdfs.PlatformFeatureSet()
-    if "key_management" not in pfs.features:
-        pytest.skip("Key management feature is not enabled; skipping base key fixture")
+    """Ensure a managed key 'e1' exists on km1 and is configured as the base key."""
+    tdfs.get_platform_features().require("key_management")
 
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
     key_id = "e1"
