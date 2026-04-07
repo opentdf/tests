@@ -129,20 +129,13 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    def require(self, *features: feature_type):
-        """Skip the current test if any of the given features are unsupported."""
-        for feature in features:
-            if feature not in self.features:
-                pytest.skip(
-                    f"platform service {self.version} doesn't yet support [{feature}]"
-                )
-
     def skip_if_unsupported(self, *features: feature_type):
-        for feature in features:
-            if feature not in self.features:
-                pytest.skip(
-                    f"platform service {self.version} doesn't yet support [{feature}]"
-                )
+        """Skip the current test if any of the given features are unsupported."""
+        missing = [f for f in features if f not in self.features]
+        if missing:
+            pytest.skip(
+                f"platform service {self.version} doesn't yet support {missing}"
+            )
 
 
 _cached_pfs: PlatformFeatureSet | None = None

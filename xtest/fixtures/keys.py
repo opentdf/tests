@@ -47,7 +47,7 @@ def _get_or_create_key(
     Key ID is "{prefix}-{root_key_hash}" to ensure uniqueness across root key changes.
     """
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", *required_features)
+    pfs.skip_if_unsupported("key_management", *required_features)
 
     key_id = f"{key_id_prefix}-{_key_id_suffix(root_key)}"
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry)
@@ -77,7 +77,7 @@ def _create_keyed_attribute(
     Returns (attribute, [key_id, ...]).
     """
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", *required_features)
+    pfs.skip_if_unsupported("key_management", *required_features)
 
     value_names = [name for name, _ in value_key_pairs]
     attr = otdfctl.attribute_create(
@@ -271,7 +271,7 @@ def attribute_allof_with_two_managed_keys(
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, list[str]]:
     """Create an ALL_OF attribute and assign two managed keys at attribute level."""
-    tdfs.get_platform_features().require("key_management")
+    tdfs.get_platform_features().skip_if_unsupported("key_management")
 
     attr = otdfctl.attribute_create(
         temporary_namespace, "kmallof", abac.AttributeRule.ALL_OF, ["r1", "e1"]
@@ -333,7 +333,7 @@ def legacy_imported_golden_r1_key(
     root_key: str,
 ) -> abac.KasKey:
     """Import (or reuse) the legacy 'golden-r1' key for decrypting golden TDFs."""
-    tdfs.get_platform_features().require("key_management")
+    tdfs.get_platform_features().skip_if_unsupported("key_management")
 
     golden_key = extra_keys["golden-r1"]
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km2)
@@ -360,7 +360,7 @@ def base_key_e1(
     root_key: str,
 ) -> None:
     """Ensure a managed key 'e1' exists on km1 and is configured as the base key."""
-    tdfs.get_platform_features().require("key_management")
+    tdfs.get_platform_features().skip_if_unsupported("key_management")
 
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry_km1)
     key_id = "e1"
