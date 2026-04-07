@@ -100,6 +100,11 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
+    mechanism-xwing)
+      set -o pipefail
+      "${cmd[@]}" help encrypt | grep -i xwing
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
