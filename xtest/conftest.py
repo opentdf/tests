@@ -75,6 +75,19 @@ def sdk_spec_type(v: str) -> str:
             )
     return v
 
+def is_sdk_spec_list(t: typing.Any) -> typing.Callable[[str], typing.Any]:
+    """Validate SDK specs: bare names ('go') or qualified ('go:gemini')."""
+    valid_sdks = typing.get_args(t)
+
+    def is_a(v: str) -> typing.Any:
+        for i in v.split():
+            sdk_name = i.split(":")[0] if ":" in i else i
+            if sdk_name not in valid_sdks:
+                raise ValueError(f"Invalid SDK '{sdk_name}' in '{i}', must be one of {valid_sdks}")
+        return v
+
+    return is_a
+
 
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
@@ -115,18 +128,21 @@ def pytest_addoption(parser: pytest.Parser):
     )
     parser.addoption(
         "--sdks",
-        help=f"select which sdks to run by default, unless overridden; one or more of {englist(typing.get_args(tdfs.sdk_type))}, optionally version-qualified (e.g. go@main, go@v0.18.0, go@*)",
-        type=sdk_spec_type,
+        help=(
+            f"select which sdks to run, one or more of {englist(typing.get_args(tdfs.sdk_type))}. "
+            "Use sdk:version to select a specific version (e.g., 'go:gemini')"
+        ),
+        type=is_sdk_spec_list(tdfs.sdk_type),
     )
     parser.addoption(
         "--sdks-decrypt",
-        help="select which sdks to run for decrypt only; accepts same format as --sdks",
-        type=sdk_spec_type,
+        help="select which sdks for decrypt (supports sdk:version syntax)",
+        type=is_sdk_spec_list(tdfs.sdk_type),
     )
     parser.addoption(
         "--sdks-encrypt",
-        help="select which sdks to run for encrypt only; accepts same format as --sdks",
-        type=sdk_spec_type,
+        help="select which sdks for encrypt (supports sdk:version syntax)",
+        type=is_sdk_spec_list(tdfs.sdk_type),
     )
 
 
@@ -160,36 +176,31 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return a
 
-    def sdk_specs_opt(names: list[str]) -> list[str]:
-        """Return SDK specifier tokens from the first matching option, or all sdk types."""
+    def sdk_specs_from_opts(names: list[str]) -> list[str] | None:
+        """Get raw SDK spec strings from the first non-empty option."""
         for name in names:
             v = metafunc.config.getoption(name)
-            if v:
+            if v and isinstance(v, str):
                 return v.split()
-        return list(typing.get_args(tdfs.sdk_type))
+        return None
+
+    def resolve_sdk_specs(specs: list[str] | None) -> list[tdfs.SDK]:
+        """Resolve SDK specs (bare or qualified) into SDK objects."""
+        if specs is None:
+            # Default: all versions of all SDKs
+            specs = list(typing.get_args(tdfs.sdk_type))
+        return [sdk for spec in specs for sdk in tdfs.parse_sdk_spec(spec)]
 
     subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
-        try:
-            e_sdks = [
-                sdk
-                for spec in sdk_specs_opt(["--sdks-encrypt", "--sdks"])
-                for sdk in tdfs.parse_sdk_spec(spec)
-            ]
-        except (FileNotFoundError, ValueError) as e:
-            raise pytest.UsageError(str(e)) from e
+        e_specs = sdk_specs_from_opts(["--sdks-encrypt", "--sdks"])
+        e_sdks = resolve_sdk_specs(e_specs)
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
-        try:
-            d_sdks = [
-                sdk
-                for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
-                for sdk in tdfs.parse_sdk_spec(spec)
-            ]
-        except (FileNotFoundError, ValueError) as e:
-            raise pytest.UsageError(str(e)) from e
+        d_specs = sdk_specs_from_opts(["--sdks-decrypt", "--sdks"])
+        d_sdks = resolve_sdk_specs(d_specs)
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
