@@ -20,7 +20,7 @@ def skip_rts_as_needed(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
 
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if container == "ztdf-ecwrap":
