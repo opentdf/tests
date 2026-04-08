@@ -1,6 +1,7 @@
 import enum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class BaseModelIgnoreExtra(BaseModel):
@@ -53,6 +54,16 @@ class Attribute(BaseModelIgnoreExtra):
     fqn: str | None
     active: BoolValue | None = None
     metadata: Metadata | None = None
+    allow_traversal: BoolValue | None = None
+
+    @field_validator("allow_traversal", mode="before")
+    @classmethod
+    def empty_allow_traversal_to_false(cls, value: object) -> object:
+        # Some policy service versions return `{}` for unset allow_traversal.
+        # Normalize that shape to an explicit false BoolValue payload.
+        if isinstance(value, dict) and len(value) == 0:
+            return {"value": False}
+        return value
 
     @property
     def value_fqns(self) -> list[str]:
@@ -152,6 +163,14 @@ class KasGrantValue(BaseModelIgnoreExtra):
     value_id: str
     key_access_server_id: str | None = None
 
+
+kas_algorithm_type = Literal[
+    "rsa:2048",
+    "rsa:4096",
+    "ec:secp256r1",
+    "ec:secp384r1",
+    "ec:secp521r1",
+]
 
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096 = 2

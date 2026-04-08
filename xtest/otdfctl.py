@@ -640,7 +640,12 @@ class OpentdfCommandLineTool:
         return Namespace.model_validate_json(out)
 
     def attribute_create(
-        self, namespace: str | Namespace, name: str, t: AttributeRule, values: list[str]
+        self,
+        namespace: str | Namespace,
+        name: str,
+        t: AttributeRule,
+        values: list[str],
+        allow_traversal: bool | None = None,
     ) -> Attribute:
         cmd = self.otdfctl + "policy attributes create".split()
 
@@ -651,6 +656,8 @@ class OpentdfCommandLineTool:
         ]
         if values:
             cmd += [f"--value={','.join(values)}"]
+        if allow_traversal is not None:
+            cmd += [f"--allow-traversal={str(allow_traversal).lower()}"]
         logger.info(f"attr-create [{' '.join(cmd)}]")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()

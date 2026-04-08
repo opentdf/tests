@@ -91,7 +91,17 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
+    attribute_traversal)
+      echo "attribute_traversal not supported"
+      exit 1
+      ;;
 
+    mechanism-rsa-4096 | mechanism-ec-curves-384-521)
+       # rsa4096 support in >= 0.13.0
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

@@ -110,7 +110,7 @@ def test_tdf_roundtrip(
 ):
     if container == "ztdf" and decrypt_sdk in dspx1153Fails:
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -175,7 +175,7 @@ def test_tdf_spec_target_422(
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
 ):
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if "hexaflexible" not in pfs.features:
         pytest.skip(f"Hexaflexible is not supported in platform {pfs.version}")
@@ -330,7 +330,7 @@ def test_tdf_assertions_unkeyed(
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
 ):
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -365,7 +365,7 @@ def test_tdf_assertions_with_keys(
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
 ):
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
@@ -408,7 +408,7 @@ def test_tdf_assertions_422_format(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if not encrypt_sdk.supports("hexaflexible"):
         pytest.skip(
@@ -547,13 +547,8 @@ def assert_tamper_error(
 
     expected_error_oneof = [
         b"tamper",
-        b"could not find policy in rewrap response",  # For older versions of go sdk, we get "InvalidFileError" instead of "tamper".
     ]
     match type:
-        case "wrap":
-            expected_error_oneof += [
-                b"InvalidFileError",
-            ]
         case "root" | "signature":
             expected_error_oneof += [
                 b"IntegrityError",
@@ -567,6 +562,33 @@ def assert_tamper_error(
     pattern = b"|".join(re.escape(err) for err in expected_error_oneof)
     assert re.search(pattern, exc.output, re.IGNORECASE), (
         f"Unexpected error output: [{exc.output}]"
+    )
+
+
+def assert_kas_request_error(
+    exc: subprocess.CalledProcessError, decrypt_sdk: tdfs.SDK
+) -> None:
+    """Assert that a KAS request error was returned.
+
+    Used for policy binding failures where KAS rejects the request (400).
+    Accepts both the new error classification (KAS request error) and the
+    legacy classification (tamper) for backward compatibility with older
+    SDK versions.
+    """
+    expected_patterns = [
+        # New classification: KAS request error
+        b"KAS request error",
+        b"rewrap request 400",
+        b"bad request",
+        b"InvalidArgument",
+        # Legacy classification: tamper (older SDK versions)
+        b"tamper",
+        b"InvalidFileError",
+        b"could not find policy in rewrap response",
+    ]
+    pattern = b"|".join(re.escape(p) for p in expected_patterns)
+    assert re.search(pattern, exc.output, re.IGNORECASE), (
+        f"Expected KAS request or tamper error, got: [{exc.output}]"
     )
 
 
@@ -584,7 +606,7 @@ def test_tdf_with_unbound_policy(
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -606,7 +628,7 @@ def test_tdf_with_unbound_policy(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "wrap", decrypt_sdk)
+        assert_kas_request_error(exc, decrypt_sdk)
 
     # Verify rewrap failure was logged (policy binding mismatch)
     # FIXME: Audit logs are not present on failed bindings
@@ -624,7 +646,7 @@ def test_tdf_with_altered_policy_binding(
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -647,7 +669,7 @@ def test_tdf_with_altered_policy_binding(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "wrap", decrypt_sdk)
+        assert_kas_request_error(exc, decrypt_sdk)
 
     # Verify rewrap failure was logged (policy binding mismatch)
     # FIXME: Audit logs are not present on failed bindings
@@ -667,7 +689,7 @@ def test_tdf_with_altered_root_sig(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -698,7 +720,7 @@ def test_tdf_with_altered_seg_sig_wrong(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -734,7 +756,7 @@ def test_tdf_with_altered_enc_seg_size(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -771,7 +793,7 @@ def test_tdf_with_altered_assertion_statement(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not encrypt_sdk.supports("assertions"):
@@ -812,7 +834,7 @@ def test_tdf_with_altered_assertion_with_keys(
 ):
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not encrypt_sdk.supports("assertions"):
@@ -862,7 +884,7 @@ def test_tdf_altered_payload_end(
         pytest.skip("Not in focus")
     if decrypt_sdk in dspx1153Fails:
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = do_encrypt_with(
@@ -897,7 +919,7 @@ def test_tdf_with_malicious_kao(
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     if not decrypt_sdk.supports("kasallowlist"):
