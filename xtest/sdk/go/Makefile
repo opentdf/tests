@@ -46,6 +46,26 @@ build:
 	done
 	@echo "All binaries built successfully"
 
+# Build a variant using a specific go.work file from src/main/
+# Usage: make build-variant VARIANT=gemini
+# Requires: src/main/go.work.$(VARIANT) must exist
+build-variant:
+	@test -n "$(VARIANT)" || { echo "Error: VARIANT is required (e.g., make build-variant VARIANT=gemini)"; exit 1; }
+	@test -f "$(MAKEFILE_DIR)/src/main/go.work.$(VARIANT)" || { echo "Error: $(MAKEFILE_DIR)/src/main/go.work.$(VARIANT) not found"; exit 1; }
+	@echo "Building variant $(VARIANT) with GOWORK=go.work.$(VARIANT)"
+	cd $(MAKEFILE_DIR)/src/main && \
+		GOWORK=$(abspath $(MAKEFILE_DIR)/src/main/go.work.$(VARIANT)) \
+		go build -o $(MAKEFILE_DIR)/binary-$(VARIANT) . || { \
+			echo "Error: Go build failed for variant $(VARIANT)"; \
+			exit 1; \
+		}
+	mkdir -p $(MAKEFILE_DIR)/dist/$(VARIANT)
+	mv $(MAKEFILE_DIR)/binary-$(VARIANT) $(MAKEFILE_DIR)/dist/$(VARIANT)/otdfctl
+	cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$(VARIANT)/
+	cp $(MAKEFILE_DIR)/otdfctl.sh $(MAKEFILE_DIR)/dist/$(VARIANT)/
+	cp $(MAKEFILE_DIR)/opentdfctl.yaml $(MAKEFILE_DIR)/dist/$(VARIANT)/
+	@echo "Variant $(VARIANT) built successfully"
+
 clean:
 	@echo "Cleaning up binaries"
 	@for version in $(VERSIONS); do \

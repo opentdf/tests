@@ -258,3 +258,104 @@ def cmd_install(
     """Install a single SDK version (used by CI action)."""
     print(f"Installing {sdk} {version}...")
     install_release(sdk, version, dist_name=dist_name, source=source)
+
+
+# Modules that otdfctl depends on from the platform monorepo.
+# Maps module path suffix to directory relative to platform root.
+_PLATFORM_MODULES = {
+    "lib/ocrypto": "lib/ocrypto",
+    "lib/flattening": "lib/flattening",
+    "lib/identifier": "lib/identifier",
+    "protocol/go": "protocol/go",
+    "sdk": "sdk",
+}
+
+
+def _generate_gowork(otdfctl_src: Path, variant_name: str, platform_dir: Path) -> Path:
+    """Generate a go.work file for building otdfctl against a platform variant.
+
+    Args:
+        otdfctl_src: Path to the otdfctl source checkout (e.g., sdk/go/src/main/)
+        variant_name: Name for this variant (e.g., "gemini")
+        platform_dir: Absolute path to the platform variant directory
+
+    Returns:
+        Path to the generated go.work file
+    """
+    platform_dir = platform_dir.resolve()
+
+    # Read Go version from the platform's go.work if available
+    go_version = "1.25.0"
+    toolchain = "go1.25.8"
+    platform_gowork = platform_dir / "go.work"
+    if platform_gowork.exists():
+        for line in platform_gowork.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("go ") and not line.startswith("go."):
+                go_version = line.split()[1]
+            elif line.startswith("toolchain "):
+                toolchain = line.split()[1]
+
+    # Validate that required platform modules exist
+    use_dirs = []
+    for _mod_suffix, rel_dir in _PLATFORM_MODULES.items():
+        mod_dir = platform_dir / rel_dir
+        if not (mod_dir / "go.mod").exists():
+            raise InstallError(
+                f"Platform module directory {mod_dir} does not contain go.mod. "
+                f"Ensure {platform_dir} is a valid platform checkout."
+            )
+        use_dirs.append(str(mod_dir))
+
+    gowork_path = otdfctl_src / f"go.work.{variant_name}"
+    lines = [
+        f"go {go_version}",
+        "",
+        f"toolchain {toolchain}",
+        "",
+        "use .",
+        "",
+        "use (",
+    ]
+    for d in use_dirs:
+        lines.append(f"\t{d}")
+    lines.append(")")
+    lines.append("")
+
+    gowork_path.write_text("\n".join(lines))
+    print(f"  Generated {gowork_path}")
+    return gowork_path
+
+
+def cmd_variant(name: str, platform_dir: str, branch: str = "main") -> None:
+    """Build otdfctl linked against a specific platform variant's modules.
+
+    1. Ensures otdfctl source is checked out
+    2. Generates a variant-specific go.work file
+    3. Builds via the Makefile build-variant target
+    """
+    platform_path = Path(platform_dir).resolve()
+    if not platform_path.is_dir():
+        raise InstallError(f"Platform directory does not exist: {platform_path}")
+
+    sdk_dirs = get_sdk_dirs()
+    go_dir = sdk_dirs["go"]
+    src_dir = go_dir / "src" / branch.replace("/", "--")
+
+    # Ensure otdfctl source is checked out
+    if not src_dir.exists():
+        print(f"Checking out otdfctl from branch '{branch}'...")
+        checkout_sdk_branch("go", branch)
+    else:
+        print(f"Using existing otdfctl checkout at {src_dir}")
+
+    # Generate variant-specific go.work
+    _generate_gowork(src_dir, name, platform_path)
+
+    # Build using the Makefile build-variant target
+    print(f"Building variant '{name}' against {platform_path}...")
+    subprocess.check_call(
+        ["make", "build-variant", f"VARIANT={name}"],
+        cwd=go_dir,
+    )
+    print(f"  Variant '{name}' built to {go_dir / 'dist' / name}")

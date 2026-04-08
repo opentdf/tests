@@ -531,6 +531,18 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
     return versions
 
 
+def parse_sdk_spec(spec: str) -> list[SDK]:
+    """Parse an SDK spec like 'go' or 'go:gemini' into a list of SDK objects.
+
+    Bare names (e.g., 'go') return all discovered versions.
+    Qualified names (e.g., 'go:gemini') return a single specific version.
+    """
+    if ":" in spec:
+        sdk_name, version = spec.split(":", 1)
+        return [SDK(sdk_name, version)]
+    return all_versions_of(spec)
+
+
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
     pfs = get_platform_features()
     pfs.skip_if_unsupported(*features)

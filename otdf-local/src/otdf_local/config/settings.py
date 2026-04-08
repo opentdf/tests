@@ -3,7 +3,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+import warnings
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from otdf_local.config.ports import Ports
@@ -94,6 +96,22 @@ class Settings(BaseSettings):
     platform_dir: Path = Field(
         default_factory=lambda: _find_platform_dir(_find_xtest_root())
     )
+
+    @field_validator("platform_dir")
+    @classmethod
+    def _validate_platform_dir(cls, v: Path) -> Path:
+        v = v.resolve()
+        if not v.exists():
+            raise ValueError(f"platform_dir does not exist: {v}")
+        if not (v / "service").is_dir():
+            raise ValueError(f"platform_dir {v} missing service/ directory")
+        if not (v / "opentdf-dev.yaml").exists():
+            warnings.warn(
+                f"platform_dir {v} missing opentdf-dev.yaml — "
+                "config generation will create it from template",
+                stacklevel=2,
+            )
+        return v
 
     @property
     def logs_dir(self) -> Path:

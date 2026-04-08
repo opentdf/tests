@@ -1,0 +1,14 @@
+Downloading cryptography (6.8MiB)
+ Downloaded cryptography
+Uninstalled 2 packages in 43ms
+Installed 2 packages in 6ms
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- /Users/dmihalcik/Documents/GitHub/DSPX-2791-xwing/tests/xtest/.venv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.14.3', 'Platform': 'macOS-26.4.1-arm64-arm-64bit-Mach-O', 'Packages': {'pytest': '9.0.2', 'pluggy': '1.6.0'}, 'Plugins': {'html': '4.1.1', 'xdist': '3.8.0', 'metadata': '3.1.1'}, 'JAVA_HOME': '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home'}
+rootdir: /Users/dmihalcik/Documents/GitHub/DSPX-2791-xwing/tests/xtest
+configfile: pyproject.toml
+plugins: html-4.1.1, xdist-3.8.0, metadata-3.1.1
+collecting ... collected 17 items / 17 deselected / 0 selected
+
+============================ 17 deselected in 0.02s ============================
