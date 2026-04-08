@@ -153,7 +153,9 @@ def managed_key_km2_ec(
     root_key: str,
 ) -> abac.KasKey:
     """Get or create EC managed key on km2."""
-    return _get_or_create_key(otdfctl, kas_entry_km2, "km2-ec", "ec:secp256r1", root_key)
+    return _get_or_create_key(
+        otdfctl, kas_entry_km2, "km2-ec", "ec:secp256r1", root_key
+    )
 
 
 @pytest.fixture(scope="module")
