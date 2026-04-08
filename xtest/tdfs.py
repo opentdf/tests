@@ -507,7 +507,7 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
 
 
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
-    pfs = PlatformFeatureSet()
+    pfs = get_platform_features()
     pfs.skip_if_unsupported(*features)
     sdk.skip_if_unsupported(*features)
 

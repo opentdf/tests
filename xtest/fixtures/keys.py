@@ -85,7 +85,7 @@ def _create_keyed_attribute(
     )
     assert attr.values and len(attr.values) == len(value_key_pairs)
 
-    for val, (expected_name, key) in zip(attr.values, value_key_pairs):
+    for val, (expected_name, key) in zip(attr.values, value_key_pairs, strict=True):
         assert val.value == expected_name
         sm = otdfctl.scs_map(scs, val)
         assert sm.attribute_value.value == val.value

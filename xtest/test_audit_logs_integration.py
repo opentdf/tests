@@ -60,7 +60,7 @@ class TestRewrapAudit:
         """Verify all expected fields in successful rewrap audit."""
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -108,7 +108,7 @@ class TestRewrapAudit:
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
@@ -154,7 +154,7 @@ class TestRewrapAudit:
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
@@ -308,7 +308,7 @@ class TestDecisionAudit:
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
@@ -370,7 +370,7 @@ class TestEdgeCases:
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -429,7 +429,7 @@ class TestEdgeCases:
         """
         if not in_focus & {encrypt_sdk, decrypt_sdk}:
             pytest.skip("Not in focus")
-        pfs = tdfs.PlatformFeatureSet()
+        pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
         tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
