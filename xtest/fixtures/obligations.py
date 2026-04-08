@@ -59,7 +59,7 @@ def _obligation_setup_helper(
     Creates attribute and optional SCS mapping, obligation definition with a single value,
     and an obligation trigger (optionally scoped to a client id).
     """
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     if "obligations" not in pfs.features:
         pytest.skip("Obligations feature is not enabled")
 

@@ -83,7 +83,7 @@ def test_key_mapping_multiple_mechanisms(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -134,7 +134,7 @@ def test_key_mapping_extended_mechanisms(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     pfs.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
     )
@@ -144,7 +144,7 @@ def test_key_mapping_extended_mechanisms(
         "mechanism-rsa-4096",
         "mechanism-ec-curves-384-521",
     )
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -210,7 +210,7 @@ def test_key_mapping_extended_ec_mechanisms(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     pfs.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
     )
@@ -283,7 +283,7 @@ def test_key_mapping_extended_rsa_mechanisms(
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     encrypt_sdk.skip_if_unsupported("mechanism-rsa-4096")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
@@ -349,7 +349,7 @@ def test_autoconfigure_one_attribute_standard(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -405,7 +405,7 @@ def test_autoconfigure_two_kas_or_standard(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -467,7 +467,7 @@ def test_autoconfigure_double_kas_and(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -528,7 +528,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -575,7 +575,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -629,7 +629,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -682,7 +682,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -729,7 +729,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -783,7 +783,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -1040,7 +1040,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     skip_dspx2457(encrypt_sdk)
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -1157,7 +1157,7 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(encrypt_sdk, "key_management")
     tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
