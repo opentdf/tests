@@ -30,6 +30,7 @@ from otdf_local.utils.console import (
     format_status,
     print_error,
     print_info,
+    print_json,
     print_success,
     print_warning,
     status_spinner,
@@ -290,7 +291,7 @@ def list_services(
 
     if json_output:
         output = [info.to_dict() for info in all_info]
-        console.print_json(json.dumps(output))
+        print_json(json.dumps(output))
         return
 
     # Table output
@@ -627,7 +628,7 @@ def env(
 
     # Output in requested format
     if format == "json":
-        console.print_json(json.dumps(env_vars, indent=2))
+        print_json(json.dumps(env_vars, indent=2))
     else:
         # Shell export format - use plain print to avoid line wrapping
         for key, value in env_vars.items():
