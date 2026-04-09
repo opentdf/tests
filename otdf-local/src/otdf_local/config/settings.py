@@ -130,13 +130,13 @@ class Settings(BaseSettings):
 
     @property
     def platform_config(self) -> Path:
-        """Platform config file path."""
-        return self.platform_dir / "opentdf-dev.yaml"
+        """Platform config file path (gitignored, generated locally)."""
+        return self.platform_dir / "opentdf.yaml"
 
     @property
     def platform_template_config(self) -> Path:
-        """Platform config template path."""
-        return self.platform_dir / "opentdf.yaml"
+        """Platform config template path (committed to git)."""
+        return self.platform_dir / "opentdf-dev.yaml"
 
     @property
     def kas_template_config(self) -> Path:
