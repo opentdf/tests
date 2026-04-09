@@ -1,9 +1,15 @@
 """Cryptographic key generation utilities."""
 
 import json
+import logging
+import os
+import platform
 import secrets
 import subprocess
+import tempfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def generate_root_key() -> str:
@@ -155,6 +161,323 @@ def ensure_keys_exist(key_dir: Path, force: bool = False) -> bool:
     generate_rsa_keypair(key_dir, "kas")
     generate_ec_keypair(key_dir, "kas-ec")
     return True
+
+
+_KEYCLOAK_KEY_FILES = [
+    "keycloak-ca.pem",
+    "keycloak-ca-private.pem",
+    "localhost.crt",
+    "localhost.key",
+    "sampleuser.crt",
+    "sampleuser.key",
+    "ca.p12",
+    "ca.jks",
+]
+
+
+def generate_ca_keypair(keys_dir: Path) -> tuple[Path, Path]:
+    """Generate a self-signed CA keypair for Keycloak TLS.
+
+    Args:
+        keys_dir: Directory to store keys
+
+    Returns:
+        Tuple of (ca_private_key_path, ca_cert_path)
+    """
+    keys_dir.mkdir(parents=True, exist_ok=True)
+    ca_key = keys_dir / "keycloak-ca-private.pem"
+    ca_cert = keys_dir / "keycloak-ca.pem"
+
+    subprocess.run(
+        [
+            "openssl", "req", "-x509", "-nodes",
+            "-newkey", "RSA:2048",
+            "-subj", "/CN=ca",
+            "-keyout", str(ca_key),
+            "-out", str(ca_cert),
+            "-days", "365",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    ca_key.chmod(0o600)
+
+    return ca_key, ca_cert
+
+
+def generate_localhost_cert(keys_dir: Path) -> tuple[Path, Path]:
+    """Generate a localhost certificate signed by the CA.
+
+    Creates a server cert with SAN DNS:localhost,IP:127.0.0.1
+    suitable for Keycloak HTTPS.
+
+    Args:
+        keys_dir: Directory containing CA keys and to store output
+
+    Returns:
+        Tuple of (key_path, cert_path)
+    """
+    ca_key = keys_dir / "keycloak-ca-private.pem"
+    ca_cert = keys_dir / "keycloak-ca.pem"
+    server_key = keys_dir / "localhost.key"
+    server_cert = keys_dir / "localhost.crt"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        csr_path = tmp / "localhost.req"
+        san_conf = tmp / "sanX509.conf"
+        req_conf = tmp / "req.conf"
+
+        san_conf.write_text("subjectAltName=DNS:localhost,IP:127.0.0.1")
+        req_conf.write_text(
+            "[req]\n"
+            "distinguished_name=req_distinguished_name\n"
+            "[req_distinguished_name]\n"
+            "[alt_names]\n"
+            "DNS.1=localhost\n"
+            "IP.1=127.0.0.1\n"
+        )
+
+        # Generate CSR + key
+        subprocess.run(
+            [
+                "openssl", "req", "-new", "-nodes",
+                "-newkey", "rsa:2048",
+                "-keyout", str(server_key),
+                "-out", str(csr_path),
+                "-batch",
+                "-subj", "/CN=localhost",
+                "-config", str(req_conf),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        server_key.chmod(0o600)
+
+        # Sign with CA
+        subprocess.run(
+            [
+                "openssl", "x509", "-req",
+                "-in", str(csr_path),
+                "-CA", str(ca_cert),
+                "-CAkey", str(ca_key),
+                "-CAcreateserial",
+                "-out", str(server_cert),
+                "-days", "3650",
+                "-sha256",
+                "-extfile", str(san_conf),
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    # Clean up CA serial file if created in keys_dir
+    serial_file = keys_dir / "keycloak-ca.srl"
+    if serial_file.exists():
+        serial_file.unlink()
+
+    return server_key, server_cert
+
+
+def generate_sampleuser_cert(keys_dir: Path) -> tuple[Path, Path]:
+    """Generate a sample user client certificate signed by the CA.
+
+    Args:
+        keys_dir: Directory containing CA keys and to store output
+
+    Returns:
+        Tuple of (key_path, cert_path)
+    """
+    ca_key = keys_dir / "keycloak-ca-private.pem"
+    ca_cert = keys_dir / "keycloak-ca.pem"
+    user_key = keys_dir / "sampleuser.key"
+    user_cert = keys_dir / "sampleuser.crt"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csr_path = Path(tmpdir) / "sampleuser.req"
+
+        subprocess.run(
+            [
+                "openssl", "req", "-new", "-nodes",
+                "-newkey", "rsa:2048",
+                "-keyout", str(user_key),
+                "-out", str(csr_path),
+                "-batch",
+                "-subj", "/CN=sampleuser",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        user_key.chmod(0o600)
+
+        subprocess.run(
+            [
+                "openssl", "x509", "-req",
+                "-in", str(csr_path),
+                "-CA", str(ca_cert),
+                "-CAkey", str(ca_key),
+                "-CAcreateserial",
+                "-out", str(user_cert),
+                "-days", "3650",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    serial_file = keys_dir / "keycloak-ca.srl"
+    if serial_file.exists():
+        serial_file.unlink()
+
+    return user_key, user_cert
+
+
+def _get_java_opts_for_docker() -> list[str]:
+    """Get JAVA_TOOL_OPTIONS env args for Docker keytool.
+
+    Works around SIGILL on Apple M4 chips by disabling SVE.
+    """
+    if platform.machine() != "arm64":
+        return []
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and "M4" in result.stdout:
+            return ["-e", "JAVA_TOOL_OPTIONS=-XX:UseSVE=0"]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return []
+
+
+def _get_keycloak_image(compose_file: Path | None) -> str:
+    """Extract the Keycloak image from a docker-compose file, or use default."""
+    default = "keycloak/keycloak:25.0"
+    if compose_file is None or not compose_file.exists():
+        return default
+    try:
+        text = compose_file.read_text()
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("image:") and "keycloak" in stripped:
+                return stripped.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return default
+
+
+def generate_ca_stores(
+    keys_dir: Path,
+    compose_file: Path | None = None,
+) -> tuple[Path, Path]:
+    """Generate PKCS12 and JKS keystores from the CA cert.
+
+    Args:
+        keys_dir: Directory containing CA keys
+        compose_file: Optional docker-compose.yaml to extract keycloak image version
+
+    Returns:
+        Tuple of (p12_path, jks_path)
+    """
+    ca_key = keys_dir / "keycloak-ca-private.pem"
+    ca_cert = keys_dir / "keycloak-ca.pem"
+    p12_path = keys_dir / "ca.p12"
+    jks_path = keys_dir / "ca.jks"
+
+    # Generate PKCS12
+    subprocess.run(
+        [
+            "openssl", "pkcs12", "-export",
+            "-in", str(ca_cert),
+            "-inkey", str(ca_key),
+            "-out", str(p12_path),
+            "-nodes",
+            "-passout", "pass:password",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    # Generate JKS via Docker keytool
+    keycloak_image = _get_keycloak_image(compose_file)
+    java_opts = _get_java_opts_for_docker()
+    uid_gid = f"{os.getuid()}:{os.getgid()}"
+
+    cmd = [
+        "docker", "run", "--rm",
+        *java_opts,
+        "-v", f"{keys_dir.resolve()}:/keys",
+        "--entrypoint", "keytool",
+        "--user", uid_gid,
+        keycloak_image,
+        "-importkeystore",
+        "-srckeystore", "/keys/ca.p12",
+        "-srcstoretype", "PKCS12",
+        "-destkeystore", "/keys/ca.jks",
+        "-deststoretype", "JKS",
+        "-srcstorepass", "password",
+        "-deststorepass", "password",
+        "-noprompt",
+    ]
+
+    subprocess.run(cmd, check=True, capture_output=True)
+
+    return p12_path, jks_path
+
+
+def ensure_keycloak_keys(
+    keys_dir: Path,
+    compose_file: Path | None = None,
+    force: bool = False,
+) -> bool:
+    """Ensure all Keycloak TLS keys exist, generating if needed.
+
+    All keycloak keys are regenerated together since the certs form a
+    CA chain (localhost.crt and sampleuser.crt are signed by the CA).
+
+    Args:
+        keys_dir: Directory for key storage
+        compose_file: Optional docker-compose.yaml for keycloak image version
+        force: If True, regenerate all keys even if they exist
+
+    Returns:
+        True if keys were generated, False if they already existed
+    """
+    if not force and all((keys_dir / f).exists() for f in _KEYCLOAK_KEY_FILES):
+        return False
+
+    logger.info("Generating Keycloak TLS keys in %s", keys_dir)
+    generate_ca_keypair(keys_dir)
+    generate_localhost_cert(keys_dir)
+    generate_sampleuser_cert(keys_dir)
+    generate_ca_stores(keys_dir, compose_file)
+    return True
+
+
+def ensure_all_temp_keys(
+    platform_dir: Path,
+    keys_dir: Path,
+    compose_file: Path | None = None,
+    force: bool = False,
+) -> bool:
+    """Ensure all temporary keys exist for running the platform.
+
+    KAS keys are generated per-platform-dir (referenced by relative paths
+    in the platform config). Keycloak TLS keys are generated in a shared
+    keys_dir so they can be reused across platform variants.
+
+    Args:
+        platform_dir: Platform source directory (for KAS keys)
+        keys_dir: Shared directory for Keycloak TLS keys
+        compose_file: Optional docker-compose.yaml for keycloak image version
+        force: If True, regenerate all keys
+
+    Returns:
+        True if any keys were generated
+    """
+    kas_generated = ensure_keys_exist(platform_dir, force)
+    kc_generated = ensure_keycloak_keys(keys_dir, compose_file, force)
+    return kas_generated or kc_generated
 
 
 def setup_golden_keys(
