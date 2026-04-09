@@ -1,7 +1,9 @@
 """Docker compose service management."""
 
 import json
+import os
 import subprocess
+from pathlib import Path
 
 from otdf_local.config.ports import Ports
 from otdf_local.config.settings import Settings
@@ -12,9 +14,10 @@ from otdf_local.services.base import Service, ServiceInfo, ServiceType
 class DockerService(Service):
     """Manages Docker compose services (Keycloak, PostgreSQL)."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, keys_dir: Path | None = None) -> None:
         super().__init__(settings)
         self._compose_file = settings.docker_compose_file
+        self._keys_dir = keys_dir or settings.keys_dir
 
     @property
     def name(self) -> str:
@@ -37,11 +40,13 @@ class DockerService(Service):
         if not self._compose_file.exists():
             return False
 
+        env = {**os.environ, "KEYS_DIR": str(self._keys_dir.resolve())}
         result = subprocess.run(
             ["docker", "compose", "-f", str(self._compose_file), "up", "-d"],
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
+            env=env,
         )
         return result.returncode == 0
 
@@ -140,10 +145,13 @@ class DockerService(Service):
         ]
 
 
-def get_docker_service(settings: Settings | None = None) -> DockerService:
+def get_docker_service(
+    settings: Settings | None = None,
+    keys_dir: Path | None = None,
+) -> DockerService:
     """Get a DockerService instance."""
     if settings is None:
         from otdf_local.config.settings import get_settings
 
         settings = get_settings()
-    return DockerService(settings)
+    return DockerService(settings, keys_dir)

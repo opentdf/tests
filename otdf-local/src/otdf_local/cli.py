@@ -112,10 +112,26 @@ def up(
     start_platform = "platform" in service_list
     start_kas = "kas" in service_list
 
+    # Step 0: Ensure temporary keys exist
+    from otdf_local.utils.keys import ensure_all_temp_keys
+
+    print_info("Checking temporary keys...")
+    try:
+        generated = ensure_all_temp_keys(
+            settings.platform_dir,
+            settings.keys_dir,
+            compose_file=settings.docker_compose_file,
+        )
+        if generated:
+            print_success("Generated missing temporary keys")
+    except Exception as e:
+        print_error(f"Failed to generate temporary keys: {e}")
+        raise typer.Exit(1) from e
+
     # Step 1: Start Docker services
     if start_docker:
         print_info("Starting Docker services (Keycloak, PostgreSQL)...")
-        docker = get_docker_service(settings)
+        docker = get_docker_service(settings, keys_dir=settings.keys_dir)
         if not docker.start():
             print_error("Failed to start Docker services")
             raise typer.Exit(1)
