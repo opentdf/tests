@@ -638,5 +638,91 @@ def env(
             print(f"export {key}='{escaped_value}'", file=sys.stdout)
 
 
+@app.command()
+def configure(
+    feature: Annotated[
+        str | None,
+        typer.Argument(help="Feature name to configure (e.g. ec-wrap, key-management)"),
+    ] = None,
+    enable: Annotated[
+        bool | None,
+        typer.Option("--enable/--disable", help="Enable or disable the feature"),
+    ] = None,
+) -> None:
+    """Configure platform feature flags.
+
+    Without arguments, lists all available features and their current state.
+    With a feature name alone, shows the current state of that feature.
+    With --enable or --disable, updates the setting persistently.
+
+    Changes survive restarts. If the platform config already exists it is
+    updated immediately; run 'otdf-local restart platform' to pick up the
+    change in a running environment.
+
+    Examples:
+
+        otdf-local configure                   # list all features
+
+        otdf-local configure ec-wrap           # show ec-wrap state
+
+        otdf-local configure ec-wrap --enable  # enable EC-wrapped TDF
+
+        otdf-local configure ec-wrap --disable # disable EC-wrapped TDF
+    """
+    from rich.table import Table
+
+    from otdf_local.config.overrides import FEATURES, apply_overrides, load_overrides, save_overrides
+    from otdf_local.utils.yaml import load_yaml, save_yaml
+
+    settings = get_settings()
+    overrides = load_overrides(settings.xtest_root)
+
+    if feature is None:
+        # List all features with their current state
+        table = Table(title="Platform Feature Flags")
+        table.add_column("Feature", style="cyan")
+        table.add_column("Description")
+        table.add_column("State")
+        for name, (_, description) in FEATURES.items():
+            if name in overrides:
+                state = "[green]enabled[/green]" if overrides[name] else "[red]disabled[/red]"
+            else:
+                state = "[dim]default[/dim]"
+            table.add_row(name, description, state)
+        console.print(table)
+        return
+
+    if feature not in FEATURES:
+        print_error(f"Unknown feature: {feature}")
+        print_info(f"Valid features: {', '.join(FEATURES)}")
+        raise typer.Exit(1)
+
+    if enable is None:
+        # Show current state of this feature
+        if feature in overrides:
+            state = "enabled" if overrides[feature] else "disabled"
+            console.print(f"{feature}: {state} (override)")
+        else:
+            console.print(f"{feature}: default (no override set)")
+        return
+
+    # Save override
+    overrides[feature] = enable
+    save_overrides(settings.xtest_root, overrides)
+
+    # Apply immediately to live config if it already exists
+    platform_config = settings.platform_config
+    if platform_config.exists():
+        data = load_yaml(platform_config)
+        apply_overrides(data, {feature: enable})
+        save_yaml(platform_config, data)
+        action = "enabled" if enable else "disabled"
+        print_success(f"{feature} {action} (applied to existing config)")
+        print_info("Run 'otdf-local restart platform' to apply to a running environment")
+    else:
+        action = "enabled" if enable else "disabled"
+        print_success(f"{feature} {action} (will apply on next start)")
+
+
 if __name__ == "__main__":
     app()
