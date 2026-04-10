@@ -12,6 +12,7 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
+from otdf_local.config.overrides import apply_overrides, load_overrides
 from otdf_local.utils.keys import get_golden_keyring_entries, setup_golden_keys
 from otdf_local.utils.yaml import (
     append_to_list,
@@ -68,6 +69,13 @@ class PlatformService(Service):
         }
 
         copy_yaml_with_updates(template_path, config_path, updates)
+
+        # Apply user-specified feature overrides
+        overrides = load_overrides(self.settings.xtest_root)
+        if overrides:
+            data = load_yaml(config_path)
+            apply_overrides(data, overrides)
+            save_yaml(config_path, data)
 
         # Set up golden keys for legacy TDF tests
         self._setup_golden_keys(config_path)
