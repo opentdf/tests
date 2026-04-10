@@ -67,10 +67,10 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
         KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Paths to additional KAS log files
     """
     # Import here to avoid circular dependency
-    from tdfs import PlatformFeatureSet
+    from tdfs import get_platform_features
 
     # Check if platform version supports audit logging
-    pfs = PlatformFeatureSet()
+    pfs = get_platform_features()
     platform_supports_audit = "audit_logging" in pfs.features
 
     # Check if disabled via CLI or environment variable

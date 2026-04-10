@@ -44,7 +44,7 @@ def attribute_single_kas_grant(
     temporary_namespace: abac.Namespace,
 ):
     """Attribute with single KAS grant on value 'a'."""
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     anyof = otdfctl.attribute_create(
         temporary_namespace, "letter", abac.AttributeRule.ANY_OF, ["a"]
     )
@@ -90,7 +90,7 @@ def attribute_two_kas_grant_or(
     assert sm.attribute_value.value == "alpha"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_value(kas_entry_alpha, alpha)
         otdfctl.grant_assign_value(kas_entry_beta, beta)
     else:
@@ -132,7 +132,7 @@ def attribute_two_kas_grant_and(
     assert sm2.attribute_value.value == "bet"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_value(kas_entry_alpha, alef)
         otdfctl.grant_assign_value(kas_entry_beta, bet)
     else:
@@ -171,7 +171,7 @@ def one_attribute_attr_kas_grant(
     assert sm.attribute_value.value == "alpha"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_attr(kas_entry_gamma, anyof)
     else:
         kas_key_alpha = otdfctl.kas_registry_create_public_key_only(
@@ -292,7 +292,7 @@ def attr_and_value_kas_grants_or(
     assert sm.attribute_value.value == "alpha"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_attr(kas_entry_gamma, anyof)
         otdfctl.grant_assign_value(kas_entry_alpha, beta)
     else:
@@ -337,7 +337,7 @@ def attr_and_value_kas_grants_and(
     assert sm2.attribute_value.value == "beta"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_attr(kas_entry_gamma, allof)
         otdfctl.grant_assign_value(kas_entry_alpha, beta)
     else:
@@ -375,7 +375,7 @@ def one_attribute_ns_kas_grant(
     sm = otdfctl.scs_map(otdf_client_scs, alpha)
     assert sm.attribute_value.value == "alpha"
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_ns(kas_entry_delta, temporary_namespace)
     else:
         kas_key_ns = otdfctl.kas_registry_create_public_key_only(
@@ -395,7 +395,7 @@ def attribute_missing_value_key_mapping(
     root_key: str,
 ) -> tuple[str, str]:
     """Attribute with attribute-level managed key mapping and a missing value FQN."""
-    pfs = tdfs.PlatformFeatureSet()
+    pfs = tdfs.get_platform_features()
     if "key_management" not in pfs.features:
         pytest.skip("Key management not supported by platform")
 
@@ -449,7 +449,7 @@ def ns_and_value_kas_grants_or(
     assert sm.attribute_value.value == "alpha"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_value(kas_entry_alpha, beta)
         otdfctl.grant_assign_ns(kas_entry_delta, temp_namespace)
     else:
@@ -494,7 +494,7 @@ def ns_and_value_kas_grants_and(
     assert sm2.attribute_value.value == "beta"
 
     # Now assign it to the current KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_value(kas_entry_alpha, beta)
         otdfctl.grant_assign_ns(kas_entry_delta, temp_namespace)
     else:
@@ -538,7 +538,7 @@ def attribute_default_rsa(
     assert sm.attribute_value.value == "wrapped"
 
     # Assign RSA key on default KAS
-    if "key_management" not in tdfs.PlatformFeatureSet().features:
+    if "key_management" not in tdfs.get_platform_features().features:
         otdfctl.grant_assign_value(kas_entry_default, wrapped)
     else:
         kas_key = otdfctl.kas_registry_create_public_key_only(

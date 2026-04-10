@@ -1,4 +1,5 @@
 import enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -162,6 +163,14 @@ class KasGrantValue(BaseModelIgnoreExtra):
     value_id: str
     key_access_server_id: str | None = None
 
+
+kas_algorithm_type = Literal[
+    "rsa:2048",
+    "rsa:4096",
+    "ec:secp256r1",
+    "ec:secp384r1",
+    "ec:secp521r1",
+]
 
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048 = 1
 KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096 = 2
