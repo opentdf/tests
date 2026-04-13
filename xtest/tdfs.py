@@ -163,17 +163,6 @@ def get_platform_features() -> PlatformFeatureSet:
     return _cached_pfs
 
 
-_cached_pfs: PlatformFeatureSet | None = None
-
-
-def get_platform_features() -> PlatformFeatureSet:
-    """Return a cached PlatformFeatureSet singleton."""
-    global _cached_pfs
-    if _cached_pfs is None:
-        _cached_pfs = PlatformFeatureSet()
-    return _cached_pfs
-
-
 class DataAttribute(BaseModel):
     attribute: str
     isDefault: bool | None = None
