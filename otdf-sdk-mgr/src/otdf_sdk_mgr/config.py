@@ -71,6 +71,10 @@ SDK_GITHUB_REPOS: dict[str, str] = {
 }
 
 GO_INSTALL_PREFIX = "go run github.com/opentdf/otdfctl"
+GO_INSTALL_PREFIX_PLATFORM = "go run github.com/opentdf/platform/otdfctl"
+
+GO_MODULE_PATH = "github.com/opentdf/otdfctl"
+GO_MODULE_PATH_PLATFORM = "github.com/opentdf/platform/otdfctl"
 
 LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
@@ -110,5 +114,42 @@ SDK_TAG_INFIXES: dict[str, str] = {
     "js": "sdk",
     "platform": "service",
 }
+
+# When resolving go versions from the platform repo, use "otdfctl" infix
+# (tags are otdfctl/v0.X.Y in the platform monorepo)
+SDK_TAG_INFIXES_PLATFORM_GO = "otdfctl"
+
+
+def go_git_url(source: str | None = None) -> str:
+    """Return the git URL for Go SDK resolution based on source.
+
+    Args:
+        source: "platform" to use the platform monorepo, None/"standalone" for the
+                standalone otdfctl repo.
+    """
+    if source == "platform":
+        return SDK_GIT_URLS["platform"]
+    return SDK_GIT_URLS["go"]
+
+
+def go_tag_infix(source: str | None = None) -> str | None:
+    """Return the tag infix for Go SDK resolution based on source."""
+    if source == "platform":
+        return SDK_TAG_INFIXES_PLATFORM_GO
+    return None
+
+
+def go_install_prefix(source: str | None = None) -> str:
+    """Return the go install/run prefix based on source."""
+    if source == "platform":
+        return GO_INSTALL_PREFIX_PLATFORM
+    return GO_INSTALL_PREFIX
+
+
+def go_module_path(source: str | None = None) -> str:
+    """Return the Go module path based on source."""
+    if source == "platform":
+        return GO_MODULE_PATH_PLATFORM
+    return GO_MODULE_PATH
 
 ALL_SDKS = ["go", "js", "java"]

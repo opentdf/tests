@@ -8,6 +8,11 @@ inputs:
   version-info:
     description: JSON-encoded output of otdf-sdk-mgr versions resolve
     required: true
+  platform-otdfctl-dir:
+    description: >-
+      Absolute path to platform's otdfctl/ directory. When set and sdk is "go",
+      head versions are symlinked from here instead of checked out from the
+      standalone opentdf/otdfctl repo.
 outputs:
   version-a:
     description: "Object containing tag, sha, and name of a version checked out"
@@ -33,19 +38,30 @@ runs:
       run: |
         case "${{ inputs.sdk }}" in
           "go")
-            echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
+            if [[ -n "$PLATFORM_OTDFCTL_DIR" && -f "$PLATFORM_OTDFCTL_DIR/go.mod" ]]; then
+              echo "sdk_repo=opentdf/platform" >> $GITHUB_ENV
+              echo "sdk_source=platform" >> $GITHUB_ENV
+              echo "Using platform-embedded otdfctl from $PLATFORM_OTDFCTL_DIR"
+            else
+              echo "sdk_repo=opentdf/otdfctl" >> $GITHUB_ENV
+              echo "sdk_source=standalone" >> $GITHUB_ENV
+            fi
             ;;
           "java")
             echo "sdk_repo=opentdf/java-sdk" >> $GITHUB_ENV
+            echo "sdk_source=standalone" >> $GITHUB_ENV
             ;;
           "js")
             echo "sdk_repo=opentdf/web-sdk" >> $GITHUB_ENV
+            echo "sdk_source=standalone" >> $GITHUB_ENV
             ;;
           *)
             echo "Invalid SDK specified: ${{ inputs.sdk }}" >> $GITHUB_STEP_SUMMARY
             exit 1
             ;;
         esac
+      env:
+        PLATFORM_OTDFCTL_DIR: ${{ inputs.platform-otdfctl-dir }}
 
     - name: resolve versions
       id: resolve
@@ -131,10 +147,36 @@ runs:
       env:
         version_info: ${{ inputs.version-info }}
 
+    - name: symlink platform-embedded otdfctl for head versions
+      if: env.sdk_source == 'platform'
+      shell: bash
+      run: |
+        # When otdfctl lives inside the platform repo, symlink it into
+        # sdk/go/src/{tag} so the Makefile builds it the same way.
+        for slot in a b c d; do
+          case "$slot" in
+            a) version_json='${{ steps.resolve.outputs.version-a }}' ; needs_source='${{ steps.check-source.outputs.needs-source-a }}' ;;
+            b) version_json='${{ steps.resolve.outputs.version-b }}' ; needs_source='${{ steps.check-source.outputs.needs-source-b }}' ;;
+            c) version_json='${{ steps.resolve.outputs.version-c }}' ; needs_source='${{ steps.check-source.outputs.needs-source-c }}' ;;
+            d) version_json='${{ steps.resolve.outputs.version-d }}' ; needs_source='${{ steps.check-source.outputs.needs-source-d }}' ;;
+          esac
+          if [[ -z "$version_json" || "$needs_source" != "true" ]]; then
+            continue
+          fi
+          tag=$(echo "$version_json" | jq -r '.tag')
+          src_dir="${{ inputs.path }}/${{ inputs.sdk }}/src/${tag}"
+          echo "Symlinking platform otdfctl to ${src_dir}"
+          mkdir -p "$(dirname "$src_dir")"
+          ln -sfn "$PLATFORM_OTDFCTL_DIR" "$src_dir"
+        done
+      env:
+        PLATFORM_OTDFCTL_DIR: ${{ inputs.platform-otdfctl-dir }}
+
     - name: checkout version a
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
-        steps.resolve.outputs.version-a != ''
+        env.sdk_source != 'platform'
+        && steps.resolve.outputs.version-a != ''
         && steps.check-source.outputs.needs-source-a == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-a).tag }}
@@ -145,7 +187,8 @@ runs:
     - name: checkout version b
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
-        steps.resolve.outputs.version-b != ''
+        env.sdk_source != 'platform'
+        && steps.resolve.outputs.version-b != ''
         && steps.check-source.outputs.needs-source-b == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-b).tag }}
@@ -156,7 +199,8 @@ runs:
     - name: checkout version c
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
-        steps.resolve.outputs.version-c != ''
+        env.sdk_source != 'platform'
+        && steps.resolve.outputs.version-c != ''
         && steps.check-source.outputs.needs-source-c == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-c).tag }}
@@ -167,7 +211,8 @@ runs:
     - name: checkout version d
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: >-
-        steps.resolve.outputs.version-d != ''
+        env.sdk_source != 'platform'
+        && steps.resolve.outputs.version-d != ''
         && steps.check-source.outputs.needs-source-d == 'true'
       with:
         path: ${{ inputs.path }}/${{ inputs.sdk }}/src/${{ fromJson(steps.resolve.outputs.version-d).tag }}
