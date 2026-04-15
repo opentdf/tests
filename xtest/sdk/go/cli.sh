@@ -22,11 +22,15 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
+  MODULE_PATH="github.com/opentdf/otdfctl"
+  if [ -f "$SCRIPT_DIR/.module-path" ]; then
+    MODULE_PATH=$(tr -d '[:space:]' <"$SCRIPT_DIR/.module-path")
+  fi
   if [ -f "$SCRIPT_DIR/.version" ]; then
     OTDFCTL_VERSION=$(tr -d '[:space:]' <"$SCRIPT_DIR/.version")
-    cmd=(go run "github.com/opentdf/otdfctl@${OTDFCTL_VERSION}")
+    cmd=(go run "${MODULE_PATH}@${OTDFCTL_VERSION}")
   else
-    cmd=(go run "github.com/opentdf/otdfctl@latest")
+    cmd=(go run "${MODULE_PATH}@latest")
   fi
 fi
 

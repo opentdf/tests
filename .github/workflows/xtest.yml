@@ -28,6 +28,11 @@ on:
         type: string
         default: all
         description: "SDK to focus on (go, js, java, all)"
+      otdfctl-source:
+        required: false
+        type: string
+        default: auto
+        description: "otdfctl source: 'auto' (detect from platform checkout), 'standalone', or 'platform'"
   workflow_call:
     inputs:
       platform-ref:
@@ -50,6 +55,10 @@ on:
         required: false
         type: string
         default: all
+      otdfctl-source:
+        required: false
+        type: string
+        default: auto
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -198,8 +207,9 @@ jobs:
               const tagToSha = {};
               const headTags = [];
 
-              for (const { tag, head, sha, alias, err, release } of refInfo) {
-                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
+              for (const { tag, head, sha, alias, err, release, source } of refInfo) {
+                const goRepoName = source === 'platform' ? 'platform' : 'otdfctl';
+                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? goRepoName : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
                 const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
                 const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
                 const tagLink = (release && tag)
@@ -290,6 +300,29 @@ jobs:
         with:
           node-version: "22.x"
 
+      ######## DETECT PLATFORM-EMBEDDED OTDFCTL #############
+      - name: Detect platform-embedded otdfctl
+        id: detect-otdfctl
+        run: |
+          PLATFORM_DIR="${{ steps.run-platform.outputs.platform-working-dir }}"
+          if [[ "$OTDFCTL_SOURCE_INPUT" == "auto" || -z "$OTDFCTL_SOURCE_INPUT" ]]; then
+            if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+              echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
+              echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
+              echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            else
+              echo "otdfctl not found in platform checkout; using standalone repo"
+              echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ "$OTDFCTL_SOURCE_INPUT" == "platform" ]]; then
+            echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
+            echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+          else
+            echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          OTDFCTL_SOURCE_INPUT: ${{ inputs.otdfctl-source }}
+
       ######### CHECKOUT JS CLI #############
       - name: Configure js-sdk
         id: configure-js
@@ -324,6 +357,7 @@ jobs:
           path: otdftests/xtest/sdk
           sdk: go
           version-info: "${{ needs.resolve-versions.outputs.go }}"
+          platform-otdfctl-dir: ${{ steps.detect-otdfctl.outputs.otdfctl-dir }}
 
       - name: Cache Go modules
         if: fromJson(steps.configure-go.outputs.heads)[0] != null
@@ -345,11 +379,15 @@ jobs:
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null && env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
+        if: >-
+          steps.detect-otdfctl.outputs.otdfctl-source != 'platform'
+          && fromJson(steps.configure-go.outputs.heads)[0] != null
+          && env.FOCUS_SDK == 'go'
+          && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
         run: |-
-          echo "Replacing go.mod packages..."
+          echo "Replacing go.mod packages (standalone otdfctl)..."
           PLATFORM_DIR_ABS="$(pwd)/${PLATFORM_WORKING_DIR}"
           OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
           echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
