@@ -172,13 +172,17 @@ runs:
             fi
           elif [[ "$INPUT_SDK" == "go" && -n "$PLATFORM_OTDFCTL_DIR" && "$needs_source" == "true" ]]; then
             # Auto-detect fallback: resolver used standalone repo but the
-            # test job detected otdfctl in the platform checkout. Symlink all
-            # head go versions to the existing dir (backward-compatible behavior).
-            # Note: no SHA comparison here — all head versions are symlinked regardless of commit.
-            echo "::warning::Auto-detecting platform source for Go version ${tag} (SHA ${sha}). Platform dir SHA: ${PLATFORM_OTDFCTL_SHA:-unknown}. No SHA match verification performed."
-            is_platform=true
-            use_existing=true
-            needs_source=false
+            # test job detected otdfctl in the platform checkout. Only reuse
+            # the platform dir when the resolved SHA matches; otherwise fall
+            # through to a standalone checkout so we test the correct code.
+            if [[ -n "$PLATFORM_OTDFCTL_SHA" && "$sha" == "$PLATFORM_OTDFCTL_SHA" ]]; then
+              echo "Auto-detected platform source for Go version ${tag} — SHA ${sha} matches platform checkout."
+              is_platform=true
+              use_existing=true
+              needs_source=false
+            else
+              echo "::notice::Go version ${tag} (SHA ${sha}) does not match platform checkout (SHA ${PLATFORM_OTDFCTL_SHA:-unknown}); checking out standalone repo."
+            fi
           fi
 
           echo "needs-checkout-${slot}=${needs_source}" >> "$GITHUB_OUTPUT"

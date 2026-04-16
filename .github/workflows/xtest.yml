@@ -90,7 +90,9 @@ jobs:
       # When explicitly set to 'platform', tells the Go resolver to resolve
       # against opentdf/platform tags instead of the standalone otdfctl repo.
       # In 'auto' mode, releases resolve from standalone; the detect-otdfctl
-      # step later checks for platform-embedded otdfctl for head builds only.
+      # step later checks for platform-embedded otdfctl for head builds only,
+      # and setup-cli-tool reuses the platform checkout only when the resolved
+      # SHA matches the platform checkout SHA.
       OTDFCTL_SOURCE: "${{ inputs.otdfctl-source == 'platform' && 'platform' || '' }}"
     steps:
       - name: Validate focus-sdk input
