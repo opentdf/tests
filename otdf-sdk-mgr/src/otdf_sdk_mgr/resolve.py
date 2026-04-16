@@ -147,7 +147,7 @@ def resolve(
         repo = Git()
         if version == "main" or version == "refs/heads/main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
-            sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
+            sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
             return _annotate(
                 {
                     "sdk": sdk,
