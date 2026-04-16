@@ -32,7 +32,7 @@ on:
         required: false
         type: string
         default: auto
-        description: "otdfctl source: 'auto' (detect from platform checkout), 'standalone', or 'platform'"
+        description: "otdfctl source: 'auto' (standalone for releases, detect platform for head builds), 'standalone', or 'platform'"
   workflow_call:
     inputs:
       platform-ref:
@@ -89,8 +89,8 @@ jobs:
       JAVA_REF: "${{ inputs.java-ref }}"
       # When explicitly set to 'platform', tells the Go resolver to resolve
       # against opentdf/platform tags instead of the standalone otdfctl repo.
-      # Auto-detection of the platform source is handled downstream by the
-      # detect-otdfctl step and setup-cli-tool action.
+      # In 'auto' mode, releases resolve from standalone; the detect-otdfctl
+      # step later checks for platform-embedded otdfctl for head builds only.
       OTDFCTL_SOURCE: "${{ inputs.otdfctl-source == 'platform' && 'platform' || '' }}"
     steps:
       - name: Validate focus-sdk input
