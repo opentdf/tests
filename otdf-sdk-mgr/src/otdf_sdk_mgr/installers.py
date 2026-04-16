@@ -11,11 +11,10 @@ import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
-    GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
     get_sdk_dir,
     get_sdk_dirs,
-    go_install_prefix,
+    go_module_path,
 )
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
@@ -29,8 +28,10 @@ class InstallError(Exception):
 def install_go_release(version: str, dist_dir: Path, source: str | None = None) -> None:
     """Install a Go CLI release by writing a .version file.
 
-    The cli.sh and otdfctl.sh wrappers read .version (and optionally .module-path)
-    and use `go run <module>@{version}` instead of a local binary.
+    The cli.sh and otdfctl.sh wrappers read .version and use
+    `go run <module>@{version}` instead of a local binary.
+    The .version file contains `module-path@version`
+    (e.g., `github.com/opentdf/otdfctl@v0.24.0`).
 
     Args:
         version: Version string (e.g., "v0.24.0" or "otdfctl/v0.24.0").
@@ -40,16 +41,14 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
     tag = normalize_version(version)
-    (dist_dir / ".version").write_text(f"{tag}\n")
-    if source == "platform":
-        (dist_dir / ".module-path").write_text(f"{GO_MODULE_PATH_PLATFORM}\n")
+    module = go_module_path(source)
+    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
     shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
     shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
     shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
-    install_module = go_install_prefix(source).removeprefix("go run ")
-    print(f"  Pre-warming Go cache for {install_module}@{tag}...")
+    print(f"  Pre-warming Go cache for {module}@{tag}...")
     result = subprocess.run(
-        ["go", "install", f"{install_module}@{tag}"],
+        ["go", "install", f"{module}@{tag}"],
         capture_output=True,
         text=True,
     )

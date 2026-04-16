@@ -56,7 +56,7 @@ otdf-sdk-mgr java-fixup
 
 ## How Release Installs Work
 
-- **Go**: Writes a `.version` file (and optionally `.module-path`); `cli.sh`/`otdfctl.sh` use `go run <module>@{version}` (no local compilation needed, Go caches the binary). The module path is `github.com/opentdf/platform/otdfctl` for platform-embedded releases or `github.com/opentdf/otdfctl` for standalone releases.
+- **Go**: Writes a `.version` file containing `module-path@version` (e.g., `github.com/opentdf/otdfctl@v0.24.0`); `cli.sh`/`otdfctl.sh` use `go run <module>@{version}` (no local compilation needed, Go caches the binary). The module path is `github.com/opentdf/platform/otdfctl` for platform-embedded releases or `github.com/opentdf/otdfctl` for standalone releases.
 - **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
 - **Java**: Downloads `cmdline.jar` from GitHub Releases; `cli.sh` uses `java -jar cmdline.jar`
 
