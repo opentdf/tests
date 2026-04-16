@@ -61,8 +61,7 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
         msg = f"go install pre-warm failed: {result.stderr.strip()}"
         if module == GO_MODULE_PATH_PLATFORM:
             raise InstallError(
-                f"{msg}\n"
-                f"The platform module path {module}@{tag} may not be published yet."
+                f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
         print(f"  Warning: {msg} (will retry at runtime)")
     print(f"  Go release {tag} installed to {dist_dir}")
