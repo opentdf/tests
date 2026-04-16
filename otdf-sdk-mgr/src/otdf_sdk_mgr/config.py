@@ -116,8 +116,16 @@ SDK_TAG_INFIXES: dict[str, str] = {
 }
 
 # When resolving go versions from the platform repo, use "otdfctl" infix
-# (tags are otdfctl/v0.X.Y in the platform monorepo)
+# (tags are otdfctl/vX.Y.Z in the platform monorepo)
 SDK_TAG_INFIXES_PLATFORM_GO = "otdfctl"
+
+_VALID_GO_SOURCES = {None, "standalone", "platform"}
+
+
+def _validate_go_source(source: str | None) -> None:
+    """Raise ValueError if source is not a recognised Go source."""
+    if source not in _VALID_GO_SOURCES:
+        raise ValueError(f"Invalid Go source {source!r}; expected one of {_VALID_GO_SOURCES}")
 
 
 def go_git_url(source: str | None = None) -> str:
@@ -127,6 +135,7 @@ def go_git_url(source: str | None = None) -> str:
         source: "platform" to use the platform monorepo, None/"standalone" for the
                 standalone otdfctl repo.
     """
+    _validate_go_source(source)
     if source == "platform":
         return SDK_GIT_URLS["platform"]
     return SDK_GIT_URLS["go"]
@@ -134,25 +143,15 @@ def go_git_url(source: str | None = None) -> str:
 
 def go_tag_infix(source: str | None = None) -> str | None:
     """Return the tag infix for Go SDK resolution based on source."""
+    _validate_go_source(source)
     if source == "platform":
         return SDK_TAG_INFIXES_PLATFORM_GO
     return None
 
 
-def go_install_prefix(source: str | None = None) -> str:
-    """Return the go install/run prefix based on source."""
-    if source == "platform":
-        return GO_INSTALL_PREFIX_PLATFORM
-    return GO_INSTALL_PREFIX_STANDALONE
-
-
-_VALID_GO_SOURCES = {None, "standalone", "platform"}
-
-
 def go_module_path(source: str | None = None) -> str:
     """Return the Go module path based on source."""
-    if source not in _VALID_GO_SOURCES:
-        raise ValueError(f"Invalid Go source {source!r}; expected one of {_VALID_GO_SOURCES}")
+    _validate_go_source(source)
     if source == "platform":
         return GO_MODULE_PATH_PLATFORM
     return GO_MODULE_PATH

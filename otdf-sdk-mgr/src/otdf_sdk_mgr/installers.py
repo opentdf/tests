@@ -11,6 +11,7 @@ import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
+    GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
     get_sdk_dir,
     get_sdk_dirs,
@@ -36,7 +37,8 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     Args:
         version: Version string (e.g., "v0.24.0" or "otdfctl/v0.24.0").
         dist_dir: Target distribution directory.
-        source: "platform" to use the platform monorepo module path, None for standalone.
+        source: "platform" to use the platform monorepo module path,
+            None or "standalone" for standalone.
     """
     go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -56,9 +58,13 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
         text=True,
     )
     if result.returncode != 0:
-        print(
-            f"  Warning: go install pre-warm failed (will retry at runtime): {result.stderr.strip()}"
-        )
+        msg = f"go install pre-warm failed: {result.stderr.strip()}"
+        if module == GO_MODULE_PATH_PLATFORM:
+            raise InstallError(
+                f"{msg}\n"
+                f"The platform module path {module}@{tag} may not be published yet."
+            )
+        print(f"  Warning: {msg} (will retry at runtime)")
     print(f"  Go release {tag} installed to {dist_dir}")
 
 

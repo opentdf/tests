@@ -112,7 +112,14 @@ def list_go_versions() -> list[dict[str, Any]]:
             version = tag.removeprefix(f"{infix}/")
             if not parse_semver(version):
                 continue
-            # Platform entries take precedence (canonical location post-migration)
+            # Platform entries take precedence (canonical location post-migration);
+            # if the same version exists in both repos, the platform entry
+            # silently overwrites the standalone one.
+            if version in seen:
+                print(
+                    f"Note: version {version} found in both standalone and platform repos; using platform source.",
+                    file=sys.stderr,
+                )
             seen[version] = {
                 "sdk": "go",
                 "version": version,
@@ -121,7 +128,10 @@ def list_go_versions() -> list[dict[str, Any]]:
                 "stable": is_stable(version),
             }
     except git.exc.GitCommandError as e:
-        print(f"Warning: failed to query platform repo for go tags: {e}", file=sys.stderr)
+        print(
+            f"::warning::Failed to query platform repo for go tags: {e}",
+            file=sys.stderr,
+        )
 
     results = list(seen.values())
     results.sort(key=lambda r: semver_sort_key(r["version"]))

@@ -113,8 +113,15 @@ def resolve_versions(
         raise typer.Exit(2)
     infix = SDK_TAG_INFIXES.get(sdk)
 
-    # Allow overriding the Go SDK source (standalone otdfctl repo vs platform monorepo)
+    # Allow overriding the Go SDK source via OTDFCTL_SOURCE env var
+    # (standalone otdfctl repo vs platform monorepo)
     go_source = os.environ.get("OTDFCTL_SOURCE") if sdk == "go" else None
+    if go_source and go_source not in ("standalone", "platform"):
+        typer.echo(
+            f"Warning: unrecognized OTDFCTL_SOURCE={go_source!r}; expected 'platform' or 'standalone'",
+            err=True,
+        )
+        go_source = None
 
     results: list[ResolveResult] = []
     shas: set[str] = set()
