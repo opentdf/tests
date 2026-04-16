@@ -148,70 +148,82 @@ def resolve(
         if version == "main" or version == "refs/heads/main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
             sha, _ = [tag for tag in all_heads if "refs/heads/main" in tag][0]
-            return _annotate({
-                "sdk": sdk,
-                "alias": version,
-                "head": True,
-                "sha": sha,
-                "tag": "main",
-            })
+            return _annotate(
+                {
+                    "sdk": sdk,
+                    "alias": version,
+                    "head": True,
+                    "sha": sha,
+                    "tag": "main",
+                }
+            )
 
         if re.match(SHA_REGEX, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
             matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
-                return _annotate({
-                    "sdk": sdk,
-                    "alias": version[:7],
-                    "sha": version,
-                    "tag": version,
-                })
+                return _annotate(
+                    {
+                        "sdk": sdk,
+                        "alias": version[:7],
+                        "sha": version,
+                        "tag": version,
+                    }
+                )
             if len(matching_tags) > 1:
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
                         pr_number = tag.split("/")[2]
-                        return _annotate({
-                            "sdk": sdk,
-                            "alias": version,
-                            "head": True,
-                            "sha": sha,
-                            "tag": f"pull-{pr_number}",
-                        })
+                        return _annotate(
+                            {
+                                "sdk": sdk,
+                                "alias": version,
+                                "head": True,
+                                "sha": sha,
+                                "tag": f"pull-{pr_number}",
+                            }
+                        )
                 for sha, tag in matching_tags:
                     mq_match = re.match(MERGE_QUEUE_REGEX, tag)
                     if mq_match:
                         to_branch = mq_match.group("branch")
                         pr_number = mq_match.group("pr_number")
                         if to_branch and pr_number:
-                            return _annotate({
+                            return _annotate(
+                                {
+                                    "sdk": sdk,
+                                    "alias": version,
+                                    "head": True,
+                                    "pr": pr_number,
+                                    "sha": sha,
+                                    "tag": f"mq-{to_branch}-{pr_number}",
+                                }
+                            )
+                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
+                        flattag = "mq--" + suffix.replace("/", "--")
+                        return _annotate(
+                            {
                                 "sdk": sdk,
                                 "alias": version,
                                 "head": True,
-                                "pr": pr_number,
                                 "sha": sha,
-                                "tag": f"mq-{to_branch}-{pr_number}",
-                            })
-                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
-                        flattag = "mq--" + suffix.replace("/", "--")
-                        return _annotate({
-                            "sdk": sdk,
-                            "alias": version,
-                            "head": True,
-                            "sha": sha,
-                            "tag": flattag,
-                        })
+                                "tag": flattag,
+                            }
+                        )
                     head = False
                     if tag.startswith("refs/heads/"):
                         head = True
                         tag = tag.split("refs/heads/")[-1]
                     flattag = tag.replace("/", "--")
-                    return _annotate({
-                        "sdk": sdk,
-                        "alias": version,
-                        "head": head,
-                        "sha": sha,
-                        "tag": flattag,
-                    })
+                    return _annotate(
+                        {
+                            "sdk": sdk,
+                            "alias": version,
+                            "head": head,
+                            "sha": sha,
+                            "tag": flattag,
+                        }
+                    )
 
                 return {
                     "sdk": sdk,
@@ -226,12 +238,14 @@ def resolve(
                 tag = tag.split("refs/tags/")[-1]
             if infix:
                 tag = tag.split(f"{infix}/")[-1]
-            return _annotate({
-                "sdk": sdk,
-                "alias": version,
-                "sha": sha,
-                "tag": tag,
-            })
+            return _annotate(
+                {
+                    "sdk": sdk,
+                    "alias": version,
+                    "sha": sha,
+                    "tag": tag,
+                }
+            )
 
         if version.startswith("refs/pull/"):
             merge_heads = [
@@ -245,14 +259,16 @@ def resolve(
                     "err": f"pull request {pr_number} not found in {sdk_url}",
                 }
             sha, _ = merge_heads[0]
-            return _annotate({
-                "sdk": sdk,
-                "alias": version,
-                "head": True,
-                "pr": pr_number,
-                "sha": sha,
-                "tag": f"pull-{pr_number}",
-            })
+            return _annotate(
+                {
+                    "sdk": sdk,
+                    "alias": version,
+                    "head": True,
+                    "pr": pr_number,
+                    "sha": sha,
+                    "tag": f"pull-{pr_number}",
+                }
+            )
 
         remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
@@ -267,13 +283,15 @@ def resolve(
 
         if version in all_listed_branches:
             sha = all_listed_branches[version]
-            return _annotate({
-                "sdk": sdk,
-                "alias": version,
-                "head": True,
-                "sha": sha,
-                "tag": version,
-            })
+            return _annotate(
+                {
+                    "sdk": sdk,
+                    "alias": version,
+                    "head": True,
+                    "sha": sha,
+                    "tag": version,
+                }
+            )
 
         if infix and version.startswith(f"{infix}/"):
             version = version.split(f"{infix}/")[-1]
@@ -317,13 +335,15 @@ def resolve(
                 if not matching_tags:
                     # No versions with CLI found, fall back to building latest from source
                     sha, tag = stable_tags[-1]
-                    return _annotate({
-                        "sdk": sdk,
-                        "alias": alias,
-                        "head": True,  # Mark as head to trigger source checkout
-                        "sha": sha,
-                        "tag": tag,
-                    })
+                    return _annotate(
+                        {
+                            "sdk": sdk,
+                            "alias": alias,
+                            "head": True,  # Mark as head to trigger source checkout
+                            "sha": sha,
+                            "tag": tag,
+                        }
+                    )
             else:
                 matching_tags = stable_tags[-1:]
         else:
@@ -348,13 +368,15 @@ def resolve(
         release = tag
         if infix:
             release = f"{infix}/{release}"
-        return _annotate({
-            "sdk": sdk,
-            "alias": alias,
-            "release": release,
-            "sha": sha,
-            "tag": tag,
-        })
+        return _annotate(
+            {
+                "sdk": sdk,
+                "alias": alias,
+                "release": release,
+                "sha": sha,
+                "tag": tag,
+            }
+        )
     except Exception as e:
         return {
             "sdk": sdk,

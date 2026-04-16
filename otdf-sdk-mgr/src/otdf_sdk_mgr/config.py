@@ -152,4 +152,5 @@ def go_module_path(source: str | None = None) -> str:
         return GO_MODULE_PATH_PLATFORM
     return GO_MODULE_PATH
 
+
 ALL_SDKS = ["go", "js", "java"]
