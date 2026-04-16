@@ -74,12 +74,16 @@ def artifact(
     dist_name: Annotated[
         Optional[str], typer.Option("--dist-name", help="Override dist directory name")
     ] = None,
+    source: Annotated[
+        Optional[str],
+        typer.Option(help='Source repo for Go CLI (e.g., "platform" for monorepo)'),
+    ] = None,
 ) -> None:
     """Install a single SDK version (used by CI)."""
     from otdf_sdk_mgr.installers import InstallError, cmd_install
 
     try:
-        cmd_install(sdk, version, dist_name=dist_name)
+        cmd_install(sdk, version, dist_name=dist_name, source=source)
     except InstallError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

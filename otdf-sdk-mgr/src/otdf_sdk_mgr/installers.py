@@ -59,7 +59,7 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     print(f"  Go release {tag} installed to {dist_dir}")
 
 
-def install_js_release(version: str, dist_dir: Path) -> None:
+def install_js_release(version: str, dist_dir: Path, **_kwargs: object) -> None:
     """Install a JS CLI release from npm registry."""
     js_dir = get_sdk_dir() / "js"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -74,7 +74,7 @@ def install_js_release(version: str, dist_dir: Path) -> None:
     print(f"  JS release {v} installed to {dist_dir}")
 
 
-def install_java_release(version: str, dist_dir: Path) -> None:
+def install_java_release(version: str, dist_dir: Path, **_kwargs: object) -> None:
     """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
 
     Raises InstallError if the artifact is not available or download fails,
@@ -142,13 +142,17 @@ INSTALLERS = {
 }
 
 
-def install_release(sdk: str, version: str, dist_name: str | None = None) -> Path:
+def install_release(
+    sdk: str, version: str, dist_name: str | None = None, **kwargs: object
+) -> Path:
     """Install a released version of an SDK CLI.
 
     Args:
         sdk: One of "go", "js", "java"
         version: Version string (e.g., "v0.24.0" or "0.24.0")
         dist_name: Override the dist directory name (defaults to normalized version)
+        **kwargs: Extra arguments forwarded to the SDK installer
+            (e.g., source="platform" for Go).
 
     Returns:
         Path to the created dist directory
@@ -166,7 +170,7 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
         print(f"  Dist directory already exists: {dist_dir} (skipping)")
         return dist_dir
 
-    INSTALLERS[sdk](version, dist_dir)
+    INSTALLERS[sdk](version, dist_dir, **kwargs)
     return dist_dir
 
 
@@ -233,7 +237,9 @@ def cmd_release(specs: list[str]) -> None:
         install_release(sdk, version)
 
 
-def cmd_install(sdk: str, version: str, dist_name: str | None = None) -> None:
+def cmd_install(
+    sdk: str, version: str, dist_name: str | None = None, source: str | None = None
+) -> None:
     """Install a single SDK version (used by CI action)."""
     print(f"Installing {sdk} {version}...")
-    install_release(sdk, version, dist_name=dist_name)
+    install_release(sdk, version, dist_name=dist_name, source=source)
