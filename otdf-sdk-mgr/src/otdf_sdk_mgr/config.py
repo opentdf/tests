@@ -70,7 +70,7 @@ SDK_GITHUB_REPOS: dict[str, str] = {
     "java": "opentdf/java-sdk",
 }
 
-GO_INSTALL_PREFIX = "go run github.com/opentdf/otdfctl"
+GO_INSTALL_PREFIX_STANDALONE = "go run github.com/opentdf/otdfctl"
 GO_INSTALL_PREFIX_PLATFORM = "go run github.com/opentdf/platform/otdfctl"
 
 GO_MODULE_PATH = "github.com/opentdf/otdfctl"
@@ -143,7 +143,7 @@ def go_install_prefix(source: str | None = None) -> str:
     """Return the go install/run prefix based on source."""
     if source == "platform":
         return GO_INSTALL_PREFIX_PLATFORM
-    return GO_INSTALL_PREFIX
+    return GO_INSTALL_PREFIX_STANDALONE
 
 
 def go_module_path(source: str | None = None) -> str:

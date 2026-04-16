@@ -179,7 +179,7 @@ jobs:
 
             core.summary.addHeading('Versions under Test', 3);
 
-            function artifactLink(sdkType, tag, release, head) {
+            function artifactLink(sdkType, tag, release, head, source) {
               if (head || !release) return '';
               const v = tag.replace(/^v/, '');
               if (sdkType === 'js') {
@@ -191,7 +191,11 @@ jobs:
                 return `<a href="${htmlEscape(url)}">Maven Central</a>`;
               }
               if (sdkType === 'go') {
-                const url = `https://pkg.go.dev/github.com/opentdf/otdfctl@${encodeURIComponent(tag)}`;
+                const modulePath = source === 'platform'
+                  ? `github.com/opentdf/platform/otdfctl`
+                  : `github.com/opentdf/otdfctl`;
+                const moduleTag = source === 'platform' ? `otdfctl/${tag}` : tag;
+                const url = `https://pkg.go.dev/${modulePath}@${encodeURIComponent(moduleTag)}`;
                 return `<a href="${htmlEscape(url)}">pkg.go.dev</a>`;
               }
               return '';
@@ -215,7 +219,7 @@ jobs:
                 const tagLink = (release && tag)
                   ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>`
                   : tag ? htmlEscape(tag) : 'N/A';
-                const artifactCell = artifactLink(sdkType, tag, release, head);
+                const artifactCell = artifactLink(sdkType, tag, release, head, source);
                 table.push([sdkLink, tagLink, commitLink, alias || 'N/A', artifactCell || 'N/A', err || 'N/A']);
                 if (err) {
                   errorCount += 1;
