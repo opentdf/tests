@@ -194,8 +194,7 @@ jobs:
                 const modulePath = source === 'platform'
                   ? `github.com/opentdf/platform/otdfctl`
                   : `github.com/opentdf/otdfctl`;
-                const moduleTag = source === 'platform' ? `otdfctl/${tag}` : tag;
-                const url = `https://pkg.go.dev/${modulePath}@${encodeURIComponent(moduleTag)}`;
+                const url = `https://pkg.go.dev/${modulePath}@${encodeURIComponent(tag)}`;
                 return `<a href="${htmlEscape(url)}">pkg.go.dev</a>`;
               }
               return '';
