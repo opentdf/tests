@@ -87,6 +87,9 @@ jobs:
       JS_REF: "${{ inputs.js-ref }}"
       OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
       JAVA_REF: "${{ inputs.java-ref }}"
+      # When explicitly set to 'platform', tells the Go resolver to resolve
+      # against opentdf/platform tags instead of the standalone otdfctl repo.
+      OTDFCTL_SOURCE: "${{ inputs.otdfctl-source == 'platform' && 'platform' || '' }}"
     steps:
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
@@ -313,6 +316,7 @@ jobs:
               echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
               echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
               echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+              echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             else
               echo "otdfctl not found in platform checkout; using standalone repo"
               echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
@@ -320,6 +324,7 @@ jobs:
           elif [[ "$OTDFCTL_SOURCE_INPUT" == "platform" ]]; then
             echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
             echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
             echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
           fi
@@ -361,6 +366,7 @@ jobs:
           sdk: go
           version-info: "${{ needs.resolve-versions.outputs.go }}"
           platform-otdfctl-dir: ${{ steps.detect-otdfctl.outputs.otdfctl-dir }}
+          platform-otdfctl-sha: ${{ steps.detect-otdfctl.outputs.otdfctl-sha }}
 
       - name: Cache Go modules
         if: fromJson(steps.configure-go.outputs.heads)[0] != null
