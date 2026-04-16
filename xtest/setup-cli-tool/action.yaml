@@ -12,7 +12,8 @@ inputs:
     description: >-
       Absolute path to platform's otdfctl/ directory. When set and sdk is "go",
       head versions whose SHA matches platform-otdfctl-sha are symlinked from
-      here instead of checked out separately.
+      here instead of checked out separately. Used in both explicit platform
+      mode (source: "platform" in resolved version) and auto-detect mode.
   platform-otdfctl-sha:
     description: >-
       SHA of the commit that platform-otdfctl-dir was checked out at.
@@ -102,11 +103,11 @@ runs:
             # Sanitize tag for use as an env var name (replace non-alphanumeric/underscore with _)
             tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
             source=$(echo "$row" | jq -r '.source // empty')
-            source_flag=""
-            [[ -n "$source" ]] && source_flag="--source $source"
+            source_args=()
+            [[ -n "$source" ]] && source_args=(--source "$source")
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
-              --dist-name "$tag" $source_flag; then
+              --dist-name "$tag" "${source_args[@]}"; then
               echo "  Warning: Artifact installation failed for ${{ inputs.sdk }} $tag"
               echo "  Will fall back to building from source"
               echo "BUILD_FROM_SOURCE_${tag_sanitized}=true" >> "$GITHUB_ENV"
@@ -172,17 +173,13 @@ runs:
             fi
           elif [[ "$INPUT_SDK" == "go" && -n "$PLATFORM_OTDFCTL_DIR" && "$needs_source" == "true" ]]; then
             # Auto-detect fallback: resolver used standalone repo but the
-            # test job detected otdfctl in the platform checkout. Only reuse
-            # the platform dir when the resolved SHA matches; otherwise fall
-            # through to a standalone checkout so we test the correct code.
-            if [[ -n "$PLATFORM_OTDFCTL_SHA" && "$sha" == "$PLATFORM_OTDFCTL_SHA" ]]; then
-              echo "Auto-detected platform source for Go version ${tag} — SHA ${sha} matches platform checkout."
-              is_platform=true
-              use_existing=true
-              needs_source=false
-            else
-              echo "::notice::Go version ${tag} (SHA ${sha}) does not match platform checkout (SHA ${PLATFORM_OTDFCTL_SHA:-unknown}); checking out standalone repo."
-            fi
+            # test job detected otdfctl in the platform checkout.
+            # NOTE: SHA comparison across repos is not meaningful (the standalone
+            # repo and platform repo have different commit histories), so we
+            # cannot safely reuse the platform checkout here. Fall through to
+            # a standalone checkout. To use the platform source, set
+            # otdfctl-source=platform explicitly.
+            echo "::notice::Go version ${tag} resolved from standalone repo; platform checkout available but cannot auto-reuse (different repo). Set otdfctl-source=platform to use the platform source."
           fi
 
           echo "needs-checkout-${slot}=${needs_source}" >> "$GITHUB_OUTPUT"

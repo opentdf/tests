@@ -90,9 +90,10 @@ jobs:
       # When explicitly set to 'platform', tells the Go resolver to resolve
       # against opentdf/platform tags instead of the standalone otdfctl repo.
       # In 'auto' mode, releases resolve from standalone; the detect-otdfctl
-      # step later checks for platform-embedded otdfctl for head builds only,
-      # and setup-cli-tool reuses the platform checkout only when the resolved
-      # SHA matches the platform checkout SHA.
+      # step later probes the platform checkout for an embedded otdfctl
+      # directory, and setup-cli-tool acts on this only for versions that need
+      # a source checkout (head or artifact-install failure), reusing the
+      # platform checkout only when the resolved SHA matches.
       OTDFCTL_SOURCE: "${{ inputs.otdfctl-source == 'platform' && 'platform' || '' }}"
     steps:
       - name: Validate focus-sdk input
@@ -325,6 +326,10 @@ jobs:
               echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
             fi
           elif [[ "$OTDFCTL_SOURCE_INPUT" == "platform" ]]; then
+            if [ -z "$PLATFORM_DIR" ] || [ ! -d "$PLATFORM_DIR/otdfctl" ] || [ ! -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+              echo "::error::otdfctl-source=platform requested but ${PLATFORM_DIR:-<empty>}/otdfctl does not exist or lacks go.mod"
+              exit 1
+            fi
             echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
             echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
             echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
