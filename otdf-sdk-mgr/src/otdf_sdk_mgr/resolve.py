@@ -147,7 +147,10 @@ def resolve(
         repo = Git()
         if version == "main" or version == "refs/heads/main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
-            sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
+            try:
+                sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
+            except StopIteration:
+                return {"sdk": sdk, "alias": version, "err": f"main branch not found in {sdk_url}"}
             return _annotate(
                 {
                     "sdk": sdk,

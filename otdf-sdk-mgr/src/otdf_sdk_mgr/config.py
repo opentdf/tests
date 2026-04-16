@@ -146,8 +146,13 @@ def go_install_prefix(source: str | None = None) -> str:
     return GO_INSTALL_PREFIX_STANDALONE
 
 
+_VALID_GO_SOURCES = {None, "platform"}
+
+
 def go_module_path(source: str | None = None) -> str:
     """Return the Go module path based on source."""
+    if source not in _VALID_GO_SOURCES:
+        raise ValueError(f"Invalid Go source {source!r}; expected one of {_VALID_GO_SOURCES}")
     if source == "platform":
         return GO_MODULE_PATH_PLATFORM
     return GO_MODULE_PATH

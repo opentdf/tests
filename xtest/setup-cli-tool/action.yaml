@@ -2,7 +2,7 @@ name: configure-sdks
 description: Check out and build one or more SDK and its CLI tool for use by xtest
 inputs:
   path:
-    description: The path to checkout the the SDK source code to; concatenated with branch or tag name.
+    description: The path to check out the SDK source code to; concatenated with branch or tag name.
   sdk:
     description: The SDK to configure; one of go, java, js
   version-info:
@@ -101,9 +101,12 @@ runs:
             echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
             # Sanitize tag for use as an env var name (replace non-alphanumeric/underscore with _)
             tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
+            source=$(echo "$row" | jq -r '.source // empty')
+            source_flag=""
+            [[ -n "$source" ]] && source_flag="--source $source"
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
               --sdk "${{ inputs.sdk }}" --version "$release" \
-              --dist-name "$tag"; then
+              --dist-name "$tag" $source_flag; then
               echo "  Warning: Artifact installation failed for ${{ inputs.sdk }} $tag"
               echo "  Will fall back to building from source"
               echo "BUILD_FROM_SOURCE_${tag_sanitized}=true" >> "$GITHUB_ENV"
@@ -171,6 +174,8 @@ runs:
             # Auto-detect fallback: resolver used standalone repo but the
             # test job detected otdfctl in the platform checkout. Symlink all
             # head go versions to the existing dir (backward-compatible behavior).
+            # Note: no SHA comparison here — all head versions are symlinked regardless of commit.
+            echo "::warning::Auto-detecting platform source for Go version ${tag} (SHA ${sha}). Platform dir SHA: ${PLATFORM_OTDFCTL_SHA:-unknown}. No SHA match verification performed."
             is_platform=true
             use_existing=true
             needs_source=false
@@ -209,6 +214,10 @@ runs:
           echo "Symlinking existing platform otdfctl to ${src_dir}"
           mkdir -p "$(dirname "$src_dir")"
           ln -sfn "$PLATFORM_OTDFCTL_DIR" "$src_dir"
+          if [ ! -e "$src_dir" ]; then
+            echo "::error::Symlink target does not exist: $PLATFORM_OTDFCTL_DIR"
+            exit 1
+          fi
         done
       env:
         PLATFORM_OTDFCTL_DIR: ${{ inputs.platform-otdfctl-dir }}
@@ -293,6 +302,10 @@ runs:
           echo "Symlinking freshly checked-out platform otdfctl ${otdfctl_dir} → ${src_dir}"
           mkdir -p "$(dirname "$src_dir")"
           ln -sfn "$otdfctl_dir" "$src_dir"
+          if [ ! -e "$src_dir" ]; then
+            echo "::error::Symlink target does not exist: ${otdfctl_dir} (does the platform repo contain an otdfctl/ directory?)"
+            exit 1
+          fi
         done
       env:
         INPUT_PATH: ${{ inputs.path }}

@@ -89,6 +89,8 @@ jobs:
       JAVA_REF: "${{ inputs.java-ref }}"
       # When explicitly set to 'platform', tells the Go resolver to resolve
       # against opentdf/platform tags instead of the standalone otdfctl repo.
+      # Auto-detection of the platform source is handled downstream by the
+      # detect-otdfctl step and setup-cli-tool action.
       OTDFCTL_SOURCE: "${{ inputs.otdfctl-source == 'platform' && 'platform' || '' }}"
     steps:
       - name: Validate focus-sdk input
@@ -310,7 +312,6 @@ jobs:
       - name: Detect platform-embedded otdfctl
         id: detect-otdfctl
         run: |
-          PLATFORM_DIR="${{ steps.run-platform.outputs.platform-working-dir }}"
           if [[ "$OTDFCTL_SOURCE_INPUT" == "auto" || -z "$OTDFCTL_SOURCE_INPUT" ]]; then
             if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
               echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
@@ -330,6 +331,7 @@ jobs:
           fi
         env:
           OTDFCTL_SOURCE_INPUT: ${{ inputs.otdfctl-source }}
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       ######### CHECKOUT JS CLI #############
       - name: Configure js-sdk
