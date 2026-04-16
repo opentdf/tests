@@ -12,11 +12,13 @@ import urllib.request
 from typing import Any
 
 from otdf_sdk_mgr.config import (
-    GO_INSTALL_PREFIX,
+    GO_INSTALL_PREFIX_PLATFORM,
+    GO_INSTALL_PREFIX_STANDALONE,
     SDK_GITHUB_REPOS,
     SDK_GIT_URLS,
     SDK_MAVEN_COORDS,
     SDK_NPM_PACKAGES,
+    SDK_TAG_INFIXES_PLATFORM_GO,
 )
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
 
@@ -68,12 +70,14 @@ def fetch_text(url: str) -> str:
 
 
 def list_go_versions() -> list[dict[str, Any]]:
-    """List Go SDK versions from git tags."""
+    """List Go SDK versions from git tags in both standalone and platform repos."""
     from git import Git
 
     repo = Git()
+    seen: dict[str, dict[str, Any]] = {}
+
+    # Standalone repo (opentdf/otdfctl): tags like v0.24.0
     raw = repo.ls_remote(SDK_GIT_URLS["go"], tags=True)
-    results = []
     for line in raw.strip().split("\n"):
         if not line:
             continue
@@ -83,16 +87,42 @@ def list_go_versions() -> list[dict[str, Any]]:
         tag = ref.removeprefix("refs/tags/")
         if not parse_semver(tag):
             continue
-        version = tag
-        results.append(
-            {
+        seen[tag] = {
+            "sdk": "go",
+            "version": tag,
+            "source": "git-tag",
+            "install_method": f"{GO_INSTALL_PREFIX_STANDALONE}@{tag}",
+            "stable": is_stable(tag),
+        }
+
+    # Platform repo (opentdf/platform): tags like otdfctl/v0.X.Y
+    infix = SDK_TAG_INFIXES_PLATFORM_GO
+    try:
+        raw = repo.ls_remote(SDK_GIT_URLS["platform"], tags=True)
+        for line in raw.strip().split("\n"):
+            if not line:
+                continue
+            _, ref = line.split("\t", 1)
+            if ref.endswith("^{}"):
+                continue
+            tag = ref.removeprefix("refs/tags/")
+            if not tag.startswith(f"{infix}/"):
+                continue
+            version = tag.removeprefix(f"{infix}/")
+            if not parse_semver(version):
+                continue
+            # Platform entries take precedence (canonical location post-migration)
+            seen[version] = {
                 "sdk": "go",
                 "version": version,
-                "source": "git-tag",
-                "install_method": f"{GO_INSTALL_PREFIX}@{version}",
+                "source": "platform-git-tag",
+                "install_method": f"{GO_INSTALL_PREFIX_PLATFORM}@{tag}",
                 "stable": is_stable(version),
             }
-        )
+    except Exception as e:
+        print(f"Warning: failed to query platform repo for go tags: {e}", file=sys.stderr)
+
+    results = list(seen.values())
     results.sort(key=lambda r: semver_sort_key(r["version"]))
     return results
 
