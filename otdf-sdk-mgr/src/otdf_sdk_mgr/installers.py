@@ -40,6 +40,9 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     """
     go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
+    # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
+    if "/" in version:
+        version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
     module = go_module_path(source)
     (dist_dir / ".version").write_text(f"{module}@{tag}\n")
@@ -142,9 +145,7 @@ INSTALLERS = {
 }
 
 
-def install_release(
-    sdk: str, version: str, dist_name: str | None = None, **kwargs: object
-) -> Path:
+def install_release(sdk: str, version: str, dist_name: str | None = None, **kwargs: object) -> Path:
     """Install a released version of an SDK CLI.
 
     Args:

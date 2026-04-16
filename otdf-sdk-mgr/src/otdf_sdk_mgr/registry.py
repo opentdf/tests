@@ -71,6 +71,7 @@ def fetch_text(url: str) -> str:
 
 def list_go_versions() -> list[dict[str, Any]]:
     """List Go SDK versions from git tags in both standalone and platform repos."""
+    import git.exc
     from git import Git
 
     repo = Git()
@@ -119,7 +120,7 @@ def list_go_versions() -> list[dict[str, Any]]:
                 "install_method": f"{GO_INSTALL_PREFIX_PLATFORM}@{tag}",
                 "stable": is_stable(version),
             }
-    except Exception as e:
+    except git.exc.GitCommandError as e:
         print(f"Warning: failed to query platform repo for go tags: {e}", file=sys.stderr)
 
     results = list(seen.values())
