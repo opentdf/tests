@@ -146,7 +146,7 @@ def go_install_prefix(source: str | None = None) -> str:
     return GO_INSTALL_PREFIX_STANDALONE
 
 
-_VALID_GO_SOURCES = {None, "platform"}
+_VALID_GO_SOURCES = {None, "standalone", "platform"}
 
 
 def go_module_path(source: str | None = None) -> str:
