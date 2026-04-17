@@ -190,54 +190,54 @@ class SuiteRunner:
                 print_error("Failed to start Docker services")
                 return False
 
-        # Wait for Keycloak
-        with status_spinner("Waiting for Keycloak..."):
+            # Wait for Keycloak
+            with status_spinner("Waiting for Keycloak..."):
+                try:
+                    wait_for_health(
+                        f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master",
+                        timeout=120,
+                        service_name="Keycloak",
+                    )
+                except Exception as e:
+                    print_error(f"Keycloak failed to become healthy: {e}")
+                    return False
+
+            # Wait for PostgreSQL
             try:
-                wait_for_health(
-                    f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master",
-                    timeout=120,
-                    service_name="Keycloak",
+                wait_for_port(
+                    Ports.POSTGRES,
+                    "localhost",
+                    timeout=60,
+                    service_name="PostgreSQL",
                 )
             except Exception as e:
-                print_error(f"Keycloak failed to become healthy: {e}")
+                print_error(f"PostgreSQL failed to become ready: {e}")
                 return False
 
-        # Wait for PostgreSQL
-        try:
-            wait_for_port(
-                Ports.POSTGRES,
-                "localhost",
-                timeout=60,
-                service_name="PostgreSQL",
-            )
-        except Exception as e:
-            print_error(f"PostgreSQL failed to become ready: {e}")
-            return False
-
-        # Provision Keycloak
-        print_info("Provisioning Keycloak...")
-        provisioner: Provisioner = get_provisioner(self.settings)
-        if not provisioner.provision_keycloak():
-            print_error("Failed to provision Keycloak")
-            return False
-
-        # Start Platform
-        platform_service = get_platform_service(self.settings)
-        if not platform_service.start():
-            print_error("Failed to start Platform")
-            return False
-
-        with status_spinner("Waiting for Platform..."):
-            try:
-                wait_for_health(platform_service.health_url, timeout=120)
-            except Exception as e:
-                print_error(f"Platform failed to become healthy: {e}")
+            # Provision Keycloak
+            print_info("Provisioning Keycloak...")
+            provisioner: Provisioner = get_provisioner(self.settings)
+            if not provisioner.provision_keycloak():
+                print_error("Failed to provision Keycloak")
                 return False
 
-        # Provision fixtures
-        print_info("Provisioning fixtures...")
-        if not provisioner.provision_fixtures():
-            print_warning("Provisioning had issues - continuing anyway")
+            # Start Platform
+            platform_service = get_platform_service(self.settings)
+            if not platform_service.start():
+                print_error("Failed to start Platform")
+                return False
+
+            with status_spinner("Waiting for Platform..."):
+                try:
+                    wait_for_health(platform_service.health_url, timeout=120)
+                except Exception as e:
+                    print_error(f"Platform failed to become healthy: {e}")
+                    return False
+
+            # Provision fixtures
+            print_info("Provisioning fixtures...")
+            if not provisioner.provision_fixtures():
+                print_warning("Provisioning had issues - continuing anyway")
 
         finally:
             if self.verbose:
