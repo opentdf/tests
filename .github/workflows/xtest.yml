@@ -133,6 +133,7 @@ jobs:
           sparse-checkout: |
             xtest/sdk
             otdf-sdk-mgr
+            otdf-local
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: "3.14"
@@ -252,6 +253,70 @@ jobs:
               throw new Error('Errors detected in version resolution. Failing the run.');
             }
 
+      - name: Generate xtest configs
+        id: xtest-configs
+        shell: bash
+        run: |
+          OTDF_LOCAL_DIR="${GITHUB_WORKSPACE}/otdf-sdk/otdf-local"
+          FOCUS_SDK="${FOCUS_SDK_INPUT:-all}"
+          OTDFCTL_SRC="${OTDFCTL_SOURCE_INPUT:-auto}"
+          PLATFORM_REFS="${PLATFORM_REF:-main}"
+          GO_REFS="${OTDFCTL_REF:-${DEFAULT_TAGS}}"
+          JS_REFS="${JS_REF:-${DEFAULT_TAGS}}"
+          JAVA_REFS="${JAVA_REF:-${DEFAULT_TAGS}}"
+
+          mkdir -p xtest-configs
+
+          # Generate one config per (platform-tag, sdk) matrix cell
+          PLATFORM_TAGS=$(echo "${{ steps.version-info.outputs.platform-tag-list }}" | jq -r '.[]')
+          for ptag in $PLATFORM_TAGS; do
+            for sdk in go java js; do
+              CONFIG_FILE="xtest-configs/${sdk}-${ptag}.yaml"
+              uv run --project "$OTDF_LOCAL_DIR" otdf-local xtest resolve \
+                --platform-ref "$ptag" \
+                --go-ref "$GO_REFS" \
+                --js-ref "$JS_REFS" \
+                --java-ref "$JAVA_REFS" \
+                --focus-sdk "$FOCUS_SDK" \
+                --otdfctl-source "$OTDFCTL_SRC" \
+                --output "$CONFIG_FILE" 2>/dev/null || true
+              # Patch encrypt-sdk to match the matrix cell
+              if [ -f "$CONFIG_FILE" ]; then
+                sed -i "s/^encrypt-sdk:.*/encrypt-sdk: ${sdk}/" "$CONFIG_FILE"
+              fi
+            done
+          done
+
+          # Emit a sample config to step summary for local reproduction
+          SAMPLE=$(ls xtest-configs/*.yaml 2>/dev/null | head -1)
+          if [ -n "$SAMPLE" ]; then
+            {
+              echo '<details><summary>Reproduce locally (xtest config)</summary>'
+              echo ''
+              echo '```yaml'
+              cat "$SAMPLE"
+              echo '```'
+              echo ''
+              echo '**To reproduce locally:**'
+              echo '```bash'
+              echo '# Save the above YAML to a file, then:'
+              echo 'cd tests/otdf-local'
+              echo 'uv run otdf-local xtest run ../xtest-config.yaml'
+              echo '```'
+              echo '</details>'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          FOCUS_SDK_INPUT: "${{ inputs.focus-sdk }}"
+          OTDFCTL_SOURCE_INPUT: "${{ inputs.otdfctl-source }}"
+
+      - name: Upload xtest configs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: xtest-configs
+          path: xtest-configs/
+          if-no-files-found: warn
+
   xct:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -275,6 +340,24 @@ jobs:
           repository: opentdf/tests
           path: otdftests # use different name bc other repos might have tests directories
           persist-credentials: false
+
+      - name: Download xtest config
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: xtest-configs
+          path: xtest-configs
+
+      - name: Set xtest config path
+        id: xtest-config
+        run: |
+          CONFIG="xtest-configs/${{ matrix.sdk }}-${{ matrix.platform-tag }}.yaml"
+          if [ -f "$CONFIG" ]; then
+            echo "config-file=$CONFIG" >> "$GITHUB_OUTPUT"
+            echo "Using xtest config: $CONFIG"
+          else
+            echo "config-file=" >> "$GITHUB_OUTPUT"
+            echo "No xtest config found for ${{ matrix.sdk }}-${{ matrix.platform-tag }}"
+          fi
 
       - name: load extra keys from file
         id: load-extra-keys
@@ -460,6 +543,28 @@ jobs:
           name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
+
+      - name: Emit xtest config for reproduction
+        if: failure() && steps.xtest-config.outputs.config-file != ''
+        run: |
+          CONFIG="${{ steps.xtest-config.outputs.config-file }}"
+          {
+            echo '<details><summary>Reproduce this failure locally</summary>'
+            echo ''
+            echo '```yaml'
+            cat "$CONFIG"
+            echo '```'
+            echo ''
+            echo '**To reproduce:**'
+            echo '```bash'
+            echo "cat > xtest-config.yaml <<'EOF'"
+            cat "$CONFIG"
+            echo 'EOF'
+            echo 'cd tests/otdf-local'
+            echo 'uv run otdf-local xtest run ../../xtest-config.yaml'
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   publish-results:
     runs-on: ubuntu-latest
