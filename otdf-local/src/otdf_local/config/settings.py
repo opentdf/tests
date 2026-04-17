@@ -70,7 +70,9 @@ def _find_platform_dir(xtest_root: Path) -> Path:
         if platform_candidate.exists() and platform_candidate.is_dir():
             # Verify it has the expected shape
             has_compose = (platform_candidate / "docker-compose.yaml").exists()
-            has_config = (platform_candidate / "opentdf-dev.yaml").exists()
+            has_config = (platform_candidate / "opentdf-dev.yaml").exists() or (
+                platform_candidate / "opentdf.yaml"
+            ).exists()
             if has_compose and has_config:
                 return platform_candidate
         current = current.parent
@@ -79,8 +81,9 @@ def _find_platform_dir(xtest_root: Path) -> Path:
     managed_main = xtest_root / "sdk" / "platform" / "src" / "main"
     if managed_main.exists() and managed_main.is_dir():
         if (managed_main / "docker-compose.yaml").exists() and (
-            managed_main / "opentdf-dev.yaml"
-        ).exists():
+            (managed_main / "opentdf-dev.yaml").exists()
+            or (managed_main / "opentdf.yaml").exists()
+        ):
             return managed_main
 
     # 3. Last resort: checkout 'main' via otdf-sdk-mgr
@@ -120,7 +123,7 @@ def _find_platform_dir(xtest_root: Path) -> Path:
     # If we get here, we didn't find it
     raise FileNotFoundError(
         f"Could not find platform directory with expected shape "
-        f"(docker-compose.yaml and opentdf-dev.yaml) searching from {xtest_root}"
+        f"(docker-compose.yaml and opentdf.yaml or opentdf-dev.yaml) searching from {xtest_root}"
     )
 
 
@@ -166,12 +169,12 @@ class Settings(BaseSettings):
     @property
     def platform_config(self) -> Path:
         """Platform config file path."""
-        return self.platform_dir / "opentdf-dev.yaml"
+        return self.platform_dir / "opentdf.yaml"
 
     @property
     def platform_template_config(self) -> Path:
         """Platform config template path."""
-        return self.platform_dir / "opentdf.yaml"
+        return self.platform_dir / "opentdf-dev.yaml"
 
     @property
     def kas_template_config(self) -> Path:
