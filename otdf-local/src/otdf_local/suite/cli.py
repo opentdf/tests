@@ -29,9 +29,9 @@ suite_app = typer.Typer(
 
 @suite_app.command("generate-shard")
 def generate_shard(
-    platform_ref: Annotated[str, typer.Option("--platform-ref", help="Platform ref to test")],
+    platform_ref: Annotated[str, typer.Option("--platform-ref", help="Platform ref to test")] = ...,
+    sdk: Annotated[str, typer.Option("--sdk", help="SDK to focus on (go, java, js)")] = ...,
     platform_sha: Annotated[Optional[str], typer.Option("--platform-sha", help="Platform SHA to test")] = None,
-    sdk: Annotated[str, typer.Option("--sdk", help="SDK to focus on (go, java, js)")],
     go_ref: Annotated[str, typer.Option("--go-ref")] = "main",
     go_sha: Annotated[Optional[str], typer.Option("--go-sha")] = None,
     java_ref: Annotated[str, typer.Option("--java-ref")] = "main",
