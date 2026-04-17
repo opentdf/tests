@@ -95,6 +95,7 @@ def generate_shard(
 @suite_app.command("run")
 def run_suite(
     config_path: Annotated[Path, typer.Argument(help="Path to SuiteConfig YAML")],
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose logging")] = False,
 ) -> None:
     """Run an X-Test suite from a configuration file."""
     if not config_path.exists():
@@ -106,7 +107,7 @@ def run_suite(
         config = SuiteConfig.model_validate(data)
     
     from otdf_local.suite.runner import SuiteRunner
-    runner = SuiteRunner(config, get_settings())
+    runner = SuiteRunner(config, get_settings(), verbose=verbose)
     
     success = runner.run()
     if not success:

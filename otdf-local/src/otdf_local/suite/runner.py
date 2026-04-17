@@ -30,9 +30,10 @@ from otdf_local.utils.console import (
 class SuiteRunner:
     """Orchestrates the execution of an X-Test suite."""
 
-    def __init__(self, config: SuiteConfig, settings: Settings) -> None:
+    def __init__(self, config: SuiteConfig, settings: Settings, verbose: bool = False) -> None:
         self.config = config
         self.settings = settings
+        self.verbose = verbose
         self.results: List[Dict] = []
 
     def run(self) -> bool:
@@ -165,12 +166,29 @@ class SuiteRunner:
         print_info("Starting services...")
         from otdf_local.health.waits import wait_for_health, wait_for_port
         from otdf_local.config.ports import Ports
+        from otdf_local.process.logs import LogAggregator
+        import threading
 
-        # Start Docker
-        docker = get_docker_service(self.settings)
-        if not docker.start():
-            print_error("Failed to start Docker services")
-            return False
+        # Start log follower if verbose
+        stop_logs = threading.Event()
+        if self.verbose:
+            def follow_logs():
+                agg = LogAggregator(self.settings.logs_dir)
+                agg.add_service("platform")
+                for entry in agg.follow():
+                    if stop_logs.is_set():
+                        break
+                    console.print(f"[dim]{entry.service}:[/dim] {entry.message}")
+            
+            log_thread = threading.Thread(target=follow_logs, daemon=True)
+            log_thread.start()
+
+        try:
+            # Start Docker
+            docker = get_docker_service(self.settings)
+            if not docker.start():
+                print_error("Failed to start Docker services")
+                return False
 
         # Wait for Keycloak
         with status_spinner("Waiting for Keycloak..."):
@@ -220,6 +238,10 @@ class SuiteRunner:
         print_info("Provisioning fixtures...")
         if not provisioner.provision_fixtures():
             print_warning("Provisioning had issues - continuing anyway")
+
+        finally:
+            if self.verbose:
+                stop_logs.set()
 
         return True
 
