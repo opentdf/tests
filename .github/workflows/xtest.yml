@@ -436,6 +436,7 @@ jobs:
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OT_ROOT_KEY: ${{ steps.test-env.outputs.root-key }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
           KAS_ALPHA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-alpha-log-file }}
           KAS_BETA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-beta-log-file }}

@@ -241,7 +241,7 @@ runs:
       with:
         path: ${{ steps.check-source.outputs.checkout-path-a }}
         persist-credentials: false
-        ref: ${{ fromJson(steps.resolve.outputs.version-a).sha }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-a || '{"sha":""}').sha }}
         repository: ${{ steps.check-source.outputs.checkout-repo-a }}
 
     - name: checkout version b
@@ -252,7 +252,7 @@ runs:
       with:
         path: ${{ steps.check-source.outputs.checkout-path-b }}
         persist-credentials: false
-        ref: ${{ fromJson(steps.resolve.outputs.version-b).sha }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-b || '{"sha":""}').sha }}
         repository: ${{ steps.check-source.outputs.checkout-repo-b }}
 
     - name: checkout version c
@@ -263,7 +263,7 @@ runs:
       with:
         path: ${{ steps.check-source.outputs.checkout-path-c }}
         persist-credentials: false
-        ref: ${{ fromJson(steps.resolve.outputs.version-c).sha }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-c || '{"sha":""}').sha }}
         repository: ${{ steps.check-source.outputs.checkout-repo-c }}
 
     - name: checkout version d
@@ -274,7 +274,7 @@ runs:
       with:
         path: ${{ steps.check-source.outputs.checkout-path-d }}
         persist-credentials: false
-        ref: ${{ fromJson(steps.resolve.outputs.version-d).sha }}
+        ref: ${{ fromJson(steps.resolve.outputs.version-d || '{"sha":""}').sha }}
         repository: ${{ steps.check-source.outputs.checkout-repo-d }}
 
     - name: symlink freshly checked-out platform sources
