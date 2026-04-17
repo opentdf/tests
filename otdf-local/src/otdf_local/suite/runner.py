@@ -86,10 +86,11 @@ class SuiteRunner:
         # Use otdf-sdk-mgr to checkout platform
         ref = platform.sha or platform.tag
         print_info(f"Ensuring platform version {ref}...")
+        sdk_mgr_dir = self.settings.xtest_root / "otdf-sdk-mgr"
         try:
             subprocess.check_call(
-                ["otdf-sdk-mgr", "checkout", "platform", ref],
-                cwd=self.settings.xtest_root / "otdf-sdk-mgr",
+                ["uv", "run", "--project", str(sdk_mgr_dir), "otdf-sdk-mgr", "checkout", "platform", ref],
+                cwd=sdk_mgr_dir,
             )
             # Find the worktree path. otdf-sdk-mgr puts it in xtest/sdk/platform/src/<branch>
             # where branch has / replaced with --
@@ -116,6 +117,7 @@ class SuiteRunner:
 
     def _ensure_sdks(self) -> None:
         """Ensure all required SDKs are installed."""
+        sdk_mgr_dir = self.settings.xtest_root / "otdf-sdk-mgr"
         for sdk, versions in self.config.sdks.items():
             for version in versions:
                 ref = version.sha or version.tag
@@ -123,11 +125,11 @@ class SuiteRunner:
                 
                 # If it's a SHA or a tag we want to build from source, we use 'checkout'
                 if version.sha or version.head:
-                    args = ["otdf-sdk-mgr", "checkout", sdk, ref]
+                    args = ["uv", "run", "--project", str(sdk_mgr_dir), "otdf-sdk-mgr", "checkout", sdk, ref]
                     try:
                         subprocess.check_call(
                             args,
-                            cwd=self.settings.xtest_root / "otdf-sdk-mgr",
+                            cwd=sdk_mgr_dir,
                         )
                         # After checkout, we need to build it
                         sdk_dir = self.settings.xtest_root / "sdk" / sdk
@@ -136,7 +138,7 @@ class SuiteRunner:
                     except subprocess.CalledProcessError as e:
                         print_warning(f"Failed to checkout/build {sdk} {ref}: {e}")
                 else:
-                    args = ["otdf-sdk-mgr", "install", "artifact", "--sdk", sdk, "--version", ref]
+                    args = ["uv", "run", "--project", str(sdk_mgr_dir), "otdf-sdk-mgr", "install", "artifact", "--sdk", sdk, "--version", ref]
                     if version.source:
                         args.extend(["--source", version.source])
                     if version.alias:
@@ -145,7 +147,7 @@ class SuiteRunner:
                     try:
                         subprocess.check_call(
                             args,
-                            cwd=self.settings.xtest_root / "otdf-sdk-mgr",
+                            cwd=sdk_mgr_dir,
                         )
                     except subprocess.CalledProcessError as e:
                         print_warning(f"Failed to install {sdk} {ref}: {e}")
