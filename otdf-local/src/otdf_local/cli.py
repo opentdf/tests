@@ -11,6 +11,7 @@ import typer
 from rich.live import Live
 
 from otdf_local import __version__
+from otdf_local.ci import ci_app
 from otdf_local.config.ports import Ports
 from otdf_local.config.settings import get_settings
 from otdf_local.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
@@ -35,6 +36,7 @@ from otdf_local.utils.console import (
     status_spinner,
 )
 from otdf_local.utils.yaml import get_nested, load_yaml
+from otdf_local.xtest import xtest_app
 
 app = typer.Typer(
     name="otdf-local",
@@ -42,6 +44,9 @@ app = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=sys.stderr.isatty(),
 )
+
+app.add_typer(ci_app, name="ci")
+app.add_typer(xtest_app, name="xtest")
 
 
 def _show_provision_error(result: ProvisionResult, target: str) -> None:

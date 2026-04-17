@@ -1,5 +1,6 @@
 """YAML manipulation utilities using ruamel.yaml."""
 
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,13 @@ def save_yaml(path: Path, data: dict[str, Any]) -> None:
     """Save data to a YAML file, preserving formatting."""
     with open(path, "w") as f:
         _yaml.dump(data, f)
+
+
+def dump_yaml(data: dict[str, Any]) -> str:
+    """Serialize YAML data to a string."""
+    stream = StringIO()
+    _yaml.dump(data, stream)
+    return stream.getvalue()
 
 
 def get_nested(data: dict[str, Any], path: str, default: Any = None) -> Any:

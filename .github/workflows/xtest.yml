@@ -28,6 +28,11 @@ on:
         type: string
         default: all
         description: "SDK to focus on (go, js, java, all)"
+      otdfctl-source:
+        required: false
+        type: string
+        default: auto
+        description: "otdfctl source: 'auto', 'standalone', or 'platform'"
   workflow_call:
     inputs:
       platform-ref:
@@ -50,229 +55,93 @@ on:
         required: false
         type: string
         default: all
+      otdfctl-source:
+        required: false
+        type: string
+        default: auto
   schedule:
-    - cron: "30 6 * * *" # 0630 UTC
-    - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
-    - cron: "0 18 * * 0" # 1800 UTC (Sunday)
+    - cron: "30 6 * * *"
+    - cron: "0 5 * * 1,3"
+    - cron: "0 18 * * 0"
 
 concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  resolve-versions:
+  prepare:
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
-      platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
-      platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
-      heads: ${{ steps.version-info.outputs.platform-heads }}
-      default-tags: ${{ steps.version-info.outputs.default-tags }}
-      go: ${{ steps.version-info.outputs.go-version-info }}
-      java: ${{ steps.version-info.outputs.java-version-info }}
-      js: ${{ steps.version-info.outputs.js-version-info }}
-    env:
-      PLATFORM_REF: "${{ inputs.platform-ref }}"
-      JS_REF: "${{ inputs.js-ref }}"
-      OTDFCTL_REF: "${{ inputs.otdfctl-ref }}"
-      JAVA_REF: "${{ inputs.java-ref }}"
+      platform-refs: ${{ steps.platform-refs.outputs.json }}
     steps:
       - name: Validate focus-sdk input
         if: ${{ inputs.focus-sdk != '' }}
         env:
           FOCUS_SDK_INPUT: ${{ inputs.focus-sdk }}
-        run: |-
+        run: |
           if [[ ! "all go java js" =~ (^|[[:space:]])${FOCUS_SDK_INPUT}($|[[:space:]]) ]]; then
             echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-      - name: Default Versions depend on context
-        id: default-tags
-        run: |-
-          if [[ $CRON_NIGHTLY == 'true' ]]; then
-            echo "Running nightly tests"
-            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
-          elif [[ $CRON_MONDAY_WEDNESDAY == 'true' ]]; then
-            echo "Running Monday/Wednesday tests"
-            echo "DEFAULT_TAGS=main" >> "$GITHUB_ENV"
-          elif [[ $CRON_WEEKLY == 'true' ]]; then
-            echo "Running weekly tests"
-            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
-          else
-            echo "Running PR, Workflow Dispatch, or manual trigger"
-            echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
-          fi
+
+      - name: Choose platform refs
+        id: platform-refs
         env:
-          CRON_NIGHTLY: ${{ github.event.schedule == '30 6 * * *' }}
-          CRON_MONDAY_WEDNESDAY: ${{ github.event.schedule == '0 5 * * 1,3' }}
-          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          path: otdf-sdk
-          persist-credentials: false
-          repository: opentdf/tests
-          sparse-checkout: |
-            xtest/sdk
-            otdf-sdk-mgr
-      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
-        with:
-          python-version: "3.14"
-      - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
-      - id: version-info
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
-        with:
-          script: |
-            function htmlEscape(str) {
-              return str.replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;")
-                        .replace(/"/g, "&quot;")
-                        .replace(/'/g, "&#39;");
-            }
-            const { spawnSync } = require('child_process');
-            const path = require('path');
-
-            const sdkMgrDir = path.join(process.env.GITHUB_WORKSPACE, 'otdf-sdk', 'otdf-sdk-mgr');
-            const defaultTags = process.env.DEFAULT_TAGS || 'main';
-            core.setOutput('default-tags', defaultTags);
-
-            const refs = {
-              platform: process.env.PLATFORM_REF || defaultTags,
-              go: process.env.OTDFCTL_REF || defaultTags,
-              js: process.env.JS_REF || defaultTags,
-              java: process.env.JAVA_REF || defaultTags
-            };
-
-            const versionData = {};
-
-            for (const [sdkType, ref] of Object.entries(refs)) {
-              try {
-                const refArgs = ref.trim().split(/\s+/).filter(Boolean);
-                const result = spawnSync('uv', ['run', '--project', sdkMgrDir, 'otdf-sdk-mgr', 'versions', 'resolve', sdkType, ...refArgs], { cwd: sdkMgrDir, encoding: 'utf-8' });
-                if (result.status !== 0) {
-                  throw new Error(result.stderr || `Process exited with code ${result.status}`);
-                }
-                const output = result.stdout;
-                const ojson = JSON.parse(output);
-                if (!!ojson.err) {
-                  throw new Error(ojson.err);
-                }
-                versionData[sdkType] = ojson;
-              } catch (error) {
-                console.error(`Error resolving version for ${sdkType}:`, error);
-                versionData[sdkType] = [{ tag: ref, err: error.message }];
-              }
-            }
-
-            core.setOutput('all', JSON.stringify(versionData));
-
-            core.summary.addHeading('Versions under Test', 3);
-
-            function artifactLink(sdkType, tag, release, head) {
-              if (head || !release) return '';
-              const v = tag.replace(/^v/, '');
-              if (sdkType === 'js') {
-                const url = `https://www.npmjs.com/package/@opentdf/ctl/v/${encodeURIComponent(v)}`;
-                return `<a href="${htmlEscape(url)}">npmjs</a>`;
-              }
-              if (sdkType === 'java') {
-                const url = `https://central.sonatype.com/artifact/io.opentdf.platform/sdk/${encodeURIComponent(v)}`;
-                return `<a href="${htmlEscape(url)}">Maven Central</a>`;
-              }
-              if (sdkType === 'go') {
-                const url = `https://pkg.go.dev/github.com/opentdf/otdfctl@${encodeURIComponent(tag)}`;
-                return `<a href="${htmlEscape(url)}">pkg.go.dev</a>`;
-              }
-              return '';
-            }
-
-            let errorCount = 0;
-            const table = [];
-            const th = (data) => ({ data, header: true });
-            table.push([th('Library'), th('Tag'), th('SHA'), th('Alias'), th('Artifact'), th('Error')]);
-
-            for (const [sdkType, refInfo] of Object.entries(versionData)) {
-              const tagList = [];
-              const tagToSha = {};
-              const headTags = [];
-
-              for (const { tag, head, sha, alias, err, release } of refInfo) {
-                const sdkRepoUrl = `https://github.com/opentdf/${encodeURIComponent(sdkType == 'js' ? 'web-sdk' : sdkType == 'go' ? 'otdfctl' : sdkType == 'java' ? 'java-sdk' : sdkType)}`;
-                const sdkLink = `<a href="${htmlEscape(sdkRepoUrl)}">${htmlEscape(sdkType)}</a>`;
-                const commitLink = sha ? `<a href="${htmlEscape(`${sdkRepoUrl}/commit/${encodeURIComponent(sha)}`)}">${htmlEscape(sha.substring(0, 7))}</a>` : ' . ';
-                const tagLink = (release && tag)
-                  ? `<a href="${htmlEscape(`${sdkRepoUrl}/releases/tag/${release}`)}">${htmlEscape(tag)}</a>`
-                  : tag ? htmlEscape(tag) : 'N/A';
-                const artifactCell = artifactLink(sdkType, tag, release, head);
-                table.push([sdkLink, tagLink, commitLink, alias || 'N/A', artifactCell || 'N/A', err || 'N/A']);
-                if (err) {
-                  errorCount += 1;
-                  continue;
-                }
-                tagList.push(tag);
-                tagToSha[tag] = sha;
-                if (head) {
-                  headTags.push(tag);
-                }
-              }
-
-              core.setOutput(`${sdkType}-tag-list`, JSON.stringify(tagList));
-              core.setOutput(`${sdkType}-tag-to-sha`, JSON.stringify(tagToSha));
-              core.setOutput(`${sdkType}-heads`, JSON.stringify(headTags));
-              core.setOutput(`${sdkType}-version-info`, JSON.stringify(refInfo));
-            }
-
-            core.summary.addTable(table);
-            core.summary.write();
-
-            if (errorCount > 0) {
-              throw new Error('Errors detected in version resolution. Failing the run.');
-            }
+          INPUT_PLATFORM_REF: ${{ inputs.platform-ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          refs="${INPUT_PLATFORM_REF}"
+          if [[ -z "$refs" ]]; then
+            case "$EVENT_NAME" in
+              workflow_dispatch|workflow_call)
+                refs="main"
+                ;;
+              *)
+                if [[ "$EVENT_SCHEDULE" == "0 5 * * 1,3" ]]; then
+                  refs="main"
+                else
+                  refs="main latest"
+                fi
+                ;;
+            esac
+          fi
+          json=$(printf '%s' "$refs" | jq -Rc 'split(" ") | map(select(length > 0))')
+          echo "json=$json" >> "$GITHUB_OUTPUT"
+          echo "Platform refs: $refs" >> "$GITHUB_STEP_SUMMARY"
 
   xct:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    needs: resolve-versions
+    needs: prepare
     permissions:
       contents: read
       packages: read
-      checks: write # Needed to publish junit tests
-      pull-requests: write # Add comments to PRs
+      checks: write
+      pull-requests: write
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk }}
     strategy:
       fail-fast: false
       matrix:
-        platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
+        platform-ref: ${{ fromJSON(needs.prepare.outputs.platform-refs) }}
         sdk: ["go", "java", "js"]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: opentdf/tests
-          path: otdftests # use different name bc other repos might have tests directories
+          path: otdftests
           persist-credentials: false
 
-      - name: load extra keys from file
-        id: load-extra-keys
-        run: |-
-          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
-
-      ######## SPIN UP PLATFORM BACKEND #############
-      - name: Check out and start up platform with deps/containers
-        id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          ec-tdf-enabled: true
-          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
-          log-type: json
+          python-version: "3.14"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
-      - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c # v1.3.0
+      - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b
+
+      - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c
         with:
           setup_only: true
           token: ${{ secrets.BUF_TOKEN }}
@@ -290,389 +159,99 @@ jobs:
         with:
           node-version: "22.x"
 
-      ######### CHECKOUT JS CLI #############
-      - name: Configure js-sdk
-        id: configure-js
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: js
-          version-info: "${{ needs.resolve-versions.outputs.js }}"
-
-      - name: Cache npm
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
-        with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
-          restore-keys: |
-            npm-${{ runner.os }}-
-
-      ######## SETUP THE JS CLI #############
-      - name: build and setup the web-sdk cli
-        id: build-web-sdk
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+      - name: Resolve default SDK refs for this event
+        id: refs
+        env:
+          INPUT_OTDFCTL_REF: ${{ inputs.otdfctl-ref }}
+          INPUT_JS_REF: ${{ inputs.js-ref }}
+          INPUT_JAVA_REF: ${{ inputs.java-ref }}
+          INPUT_OTDFCTL_SOURCE: ${{ inputs.otdfctl-source }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
-          make
-        working-directory: otdftests/xtest/sdk/js
-
-      ######## CHECKOUT GO CLI #############
-      - name: Configure otdfctl
-        id: configure-go
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: go
-          version-info: "${{ needs.resolve-versions.outputs.go }}"
-
-      - name: Cache Go modules
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
-          restore-keys: |
-            go-${{ runner.os }}-
-
-      - name: Resolve otdfctl heads
-        id: resolve-otdfctl-heads
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: |-
-          echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
-        env:
-          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
-
-      - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null && env.FOCUS_SDK == 'go' && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
-        env:
-          PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
-        run: |-
-          echo "Replacing go.mod packages..."
-          PLATFORM_DIR_ABS="$(pwd)/${PLATFORM_WORKING_DIR}"
-          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
-          echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
-          echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
-          for head in $(echo "${OTDFCTL_HEADS}" | jq -r '.[]'); do
-            echo "Processing head: $head"
-            cd "${OTDFCTL_DIR_ABS}/$head"
-            for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-              go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
-            done
-            go mod tidy
-          done
-
-      ######## SETUP THE GO CLI #############
-      - name: Prepare go cli
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: |-
-          make
-        working-directory: otdftests/xtest/sdk/go
-
-      ####### CHECKOUT JAVA SDK ##############
-
-      - name: Configure java-sdk
-        id: configure-java
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: java
-          version-info: "${{ needs.resolve-versions.outputs.java }}"
-
-      - name: Cache Maven repository
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
-          restore-keys: |
-            maven-${{ runner.os }}-
-
-      - name: pre-release protocol buffers for java-sdk
-        if: >-
-          fromJson(steps.configure-java.outputs.heads)[0] != null
-          && (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java')
-          && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
-        run: |-
-          echo "Replacing .env files for java-sdk..."
-          echo "Platform tag: $platform_tag"
-          echo "Java version info: $java_version_info"
-          for row in $(echo "$java_version_info" | jq -c '.[]'); do
-            TAG=$(echo "$row" | jq -r '.tag')
-            HEAD=$(echo "$row" | jq -r '.head')
-            if [[ "$HEAD" == "true" ]]; then
-              echo "Creating .env file for tag: [$TAG]; pointing to platform ref [$platform_tag]"
-              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
-            else
-              echo "Skipping .env file creation for release version [$TAG]"
-            fi
-          done
-        env:
-          java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          platform_tag: ${{ matrix.platform-tag }}
-
-      ####### SETUP JAVA CLI ##############
-      - name: Prepare java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
-        run: |
-          make
-        working-directory: otdftests/xtest/sdk/java
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-
-      ######## Configure test environment #############
-      - name: Lookup current platform version
-        id: platform-version
-        run: |-
-          if ! go run ./service version; then
-            # NOTE: the version command was added in 0.4.37
-            echo "Error: Unable to get platform version; defaulting to tag: [$PLATFORM_TAG]"
-            echo "PLATFORM_VERSION=$PLATFORM_TAG" >> "$GITHUB_ENV"
-            exit
-          fi
-          # Older version commands output version to stderr; newer versions output to stdout
-          PLATFORM_VERSION=$(go run ./service version 2>&1)
-          echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
-          echo "## Platform version output: [$PLATFORM_VERSION]"
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Check key management support and prepare root key
-        id: km-check
-        run: |-
-          OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
-          echo "OT_CONFIG_FILE=$OT_CONFIG_FILE" >> "$GITHUB_ENV"
-          # Determine if the config declares the key_management field
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false)
-              echo "KEY_MANAGEMENT_SUPPORTED=true" >> "$GITHUB_ENV"
-              echo "supported=true" >> "$GITHUB_OUTPUT"
+          defaults="main latest"
+          case "$EVENT_NAME" in
+            workflow_dispatch|workflow_call)
+              defaults="main"
               ;;
             *)
-              echo "KEY_MANAGEMENT_SUPPORTED=false" >> "$GITHUB_ENV"
-              echo "supported=false" >> "$GITHUB_OUTPUT"
+              if [[ "$EVENT_SCHEDULE" == "0 5 * * 1,3" ]]; then
+                defaults="main"
+              fi
               ;;
           esac
-          # Prepare a root key for use by additional KAS instances
-          existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
-          if [ -n "$existing_root_key" ] && [ "$existing_root_key" != "null" ]; then
-            echo "Using existing root key from config"
-            echo "OT_ROOT_KEY=$existing_root_key" >> "$GITHUB_ENV"
-            echo "root_key=$existing_root_key" >> "$GITHUB_OUTPUT"
-          else
-            echo "Generating a new root key for additional KAS"
-            gen_root_key=$(openssl rand -hex 32)
-            echo "OT_ROOT_KEY=$gen_root_key" >> "$GITHUB_ENV"
-            echo "root_key=$gen_root_key" >> "$GITHUB_OUTPUT"
+          echo "otdfctl-ref=${INPUT_OTDFCTL_REF:-$defaults}" >> "$GITHUB_OUTPUT"
+          echo "js-ref=${INPUT_JS_REF:-$defaults}" >> "$GITHUB_OUTPUT"
+          echo "java-ref=${INPUT_JAVA_REF:-$defaults}" >> "$GITHUB_OUTPUT"
+          echo "otdfctl-source=${INPUT_OTDFCTL_SOURCE:-auto}" >> "$GITHUB_OUTPUT"
+
+      - name: Write replay config and summary
+        id: plan
+        working-directory: otdftests
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          extra_args=()
+          if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" && "$GITHUB_EVENT_NAME" != "workflow_call" ]]; then
+            extra_args+=(--include-helper-tests --include-otdf-local-integration)
           fi
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+          uv run --project otdf-local otdf-local xtest plan \
+            --platform-ref "${{ matrix.platform-ref }}" \
+            --go-ref "${{ steps.refs.outputs.otdfctl-ref }}" \
+            --js-ref "${{ steps.refs.outputs.js-ref }}" \
+            --java-ref "${{ steps.refs.outputs.java-ref }}" \
+            --encrypt-sdk "${ENCRYPT_SDK}" \
+            --focus-sdk "${FOCUS_SDK}" \
+            --otdfctl-source "${{ steps.refs.outputs.otdfctl-source }}" \
+            --output "xtest/ci-config-${ENCRYPT_SDK}-${{ matrix.platform-ref }}.yaml" \
+            --write-summary \
+            "${extra_args[@]}"
 
-      - name: Install test dependencies
-        run: uv sync
-        working-directory: otdftests/xtest
-      - name: Validate xtest helper library (tests of the test harness and its utilities)
-        if: ${{ !inputs }}
-        run: |-
-          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py test_audit_logs.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Validate otdf-local integration tests
-        if: ${{ !inputs }}
-        run: |-
-          uv sync
-          uv run pytest --maxfail=1 --disable-warnings -v --tb=short -m integration
-        working-directory: otdftests/otdf-local
-        env:
-          OTDF_LOCAL_PLATFORM_DIR: ${{ github.workspace }}/${{ steps.run-platform.outputs.platform-working-dir }}
-
-      ######## RUN THE TESTS #############
-      - name: Run legacy decryption tests
-        run: |-
-          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Run all standard xtests
-        if: ${{ env.FOCUS_SDK == 'all' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Run xtests focusing on a specific SDK
-        if: ${{ env.FOCUS_SDK != 'all' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      ######## ATTRIBUTE BASED CONFIGURATION #############
-
-      - name: Does platform support multikas?
-        id: multikas
-        run: |-
-          if [[ $PLATFORM_TAG == main ]]; then
-            echo "Main supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }' <<< "${PLATFORM_VERSION#v}"; then
-            echo "Selected version [$PLATFORM_VERSION] supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Start additional kas
-        id: kas-alpha
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: alpha
-          kas-port: 8181
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-beta
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: beta
-          kas-port: 8282
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-gamma
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: gamma
-          kas-port: 8383
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-delta
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8484
-          kas-name: delta
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional KM kas (km1)
-        id: kas-km1
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          key-management: ${{ steps.km-check.outputs.supported }}
-          kas-name: km1
-          kas-port: 8585
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional KM kas (km2)
-        id: kas-km2
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: km2
-          key-management: ${{ steps.km-check.outputs.supported }}
-          kas-port: 8686
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Run attribute based configuration tests
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        run: >-
-          uv run pytest
-          -ra
-          -v
-          --numprocesses auto
-          --dist loadscope
-          --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
-          --self-contained-html
-          --audit-log-dir test-results/audit-logs
-          --sdks-encrypt "${ENCRYPT_SDK}"
-          --focus "$FOCUS_SDK"
-          test_abac.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
-          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
-          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
-          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
-          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
-          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
-          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
+      - name: Run xtest job
+        working-directory: otdftests
+        run: |
+          uv run --project otdf-local otdf-local xtest run --config "${{ steps.plan.outputs.config-path }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         id: upload-artifact
         if: success() || failure()
         with:
-          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
+          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{ steps.plan.outputs.platform-tag }}
           path: otdftests/xtest/test-results/*.html
 
       - name: Upload audit logs on failure
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: failure()
         with:
-          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          name: audit-logs-${{ matrix.sdk }}-${{ steps.plan.outputs.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
 
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
-    if: always() # Always try to publish results, even if tests fail
+    if: always()
     permissions:
-      pull-requests: write # Add comments to PRs
+      pull-requests: write
     steps:
       - id: comment-artifact-list
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
         env:
           XCT_RESULT: ${{ needs.xct.result }}
         with:
           script: |
-            const { owner, repo} = context.repo;
+            const { owner, repo } = context.repo;
             const runId = context.runId;
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
               owner,
               repo,
               run_id: runId,
-            })
+            });
             const results = artifacts.data.artifacts.map(({ name, id }) => `[${name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${id})`).join('\n');
             const xctResult = process.env.XCT_RESULT;
             const heading = xctResult === 'success' ? 'X-Test Results' : 'X-Test Failure Report';
-            const body = `## ${heading}\n${results}`
+            const body = `## ${heading}\n${results}`;
             const issue_number = context.issue?.number ?? context.pull_request?.number;
             if (!issue_number) {
               core.summary.addRaw(body);
@@ -689,11 +268,10 @@ jobs:
                 console.error("403 when attempting to comment on PR (likely fork)", err);
                 return;
               }
-              throw err; // Re-throw unexpected errors
+              throw err;
             }
 
   xtest:
-    # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
     runs-on: ubuntu-latest
     needs: xct
     if: always()
@@ -702,12 +280,13 @@ jobs:
     steps:
       - name: Assert all matrix jobs passed
         if: ${{ needs.xct.result == 'failure' || needs.xct.result == 'cancelled' }}
-        run: |-
+        run: |
           echo "xct matrix had failures (overall result: ${XCT_RESULT}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
           exit 1
         env:
           XCT_RESULT: ${{ needs.xct.result }}
+
       - name: Success summary
         if: ${{ needs.xct.result == 'success' }}
-        run: |-
-           echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "All xtest jobs succeeded." >> "$GITHUB_STEP_SUMMARY"

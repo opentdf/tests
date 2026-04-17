@@ -1,0 +1,140 @@
+name: setup-test-environment
+description: >-
+  Detect platform capabilities, extract configuration, and prepare the test
+  environment. Consolidates otdfctl detection, platform version lookup, key
+  management support, root key extraction, multikas support check, and test
+  dependency installation.
+
+inputs:
+  platform-working-dir:
+    description: Platform checkout directory (from start-up-with-containers output)
+    required: true
+  platform-tag:
+    description: Platform version tag under test (matrix value)
+    required: true
+  otdfctl-source-input:
+    description: "User's otdfctl-source preference: auto, standalone, or platform"
+    required: false
+    default: "auto"
+  tests-path:
+    description: Path to the tests repo checkout
+    required: false
+    default: "otdftests"
+
+outputs:
+  otdfctl-source:
+    description: "Resolved otdfctl source: platform or standalone"
+    value: ${{ steps.detect-otdfctl.outputs.otdfctl-source }}
+  otdfctl-dir:
+    description: Absolute path to otdfctl directory (if source=platform)
+    value: ${{ steps.detect-otdfctl.outputs.otdfctl-dir }}
+  otdfctl-sha:
+    description: SHA of the platform checkout (if source=platform)
+    value: ${{ steps.detect-otdfctl.outputs.otdfctl-sha }}
+  platform-version:
+    description: Detected platform version string
+    value: ${{ steps.platform-version.outputs.version }}
+  key-management-supported:
+    description: Whether the platform supports key management (true/false)
+    value: ${{ steps.km-check.outputs.supported }}
+  root-key:
+    description: Root key for KAS instances
+    value: ${{ steps.km-check.outputs.root_key }}
+  multikas-supported:
+    description: Whether multi-KAS is supported (true/false)
+    value: ${{ steps.multikas.outputs.supported }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect platform-embedded otdfctl
+      id: detect-otdfctl
+      shell: bash
+      run: |
+        if [[ "$OTDFCTL_SOURCE_INPUT" == "auto" || -z "$OTDFCTL_SOURCE_INPUT" ]]; then
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
+            echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
+            echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "otdfctl not found in platform checkout; using standalone repo"
+            echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
+          fi
+        elif [[ "$OTDFCTL_SOURCE_INPUT" == "platform" ]]; then
+          if [ -z "$PLATFORM_DIR" ] || [ ! -d "$PLATFORM_DIR/otdfctl" ] || [ ! -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "::error::otdfctl-source=platform requested but ${PLATFORM_DIR:-<empty>}/otdfctl does not exist or lacks go.mod"
+            exit 1
+          fi
+          echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
+          echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+          echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        else
+          echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
+        fi
+      env:
+        OTDFCTL_SOURCE_INPUT: ${{ inputs.otdfctl-source-input }}
+        PLATFORM_DIR: ${{ inputs.platform-working-dir }}
+
+    - name: Lookup platform version
+      id: platform-version
+      shell: bash
+      run: |
+        if ! go run ./service version; then
+          echo "Error: Unable to get platform version; defaulting to tag: [$PLATFORM_TAG]"
+          echo "version=$PLATFORM_TAG" >> "$GITHUB_OUTPUT"
+          exit
+        fi
+        PLATFORM_VERSION=$(go run ./service version 2>&1)
+        echo "version=$PLATFORM_VERSION" >> "$GITHUB_OUTPUT"
+      working-directory: ${{ inputs.platform-working-dir }}
+      env:
+        PLATFORM_TAG: ${{ inputs.platform-tag }}
+
+    - name: Check key management support and prepare root key
+      id: km-check
+      shell: bash
+      run: |
+        OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
+        km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+        case "$km_value" in
+          true|false)
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+            ;;
+        esac
+        existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
+        if [ -n "$existing_root_key" ] && [ "$existing_root_key" != "null" ]; then
+          echo "Using existing root key from config"
+          echo "root_key=$existing_root_key" >> "$GITHUB_OUTPUT"
+        else
+          echo "Generating a new root key for additional KAS"
+          gen_root_key=$(openssl rand -hex 32)
+          echo "root_key=$gen_root_key" >> "$GITHUB_OUTPUT"
+        fi
+      working-directory: ${{ inputs.platform-working-dir }}
+
+    - name: Check multikas support
+      id: multikas
+      shell: bash
+      run: |
+        if [[ $PLATFORM_TAG == main ]]; then
+          echo "Main supports multikas"
+          echo "supported=true" >> "$GITHUB_OUTPUT"
+        elif awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }' <<< "${PLATFORM_VERSION#v}"; then
+          echo "Selected version [$PLATFORM_VERSION] supports multikas"
+          echo "supported=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
+          echo "supported=false" >> "$GITHUB_OUTPUT"
+        fi
+      env:
+        PLATFORM_TAG: ${{ inputs.platform-tag }}
+        PLATFORM_VERSION: ${{ steps.platform-version.outputs.version }}
+
+    - name: Install test dependencies
+      shell: bash
+      run: uv sync
+      working-directory: ${{ inputs.tests-path }}/xtest
