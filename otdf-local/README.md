@@ -51,6 +51,34 @@ uv run otdf-local down
 
 ## Commands
 
+### `xtest` - Replay CI XTests Locally
+
+Generate a replayable config from refs:
+
+```bash
+otdf-local xtest plan \
+  --platform-ref latest \
+  --go-ref "main latest" \
+  --js-ref "main latest" \
+  --java-ref "main latest" \
+  --encrypt-sdk go \
+  --output xtest-repro.yaml
+```
+
+Run the same orchestration locally that CI uses:
+
+```bash
+otdf-local xtest run --config xtest-repro.yaml
+```
+
+Or run directly without a saved config:
+
+```bash
+otdf-local xtest run --platform-ref latest --encrypt-sdk go
+```
+
+The generated YAML is designed to be pasted directly from the GitHub Actions step summary and replayed locally.
+
 ### `up` - Start Environment
 
 Start all or specific services.

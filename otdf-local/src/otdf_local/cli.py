@@ -36,6 +36,7 @@ from otdf_local.utils.console import (
     status_spinner,
 )
 from otdf_local.utils.yaml import get_nested, load_yaml
+from otdf_local.xtest import xtest_app
 
 app = typer.Typer(
     name="otdf-local",
@@ -45,6 +46,7 @@ app = typer.Typer(
 )
 
 app.add_typer(ci_app, name="ci")
+app.add_typer(xtest_app, name="xtest")
 
 
 def _show_provision_error(result: ProvisionResult, target: str) -> None:
