@@ -54,13 +54,15 @@ def _find_xtest_root() -> Path:
 def _find_platform_dir(xtest_root: Path) -> Path:
     """Find the platform directory by searching for a sibling of an ancestor.
 
-    Searches up the directory tree from xtest_root looking for a 'platform' directory
-    that has the expected shape (contains docker-compose.yaml and opentdf-dev.yaml).
+    Searches for a 'platform' directory in:
+    1. Ancestor siblings (for local development checkouts)
+    2. The otdf-sdk-mgr managed location (xtest/sdk/platform/src/main)
+    3. Last resort: attempts to checkout 'main' via otdf-sdk-mgr
 
     Raises:
         FileNotFoundError: If platform directory is not found with expected shape.
     """
-    # Start from xtest_root and walk up
+    # 1. Search for sibling 'platform' checkouts
     current = xtest_root
     while current != current.parent:
         # Check siblings at this level
@@ -72,6 +74,48 @@ def _find_platform_dir(xtest_root: Path) -> Path:
             if has_compose and has_config:
                 return platform_candidate
         current = current.parent
+
+    # 2. Search in otdf-sdk-mgr managed location
+    managed_main = xtest_root / "sdk" / "platform" / "src" / "main"
+    if managed_main.exists() and managed_main.is_dir():
+        if (managed_main / "docker-compose.yaml").exists() and (
+            managed_main / "opentdf-dev.yaml"
+        ).exists():
+            return managed_main
+
+    # 3. Last resort: checkout 'main' via otdf-sdk-mgr
+    sdk_mgr_dir = xtest_root.parent / "otdf-sdk-mgr"
+    if sdk_mgr_dir.exists():
+        import subprocess
+
+        try:
+            # We use plain print to avoid circular imports or dependency on rich here
+            print(
+                "Platform not found. Attempting to checkout 'main' via otdf-sdk-mgr..."
+            )
+            subprocess.check_call(
+                [
+                    "uv",
+                    "run",
+                    "--project",
+                    str(sdk_mgr_dir),
+                    "otdf-sdk-mgr",
+                    "checkout",
+                    "platform",
+                    "main",
+                ],
+                cwd=sdk_mgr_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if managed_main.exists() and managed_main.is_dir():
+                if (managed_main / "docker-compose.yaml").exists() and (
+                    managed_main / "opentdf-dev.yaml"
+                ).exists():
+                    return managed_main
+        except Exception:
+            # Fall through to FileNotFoundError
+            pass
 
     # If we get here, we didn't find it
     raise FileNotFoundError(

@@ -58,7 +58,11 @@ class SuiteRunner:
         # Create a specific settings instance for this platform
         # We need to be careful with global state in otdf-local
         # but for now we'll just update the settings object.
-        original_platform_dir = self.settings.platform_dir
+        try:
+            original_platform_dir = self.settings.platform_dir
+        except FileNotFoundError:
+            original_platform_dir = None
+
         self.settings.platform_dir = platform_dir
 
         try:
@@ -79,7 +83,11 @@ class SuiteRunner:
 
         finally:
             self._stop_services()
-            self.settings.platform_dir = original_platform_dir
+            if original_platform_dir:
+                self.settings.platform_dir = original_platform_dir
+            else:
+                # If there was no original platform dir, clear the override
+                self.settings._platform_dir = None
 
     def _ensure_platform(self, platform: PlatformVersion) -> Optional[Path]:
         """Ensure the platform is checked out at the right version."""
