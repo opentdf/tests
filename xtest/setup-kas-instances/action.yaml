@@ -1,0 +1,86 @@
+name: setup-kas-instances
+description: >-
+  Start additional KAS instances for multi-KAS / ABAC tests.
+  Uses otdf-local ci start-kas to start all 6 KAS instances
+  (alpha, beta, gamma, delta, km1, km2) and expose their log file paths.
+
+inputs:
+  platform-working-dir:
+    description: Path to the platform checkout directory
+    required: true
+  root-key:
+    description: Root key for KAS instances
+    required: true
+  key-management-supported:
+    description: Enable key management on km1/km2 instances (true/false)
+    required: false
+    default: "false"
+  ec-tdf-enabled:
+    description: Enable EC TDF support
+    required: false
+    default: "true"
+  log-type:
+    description: Log format type
+    required: false
+    default: "json"
+  tests-path:
+    description: Path to the tests repo checkout
+    required: false
+    default: "otdftests"
+
+outputs:
+  kas-alpha-log-file:
+    description: Path to KAS alpha log file
+    value: ${{ steps.start-kas.outputs.kas-alpha-log-file }}
+  kas-beta-log-file:
+    description: Path to KAS beta log file
+    value: ${{ steps.start-kas.outputs.kas-beta-log-file }}
+  kas-gamma-log-file:
+    description: Path to KAS gamma log file
+    value: ${{ steps.start-kas.outputs.kas-gamma-log-file }}
+  kas-delta-log-file:
+    description: Path to KAS delta log file
+    value: ${{ steps.start-kas.outputs.kas-delta-log-file }}
+  kas-km1-log-file:
+    description: Path to KAS km1 log file
+    value: ${{ steps.start-kas.outputs.kas-km1-log-file }}
+  kas-km2-log-file:
+    description: Path to KAS km2 log file
+    value: ${{ steps.start-kas.outputs.kas-km2-log-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Start KAS instances
+      id: start-kas
+      shell: bash
+      run: |
+        KM_FLAG=""
+        if [[ "$KEY_MANAGEMENT" == "true" ]]; then
+          KM_FLAG="--key-management"
+        else
+          KM_FLAG="--no-key-management"
+        fi
+
+        EC_FLAG=""
+        if [[ "$EC_TDF_ENABLED" == "true" ]]; then
+          EC_FLAG="--ec-tdf-enabled"
+        else
+          EC_FLAG="--no-ec-tdf"
+        fi
+
+        OTDF_LOCAL_DIR="$(cd "$TESTS_PATH" && pwd)/otdf-local"
+
+        uv run --project "$OTDF_LOCAL_DIR" otdf-local ci start-kas \
+          --platform-dir "$(pwd)/$PLATFORM_DIR" \
+          --root-key "$ROOT_KEY" \
+          $EC_FLAG \
+          $KM_FLAG \
+          --log-type "$LOG_TYPE"
+      env:
+        PLATFORM_DIR: ${{ inputs.platform-working-dir }}
+        ROOT_KEY: ${{ inputs.root-key }}
+        KEY_MANAGEMENT: ${{ inputs.key-management-supported }}
+        EC_TDF_ENABLED: ${{ inputs.ec-tdf-enabled }}
+        LOG_TYPE: ${{ inputs.log-type }}
+        TESTS_PATH: ${{ inputs.tests-path }}
