@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from otdf_local.xtest.config import (
     DEFAULT_PHASES,
@@ -75,10 +72,14 @@ class TestXtestConfigRoundTrip:
             inputs=XtestInputs(platform_ref="main", go_ref="v0.29.0", focus_sdk="go"),
             resolved={
                 "platform": [
-                    ResolvedVersion(sdk="platform", tag="main", sha="abc123", head=True),
+                    ResolvedVersion(
+                        sdk="platform", tag="main", sha="abc123", head=True
+                    ),
                 ],
                 "go": [
-                    ResolvedVersion(sdk="go", tag="v0.29.0", sha="def456", release="v0.29.0"),
+                    ResolvedVersion(
+                        sdk="go", tag="v0.29.0", sha="def456", release="v0.29.0"
+                    ),
                 ],
             },
             platform_tag="main",
@@ -86,7 +87,9 @@ class TestXtestConfigRoundTrip:
             features=Features(ec_tdf=True, key_management=False, multikas=True),
             phases=[
                 TestPhase(name="legacy", test_files=["test_legacy.py"]),
-                TestPhase(name="abac", test_files=["test_abac.py"], requires=["multikas"]),
+                TestPhase(
+                    name="abac", test_files=["test_abac.py"], requires=["multikas"]
+                ),
             ],
         )
 
@@ -108,7 +111,9 @@ class TestXtestConfigRoundTrip:
 
     def test_round_trip_file(self, tmp_path: Path):
         config = XtestConfig(
-            resolved={"go": [ResolvedVersion(sdk="go", tag="main", sha="aaa111", head=True)]},
+            resolved={
+                "go": [ResolvedVersion(sdk="go", tag="main", sha="aaa111", head=True)]
+            },
         )
         out_file = tmp_path / "config.yaml"
         config.to_yaml_file(out_file)
@@ -160,12 +165,16 @@ class TestFeatureRequirements:
 
     def test_met_requirements(self):
         config = XtestConfig(features=Features(multikas=True, ec_tdf=True))
-        phase = TestPhase(name="abac", test_files=["test_abac.py"], requires=["multikas"])
+        phase = TestPhase(
+            name="abac", test_files=["test_abac.py"], requires=["multikas"]
+        )
         assert config.check_phase_requirements(phase) is True
 
     def test_unmet_requirements(self):
         config = XtestConfig(features=Features(multikas=False))
-        phase = TestPhase(name="abac", test_files=["test_abac.py"], requires=["multikas"])
+        phase = TestPhase(
+            name="abac", test_files=["test_abac.py"], requires=["multikas"]
+        )
         assert config.check_phase_requirements(phase) is False
 
     def test_no_requirements(self):
@@ -175,7 +184,9 @@ class TestFeatureRequirements:
 
     def test_key_management_requirement(self):
         config = XtestConfig(features=Features(key_management=False))
-        phase = TestPhase(name="km", test_files=["test.py"], requires=["key-management"])
+        phase = TestPhase(
+            name="km", test_files=["test.py"], requires=["key-management"]
+        )
         assert config.check_phase_requirements(phase) is False
 
         config.features.key_management = True

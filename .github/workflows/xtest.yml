@@ -268,7 +268,7 @@ jobs:
           mkdir -p xtest-configs
 
           # Generate one config per (platform-tag, sdk) matrix cell
-          PLATFORM_TAGS=$(echo "${{ steps.version-info.outputs.platform-tag-list }}" | jq -r '.[]')
+          PLATFORM_TAGS=$(echo "$PLATFORM_TAG_LIST_JSON" | jq -r '.[]')
           for ptag in $PLATFORM_TAGS; do
             for sdk in go java js; do
               CONFIG_FILE="xtest-configs/${sdk}-${ptag}.yaml"
@@ -309,6 +309,7 @@ jobs:
         env:
           FOCUS_SDK_INPUT: "${{ inputs.focus-sdk }}"
           OTDFCTL_SOURCE_INPUT: "${{ inputs.otdfctl-source }}"
+          PLATFORM_TAG_LIST_JSON: "${{ steps.version-info.outputs.platform-tag-list }}"
 
       - name: Upload xtest configs
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
