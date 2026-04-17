@@ -11,7 +11,7 @@ import typer
 
 from otdf_sdk_mgr.cli_install import install_app
 from otdf_sdk_mgr.cli_versions import versions_app
-from otdf_sdk_mgr.config import ALL_SDKS, get_sdk_dirs
+from otdf_sdk_mgr.config import ALL_SDKS, ALL_REPOS, get_sdk_dirs
 
 app = typer.Typer(
     name="otdf-sdk-mgr",
@@ -27,22 +27,22 @@ app.add_typer(versions_app, name="versions")
 def checkout(
     sdk: Annotated[
         Optional[str],
-        typer.Argument(help="SDK to checkout (go, js, java)"),
+        typer.Argument(help="SDK or repo to checkout (go, js, java, platform)"),
     ] = None,
     branch: Annotated[str, typer.Argument(help="Branch to checkout")] = "main",
-    all_sdks: Annotated[bool, typer.Option("--all", help="Checkout all SDKs")] = False,
+    all_sdks: Annotated[bool, typer.Option("--all", help="Checkout all repos")] = False,
 ) -> None:
-    """Clone bare repo and create/update worktree for an SDK branch."""
+    """Clone bare repo and create/update worktree for an SDK or platform branch."""
     from otdf_sdk_mgr.checkout import checkout_sdk_branch
 
     try:
         if all_sdks:
-            for s in ALL_SDKS:
+            for s in ALL_REPOS:
                 checkout_sdk_branch(s, branch)
         elif sdk:
             checkout_sdk_branch(sdk, branch)
         else:
-            typer.echo("Error: provide an SDK name or use --all", err=True)
+            typer.echo("Error: provide a repo name or use --all", err=True)
             raise typer.Exit(1)
     except (ValueError, subprocess.CalledProcessError) as e:
         typer.echo(f"Error: {e}", err=True)
@@ -63,8 +63,10 @@ def clean(
     remove_src = not dist_only
 
     sdk_dirs = get_sdk_dirs()
-    for sdk in ALL_SDKS:
-        sdk_dir = sdk_dirs[sdk]
+    for repo in ALL_REPOS:
+        if repo not in sdk_dirs:
+            continue
+        sdk_dir = sdk_dirs[repo]
         if remove_dist:
             dist_dir = sdk_dir / "dist"
             if dist_dir.exists():
@@ -93,3 +95,39 @@ def java_fixup(
     from otdf_sdk_mgr.java_fixup import post_checkout_java_fixup
 
     post_checkout_java_fixup(base_dir)
+
+
+@app.command("go-fixup")
+def go_fixup_cmd(
+    platform_dir: Annotated[
+        Path,
+        typer.Option("--platform-dir", help="Path to the platform checkout root"),
+    ],
+    heads: Annotated[
+        Optional[str],
+        typer.Option(
+            "--heads",
+            help="JSON list of head version tags to process (e.g. '[\"main\"]')",
+        ),
+    ] = None,
+    base_dir: Annotated[
+        Optional[Path],
+        typer.Argument(help="Base directory for Go source trees"),
+    ] = None,
+) -> None:
+    """Bridge Go client go.mod to server shared modules for head builds.
+
+    Performs go mod edit -replace + go mod tidy for each head version,
+    pointing platform module imports at the local platform checkout.
+    Only needed for standalone otdfctl checkouts.
+    """
+    import json as json_mod
+
+    from otdf_sdk_mgr.go_fixup import go_fixup
+
+    heads_list = json_mod.loads(heads) if heads else None
+    try:
+        go_fixup(platform_dir, heads=heads_list, base_dir=base_dir)
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1) from e

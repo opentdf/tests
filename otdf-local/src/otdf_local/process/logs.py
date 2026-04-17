@@ -61,6 +61,16 @@ class LogReader:
             self._position = f.tell()
         return entries
 
+    def seek_to_end(self) -> None:
+        """Move the read position to the end of the file."""
+        if not self.log_file.exists():
+            self._position = 0
+            return
+
+        with open(self.log_file) as f:
+            f.seek(0, 2)  # Seek to end
+            self._position = f.tell()
+
     def follow(self, poll_interval: float = 0.5) -> Iterator[LogEntry]:
         """Continuously yield new log entries."""
         while True:
@@ -181,6 +191,12 @@ class LogAggregator:
             entries,
             key=lambda e: (e.timestamp is None, e.timestamp or datetime.max),
         )
+
+    def seek_to_end(self, services: list[str] | None = None) -> None:
+        """Seek all (or specified) readers to the end of their files."""
+        readers = self._get_readers(services)
+        for reader in readers:
+            reader.seek_to_end()
 
     def follow(
         self,

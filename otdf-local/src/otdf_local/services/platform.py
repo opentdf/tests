@@ -54,6 +54,21 @@ class PlatformService(Service):
         config_path = self.settings.platform_config
         template_path = self.settings.platform_template_config
 
+        # Fallback if template doesn't exist
+        if not template_path.exists():
+            # Try opentdf-example.yaml
+            example_template = self.settings.platform_dir / "opentdf-example.yaml"
+            if example_template.exists():
+                template_path = example_template
+            else:
+                # If neither exist, we might have to just use opentdf.yaml if it exists
+                # or raise a more helpful error
+                if not config_path.exists():
+                    raise FileNotFoundError(
+                        f"Could not find template {template_path} or {example_template}"
+                    )
+                return config_path
+
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
 

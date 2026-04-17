@@ -56,7 +56,10 @@ class KASService(Service):
         template_path = self.settings.kas_template_config
 
         # Load platform config to get root_key
-        platform_config = load_yaml(self.settings.platform_config)
+        try:
+            platform_config = load_yaml(self.settings.platform_config)
+        except FileNotFoundError:
+            platform_config = {}
         root_key = get_nested(platform_config, "services.kas.root_key", "")
 
         # Detect platform features to determine supported config options
