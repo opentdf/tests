@@ -18,17 +18,18 @@ from otdf_local.xtest.config import (
 )
 
 
-def _find_sdk_mgr_dir(settings: Settings) -> Path:
+def _find_sdk_mgr_dir(settings: Settings | None = None) -> Path:
     """Locate the otdf-sdk-mgr directory (sibling of otdf-local in the repo)."""
     # Walk up from this file to find otdf-local root, then look for sibling
     otdf_local_dir = Path(__file__).resolve().parent.parent.parent.parent
     sdk_mgr = otdf_local_dir.parent / "otdf-sdk-mgr"
     if sdk_mgr.is_dir():
         return sdk_mgr
-    # Try from xtest_root
-    sdk_mgr = settings.xtest_root.parent / "otdf-sdk-mgr"
-    if sdk_mgr.is_dir():
-        return sdk_mgr
+    # Try from xtest_root if settings available
+    if settings is not None:
+        sdk_mgr = settings.xtest_root.parent / "otdf-sdk-mgr"
+        if sdk_mgr.is_dir():
+            return sdk_mgr
     raise FileNotFoundError(
         f"Could not find otdf-sdk-mgr directory. Checked: {otdf_local_dir.parent / 'otdf-sdk-mgr'}"
     )
@@ -125,12 +126,13 @@ def detect_features(settings: Settings) -> Features:
     return features
 
 
-def resolve_all(inputs: XtestInputs, settings: Settings) -> XtestConfig:
+def resolve_all(inputs: XtestInputs, settings: Settings | None = None) -> XtestConfig:
     """Resolve all SDK versions and detect features, returning a complete config.
 
     Args:
         inputs: The version refs and options to resolve
-        settings: otdf-local settings (for feature detection and path finding)
+        settings: otdf-local settings (for feature detection and path finding).
+            Optional - if not provided, feature detection is skipped.
 
     Returns:
         A fully populated XtestConfig
@@ -174,11 +176,13 @@ def resolve_all(inputs: XtestInputs, settings: Settings) -> XtestConfig:
     platform_tags = [v.tag for v in resolved.get("platform", []) if not v.err]
     platform_tag = platform_tags[0] if platform_tags else "main"
 
-    # Detect features
-    try:
-        features = detect_features(settings)
-    except Exception:
-        features = Features()
+    # Detect features (only if platform dir is available)
+    features = Features()
+    if settings is not None:
+        try:
+            features = detect_features(settings)
+        except Exception:
+            pass
 
     return XtestConfig(
         inputs=inputs,

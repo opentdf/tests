@@ -77,7 +77,10 @@ def resolve(
         otdfctl_source=otdfctl_source,
     )
 
-    settings = get_settings()
+    try:
+        settings = get_settings()
+    except (FileNotFoundError, Exception):
+        settings = None
     config = resolve_all(inputs, settings)
 
     yaml_output = config.to_yaml()
