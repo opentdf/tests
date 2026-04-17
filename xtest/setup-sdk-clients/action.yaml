@@ -1,0 +1,159 @@
+name: setup-sdk-clients
+description: >-
+  Configure, cache, patch, and build an SDK CLI for xtest. Wraps setup-cli-tool
+  and adds SDK-appropriate caching, go.mod/java .env fixups, and make builds.
+  Each invocation handles one SDK (go, java, or js).
+
+inputs:
+  sdk:
+    description: "SDK to set up: go, java, or js"
+    required: true
+  version-info:
+    description: JSON-encoded output of otdf-sdk-mgr versions resolve for this SDK
+    required: true
+  tests-path:
+    description: Path to the tests repo checkout
+    required: false
+    default: "otdftests"
+  platform-working-dir:
+    description: >-
+      Platform checkout directory. Used for go-fixup (bridging client go.mod
+      to server shared modules) and detecting platform-embedded otdfctl.
+    required: false
+  platform-heads:
+    description: JSON list of platform tags that are heads (from resolve-versions)
+    required: false
+    default: "[]"
+  platform-tag:
+    description: Current matrix platform-tag value
+    required: false
+  platform-tag-to-sha:
+    description: JSON object mapping platform tags to SHAs
+    required: false
+    default: "{}"
+  otdfctl-source:
+    description: "Resolved otdfctl source: platform or standalone"
+    required: false
+    default: "standalone"
+  otdfctl-dir:
+    description: Absolute path to platform's otdfctl directory
+    required: false
+  otdfctl-sha:
+    description: SHA of the platform otdfctl checkout
+    required: false
+  focus-sdk:
+    description: "SDK focus filter: all, go, java, or js"
+    required: false
+    default: "all"
+  buf-token:
+    description: BUF token for Java proto compilation
+    required: false
+  pat-opentdf:
+    description: PAT for buf HTTPS password (Java SDK build)
+    required: false
+
+outputs:
+  heads:
+    description: JSON list of head tags for this SDK
+    value: ${{ steps.configure.outputs.heads }}
+
+runs:
+  using: composite
+  steps:
+    # Step 1: Configure SDK via setup-cli-tool (checkout/install)
+    - name: Configure ${{ inputs.sdk }}
+      id: configure
+      uses: ./otdftests/xtest/setup-cli-tool
+      with:
+        path: ${{ inputs.tests-path }}/xtest/sdk
+        sdk: ${{ inputs.sdk }}
+        version-info: ${{ inputs.version-info }}
+        platform-otdfctl-dir: ${{ inputs.otdfctl-dir }}
+        platform-otdfctl-sha: ${{ inputs.otdfctl-sha }}
+
+    # Step 2: SDK-appropriate dependency caching
+    - name: Cache npm
+      if: inputs.sdk == 'js' && fromJson(steps.configure.outputs.heads)[0] != null
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/xtest/sdk/js/src/**/package-lock.json', inputs.tests-path)) }}
+        restore-keys: |
+          npm-${{ runner.os }}-
+
+    - name: Cache Go modules
+      if: inputs.sdk == 'go' && fromJson(steps.configure.outputs.heads)[0] != null
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-${{ runner.os }}-${{ hashFiles(format('{0}/xtest/sdk/go/src/*/go.sum', inputs.tests-path)) }}
+        restore-keys: |
+          go-${{ runner.os }}-
+
+    - name: Cache Maven repository
+      if: inputs.sdk == 'java' && fromJson(steps.configure.outputs.heads)[0] != null
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      with:
+        path: ~/.m2/repository
+        key: maven-${{ runner.os }}-${{ hashFiles(format('{0}/xtest/sdk/java/src/**/pom.xml', inputs.tests-path)) }}
+        restore-keys: |
+          maven-${{ runner.os }}-
+
+    # Step 3: SDK-specific fixups
+
+    # Go: Bridge client go.mod to server shared modules (standalone otdfctl only)
+    - name: Go fixup - replace go.mod packages
+      if: >-
+        inputs.sdk == 'go'
+        && steps.configure.outputs.heads != '[]'
+        && inputs.otdfctl-source != 'platform'
+        && inputs.focus-sdk == 'go'
+        && contains(fromJSON(inputs.platform-heads), inputs.platform-tag)
+        && inputs.platform-working-dir != ''
+      shell: bash
+      run: |
+        SDK_MGR_DIR="$(cd "$TESTS_PATH" && pwd)/otdf-sdk-mgr"
+        PLATFORM_DIR_ABS="$(pwd)/${PLATFORM_WORKING_DIR}"
+        BASE_DIR="$(pwd)/${TESTS_PATH}/xtest/sdk/go/src"
+        HEADS='${{ steps.configure.outputs.heads }}'
+        uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr go-fixup \
+          --platform-dir "$PLATFORM_DIR_ABS" \
+          --heads "$HEADS" \
+          "$BASE_DIR"
+      env:
+        PLATFORM_WORKING_DIR: ${{ inputs.platform-working-dir }}
+        TESTS_PATH: ${{ inputs.tests-path }}
+
+    # Java: Create .env files with PLATFORM_BRANCH for head versions
+    - name: Java fixup - create platform branch .env files
+      if: >-
+        inputs.sdk == 'java'
+        && steps.configure.outputs.heads != '[]'
+        && (inputs.focus-sdk == 'go' || inputs.focus-sdk == 'java')
+        && contains(fromJSON(inputs.platform-heads), inputs.platform-tag)
+      shell: bash
+      run: |
+        for row in $(echo "$VERSION_INFO" | jq -c '.[]'); do
+          TAG=$(echo "$row" | jq -r '.tag')
+          HEAD=$(echo "$row" | jq -r '.head')
+          if [[ "$HEAD" == "true" ]]; then
+            echo "Creating .env file for tag: [$TAG]; pointing to platform ref [$PLATFORM_REF]"
+            echo "PLATFORM_BRANCH=$PLATFORM_REF" > "${TESTS_PATH}/xtest/sdk/java/${TAG}.env"
+          fi
+        done
+      env:
+        VERSION_INFO: ${{ inputs.version-info }}
+        PLATFORM_REF: ${{ fromJSON(inputs.platform-tag-to-sha)[inputs.platform-tag] }}
+        TESTS_PATH: ${{ inputs.tests-path }}
+
+    # Step 4: Build the SDK CLI
+    - name: Build ${{ inputs.sdk }} CLI
+      if: fromJson(steps.configure.outputs.heads)[0] != null
+      shell: bash
+      run: make
+      working-directory: ${{ inputs.tests-path }}/xtest/sdk/${{ inputs.sdk }}
+      env:
+        BUF_INPUT_HTTPS_USERNAME: ${{ inputs.sdk == 'java' && 'opentdf-bot' || '' }}
+        BUF_INPUT_HTTPS_PASSWORD: ${{ inputs.sdk == 'java' && inputs.pat-opentdf || '' }}

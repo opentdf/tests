@@ -311,226 +311,56 @@ jobs:
         with:
           node-version: "22.x"
 
-      ######## DETECT PLATFORM-EMBEDDED OTDFCTL #############
-      - name: Detect platform-embedded otdfctl
-        id: detect-otdfctl
-        run: |
-          if [[ "$OTDFCTL_SOURCE_INPUT" == "auto" || -z "$OTDFCTL_SOURCE_INPUT" ]]; then
-            if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
-              echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
-              echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
-              echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
-              echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-            else
-              echo "otdfctl not found in platform checkout; using standalone repo"
-              echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
-            fi
-          elif [[ "$OTDFCTL_SOURCE_INPUT" == "platform" ]]; then
-            if [ -z "$PLATFORM_DIR" ] || [ ! -d "$PLATFORM_DIR/otdfctl" ] || [ ! -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
-              echo "::error::otdfctl-source=platform requested but ${PLATFORM_DIR:-<empty>}/otdfctl does not exist or lacks go.mod"
-              exit 1
-            fi
-            echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
-            echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
-            echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          else
-            echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          OTDFCTL_SOURCE_INPUT: ${{ inputs.otdfctl-source }}
-          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
-
-      ######### CHECKOUT JS CLI #############
-      - name: Configure js-sdk
-        id: configure-js
-        uses: ./otdftests/xtest/setup-cli-tool
+      ######## SETUP TEST ENVIRONMENT #############
+      - name: Setup test environment
+        id: test-env
+        uses: ./otdftests/xtest/setup-test-environment
         with:
-          path: otdftests/xtest/sdk
+          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
+          platform-tag: ${{ matrix.platform-tag }}
+          otdfctl-source-input: ${{ inputs.otdfctl-source }}
+
+      ######## SETUP SDK CLIENTS #############
+      - name: Setup JS SDK client
+        id: setup-js
+        uses: ./otdftests/xtest/setup-sdk-clients
+        with:
           sdk: js
           version-info: "${{ needs.resolve-versions.outputs.js }}"
+          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
+          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
+          platform-tag: ${{ matrix.platform-tag }}
+          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
 
-      - name: Cache npm
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - name: Setup Go SDK client (otdfctl)
+        id: setup-go
+        uses: ./otdftests/xtest/setup-sdk-clients
         with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
-          restore-keys: |
-            npm-${{ runner.os }}-
-
-      ######## SETUP THE JS CLI #############
-      - name: build and setup the web-sdk cli
-        id: build-web-sdk
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
-        run: |
-          make
-        working-directory: otdftests/xtest/sdk/js
-
-      ######## CHECKOUT GO CLI #############
-      - name: Configure otdfctl
-        id: configure-go
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
           sdk: go
           version-info: "${{ needs.resolve-versions.outputs.go }}"
-          platform-otdfctl-dir: ${{ steps.detect-otdfctl.outputs.otdfctl-dir }}
-          platform-otdfctl-sha: ${{ steps.detect-otdfctl.outputs.otdfctl-sha }}
+          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
+          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
+          platform-tag: ${{ matrix.platform-tag }}
+          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
+          otdfctl-source: ${{ steps.test-env.outputs.otdfctl-source }}
+          otdfctl-dir: ${{ steps.test-env.outputs.otdfctl-dir }}
+          otdfctl-sha: ${{ steps.test-env.outputs.otdfctl-sha }}
+          focus-sdk: ${{ inputs.focus-sdk || 'all' }}
 
-      - name: Cache Go modules
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - name: Setup Java SDK client
+        id: setup-java
+        uses: ./otdftests/xtest/setup-sdk-clients
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
-          restore-keys: |
-            go-${{ runner.os }}-
-
-      - name: Resolve otdfctl heads
-        id: resolve-otdfctl-heads
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: |-
-          echo "OTDFCTL_HEADS=$OTDFCTL_HEADS" >> "$GITHUB_ENV"
-        env:
-          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
-
-      - name: Replace otdfctl go.mod packages, but only at head version of platform
-        if: >-
-          steps.detect-otdfctl.outputs.otdfctl-source != 'platform'
-          && fromJson(steps.configure-go.outputs.heads)[0] != null
-          && env.FOCUS_SDK == 'go'
-          && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
-        env:
-          PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
-        run: |-
-          echo "Replacing go.mod packages (standalone otdfctl)..."
-          PLATFORM_DIR_ABS="$(pwd)/${PLATFORM_WORKING_DIR}"
-          OTDFCTL_DIR_ABS="$(pwd)/otdftests/xtest/sdk/go/src/"
-          echo "PLATFORM_DIR_ABS: $PLATFORM_DIR_ABS"
-          echo "OTDFCTL_DIR_ABS: $OTDFCTL_DIR_ABS"
-          for head in $(echo "${OTDFCTL_HEADS}" | jq -r '.[]'); do
-            echo "Processing head: $head"
-            cd "${OTDFCTL_DIR_ABS}/$head"
-            for m in lib/fixtures lib/ocrypto protocol/go sdk; do
-              go mod edit -replace "github.com/opentdf/platform/$m=${PLATFORM_DIR_ABS}/$m"
-            done
-            go mod tidy
-          done
-
-      ######## SETUP THE GO CLI #############
-      - name: Prepare go cli
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: |-
-          make
-        working-directory: otdftests/xtest/sdk/go
-
-      ####### CHECKOUT JAVA SDK ##############
-
-      - name: Configure java-sdk
-        id: configure-java
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
           sdk: java
           version-info: "${{ needs.resolve-versions.outputs.java }}"
+          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
+          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
+          platform-tag: ${{ matrix.platform-tag }}
+          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
+          focus-sdk: ${{ inputs.focus-sdk || 'all' }}
+          pat-opentdf: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
-      - name: Cache Maven repository
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
-          restore-keys: |
-            maven-${{ runner.os }}-
-
-      - name: pre-release protocol buffers for java-sdk
-        if: >-
-          fromJson(steps.configure-java.outputs.heads)[0] != null
-          && (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java')
-          && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
-        run: |-
-          echo "Replacing .env files for java-sdk..."
-          echo "Platform tag: $platform_tag"
-          echo "Java version info: $java_version_info"
-          for row in $(echo "$java_version_info" | jq -c '.[]'); do
-            TAG=$(echo "$row" | jq -r '.tag')
-            HEAD=$(echo "$row" | jq -r '.head')
-            if [[ "$HEAD" == "true" ]]; then
-              echo "Creating .env file for tag: [$TAG]; pointing to platform ref [$platform_tag]"
-              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
-            else
-              echo "Skipping .env file creation for release version [$TAG]"
-            fi
-          done
-        env:
-          java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          platform_tag: ${{ matrix.platform-tag }}
-
-      ####### SETUP JAVA CLI ##############
-      - name: Prepare java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
-        run: |
-          make
-        working-directory: otdftests/xtest/sdk/java
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-
-      ######## Configure test environment #############
-      - name: Lookup current platform version
-        id: platform-version
-        run: |-
-          if ! go run ./service version; then
-            # NOTE: the version command was added in 0.4.37
-            echo "Error: Unable to get platform version; defaulting to tag: [$PLATFORM_TAG]"
-            echo "PLATFORM_VERSION=$PLATFORM_TAG" >> "$GITHUB_ENV"
-            exit
-          fi
-          # Older version commands output version to stderr; newer versions output to stdout
-          PLATFORM_VERSION=$(go run ./service version 2>&1)
-          echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
-          echo "## Platform version output: [$PLATFORM_VERSION]"
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Check key management support and prepare root key
-        id: km-check
-        run: |-
-          OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
-          echo "OT_CONFIG_FILE=$OT_CONFIG_FILE" >> "$GITHUB_ENV"
-          # Determine if the config declares the key_management field
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false)
-              echo "KEY_MANAGEMENT_SUPPORTED=true" >> "$GITHUB_ENV"
-              echo "supported=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "KEY_MANAGEMENT_SUPPORTED=false" >> "$GITHUB_ENV"
-              echo "supported=false" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-          # Prepare a root key for use by additional KAS instances
-          existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
-          if [ -n "$existing_root_key" ] && [ "$existing_root_key" != "null" ]; then
-            echo "Using existing root key from config"
-            echo "OT_ROOT_KEY=$existing_root_key" >> "$GITHUB_ENV"
-            echo "root_key=$existing_root_key" >> "$GITHUB_OUTPUT"
-          else
-            echo "Generating a new root key for additional KAS"
-            gen_root_key=$(openssl rand -hex 32)
-            echo "OT_ROOT_KEY=$gen_root_key" >> "$GITHUB_ENV"
-            echo "root_key=$gen_root_key" >> "$GITHUB_OUTPUT"
-          fi
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
-
-      - name: Install test dependencies
-        run: uv sync
-        working-directory: otdftests/xtest
+      ######## VALIDATE HELPERS #############
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
@@ -579,92 +409,17 @@ jobs:
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
-      - name: Does platform support multikas?
-        id: multikas
-        run: |-
-          if [[ $PLATFORM_TAG == main ]]; then
-            echo "Main supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }' <<< "${PLATFORM_VERSION#v}"; then
-            echo "Selected version [$PLATFORM_VERSION] supports multikas"
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "At tag [$PLATFORM_TAG], [$PLATFORM_VERSION] probably does not support multikas"
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Start additional kas
-        id: kas-alpha
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+      - name: Start KAS instances for ABAC tests
+        id: kas-instances
+        if: ${{ steps.test-env.outputs.multikas-supported == 'true' }}
+        uses: ./otdftests/xtest/setup-kas-instances
         with:
-          ec-tdf-enabled: true
-          kas-name: alpha
-          kas-port: 8181
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-beta
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: beta
-          kas-port: 8282
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-gamma
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: gamma
-          kas-port: 8383
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional kas
-        id: kas-delta
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-port: 8484
-          kas-name: delta
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional KM kas (km1)
-        id: kas-km1
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          key-management: ${{ steps.km-check.outputs.supported }}
-          kas-name: km1
-          kas-port: 8585
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
-
-      - name: Start additional KM kas (km2)
-        id: kas-km2
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          ec-tdf-enabled: true
-          kas-name: km2
-          key-management: ${{ steps.km-check.outputs.supported }}
-          kas-port: 8686
-          log-type: json
-          root-key: ${{ steps.km-check.outputs.root_key }}
+          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
+          root-key: ${{ steps.test-env.outputs.root-key }}
+          key-management-supported: ${{ steps.test-env.outputs.key-management-supported }}
 
       - name: Run attribute based configuration tests
-        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        if: ${{ steps.test-env.outputs.multikas-supported == 'true' }}
         run: >-
           uv run pytest
           -ra
@@ -682,12 +437,12 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
-          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
-          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
-          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
-          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
-          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
-          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
+          KAS_ALPHA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-alpha-log-file }}
+          KAS_BETA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-beta-log-file }}
+          KAS_GAMMA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-gamma-log-file }}
+          KAS_DELTA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-delta-log-file }}
+          KAS_KM1_LOG_FILE: ${{ steps.kas-instances.outputs.kas-km1-log-file }}
+          KAS_KM2_LOG_FILE: ${{ steps.kas-instances.outputs.kas-km2-log-file }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
