@@ -86,7 +86,7 @@ class SuiteRunner:
         # Use otdf-sdk-mgr to checkout platform
         ref = platform.sha or platform.tag
         print_info(f"Ensuring platform version {ref}...")
-        sdk_mgr_dir = self.settings.xtest_root / "otdf-sdk-mgr"
+        sdk_mgr_dir = self.settings.xtest_root.parent / "otdf-sdk-mgr"
         try:
             subprocess.check_call(
                 ["uv", "run", "--project", str(sdk_mgr_dir), "otdf-sdk-mgr", "checkout", "platform", ref],
@@ -117,7 +117,7 @@ class SuiteRunner:
 
     def _ensure_sdks(self) -> None:
         """Ensure all required SDKs are installed."""
-        sdk_mgr_dir = self.settings.xtest_root / "otdf-sdk-mgr"
+        sdk_mgr_dir = self.settings.xtest_root.parent / "otdf-sdk-mgr"
         for sdk, versions in self.config.sdks.items():
             for version in versions:
                 ref = version.sha or version.tag
