@@ -43,6 +43,7 @@ def get_sdk_dirs() -> dict[str, Path]:
         "go": sdk_dir / "go",
         "js": sdk_dir / "js",
         "java": sdk_dir / "java",
+        "platform": sdk_dir / "platform",
     }
 
 
@@ -107,6 +108,7 @@ SDK_BARE_REPOS: dict[str, str] = {
     "go": "otdfctl.git",
     "java": "java-sdk.git",
     "js": "web-sdk.git",
+    "platform": "platform.git",
 }
 
 # Tag infixes for monorepo tag resolution
@@ -158,3 +160,4 @@ def go_module_path(source: str | None = None) -> str:
 
 
 ALL_SDKS = ["go", "js", "java"]
+ALL_REPOS = ["go", "js", "java", "platform"]

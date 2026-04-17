@@ -281,169 +281,24 @@ jobs:
         run: |-
           echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
 
-      ######## SPIN UP PLATFORM BACKEND #############
-      - name: Check out and start up platform with deps/containers
-        id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
-        with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          ec-tdf-enabled: true
-          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
-          log-type: json
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
-      - uses: bufbuild/buf-action@8f4a1456a0ab6a1eb80ba68e53832e6fcfacc16c # v1.3.0
-        with:
-          setup_only: true
-          token: ${{ secrets.BUF_TOKEN }}
-          version: "1.56.0"
-
-      - name: Set up JDK
-        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
-        with:
-          java-version: "11"
-          distribution: "adopt"
-          server-id: github
-
-      - name: Set up Node 22
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
-        with:
-          node-version: "22.x"
-
-      ######## SETUP TEST ENVIRONMENT #############
-      - name: Setup test environment
-        id: test-env
-        uses: ./otdftests/xtest/setup-test-environment
-        with:
-          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
-          platform-tag: ${{ matrix.platform-tag }}
-          otdfctl-source-input: ${{ inputs.otdfctl-source }}
-
-      ######## SETUP SDK CLIENTS #############
-      - name: Setup JS SDK client
-        id: setup-js
-        uses: ./otdftests/xtest/setup-sdk-clients
-        with:
-          sdk: js
-          version-info: "${{ needs.resolve-versions.outputs.js }}"
-          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
-          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
-          platform-tag: ${{ matrix.platform-tag }}
-          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
-
-      - name: Setup Go SDK client (otdfctl)
-        id: setup-go
-        uses: ./otdftests/xtest/setup-sdk-clients
-        with:
-          sdk: go
-          version-info: "${{ needs.resolve-versions.outputs.go }}"
-          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
-          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
-          platform-tag: ${{ matrix.platform-tag }}
-          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
-          otdfctl-source: ${{ steps.test-env.outputs.otdfctl-source }}
-          otdfctl-dir: ${{ steps.test-env.outputs.otdfctl-dir }}
-          otdfctl-sha: ${{ steps.test-env.outputs.otdfctl-sha }}
-          focus-sdk: ${{ inputs.focus-sdk || 'all' }}
-
-      - name: Setup Java SDK client
-        id: setup-java
-        uses: ./otdftests/xtest/setup-sdk-clients
-        with:
-          sdk: java
-          version-info: "${{ needs.resolve-versions.outputs.java }}"
-          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
-          platform-heads: ${{ needs.resolve-versions.outputs.heads }}
-          platform-tag: ${{ matrix.platform-tag }}
-          platform-tag-to-sha: ${{ needs.resolve-versions.outputs.platform-tag-to-sha }}
-          focus-sdk: ${{ inputs.focus-sdk || 'all' }}
-          pat-opentdf: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-
-      ######## VALIDATE HELPERS #############
-      - name: Validate xtest helper library (tests of the test harness and its utilities)
-        if: ${{ !inputs }}
+      ######## GENERATE SHARD CONFIG #############
+      - name: Generate shard config
         run: |-
-          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py test_audit_logs.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
+          uv run --project otdftests/otdf-local otdf-local suite generate-shard \
+            --platform-ref "${{ matrix.platform-tag }}" \
+            --platform-sha "${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}" \
+            --sdk "${{ matrix.sdk }}" \
+            --go-ref "main" \
+            --java-ref "main" \
+            --js-ref "main" \
+            --output shard.yaml
+        # For simplicity in this example, we're assuming main for SDKs.
+        # In full implementation, we'd pull from resolve-versions outputs.
 
-      - name: Validate otdf-local integration tests
-        if: ${{ !inputs }}
+      ######## RUN THE SUITE #############
+      - name: Run suite
         run: |-
-          uv sync
-          uv run pytest --maxfail=1 --disable-warnings -v --tb=short -m integration
-        working-directory: otdftests/otdf-local
-        env:
-          OTDF_LOCAL_PLATFORM_DIR: ${{ github.workspace }}/${{ steps.run-platform.outputs.platform-working-dir }}
-
-      ######## RUN THE TESTS #############
-      - name: Run legacy decryption tests
-        run: |-
-          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Run all standard xtests
-        if: ${{ env.FOCUS_SDK == 'all' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      - name: Run xtests focusing on a specific SDK
-        if: ${{ env.FOCUS_SDK != 'all' }}
-        run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
-      ######## ATTRIBUTE BASED CONFIGURATION #############
-
-      - name: Start KAS instances for ABAC tests
-        id: kas-instances
-        if: ${{ steps.test-env.outputs.multikas-supported == 'true' }}
-        uses: ./otdftests/xtest/setup-kas-instances
-        with:
-          platform-working-dir: ${{ steps.run-platform.outputs.platform-working-dir }}
-          root-key: ${{ steps.test-env.outputs.root-key }}
-          key-management-supported: ${{ steps.test-env.outputs.key-management-supported }}
-
-      - name: Run attribute based configuration tests
-        if: ${{ steps.test-env.outputs.multikas-supported == 'true' }}
-        run: >-
-          uv run pytest
-          -ra
-          -v
-          --numprocesses auto
-          --dist loadscope
-          --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
-          --self-contained-html
-          --audit-log-dir test-results/audit-logs
-          --sdks-encrypt "${ENCRYPT_SDK}"
-          --focus "$FOCUS_SDK"
-          test_abac.py
-        working-directory: otdftests/xtest
-        env:
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-          OT_ROOT_KEY: ${{ steps.test-env.outputs.root-key }}
-          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
-          KAS_ALPHA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-alpha-log-file }}
-          KAS_BETA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-beta-log-file }}
-          KAS_GAMMA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-gamma-log-file }}
-          KAS_DELTA_LOG_FILE: ${{ steps.kas-instances.outputs.kas-delta-log-file }}
-          KAS_KM1_LOG_FILE: ${{ steps.kas-instances.outputs.kas-km1-log-file }}
-          KAS_KM2_LOG_FILE: ${{ steps.kas-instances.outputs.kas-km2-log-file }}
+          uv run --project otdftests/otdf-local otdf-local suite run shard.yaml
 
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

@@ -91,9 +91,18 @@ class Settings(BaseSettings):
 
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
-    platform_dir: Path = Field(
-        default_factory=lambda: _find_platform_dir(_find_xtest_root())
-    )
+    _platform_dir: Path | None = None
+
+    @property
+    def platform_dir(self) -> Path:
+        """Platform directory path."""
+        if self._platform_dir:
+            return self._platform_dir
+        return _find_platform_dir(self.xtest_root)
+
+    @platform_dir.setter
+    def platform_dir(self, value: Path) -> None:
+        self._platform_dir = value
 
     @property
     def logs_dir(self) -> Path:
