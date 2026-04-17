@@ -255,12 +255,13 @@ jobs:
 
       - name: Generate xtest configs
         id: xtest-configs
+        continue-on-error: true
         shell: bash
         run: |
+          set +e  # Don't abort on errors; this step is supplementary
           OTDF_LOCAL_DIR="${GITHUB_WORKSPACE}/otdf-sdk/otdf-local"
           FOCUS_SDK="${FOCUS_SDK_INPUT:-all}"
           OTDFCTL_SRC="${OTDFCTL_SOURCE_INPUT:-auto}"
-          PLATFORM_REFS="${PLATFORM_REF:-main}"
           GO_REFS="${OTDFCTL_REF:-${DEFAULT_TAGS}}"
           JS_REFS="${JS_REF:-${DEFAULT_TAGS}}"
           JAVA_REFS="${JAVA_REF:-${DEFAULT_TAGS}}"
@@ -272,6 +273,7 @@ jobs:
           for ptag in $PLATFORM_TAGS; do
             for sdk in go java js; do
               CONFIG_FILE="xtest-configs/${sdk}-${ptag}.yaml"
+              echo "Generating config: $CONFIG_FILE"
               uv run --project "$OTDF_LOCAL_DIR" otdf-local xtest resolve \
                 --platform-ref "$ptag" \
                 --go-ref "$GO_REFS" \
@@ -279,7 +281,7 @@ jobs:
                 --java-ref "$JAVA_REFS" \
                 --focus-sdk "$FOCUS_SDK" \
                 --otdfctl-source "$OTDFCTL_SRC" \
-                --output "$CONFIG_FILE" 2>/dev/null || true
+                --output "$CONFIG_FILE" || echo "Warning: config generation failed for ${sdk}-${ptag}"
               # Patch encrypt-sdk to match the matrix cell
               if [ -f "$CONFIG_FILE" ]; then
                 sed -i "s/^encrypt-sdk:.*/encrypt-sdk: ${sdk}/" "$CONFIG_FILE"
@@ -305,6 +307,8 @@ jobs:
               echo '```'
               echo '</details>'
             } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Warning: No xtest configs were generated"
           fi
         env:
           FOCUS_SDK_INPUT: "${{ inputs.focus-sdk }}"
@@ -312,6 +316,7 @@ jobs:
           PLATFORM_TAG_LIST_JSON: "${{ steps.version-info.outputs.platform-tag-list }}"
 
       - name: Upload xtest configs
+        if: steps.xtest-configs.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xtest-configs
@@ -343,6 +348,7 @@ jobs:
           persist-credentials: false
 
       - name: Download xtest config
+        continue-on-error: true
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: xtest-configs
