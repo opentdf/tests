@@ -163,6 +163,13 @@ class SuiteRunner:
 
     def _start_services(self, platform: PlatformVersion) -> bool:
         """Start Docker, Platform, and optionally KAS."""
+        # Ensure we stop everything first to have a clean start
+        self._stop_services()
+        
+        # Clean logs before starting to avoid pollution
+        from otdf_local.cli import _do_clean
+        _do_clean(self.settings, keep_logs=False)
+
         print_info("Starting services...")
         from otdf_local.health.waits import wait_for_health, wait_for_port
         from otdf_local.config.ports import Ports
@@ -175,6 +182,13 @@ class SuiteRunner:
             def follow_logs():
                 agg = LogAggregator(self.settings.logs_dir)
                 agg.add_service("platform")
+                # Also add standard KAS just in case
+                for kas in Ports.standard_kas_names():
+                    agg.add_service(f"kas-{kas}")
+                
+                # Seek to end so we don't read old/cleared logs if they were instantly recreated
+                agg.seek_to_end()
+
                 for entry in agg.follow():
                     if stop_logs.is_set():
                         break
@@ -221,8 +235,21 @@ class SuiteRunner:
                 print_error("Failed to provision Keycloak")
                 return False
 
+            # Wait for the opentdf realm to be ready
+            with status_spinner("Waiting for opentdf realm..."):
+                try:
+                    wait_for_health(
+                        f"http://localhost:{Ports.KEYCLOAK}/auth/realms/opentdf",
+                        timeout=60,
+                        service_name="Keycloak opentdf realm",
+                    )
+                except Exception as e:
+                    print_error(f"opentdf realm failed to become ready: {e}")
+                    return False
+
             # Start Platform
             platform_service = get_platform_service(self.settings)
+
             if not platform_service.start():
                 print_error("Failed to start Platform")
                 return False
