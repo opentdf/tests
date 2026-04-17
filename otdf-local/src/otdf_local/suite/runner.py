@@ -163,34 +163,63 @@ class SuiteRunner:
     def _start_services(self, platform: PlatformVersion) -> bool:
         """Start Docker, Platform, and optionally KAS."""
         print_info("Starting services...")
-
-        # Update platform config if extra_keys provided
-        if platform.extra_keys:
-            # We'll handle this by writing to extra-keys.json if it's a JSON string
-            # or just assume xtest/extra-keys.json is used by PlatformService._setup_golden_keys
-            pass
+        from otdf_local.health.waits import wait_for_health, wait_for_port
+        from otdf_local.config.ports import Ports
 
         # Start Docker
         docker = get_docker_service(self.settings)
         if not docker.start():
+            print_error("Failed to start Docker services")
+            return False
+
+        # Wait for Keycloak
+        with status_spinner("Waiting for Keycloak..."):
+            try:
+                wait_for_health(
+                    f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master",
+                    timeout=120,
+                    service_name="Keycloak",
+                )
+            except Exception as e:
+                print_error(f"Keycloak failed to become healthy: {e}")
+                return False
+
+        # Wait for PostgreSQL
+        try:
+            wait_for_port(
+                Ports.POSTGRES,
+                "localhost",
+                timeout=60,
+                service_name="PostgreSQL",
+            )
+        except Exception as e:
+            print_error(f"PostgreSQL failed to become ready: {e}")
+            return False
+
+        # Provision Keycloak
+        print_info("Provisioning Keycloak...")
+        provisioner: Provisioner = get_provisioner(self.settings)
+        if not provisioner.provision_keycloak():
+            print_error("Failed to provision Keycloak")
             return False
 
         # Start Platform
         platform_service = get_platform_service(self.settings)
         if not platform_service.start():
+            print_error("Failed to start Platform")
             return False
 
         with status_spinner("Waiting for Platform..."):
-            from otdf_local.health.waits import wait_for_health
             try:
                 wait_for_health(platform_service.health_url, timeout=120)
             except Exception as e:
                 print_error(f"Platform failed to become healthy: {e}")
                 return False
 
-        # Provision
-        provisioner = get_provisioner(self.settings)
-        provisioner.provision_all()
+        # Provision fixtures
+        print_info("Provisioning fixtures...")
+        if not provisioner.provision_fixtures():
+            print_warning("Provisioning had issues - continuing anyway")
 
         return True
 
@@ -262,6 +291,11 @@ class SuiteRunner:
     def _print_summary(self) -> None:
         """Print a summary of all test results."""
         console.print("\n[bold]--- Test Suite Summary ---[/bold]")
+        
+        if not self.results:
+            print_warning("No tests were executed (likely due to setup failures).")
+            return
+
         all_passed = True
         for res in self.results:
             status = "[green]PASS[/green]" if res["success"] else "[red]FAIL[/red]"
