@@ -320,7 +320,11 @@ jobs:
               echo "otdfctl found in platform checkout at $PLATFORM_DIR/otdfctl"
               echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
               echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
-              echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              platform_sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
+                echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
+                exit 1
+              }
+              echo "otdfctl-sha=$platform_sha" >> "$GITHUB_OUTPUT"
             else
               echo "otdfctl not found in platform checkout; using standalone repo"
               echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
@@ -332,7 +336,11 @@ jobs:
             fi
             echo "otdfctl-source=platform" >> "$GITHUB_OUTPUT"
             echo "otdfctl-dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
-            echo "otdfctl-sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            platform_sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
+              echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
+              exit 1
+            }
+            echo "otdfctl-sha=$platform_sha" >> "$GITHUB_OUTPUT"
           else
             echo "otdfctl-source=standalone" >> "$GITHUB_OUTPUT"
           fi

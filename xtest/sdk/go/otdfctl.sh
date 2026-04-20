@@ -16,8 +16,8 @@ done
 source "$XTEST_DIR/test.env"
 
 cmd=("$SCRIPT_DIR"/otdfctl)
-if [ ! -f "$SCRIPT_DIR"/otdfctl ]; then
-  if [ -f "$SCRIPT_DIR/.version" ]; then
+if [[ ! -f "$SCRIPT_DIR"/otdfctl ]]; then
+  if [[ -f "$SCRIPT_DIR/.version" ]]; then
     VERSION_SPEC=$(tr -d '[:space:]' <"$SCRIPT_DIR/.version")
     if [[ "$VERSION_SPEC" == *@* ]]; then
       # New format: module-path@version

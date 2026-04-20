@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import NotRequired, TypedDict, TypeGuard
 
+import git.exc
 from git import Git
 
 from otdf_sdk_mgr.config import (
@@ -133,17 +134,23 @@ def resolve(
     _go_platform = sdk == "go" and go_source == "platform"
 
     def _annotate(result: ResolveResult) -> ResolveResult:
-        """Add source field to successful results when resolving go from platform."""
+        """Add source field to successful results when resolving go from platform.
+
+        Error results are returned unchanged.
+        """
         if _go_platform and is_resolve_success(result):
             result["source"] = "platform"
         return result
 
+    # Validate config and resolve URLs before the try block so that
+    # programming errors (bad go_source, unknown SDK) propagate immediately.
+    if _go_platform:
+        sdk_url = go_git_url("platform")
+        infix = go_tag_infix("platform")
+    else:
+        sdk_url = SDK_GIT_URLS[sdk]
+
     try:
-        if _go_platform:
-            sdk_url = go_git_url("platform")
-            infix = go_tag_infix("platform")
-        else:
-            sdk_url = SDK_GIT_URLS[sdk]
         repo = Git()
         if version == "main" or version == "refs/heads/main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
@@ -380,7 +387,7 @@ def resolve(
                 "tag": tag,
             }
         )
-    except Exception as e:
+    except (git.exc.GitCommandError, ValueError) as e:
         return {
             "sdk": sdk,
             "alias": version,

@@ -114,7 +114,7 @@ def list_go_versions() -> list[dict[str, Any]]:
                 continue
             # Platform entries take precedence (canonical location post-migration);
             # if the same version exists in both repos, the platform entry
-            # silently overwrites the standalone one.
+            # overwrites the standalone one (a notice is printed below).
             if version in seen:
                 print(
                     f"Note: version {version} found in both standalone and platform repos; using platform source.",
@@ -124,7 +124,7 @@ def list_go_versions() -> list[dict[str, Any]]:
                 "sdk": "go",
                 "version": version,
                 "source": "platform-git-tag",
-                "install_method": f"{GO_INSTALL_PREFIX_PLATFORM}@{tag}",
+                "install_method": f"{GO_INSTALL_PREFIX_PLATFORM}@{version}",
                 "stable": is_stable(version),
             }
     except git.exc.GitCommandError as e:

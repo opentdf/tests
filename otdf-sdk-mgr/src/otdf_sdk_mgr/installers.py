@@ -180,22 +180,30 @@ def install_release(sdk: str, version: str, dist_name: str | None = None, **kwar
     return dist_dir
 
 
-def latest_stable_version(sdk: str) -> str | None:
-    """Find the latest stable version for an SDK that has a CLI available."""
+def latest_stable_version(sdk: str) -> tuple[str, str | None] | None:
+    """Find the latest stable version for an SDK that has a CLI available.
+
+    Returns (version, source) where source is "platform" for Go versions
+    from the platform repo, or None otherwise.
+    """
     if sdk == "go":
         versions = list_go_versions()
         stable = [v for v in versions if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        if not stable:
+            return None
+        entry = stable[-1]
+        source = "platform" if entry.get("source") == "platform-git-tag" else None
+        return entry["version"], source
     elif sdk == "js":
         versions = list_js_versions()
         stable = [v for v in versions if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        return (stable[-1]["version"], None) if stable else None
     elif sdk == "java":
         releases = list_java_github_releases()
         stable_with_cli = [
             v for v in releases if v.get("stable", False) and v.get("has_cli", False)
         ]
-        return stable_with_cli[-1]["version"] if stable_with_cli else None
+        return (stable_with_cli[-1]["version"], None) if stable_with_cli else None
     return None
 
 
@@ -203,12 +211,13 @@ def cmd_stable(sdks: list[str]) -> None:
     """Install the latest stable release for each SDK."""
     for sdk in sdks:
         print(f"Finding latest stable {sdk} release...")
-        version = latest_stable_version(sdk)
-        if version is None:
+        result = latest_stable_version(sdk)
+        if result is None:
             print(f"  Warning: No stable version found for {sdk}, skipping")
             continue
+        version, source = result
         print(f"  Latest stable {sdk}: {version}")
-        install_release(sdk, version)
+        install_release(sdk, version, source=source)
 
 
 def cmd_lts(sdks: list[str]) -> None:

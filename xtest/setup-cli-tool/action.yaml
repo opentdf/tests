@@ -71,10 +71,10 @@ runs:
         fi
 
         if echo "$version_info" | jq -e '.[] | select(.err != null)' > /dev/null; then
-          echo "Error: One or more errors occurred while resolving versions for ${{ inputs.sdk }}: $version_info"
+          echo "Error: One or more errors occurred while resolving versions for $INPUT_SDK: $version_info"
           exit 1
         fi
-        echo "Version Info for ${{ inputs.sdk }}: $version_info"
+        echo "Version Info for $INPUT_SDK: $version_info"
 
         version_a=$(echo "$version_info" | jq -rc '.[0] // empty')
         version_b=$(echo "$version_info" | jq -rc '.[1] // empty')
@@ -89,26 +89,27 @@ runs:
         echo "heads=$head_tags" >> $GITHUB_OUTPUT
       env:
         version_info: ${{ inputs.version-info }}
+        INPUT_SDK: ${{ inputs.sdk }}
 
     - name: install released versions
       shell: bash
       run: |
-        SDK_MGR_DIR="$(cd "${{ inputs.path }}/../.." && pwd)/otdf-sdk-mgr"
+        SDK_MGR_DIR="$(cd "$INPUT_PATH/../.." && pwd)/otdf-sdk-mgr"
         echo "${version_info}" | jq -c '.[]' | while IFS= read -r row; do
           tag=$(echo "$row" | jq -r '.tag')
           head=$(echo "$row" | jq -r '.head // false')
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
-            echo "Installing ${{ inputs.sdk }} $tag from registry (release: $release)"
+            echo "Installing $INPUT_SDK $tag from registry (release: $release)"
             # Sanitize tag for use as an env var name (replace non-alphanumeric/underscore with _)
             tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
             source=$(echo "$row" | jq -r '.source // empty')
             source_args=()
             [[ -n "$source" ]] && source_args=(--source "$source")
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
-              --sdk "${{ inputs.sdk }}" --version "$release" \
+              --sdk "$INPUT_SDK" --version "$release" \
               --dist-name "$tag" "${source_args[@]}"; then
-              echo "  Warning: Artifact installation failed for ${{ inputs.sdk }} $tag"
+              echo "  Warning: Artifact installation failed for $INPUT_SDK $tag"
               echo "  Will fall back to building from source"
               echo "BUILD_FROM_SOURCE_${tag_sanitized}=true" >> "$GITHUB_ENV"
             fi
@@ -116,6 +117,8 @@ runs:
         done
       env:
         version_info: ${{ inputs.version-info }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SDK: ${{ inputs.sdk }}
 
     - name: determine source checkout needs
       id: check-source
@@ -299,7 +302,7 @@ runs:
           fi
           tag=$(echo "$version_json" | jq -r '.tag')
           src_dir="${INPUT_PATH}/${INPUT_SDK}/src/${tag}"
-          otdfctl_dir="${checkout_path}/otdfctl"
+          otdfctl_dir="$(cd "${checkout_path}/otdfctl" && pwd)"
           echo "Symlinking freshly checked-out platform otdfctl ${otdfctl_dir} → ${src_dir}"
           mkdir -p "$(dirname "$src_dir")"
           ln -sfn "$otdfctl_dir" "$src_dir"
@@ -331,9 +334,11 @@ runs:
     - name: post checkout cleanups
       if: inputs.sdk == 'java'
       run: |
-        SDK_MGR_DIR="$(cd "${{ inputs.path }}/../.." && pwd)/otdf-sdk-mgr"
+        SDK_MGR_DIR="$(cd "$INPUT_PATH/../.." && pwd)/otdf-sdk-mgr"
         uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr java-fixup
       shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
 
     - name: save env from version-info
       shell: bash
@@ -343,8 +348,10 @@ runs:
           tag=$(echo "$version" | jq -r '.tag')
           env=$(echo "$version" | jq -r '.env // empty')
           if [[ -n "$env" ]]; then
-            echo "$env" > "${{ inputs.path }}/${{ inputs.sdk }}/src/${tag}.env"
+            echo "$env" > "$INPUT_PATH/$INPUT_SDK/src/${tag}.env"
           fi
         done
       env:
         version_info: ${{ inputs.version-info }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SDK: ${{ inputs.sdk }}
