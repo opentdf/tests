@@ -148,7 +148,10 @@ def resolve(
         sdk_url = go_git_url("platform")
         infix = go_tag_infix("platform")
     else:
-        sdk_url = SDK_GIT_URLS[sdk]
+        try:
+            sdk_url = SDK_GIT_URLS[sdk]
+        except KeyError:
+            return {"sdk": sdk, "alias": version, "err": f"unknown SDK: {sdk}"}
 
     try:
         repo = Git()

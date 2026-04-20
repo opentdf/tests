@@ -1,6 +1,8 @@
 # otdf-sdk-mgr
 
-SDK artifact management CLI for OpenTDF cross-client tests. Installs SDK CLIs from **released artifacts** (fast, deterministic) or **source** (for branch/PR testing). Both modes produce the same `sdk/{go,java,js}/dist/{version}/` directory structure.
+SDK artifact management CLI for OpenTDF cross-client tests.
+Installs SDK CLIs from **released artifacts** (fast, deterministic) or **source** (for branch/PR testing).
+Both modes produce the same `sdk/{go,java,js}/dist/{version}/` directory structure.
 
 ## Installation
 
