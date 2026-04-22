@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Annotated, Any, Optional
 
 import typer
@@ -112,10 +113,20 @@ def resolve_versions(
         raise typer.Exit(2)
     infix = SDK_TAG_INFIXES.get(sdk)
 
+    # Set the Go SDK source via OTDFCTL_SOURCE env var
+    # (standalone otdfctl repo vs platform monorepo). When unset, defaults to standalone.
+    go_source = os.environ.get("OTDFCTL_SOURCE") if sdk == "go" else None
+    if go_source and go_source not in ("standalone", "platform"):
+        typer.echo(
+            f"Error: unrecognized OTDFCTL_SOURCE={go_source!r}; expected 'platform' or 'standalone'",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     results: list[ResolveResult] = []
     shas: set[str] = set()
     for version in tags:
-        v = resolve(sdk, version, infix)
+        v = resolve(sdk, version, infix, go_source=go_source)
         if is_resolve_success(v):
             env = lookup_additional_options(sdk, v["tag"])
             if env:

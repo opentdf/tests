@@ -11,9 +11,11 @@ import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
+    GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
     get_sdk_dir,
     get_sdk_dirs,
+    go_module_path,
 )
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
@@ -24,33 +26,48 @@ class InstallError(Exception):
     """Raised when SDK installation fails."""
 
 
-def install_go_release(version: str, dist_dir: Path) -> None:
+def install_go_release(version: str, dist_dir: Path, source: str | None = None) -> None:
     """Install a Go CLI release by writing a .version file.
 
     The cli.sh and otdfctl.sh wrappers read .version and use
-    `go run github.com/opentdf/otdfctl@{version}` instead of a local binary.
+    `go run <module>@{version}` instead of a local binary.
+    The .version file contains `module-path@version`
+    (e.g., `github.com/opentdf/otdfctl@v0.24.0`).
+
+    Args:
+        version: Version string (e.g., "v0.24.0" or "otdfctl/v0.24.0").
+        dist_dir: Target distribution directory.
+        source: "platform" to use the platform monorepo module path,
+            None or "standalone" for standalone.
     """
     go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
+    # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
+    if "/" in version:
+        version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
-    (dist_dir / ".version").write_text(f"{tag}\n")
+    module = go_module_path(source)
+    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
     shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
     shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
     shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
-    print(f"  Pre-warming Go cache for otdfctl@{tag}...")
+    print(f"  Pre-warming Go cache for {module}@{tag}...")
     result = subprocess.run(
-        ["go", "install", f"github.com/opentdf/otdfctl@{tag}"],
+        ["go", "install", f"{module}@{tag}"],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        print(
-            f"  Warning: go install pre-warm failed (will retry at runtime): {result.stderr.strip()}"
-        )
+        msg = f"go install pre-warm failed: {result.stderr.strip()}"
+        if module == GO_MODULE_PATH_PLATFORM:
+            raise InstallError(
+                f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
+            )
+        print(f"  Warning: {msg} (will retry at runtime)")
     print(f"  Go release {tag} installed to {dist_dir}")
 
 
-def install_js_release(version: str, dist_dir: Path) -> None:
+def install_js_release(version: str, dist_dir: Path, **_kwargs: object) -> None:
     """Install a JS CLI release from npm registry."""
     js_dir = get_sdk_dir() / "js"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +82,7 @@ def install_js_release(version: str, dist_dir: Path) -> None:
     print(f"  JS release {v} installed to {dist_dir}")
 
 
-def install_java_release(version: str, dist_dir: Path) -> None:
+def install_java_release(version: str, dist_dir: Path, **_kwargs: object) -> None:
     """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
 
     Raises InstallError if the artifact is not available or download fails,
@@ -133,13 +150,15 @@ INSTALLERS = {
 }
 
 
-def install_release(sdk: str, version: str, dist_name: str | None = None) -> Path:
+def install_release(sdk: str, version: str, dist_name: str | None = None, **kwargs: object) -> Path:
     """Install a released version of an SDK CLI.
 
     Args:
         sdk: One of "go", "js", "java"
         version: Version string (e.g., "v0.24.0" or "0.24.0")
         dist_name: Override the dist directory name (defaults to normalized version)
+        **kwargs: Extra arguments forwarded to the SDK installer
+            (e.g., source="platform" for Go).
 
     Returns:
         Path to the created dist directory
@@ -157,26 +176,34 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
         print(f"  Dist directory already exists: {dist_dir} (skipping)")
         return dist_dir
 
-    INSTALLERS[sdk](version, dist_dir)
+    INSTALLERS[sdk](version, dist_dir, **kwargs)
     return dist_dir
 
 
-def latest_stable_version(sdk: str) -> str | None:
-    """Find the latest stable version for an SDK that has a CLI available."""
+def latest_stable_version(sdk: str) -> tuple[str, str | None] | None:
+    """Find the latest stable version for an SDK that has a CLI available.
+
+    Returns (version, source) where source is "platform" for Go versions
+    from the platform repo, or None otherwise.
+    """
     if sdk == "go":
         versions = list_go_versions()
         stable = [v for v in versions if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        if not stable:
+            return None
+        entry = stable[-1]
+        source = "platform" if entry.get("source") == "platform-git-tag" else None
+        return entry["version"], source
     elif sdk == "js":
         versions = list_js_versions()
         stable = [v for v in versions if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        return (stable[-1]["version"], None) if stable else None
     elif sdk == "java":
         releases = list_java_github_releases()
         stable_with_cli = [
             v for v in releases if v.get("stable", False) and v.get("has_cli", False)
         ]
-        return stable_with_cli[-1]["version"] if stable_with_cli else None
+        return (stable_with_cli[-1]["version"], None) if stable_with_cli else None
     return None
 
 
@@ -184,12 +211,13 @@ def cmd_stable(sdks: list[str]) -> None:
     """Install the latest stable release for each SDK."""
     for sdk in sdks:
         print(f"Finding latest stable {sdk} release...")
-        version = latest_stable_version(sdk)
-        if version is None:
+        result = latest_stable_version(sdk)
+        if result is None:
             print(f"  Warning: No stable version found for {sdk}, skipping")
             continue
+        version, source = result
         print(f"  Latest stable {sdk}: {version}")
-        install_release(sdk, version)
+        install_release(sdk, version, source=source)
 
 
 def cmd_lts(sdks: list[str]) -> None:
@@ -224,7 +252,9 @@ def cmd_release(specs: list[str]) -> None:
         install_release(sdk, version)
 
 
-def cmd_install(sdk: str, version: str, dist_name: str | None = None) -> None:
+def cmd_install(
+    sdk: str, version: str, dist_name: str | None = None, source: str | None = None
+) -> None:
     """Install a single SDK version (used by CI action)."""
     print(f"Installing {sdk} {version}...")
-    install_release(sdk, version, dist_name=dist_name)
+    install_release(sdk, version, dist_name=dist_name, source=source)
