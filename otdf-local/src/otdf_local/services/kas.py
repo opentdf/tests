@@ -77,6 +77,7 @@ class KASService(Service):
         if self.is_key_management:
             updates["services.kas.preview.key_management"] = True
             updates["services.kas.preview.ec_tdf_enabled"] = True
+            updates["services.kas.preview.hybrid_tdf_enabled"] = True
             # registered_kas_uri should NOT have /kas suffix
             updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
 

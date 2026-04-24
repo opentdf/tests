@@ -53,6 +53,7 @@ feature_type = Literal[
     "mechanism-ec-curves-384-521",
     # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
     "mechanism-xwing",
+    "mechanism-secpmlkem",
     "ns_grants",
     "obligations",
 ]
@@ -132,6 +133,7 @@ class PlatformFeatureSet(BaseModel):
         # X-Wing hybrid PQ/T KEM support (ML-KEM-768 + X25519)
         if self.semver >= (0, 14, 0):
             self.features.add("mechanism-xwing")
+            self.features.add("mechanism-secpmlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
@@ -150,6 +152,17 @@ class PlatformFeatureSet(BaseModel):
             pytest.skip(
                 f"platform service {self.version} doesn't yet support {missing}"
             )
+
+
+_cached_pfs: PlatformFeatureSet | None = None
+
+
+def get_platform_features() -> PlatformFeatureSet:
+    """Return a cached PlatformFeatureSet singleton."""
+    global _cached_pfs
+    if _cached_pfs is None:
+        _cached_pfs = PlatformFeatureSet()
+    return _cached_pfs
 
 
 _cached_pfs: PlatformFeatureSet | None = None

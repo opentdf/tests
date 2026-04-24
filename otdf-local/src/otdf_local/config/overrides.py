@@ -9,12 +9,16 @@ from otdf_local.utils.yaml import load_yaml, save_yaml, set_nested
 FEATURES: dict[str, tuple[str, str]] = {
     "ec-wrap": (
         "services.kas.preview.ec_tdf_enabled",
-        "EC-wrapped TDF support (ML-KEM / X-Wing hybrid)",
+        "EC-wrapped TDF support",
     ),
     "key-management": (
         "services.kas.preview.key_management",
         "Key management service",
     ),
+    "hpqt": (
+        "services.kas.preview.hybrid_tdf_enabled",
+        "Hybrid Post Quantum/Traditional KEM Algorithms"
+    )
 }
 
 
