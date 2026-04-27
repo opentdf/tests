@@ -102,6 +102,11 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }'
       exit $?
       ;;
+    mechanism-xwing)
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

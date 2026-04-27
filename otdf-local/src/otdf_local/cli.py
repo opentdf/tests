@@ -30,6 +30,7 @@ from otdf_local.utils.console import (
     format_status,
     print_error,
     print_info,
+    print_json,
     print_success,
     print_warning,
     status_spinner,
@@ -112,10 +113,26 @@ def up(
     start_platform = "platform" in service_list
     start_kas = "kas" in service_list
 
+    # Step 0: Ensure temporary keys exist
+    from otdf_local.utils.keys import ensure_all_temp_keys
+
+    print_info("Checking temporary keys...")
+    try:
+        generated = ensure_all_temp_keys(
+            settings.platform_dir,
+            settings.keys_dir,
+            compose_file=settings.docker_compose_file,
+        )
+        if generated:
+            print_success("Generated missing temporary keys")
+    except Exception as e:
+        print_error(f"Failed to generate temporary keys: {e}")
+        raise typer.Exit(1) from e
+
     # Step 1: Start Docker services
     if start_docker:
         print_info("Starting Docker services (Keycloak, PostgreSQL)...")
-        docker = get_docker_service(settings)
+        docker = get_docker_service(settings, keys_dir=settings.keys_dir)
         if not docker.start():
             print_error("Failed to start Docker services")
             raise typer.Exit(1)
@@ -274,7 +291,7 @@ def list_services(
 
     if json_output:
         output = [info.to_dict() for info in all_info]
-        console.print_json(json.dumps(output))
+        print_json(json.dumps(output))
         return
 
     # Table output
@@ -611,7 +628,7 @@ def env(
 
     # Output in requested format
     if format == "json":
-        console.print_json(json.dumps(env_vars, indent=2))
+        print_json(json.dumps(env_vars, indent=2))
     else:
         # Shell export format - use plain print to avoid line wrapping
         for key, value in env_vars.items():
@@ -619,6 +636,92 @@ def env(
             escaped_value = value.replace("'", "'\\''")
             # Use plain print to stdout to avoid rich console line wrapping
             print(f"export {key}='{escaped_value}'", file=sys.stdout)
+
+
+@app.command()
+def configure(
+    feature: Annotated[
+        str | None,
+        typer.Argument(help="Feature name to configure (e.g. ec-wrap, key-management)"),
+    ] = None,
+    enable: Annotated[
+        bool | None,
+        typer.Option("--enable/--disable", help="Enable or disable the feature"),
+    ] = None,
+) -> None:
+    """Configure platform feature flags.
+
+    Without arguments, lists all available features and their current state.
+    With a feature name alone, shows the current state of that feature.
+    With --enable or --disable, updates the setting persistently.
+
+    Changes survive restarts. If the platform config already exists it is
+    updated immediately; run 'otdf-local restart platform' to pick up the
+    change in a running environment.
+
+    Examples:
+
+        otdf-local configure                   # list all features
+
+        otdf-local configure ec-wrap           # show ec-wrap state
+
+        otdf-local configure ec-wrap --enable  # enable EC-wrapped TDF
+
+        otdf-local configure ec-wrap --disable # disable EC-wrapped TDF
+    """
+    from rich.table import Table
+
+    from otdf_local.config.overrides import FEATURES, apply_overrides, load_overrides, save_overrides
+    from otdf_local.utils.yaml import load_yaml, save_yaml
+
+    settings = get_settings()
+    overrides = load_overrides(settings.xtest_root)
+
+    if feature is None:
+        # List all features with their current state
+        table = Table(title="Platform Feature Flags")
+        table.add_column("Feature", style="cyan")
+        table.add_column("Description")
+        table.add_column("State")
+        for name, (_, description) in FEATURES.items():
+            if name in overrides:
+                state = "[green]enabled[/green]" if overrides[name] else "[red]disabled[/red]"
+            else:
+                state = "[dim]default[/dim]"
+            table.add_row(name, description, state)
+        console.print(table)
+        return
+
+    if feature not in FEATURES:
+        print_error(f"Unknown feature: {feature}")
+        print_info(f"Valid features: {', '.join(FEATURES)}")
+        raise typer.Exit(1)
+
+    if enable is None:
+        # Show current state of this feature
+        if feature in overrides:
+            state = "enabled" if overrides[feature] else "disabled"
+            console.print(f"{feature}: {state} (override)")
+        else:
+            console.print(f"{feature}: default (no override set)")
+        return
+
+    # Save override
+    overrides[feature] = enable
+    save_overrides(settings.xtest_root, overrides)
+
+    # Apply immediately to live config if it already exists
+    platform_config = settings.platform_config
+    if platform_config.exists():
+        data = load_yaml(platform_config)
+        apply_overrides(data, {feature: enable})
+        save_yaml(platform_config, data)
+        action = "enabled" if enable else "disabled"
+        print_success(f"{feature} {action} (applied to existing config)")
+        print_info("Run 'otdf-local restart platform' to apply to a running environment")
+    else:
+        action = "enabled" if enable else "disabled"
+        print_success(f"{feature} {action} (will apply on next start)")
 
 
 if __name__ == "__main__":

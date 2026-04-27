@@ -100,6 +100,16 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
+    mechanism-xwing)
+      set -o pipefail
+      "${cmd[@]}" help policy kas-registry key create | grep -i hpqt:xwing
+      exit $?
+      ;;
+    mechanism-secpmkem)
+      set -o pipefail
+      "${cmd[@]}" help policy kas-registry key create | grep -i hpqt:secp256r1-mlkem768
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

@@ -51,6 +51,9 @@ feature_type = Literal[
     "mechanism-rsa-4096",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
     "mechanism-ec-curves-384-521",
+    # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
+    "mechanism-xwing",
+    "mechanism-secpmlkem",
     "ns_grants",
     "obligations",
 ]
@@ -127,7 +130,20 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
 
+        # X-Wing hybrid PQ/T KEM support (ML-KEM-768 + X25519)
+        if self.semver >= (0, 14, 0):
+            self.features.add("mechanism-xwing")
+            self.features.add("mechanism-secpmlkem")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
+
+    def require(self, *features: feature_type):
+        """Skip the current test if any of the given features are unsupported."""
+        for feature in features:
+            if feature not in self.features:
+                pytest.skip(
+                    f"platform service {self.version} doesn't yet support [{feature}]"
+                )
 
     def skip_if_unsupported(self, *features: feature_type):
         """Skip the current test if any of the given features are unsupported."""
@@ -136,6 +152,17 @@ class PlatformFeatureSet(BaseModel):
             pytest.skip(
                 f"platform service {self.version} doesn't yet support {missing}"
             )
+
+
+_cached_pfs: PlatformFeatureSet | None = None
+
+
+def get_platform_features() -> PlatformFeatureSet:
+    """Return a cached PlatformFeatureSet singleton."""
+    global _cached_pfs
+    if _cached_pfs is None:
+        _cached_pfs = PlatformFeatureSet()
+    return _cached_pfs
 
 
 _cached_pfs: PlatformFeatureSet | None = None
@@ -504,6 +531,18 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
         if os.path.isdir(os.path.join(sdk_path, version)):
             versions.append(SDK(sdk, version))
     return versions
+
+
+def parse_sdk_spec(spec: str) -> list[SDK]:
+    """Parse an SDK spec like 'go' or 'go:gemini' into a list of SDK objects.
+
+    Bare names (e.g., 'go') return all discovered versions.
+    Qualified names (e.g., 'go:gemini') return a single specific version.
+    """
+    if ":" in spec:
+        sdk_name, version = spec.split(":", 1)
+        return [SDK(sdk_name, version)]
+    return all_versions_of(spec)
 
 
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
