@@ -100,6 +100,13 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }'
       exit $?
       ;;
+    tamper-error-split)
+      # KAS 400 split: generic "bad request" = tamper, descriptive = misconfiguration
+      # Introduced in go sdk 0.14.0
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 14)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

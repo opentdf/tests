@@ -53,6 +53,9 @@ feature_type = Literal[
     "mechanism-ec-curves-384-521",
     "ns_grants",
     "obligations",
+    # KAS 400 errors are split: generic "bad request" = tamper (ErrTampered),
+    # descriptive messages = misconfiguration (ErrKASRequestError).
+    "tamper-error-split",
 ]
 
 container_version = Literal["4.2.2", "4.3.0"]

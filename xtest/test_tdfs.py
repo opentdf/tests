@@ -565,30 +565,38 @@ def assert_tamper_error(
     )
 
 
-def assert_kas_request_error(
+def assert_policy_tamper_error(
     exc: subprocess.CalledProcessError, decrypt_sdk: tdfs.SDK
 ) -> None:
-    """Assert that a KAS request error was returned.
+    """Assert that a policy binding tamper error was returned.
 
-    Used for policy binding failures where KAS rejects the request (400).
-    Accepts both the new error classification (KAS request error) and the
-    legacy classification (tamper) for backward compatibility with older
-    SDK versions.
+    Policy binding failures (unbound or altered policy) are integrity
+    failures. KAS intentionally returns a generic "bad request" to avoid
+    leaking information about secret key computations, and the SDK
+    classifies this as a tamper error.
     """
+    if decrypt_sdk.supports("tamper-error-split"):
+        # SDK distinguishes tamper from misconfiguration — assert tamper specifically
+        assert re.search(b"tamper", exc.output, re.IGNORECASE), (
+            f"Expected tamper error, got: [{exc.output}]"
+        )
+        assert not re.search(b"KAS request error", exc.output, re.IGNORECASE), (
+            f"Policy binding failure must not be classified as KAS request error: [{exc.output}]"
+        )
+        return
+
+    # Older SDKs: accept any plausible error output
     expected_patterns = [
-        # New classification: KAS request error
-        b"KAS request error",
-        b"rewrap request 400",
+        b"tamper",
         b"bad request",
         b"InvalidArgument",
-        # Legacy classification: tamper (older SDK versions)
-        b"tamper",
+        b"rewrap request 400",
         b"InvalidFileError",
         b"could not find policy in rewrap response",
     ]
     pattern = b"|".join(re.escape(p) for p in expected_patterns)
     assert re.search(pattern, exc.output, re.IGNORECASE), (
-        f"Expected KAS request or tamper error, got: [{exc.output}]"
+        f"Expected policy tamper error, got: [{exc.output}]"
     )
 
 
@@ -628,7 +636,7 @@ def test_tdf_with_unbound_policy(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_kas_request_error(exc, decrypt_sdk)
+        assert_policy_tamper_error(exc, decrypt_sdk)
 
     # Verify rewrap failure was logged (policy binding mismatch)
     # FIXME: Audit logs are not present on failed bindings
@@ -669,7 +677,7 @@ def test_tdf_with_altered_policy_binding(
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
-        assert_kas_request_error(exc, decrypt_sdk)
+        assert_policy_tamper_error(exc, decrypt_sdk)
 
     # Verify rewrap failure was logged (policy binding mismatch)
     # FIXME: Audit logs are not present on failed bindings
