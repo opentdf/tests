@@ -6,9 +6,9 @@ This guide covers operational procedures for managing the test environment with 
 
 ```bash
 cd otdf-local
-eval $(uv run otdf-local env)         # Sets PLATFORM_LOG_FILE, KAS_*_LOG_FILE, etc.
-uv run otdf-local env --format json   # Output as JSON
+uv run otdf-local env > ../xtest/local.env   # Generate local.env
 cd ../xtest
+set -a && source local.env && set +a         # Source the environment
 uv run pytest --sdks go -v
 ```
 
