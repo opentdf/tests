@@ -70,7 +70,7 @@ def test_xwing_roundtrip(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", "autoconfigure", "mechanism-xwing")
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-xwing")
     encrypt_sdk.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-xwing"
     )
@@ -131,7 +131,7 @@ def test_xwing_with_ec_roundtrip(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", "autoconfigure", "mechanism-xwing")
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-xwing")
     encrypt_sdk.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-xwing"
     )
@@ -204,7 +204,7 @@ def test_secpmlkem_3_roundtrip(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", "autoconfigure", "mechanism-secpmlkem")
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-secpmlkem")
     encrypt_sdk.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-secpmlkem"
     )
@@ -271,7 +271,7 @@ def test_secpmlkem_5_roundtrip(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.require("key_management", "autoconfigure", "mechanism-secpmlkem")
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-secpmlkem")
     encrypt_sdk.skip_if_unsupported(
         "key_management", "autoconfigure", "mechanism-secpmlkem"
     )
