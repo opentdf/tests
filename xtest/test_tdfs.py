@@ -352,6 +352,7 @@ def test_tdf_assertions_422_format(
         target_mode="4.2.2",
         attr_values=attribute_default_rsa.value_fqns,
     )
+    looks_like_422(tdfs.manifest(ct_file))
 
     fname = ct_file.stem
     rt_file = tmp_dir / f"{fname}.untdf"
