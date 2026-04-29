@@ -2,7 +2,7 @@
 
 This module contains fixtures for:
 - Extra keys loaded from extra-keys.json
-- Managed key creation and assignment (RSA, EC, X-Wing)
+- Managed key creation and assignment
 - Public key registration
 - Legacy key imports
 - Base key configuration
