@@ -227,10 +227,16 @@ def key_secpmlkem_3(
     root_key: str,
 ) -> abac.KasKey:
     """Get or create X-Wing hybrid hpqt:secp256r1-mlkem768 managed key on km1."""
- 
+
     return _get_or_create_key(
-        otdfctl, kas_entry_km1, "secp256r1-mlkem768", "hpqt:secp256r1-mlkem768", root_key, "mechanism-secpmlkem"
+        otdfctl,
+        kas_entry_km1,
+        "secp256r1-mlkem768",
+        "hpqt:secp256r1-mlkem768",
+        root_key,
+        "mechanism-secpmlkem",
     )
+
 
 @pytest.fixture(scope="module")
 def key_secpmlkem_5(
@@ -239,9 +245,14 @@ def key_secpmlkem_5(
     root_key: str,
 ) -> abac.KasKey:
     """Get or create X-Wing hybrid hpqt:secp384r1-mlkem1024 managed key on km1."""
- 
+
     return _get_or_create_key(
-        otdfctl, kas_entry_km1, "secp384r1-mlkem1024", "hpqt:secp384r1-mlkem1024", root_key, "mechanism-secpmlkem"
+        otdfctl,
+        kas_entry_km1,
+        "secp384r1-mlkem1024",
+        "hpqt:secp384r1-mlkem1024",
+        root_key,
+        "mechanism-secpmlkem",
     )
 
 

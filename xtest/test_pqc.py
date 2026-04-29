@@ -28,11 +28,7 @@ def _b64_decoded_len(s: str) -> int:
 
 def _pem_decoded_len(pem: str) -> int:
     """Return the byte length of the DER payload inside a PEM block."""
-    lines = [
-        ln
-        for ln in pem.strip().splitlines()
-        if not ln.startswith("-----")
-    ]
+    lines = [ln for ln in pem.strip().splitlines() if not ln.startswith("-----")]
     return len(base64.b64decode("".join(lines)))
 
 
@@ -75,7 +71,9 @@ def test_xwing_roundtrip(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     pfs.require("key_management", "autoconfigure", "mechanism-xwing")
-    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure", "mechanism-xwing")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-xwing"
+    )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -134,7 +132,9 @@ def test_xwing_with_ec_roundtrip(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     pfs.require("key_management", "autoconfigure", "mechanism-xwing")
-    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure", "mechanism-xwing")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-xwing"
+    )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -171,9 +171,14 @@ def test_xwing_with_ec_roundtrip(
 
     # Verify X-Wing KEM sizes on the xwing KAO
     xwing_kid = key_xwing.key.key_id
-    for kao in manifest.encryptionInformation.keyAccess:
-        if kao.kid == xwing_kid:
-            assert_xwing_kao_sizes(kao)
+    xwing_kao = next(
+        kao for kao in manifest.encryptionInformation.keyAccess if kao.kid == xwing_kid
+    )
+    assert xwing_kao is not None, (
+        f"X-Wing KAO with kid={xwing_kid} not found in manifest"
+    )
+
+    assert_xwing_kao_sizes(xwing_kao)
     assert_xwing_public_key_size(key_xwing)
 
     if any(
@@ -181,5 +186,139 @@ def test_xwing_with_ec_roundtrip(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = tmp_dir / f"xwing-ec-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_secpmlkem_3_roundtrip(
+    attribute_with_secpmlkem_3_key: tuple[Attribute, list[str]],
+    key_secpmlkem_3: KasKey,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Encrypt and decrypt with an X-Wing managed key."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.require("key_management", "autoconfigure", "mechanism-secpmlkem")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-secpmlkem"
+    )
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_secpmlkem_3_key
+
+    sample_name = f"secpmlkem_3-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attr.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+
+    manifest_kids = {kao.kid for kao in manifest.encryptionInformation.keyAccess}
+    expected_kids = set(key_ids)
+    assert manifest_kids == expected_kids, (
+        f"Expected key IDs {expected_kids} but got {manifest_kids}"
+    )
+
+    manifest_urls = {kao.url for kao in manifest.encryptionInformation.keyAccess}
+    assert kas_url_km1 in manifest_urls
+
+    # Verify NIST curve compatible MLKEM hybrid sizes in the KAO and registered public key
+    kao = manifest.encryptionInformation.keyAccess[0]
+    wrapped_len = _b64_decoded_len(kao.wrappedKey)
+    assert wrapped_len > XWING_CIPHERTEXT_SIZE, (
+        f"wrappedKey should be larger than {XWING_CIPHERTEXT_SIZE} bytes, got {wrapped_len}"
+    )
+    pem = key_secpmlkem_3.key.public_key_ctx.pem
+    der_len = _pem_decoded_len(pem)
+    assert der_len >= XWING_ENCAPSULATION_KEY_SIZE, (
+        f"public key DER should be >= {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
+    )
+
+    rt_file = tmp_dir / f"secpmlkem_3-{encrypt_sdk}-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_secpmlkem_5_roundtrip(
+    attribute_with_secpmlkem_5_key: tuple[Attribute, list[str]],
+    key_secpmlkem_5: KasKey,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    pt_file: Path,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+):
+    """Encrypt and decrypt with an X-Wing managed key."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.require("key_management", "autoconfigure", "mechanism-secpmlkem")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-secpmlkem"
+    )
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_secpmlkem_5_key
+
+    sample_name = f"secpmlkem_3-{encrypt_sdk}"
+    if sample_name in cipherTexts:
+        ct_file = cipherTexts[sample_name]
+    else:
+        ct_file = tmp_dir / f"{sample_name}.tdf"
+        cipherTexts[sample_name] = ct_file
+        encrypt_sdk.encrypt(
+            pt_file,
+            ct_file,
+            mime_type="text/plain",
+            container="ztdf",
+            attr_values=attr.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+
+    manifest_kids = {kao.kid for kao in manifest.encryptionInformation.keyAccess}
+    expected_kids = set(key_ids)
+    assert manifest_kids == expected_kids, (
+        f"Expected key IDs {expected_kids} but got {manifest_kids}"
+    )
+
+    manifest_urls = {kao.url for kao in manifest.encryptionInformation.keyAccess}
+    assert kas_url_km1 in manifest_urls
+
+    # Verify NIST curve compatible MLKEM hybrid sizes in the KAO and registered public key
+    kao = manifest.encryptionInformation.keyAccess[0]
+    wrapped_len = _b64_decoded_len(kao.wrappedKey)
+    assert wrapped_len > XWING_CIPHERTEXT_SIZE, (
+        f"wrappedKey should be larger than {XWING_CIPHERTEXT_SIZE} bytes, got {wrapped_len}"
+    )
+    pem = key_secpmlkem_5.key.public_key_ctx.pem
+    der_len = _pem_decoded_len(pem)
+    assert der_len >= XWING_ENCAPSULATION_KEY_SIZE, (
+        f"public key DER should be >= {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
+    )
+
+    rt_file = tmp_dir / f"secpmlkem_3-{encrypt_sdk}-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
