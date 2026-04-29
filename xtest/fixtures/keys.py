@@ -208,6 +208,54 @@ def key_r4096(
     return _get_or_create_key(otdfctl, kas_entry_km1, "r4096", "rsa:4096", root_key)
 
 
+@pytest.fixture(scope="module")
+def key_xwing(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create X-Wing hybrid PQ/T managed key on km1."""
+    return _get_or_create_key(
+        otdfctl, kas_entry_km1, "xwing", "hpqt:xwing", root_key, "mechanism-xwing"
+    )
+
+
+@pytest.fixture(scope="module")
+def key_secpmlkem_3(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create hpqt:secp256r1-mlkem768 managed key on km1."""
+
+    return _get_or_create_key(
+        otdfctl,
+        kas_entry_km1,
+        "secp256r1-mlkem768",
+        "hpqt:secp256r1-mlkem768",
+        root_key,
+        "mechanism-secpmlkem",
+    )
+
+
+@pytest.fixture(scope="module")
+def key_secpmlkem_5(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create hpqt:secp384r1-mlkem1024 managed key on km1."""
+
+    return _get_or_create_key(
+        otdfctl,
+        kas_entry_km1,
+        "secp384r1-mlkem1024",
+        "hpqt:secp384r1-mlkem1024",
+        root_key,
+        "mechanism-secpmlkem",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Attribute + key assignment fixtures (value-level)
 # ---------------------------------------------------------------------------
@@ -257,6 +305,79 @@ def attribute_with_different_kids(
         otdf_client_scs,
     )
     return attr
+
+
+@pytest.fixture(scope="module")
+def attribute_with_xwing_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_xwing: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute and assign an X-Wing key to it."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "xwing-test",
+        [("xw1", key_xwing)],
+        otdf_client_scs,
+        "mechanism-xwing",
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_xwing_and_ec_keys(
+    otdfctl: OpentdfCommandLineTool,
+    key_xwing: abac.KasKey,
+    managed_key_km2_ec: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute with both X-Wing and EC keys assigned."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "xwing-hybrid-test",
+        [("xw1", key_xwing), ("ec1", managed_key_km2_ec)],
+        otdf_client_scs,
+        "mechanism-xwing",
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_secpmlkem_3_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_secpmlkem_3: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute and assign an secp256r1-mlkem768 key to it."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "secpmlkem3-test",
+        [("m3", key_secpmlkem_3)],
+        otdf_client_scs,
+        "mechanism-secpmlkem",
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_secpmlkem_5_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_secpmlkem_5: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute and assign an secp384r1-mlkem1024 key to it."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "secpmlkem5-test",
+        [("m5", key_secpmlkem_5)],
+        otdf_client_scs,
+        "mechanism-secpmlkem",
+    )
 
 
 # ---------------------------------------------------------------------------

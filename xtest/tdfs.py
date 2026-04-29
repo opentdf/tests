@@ -51,6 +51,10 @@ feature_type = Literal[
     "mechanism-rsa-4096",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
     "mechanism-ec-curves-384-521",
+    # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
+    "mechanism-xwing",
+    # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
+    "mechanism-secpmlkem",
     "ns_grants",
     "obligations",
 ]
@@ -126,6 +130,11 @@ class PlatformFeatureSet(BaseModel):
         # wrapping with those curves on platforms v0.13.0 and later.
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
+
+        # X-Wing hybrid PQ/T KEM support (ML-KEM-768 + X25519)
+        if self.semver >= (0, 14, 0):
+            self.features.add("mechanism-xwing")
+            self.features.add("mechanism-secpmlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
