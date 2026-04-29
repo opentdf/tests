@@ -105,7 +105,7 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help policy kas-registry key create | grep -i hpqt:xwing
       exit $?
       ;;
-    mechanism-secpmkem)
+    mechanism-secpmlkem)
       set -o pipefail
       "${cmd[@]}" help policy kas-registry key create | grep -i hpqt:secp256r1-mlkem768
       exit $?
