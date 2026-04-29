@@ -12,9 +12,8 @@ import pytest
 
 import tdfs
 from abac import Attribute, KasKey
+from fixtures.encryption import EncryptFactory
 from tdfs import KeyAccessObject
-
-cipherTexts: dict[str, Path] = {}
 
 # X-Wing KEM sizes per draft-connolly-cfrg-xwing-kem-10
 XWING_ENCAPSULATION_KEY_SIZE = 1216  # public key, bytes
@@ -65,6 +64,7 @@ def test_xwing_roundtrip(
     pt_file: Path,
     kas_url_km1: str,
     in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
 ):
     """Encrypt and decrypt with an X-Wing managed key."""
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -79,20 +79,11 @@ def test_xwing_roundtrip(
 
     attr, key_ids = attribute_with_xwing_key
 
-    sample_name = f"xwing-{encrypt_sdk}"
-    if sample_name in cipherTexts:
-        ct_file = cipherTexts[sample_name]
-    else:
-        ct_file = tmp_dir / f"{sample_name}.tdf"
-        cipherTexts[sample_name] = ct_file
-        encrypt_sdk.encrypt(
-            pt_file,
-            ct_file,
-            mime_type="text/plain",
-            container="ztdf",
-            attr_values=attr.value_fqns,
-            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        )
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
@@ -126,6 +117,7 @@ def test_xwing_with_ec_roundtrip(
     kas_url_km1: str,
     kas_url_km2: str,
     in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
 ):
     """Encrypt and decrypt with both X-Wing and EC keys (multi-mechanism)."""
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
@@ -140,20 +132,11 @@ def test_xwing_with_ec_roundtrip(
 
     attr, key_ids = attribute_with_xwing_and_ec_keys
 
-    sample_name = f"xwing-ec-{encrypt_sdk}"
-    if sample_name in cipherTexts:
-        ct_file = cipherTexts[sample_name]
-    else:
-        ct_file = tmp_dir / f"{sample_name}.tdf"
-        cipherTexts[sample_name] = ct_file
-        encrypt_sdk.encrypt(
-            pt_file,
-            ct_file,
-            mime_type="text/plain",
-            container="ztdf",
-            attr_values=attr.value_fqns,
-            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        )
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 2

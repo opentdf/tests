@@ -7,8 +7,7 @@ import pytest
 
 import tdfs
 from abac import Attribute
-
-cipherTexts: dict[str, Path] = {}
+from fixtures.encryption import EncryptFactory
 
 
 def skip_rts_as_needed(
@@ -45,6 +44,7 @@ def test_or_attributes_success(
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
 ):
     skip_rts_as_needed(encrypt_sdk, decrypt_sdk, container, in_focus)
 
@@ -63,24 +63,15 @@ def test_or_attributes_success(
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
-        sample_name = f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
-            ct_file = tmp_dir / f"{sample_name}"
-            # Currently, we only support rsa:2048 and ec:secp256r1
-            encrypt_sdk.encrypt(
-                pt_file,
-                ct_file,
-                mime_type="text/plain",
-                container=container,
-                attr_values=fqns,
-                target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-            )
-            assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+        ct_file = encrypted_tdf(
+            encrypt_sdk,
+            container=container,
+            attr_values=fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_dir / f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -125,6 +116,7 @@ def test_and_attributes_success(
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
 ):
     """
     Test AND attribute policy type.
@@ -149,23 +141,15 @@ def test_and_attributes_success(
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
-        sample_name = f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
-            ct_file = tmp_dir / f"{sample_name}"
-            encrypt_sdk.encrypt(
-                pt_file,
-                ct_file,
-                mime_type="text/plain",
-                container=container,
-                attr_values=fqns,
-                target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-            )
-            assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+        ct_file = encrypted_tdf(
+            encrypt_sdk,
+            container=container,
+            attr_values=fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_dir / f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -179,6 +163,7 @@ def test_hierarchy_attributes_success(
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
 ):
     """
     Test HIERARCHY attribute policy type.
@@ -206,23 +191,15 @@ def test_hierarchy_attributes_success(
         assert len(fqns) == len(vals_to_use)
         short_names = [v.value for v in vals_to_use]
         assert len(short_names) == len(vals_to_use)
-        sample_name = f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}.{container}"
-        if sample_name in cipherTexts:
-            ct_file = cipherTexts[sample_name]
-        else:
-            ct_file = tmp_dir / f"{sample_name}"
-            encrypt_sdk.encrypt(
-                pt_file,
-                ct_file,
-                mime_type="text/plain",
-                container=container,
-                attr_values=fqns,
-                target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-            )
-            assert_expected_attrs(container, None, ct_file, fqns)
-            cipherTexts[sample_name] = ct_file
+        ct_file = encrypted_tdf(
+            encrypt_sdk,
+            container=container,
+            attr_values=fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"{sample_name}.returned"
+        rt_file = tmp_dir / f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
