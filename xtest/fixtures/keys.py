@@ -226,7 +226,7 @@ def key_secpmlkem_3(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create X-Wing hybrid hpqt:secp256r1-mlkem768 managed key on km1."""
+    """Get or create hpqt:secp256r1-mlkem768 managed key on km1."""
 
     return _get_or_create_key(
         otdfctl,
@@ -244,7 +244,7 @@ def key_secpmlkem_5(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create X-Wing hybrid hpqt:secp384r1-mlkem1024 managed key on km1."""
+    """Get or create hpqt:secp384r1-mlkem1024 managed key on km1."""
 
     return _get_or_create_key(
         otdfctl,
@@ -351,7 +351,7 @@ def attribute_with_secpmlkem_3_key(
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, list[str]]:
-    """Create an ALL_OF attribute and assign an X-Wing key to it."""
+    """Create an ALL_OF attribute and assign an secp256r1-mlkem768 key to it."""
     return _create_keyed_attribute(
         otdfctl,
         temporary_namespace,
@@ -369,7 +369,7 @@ def attribute_with_secpmlkem_5_key(
     otdf_client_scs: abac.SubjectConditionSet,
     temporary_namespace: abac.Namespace,
 ) -> tuple[abac.Attribute, list[str]]:
-    """Create an ALL_OF attribute and assign an X-Wing key to it."""
+    """Create an ALL_OF attribute and assign an secp384r1-mlkem1024 key to it."""
     return _create_keyed_attribute(
         otdfctl,
         temporary_namespace,

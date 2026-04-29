@@ -53,6 +53,7 @@ feature_type = Literal[
     "mechanism-ec-curves-384-521",
     # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
     "mechanism-xwing",
+    # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
     "mechanism-secpmlkem",
     "ns_grants",
     "obligations",

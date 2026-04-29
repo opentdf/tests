@@ -1,7 +1,7 @@
-"""Tests for X-Wing hybrid post-quantum/traditional KEM (ML-KEM-768 + X25519).
+"""Tests for hybrid post-quantum/traditional KEM.
 
 These tests verify that TDF encryption and decryption work correctly when
-X-Wing managed keys are assigned to attributes via the policy service.
+X-Wing and NIST approved hybrid managed keys are assigned to attributes via the policy service.
 """
 
 import base64
