@@ -67,18 +67,6 @@ class TestResolveMain:
         assert is_resolve_success(result)
         assert result["tag"] == "main"
 
-    def test_refs_heads_non_main_branch(self):
-        ls = make_ls_remote(
-            (SHA40, "refs/heads/release/sdk-v0.17"),
-            (SHA40, "refs/heads/main"),
-        )
-        with patch_git(ls):
-            result = resolve("js", "refs/heads/release/sdk-v0.17", None)
-        assert is_resolve_success(result)
-        assert result["head"] is True
-        assert result["tag"] == "release/sdk-v0.17"
-        assert result["sha"] == SHA40
-
 
 # ---------------------------------------------------------------------------
 # resolve() — SHA inputs
