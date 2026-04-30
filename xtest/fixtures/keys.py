@@ -18,7 +18,7 @@ import pytest
 
 import abac
 import tdfs
-from otdfctl import OpentdfCommandLineTool
+from otdfctl import InvalidAlgorithm, OpentdfCommandLineTool
 
 
 @pytest.fixture(scope="session")
@@ -53,14 +53,17 @@ def _get_or_create_key(
     existing_keys = otdfctl.kas_registry_keys_list(kas_entry)
     key = next((k for k in existing_keys if k.key.key_id == key_id), None)
     if key is None:
-        key = otdfctl.kas_registry_create_key(
-            kas_entry,
-            key_id=key_id,
-            mode="local",
-            algorithm=algorithm,
-            wrapping_key=root_key,
-            wrapping_key_id="root",
-        )
+        try:
+            key = otdfctl.kas_registry_create_key(
+                kas_entry,
+                key_id=key_id,
+                mode="local",
+                algorithm=algorithm,
+                wrapping_key=root_key,
+                wrapping_key_id="root",
+            )
+        except InvalidAlgorithm:
+            pytest.skip(f"Algorithm {algorithm} not supported by platform")
     return key
 
 
