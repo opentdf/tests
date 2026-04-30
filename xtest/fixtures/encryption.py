@@ -1,9 +1,6 @@
 """Session-scoped factory fixture for memoized TDF encryption.
 
-Replaces the per-module ``cipherTexts: dict[str, Path]`` caches that several
-test modules used to maintain by hand. The cache key is derived automatically
-from the inputs that affect the encrypted output, so callers do not pick a
-scenario string.
+The cache key and filenames are derived automatically from the test name and input.
 """
 
 import hashlib
