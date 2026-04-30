@@ -40,7 +40,6 @@ def test_or_attributes_success(
     attribute_with_or_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -61,8 +60,6 @@ def test_or_attributes_success(
         assert len([v.fqn for v in vals_to_use if v.fqn is None]) == 0
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
-        short_names = [v.value for v in vals_to_use]
-        assert len(short_names) == len(vals_to_use)
         ct_file = encrypted_tdf(
             encrypt_sdk,
             container=container,
@@ -71,10 +68,7 @@ def test_or_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = (
-            tmp_dir
-            / f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
-        )
+        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -115,7 +109,6 @@ def test_and_attributes_success(
     attribute_with_and_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -142,8 +135,6 @@ def test_and_attributes_success(
         assert len([v.fqn for v in vals_to_use if v.fqn is None]) == 0
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
-        short_names = [v.value for v in vals_to_use]
-        assert len(short_names) == len(vals_to_use)
         ct_file = encrypted_tdf(
             encrypt_sdk,
             container=container,
@@ -152,10 +143,7 @@ def test_and_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = (
-            tmp_dir
-            / f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
-        )
+        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -165,7 +153,6 @@ def test_hierarchy_attributes_success(
     attribute_with_hierarchy_type: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    tmp_dir: Path,
     pt_file: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
@@ -195,8 +182,6 @@ def test_hierarchy_attributes_success(
         assert len([v.fqn for v in vals_to_use if v.fqn is None]) == 0
         fqns = [v.fqn for v in vals_to_use if v.fqn is not None]
         assert len(fqns) == len(vals_to_use)
-        short_names = [v.value for v in vals_to_use]
-        assert len(short_names) == len(vals_to_use)
         ct_file = encrypted_tdf(
             encrypt_sdk,
             container=container,
@@ -205,10 +190,7 @@ def test_hierarchy_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = (
-            tmp_dir
-            / f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
-        )
+        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
