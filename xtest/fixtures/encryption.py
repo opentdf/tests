@@ -47,7 +47,9 @@ class EncryptFactory:
         if cached is not None:
             return cached
         digest = hashlib.sha1(repr(key).encode()).hexdigest()[:8]
-        ct_file = self._tmp_dir / f"ct-{self._label}-{encrypt_sdk}-{container}-{digest}.tdf"
+        ct_file = (
+            self._tmp_dir / f"ct-{self._label}-{encrypt_sdk}-{container}-{digest}.tdf"
+        )
         encrypt_sdk.encrypt(
             self._pt_file,
             ct_file,
