@@ -216,7 +216,6 @@ def looks_like_430(manifest: tdfs.Manifest):
 def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -234,7 +233,6 @@ def test_manifest_validity(
 def test_manifest_validity_with_assertions(
     encrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
