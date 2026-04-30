@@ -68,7 +68,7 @@ def test_or_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
+        rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -143,7 +143,7 @@ def test_and_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
+        rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -190,7 +190,7 @@ def test_hierarchy_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.returned")
+        rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )

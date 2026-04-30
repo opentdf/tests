@@ -84,7 +84,7 @@ def test_tdf_roundtrip(
     else:
         looks_like_430(manifest)
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
 
     # Mark timestamp before decrypt for audit log correlation
     mark = audit_logs.mark("before_decrypt")
@@ -100,7 +100,7 @@ def test_tdf_roundtrip(
         and decrypt_sdk.supports("ecwrap")
         and "ecwrap" in pfs.features
     ):
-        ert_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}-ecrewrap.untdf")
+        ert_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="ecrewrap")
         ec_mark = audit_logs.mark("before_ecwrap_decrypt")
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
@@ -133,7 +133,7 @@ def test_tdf_spec_target_422(
         attr_values=attribute_default_rsa.value_fqns,
     )
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -211,7 +211,6 @@ def looks_like_430(manifest: tdfs.Manifest):
 
 def test_manifest_validity(
     encrypt_sdk: tdfs.SDK,
-    pt_file: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -228,7 +227,6 @@ def test_manifest_validity(
 
 def test_manifest_validity_with_assertions(
     encrypt_sdk: tdfs.SDK,
-    pt_file: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
@@ -274,7 +272,7 @@ def test_tdf_assertions_unkeyed(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -304,7 +302,7 @@ def test_tdf_assertions_with_keys(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -345,7 +343,7 @@ def test_tdf_assertions_422_format(
     )
     looks_like_422(tdfs.manifest(ct_file))
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -528,20 +526,13 @@ def test_tdf_with_unbound_policy(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
-
-    # Mark timestamp before tampered decrypt for audit log correlation
-    # mark = audit_logs.mark("before_tampered_decrypt")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_kas_request_error(exc, decrypt_sdk)
-
-    # Verify rewrap failure was logged (policy binding mismatch)
-    # FIXME: Audit logs are not present on failed bindings
-    # audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
 
 
 def test_tdf_with_altered_policy_binding(
@@ -563,20 +554,13 @@ def test_tdf_with_altered_policy_binding(
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
     )
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
-
-    # Mark timestamp before tampered decrypt for audit log correlation
-    # mark = audit_logs.mark("before_tampered_decrypt")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_kas_request_error(exc, decrypt_sdk)
-
-    # Verify rewrap failure was logged (policy binding mismatch)
-    # FIXME: Audit logs are not present on failed bindings
-    # audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
 
 
 ## INTEGRITY TAMPER TESTS
@@ -600,7 +584,7 @@ def test_tdf_with_altered_root_sig(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -626,7 +610,7 @@ def test_tdf_with_altered_seg_sig_wrong(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(
             b_file, rt_file, "ztdf", expect_error=True, verify_assertions=False
@@ -659,7 +643,7 @@ def test_tdf_with_altered_enc_seg_size(
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
     )
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -696,7 +680,7 @@ def test_tdf_with_altered_assertion_statement(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -731,7 +715,7 @@ def test_tdf_with_altered_assertion_with_keys(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(
             b_file,
@@ -768,7 +752,7 @@ def test_tdf_altered_payload_end(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -799,7 +783,7 @@ def test_tdf_with_malicious_kao(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
-    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     # Mark timestamp - note: this test may not generate a rewrap audit event
     # because the SDK should reject the malicious KAO before calling the KAS

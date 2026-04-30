@@ -101,7 +101,7 @@ def test_xwing_roundtrip(
     assert_xwing_kao_sizes(kao)
     assert_xwing_public_key_size(key_xwing)
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -166,7 +166,7 @@ def test_xwing_with_ec_roundtrip(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -224,7 +224,7 @@ def test_secpmlkem_3_roundtrip(
         f"public key DER should be >= {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
     )
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -282,6 +282,6 @@ def test_secpmlkem_5_roundtrip(
         f"public key DER should be >= {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
     )
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)

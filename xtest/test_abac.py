@@ -101,7 +101,7 @@ def test_key_mapping_multiple_mechanisms(
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_default
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -169,7 +169,7 @@ def test_key_mapping_extended_mechanisms(
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
 
     # Decrypt and verify
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -230,7 +230,7 @@ def test_key_mapping_extended_ec_mechanisms(
     )
 
     # Decrypt and verify
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -290,7 +290,7 @@ def test_key_mapping_extended_rsa_mechanisms(
     )
 
     # Decrypt and verify
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -329,7 +329,7 @@ def test_autoconfigure_one_attribute_standard(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -385,7 +385,7 @@ def test_autoconfigure_two_kas_or_standard(
     # Mark timestamp before decrypt for audit log correlation
     mark = audit_logs.mark("before_decrypt")
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -439,7 +439,7 @@ def test_autoconfigure_double_kas_and(
     # Mark timestamp before decrypt for audit log correlation
     mark = audit_logs.mark("before_decrypt")
 
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -480,7 +480,7 @@ def test_autoconfigure_one_attribute_attr_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -525,7 +525,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -570,7 +570,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -607,7 +607,7 @@ def test_autoconfigure_one_attribute_ns_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -652,7 +652,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -697,7 +697,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -945,7 +945,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
         kao.type == "ec-wrapped" for kao in manifest.encryptionInformation.keyAccess
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
-    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
