@@ -29,7 +29,6 @@ def test_tdf_roundtrip(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     container: tdfs.container_type,
     in_focus: set[tdfs.SDK],
     audit_logs: AuditLogAsserter,
@@ -85,8 +84,7 @@ def test_tdf_roundtrip(
     else:
         looks_like_430(manifest)
 
-    fname = ct_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
 
     # Mark timestamp before decrypt for audit log correlation
     mark = audit_logs.mark("before_decrypt")
@@ -102,7 +100,7 @@ def test_tdf_roundtrip(
         and decrypt_sdk.supports("ecwrap")
         and "ecwrap" in pfs.features
     ):
-        ert_file = tmp_dir / f"{fname}-ecrewrap.untdf"
+        ert_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}-ecrewrap.untdf")
         ec_mark = audit_logs.mark("before_ecwrap_decrypt")
         decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
         assert filecmp.cmp(pt_file, ert_file)
@@ -114,7 +112,6 @@ def test_tdf_spec_target_422(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -136,8 +133,7 @@ def test_tdf_spec_target_422(
         attr_values=attribute_default_rsa.value_fqns,
     )
 
-    fname = ct_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -258,7 +254,6 @@ def test_tdf_assertions_unkeyed(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
@@ -279,8 +274,7 @@ def test_tdf_assertions_unkeyed(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
-    fname = ct_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
 
@@ -289,7 +283,6 @@ def test_tdf_assertions_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -311,8 +304,7 @@ def test_tdf_assertions_with_keys(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
-    fname = ct_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -327,7 +319,6 @@ def test_tdf_assertions_422_format(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
-    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -354,8 +345,7 @@ def test_tdf_assertions_422_format(
     )
     looks_like_422(tdfs.manifest(ct_file))
 
-    fname = ct_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{ct_file.stem}-{decrypt_sdk}.untdf")
 
     decrypt_sdk.decrypt(
         ct_file,
@@ -523,10 +513,7 @@ def assert_kas_request_error(
 def test_tdf_with_unbound_policy(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    audit_logs: AuditLogAsserter,
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
 ) -> None:
@@ -541,8 +528,7 @@ def test_tdf_with_unbound_policy(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("unbound_policy", ct_file, change_policy)
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
 
     # Mark timestamp before tampered decrypt for audit log correlation
     # mark = audit_logs.mark("before_tampered_decrypt")
@@ -561,10 +547,7 @@ def test_tdf_with_unbound_policy(
 def test_tdf_with_altered_policy_binding(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
-    audit_logs: AuditLogAsserter,
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
 ) -> None:
@@ -580,8 +563,7 @@ def test_tdf_with_altered_policy_binding(
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
     )
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
 
     # Mark timestamp before tampered decrypt for audit log correlation
     # mark = audit_logs.mark("before_tampered_decrypt")
@@ -603,8 +585,6 @@ def test_tdf_with_altered_policy_binding(
 def test_tdf_with_altered_root_sig(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -620,8 +600,7 @@ def test_tdf_with_altered_root_sig(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -632,8 +611,6 @@ def test_tdf_with_altered_root_sig(
 def test_tdf_with_altered_seg_sig_wrong(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -649,8 +626,7 @@ def test_tdf_with_altered_seg_sig_wrong(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("broken_seg_sig", ct_file, change_segment_hash)
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(
             b_file, rt_file, "ztdf", expect_error=True, verify_assertions=False
@@ -666,8 +642,6 @@ def test_tdf_with_altered_seg_sig_wrong(
 def test_tdf_with_altered_enc_seg_size(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -685,8 +659,7 @@ def test_tdf_with_altered_enc_seg_size(
     b_file = tdfs.update_manifest(
         "broken_enc_seg_sig", ct_file, change_encrypted_segment_size
     )
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -700,8 +673,6 @@ def test_tdf_with_altered_enc_seg_size(
 def test_tdf_with_altered_assertion_statement(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     assertion_file_no_keys: str,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
@@ -725,8 +696,7 @@ def test_tdf_with_altered_assertion_statement(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -737,8 +707,6 @@ def test_tdf_with_altered_assertion_statement(
 def test_tdf_with_altered_assertion_with_keys(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     assertion_file_rs_and_hs_keys: str,
     assertion_verification_file_rs_and_hs_keys: str,
     in_focus: set[tdfs.SDK],
@@ -763,8 +731,7 @@ def test_tdf_with_altered_assertion_with_keys(
     b_file = tdfs.update_manifest(
         "altered_assertion_statement", ct_file, change_assertion_statement
     )
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(
             b_file,
@@ -784,8 +751,6 @@ def test_tdf_with_altered_assertion_with_keys(
 def test_tdf_altered_payload_end(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
@@ -803,8 +768,7 @@ def test_tdf_altered_payload_end(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
     try:
         decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
@@ -818,8 +782,6 @@ def test_tdf_altered_payload_end(
 def test_tdf_with_malicious_kao(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    tmp_dir: Path,
     in_focus: set[tdfs.SDK],
     audit_logs: AuditLogAsserter,
     attribute_default_rsa: Attribute,
@@ -837,8 +799,7 @@ def test_tdf_with_malicious_kao(
         attr_values=attribute_default_rsa.value_fqns,
     )
     b_file = tdfs.update_manifest("malicious_kao", ct_file, malicious_kao)
-    fname = b_file.stem
-    rt_file = tmp_dir / f"{fname}.untdf"
+    rt_file = ct_file.with_name(f"{b_file.stem}-{decrypt_sdk}.untdf")
 
     # Mark timestamp - note: this test may not generate a rewrap audit event
     # because the SDK should reject the malicious KAO before calling the KAS
