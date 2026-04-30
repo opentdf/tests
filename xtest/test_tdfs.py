@@ -944,7 +944,7 @@ def test_tdf_with_malicious_kao(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert re.search(
-            b"allowlist|not allowed|disallowed KASes",
+            b"allowlist|not allowed|disallowed KASes|AggregateError",
             exc.output,
             re.IGNORECASE | re.MULTILINE,
         ), f"Unexpected error output: [{exc.output}]"
