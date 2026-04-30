@@ -78,7 +78,9 @@ def test_tdf_roundtrip(
     else:
         assert kao.type == "wrapped"
         assert kao.ephemeralPublicKey is None
-    if target_mode == "4.2.2" or (target_mode is None and not encrypt_sdk.supports("hexless")):
+    if target_mode == "4.2.2" or (
+        target_mode is None and not encrypt_sdk.supports("hexless")
+    ):
         looks_like_422(manifest)
     else:
         looks_like_430(manifest)

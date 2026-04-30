@@ -71,7 +71,10 @@ def test_or_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        rt_file = (
+            tmp_dir
+            / f"pt-or-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        )
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -149,7 +152,10 @@ def test_and_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        rt_file = (
+            tmp_dir
+            / f"pt-and-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        )
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
@@ -199,7 +205,10 @@ def test_hierarchy_attributes_success(
         )
         assert_expected_attrs(container, None, ct_file, fqns)
 
-        rt_file = tmp_dir / f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        rt_file = (
+            tmp_dir
+            / f"pt-hierarchy-{'-'.join(short_names)}-{encrypt_sdk}-{decrypt_sdk}.{container}.returned"
+        )
         decrypt_or_dont(
             decrypt_sdk, pt_file, container, expect_success, ct_file, rt_file
         )
