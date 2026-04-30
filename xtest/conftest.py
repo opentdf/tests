@@ -35,6 +35,7 @@ pytest_plugins = [
     "fixtures.obligations",
     "fixtures.keys",
     "fixtures.audit",
+    "fixtures.encryption",
 ]
 
 
@@ -203,7 +204,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
 
 # Core fixtures
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def pt_file(tmp_dir: Path, size: str) -> Path:
     """Generate a plaintext test file.
 
@@ -222,7 +223,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     return pt_file
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="session")
 def tmp_dir(request: pytest.FixtureRequest) -> Path:
     """Create worker-specific temporary directory for test files.
 
