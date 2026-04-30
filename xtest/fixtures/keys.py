@@ -63,7 +63,9 @@ def _get_or_create_key(
                 wrapping_key_id="root",
             )
         except InvalidAlgorithm:
-            pytest.skip(f"Algorithm {algorithm} not supported by platform")
+            if required_features:
+                pytest.skip(f"Algorithm {algorithm} not supported by platform")
+            raise
     return key
 
 
