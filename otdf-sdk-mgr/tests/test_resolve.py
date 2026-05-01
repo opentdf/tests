@@ -75,7 +75,7 @@ class TestResolveMain:
         with patch_git(ls):
             result = resolve("js", "refs/heads/release/sdk-v0.17", None)
         assert is_resolve_success(result)
-        assert result["head"] is True
+        assert "head" in result and result["head"] is True
         assert result["tag"] == "release/sdk-v0.17"
         assert result["sha"] == SHA40
 
