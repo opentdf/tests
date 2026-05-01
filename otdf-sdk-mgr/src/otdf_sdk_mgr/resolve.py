@@ -155,8 +155,7 @@ def resolve(
 
     try:
         repo = Git()
-        if version.startswith("refs/heads/"):
-            version = version[len("refs/heads/"):]
+        version = version.removeprefix("refs/heads/")
         if version == "main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
             try:
