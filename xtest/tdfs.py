@@ -529,7 +529,8 @@ def parse_sdk_spec(spec: str) -> list[SDK]:
     """
     if ":" in spec:
         sdk_type_val, version = spec.split(":", 1)
-        assert is_sdk_type(sdk_type_val), f"Unknown SDK type: {sdk_type_val!r}"
+        if not is_sdk_type(sdk_type_val):
+            raise ValueError(f"Unknown SDK type: {sdk_type_val!r}")
         if version == "*":
             return all_versions_of(sdk_type_val)
         return [SDK(sdk_type_val, version)]
