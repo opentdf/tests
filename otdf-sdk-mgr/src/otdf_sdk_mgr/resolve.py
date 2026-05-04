@@ -155,7 +155,8 @@ def resolve(
 
     try:
         repo = Git()
-        if version == "main" or version == "refs/heads/main":
+        version = version.removeprefix("refs/heads/")
+        if version == "main":
             all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
             try:
                 sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
