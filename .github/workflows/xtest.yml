@@ -82,6 +82,7 @@ jobs:
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
+      sdk-version-list: ${{ steps.version-info.outputs.sdk-version-list }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref }}"
       JS_REF: "${{ inputs.js-ref }}"
@@ -185,6 +186,15 @@ jobs:
 
             core.setOutput('all', JSON.stringify(versionData));
 
+            const sdkVersionList = [];
+            for (const [sdkType, refInfo] of Object.entries(versionData)) {
+              if (sdkType === 'platform') continue;
+              for (const { tag, err } of refInfo) {
+                if (!err) sdkVersionList.push(`${sdkType}:${tag}`);
+              }
+            }
+            core.setOutput('sdk-version-list', JSON.stringify(sdkVersionList));
+
             core.summary.addHeading('Versions under Test', 3);
 
             function artifactLink(sdkType, tag, release, head, source) {
@@ -263,12 +273,12 @@ jobs:
       pull-requests: write # Add comments to PRs
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
-      ENCRYPT_SDK: ${{ matrix.sdk }}
+      ENCRYPT_SDK: ${{ matrix.sdk-version }}
     strategy:
       fail-fast: false
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
-        sdk: ["go", "java", "js"]
+        sdk-version: ${{ fromJSON(needs.resolve-versions.outputs.sdk-version-list) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -408,7 +418,7 @@ jobs:
         if: >-
           steps.detect-otdfctl.outputs.otdfctl-source != 'platform'
           && fromJson(steps.configure-go.outputs.heads)[0] != null
-          && env.FOCUS_SDK == 'go'
+          && startsWith(matrix.sdk-version, 'go:')
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
@@ -456,7 +466,7 @@ jobs:
       - name: pre-release protocol buffers for java-sdk
         if: >-
           fromJson(steps.configure-java.outputs.heads)[0] != null
-          && (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java')
+          && (startsWith(matrix.sdk-version, 'go:') || startsWith(matrix.sdk-version, 'java:'))
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing .env files for java-sdk..."
@@ -702,14 +712,14 @@ jobs:
         id: upload-artifact
         if: success() || failure()
         with:
-          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
+          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk-version }}-${{matrix.platform-tag}}
           path: otdftests/xtest/test-results/*.html
 
       - name: Upload audit logs on failure
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: failure()
         with:
-          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          name: audit-logs-${{ matrix.sdk-version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
 
