@@ -64,7 +64,7 @@ def sdk_spec_type(v: str) -> str:
     """Validate SDK specifiers: 'go', 'go:*', 'go:main', 'go:v0.18.0', etc."""
     for spec in v.split():
         sdk_type_val = spec.split(":", 1)[0]
-        if sdk_type_val not in typing.get_args(tdfs.sdk_type):
+        if not tdfs.is_sdk_type(sdk_type_val):
             raise ValueError(f"Invalid SDK type: {sdk_type_val!r}")
     return v
 
