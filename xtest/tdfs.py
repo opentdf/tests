@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
@@ -22,6 +22,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
+
+
+def is_sdk_type(val: str) -> TypeIs[sdk_type]:
+    return val in get_args(sdk_type)
+
 
 focus_type = Literal[sdk_type, "all"]
 
@@ -524,9 +529,11 @@ def parse_sdk_spec(spec: str) -> list[SDK]:
     """
     if ":" in spec:
         sdk_type_val, version = spec.split(":", 1)
+        assert is_sdk_type(sdk_type_val), f"Unknown SDK type: {sdk_type_val!r}"
         if version == "*":
             return all_versions_of(sdk_type_val)
         return [SDK(sdk_type_val, version)]
+    assert is_sdk_type(spec), f"Unknown SDK type: {spec!r}"
     return all_versions_of(spec)
 
 
