@@ -709,19 +709,24 @@ jobs:
           KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
 
+      - name: Sanitize sdk-version for artifact name
+        id: artifact-name
+        if: success() || failure()
+        run: echo "sdk_version=${ENCRYPT_SDK//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact
         if: success() || failure()
         with:
-          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk-version }}-${{matrix.platform-tag}}
+          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/*.html
 
       - name: Upload audit logs on failure
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: failure()
         with:
-          name: audit-logs-${{ matrix.sdk-version }}-${{ matrix.platform-tag }}
+          name: audit-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
 

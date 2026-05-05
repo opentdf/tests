@@ -385,7 +385,11 @@ class SDK:
         return hash((self.sdk, self.version))
 
     def is_released(self) -> bool:
-        return bool(re.match(r"^v\d+\.\d+\.\d+", self.version))
+        return bool(
+            re.fullmatch(
+                r"(?:sdk/)?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", self.version
+            )
+        )
 
     def encrypt(
         self,
