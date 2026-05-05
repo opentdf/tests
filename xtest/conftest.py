@@ -61,11 +61,16 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
 
 
 def sdk_spec_type(v: str) -> str:
-    """Validate SDK specifiers: 'go', 'go@*', 'go@main', 'go@v0.18.0', etc."""
-    for spec in v.split():
-        sdk_type_val = spec.split("@", 1)[0]
-        if not tdfs.is_sdk_type(sdk_type_val):
-            raise ValueError(f"Invalid SDK type: {sdk_type_val!r}")
+    """Validate a whitespace-separated list of SDK specifiers: 'go', 'go@*', 'go@main java@v1.2.0', etc."""
+    specs = v.split()
+    if not specs:
+        raise ValueError("At least one SDK specifier is required")
+    for spec in specs:
+        parts = spec.split("@", 1)
+        if not tdfs.is_sdk_type(parts[0]):
+            raise ValueError(f"Invalid SDK type: {parts[0]!r}")
+        if len(parts) == 2 and not parts[1]:
+            raise ValueError(f"Empty version in SDK specifier {spec!r}; use e.g. go@main, go@v0.18.0, go@*")
     return v
 
 
@@ -103,7 +108,7 @@ def pytest_addoption(parser: pytest.Parser):
     )
     parser.addoption(
         "--sdks",
-        help=f"select which sdks to run by default, unless overridden; one or more of {englist(typing.get_args(tdfs.sdk_type))}, optionally version-qualified (e.g. go:main, go:v0.18.0, go:*)",
+        help=f"select which sdks to run by default, unless overridden; one or more of {englist(typing.get_args(tdfs.sdk_type))}, optionally version-qualified (e.g. go@main, go@v0.18.0, go@*)",
         type=sdk_spec_type,
     )
     parser.addoption(
@@ -159,19 +164,25 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
-        e_sdks = [
-            sdk
-            for spec in sdk_specs_opt(["--sdks-encrypt", "--sdks"])
-            for sdk in tdfs.parse_sdk_spec(spec)
-        ]
+        try:
+            e_sdks = [
+                sdk
+                for spec in sdk_specs_opt(["--sdks-encrypt", "--sdks"])
+                for sdk in tdfs.parse_sdk_spec(spec)
+            ]
+        except (FileNotFoundError, ValueError) as e:
+            raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
-        d_sdks = [
-            sdk
-            for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
-            for sdk in tdfs.parse_sdk_spec(spec)
-        ]
+        try:
+            d_sdks = [
+                sdk
+                for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
+                for sdk in tdfs.parse_sdk_spec(spec)
+            ]
+        except (FileNotFoundError, ValueError) as e:
+            raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
