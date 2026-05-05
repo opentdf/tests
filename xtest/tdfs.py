@@ -359,6 +359,7 @@ def simple_container(container: container_type) -> container_type:
 
 class SDK:
     sdk: sdk_type
+    version: str
     _supports: dict[feature_type, bool]
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
