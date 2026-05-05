@@ -109,6 +109,11 @@ def pytest_addoption(parser: pytest.Parser):
         help="disable automatic KAS audit log collection",
     )
     parser.addoption(
+        "--skip-released-pairs",
+        action="store_true",
+        help="skip round-trip tests where all SDKs are released artifacts",
+    )
+    parser.addoption(
         "--sdks",
         help=f"select which sdks to run by default, unless overridden; one or more of {englist(typing.get_args(tdfs.sdk_type))}, optionally version-qualified (e.g. go@main, go@v0.18.0, go@*)",
         type=sdk_spec_type,
@@ -209,6 +214,18 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         else:
             containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
+
+
+def pytest_runtest_setup(item: pytest.Item):
+    if not item.config.getoption("--skip-released-pairs", default=False):
+        return
+    params = getattr(item, "callspec", None)
+    if params is None:
+        return
+    e = params.params.get("encrypt_sdk")
+    d = params.params.get("decrypt_sdk")
+    if e is not None and d is not None and e.is_released() and d.is_released():
+        pytest.skip(f"released-only pair ({e} × {d})")
 
 
 # Core fixtures

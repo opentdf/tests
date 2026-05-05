@@ -384,6 +384,9 @@ class SDK:
     def __hash__(self) -> int:
         return hash((self.sdk, self.version))
 
+    def is_released(self) -> bool:
+        return bool(re.match(r"^v\d+\.\d+\.\d+", self.version))
+
     def encrypt(
         self,
         pt_file: Path,
