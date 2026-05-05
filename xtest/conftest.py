@@ -61,9 +61,9 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
 
 
 def sdk_spec_type(v: str) -> str:
-    """Validate SDK specifiers: 'go', 'go:*', 'go:main', 'go:v0.18.0', etc."""
+    """Validate SDK specifiers: 'go', 'go@*', 'go@main', 'go@v0.18.0', etc."""
     for spec in v.split():
-        sdk_type_val = spec.split(":", 1)[0]
+        sdk_type_val = spec.split("@", 1)[0]
         if not tdfs.is_sdk_type(sdk_type_val):
             raise ValueError(f"Invalid SDK type: {sdk_type_val!r}")
     return v

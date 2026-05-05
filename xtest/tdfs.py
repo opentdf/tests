@@ -524,11 +524,11 @@ def parse_sdk_spec(spec: str) -> list[SDK]:
     """Parse an SDK specifier into SDK objects.
 
     Supports:
-    - "go" or "go:*" → all versions in sdk/go/dist/
-    - "go:main" or "go:v0.18.0" → only that specific version
+    - "go" or "go@*" → all versions in sdk/go/dist/
+    - "go@main" or "go@v0.18.0" → only that specific version
     """
-    if ":" in spec:
-        sdk_type_val, version = spec.split(":", 1)
+    if "@" in spec:
+        sdk_type_val, version = spec.split("@", 1)
         if not is_sdk_type(sdk_type_val):
             raise ValueError(f"Unknown SDK type: {sdk_type_val!r}")
         if version == "*":

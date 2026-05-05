@@ -190,7 +190,7 @@ jobs:
             for (const [sdkType, refInfo] of Object.entries(versionData)) {
               if (sdkType === 'platform') continue;
               for (const { tag, err } of refInfo) {
-                if (!err) sdkVersionList.push(`${sdkType}:${tag}`);
+                if (!err) sdkVersionList.push(`${sdkType}@${tag}`);
               }
             }
             core.setOutput('sdk-version-list', JSON.stringify(sdkVersionList));
@@ -418,7 +418,7 @@ jobs:
         if: >-
           steps.detect-otdfctl.outputs.otdfctl-source != 'platform'
           && fromJson(steps.configure-go.outputs.heads)[0] != null
-          && startsWith(matrix.sdk-version, 'go:')
+          && startsWith(matrix.sdk-version, 'go@')
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
@@ -466,7 +466,7 @@ jobs:
       - name: pre-release protocol buffers for java-sdk
         if: >-
           fromJson(steps.configure-java.outputs.heads)[0] != null
-          && (startsWith(matrix.sdk-version, 'go:') || startsWith(matrix.sdk-version, 'java:'))
+          && (startsWith(matrix.sdk-version, 'go@') || startsWith(matrix.sdk-version, 'java@'))
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing .env files for java-sdk..."
