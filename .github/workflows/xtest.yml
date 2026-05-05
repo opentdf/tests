@@ -274,7 +274,7 @@ jobs:
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk-version }}
-      SKIP_RELEASED_PAIRS: ${{ github.event_name != 'workflow_dispatch' }}
+      SKIP_RELEASED_PAIRS: ${{ github.event_name != 'workflow_dispatch' && !contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag) }}
     strategy:
       fail-fast: false
       matrix:
