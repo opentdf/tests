@@ -70,7 +70,9 @@ def sdk_spec_type(v: str) -> str:
         if not tdfs.is_sdk_type(parts[0]):
             raise ValueError(f"Invalid SDK type: {parts[0]!r}")
         if len(parts) == 2 and not parts[1]:
-            raise ValueError(f"Empty version in SDK specifier {spec!r}; use e.g. go@main, go@v0.18.0, go@*")
+            raise ValueError(
+                f"Empty version in SDK specifier {spec!r}; use e.g. go@main, go@v0.18.0, go@*"
+            )
     return v
 
 
