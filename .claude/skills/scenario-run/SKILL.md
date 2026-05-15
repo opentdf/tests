@@ -1,12 +1,12 @@
 ---
 name: scenario-run
-description: Execute the pytest suite declared by a scenarios.yaml against the running instance, then classify the result as "bug reproduced", "not reproduced", or "unrelated failure". Use after `scenario-up` has confirmed the instance is healthy.
+description: Execute the pytest suite declared by a scenarios.yaml against the running instance, then classify the result as "expected outcome", "unexpected outcome", or "unrelated failure" against the scenario's `expected:` / `actual:` fields. Works for bug-repro scenarios, TDD/feature scenarios, and matrix runs. Use after `scenario-up` has confirmed the instance is healthy.
 allowed-tools: Bash, Read
 ---
 
 # scenario-run
 
-You run the pytest selection declared by the scenario's `suite` block against the running instance and interpret the result in terms of the bug being investigated.
+You run the pytest selection declared by the scenario's `suite` block against the running instance and interpret the result in terms of the ticket the scenario was authored for. The same three-bucket classification works for bug-repros (where "expected" means *failure that matches `actual:`*) and for TDD scenarios (where "expected" means *skip-until-feature-lands*).
 
 ## Inputs
 
@@ -27,16 +27,21 @@ You run the pytest selection declared by the scenario's `suite` block against th
 
 2. **Capture exit code and tail of output**. The pytest output is the source of truth; don't re-interpret.
 
-3. **Classify**:
-   - **Bug reproduced** — the test failed with an assertion or stderr that matches the scenario's `actual:` field. Cite the matching line.
-   - **Bug NOT reproduced** — the test passed. This is meaningful: either the bug is fixed at this version combination, or the scenario doesn't capture it precisely yet. Suggest the user widen the assertion or pick a different version pin.
-   - **Unrelated failure** — pytest errored out (collection error, environment issue, import error, timeout). Don't claim repro success or failure; report the error and recommend a next diagnostic step.
+3. **Classify** against the scenario's `expected:` and `actual:` fields:
+   - **Expected outcome** — the test result matches what `expected:` (or, for a bug, `actual:`) predicts.
+     - Bug scenario: pytest FAILED with an assertion/stderr matching `actual:`. Bug reproduced. Cite the matching line.
+     - TDD/feature scenario on a ref where the feature isn't landed yet: tests SKIPPED via `supports("<feature>")`. Feature gate is still pending as predicted.
+     - TDD/feature scenario on a ref where the feature is landed: tests PASSED. Feature works; the scenario is now a regression gate.
+   - **Unexpected outcome** — the test result is *not* what the scenario predicted.
+     - Bug scenario: pytest PASSED. Either the bug is fixed at this pin, or the scenario doesn't capture it tightly enough. Suggest widening the assertion, pinning a different ref, or marking the bug closed.
+     - TDD/feature scenario: tests FAILED for a reason that doesn't match `actual:`. A real bug surfaced, OR the prereq implementation work landed and the test now needs a real assertion (not a skip). Surface the actual failure to the user.
+   - **Unrelated failure** — pytest errored out (collection error, environment issue, import error, timeout). Don't claim outcome match either way; report the error and recommend a next diagnostic step.
 
 4. **Record artifacts**. The pytest run leaves logs under `tests/instances/<id>/logs/`. List the relevant log files in your reply so the user can attach them to the Jira ticket.
 
 ## Output format
 
-One-line headline (`bug reproduced` / `not reproduced` / `unrelated failure`), then a short bulleted summary:
+One-line headline (`expected outcome` / `unexpected outcome` / `unrelated failure`), then a short bulleted summary:
 - `select:` the pytest selector
 - `exit_code:` the return value
 - `evidence:` 1-2 lines from the output that justify the classification
