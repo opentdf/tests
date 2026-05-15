@@ -226,6 +226,34 @@ dev = [
 ]
 
 [[package]]
+name = "otdf-sdk-mgr"
+version = "0.1.0"
+source = { editable = "../otdf-sdk-mgr" }
+dependencies = [
+    { name = "gitpython" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "ruamel-yaml" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gitpython", specifier = ">=3.1.50" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "ruamel-yaml", specifier = ">=0.18.0" },
+    { name = "typer", specifier = ">=0.26.5" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.410" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "ruff", specifier = ">=0.15.15" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.0"
 source = { registry = "https://pypi.org/simple" }
