@@ -87,3 +87,31 @@ def artifact(
     except InstallError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+
+
+@install_app.command()
+def variant(
+    name: Annotated[str, typer.Argument(help="Variant name (e.g., gemini, enhanced, codex)")],
+    platform_dir: Annotated[
+        str, typer.Argument(help="Path to the platform variant directory")
+    ],
+    branch: Annotated[
+        str, typer.Option(help="otdfctl branch to checkout for source")
+    ] = "main",
+) -> None:
+    """Build Go SDK (otdfctl) linked against a platform variant's modules.
+
+    Generates a variant-specific go.work file and builds otdfctl using the
+    platform variant's lib/ocrypto, sdk, and protocol modules. This allows
+    testing different post-quantum implementations side by side.
+
+    Example:
+        otdf-sdk-mgr install variant gemini ~/repos/pq-gemini/platform
+    """
+    from otdf_sdk_mgr.installers import InstallError, cmd_variant
+
+    try:
+        cmd_variant(name, platform_dir, branch)
+    except InstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)

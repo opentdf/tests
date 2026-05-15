@@ -8,8 +8,9 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
-# Global console instance
-console = Console()
+# Global console instance (stderr for all status/diagnostic output)
+console = Console(stderr=True)
+_stdout_console = Console()  # stdout for machine-readable data output
 
 
 def print_success(message: str) -> None:
@@ -69,6 +70,11 @@ def format_health(healthy: bool | None) -> str:
     if healthy:
         return "[green]✓[/green]"
     return "[red]✗[/red]"
+
+
+def print_json(data: str) -> None:
+    """Print JSON data to stdout."""
+    _stdout_console.print_json(data)
 
 
 def create_progress() -> Progress:
