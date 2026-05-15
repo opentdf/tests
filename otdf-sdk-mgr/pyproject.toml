@@ -5,7 +5,9 @@ description = "SDK artifact management CLI for OpenTDF cross-client tests"
 requires-python = ">=3.11"
 dependencies = [
     "gitpython>=3.1.50",
+    "pydantic>=2.6.0",
     "rich>=13.7.0",
+    "ruamel.yaml>=0.18.0",
     "typer>=0.12.0",
 ]
 
