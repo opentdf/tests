@@ -213,7 +213,10 @@ def _main(argv: list[str] | None = None) -> int:
     elif kind == "Instance":
         model = Instance
     else:
-        print(f"error: {path} has unknown kind {kind!r}; expected Scenario or Instance", file=sys.stderr)
+        print(
+            f"error: {path} has unknown kind {kind!r}; expected Scenario or Instance",
+            file=sys.stderr,
+        )
         return 1
     try:
         model.model_validate(raw)
