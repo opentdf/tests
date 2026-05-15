@@ -1,10 +1,11 @@
 {
   "name": "opentdf-test-harness",
   "version": "0.1.0",
-  "description": "Skills for reproducing OpenTDF bugs locally via otdf-local and otdf-sdk-mgr. Pulls bug context from Jira (acli), provisions pinned platform/KAS/SDK versions, runs the xtest pytest suite, and tears down. Useful for QA, platform/SDK developers, and downstream first/third-party integrators.",
+  "description": "Jira-ticket-driven scenarios for the OpenTDF test harness. Pulls ticket context from Jira (acli) — any ticket type, including bugs, feature stories, and PR-driven work — provisions pinned platform/KAS/SDK versions or refs (released versions, main, feature branches, PR SHAs), runs the xtest pytest suite, and tears down. Useful for QA, platform/SDK developers writing tests for new features first, and downstream first/third-party integrators.",
   "skills_dir": "../skills",
   "skills": [
-    "scenario-from-bug-report",
+    "scenario-from-ticket",
+    "scenario-matrix",
     "scenario-up",
     "scenario-run",
     "scenario-tear-down",
@@ -15,7 +16,8 @@
     "go toolchain (platform binaries are built from source)",
     "git (for worktrees of opentdf/platform)",
     "docker (for keycloak/postgres dependencies)",
-    "acli (Atlassian CLI; needed for the scenario-from-bug-report skill)"
+    "acli (Atlassian CLI; needed for the scenario-from-ticket skill)",
+    "gh (GitHub CLI; needed for scenario-matrix to resolve PR refs)"
   ],
   "permissions": {
     "allow": [
