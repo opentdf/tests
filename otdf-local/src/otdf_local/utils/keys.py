@@ -197,7 +197,9 @@ def setup_golden_keys(
                 f"Missing required fields in extra-keys.json for kid: {kid}"
             )
 
-        # Write key files to platform directory
+        # Write key files into the target directory (platform_dir for legacy
+        # single-instance, or the per-instance keys dir for multi-instance).
+        platform_dir.mkdir(parents=True, exist_ok=True)
         private_path = platform_dir / f"{kid}-private.pem"
         cert_path = platform_dir / f"{kid}-cert.pem"
 
@@ -205,12 +207,14 @@ def setup_golden_keys(
         private_path.chmod(0o600)
         cert_path.write_text(cert)
 
+        # Use absolute paths so the platform binary finds them regardless of
+        # its working directory (worktree in multi-instance mode).
         keys_config.append(
             {
                 "kid": kid,
                 "alg": alg,
-                "private": f"{kid}-private.pem",
-                "cert": f"{kid}-cert.pem",
+                "private": str(private_path.resolve()),
+                "cert": str(cert_path.resolve()),
             }
         )
 
