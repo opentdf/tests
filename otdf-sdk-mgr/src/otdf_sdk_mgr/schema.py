@@ -12,8 +12,8 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from ruamel.yaml import YAML
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from ruamel.yaml import YAML, YAMLError
 
 API_VERSION = "opentdf.io/v1alpha1"
 
@@ -46,7 +46,7 @@ class PlatformPin(_StrictModel):
 
     @model_validator(mode="after")
     def _exactly_one(self) -> PlatformPin:
-        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k)]
+        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k) is not None]
         if len(set_fields) != 1:
             raise ValueError(
                 f"PlatformPin must set exactly one of dist|source|image (got {set_fields or 'none'})"
@@ -65,7 +65,7 @@ class KasPin(_StrictModel):
 
     @model_validator(mode="after")
     def _exactly_one(self) -> KasPin:
-        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k)]
+        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k) is not None]
         if len(set_fields) != 1:
             raise ValueError(
                 f"KasPin must set exactly one of dist|source|image (got {set_fields or 'none'})"
@@ -107,7 +107,7 @@ class Instance(_StrictModel):
     single file.
     """
 
-    apiVersion: str = API_VERSION
+    apiVersion: Literal["opentdf.io/v1alpha1"] = API_VERSION
     kind: Literal["Instance"] = "Instance"
     metadata: Metadata = Field(default_factory=Metadata)
     platform: PlatformPin
@@ -135,7 +135,7 @@ class Suite(_StrictModel):
     """Pytest selection + flags."""
 
     select: str = Field(description="Pytest -k or path::node selector")
-    containers: str | None = Field(default=None, description="Forwarded to --containers")
+    containers: ContainerKind | None = Field(default=None, description="Forwarded to --containers")
     markers: str | None = Field(default=None, description="Forwarded to -m")
     extra_args: list[str] = Field(default_factory=list)
 
@@ -146,7 +146,7 @@ class Scenario(_StrictModel):
     Composes an Instance with SDK pins and a pytest Suite selection.
     """
 
-    apiVersion: str = API_VERSION
+    apiVersion: Literal["opentdf.io/v1alpha1"] = API_VERSION
     kind: Literal["Scenario"] = "Scenario"
     metadata: Metadata = Field(default_factory=Metadata)
     instance: Annotated[Instance, Field(description="Inline instance definition")]
@@ -157,27 +157,25 @@ class Scenario(_StrictModel):
 
 
 def _yaml() -> YAML:
-    y = YAML(typ="safe")
-    y.preserve_quotes = True
-    return y
+    return YAML(typ="safe")
+
+
+def _load_yaml_mapping(path: str | Path) -> dict[str, object]:
+    p = Path(path)
+    raw = _yaml().load(p.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{p}: top-level YAML must be a mapping, got {type(raw).__name__}")
+    return raw
 
 
 def load_scenario(path: str | Path) -> Scenario:
     """Parse and validate a scenarios.yaml file."""
-    p = Path(path)
-    raw = _yaml().load(p.read_text())
-    if not isinstance(raw, dict):
-        raise ValueError(f"{p}: top-level YAML must be a mapping, got {type(raw).__name__}")
-    return Scenario.model_validate(raw)
+    return Scenario.model_validate(_load_yaml_mapping(path))
 
 
 def load_instance(path: str | Path) -> Instance:
     """Parse and validate an instance.yaml file."""
-    p = Path(path)
-    raw = _yaml().load(p.read_text())
-    if not isinstance(raw, dict):
-        raise ValueError(f"{p}: top-level YAML must be a mapping, got {type(raw).__name__}")
-    return Instance.model_validate(raw)
+    return Instance.model_validate(_load_yaml_mapping(path))
 
 
 def dump_instance(instance: Instance, path: str | Path) -> None:
@@ -186,7 +184,7 @@ def dump_instance(instance: Instance, path: str | Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     data = instance.model_dump(mode="json", exclude_none=True)
     y = _yaml()
-    with p.open("w") as f:
+    with p.open("w", encoding="utf-8") as f:
         y.dump(data, f)
 
 
@@ -198,12 +196,15 @@ def _main(argv: list[str] | None = None) -> int:
         return 2
     path = Path(args[1])
     try:
-        raw = _yaml().load(path.read_text())
+        raw = _load_yaml_mapping(path)
     except OSError as e:
         print(f"error: cannot read {path}: {e}", file=sys.stderr)
         return 1
-    if not isinstance(raw, dict):
-        print(f"error: {path} top-level YAML must be a mapping", file=sys.stderr)
+    except YAMLError as e:
+        print(f"error: invalid YAML in {path}: {e}", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 1
     kind = raw.get("kind")
     model: type[BaseModel]
@@ -216,7 +217,7 @@ def _main(argv: list[str] | None = None) -> int:
         return 1
     try:
         model.model_validate(raw)
-    except Exception as e:
+    except ValidationError as e:
         print(f"invalid: {e}", file=sys.stderr)
         return 1
     print(f"ok: {path} ({kind})")
