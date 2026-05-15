@@ -35,7 +35,7 @@ class KASService(Service):
 
     @property
     def port(self) -> int:
-        return Ports.get_kas_port(self._kas_name)
+        return self.settings.get_kas_port(self._kas_name)
 
     @property
     def service_type(self) -> ServiceType:
@@ -47,25 +47,60 @@ class KASService(Service):
 
     @property
     def is_key_management(self) -> bool:
-        """Check if this is a key management KAS instance."""
+        """Check if this is a key management KAS instance.
+
+        When an instance.yaml pins this KAS, prefer the manifest's `mode`
+        field. Otherwise fall back to the legacy name-based heuristic.
+        """
+        instance = self.settings.load_instance()
+        if instance is not None and self._kas_name in instance.kas:
+            return instance.kas[self._kas_name].mode == "key_management"
         return Ports.is_km_kas(self._kas_name)
+
+    def _instance_paths(self) -> tuple[Path, Path] | None:
+        """Return (binary, worktree) for an instance-pinned KAS, or None."""
+        instance = self.settings.load_instance()
+        if instance is None:
+            return None
+        pin = instance.kas.get(self._kas_name)
+        if pin is None or pin.dist is None:
+            return None
+        binary = self.settings.platform_binary_for(pin.dist)
+        if not binary.exists():
+            raise FileNotFoundError(
+                f"KAS {self._kas_name} binary not found at {binary}. "
+                f"Run `otdf-sdk-mgr install release platform:{pin.dist}`."
+            )
+        worktree = binary.parent
+        version_file = binary.parent / ".version"
+        if version_file.exists():
+            for line in version_file.read_text().splitlines():
+                if line.startswith("worktree="):
+                    worktree = Path(line.split("=", 1)[1].strip())
+                    break
+        return binary, worktree
 
     def _generate_config(self) -> Path:
         """Generate the KAS config file from template."""
+        instance_paths = self._instance_paths()
+        if instance_paths is not None:
+            _, worktree = instance_paths
+            platform_dir = worktree
+        else:
+            platform_dir = self.settings._require_platform_dir()
+
         config_path = self.settings.get_kas_config_path(self._kas_name)
-        template_path = self.settings.kas_template_config
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        template_path = platform_dir / "opentdf-kas-mode.yaml"
 
         # Load platform config to get root_key
         platform_config = load_yaml(self.settings.platform_config)
         root_key = get_nested(platform_config, "services.kas.root_key", "")
 
         # Detect platform features to determine supported config options
-        features = PlatformFeatures.detect(self.settings.platform_dir)
-
-        # Use stderr if supported, otherwise stdout (v0.9.0 only supports stdout)
+        features = PlatformFeatures.detect(platform_dir)
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
-        # Base updates for all KAS instances
         updates = {
             "logger.type": "json",
             "logger.output": logger_output,
@@ -73,44 +108,43 @@ class KASService(Service):
             "services.kas.root_key": root_key,
         }
 
-        # Key management KAS instances need additional config
+        # Per-KAS features from instance.yaml override the legacy heuristic.
+        instance = self.settings.load_instance()
+        kas_pin = instance.kas.get(self._kas_name) if instance is not None else None
+        extra_features: dict[str, bool] = dict(kas_pin.features) if kas_pin is not None else {}
+
         if self.is_key_management:
             updates["services.kas.preview.key_management"] = True
             updates["services.kas.preview.ec_tdf_enabled"] = True
-            # registered_kas_uri should NOT have /kas suffix
             updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
+
+        for feature_key, feature_val in extra_features.items():
+            updates[f"services.kas.preview.{feature_key}"] = feature_val
 
         copy_yaml_with_updates(template_path, config_path, updates)
         return config_path
 
     def start(self) -> bool:
         """Start the KAS instance."""
-        # Ensure directories exist
         self.settings.ensure_directories()
-
-        # Kill any existing process on the port
         kill_process_on_port(self.port)
-
-        # Generate config
         config_path = self._generate_config()
 
-        # Build the command
-        cmd = [
-            "go",
-            "run",
-            "./service",
-            "start",
-            "--config-file",
-            str(config_path),
-        ]
+        instance_paths = self._instance_paths()
+        if instance_paths is not None:
+            binary, worktree = instance_paths
+            cmd = [str(binary), "start", "--config-file", str(config_path)]
+            cwd = worktree
+        else:
+            cmd = ["go", "run", "./service", "start", "--config-file", str(config_path)]
+            cwd = self.settings._require_platform_dir()
 
-        # Start the process
         log_file = self.settings.get_kas_log_path(self._kas_name)
 
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,
-            cwd=self.settings.platform_dir,
+            cwd=cwd,
             log_file=log_file,
             env={"OPENTDF_LOG_LEVEL": "info"},
         )
@@ -148,7 +182,12 @@ class KASService(Service):
 
 
 class KASManager:
-    """Manages all KAS instances."""
+    """Manages KAS instances.
+
+    When an `instance.yaml` is loaded, the managed set is restricted to the
+    KAS names listed in the manifest. Otherwise the legacy full set
+    (alpha/beta/gamma/delta/km1/km2) is managed.
+    """
 
     def __init__(
         self,
@@ -159,8 +198,13 @@ class KASManager:
         self._process_manager = process_manager or ProcessManager()
         self._instances: dict[str, KASService] = {}
 
-        # Create instances for all configured KAS
-        for kas_name in Ports.all_kas_names():
+        instance = settings.load_instance()
+        if instance is not None and instance.kas:
+            kas_names = list(instance.kas.keys())
+        else:
+            kas_names = Ports.all_kas_names()
+
+        for kas_name in kas_names:
             self._instances[kas_name] = KASService(
                 settings, kas_name, self._process_manager
             )
@@ -184,17 +228,19 @@ class KASManager:
         return results
 
     def start_standard(self) -> dict[str, bool]:
-        """Start only standard (non-km) KAS instances."""
+        """Start only standard (non-key-management) KAS instances under management."""
         results = {}
-        for name in Ports.standard_kas_names():
-            results[name] = self._instances[name].start()
+        for name, inst in self._instances.items():
+            if not inst.is_key_management:
+                results[name] = inst.start()
         return results
 
     def start_km(self) -> dict[str, bool]:
-        """Start only key management KAS instances."""
+        """Start only key-management KAS instances under management."""
         results = {}
-        for name in Ports.km_kas_names():
-            results[name] = self._instances[name].start()
+        for name, inst in self._instances.items():
+            if inst.is_key_management:
+                results[name] = inst.start()
         return results
 
     def get_all_info(self) -> list[ServiceInfo]:
