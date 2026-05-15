@@ -1,10 +1,12 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import os
 import shutil
 import sys
 import time
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Optional
 
 import httpx
 import typer
@@ -44,6 +46,18 @@ app = typer.Typer(
 )
 
 
+def _register_subapps() -> None:
+    """Defer imports so the schema dependency only loads when needed."""
+    from otdf_local.cli_instance import instance_app
+    from otdf_local.cli_scenario import scenario_app
+
+    app.add_typer(instance_app, name="instance")
+    app.add_typer(scenario_app, name="scenario")
+
+
+_register_subapps()
+
+
 def _show_provision_error(result: ProvisionResult, target: str) -> None:
     """Display provisioning error with stderr details."""
     print_error(f"{target} provisioning failed (exit code {result.return_code})")
@@ -75,9 +89,19 @@ def main(
             is_eager=True,
         ),
     ] = False,
+    instance: Annotated[
+        Optional[str],
+        typer.Option(
+            "--instance",
+            help='Named instance under tests/instances/. Defaults to "default" (or $OTDF_LOCAL_INSTANCE_NAME).',
+        ),
+    ] = None,
 ) -> None:
     """OpenTDF test environment management CLI."""
-    pass
+    if instance is not None:
+        os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance
+        # Invalidate the cached Settings so subsequent commands see the new value
+        get_settings.cache_clear()
 
 
 @app.command()
