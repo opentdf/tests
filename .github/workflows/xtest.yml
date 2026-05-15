@@ -82,6 +82,7 @@ jobs:
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
+      sdk-version-list: ${{ steps.version-info.outputs.sdk-version-list }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref }}"
       JS_REF: "${{ inputs.js-ref }}"
@@ -185,6 +186,15 @@ jobs:
 
             core.setOutput('all', JSON.stringify(versionData));
 
+            const sdkVersionList = [];
+            for (const [sdkType, refInfo] of Object.entries(versionData)) {
+              if (sdkType === 'platform') continue;
+              for (const { tag, err } of refInfo) {
+                if (!err) sdkVersionList.push(`${sdkType}@${tag}`);
+              }
+            }
+            core.setOutput('sdk-version-list', JSON.stringify(sdkVersionList));
+
             core.summary.addHeading('Versions under Test', 3);
 
             function artifactLink(sdkType, tag, release, head, source) {
@@ -263,12 +273,13 @@ jobs:
       pull-requests: write # Add comments to PRs
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
-      ENCRYPT_SDK: ${{ matrix.sdk }}
+      ENCRYPT_SDK: ${{ matrix.sdk-version }}
+      SKIP_RELEASED_PAIRS: ${{ github.event_name != 'workflow_dispatch' && !contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag) }}
     strategy:
       fail-fast: false
       matrix:
         platform-tag: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-list) }}
-        sdk: ["go", "java", "js"]
+        sdk-version: ${{ fromJSON(needs.resolve-versions.outputs.sdk-version-list) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -408,7 +419,7 @@ jobs:
         if: >-
           steps.detect-otdfctl.outputs.otdfctl-source != 'platform'
           && fromJson(steps.configure-go.outputs.heads)[0] != null
-          && env.FOCUS_SDK == 'go'
+          && startsWith(matrix.sdk-version, 'go@')
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         env:
           PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
@@ -456,7 +467,7 @@ jobs:
       - name: pre-release protocol buffers for java-sdk
         if: >-
           fromJson(steps.configure-java.outputs.heads)[0] != null
-          && (env.FOCUS_SDK == 'go' || env.FOCUS_SDK == 'java')
+          && (startsWith(matrix.sdk-version, 'go@') || startsWith(matrix.sdk-version, 'java@'))
           && contains(fromJSON(needs.resolve-versions.outputs.heads), matrix.platform-tag)
         run: |-
           echo "Replacing .env files for java-sdk..."
@@ -559,7 +570,8 @@ jobs:
       ######## RUN THE TESTS #############
       - name: Run legacy decryption tests
         run: |-
-          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_legacy.py
+          skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-decrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -568,7 +580,8 @@ jobs:
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v test_tdfs.py test_policytypes.py test_pqc.py
+          skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py test_pqc.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -578,7 +591,8 @@ jobs:
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" test_tdfs.py test_policytypes.py test_pqc.py
+          skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py test_pqc.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -673,18 +687,16 @@ jobs:
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        run: >-
-          uv run pytest
-          -ra
-          -v
-          --numprocesses auto
-          --dist loadscope
-          --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html
-          --self-contained-html
-          --audit-log-dir test-results/audit-logs
-          --sdks-encrypt "${ENCRYPT_SDK}"
-          --focus "$FOCUS_SDK"
-          test_abac.py
+        run: |-
+          skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
+          uv run pytest -ra -v --numprocesses auto --dist loadscope \
+            --html test-results/attributes-${FOCUS_SDK}-${PLATFORM_TAG}.html \
+            --self-contained-html \
+            --audit-log-dir test-results/audit-logs \
+            --sdks-encrypt "${ENCRYPT_SDK}" \
+            --focus "$FOCUS_SDK" \
+            $skip_flag \
+            test_abac.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -697,19 +709,24 @@ jobs:
           KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
 
+      - name: Sanitize sdk-version for artifact name
+        id: artifact-name
+        if: success() || failure()
+        run: echo "sdk_version=${ENCRYPT_SDK//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact
         if: success() || failure()
         with:
-          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ matrix.sdk }}-${{matrix.platform-tag}}
+          name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/*.html
 
       - name: Upload audit logs on failure
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: failure()
         with:
-          name: audit-logs-${{ matrix.sdk }}-${{ matrix.platform-tag }}
+          name: audit-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
 
@@ -765,9 +782,9 @@ jobs:
       contents: read
     steps:
       - name: Assert all matrix jobs passed
-        if: ${{ needs.xct.result == 'failure' || needs.xct.result == 'cancelled' }}
+        if: ${{ needs.xct.result == 'failure' || needs.xct.result == 'cancelled' || needs.xct.result == 'skipped' }}
         run: |-
-          echo "xct matrix had failures (overall result: ${XCT_RESULT}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
+          echo "xct matrix failed or was skipped (overall result: ${XCT_RESULT}). Marking xtest failed." >> "$GITHUB_STEP_SUMMARY"
           exit 1
         env:
           XCT_RESULT: ${{ needs.xct.result }}

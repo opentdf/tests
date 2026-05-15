@@ -1711,10 +1711,10 @@ class AuditLogAsserter:
 
         if matching:
             context.append("Matching logs:")
-            for log in matching[:10]:
-                context.append(
-                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
-                )
+            context.extend(
+                f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                for log in matching[:10]
+            )
             if len(matching) > 10:
                 context.append(f"  ... and {len(matching) - 10} more")
             context.append("")
@@ -1734,10 +1734,10 @@ class AuditLogAsserter:
             context.append(
                 f"Logs before timeout (last {len(recent_logs)} of {len(all_logs)}):"
             )
-            for log in recent_logs:
-                context.append(
-                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
-                )
+            context.extend(
+                f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                for log in recent_logs
+            )
 
         # Show timeout marker
         if timeout_time:
@@ -1751,10 +1751,10 @@ class AuditLogAsserter:
             context.append(
                 f"Logs AFTER timeout ({len(late_to_show)} of {len(late_logs)} late arrivals):"
             )
-            for log in late_to_show:
-                context.append(
-                    f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
-                )
+            context.extend(
+                f"  [{log.timestamp}] {log.service_name}: {log.raw_line}"
+                for log in late_to_show
+            )
             if len(late_logs) > 10:
                 context.append(f"  ... and {len(late_logs) - 10} more late arrivals")
             context.append("")
