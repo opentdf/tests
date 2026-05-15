@@ -60,6 +60,22 @@ def is_type_or_list_of_types(t: typing.Any) -> typing.Callable[[str], typing.Any
     return is_a
 
 
+def sdk_spec_type(v: str) -> str:
+    """Validate a whitespace-separated list of SDK specifiers: 'go', 'go@*', 'go@main java@v1.2.0', etc."""
+    specs = v.split()
+    if not specs:
+        raise ValueError("At least one SDK specifier is required")
+    for spec in specs:
+        parts = spec.split("@", 1)
+        if not tdfs.is_sdk_type(parts[0]):
+            raise ValueError(f"Invalid SDK type: {parts[0]!r}")
+        if len(parts) == 2 and not parts[1]:
+            raise ValueError(
+                f"Empty version in SDK specifier {spec!r}; use e.g. go@main, go@v0.18.0, go@*"
+            )
+    return v
+
+
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
@@ -93,19 +109,24 @@ def pytest_addoption(parser: pytest.Parser):
         help="disable automatic KAS audit log collection",
     )
     parser.addoption(
+        "--skip-released-pairs",
+        action="store_true",
+        help="skip round-trip tests where all SDKs are released artifacts",
+    )
+    parser.addoption(
         "--sdks",
-        help=f"select which sdks to run by default, unless overridden, one or more of {englist(typing.get_args(tdfs.sdk_type))}",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
+        help=f"select which sdks to run by default, unless overridden; one or more of {englist(typing.get_args(tdfs.sdk_type))}, optionally version-qualified (e.g. go@main, go@v0.18.0, go@*)",
+        type=sdk_spec_type,
     )
     parser.addoption(
         "--sdks-decrypt",
-        help="select which sdks to run for decrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
+        help="select which sdks to run for decrypt only; accepts same format as --sdks",
+        type=sdk_spec_type,
     )
     parser.addoption(
         "--sdks-encrypt",
-        help="select which sdks to run for encrypt only",
-        type=is_type_or_list_of_types(tdfs.sdk_type),
+        help="select which sdks to run for encrypt only; accepts same format as --sdks",
+        type=sdk_spec_type,
     )
 
 
@@ -139,44 +160,36 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return a
 
-    def defaulted_list_opt[T](
-        names: list[str], t: typing.Any, default: list[T]
-    ) -> list[T]:
+    def sdk_specs_opt(names: list[str]) -> list[str]:
+        """Return SDK specifier tokens from the first matching option, or all sdk types."""
         for name in names:
             v = metafunc.config.getoption(name)
             if v:
-                return cast(list[T], list_opt(name, t))
-        return default
+                return v.split()
+        return list(typing.get_args(tdfs.sdk_type))
 
     subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
-        encrypt_sdks: list[tdfs.sdk_type] = []
-        encrypt_sdks = defaulted_list_opt(
-            ["--sdks-encrypt", "--sdks"],
-            tdfs.sdk_type,
-            list(typing.get_args(tdfs.sdk_type)),
-        )
-        # convert list of sdk_type to list of SDK objects
-        e_sdks = [
-            v
-            for sdks in [tdfs.all_versions_of(sdk) for sdk in encrypt_sdks]
-            for v in sdks
-        ]
+        try:
+            e_sdks = [
+                sdk
+                for spec in sdk_specs_opt(["--sdks-encrypt", "--sdks"])
+                for sdk in tdfs.parse_sdk_spec(spec)
+            ]
+        except (FileNotFoundError, ValueError) as e:
+            raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
-        decrypt_sdks: list[tdfs.sdk_type] = []
-        decrypt_sdks = defaulted_list_opt(
-            ["--sdks-decrypt", "--sdks"],
-            tdfs.sdk_type,
-            list(typing.get_args(tdfs.sdk_type)),
-        )
-        d_sdks = [
-            v
-            for sdks in [tdfs.all_versions_of(sdk) for sdk in decrypt_sdks]
-            for v in sdks
-        ]
+        try:
+            d_sdks = [
+                sdk
+                for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
+                for sdk in tdfs.parse_sdk_spec(spec)
+            ]
+        except (FileNotFoundError, ValueError) as e:
+            raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
@@ -201,6 +214,18 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         else:
             containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
+
+
+def pytest_runtest_setup(item: pytest.Item):
+    if not item.config.getoption("--skip-released-pairs", default=False):
+        return
+    params = getattr(item, "callspec", None)
+    if params is None:
+        return
+    e = params.params.get("encrypt_sdk")
+    d = params.params.get("decrypt_sdk")
+    if e is not None and d is not None and e.is_released() and d.is_released():
+        pytest.skip(f"released-only pair ({e} × {d})")
 
 
 # Core fixtures

@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
@@ -22,6 +22,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 sdk_type = Literal["go", "java", "js"]
+
+
+def is_sdk_type(val: str) -> TypeIs[sdk_type]:
+    return val in get_args(sdk_type)
+
 
 focus_type = Literal[sdk_type, "all"]
 
@@ -354,6 +359,7 @@ def simple_container(container: container_type) -> container_type:
 
 class SDK:
     sdk: sdk_type
+    version: str
     _supports: dict[feature_type, bool]
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
@@ -377,6 +383,13 @@ class SDK:
 
     def __hash__(self) -> int:
         return hash((self.sdk, self.version))
+
+    def is_released(self) -> bool:
+        return bool(
+            re.fullmatch(
+                r"(?:sdk/)?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", self.version
+            )
+        )
 
     def encrypt(
         self,
@@ -505,14 +518,33 @@ class SDK:
 
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
-    versions: list[SDK] = []
     sdk_path = os.path.join("sdk", sdk, "dist")
     if not os.path.isdir(sdk_path):
         return []
-    for version in os.listdir(sdk_path):
-        if os.path.isdir(os.path.join(sdk_path, version)):
-            versions.append(SDK(sdk, version))
-    return versions
+    return [
+        SDK(sdk, version)
+        for version in os.listdir(sdk_path)
+        if os.path.isdir(os.path.join(sdk_path, version))
+    ]
+
+
+def parse_sdk_spec(spec: str) -> list[SDK]:
+    """Parse an SDK specifier into SDK objects.
+
+    Supports:
+    - "go" or "go@*" → all versions in sdk/go/dist/
+    - "go@main" or "go@v0.18.0" → only that specific version
+    """
+    if "@" in spec:
+        sdk_type_val, version = spec.split("@", 1)
+        if not is_sdk_type(sdk_type_val):
+            raise ValueError(f"Unknown SDK type: {sdk_type_val!r}")
+        if version == "*":
+            return all_versions_of(sdk_type_val)
+        return [SDK(sdk_type_val, version)]
+    if not is_sdk_type(spec):
+        raise ValueError(f"Unknown SDK type: {spec!r}")
+    return all_versions_of(spec)
 
 
 def skip_if_unsupported(sdk: SDK, *features: feature_type):
