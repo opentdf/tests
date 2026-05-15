@@ -79,6 +79,16 @@ def sdk_spec_type(v: str) -> str:
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
+        "--scenario",
+        help="path to scenarios.yaml; --sdks-encrypt/--sdks-decrypt/--containers default from it",
+        type=Path,
+    )
+    parser.addoption(
+        "--instance",
+        help="otdf-local instance name; sets OTDF_LOCAL_INSTANCE_NAME for child tooling",
+        type=str,
+    )
+    parser.addoption(
         "--audit-log-dir",
         help="directory to write audit logs on test failure (default: tmp/audit-logs)",
         type=Path,
@@ -128,6 +138,57 @@ def pytest_addoption(parser: pytest.Parser):
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
     )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Apply --scenario defaults and --instance env-var threading.
+
+    When `--scenario PATH` is given, missing `--sdks-encrypt`, `--sdks-decrypt`,
+    and `--containers` options are populated from the scenario file. Options
+    explicitly passed on the CLI always win. `--instance NAME` is propagated
+    via `OTDF_LOCAL_INSTANCE_NAME` so any child `otdf-local` invocation sees
+    the same instance.
+    """
+    import os
+
+    instance = config.getoption("--instance")
+    if instance:
+        os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance
+
+    scenario_path = config.getoption("--scenario")
+    if not scenario_path:
+        return
+    try:
+        from otdf_sdk_mgr.schema import (
+            installed_json_for,
+            load_scenario,
+            scenario_to_pytest_sdks,
+        )
+    except ImportError:
+        # otdf-sdk-mgr may not be installed in a minimal pytest env.
+        return
+    scenario = load_scenario(scenario_path)
+    # `sdk@<version>` tokens come from the install record so they match the
+    # dist directories #446's parser walks under `xtest/sdk/<lang>/dist/`.
+    # If the user passed --sdks-encrypt / --sdks-decrypt explicitly, their
+    # tokens win and we skip the resolution step entirely.
+    need_resolve = (
+        (not config.getoption("--sdks-encrypt") and scenario.sdks.encrypt)
+        or (not config.getoption("--sdks-decrypt") and scenario.sdks.decrypt)
+    )
+    if need_resolve:
+        try:
+            tokens = scenario_to_pytest_sdks(scenario, installed_json_for(scenario_path))
+        except FileNotFoundError as e:
+            raise pytest.UsageError(str(e)) from e
+        if not config.getoption("--sdks-encrypt") and tokens["encrypt"]:
+            config.option.sdks_encrypt = " ".join(tokens["encrypt"])
+        if not config.getoption("--sdks-decrypt") and tokens["decrypt"]:
+            config.option.sdks_decrypt = " ".join(tokens["decrypt"])
+    if not config.getoption("--containers") and scenario.suite.containers:
+        config.option.containers = scenario.suite.containers
+    if not instance and scenario.instance.metadata.name:
+        os.environ["OTDF_LOCAL_INSTANCE_NAME"] = scenario.instance.metadata.name
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
