@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,8 +14,10 @@ from otdf_sdk_mgr.schema import (
     SdkPin,
     SourceRef,
     dump_instance,
+    installed_json_for,
     load_instance,
     load_scenario,
+    scenario_to_pytest_sdks,
 )
 from pydantic import ValidationError
 
@@ -124,3 +127,56 @@ def test_unknown_api_version_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(ValidationError):
         load_scenario(bad)
+
+
+def test_installed_json_for_swaps_suffix(tmp_path: Path) -> None:
+    assert installed_json_for(tmp_path / "x.yaml") == tmp_path / "x.installed.json"
+    assert installed_json_for(tmp_path / "y.yml") == tmp_path / "y.installed.json"
+    # No extension on the scenario path → still produces a .installed.json sibling.
+    assert installed_json_for(tmp_path / "noext") == tmp_path / "noext.installed.json"
+
+
+def _write_scenario(tmp_path: Path) -> tuple[Path, Path]:
+    scenario_path = tmp_path / "scenario.yaml"
+    scenario_path.write_text(_minimal_scenario_yaml(), encoding="utf-8")
+    return scenario_path, installed_json_for(scenario_path)
+
+
+def test_scenario_to_pytest_sdks_uses_dist_dir_name(tmp_path: Path) -> None:
+    scenario_path, installed_path = _write_scenario(tmp_path)
+    scenario = load_scenario(scenario_path)
+    # Simulate what `otdf-sdk-mgr install scenario` writes: paths whose
+    # last segment is the dist-dir name xtest will see under sdk/<lang>/dist/.
+    installed_path.write_text(
+        json.dumps(
+            {
+                "manifest": str(scenario_path),
+                "sdks": {
+                    "go": {"version": "lts", "path": str(tmp_path / "sdk/go/dist/v0.24.0")},
+                    "java": {"version": "0.7.8", "path": str(tmp_path / "sdk/java/dist/v0.7.8")},
+                },
+            }
+        )
+    )
+    out = scenario_to_pytest_sdks(scenario, installed_path)
+    assert out == {"encrypt": ["go@v0.24.0"], "decrypt": ["java@v0.7.8"]}
+
+
+def test_scenario_to_pytest_sdks_missing_installed_raises_with_hint(tmp_path: Path) -> None:
+    scenario_path, installed_path = _write_scenario(tmp_path)
+    scenario = load_scenario(scenario_path)
+    with pytest.raises(FileNotFoundError, match="install scenario"):
+        scenario_to_pytest_sdks(scenario, installed_path)
+
+
+def test_scenario_to_pytest_sdks_missing_sdk_entry_raises(tmp_path: Path) -> None:
+    scenario_path, installed_path = _write_scenario(tmp_path)
+    scenario = load_scenario(scenario_path)
+    # Forget to record `java`'s install — should raise ValueError, not silently drop.
+    installed_path.write_text(
+        json.dumps(
+            {"sdks": {"go": {"version": "lts", "path": str(tmp_path / "sdk/go/dist/v0.24.0")}}}
+        )
+    )
+    with pytest.raises(ValueError, match="java"):
+        scenario_to_pytest_sdks(scenario, installed_path)

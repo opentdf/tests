@@ -7,6 +7,7 @@ definition.
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -186,6 +187,65 @@ def dump_instance(instance: Instance, path: str | Path) -> None:
     y = _yaml()
     with p.open("w", encoding="utf-8") as f:
         y.dump(data, f)
+
+
+def installed_json_for(scenario_path: str | Path) -> Path:
+    """Path to the install-record file `otdf-sdk-mgr install scenario` writes.
+
+    Convention: alongside the scenario, with `.installed.json` swapped in for
+    the file's suffix. e.g. `xtest/scenarios/x.yaml` →
+    `xtest/scenarios/x.installed.json`.
+    """
+    p = Path(scenario_path)
+    return p.with_suffix(".installed.json")
+
+
+def scenario_to_pytest_sdks(
+    scenario: Scenario,
+    installed_json_path: str | Path,
+) -> dict[str, list[str]]:
+    """Turn a Scenario's encrypt/decrypt SDK pins into xtest `--sdks-*` tokens.
+
+    After PR #446, xtest's `--sdks`, `--sdks-encrypt`, and `--sdks-decrypt`
+    accept whitespace-separated `sdk@version` specifiers where `version`
+    must match a directory name under `xtest/sdk/<lang>/dist/`. Scenario
+    version fields may be aliases (`lts`, `tip`) that only resolve after
+    `otdf-sdk-mgr install scenario` writes a sibling `.installed.json`
+    recording the dist paths actually laid down on disk.
+
+    Returns `{"encrypt": [...], "decrypt": [...]}` with each list containing
+    `sdk@<dist-name>` tokens. Raises `FileNotFoundError` (with an actionable
+    hint) when `installed.json` is missing, and `ValueError` when the
+    scenario references an SDK the install record doesn't cover.
+    """
+    p = Path(installed_json_path)
+    if not p.is_file():
+        raise FileNotFoundError(
+            f"{p} not found. Run `otdf-sdk-mgr install scenario <scenario.yaml>` "
+            "first so the dist names get resolved; scenario_to_pytest_sdks needs "
+            "the installed record to translate aliases like `lts`/`tip` into the "
+            "concrete `sdk@version` tokens xtest's pytest options expect."
+        )
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{p}: malformed installed.json: {e}") from e
+    sdk_map = data.get("sdks", {}) if isinstance(data, dict) else {}
+
+    def token(sdk_name: str) -> str:
+        entry = sdk_map.get(sdk_name)
+        if not isinstance(entry, dict) or "path" not in entry:
+            raise ValueError(
+                f"Scenario references SDK '{sdk_name}' but {p} has no install record "
+                f"for it. Re-run `otdf-sdk-mgr install scenario`."
+            )
+        dist_name = Path(str(entry["path"])).name
+        return f"{sdk_name}@{dist_name}"
+
+    return {
+        "encrypt": [token(name) for name in scenario.sdks.encrypt],
+        "decrypt": [token(name) for name in scenario.sdks.decrypt],
+    }
 
 
 def _main(argv: list[str] | None = None) -> int:
