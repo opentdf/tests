@@ -22,11 +22,11 @@ Two ideas to internalize before reading the steps:
 
 ### Step 1 — Pull the Jira context
 
-If a Jira key was given, run both — comments often carry scope refinements that aren't in the description:
+If a Jira key was given, run both — `view` takes the key positionally, `comment list` requires `--key`; comments often carry scope refinements that aren't in the description:
 
 ```bash
 acli jira workitem view <JIRA-KEY> --fields '*all' --json
-acli jira workitem comment list <JIRA-KEY>
+acli jira workitem comment list --key <JIRA-KEY>
 ```
 
 Extract Issue Type, summary, description, status, and any comments about scope or implementation notes. If no Jira key, the user's description IS the spec input.
