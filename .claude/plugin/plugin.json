@@ -4,6 +4,7 @@
   "description": "Jira-ticket-driven scenarios for the OpenTDF test harness. Pulls ticket context from Jira (acli) — any ticket type, including bugs, feature stories, and PR-driven work — provisions pinned platform/KAS/SDK versions or refs (released versions, main, feature branches, PR SHAs), runs the xtest pytest suite, and tears down. Useful for QA, platform/SDK developers writing tests for new features first, and downstream first/third-party integrators.",
   "skills_dir": "../skills",
   "skills": [
+    "feature-design",
     "scenario-from-ticket",
     "scenario-matrix",
     "scenario-up",
@@ -32,6 +33,7 @@
       "Bash(acli jira workitem link list *)",
       "Bash(acli jira project view *)",
       "Write(xtest/scenarios/**)",
+      "Write(xtest/features/**)",
       "Write(xtest/bug_*_test.py)",
       "Write(tests/instances/**)"
     ]
