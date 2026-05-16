@@ -92,7 +92,7 @@ Likely candidates: `test_tdfs.py` (roundtrip), `test_abac.py` (ABAC), `test_lega
 
 ## Step 5 — Write `xtest/scenarios/<id>.yaml`
 
-The schema (`otdf_sdk_mgr.schema.Scenario`) rejects unknown fields. Each pin (`PlatformPin`, `KasPin`) requires **exactly one** of `dist:`, `source:`, or `image:`. `image:` is reserved for forward-compat and rejected today — pick `dist:` or `source:`.
+The canonical field list (titles, types, defaults, `anyOf` branches) lives in `xtest/schema/scenario.schema.json` — `Read` it whenever you need to know what's allowed. Each pin (`PlatformPin`, `KasPin`) requires **exactly one** of `dist:`, `source:`, or `image:`. `image:` is reserved for forward-compat and rejected today — pick `dist:` or `source:`.
 
 Released-version pin (typical Bug scenario):
 
