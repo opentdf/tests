@@ -17,11 +17,11 @@ The Jira key also becomes the working **branch name** (`<JIRA-KEY>-repro` for Bu
 
 ## Step 1 — Pull the Jira ticket into context
 
-**Always run BOTH commands**. Don't skip the comment list — comments often carry the most recent reproduction status, "what changed" notes, or "fixed by PR #N" pointers that aren't in the original description:
+**Always run BOTH commands** — exactly as shown; the two subcommands take the key differently (`view` is positional, `comment list` requires `--key`). Don't skip the comment list — comments often carry the most recent reproduction status, "what changed" notes, or "fixed by PR #N" pointers that aren't in the original description:
 
 ```bash
 acli jira workitem view <JIRA-KEY> --fields '*all' --json
-acli jira workitem comment list <JIRA-KEY>
+acli jira workitem comment list --key <JIRA-KEY>
 ```
 
 From the JSON output of the first command, extract:
