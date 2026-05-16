@@ -1,0 +1,49 @@
+{
+  "name": "opentdf-test-harness",
+  "version": "0.1.0",
+  "description": "Jira-ticket-driven scenarios for the OpenTDF test harness. Pulls ticket context from Jira (acli) — any ticket type, including bugs, feature stories, and PR-driven work — provisions pinned platform/KAS/SDK versions or refs (released versions, main, feature branches, PR SHAs), runs the xtest pytest suite, and tears down. Useful for QA, platform/SDK developers writing tests for new features first, and downstream first/third-party integrators.",
+  "skills_dir": "../skills",
+  "skills": [
+    "feature-design",
+    "scenario-from-ticket",
+    "scenario-matrix",
+    "scenario-up",
+    "scenario-run",
+    "scenario-tear-down",
+    "instance-status"
+  ],
+  "requirements": [
+    "uv (python package manager) on PATH",
+    "go toolchain (platform binaries are built from source)",
+    "git (for worktrees of opentdf/platform)",
+    "docker (for keycloak/postgres dependencies)",
+    "acli (Atlassian CLI; needed for the scenario-from-ticket skill)",
+    "gh (GitHub CLI; needed for scenario-matrix to resolve PR refs)"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(uv run otdf-local *)",
+      "Bash(uv run otdf-sdk-mgr *)",
+      "Bash(uv run pytest *)",
+      "Bash(acli jira workitem view *)",
+      "Bash(acli jira workitem search *)",
+      "Bash(acli jira workitem comment list *)",
+      "Bash(acli jira workitem comment create *)",
+      "Bash(acli jira workitem attachment list *)",
+      "Bash(acli jira workitem link list *)",
+      "Bash(acli jira project view *)",
+      "Skill(feature-design)",
+      "Skill(scenario-from-ticket)",
+      "Skill(scenario-matrix)",
+      "Skill(scenario-up)",
+      "Skill(scenario-run)",
+      "Skill(scenario-tear-down)",
+      "Skill(instance-status)",
+      "Write(xtest/scenarios/**)",
+      "Write(xtest/features/**)",
+      "Write(xtest/bug_*_test.py)",
+      "Write(tests/instances/**)"
+    ]
+  },
+  "permission_notes": "acli jira write-paths intentionally excluded: edit/delete/transition/assign/archive/clone/create/create-bulk/link create/watcher add/comment update/comment delete. Add them explicitly via .claude/settings.local.json if your team needs them; the default plugin is read+comment only."
+}

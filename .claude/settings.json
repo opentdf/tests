@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run otdf-local *)",
+      "Bash(uv run otdf-sdk-mgr *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv sync *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(gh api *)",
+      "Bash(gh issue view *)",
+      "Bash(gh pr view *)",
+      "Bash(gh run *)",
+      "Bash(acli jira workitem view *)",
+      "Bash(acli jira workitem search *)",
+      "Bash(acli jira workitem comment list *)",
+      "Bash(acli jira workitem comment create *)",
+      "Bash(acli jira workitem attachment list *)",
+      "Bash(acli jira workitem link list *)",
+      "Bash(acli jira workitem watcher list *)",
+      "Bash(acli jira project view *)",
+      "Bash(acli jira board view *)",
+      "Bash(acli jira sprint view *)",
+      "Skill(*)",
+      "Write(xtest/scenarios/**)",
+      "Write(xtest/features/**)",
+      "Write(xtest/bug_*_test.py)",
+      "Write(tests/instances/**)",
+      "Write(.claude/tmp/**)"
+    ]
+  }
+}
