@@ -27,9 +27,7 @@
       "Bash(acli jira board view *)",
       "Bash(acli jira sprint view *)",
       "Skill(*)",
-      "Write(xtest/scenarios/**)",
-      "Write(xtest/features/**)",
-      "Write(xtest/bug_*_test.py)",
+      "Write(xtest/**)",
       "Write(tests/instances/**)",
       "Write(.claude/tmp/**)"
     ]

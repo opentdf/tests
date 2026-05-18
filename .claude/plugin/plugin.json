@@ -44,9 +44,7 @@
       "Skill(scenario-run)",
       "Skill(scenario-tear-down)",
       "Skill(instance-status)",
-      "Write(xtest/scenarios/**)",
-      "Write(xtest/features/**)",
-      "Write(xtest/bug_*_test.py)",
+      "Write(xtest/**)",
       "Write(tests/instances/**)"
     ]
   },
