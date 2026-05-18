@@ -36,14 +36,30 @@ Extract Issue Type, summary, description, status, and any comments about scope o
 Draft the full spec body and the per-repo todo lists inline in the reply. Don't ask the user one field at a time — produce a complete first draft they can react to:
 
 - **Feature flag name** — snake_case identifier derived from the Jira summary. Becomes the `supports("<name>")` gate string AND the `feature_type` entry in `xtest/tdfs.py`. Validate it's a valid Python identifier and doesn't collide with an existing `feature_type` member.
-- **Touched repos** — default set is `tests, platform, sdk-go, sdk-java, sdk-web`. Trim or expand based on what the ticket says. Pure platform features skip the SDK repos; pure SDK-only features skip platform; `tests` is always present (the dormant scenario + tdfs.py entry has to live there).
-- **Per-repo todo lists** — 2–4 bullets per repo:
-  - `tests` — register the feature in `feature_type`, author the scenario, draft the test gated on `supports("<feature>")`.
-  - `platform` — service-side implementation (KAS path, policy plumbing, etc.) and any env-var handling in the dev harness (e.g. honoring `XT_WITH_<FEATURE>`).
-  - `sdk-go` / `sdk-java` / `sdk-web` — encrypt/decrypt path implementation, plus a `supports <feature>` case in that SDK's `cli.sh` source. **Don't pin the version bound in the spec** — the implementing engineer sets the `awk` predicate at PR time, since the bound depends on which release will ship the impl.
-- **Branch name** — `<JIRA-KEY>-<feature-slug>`, the same string across every touched repo so `feature-orchestrate` (and the user) can find each repo's PR by branch alone.
+- **Touched cells** — the spec divides work into *cells of effort*, not just repos. The platform monorepo holds proto definitions, the Go SDK, KAS service code, and shared libraries; a feature often touches multiple cells *inside* `platform` plus one or more standalone SDK repos. Default cells when a feature spans the whole stack:
+  - `tests` — always present (dormant scenario + `feature_type` entry); no `path:` since it IS the current repo.
+  - `platform-proto` — when the feature changes wire format (`.proto` edits + `buf generate`). The bindings it produces are an upstream dependency for every SDK cell. `path: platform`.
+  - `platform-service` — KAS path / policy plumbing / dev-harness env-var handling. `path: platform`.
+  - `platform-go-sdk` — Go SDK encrypt/decrypt path (lives in the platform monorepo at `sdk/`). `path: platform`.
+  - `java-sdk` — Java SDK. `path: java-sdk` (standalone repo).
+  - `web-sdk` — JS/TS SDK. `path: web-sdk` (standalone repo).
+  - `otdfctl` — Go CLI. `path: otdfctl`. Rare; usually only when the feature surfaces in the CLI directly.
 
-Present the draft, then ask exactly one composite question: "Anything to redirect — feature name, touched repos, todo items, branch?" Apply edits in a single revision rather than turn-by-turn. The user can always drop into plain chat if they want to think out loud — answer normally and re-invoke this skill once the design firms up.
+  Pure platform-internal features skip the SDK cells. SDK-only features skip the platform cells. Trim aggressively.
+
+- **`path:`** — for every non-`tests` cell, set `path:` to the sibling directory under `~/Documents/GitHub/opentdf/`. Multiple cells can share a `path` value (the orchestrator creates a separate worktree per cell, each on its own branch).
+
+- **`depends_on:`** — list other cell keys whose work must finish before this cell can adopt their output. The canonical case: every cell that consumes regenerated bindings declares `depends_on: [platform-proto]` whenever the feature changes proto. Without `depends_on`, the orchestrator runs cells in parallel.
+
+- **Per-cell todo lists** — 2-4 bullets per cell:
+  - `tests` — register the feature in `feature_type`, author the scenario, draft the test gated on `supports("<feature>")`.
+  - `platform-proto` — edit the `.proto`, run `buf generate`, commit the regenerated stubs across Go / Java / JS subdirs.
+  - `platform-service` — implement the server-side change; honor any new env var the test harness uses (e.g. `XT_WITH_<FEATURE>`).
+  - `platform-go-sdk` / `java-sdk` / `web-sdk` / `otdfctl` — implement the client encrypt/decrypt path, plus a `supports <feature>` case in that SDK's `cli.sh` source. **Don't pin the version bound in the spec** — the implementing engineer sets the `awk` predicate at PR time, since the bound depends on which release ships the impl.
+
+- **Branch names** — `<JIRA-KEY>-<cell-key>` (e.g. `DSPX-2719-platform-proto`, `DSPX-2719-java-sdk`). Cell-specific rather than uniform-across-repos because the orchestrator creates a separate worktree per cell, each on its own branch — multiple cells sharing the same `path` would otherwise collide.
+
+Present the draft, then ask exactly one composite question: "Anything to redirect — feature name, touched cells, todo items, dependency edges, branches?" Apply edits in a single revision rather than turn-by-turn. The user can always drop into plain chat if they want to think out loud — just answer them and re-invoke this skill once the design firms up.
 
 If no Jira key was given AND the user's description doesn't pin down a clear scope (feature flag name, touched repos, intended behavior), bail rather than fabricate:
 
@@ -67,25 +83,49 @@ metadata:
   created: <YYYY-MM-DD>
 repos:
   tests:
-    branch: <JIRA-KEY>-<feature-slug>
+    branch: <JIRA-KEY>-tests
     todo:
       - Register "<feature-name>" in xtest/tdfs.py feature_type
       - Author scenario + draft test (via scenario-from-ticket)
-  platform:
-    branch: <JIRA-KEY>-<feature-slug>
-    todo: [ ... ]
-  sdk-go:
-    branch: <JIRA-KEY>-<feature-slug>
+  platform-proto:                          # cell key, not repo name
+    path: platform                         # which sibling repo this lives in
+    branch: <JIRA-KEY>-platform-proto
     todo:
-      - Implement <feature> in the encrypt/decrypt path
-      - Add `supports <feature>` case to cli.sh with version-bound awk predicate
-  sdk-java: { branch: ..., todo: [ ... ] }
-  sdk-web:  { branch: ..., todo: [ ... ] }
+      - Edit <service>.proto, add <RPC> with <fields>
+      - Run buf generate; commit regenerated Go/Java/JS stubs
+  platform-service:
+    path: platform
+    branch: <JIRA-KEY>-platform-service
+    depends_on: [platform-proto]           # waits for proto cell
+    todo:
+      - Implement the new RPC handler in the KAS service
+      - Honor XT_WITH_<FEATURE> in the dev test harness
+  platform-go-sdk:
+    path: platform
+    branch: <JIRA-KEY>-platform-go-sdk
+    depends_on: [platform-proto]
+    todo:
+      - Implement <feature> in the SDK's encrypt path
+      - Add `supports <feature>` case to sdk/go/cli.sh
+  java-sdk:
+    path: java-sdk
+    branch: <JIRA-KEY>-java-sdk
+    depends_on: [platform-proto]
+    todo:
+      - Implement <feature> in the Java SDK encrypt path
+      - Add `supports <feature>` case to sdk/java/cli.sh
+  web-sdk:
+    path: web-sdk
+    branch: <JIRA-KEY>-web-sdk
+    depends_on: [platform-proto]
+    todo:
+      - Implement <feature> in the JS SDK encrypt path
+      - Add `supports <feature>` case to sdk/js/cli.sh
 scenarios:
   - xtest/scenarios/<jira-key-lowercased>.yaml
 ```
 
-PR status (open/merged/CI passing) deliberately is NOT in the spec — it's auto-discovered from `gh pr list --search "head:<branch>"` per repo whenever something asks "where are we?" The spec is a declaration of intent.
+PR status (open/merged/CI passing) deliberately is NOT in the spec — it's auto-discovered from `gh pr list --search "head:<branch>"` per repo whenever something asks "where are we?" The spec is a declaration of intent. The orchestrator (`feature-orchestrate`) reads this file and fans out one subagent per cell, respecting `depends_on` waves.
 
 ### Step 4 — Drive the tests-side artifacts
 
