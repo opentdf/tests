@@ -299,6 +299,19 @@ def build_prompt(spec: FeatureSpec, cell: Cell) -> str:
 PR_URL_RE = re.compile(r"https://github\.com/[^\s]+/pull/\d+")
 
 
+def check_existing_pr(repo: Path, branch: str) -> str | None:
+    """Return the URL of an open PR for this branch in the given repo, or None."""
+    result = subprocess.run(
+        ["gh", "pr", "list", "--head", branch, "--json", "url", "--jq", ".[0].url"],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return None
+
+
 @dataclass
 class CellResult:
     cell: Cell
@@ -316,7 +329,16 @@ def run_cell(
     transcripts_dir: Path,
     timeout_s: int,
     model: str,
+    force: bool = False,
 ) -> CellResult:
+    # Idempotency: skip cells whose branch already has an open PR, unless --force.
+    if not force:
+        repo = OPENTDF_ROOT / (cell.path or "")
+        if repo.is_dir():
+            existing_pr = check_existing_pr(repo, cell.branch)
+            if existing_pr:
+                return CellResult(cell, Path(), Path(), True, existing_pr, None)
+
     try:
         wt = ensure_worktree(spec, cell)
     except Exception as e:
@@ -442,6 +464,10 @@ def run(
     model: Annotated[
         str, typer.Option("--model", help="Sub-agent model alias.")
     ] = "sonnet",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-run cells even if they already have open PRs."),
+    ] = False,
     transcripts_dir: Annotated[
         Path,
         typer.Option(
@@ -481,14 +507,20 @@ def run(
             typer.echo(f"  Wave {i}:")
             for cell in wave:
                 if cell.key == "tests":
+                    existing = check_existing_pr(TESTS_REPO, cell.branch)
+                    pr_note = f" [PR EXISTS: {existing}]" if existing else ""
                     typer.echo(
                         f"    - {cell.key}: path=(tests repo) branch={cell.branch}"
-                        f" action=push+draft-PR"
+                        f" action=push+draft-PR{pr_note}"
                     )
                 else:
+                    repo = OPENTDF_ROOT / (cell.path or "")
+                    existing = check_existing_pr(repo, cell.branch) if repo.is_dir() else None
+                    pr_note = f" [PR EXISTS: {existing}]" if existing else ""
                     wt = worktree_for(spec, cell)
                     typer.echo(
-                        f"    - {cell.key}: path={cell.path} branch={cell.branch} worktree={wt}"
+                        f"    - {cell.key}: path={cell.path} branch={cell.branch}"
+                        f" worktree={wt}{pr_note}"
                     )
         return
 
@@ -512,6 +544,7 @@ def run(
                 transcripts_dir=transcripts_dir,
                 timeout_s=timeout_s,
                 model=model,
+                force=force,
             )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(runnable))) as ex:

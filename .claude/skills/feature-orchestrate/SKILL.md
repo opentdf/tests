@@ -26,7 +26,7 @@ Before dispatching, run a dry-run so the user can confirm the topology and pinni
 uv run otdf-sdk-mgr orchestrate run xtest/features/<name>.yaml --dry-run
 ```
 
-The output names each cell, its target repo path, the branch it'll work on, and the worktree path the orchestrator will create (or `action=push+draft-PR` for the `tests` cell). Each wave is a set of cells with no dependencies between them; cells in a later wave have at least one `depends_on` edge into an earlier wave.
+The output names each cell, its target repo path, the branch it'll work on, and the worktree path the orchestrator will create (or `action=push+draft-PR` for the `tests` cell). Cells that already have an open PR are annotated with `[PR EXISTS: <url>]` — those will be skipped on the real run (no subagent launched). Each wave is a set of cells with no dependencies between them; cells in a later wave have at least one `depends_on` edge into an earlier wave.
 
 Surface the dry-run output to the user verbatim. If anything looks wrong (a cell going to the wrong repo, a missing `depends_on` edge, a stale branch name), ask the user to fix the spec via `feature-design` (or edit it directly) before proceeding.
 
@@ -38,7 +38,9 @@ When the user confirms, run for real:
 uv run otdf-sdk-mgr orchestrate run xtest/features/<name>.yaml
 ```
 
-For each cell, the orchestrator:
+The run is **idempotent**: cells whose branch already has an open PR are reported as `OK` with the existing PR URL and no subagent is launched. Re-running after a partial failure resumes from where it left off — already-done cells are skipped, failed or not-yet-started cells are dispatched. Use `--force` to re-run a cell even if it already has a PR (e.g. to incorporate spec changes into an existing draft).
+
+For each cell that needs work, the orchestrator:
 
 1. Creates `~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/` as a worktree of `~/Documents/GitHub/opentdf/<path>` on branch `<cell.branch>`. Idempotent — reuses an existing worktree if it's already on the right branch, bails if it's on a different one.
 2. Writes a minimal `.claude/settings.json` into the worktree (allowing `git`, `gh pr create`, and the repo-type-appropriate test commands: `go`/`make`/`buf` for platform, `mvn` for java-sdk, `npm` for web-sdk).
@@ -62,10 +64,18 @@ web-sdk                  FAIL   exit 1
 
 Pass the table on to the user, plus the JSONL transcript paths for any FAIL rows so they can inspect what went wrong.
 
-## When to use partial runs
+## Resumption and partial runs
 
-- `--only platform-proto` — proto change has to ship before anything else can adopt the new bindings. Run the proto cell alone first, review the PR, merge it, then run the rest.
-- `--only java-sdk` — re-launch a single failed cell after fixing whatever broke. The dependency check still runs; if `java-sdk`'s `depends_on` failed earlier, the orchestrator will refuse rather than racing.
+**Resuming after a failure** — just re-run the same command. The orchestrator skips cells that already have open PRs and only dispatches the ones that failed or were skipped due to upstream failures. The dependency check still runs: if a cell's `depends_on` failed in the previous wave, it will be skipped again rather than dispatched into a broken state. Fix the upstream cell first (see below), then re-run.
+
+**Fixing a failed cell** — inspect the transcript at `.claude/tmp/runs/<JIRA-KEY>-<cell-key>.jsonl`, identify the problem, fix it (in the worktree at `~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/` or by patching the spec), then re-run. If the fix was in the worktree (e.g. the subagent left partial commits), you may want `--only <cell-key>` to avoid redundant PR-existence checks across many cells.
+
+**Staging a cell before its dependents** — `--only platform-proto` runs only the proto cell. Once its PR is reviewed and merged, re-run without `--only` and the orchestrator picks up from the next wave (proto cell already has a PR, so it's skipped; service/SDK cells proceed).
+
+**Forcing a re-run** — `--force` makes the orchestrator ignore existing PRs and dispatch a fresh subagent for every non-skipped cell. Combine with `--only` to force just one cell:
+```bash
+uv run otdf-sdk-mgr orchestrate run xtest/features/<name>.yaml --only java-sdk --force
+```
 
 ## Notes
 
