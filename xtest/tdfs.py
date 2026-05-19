@@ -119,6 +119,8 @@ feature_type = Literal[
     "mechanism-rsa-4096",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
     "mechanism-ec-curves-384-521",
+    # Support for encrypting with pure ML-KEM-768 post-quantum KEM (FIPS 203 / CRYSTALS-Kyber-768).
+    "mechanism-mlkem",
     # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
     "mechanism-xwing",
     # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
@@ -220,6 +222,10 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+
+        # Pure ML-KEM-768 KEM support (FIPS 203 / CRYSTALS-Kyber-768)
+        if self.semver >= (0, 15, 0):  # version TBD — update when platform milestone is set
+            self.features.add("mechanism-mlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
