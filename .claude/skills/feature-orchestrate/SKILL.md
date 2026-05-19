@@ -1,6 +1,6 @@
 ---
 name: feature-orchestrate
-description: Fan out per-cell subagents to implement a multi-repo feature described by `xtest/features/<name>.yaml`. Reads the spec, creates one git worktree per cell at `~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/`, topologically sorts cells by `depends_on`, and launches `claude -p` subagents in parallel within each wave. Each subagent implements its cell and opens a draft PR. Use after `feature-design` has produced the spec and the tests-side PR is in flight (or merged).
+description: Coordinate a TDD multi-repo feature implementation. Pushes the tests-side draft PR in Wave 1 (so SDK subagents can run CI against the test definitions), then fans out one `claude -p` subagent per implementation cell — each in its own git worktree — to implement, commit, and open draft PRs across platform, java-sdk, web-sdk, and other repos in dependency order. Use when `feature-design` has finished and you're ready to dispatch cross-repo implementation.
 allowed-tools: Bash, Read
 ---
 
@@ -26,7 +26,7 @@ Before dispatching, run a dry-run so the user can confirm the topology and pinni
 uv run otdf-sdk-mgr orchestrate run xtest/features/<name>.yaml --dry-run
 ```
 
-The output names each cell, its target repo path, the branch it'll work on, and the worktree path the orchestrator will create. Each wave is a set of cells with no dependencies between them; cells in a later wave have at least one `depends_on` edge into an earlier wave.
+The output names each cell, its target repo path, the branch it'll work on, and the worktree path the orchestrator will create (or `action=push+draft-PR` for the `tests` cell). Each wave is a set of cells with no dependencies between them; cells in a later wave have at least one `depends_on` edge into an earlier wave.
 
 Surface the dry-run output to the user verbatim. If anything looks wrong (a cell going to the wrong repo, a missing `depends_on` edge, a stale branch name), ask the user to fix the spec via `feature-design` (or edit it directly) before proceeding.
 
@@ -53,6 +53,7 @@ When the orchestrator finishes, it prints a final table:
 
 ```
 CELL                     STATUS PR / ERROR
+tests                    OK     https://github.com/opentdf/tests/pull/123
 platform-proto           OK     https://github.com/opentdf/platform/pull/1234
 platform-service         OK     https://github.com/opentdf/platform/pull/1235
 java-sdk                 OK     https://github.com/opentdf/java-sdk/pull/567
@@ -68,7 +69,8 @@ Pass the table on to the user, plus the JSONL transcript paths for any FAIL rows
 
 ## Notes
 
-- This skill **does not edit the `tests/` repo**. The `tests` cell in the spec is owned by `feature-design`; the orchestrator skips it. If the tests-side PR isn't merged yet, that's fine — the subagent PRs will run their CI against the SDK changes, and the dormant tests in `tests/main` only activate once each repo's `supports("<feature>")` case lands.
+- **TDD/BDD lifecycle.** The `tests` cell is handled differently from all other cells: the orchestrator pushes the branch and opens a draft PR directly (no subagent) in Wave 1, alongside `platform-proto`. This makes the dormant tests visible to CI early — each SDK's per-repo PR can link back to the tests PR, and once that repo adds a `supports <feature>` case to its CLI wrapper, its CI activates the relevant tests automatically. No cross-PR lockstep coordination is needed.
+- **The `tests` cell is never skipped automatically.** If `feature-design` produced the tests-side artifacts on the current branch, the orchestrator pushes that branch and opens the draft PR. If the tests repo is on a different branch, the orchestrator reports an error rather than silently skipping.
 - Worktrees live at `~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/` regardless of which repo they came from. The user's main checkouts (`~/Documents/GitHub/opentdf/{platform,java-sdk,web-sdk,otdfctl}/`) are never modified.
 - Subagents print the PR URL on their last line of output as a contract — the orchestrator parses it with a regex. If a subagent doesn't print one, the orchestrator reports the cell as "no PR URL" but doesn't mark it failed (the subagent may have done useful work even if the PR step failed).
 - The orchestrator dispatches subagents in parallel within a wave, so per-cell logs interleave in real time but each cell's full transcript lands in its own JSONL file. Inspect transcripts under `.claude/tmp/runs/`.
