@@ -264,7 +264,27 @@ The full feature spec is below for cross-cell context. Your work is whatever
 {body}
 --- END SPEC ---
 
-Instructions:
+## xtest feature detection
+
+The `tests` repo has a draft PR with dormant integration tests for this feature.
+The tests stay skipped until the SDK CLI wrapper reports support. xtest detects
+support by running:
+
+    <sdk-cli> supports {name}
+
+and expecting exit 0. Your todo list includes adding a `supports {name}` case
+to the SDK's `xtest/sdk/<lang>/cli.sh` wrapper. This is what activates the
+integration tests when your PR's CI runs — do not skip it.
+
+Look at existing `supports` cases already in the file for the pattern (they
+typically grep the SDK's own help or capability output for a feature string,
+e.g. `grep -q "mlkem:768" <<< "$(cli help ...)"` or a direct SDK call). The
+specific probe to use is noted in your todo list item.
+
+Related test scenario(s): {scenarios}
+
+## Instructions
+
 1. Implement every item in `repos.{cell_key}.todo`. Don't switch branches.
 2. Run the repo's local checks before committing (unit tests, linters, build).
 3. Commit using house-style subject: `<type>({path}): <description> ({jira})`.
