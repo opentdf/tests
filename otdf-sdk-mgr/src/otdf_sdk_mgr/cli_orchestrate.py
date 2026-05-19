@@ -193,6 +193,12 @@ def ensure_worktree(spec: FeatureSpec, cell: Cell) -> Path:
     subprocess.check_call(
         ["git", "-C", str(repo), "worktree", "add", str(wt), "-b", cell.branch],
     )
+    # Disable commit signing for unattended runs — no interactive 1Password/GPG
+    # dialog available. The user should re-sign before merging; see sign-off note
+    # in the final report.
+    subprocess.check_call(
+        ["git", "-C", str(wt), "config", "--local", "commit.gpgsign", "false"],
+    )
     return wt
 
 
@@ -210,10 +216,16 @@ COMMON_ALLOW: tuple[str, ...] = (
 )
 
 REPO_ALLOW: dict[str, tuple[str, ...]] = {
-    "platform": ("Bash(go *)", "Bash(make *)", "Bash(buf *)", "Bash(yq *)"),
+    "platform": (
+        "Bash(go *)",
+        "Bash(make *)",
+        "Bash(buf *)",
+        "Bash(yq *)",
+        "Bash(golangci-lint *)",
+    ),
     "java-sdk": ("Bash(mvn *)", "Bash(./mvnw *)"),
     "web-sdk": ("Bash(npm *)", "Bash(pnpm *)", "Bash(node *)"),
-    "otdfctl": ("Bash(go *)", "Bash(make *)"),
+    "otdfctl": ("Bash(go *)", "Bash(make *)", "Bash(golangci-lint *)"),
 }
 
 
@@ -256,6 +268,8 @@ Instructions:
 2. Run the repo's local checks before committing (unit tests, linters, build).
 3. Commit using house-style subject: `<type>({path}): <description> ({jira})`.
    No `Jira:` footer. Add `Co-Authored-By: Claude` to the message.
+   Note: commit.gpgsign has been set to false in this worktree — commit normally
+   without any signing flags. The user will sign commits before merging.
 4. Open a draft PR via `gh pr create --draft --title "<same as commit subject>" --body "..."`.
    PR body references the parent Jira (https://virtru.atlassian.net/browse/{jira})
    and the tests-side scenario(s): {scenarios}.
@@ -446,6 +460,21 @@ def run(
         status = "OK" if r.success else "FAIL"
         rhs = r.pr_url or r.error or "?"
         typer.echo(f"{r.cell.key:<24} {status:<6} {rhs}")
+
+    signed_off = [r for r in results if r.success and r.worktree != Path()]
+    if signed_off:
+        typer.echo("")
+        typer.echo("=== Deferred signing ===")
+        typer.echo(
+            "Commits were made with commit.gpgsign=false (unattended run).\n"
+            "To retroactively sign all commits on each branch before merging,\n"
+            "run the following for each worktree:"
+        )
+        for r in signed_off:
+            typer.echo(
+                f"  git -C {r.worktree} rebase HEAD~$(git -C {r.worktree} rev-list"
+                f" --count origin/HEAD..HEAD) --exec 'git commit --amend --no-edit -S'"
+            )
 
     if any(not r.success for r in results):
         raise typer.Exit(1)
