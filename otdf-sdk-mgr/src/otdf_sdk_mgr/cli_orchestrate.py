@@ -1,13 +1,13 @@
 """`otdf-sdk-mgr orchestrate` subcommands.
 
 Read a multi-repo feature spec from `xtest/features/<name>.yaml`, topologically
-sort the cells by `depends_on`, create one git worktree per cell at
-`~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/`, and fan out `claude -p`
-subagents to implement each cell in parallel within each wave. Each subagent
-opens a draft PR and prints its URL as the last line of stdout.
+sort the cells by `depends_on`, and drive implementation in dependency waves.
 
-The `tests` cell is skipped — `feature-design` already produced its artifacts
-(scenario, draft test, `feature_type` entry).
+TDD lifecycle: the `tests` cell is handled in Wave 1 — the orchestrator pushes
+the branch and opens a draft PR directly (no subagent), so SDK CI jobs can
+reference the test definitions as they land. All other cells get a git worktree
+at `~/Documents/GitHub/worktrees/<JIRA-KEY>-<cell-key>/` and a `claude -p`
+subagent that implements, commits, and opens a draft PR.
 """
 
 from __future__ import annotations
@@ -158,6 +158,7 @@ def topological_waves(
 
 OPENTDF_ROOT = Path.home() / "Documents/GitHub/opentdf"
 WORKTREES_ROOT = Path.home() / "Documents/GitHub/worktrees"
+TESTS_REPO = OPENTDF_ROOT / "tests"
 
 
 def worktree_for(spec: FeatureSpec, cell: Cell) -> Path:
@@ -357,6 +358,71 @@ def run_cell(
     return CellResult(cell, wt, transcript, True, pr_url, None)
 
 
+def run_tests_cell(spec: FeatureSpec, cell: Cell) -> CellResult:
+    """Push the tests branch and open a draft PR without launching a subagent.
+
+    feature-design already wrote the tests-side artifacts; this step makes them
+    visible to downstream CI by pushing the branch and opening a PR. Commits
+    were made by the user (signed normally), so deferred signing doesn't apply.
+    """
+    repo = TESTS_REPO
+    if not repo.is_dir():
+        return CellResult(cell, Path(), Path(), False, None, f"tests repo not found: {repo}")
+
+    try:
+        current = subprocess.check_output(
+            ["git", "-C", str(repo), "branch", "--show-current"], text=True
+        ).strip()
+    except subprocess.CalledProcessError as e:
+        return CellResult(cell, Path(), Path(), False, None, f"git branch check failed: {e}")
+
+    if current != cell.branch:
+        return CellResult(
+            cell, Path(), Path(), False, None,
+            f"tests repo is on branch '{current}', expected '{cell.branch}' — "
+            "did feature-design run on this branch?",
+        )
+
+    try:
+        subprocess.check_call(
+            ["git", "-C", str(repo), "push", "-u", "origin", cell.branch],
+        )
+    except subprocess.CalledProcessError as e:
+        return CellResult(cell, Path(), Path(), False, None, f"git push failed: {e}")
+
+    # Reuse an existing PR rather than creating a duplicate.
+    existing = subprocess.run(
+        ["gh", "pr", "list", "--head", cell.branch, "--json", "url", "--jq", ".[0].url"],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+    )
+    if existing.returncode == 0 and existing.stdout.strip():
+        return CellResult(cell, Path(), Path(), True, existing.stdout.strip(), None)
+
+    jira = spec.jira or spec.name
+    pr_title = f"test(tests): {spec.title} ({jira})"
+    jira_url = f"https://virtru.atlassian.net/browse/{jira}"
+    scenarios_str = ", ".join(spec.scenarios) or "(none)"
+    pr_body = (
+        f"Tests-side artifacts for [{jira}]({jira_url}).\n\n"
+        f"Scenarios: {scenarios_str}\n\n"
+        "Tests land dormant — they stay skipped until each per-repo PR adds a "
+        "`supports <feature>` case to its SDK CLI wrapper."
+    )
+    try:
+        out = subprocess.check_output(
+            ["gh", "pr", "create", "--draft", "--title", pr_title, "--body", pr_body],
+            cwd=str(repo),
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        return CellResult(cell, Path(), Path(), False, None, f"gh pr create failed: {e}")
+
+    m = PR_URL_RE.search(out)
+    return CellResult(cell, Path(), Path(), True, m.group(0) if m else None, None)
+
+
 # ---------------------------------------------------------------------- CLI
 
 
@@ -394,14 +460,14 @@ def run(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1) from e
 
-    skip: set[str] = {"tests"}
+    skip: set[str] = set()
     if only:
         only_set = set(only)
         unknown = only_set - set(spec.cells)
         if unknown:
             typer.echo(f"Error: --only references unknown cell(s): {sorted(unknown)}", err=True)
             raise typer.Exit(1)
-        skip = skip | (set(spec.cells) - only_set)
+        skip = set(spec.cells) - only_set
 
     try:
         waves = topological_waves(spec.cells, skip=skip)
@@ -414,10 +480,16 @@ def run(
         for i, wave in enumerate(waves, 1):
             typer.echo(f"  Wave {i}:")
             for cell in wave:
-                wt = worktree_for(spec, cell)
-                typer.echo(
-                    f"    - {cell.key}: path={cell.path} branch={cell.branch} worktree={wt}"
-                )
+                if cell.key == "tests":
+                    typer.echo(
+                        f"    - {cell.key}: path=(tests repo) branch={cell.branch}"
+                        f" action=push+draft-PR"
+                    )
+                else:
+                    wt = worktree_for(spec, cell)
+                    typer.echo(
+                        f"    - {cell.key}: path={cell.path} branch={cell.branch} worktree={wt}"
+                    )
         return
 
     failed: set[str] = set()
@@ -432,18 +504,18 @@ def run(
             )
             failed.add(skipped.key)
 
+        def _dispatch(c: Cell) -> CellResult:
+            if c.key == "tests":
+                return run_tests_cell(spec, c)
+            return run_cell(
+                spec, c,
+                transcripts_dir=transcripts_dir,
+                timeout_s=timeout_s,
+                model=model,
+            )
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(runnable))) as ex:
-            futures = {
-                ex.submit(
-                    run_cell,
-                    spec,
-                    c,
-                    transcripts_dir=transcripts_dir,
-                    timeout_s=timeout_s,
-                    model=model,
-                ): c
-                for c in runnable
-            }
+            futures = {ex.submit(_dispatch, c): c for c in runnable}
             for fut in concurrent.futures.as_completed(futures):
                 r = fut.result()
                 results.append(r)
