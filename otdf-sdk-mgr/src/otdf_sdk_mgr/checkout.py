@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -97,7 +98,8 @@ def checkout_go_from_platform(ref: str) -> Path:
 
     if worktree_path.exists():
         print(f"Worktree for ref '{ref}' already exists at {worktree_path}. Updating...")
-        _run(["git", "-C", str(worktree_path), "pull", "origin", ref])
+        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "origin", ref, "--tags"])
+        _run(["git", "-C", str(worktree_path), "checkout", "--force", "FETCH_HEAD"])
     else:
         print(f"Setting up worktree for ref '{ref}' at {worktree_path}...")
         _run(
@@ -119,8 +121,13 @@ def checkout_go_from_platform(ref: str) -> Path:
         )
 
     src_link.parent.mkdir(parents=True, exist_ok=True)
-    if src_link.is_symlink() or src_link.exists():
+    if src_link.is_symlink():
         src_link.unlink()
+    elif src_link.exists():
+        if src_link.is_dir():
+            shutil.rmtree(src_link)
+        else:
+            src_link.unlink()
     src_link.symlink_to(Path("..") / "platform-src" / local_name / "otdfctl")
     print(f"Symlinked {src_link} → {otdfctl_dir}")
 
