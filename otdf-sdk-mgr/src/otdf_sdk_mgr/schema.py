@@ -74,14 +74,18 @@ class KasPin(_StrictModel):
         return self
 
 
-class SdkPin(_StrictModel):
-    """SDK version pin (forwarded to otdf-sdk-mgr's existing resolve())."""
+class ScenarioSdk(_StrictModel):
+    """One ordered SDK selection within a scenario role."""
 
+    sdk: SdkName
     version: str
     source: str | None = Field(
         default=None,
         description='For Go: "platform" to use the monorepo module path',
     )
+
+    def install_key(self) -> tuple[SdkName, str, str | None]:
+        return (self.sdk, self.version, self.source)
 
 
 class PortsConfig(_StrictModel):
@@ -121,15 +125,38 @@ class Instance(_StrictModel):
 class ScenarioSdks(_StrictModel):
     """Encrypt/decrypt split mirrors xtest's --sdks-encrypt/--sdks-decrypt.
 
-    Listing the same SDK in both maps reproduces the legacy "all pairs" mode.
+    Selections are ordered to preserve the eventual argv order, and are
+    de-duplicated within each role by (sdk, version, source).
     """
 
-    encrypt: dict[SdkName, SdkPin] = Field(default_factory=dict)
-    decrypt: dict[SdkName, SdkPin] = Field(default_factory=dict)
+    encrypt: list[ScenarioSdk] = Field(default_factory=list)
+    decrypt: list[ScenarioSdk] = Field(default_factory=list)
 
-    def union(self) -> dict[SdkName, SdkPin]:
-        """Return the union of encrypt+decrypt SDK pins (decrypt wins on conflict)."""
-        return {**self.encrypt, **self.decrypt}
+    @model_validator(mode="after")
+    def _dedupe_per_role(self) -> ScenarioSdks:
+        for role in ("encrypt", "decrypt"):
+            seen: set[tuple[SdkName, str, str | None]] = set()
+            duplicates = []
+            for entry in getattr(self, role):
+                key = entry.install_key()
+                if key in seen:
+                    duplicates.append(key)
+                seen.add(key)
+            if duplicates:
+                raise ValueError(f"ScenarioSdks.{role} contains duplicate sdk/version entries: {duplicates}")
+        return self
+
+    def union(self) -> list[ScenarioSdk]:
+        """Return the ordered union of encrypt+decrypt selections."""
+        out: list[ScenarioSdk] = []
+        seen: set[tuple[SdkName, str, str | None]] = set()
+        for entry in [*self.encrypt, *self.decrypt]:
+            key = entry.install_key()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(entry)
+        return out
 
 
 class Suite(_StrictModel):
@@ -239,19 +266,36 @@ def scenario_to_pytest_sdks(
         raise ValueError(f"{p}: malformed installed.json: {e}") from e
     sdk_map = data.get("sdks", {}) if isinstance(data, dict) else {}
 
-    def token(sdk_name: str) -> str:
-        entry = sdk_map.get(sdk_name)
-        if not isinstance(entry, dict) or "path" not in entry:
+    def token(role: str, entry: ScenarioSdk) -> str:
+        role_map = sdk_map.get(role)
+        if not isinstance(role_map, list):
             raise ValueError(
-                f"Scenario references SDK '{sdk_name}' but {p} has no install record "
-                f"for it. Re-run `otdf-sdk-mgr install scenario`."
+                f"{p}: missing install records for role '{role}'. "
+                "Re-run `otdf-sdk-mgr install scenario`."
             )
-        dist_name = Path(str(entry["path"])).name
-        return f"{sdk_name}@{dist_name}"
+        install_entry = next(
+            (
+                candidate
+                for candidate in role_map
+                if isinstance(candidate, dict)
+                and candidate.get("sdk") == entry.sdk
+                and candidate.get("version") == entry.version
+                and candidate.get("source") == entry.source
+            ),
+            None,
+        )
+        if not isinstance(install_entry, dict) or "path" not in install_entry:
+            raise ValueError(
+                f"Scenario references {role} SDK '{entry.sdk}' version '{entry.version}'"
+                f"{' source ' + entry.source if entry.source else ''}, but {p} has no matching "
+                "install record for it. Re-run `otdf-sdk-mgr install scenario`."
+            )
+        dist_name = Path(str(install_entry["path"])).name
+        return f"{entry.sdk}@{dist_name}"
 
     return {
-        "encrypt": [token(name) for name in scenario.sdks.encrypt],
-        "decrypt": [token(name) for name in scenario.sdks.decrypt],
+        "encrypt": [token("encrypt", entry) for entry in scenario.sdks.encrypt],
+        "decrypt": [token("decrypt", entry) for entry in scenario.sdks.decrypt],
     }
 
 

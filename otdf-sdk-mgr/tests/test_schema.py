@@ -10,8 +10,8 @@ from otdf_sdk_mgr.schema import (
     Instance,
     KasPin,
     PlatformPin,
+    ScenarioSdk,
     ScenarioSdks,
-    SdkPin,
     SourceRef,
     dump_instance,
     installed_json_for,
@@ -38,9 +38,11 @@ instance:
     alpha: { dist: v0.9.0, mode: standard }
 sdks:
   encrypt:
-    go: { version: lts }
+    - sdk: go
+      version: lts
   decrypt:
-    java: { version: "0.7.8" }
+    - sdk: java
+      version: "0.7.8"
 suite:
   targets:
     - "xtest/test_tdfs.py::test_tdf_roundtrip"
@@ -57,8 +59,10 @@ def test_scenario_roundtrip(tmp_path: Path) -> None:
     assert scenario.instance.platform.dist == "v0.9.0"
     assert scenario.instance.ports.base == 9080
     assert "alpha" in scenario.instance.kas
-    assert scenario.sdks.encrypt["go"].version == "lts"
-    assert scenario.sdks.decrypt["java"].version == "0.7.8"
+    assert scenario.sdks.encrypt[0].sdk == "go"
+    assert scenario.sdks.encrypt[0].version == "lts"
+    assert scenario.sdks.decrypt[0].sdk == "java"
+    assert scenario.sdks.decrypt[0].version == "0.7.8"
     assert scenario.suite.targets == ["xtest/test_tdfs.py::test_tdf_roundtrip"]
     assert scenario.suite.containers == ["ztdf"]
 
@@ -77,14 +81,33 @@ def test_kas_pin_features_pass_through() -> None:
     assert pin.features["ec_tdf_enabled"] is True
 
 
-def test_scenario_sdks_union_dedupes_and_prefers_decrypt() -> None:
+def test_scenario_sdks_union_preserves_order_and_dedupes_exact_matches() -> None:
     sdks = ScenarioSdks(
-        encrypt={"go": SdkPin(version="lts")},
-        decrypt={"go": SdkPin(version="0.7.8"), "java": SdkPin(version="0.7.8")},
+        encrypt=[
+            ScenarioSdk(sdk="go", version="lts"),
+            ScenarioSdk(sdk="java", version="0.7.8"),
+        ],
+        decrypt=[
+            ScenarioSdk(sdk="go", version="0.7.8"),
+            ScenarioSdk(sdk="java", version="0.7.8"),
+        ],
     )
     union = sdks.union()
-    assert set(union.keys()) == {"go", "java"}
-    assert union["go"].version == "0.7.8"
+    assert [(entry.sdk, entry.version) for entry in union] == [
+        ("go", "lts"),
+        ("java", "0.7.8"),
+        ("go", "0.7.8"),
+    ]
+
+
+def test_scenario_sdks_rejects_exact_duplicate_within_role() -> None:
+    with pytest.raises(ValidationError, match="duplicate"):
+        ScenarioSdks(
+            encrypt=[
+                ScenarioSdk(sdk="go", version="lts"),
+                ScenarioSdk(sdk="go", version="lts"),
+            ]
+        )
 
 
 def test_dump_load_instance_roundtrip(tmp_path: Path) -> None:
@@ -168,8 +191,20 @@ def test_scenario_to_pytest_sdks_uses_dist_dir_name(tmp_path: Path) -> None:
             {
                 "manifest": str(scenario_path),
                 "sdks": {
-                    "go": {"version": "lts", "path": str(tmp_path / "sdk/go/dist/v0.24.0")},
-                    "java": {"version": "0.7.8", "path": str(tmp_path / "sdk/java/dist/v0.7.8")},
+                    "encrypt": [
+                        {
+                            "sdk": "go",
+                            "version": "lts",
+                            "path": str(tmp_path / "sdk/go/dist/v0.24.0"),
+                        }
+                    ],
+                    "decrypt": [
+                        {
+                            "sdk": "java",
+                            "version": "0.7.8",
+                            "path": str(tmp_path / "sdk/java/dist/v0.7.8"),
+                        }
+                    ],
                 },
             }
         )
@@ -191,8 +226,66 @@ def test_scenario_to_pytest_sdks_missing_sdk_entry_raises(tmp_path: Path) -> Non
     # Forget to record `java`'s install — should raise ValueError, not silently drop.
     installed_path.write_text(
         json.dumps(
-            {"sdks": {"go": {"version": "lts", "path": str(tmp_path / "sdk/go/dist/v0.24.0")}}}
+            {
+                "sdks": {
+                    "encrypt": [
+                        {
+                            "sdk": "go",
+                            "version": "lts",
+                            "path": str(tmp_path / "sdk/go/dist/v0.24.0"),
+                        }
+                    ],
+                    "decrypt": [],
+                }
+            }
         )
     )
     with pytest.raises(ValueError, match="java"):
         scenario_to_pytest_sdks(scenario, installed_path)
+
+
+def test_scenario_to_pytest_sdks_distinguishes_roles_and_versions(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "scenario.yaml"
+    scenario_path.write_text(
+        """
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+instance:
+  platform: { dist: v0.9.0 }
+sdks:
+  encrypt:
+    - sdk: go
+      version: lts
+  decrypt:
+    - sdk: go
+      version: main
+suite:
+  targets: [xtest/test_tdfs.py]
+""",
+        encoding="utf-8",
+    )
+    installed_path = installed_json_for(scenario_path)
+    installed_path.write_text(
+        json.dumps(
+            {
+                "sdks": {
+                    "encrypt": [
+                        {
+                            "sdk": "go",
+                            "version": "lts",
+                            "path": str(tmp_path / "sdk/go/dist/v0.24.0"),
+                        }
+                    ],
+                    "decrypt": [
+                        {
+                            "sdk": "go",
+                            "version": "main",
+                            "path": str(tmp_path / "sdk/go/dist/main"),
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    out = scenario_to_pytest_sdks(load_scenario(scenario_path), installed_path)
+    assert out == {"encrypt": ["go@v0.24.0"], "decrypt": ["go@main"]}
