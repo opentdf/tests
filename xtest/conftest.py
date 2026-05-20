@@ -138,7 +138,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     - encrypt_sdk: which SDK(s) to use for encryption
     - decrypt_sdk: which SDK(s) to use for decryption
     - in_focus: filter tests by SDK focus
-    - container: which container formats to test (ztdf, nano)
+    - container: which container formats to test (ztdf, ztdf-ecwrap)
     """
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(

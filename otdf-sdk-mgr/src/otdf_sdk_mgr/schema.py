@@ -20,7 +20,7 @@ API_VERSION = "opentdf.io/v1alpha1"
 
 KasMode = Literal["standard", "key_management"]
 SdkName = Literal["go", "java", "js"]
-ContainerKind = Literal["ztdf", "ztdf-ecwrap", "nano", "nano-with-policy"]
+ContainerKind = Literal["ztdf", "ztdf-ecwrap"]
 
 
 class _StrictModel(BaseModel):
@@ -135,8 +135,15 @@ class ScenarioSdks(_StrictModel):
 class Suite(_StrictModel):
     """Pytest selection + flags."""
 
-    select: str = Field(description="Pytest -k or path::node selector")
-    containers: ContainerKind | None = Field(default=None, description="Forwarded to --containers")
+    targets: list[str] = Field(
+        default_factory=list,
+        description="Positional pytest targets, e.g. test files or path::node ids",
+    )
+    kexpr: str | None = Field(default=None, description="Forwarded to pytest -k")
+    containers: list[ContainerKind] = Field(
+        default_factory=list,
+        description="Forwarded to --containers as a whitespace-separated list",
+    )
     markers: str | None = Field(default=None, description="Forwarded to -m")
     extra_args: list[str] = Field(default_factory=list)
 

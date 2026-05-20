@@ -42,8 +42,10 @@ sdks:
   decrypt:
     java: { version: "0.7.8" }
 suite:
-  select: "xtest/test_tdfs.py::test_tdf_roundtrip"
-  containers: ztdf
+  targets:
+    - "xtest/test_tdfs.py::test_tdf_roundtrip"
+  containers:
+    - ztdf
 """
 
 
@@ -57,6 +59,8 @@ def test_scenario_roundtrip(tmp_path: Path) -> None:
     assert "alpha" in scenario.instance.kas
     assert scenario.sdks.encrypt["go"].version == "lts"
     assert scenario.sdks.decrypt["java"].version == "0.7.8"
+    assert scenario.suite.targets == ["xtest/test_tdfs.py::test_tdf_roundtrip"]
+    assert scenario.suite.containers == ["ztdf"]
 
 
 def test_platform_pin_requires_exactly_one_source() -> None:
@@ -100,7 +104,7 @@ def test_unknown_field_rejected_by_extra_forbid(tmp_path: Path) -> None:
     bad = tmp_path / "bad.yaml"
     bad.write_text(
         "apiVersion: opentdf.io/v1alpha1\nkind: Scenario\nunknown_field: oops\n"
-        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  select: foo\n",
+        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  targets: [foo]\n",
         encoding="utf-8",
     )
     with pytest.raises(ValidationError):
@@ -111,7 +115,7 @@ def test_unknown_kind_rejected(tmp_path: Path) -> None:
     bad = tmp_path / "bad-kind.yaml"
     bad.write_text(
         "apiVersion: opentdf.io/v1alpha1\nkind: NotScenario\n"
-        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  select: foo\n",
+        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  targets: [foo]\n",
         encoding="utf-8",
     )
     with pytest.raises(ValidationError):
@@ -122,7 +126,19 @@ def test_unknown_api_version_rejected(tmp_path: Path) -> None:
     bad = tmp_path / "bad-version.yaml"
     bad.write_text(
         "apiVersion: opentdf.io/v1beta1\nkind: Scenario\n"
-        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  select: foo\n",
+        "instance:\n  platform: { dist: v0.9.0 }\nsuite:\n  targets: [foo]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_scenario(bad)
+
+
+def test_removed_nano_container_is_rejected(tmp_path: Path) -> None:
+    bad = tmp_path / "bad-container.yaml"
+    bad.write_text(
+        "apiVersion: opentdf.io/v1alpha1\nkind: Scenario\n"
+        "instance:\n  platform: { dist: v0.9.0 }\n"
+        "suite:\n  targets: [xtest/test_tdfs.py]\n  containers: [nano]\n",
         encoding="utf-8",
     )
     with pytest.raises(ValidationError):
