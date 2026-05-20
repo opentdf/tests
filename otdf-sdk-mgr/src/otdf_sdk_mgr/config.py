@@ -73,8 +73,13 @@ SDK_GITHUB_REPOS: dict[str, str] = {
 GO_INSTALL_PREFIX_STANDALONE = "go run github.com/opentdf/otdfctl"
 GO_INSTALL_PREFIX_PLATFORM = "go run github.com/opentdf/platform/otdfctl"
 
-GO_MODULE_PATH = "github.com/opentdf/otdfctl"
-GO_MODULE_PATH_PLATFORM = "github.com/opentdf/platform/otdfctl"
+# Module paths keyed by source. "platform" is the canonical, post-migration
+# location; "standalone" covers archived pre-v0.31.0 release artifacts that
+# remain installable via the Go module proxy.
+GO_MODULE_PATHS: dict[str, str] = {
+    "platform": "github.com/opentdf/platform/otdfctl",
+    "standalone": "github.com/opentdf/otdfctl",
+}
 
 LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
@@ -102,9 +107,10 @@ JAVA_PLATFORM_BRANCH_MAP: dict[str, str] = {
     "0.1.0": "protocol/go/v0.2.3",
 }
 
-# Bare repo names per SDK (used by checkout)
+# Bare repo names per SDK (used by checkout). "go" is intentionally absent —
+# otdfctl source builds come from the opentdf/platform monorepo via
+# checkout_go_from_platform, not from a standalone clone.
 SDK_BARE_REPOS: dict[str, str] = {
-    "go": "otdfctl.git",
     "java": "java-sdk.git",
     "js": "web-sdk.git",
 }
@@ -119,42 +125,15 @@ SDK_TAG_INFIXES: dict[str, str] = {
 # (tags are otdfctl/vX.Y.Z in the platform monorepo)
 SDK_TAG_INFIXES_PLATFORM_GO = "otdfctl"
 
-_VALID_GO_SOURCES = {None, "standalone", "platform"}
 
-
-def _validate_go_source(source: str | None) -> None:
-    """Raise ValueError if source is not a recognised Go source."""
-    if source not in _VALID_GO_SOURCES:
-        raise ValueError(f"Invalid Go source {source!r}; expected one of {_VALID_GO_SOURCES}")
-
-
-def go_git_url(source: str | None = None) -> str:
-    """Return the git URL for Go SDK resolution based on source.
-
-    Args:
-        source: "platform" to use the platform monorepo, None/"standalone" for the
-                standalone otdfctl repo.
-    """
-    _validate_go_source(source)
-    if source == "platform":
-        return SDK_GIT_URLS["platform"]
-    return SDK_GIT_URLS["go"]
-
-
-def go_tag_infix(source: str | None = None) -> str | None:
-    """Return the tag infix for Go SDK resolution based on source."""
-    _validate_go_source(source)
-    if source == "platform":
-        return SDK_TAG_INFIXES_PLATFORM_GO
-    return None
-
-
-def go_module_path(source: str | None = None) -> str:
-    """Return the Go module path based on source."""
-    _validate_go_source(source)
-    if source == "platform":
-        return GO_MODULE_PATH_PLATFORM
-    return GO_MODULE_PATH
+def go_module_path(source: str) -> str:
+    """Return the Go module path for the given source ("platform" or "standalone")."""
+    try:
+        return GO_MODULE_PATHS[source]
+    except KeyError as e:
+        raise ValueError(
+            f"Invalid Go source {source!r}; expected one of {sorted(GO_MODULE_PATHS)}"
+        ) from e
 
 
 ALL_SDKS = ["go", "js", "java"]

@@ -13,8 +13,7 @@ from otdf_sdk_mgr.config import (
     LTS_VERSIONS,
     SDK_GIT_URLS,
     SDK_NPM_PACKAGES,
-    go_git_url,
-    go_tag_infix,
+    SDK_TAG_INFIXES_PLATFORM_GO,
 )
 
 
@@ -54,6 +53,12 @@ MERGE_QUEUE_REGEX = (
 )
 
 SHA_REGEX = r"^[a-f0-9]{7,64}$"
+
+# otdfctl moved into the platform monorepo at v0.31.0. Tags below this cannot be
+# source-built from the platform checkout (the otdfctl/ subdir doesn't exist at
+# those commits) and are resolved against the archived standalone repo for
+# artifact install only.
+OTDFCTL_PLATFORM_MIN_VERSION = (0, 31, 0)
 
 
 def _try_resolve_js_npm(
@@ -115,44 +120,99 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
     return None
 
 
+def _semver_tuple(version: str) -> tuple[int, int, int] | None:
+    """Parse 'vX.Y.Z' or 'X.Y.Z' into a tuple; ignore pre-release/build suffixes."""
+    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", version)
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def go_source_for(version: str) -> str:
+    """Decide whether a go version resolves against platform or standalone.
+
+    Heads, SHAs, branch names, "main", "latest" → platform. Semver tags →
+    platform for v0.31.0+ (where otdfctl/ lives in the monorepo), else
+    standalone (artifact-install fallback for archived releases).
+    "lts" follows LTS_VERSIONS["go"].
+    """
+    if version in ("main", "latest"):
+        return "platform"
+    if re.match(SHA_REGEX, version):
+        return "platform"
+    if version.startswith("refs/"):
+        return "platform"
+    if version == "lts":
+        lts_semver = _semver_tuple(LTS_VERSIONS.get("go", ""))
+        if lts_semver is not None and lts_semver < OTDFCTL_PLATFORM_MIN_VERSION:
+            return "standalone"
+        return "platform"
+    bare = version.removeprefix("otdfctl/")
+    semver = _semver_tuple(bare)
+    if semver is not None and semver < OTDFCTL_PLATFORM_MIN_VERSION:
+        return "standalone"
+    return "platform"
+
+
+def _looks_like_release_tag(version: str) -> bool:
+    """Whether `version` could be a release tag (for standalone fallback)."""
+    bare = version.removeprefix("otdfctl/")
+    return _semver_tuple(bare) is not None or version == "lts"
+
+
 def resolve(
     sdk: str,
     version: str,
     infix: str | None,
-    go_source: str | None = None,
 ) -> ResolveResult:
     """Resolve a version spec to a concrete SHA and tag.
+
+    For sdk='go', resolution always targets the platform monorepo's otdfctl/
+    subtree (tags `otdfctl/vX.Y.Z`, infix `otdfctl`). Pre-v0.31.0 tags fall
+    back to the archived standalone opentdf/otdfctl repo and are flagged
+    artifact-install-only via source="standalone".
 
     Args:
         sdk: SDK identifier (go, js, java, platform).
         version: Version spec (main, SHA, tag, latest, lts, etc.).
         infix: Tag infix for monorepo tag resolution (e.g. "sdk" for JS).
-        go_source: For sdk=="go", override the git URL and infix.
-            "platform" resolves against the platform monorepo (otdfctl/ prefix tags).
-            None or "standalone" uses the standalone otdfctl repo (default).
+            Ignored for sdk='go' (always overridden to "otdfctl" or None
+            depending on the resolved source).
     """
-    _go_platform = sdk == "go" and go_source == "platform"
-
-    def _annotate(result: ResolveResult) -> ResolveResult:
-        """Add source field to successful results when resolving go from platform.
-
-        Error results are returned unchanged.
-        """
-        if _go_platform and is_resolve_success(result):
-            result["source"] = "platform"
+    if sdk == "go":
+        go_source = go_source_for(version)
+        if go_source == "platform":
+            sdk_url = SDK_GIT_URLS["platform"]
+            go_infix: str | None = SDK_TAG_INFIXES_PLATFORM_GO
+        else:
+            sdk_url = SDK_GIT_URLS["go"]
+            go_infix = None
+        result = _resolve_against(sdk, version, go_infix, sdk_url)
+        if is_resolve_success(result):
+            result["source"] = go_source
+            return result
+        # Platform miss on a tag-like input: try the archived standalone repo.
+        if go_source == "platform" and _looks_like_release_tag(version):
+            fallback = _resolve_against(sdk, version, None, SDK_GIT_URLS["go"])
+            if is_resolve_success(fallback):
+                fallback["source"] = "standalone"
+                return fallback
         return result
 
-    # Validate config and resolve URLs before the try block so that
-    # programming errors (bad go_source, unknown SDK) propagate immediately.
-    if _go_platform:
-        sdk_url = go_git_url("platform")
-        infix = go_tag_infix("platform")
-    else:
-        try:
-            sdk_url = SDK_GIT_URLS[sdk]
-        except KeyError:
-            return {"sdk": sdk, "alias": version, "err": f"unknown SDK: {sdk}"}
+    try:
+        sdk_url = SDK_GIT_URLS[sdk]
+    except KeyError:
+        return {"sdk": sdk, "alias": version, "err": f"unknown SDK: {sdk}"}
+    return _resolve_against(sdk, version, infix, sdk_url)
 
+
+def _resolve_against(
+    sdk: str,
+    version: str,
+    infix: str | None,
+    sdk_url: str,
+) -> ResolveResult:
+    """Run ls-remote-based resolution against a specific git URL."""
     try:
         repo = Git()
         version = version.removeprefix("refs/heads/")
@@ -162,82 +222,70 @@ def resolve(
                 sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
             except StopIteration:
                 return {"sdk": sdk, "alias": version, "err": f"main branch not found in {sdk_url}"}
-            return _annotate(
-                {
-                    "sdk": sdk,
-                    "alias": version,
-                    "head": True,
-                    "sha": sha,
-                    "tag": "main",
-                }
-            )
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "sha": sha,
+                "tag": "main",
+            }
 
         if re.match(SHA_REGEX, version):
             ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
             matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
-                return _annotate(
-                    {
-                        "sdk": sdk,
-                        "alias": version[:7],
-                        "sha": version,
-                        "tag": version,
-                    }
-                )
+                return {
+                    "sdk": sdk,
+                    "alias": version[:7],
+                    "sha": version,
+                    "tag": version,
+                }
             if len(matching_tags) > 1:
                 for sha, tag in matching_tags:
                     if tag.startswith("refs/pull/"):
                         pr_number = tag.split("/")[2]
-                        return _annotate(
-                            {
-                                "sdk": sdk,
-                                "alias": version,
-                                "head": True,
-                                "sha": sha,
-                                "tag": f"pull-{pr_number}",
-                            }
-                        )
+                        return {
+                            "sdk": sdk,
+                            "alias": version,
+                            "head": True,
+                            "sha": sha,
+                            "tag": f"pull-{pr_number}",
+                        }
                 for sha, tag in matching_tags:
                     mq_match = re.match(MERGE_QUEUE_REGEX, tag)
                     if mq_match:
                         to_branch = mq_match.group("branch")
                         pr_number = mq_match.group("pr_number")
                         if to_branch and pr_number:
-                            return _annotate(
-                                {
-                                    "sdk": sdk,
-                                    "alias": version,
-                                    "head": True,
-                                    "pr": pr_number,
-                                    "sha": sha,
-                                    "tag": f"mq-{to_branch}-{pr_number}",
-                                }
-                            )
-                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
-                        flattag = "mq--" + suffix.replace("/", "--")
-                        return _annotate(
-                            {
+                            return {
                                 "sdk": sdk,
                                 "alias": version,
                                 "head": True,
+                                "pr": pr_number,
                                 "sha": sha,
-                                "tag": flattag,
+                                "tag": f"mq-{to_branch}-{pr_number}",
                             }
-                        )
+                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
+                        flattag = "mq--" + suffix.replace("/", "--")
+                        return {
+                            "sdk": sdk,
+                            "alias": version,
+                            "head": True,
+                            "sha": sha,
+                            "tag": flattag,
+                        }
                     head = False
                     if tag.startswith("refs/heads/"):
                         head = True
                         tag = tag.split("refs/heads/")[-1]
                     flattag = tag.replace("/", "--")
-                    return _annotate(
-                        {
-                            "sdk": sdk,
-                            "alias": version,
-                            "head": head,
-                            "sha": sha,
-                            "tag": flattag,
-                        }
-                    )
+                    return {
+                        "sdk": sdk,
+                        "alias": version,
+                        "head": head,
+                        "sha": sha,
+                        "tag": flattag,
+                    }
 
                 return {
                     "sdk": sdk,
@@ -252,14 +300,12 @@ def resolve(
                 tag = tag.split("refs/tags/")[-1]
             if infix:
                 tag = tag.split(f"{infix}/")[-1]
-            return _annotate(
-                {
-                    "sdk": sdk,
-                    "alias": version,
-                    "sha": sha,
-                    "tag": tag,
-                }
-            )
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "sha": sha,
+                "tag": tag,
+            }
 
         if version.startswith("refs/pull/"):
             merge_heads = [
@@ -273,16 +319,14 @@ def resolve(
                     "err": f"pull request {pr_number} not found in {sdk_url}",
                 }
             sha, _ = merge_heads[0]
-            return _annotate(
-                {
-                    "sdk": sdk,
-                    "alias": version,
-                    "head": True,
-                    "pr": pr_number,
-                    "sha": sha,
-                    "tag": f"pull-{pr_number}",
-                }
-            )
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "pr": pr_number,
+                "sha": sha,
+                "tag": f"pull-{pr_number}",
+            }
 
         remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
         all_listed_tags = [
@@ -297,15 +341,13 @@ def resolve(
 
         if version in all_listed_branches:
             sha = all_listed_branches[version]
-            return _annotate(
-                {
-                    "sdk": sdk,
-                    "alias": version,
-                    "head": True,
-                    "sha": sha,
-                    "tag": version,
-                }
-            )
+            return {
+                "sdk": sdk,
+                "alias": version,
+                "head": True,
+                "sha": sha,
+                "tag": version,
+            }
 
         if infix and version.startswith(f"{infix}/"):
             version = version.split(f"{infix}/")[-1]
@@ -349,15 +391,13 @@ def resolve(
                 if not matching_tags:
                     # No versions with CLI found, fall back to building latest from source
                     sha, tag = stable_tags[-1]
-                    return _annotate(
-                        {
-                            "sdk": sdk,
-                            "alias": alias,
-                            "head": True,  # Mark as head to trigger source checkout
-                            "sha": sha,
-                            "tag": tag,
-                        }
-                    )
+                    return {
+                        "sdk": sdk,
+                        "alias": alias,
+                        "head": True,  # Mark as head to trigger source checkout
+                        "sha": sha,
+                        "tag": tag,
+                    }
             else:
                 matching_tags = stable_tags[-1:]
         else:
@@ -382,15 +422,13 @@ def resolve(
         release = tag
         if infix:
             release = f"{infix}/{release}"
-        return _annotate(
-            {
-                "sdk": sdk,
-                "alias": alias,
-                "release": release,
-                "sha": sha,
-                "tag": tag,
-            }
-        )
+        return {
+            "sdk": sdk,
+            "alias": alias,
+            "release": release,
+            "sha": sha,
+            "tag": tag,
+        }
     except (git.exc.GitCommandError, ValueError) as e:
         return {
             "sdk": sdk,

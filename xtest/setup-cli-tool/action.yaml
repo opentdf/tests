@@ -10,10 +10,11 @@ inputs:
     required: true
   platform-otdfctl-dir:
     description: >-
-      Absolute path to platform's otdfctl/ directory. When set and sdk is "go",
-      head versions whose SHA matches platform-otdfctl-sha are symlinked from
-      here instead of checked out separately. Used in both explicit platform
-      mode (source: "platform" in resolved version) and auto-detect mode.
+      Absolute path to platform's otdfctl/ directory. Required when sdk is
+      "go" and any resolved version has source="platform" (the canonical
+      path post-otdfctl-migration). When the resolved SHA matches
+      platform-otdfctl-sha the directory is reused via symlink instead of
+      a fresh checkout.
   platform-otdfctl-sha:
     description: >-
       SHA of the commit that platform-otdfctl-dir was checked out at.
@@ -44,7 +45,10 @@ runs:
       run: |
         case "$INPUT_SDK" in
           "go")
-            echo "STANDALONE_REPO=opentdf/otdfctl" >> "$GITHUB_ENV"
+            # otdfctl now lives in the opentdf/platform monorepo (post-v0.31.0);
+            # the standalone opentdf/otdfctl repo is archived and only used for
+            # artifact installs of pre-v0.31.0 releases (handled by
+            # otdf-sdk-mgr install artifact, never a source clone).
             ;;
           "java")
             echo "STANDALONE_REPO=opentdf/java-sdk" >> "$GITHUB_ENV"
@@ -157,12 +161,19 @@ runs:
 
           is_platform=false
           use_existing=false
-          checkout_repo="$STANDALONE_REPO"
+          # Default checkout target: the SDK's standalone repo. Go has no
+          # standalone source path (the archived opentdf/otdfctl repo is
+          # artifact-install-only); the resolver always tags go heads with
+          # source="platform" so they take the branch below.
+          checkout_repo="${STANDALONE_REPO:-}"
           checkout_path="${INPUT_PATH}/${INPUT_SDK}/src/${tag}"
 
           if [[ "$source" == "platform" ]]; then
-            # Explicit platform mode: resolver tagged this version as from
-            # opentdf/platform. Use per-version SHA to decide checkout strategy.
+            # otdfctl lives in opentdf/platform/otdfctl; head builds need the
+            # platform checkout in scope so go.work resolves protocol/go, sdk,
+            # and lib/* to local sources. Pre-v0.31.0 go releases
+            # (source="standalone") are installed via Go module proxy and
+            # never source-checked-out here.
             is_platform=true
             if [[ "$needs_source" == "true" && -n "$PLATFORM_OTDFCTL_DIR" \
                   && -n "$PLATFORM_OTDFCTL_SHA" && "$sha" == "$PLATFORM_OTDFCTL_SHA" ]]; then
@@ -174,13 +185,13 @@ runs:
               checkout_repo="$PLATFORM_REPO"
               checkout_path="${INPUT_PATH}/${INPUT_SDK}/platform-src/${tag}"
             fi
-          elif [[ "$INPUT_SDK" == "go" && -n "$PLATFORM_OTDFCTL_DIR" && "$needs_source" == "true" ]]; then
-            # Auto-detect: resolver used standalone repo but detect-otdfctl found
-            # an embedded otdfctl/ in the platform checkout. PLATFORM_OTDFCTL_DIR
-            # is only set after confirming the directory exists, so reuse it directly.
-            echo "::notice::Go version ${tag} resolved from standalone repo; reusing platform-embedded otdfctl at $PLATFORM_OTDFCTL_DIR."
-            use_existing=true
-            needs_source=false
+          elif [[ "$INPUT_SDK" == "go" && "$needs_source" == "true" ]]; then
+            # Reached when a pre-v0.31.0 (source="standalone") go release's
+            # artifact install failed; the archived opentdf/otdfctl repo
+            # offers no source-build fallback. Fail loud rather than letting
+            # actions/checkout error on an empty repository value.
+            echo "::error::Go release ${tag} requires source build but pre-v0.31.0 standalone otdfctl source builds are not supported. Check the install-released-versions step log for the underlying go-install failure."
+            exit 1
           fi
 
           echo "needs-checkout-${slot}=${needs_source}" >> "$GITHUB_OUTPUT"

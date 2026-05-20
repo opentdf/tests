@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from otdf_sdk_mgr.resolve import (
     ResolveResult,
     _try_resolve_js_npm,
+    go_source_for,
     is_resolve_error,
     is_resolve_success,
     resolve,
@@ -252,15 +253,17 @@ class TestResolveVersionTags:
 
 class TestResolveLatest:
     def test_non_java_returns_last_stable(self):
+        # For go, "latest" routes to the platform monorepo (otdfctl/ infix).
         ls = make_ls_remote(
-            ("1" * 40, "refs/tags/v0.1.0"),
-            ("2" * 40, "refs/tags/v0.2.0"),
-            ("3" * 40, "refs/tags/v0.3.0"),
+            ("1" * 40, "refs/tags/otdfctl/v0.31.0"),
+            ("2" * 40, "refs/tags/otdfctl/v0.32.0"),
+            ("3" * 40, "refs/tags/otdfctl/v0.33.0"),
         )
         with patch_git(ls):
             result = resolve("go", "latest", None)
         assert is_resolve_success(result)
-        assert result["tag"] == "v0.3.0"
+        assert result["tag"] == "v0.33.0"
+        assert result.get("source") == "platform"
 
     def test_java_with_cli_available(self):
         ls = make_ls_remote(
@@ -300,6 +303,88 @@ class TestResolveLatest:
 # ---------------------------------------------------------------------------
 # _try_resolve_js_npm()
 # ---------------------------------------------------------------------------
+
+
+class TestGoSourceFor:
+    """go_source_for() — chooses platform vs standalone for a go version spec."""
+
+    def test_main_is_platform(self):
+        assert go_source_for("main") == "platform"
+
+    def test_latest_is_platform(self):
+        assert go_source_for("latest") == "platform"
+
+    def test_sha_is_platform(self):
+        assert go_source_for(SHA40) == "platform"
+
+    def test_branch_name_is_platform(self):
+        assert go_source_for("feature-branch") == "platform"
+
+    def test_post_migration_tag_is_platform(self):
+        assert go_source_for("v0.31.0") == "platform"
+        assert go_source_for("v0.32.0") == "platform"
+        assert go_source_for("otdfctl/v0.32.0") == "platform"
+
+    def test_pre_migration_tag_is_standalone(self):
+        assert go_source_for("v0.29.0") == "standalone"
+        assert go_source_for("v0.24.0") == "standalone"
+        assert go_source_for("0.30.0") == "standalone"
+        assert go_source_for("otdfctl/v0.29.0") == "standalone"
+
+    def test_lts_follows_lts_versions(self):
+        # LTS_VERSIONS["go"] is "0.24.0" → standalone.
+        assert go_source_for("lts") == "standalone"
+
+
+class TestResolveGo:
+    """resolve() — go-specific routing between platform and standalone."""
+
+    def test_main_resolves_against_platform_with_source_field(self):
+        ls = make_ls_remote((SHA40, "refs/heads/main"))
+        with patch_git(ls):
+            result = resolve("go", "main", None)
+        assert is_resolve_success(result)
+        assert result.get("source") == "platform"
+        assert result.get("head") is True
+
+    def test_bare_semver_post_migration_routes_to_platform(self):
+        # Bare "v0.31.0" → looked up as otdfctl/v0.31.0 in platform.
+        ls = make_ls_remote((SHA40, "refs/tags/otdfctl/v0.31.0"))
+        with patch_git(ls):
+            result = resolve("go", "v0.31.0", None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.31.0"
+        assert result["sha"] == SHA40
+        assert result.get("source") == "platform"
+
+    def test_prefixed_tag_routes_to_platform(self):
+        ls = make_ls_remote((SHA40, "refs/tags/otdfctl/v0.32.0"))
+        with patch_git(ls):
+            result = resolve("go", "otdfctl/v0.32.0", None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.32.0"
+        assert result.get("source") == "platform"
+
+    def test_pre_migration_tag_routes_to_standalone(self):
+        # v0.29.0 < 0.31.0 → standalone; mock returns standalone-style tag.
+        ls = make_ls_remote((SHA40, "refs/tags/v0.29.0"))
+        with patch_git(ls):
+            result = resolve("go", "v0.29.0", None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.29.0"
+        assert result.get("source") == "standalone"
+
+    def test_platform_miss_falls_back_to_standalone(self):
+        # A version that looks post-migration but doesn't exist in platform
+        # should fall back to standalone if present there.
+        ls = make_ls_remote((SHA40, "refs/tags/v0.31.99"))
+        with patch_git(ls):
+            result = resolve("go", "v0.31.99", None)
+        assert is_resolve_success(result)
+        # The fallback resolve runs against the standalone URL with no infix;
+        # mock returns one tag which matches.
+        assert result["tag"] == "v0.31.99"
+        assert result.get("source") == "standalone"
 
 
 class TestTryResolveJsNpm:

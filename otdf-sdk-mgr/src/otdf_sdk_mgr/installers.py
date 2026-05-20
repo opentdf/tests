@@ -11,7 +11,7 @@ import urllib.request
 from pathlib import Path
 
 from otdf_sdk_mgr.config import (
-    GO_MODULE_PATH_PLATFORM,
+    GO_MODULE_PATHS,
     LTS_VERSIONS,
     get_sdk_dir,
     get_sdk_dirs,
@@ -19,6 +19,7 @@ from otdf_sdk_mgr.config import (
 )
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
+from otdf_sdk_mgr.resolve import go_source_for
 from otdf_sdk_mgr.semver import normalize_version
 
 
@@ -32,13 +33,13 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     The cli.sh and otdfctl.sh wrappers read .version and use
     `go run <module>@{version}` instead of a local binary.
     The .version file contains `module-path@version`
-    (e.g., `github.com/opentdf/otdfctl@v0.24.0`).
+    (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`).
 
     Args:
         version: Version string (e.g., "v0.24.0" or "otdfctl/v0.24.0").
         dist_dir: Target distribution directory.
-        source: "platform" to use the platform monorepo module path,
-            None or "standalone" for standalone.
+        source: "platform" or "standalone"; auto-derived from `version` when
+            omitted (post-v0.31.0 → platform, archived releases → standalone).
     """
     go_dir = get_sdk_dir() / "go"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -46,6 +47,8 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     if "/" in version:
         version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
+    if source is None:
+        source = go_source_for(tag)
     module = go_module_path(source)
     (dist_dir / ".version").write_text(f"{module}@{tag}\n")
     shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
@@ -59,7 +62,7 @@ def install_go_release(version: str, dist_dir: Path, source: str | None = None) 
     )
     if result.returncode != 0:
         msg = f"go install pre-warm failed: {result.stderr.strip()}"
-        if module == GO_MODULE_PATH_PLATFORM:
+        if module == GO_MODULE_PATHS["platform"]:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
@@ -183,8 +186,8 @@ def install_release(sdk: str, version: str, dist_name: str | None = None, **kwar
 def latest_stable_version(sdk: str) -> tuple[str, str | None] | None:
     """Find the latest stable version for an SDK that has a CLI available.
 
-    Returns (version, source) where source is "platform" for Go versions
-    from the platform repo, or None otherwise.
+    Returns (version, source) where source is "platform" or "standalone" for
+    Go (drives module-path selection in install_go_release), or None otherwise.
     """
     if sdk == "go":
         versions = list_go_versions()
@@ -192,7 +195,7 @@ def latest_stable_version(sdk: str) -> tuple[str, str | None] | None:
         if not stable:
             return None
         entry = stable[-1]
-        source = "platform" if entry.get("source") == "platform-git-tag" else None
+        source = "platform" if entry.get("source") == "platform-git-tag" else "standalone"
         return entry["version"], source
     elif sdk == "js":
         versions = list_js_versions()
@@ -233,12 +236,21 @@ def cmd_lts(sdks: list[str]) -> None:
 
 def cmd_tip(sdks: list[str]) -> None:
     """Delegate to source checkout + make for head builds."""
+    import os
+
+    from otdf_sdk_mgr.checkout import checkout_go_from_platform
+
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
         print(f"Checking out and building {sdk} from source...")
-        checkout_sdk_branch(sdk, "main")
         make_dir = sdk_dirs[sdk]
-        subprocess.check_call(["make"], cwd=make_dir)
+        env = os.environ.copy()
+        if sdk == "go":
+            platform_dir = checkout_go_from_platform("main")
+            env["GOWORK"] = str(platform_dir / "go.work")
+        else:
+            checkout_sdk_branch(sdk, "main")
+        subprocess.check_call(["make"], cwd=make_dir, env=env)
         print(f"  {sdk} built from source")
 
 
