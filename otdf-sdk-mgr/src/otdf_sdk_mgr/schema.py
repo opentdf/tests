@@ -143,7 +143,9 @@ class ScenarioSdks(_StrictModel):
                     duplicates.append(key)
                 seen.add(key)
             if duplicates:
-                raise ValueError(f"ScenarioSdks.{role} contains duplicate sdk/version entries: {duplicates}")
+                raise ValueError(
+                    f"ScenarioSdks.{role} contains duplicate sdk/version entries: {duplicates}"
+                )
         return self
 
     def union(self) -> list[ScenarioSdk]:
