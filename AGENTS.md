@@ -7,10 +7,11 @@ This guide provides essential knowledge for AI agents performing updates, refact
 | Path | Purpose | Has its own AGENTS.md? |
 |------|---------|------------------------|
 | `xtest/` | pytest integration tests (the main test suite) | yes |
-| `otdf-sdk-mgr/` | Python CLI that installs SDK CLIs from releases or source (see `otdf-sdk-mgr/README.md`) | no |
+| `otdf-sdk-mgr/` | Python CLI that installs SDK CLIs and the platform service from releases or source | yes |
 | `otdf-local/` | Python CLI that runs/stops the platform + KAS instances locally | yes |
 | `vulnerability/` | Playwright UI test suite (run with `npx playwright test`) | no |
-| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) | n/a |
+| `platform/` | Platform service source — **installed by `otdf-sdk-mgr install platform`**, not committed. Edits here may be wiped by a reinstall. |  |
+| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) |  |
 
 ## Test Framework Overview
 
@@ -234,7 +235,4 @@ yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 
 ## Closing Note
 
-Test failures are usually configuration mismatches, not SDK bugs. Check
-the local environment against what the tests expect before suspecting the
-code. Per-subsystem details live in `xtest/AGENTS.md`,
-`otdf-local/AGENTS.md`, and `otdf-sdk-mgr/README.md`.
+The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect. See the per-package guides in `xtest/`, `otdf-sdk-mgr/`, and `otdf-local/` for sub-system specifics.
