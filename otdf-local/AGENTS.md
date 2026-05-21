@@ -2,6 +2,8 @@
 
 This guide covers operational procedures for managing the test environment with `otdf-local`. For command reference, see [README.md](README.md).
 
+**Depends on `otdf-sdk-mgr`.** `otdf-local` launches binaries that `otdf-sdk-mgr install platform` (or `otdf-sdk-mgr install scenario`) writes into `xtest/platform/dist/`. If `otdf-local up` complains that a binary is missing, run the installer first.
+
 ## Environment Setup for pytest
 
 ```bash
