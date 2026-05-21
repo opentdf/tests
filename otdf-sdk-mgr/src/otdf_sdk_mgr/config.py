@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 
@@ -70,16 +71,22 @@ SDK_GITHUB_REPOS: dict[str, str] = {
     "java": "opentdf/java-sdk",
 }
 
-GO_INSTALL_PREFIX_STANDALONE = "go run github.com/opentdf/otdfctl"
-GO_INSTALL_PREFIX_PLATFORM = "go run github.com/opentdf/platform/otdfctl"
+# Canonical post-migration location.
+GO_MODULE_PATH_PLATFORM = "github.com/opentdf/platform/otdfctl"
+# Archived pre-v0.31.0 releases; still installable via the Go module proxy.
+GO_MODULE_PATH_STANDALONE = "github.com/opentdf/otdfctl"
 
-# Module paths keyed by source. "platform" is the canonical, post-migration
-# location; "standalone" covers archived pre-v0.31.0 release artifacts that
-# remain installable via the Go module proxy.
-GO_MODULE_PATHS: dict[str, str] = {
-    "platform": "github.com/opentdf/platform/otdfctl",
-    "standalone": "github.com/opentdf/otdfctl",
-}
+# otdfctl moved into the platform monorepo at v0.31.0; tags below this resolve
+# against the archived standalone module path for artifact install only.
+OTDFCTL_PLATFORM_MIN_VERSION = (0, 31, 0)
+
+
+def go_module_for_tag(tag: str) -> str:
+    """Pick the Go module path for an otdfctl release tag."""
+    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+    if m and (int(m.group(1)), int(m.group(2)), int(m.group(3))) < OTDFCTL_PLATFORM_MIN_VERSION:
+        return GO_MODULE_PATH_STANDALONE
+    return GO_MODULE_PATH_PLATFORM
 
 LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
@@ -108,8 +115,7 @@ JAVA_PLATFORM_BRANCH_MAP: dict[str, str] = {
 }
 
 # Bare repo names per SDK (used by checkout). "go" is intentionally absent —
-# otdfctl source builds come from the opentdf/platform monorepo via
-# checkout_go_from_platform, not from a standalone clone.
+# otdfctl source builds come from opentdf/platform via checkout_go_from_platform.
 SDK_BARE_REPOS: dict[str, str] = {
     "java": "java-sdk.git",
     "js": "web-sdk.git",
@@ -120,20 +126,6 @@ SDK_TAG_INFIXES: dict[str, str] = {
     "js": "sdk",
     "platform": "service",
 }
-
-# When resolving go versions from the platform repo, use "otdfctl" infix
-# (tags are otdfctl/vX.Y.Z in the platform monorepo)
-SDK_TAG_INFIXES_PLATFORM_GO = "otdfctl"
-
-
-def go_module_path(source: str) -> str:
-    """Return the Go module path for the given source ("platform" or "standalone")."""
-    try:
-        return GO_MODULE_PATHS[source]
-    except KeyError as e:
-        raise ValueError(
-            f"Invalid Go source {source!r}; expected one of {sorted(GO_MODULE_PATHS)}"
-        ) from e
 
 
 ALL_SDKS = ["go", "js", "java"]

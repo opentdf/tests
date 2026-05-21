@@ -13,7 +13,6 @@ from otdf_sdk_mgr.config import (
     LTS_VERSIONS,
     SDK_GIT_URLS,
     SDK_NPM_PACKAGES,
-    SDK_TAG_INFIXES_PLATFORM_GO,
 )
 
 
@@ -25,7 +24,6 @@ class ResolveSuccess(TypedDict):
     pr: NotRequired[str]
     release: NotRequired[str]
     sha: str
-    source: NotRequired[str]
     tag: str
 
 
@@ -53,12 +51,6 @@ MERGE_QUEUE_REGEX = (
 )
 
 SHA_REGEX = r"^[a-f0-9]{7,64}$"
-
-# otdfctl moved into the platform monorepo at v0.31.0. Tags below this cannot be
-# source-built from the platform checkout (the otdfctl/ subdir doesn't exist at
-# those commits) and are resolved against the archived standalone repo for
-# artifact install only.
-OTDFCTL_PLATFORM_MIN_VERSION = (0, 31, 0)
 
 
 def _try_resolve_js_npm(
@@ -120,46 +112,6 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
     return None
 
 
-def _semver_tuple(version: str) -> tuple[int, int, int] | None:
-    """Parse 'vX.Y.Z' or 'X.Y.Z' into a tuple; ignore pre-release/build suffixes."""
-    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", version)
-    if not m:
-        return None
-    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
-
-
-def go_source_for(version: str) -> str:
-    """Decide whether a go version resolves against platform or standalone.
-
-    Heads, SHAs, branch names, "main", "latest" → platform. Semver tags →
-    platform for v0.31.0+ (where otdfctl/ lives in the monorepo), else
-    standalone (artifact-install fallback for archived releases).
-    "lts" follows LTS_VERSIONS["go"].
-    """
-    if version in ("main", "latest"):
-        return "platform"
-    if re.match(SHA_REGEX, version):
-        return "platform"
-    if version.startswith("refs/"):
-        return "platform"
-    if version == "lts":
-        lts_semver = _semver_tuple(LTS_VERSIONS.get("go", ""))
-        if lts_semver is not None and lts_semver < OTDFCTL_PLATFORM_MIN_VERSION:
-            return "standalone"
-        return "platform"
-    bare = version.removeprefix("otdfctl/")
-    semver = _semver_tuple(bare)
-    if semver is not None and semver < OTDFCTL_PLATFORM_MIN_VERSION:
-        return "standalone"
-    return "platform"
-
-
-def _looks_like_release_tag(version: str) -> bool:
-    """Whether `version` could be a release tag (for standalone fallback)."""
-    bare = version.removeprefix("otdfctl/")
-    return _semver_tuple(bare) is not None or version == "lts"
-
-
 def resolve(
     sdk: str,
     version: str,
@@ -167,37 +119,15 @@ def resolve(
 ) -> ResolveResult:
     """Resolve a version spec to a concrete SHA and tag.
 
-    For sdk='go', resolution always targets the platform monorepo's otdfctl/
-    subtree (tags `otdfctl/vX.Y.Z`, infix `otdfctl`). Pre-v0.31.0 tags fall
-    back to the archived standalone opentdf/otdfctl repo and are flagged
-    artifact-install-only via source="standalone".
-
-    Args:
-        sdk: SDK identifier (go, js, java, platform).
-        version: Version spec (main, SHA, tag, latest, lts, etc.).
-        infix: Tag infix for monorepo tag resolution (e.g. "sdk" for JS).
-            Ignored for sdk='go' (always overridden to "otdfctl" or None
-            depending on the resolved source).
+    For sdk='go', resolution targets the platform monorepo's otdfctl/ subtree
+    (tags `otdfctl/vX.Y.Z`). Tags not found there fall back to the archived
+    opentdf/otdfctl repo (pre-v0.31.0). The `infix` argument is ignored for go.
     """
     if sdk == "go":
-        go_source = go_source_for(version)
-        if go_source == "platform":
-            sdk_url = SDK_GIT_URLS["platform"]
-            go_infix: str | None = SDK_TAG_INFIXES_PLATFORM_GO
-        else:
-            sdk_url = SDK_GIT_URLS["go"]
-            go_infix = None
-        result = _resolve_against(sdk, version, go_infix, sdk_url)
+        result = _resolve_against("go", version, "otdfctl", SDK_GIT_URLS["platform"])
         if is_resolve_success(result):
-            result["source"] = go_source
             return result
-        # Platform miss on a tag-like input: try the archived standalone repo.
-        if go_source == "platform" and _looks_like_release_tag(version):
-            fallback = _resolve_against(sdk, version, None, SDK_GIT_URLS["go"])
-            if is_resolve_success(fallback):
-                fallback["source"] = "standalone"
-                return fallback
-        return result
+        return _resolve_against("go", version, None, SDK_GIT_URLS["go"])
 
     try:
         sdk_url = SDK_GIT_URLS[sdk]

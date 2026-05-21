@@ -28,11 +28,6 @@ on:
         type: string
         default: all
         description: "SDK to focus on (go, js, java, all)"
-      otdfctl-source:
-        required: false
-        type: string
-        default: ""
-        description: "DEPRECATED — ignored. otdfctl is always sourced from the opentdf/platform monorepo; pre-v0.31.0 tags fall back to the Go module proxy for artifact install."
   workflow_call:
     inputs:
       platform-ref:
@@ -55,15 +50,6 @@ on:
         required: false
         type: string
         default: all
-      otdfctl-source:
-        # DEPRECATED — accepted but ignored. otdfctl is always sourced from
-        # the opentdf/platform monorepo; pre-v0.31.0 tags fall back to the
-        # Go module proxy for artifact install. Kept declared so existing
-        # workflow_call sites that pass this input don't fail with
-        # "Unexpected inputs provided".
-        required: false
-        type: string
-        default: ""
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -103,12 +89,6 @@ jobs:
             echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-      - name: Warn on deprecated otdfctl-source input
-        if: ${{ inputs.otdfctl-source != '' }}
-        env:
-          OTDFCTL_SOURCE_INPUT: ${{ inputs.otdfctl-source }}
-        run: |-
-          echo "::warning::Input 'otdfctl-source=${OTDFCTL_SOURCE_INPUT}' is deprecated and ignored. otdfctl is now always sourced from the opentdf/platform monorepo; pre-v0.31.0 tags fall back to the Go module proxy. Remove this input from your caller."
       - name: Default Versions depend on context
         id: default-tags
         run: |-
