@@ -57,7 +57,13 @@ def install_scenario_cmd(
         typer.echo(f"Error: {path} has unknown kind {raw_kind!r}", err=True)
         raise typer.Exit(1)
 
-    installed: dict[str, object] = {"manifest": str(path), "platform": None, "kas": {}, "sdks": {}}
+    installed: dict[str, object] = {
+        "manifest": str(path),
+        "platform": None,
+        "kas": {},
+        "sdks": {"encrypt": [], "decrypt": []},
+    }
+    out = path.parent / f"{path.stem}.installed.json"
 
     try:
         installed["platform"] = _install_platform_pin(instance.platform)
@@ -65,25 +71,29 @@ def install_scenario_cmd(
             installed["kas"][kas_name] = _install_platform_pin(kas_pin)
         if not skip_scripts:
             install_helper_scripts()
-    except PlatformInstallError as e:
-        typer.echo(f"Error installing platform artifacts: {e}", err=True)
+
+        if scenario is not None:
+            install_paths: dict[tuple[str, str, str | None], str] = {}
+            for entry in scenario.sdks.union():
+                dist_dir = install_release(entry.sdk, entry.version)
+                install_paths[entry.install_key()] = str(dist_dir)
+            for role in ("encrypt", "decrypt"):
+                installed["sdks"][role] = [
+                    {
+                        "sdk": entry.sdk,
+                        "version": entry.version,
+                        "source": entry.source,
+                        "path": install_paths[entry.install_key()],
+                    }
+                    for entry in getattr(scenario.sdks, role)
+                ]
+    except (PlatformInstallError, InstallError) as e:
+        installed["status"] = "partial"
+        out.write_text(json.dumps(installed, indent=2) + "\n")
+        typer.echo(f"Error: {e}", err=True)
+        typer.echo(f"  Wrote partial manifest to {out}", err=True)
         raise typer.Exit(1)
 
-    if scenario is not None:
-        sdks = scenario.sdks.union()
-        for sdk_name, sdk_pin in sdks.items():
-            try:
-                dist_dir = install_release(sdk_name, sdk_pin.version, source=sdk_pin.source)
-                installed["sdks"][sdk_name] = {
-                    "version": sdk_pin.version,
-                    "source": sdk_pin.source,
-                    "path": str(dist_dir),
-                }
-            except InstallError as e:
-                typer.echo(f"Error installing SDK {sdk_name}: {e}", err=True)
-                raise typer.Exit(1)
-
-    out = path.parent / f"{path.stem}.installed.json"
     out.write_text(json.dumps(installed, indent=2) + "\n")
     typer.echo(f"  Wrote {out}")
 
@@ -91,9 +101,14 @@ def install_scenario_cmd(
 def _peek_kind(path: Path) -> str | None:
     """Cheap pre-validation read so we can dispatch to the right model loader."""
     from ruamel.yaml import YAML
+    from ruamel.yaml.error import YAMLError
 
     y = YAML(typ="safe")
-    raw = y.load(path.read_text())
+    try:
+        raw = y.load(path.read_text())
+    except YAMLError as e:
+        typer.echo(f"Error: {path} is not valid YAML: {e}", err=True)
+        raise typer.Exit(1)
     if isinstance(raw, dict):
         kind = raw.get("kind")
         return kind if isinstance(kind, str) else None
