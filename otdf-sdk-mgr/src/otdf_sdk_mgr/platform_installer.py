@@ -43,9 +43,7 @@ def get_platform_dir() -> Path:
         if (current / "xtest").exists():
             return current / "xtest" / "platform"
         current = current.parent
-    raise PlatformInstallError(
-        "Could not locate xtest/ root. Set OTDF_PLATFORM_DIR to override."
-    )
+    raise PlatformInstallError("Could not locate xtest/ root. Set OTDF_PLATFORM_DIR to override.")
 
 
 def _platform_src_root() -> Path:

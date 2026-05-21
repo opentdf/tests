@@ -66,16 +66,32 @@ def test_install_scenario_writes_consumable_manifest(tmp_path: Path) -> None:
     }
     assert set(record["kas"].keys()) == {"alpha"}
     assert record["sdks"]["encrypt"] == [
-        {"sdk": "go", "version": "v0.24.0", "source": None,
-         "path": str(tmp_path / "sdk" / "go" / "v0.24.0")},
-        {"sdk": "js", "version": "v0.5.0", "source": None,
-         "path": str(tmp_path / "sdk" / "js" / "v0.5.0")},
+        {
+            "sdk": "go",
+            "version": "v0.24.0",
+            "source": None,
+            "path": str(tmp_path / "sdk" / "go" / "v0.24.0"),
+        },
+        {
+            "sdk": "js",
+            "version": "v0.5.0",
+            "source": None,
+            "path": str(tmp_path / "sdk" / "js" / "v0.5.0"),
+        },
     ]
     assert record["sdks"]["decrypt"] == [
-        {"sdk": "js", "version": "v0.5.0", "source": None,
-         "path": str(tmp_path / "sdk" / "js" / "v0.5.0")},
-        {"sdk": "java", "version": "v0.7.8", "source": None,
-         "path": str(tmp_path / "sdk" / "java" / "v0.7.8")},
+        {
+            "sdk": "js",
+            "version": "v0.5.0",
+            "source": None,
+            "path": str(tmp_path / "sdk" / "js" / "v0.5.0"),
+        },
+        {
+            "sdk": "java",
+            "version": "v0.7.8",
+            "source": None,
+            "path": str(tmp_path / "sdk" / "java" / "v0.7.8"),
+        },
     ]
     assert "status" not in record
 
@@ -98,8 +114,7 @@ def test_install_scenario_writes_partial_manifest_on_failure(tmp_path: Path) -> 
     with (
         patch("otdf_sdk_mgr.cli_scenario.install_platform_release", return_value=platform_dist),
         patch("otdf_sdk_mgr.cli_scenario.install_helper_scripts"),
-        patch("otdf_sdk_mgr.cli_scenario.install_release",
-              side_effect=InstallError("boom")),
+        patch("otdf_sdk_mgr.cli_scenario.install_release", side_effect=InstallError("boom")),
         pytest.raises(typer.Exit),
     ):
         install_scenario_cmd(scenario_path, skip_scripts=True)
