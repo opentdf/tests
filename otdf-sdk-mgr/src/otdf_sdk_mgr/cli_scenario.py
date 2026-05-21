@@ -71,18 +71,26 @@ def install_scenario_cmd(
         typer.echo(f"Error: {path} has unknown kind {kind!r}", err=True)
         raise typer.Exit(1)
 
-    installed: dict[str, object] = {
-        "manifest": str(path),
-        "platform": None,
-        "kas": {},
-        "sdks": {"encrypt": [], "decrypt": []},
-    }
+    installed_platform: dict[str, str] | None = None
+    installed_kas: dict[str, dict[str, str]] = {}
+    installed_sdks: dict[str, list[dict[str, str | None]]] = {"encrypt": [], "decrypt": []}
     out = path.parent / f"{path.stem}.installed.json"
 
+    def _snapshot(status: str | None = None) -> dict[str, object]:
+        snap: dict[str, object] = {
+            "manifest": str(path),
+            "platform": installed_platform,
+            "kas": installed_kas,
+            "sdks": installed_sdks,
+        }
+        if status is not None:
+            snap["status"] = status
+        return snap
+
     try:
-        installed["platform"] = _install_platform_pin(instance.platform)
+        installed_platform = _install_platform_pin(instance.platform)
         for kas_name, kas_pin in instance.kas.items():
-            installed["kas"][kas_name] = _install_platform_pin(kas_pin)
+            installed_kas[kas_name] = _install_platform_pin(kas_pin)
         if not skip_scripts:
             install_helper_scripts()
 
@@ -92,7 +100,7 @@ def install_scenario_cmd(
                 dist_dir = install_release(entry.sdk, entry.version)
                 install_paths[entry.install_key()] = str(dist_dir)
             for role in ("encrypt", "decrypt"):
-                installed["sdks"][role] = [
+                installed_sdks[role] = [
                     {
                         "sdk": entry.sdk,
                         "version": entry.version,
@@ -102,11 +110,10 @@ def install_scenario_cmd(
                     for entry in getattr(scenario.sdks, role)
                 ]
     except (PlatformInstallError, InstallError) as e:
-        installed["status"] = "partial"
-        out.write_text(json.dumps(installed, indent=2) + "\n")
+        out.write_text(json.dumps(_snapshot(status="partial"), indent=2) + "\n")
         typer.echo(f"Error: {e}", err=True)
         typer.echo(f"  Wrote partial manifest to {out}", err=True)
         raise typer.Exit(1)
 
-    out.write_text(json.dumps(installed, indent=2) + "\n")
+    out.write_text(json.dumps(_snapshot(), indent=2) + "\n")
     typer.echo(f"  Wrote {out}")
