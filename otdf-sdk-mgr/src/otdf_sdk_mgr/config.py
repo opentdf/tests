@@ -88,6 +88,7 @@ def go_module_for_tag(tag: str) -> str:
         return GO_MODULE_PATH_STANDALONE
     return GO_MODULE_PATH_PLATFORM
 
+
 LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
     "java": "0.9.0",

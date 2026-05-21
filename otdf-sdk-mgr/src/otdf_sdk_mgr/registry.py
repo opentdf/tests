@@ -85,13 +85,15 @@ def list_go_versions() -> list[dict[str, Any]]:
         version = tag.removeprefix("otdfctl/")
         if not parse_semver(version):
             continue
-        results.append({
-            "sdk": "go",
-            "version": version,
-            "source": "platform-git-tag",
-            "install_method": f"go run {go_module_for_tag(version)}@{version}",
-            "stable": is_stable(version),
-        })
+        results.append(
+            {
+                "sdk": "go",
+                "version": version,
+                "source": "platform-git-tag",
+                "install_method": f"go run {go_module_for_tag(version)}@{version}",
+                "stable": is_stable(version),
+            }
+        )
     results.sort(key=lambda r: semver_sort_key(r["version"]))
     return results
 

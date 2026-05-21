@@ -173,7 +173,8 @@ def latest_stable_version(sdk: str) -> str | None:
         return stable[-1]["version"] if stable else None
     elif sdk == "java":
         stable_with_cli = [
-            v for v in list_java_github_releases()
+            v
+            for v in list_java_github_releases()
             if v.get("stable", False) and v.get("has_cli", False)
         ]
         return stable_with_cli[-1]["version"] if stable_with_cli else None
