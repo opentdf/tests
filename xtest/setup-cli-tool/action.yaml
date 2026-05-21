@@ -10,15 +10,12 @@ inputs:
     required: true
   platform-otdfctl-dir:
     description: >-
-      Absolute path to platform's otdfctl/ directory. When set and sdk is "go",
-      head versions whose SHA matches platform-otdfctl-sha are symlinked from
-      here instead of checked out separately. Used in both explicit platform
-      mode (source: "platform" in resolved version) and auto-detect mode.
+      Absolute path to platform's otdfctl/ directory. When set and a resolved
+      go version's SHA matches platform-otdfctl-sha the directory is reused
+      via symlink instead of a fresh checkout.
   platform-otdfctl-sha:
     description: >-
       SHA of the commit that platform-otdfctl-dir was checked out at.
-      Used to decide which Go head version (if any) can reuse the existing
-      platform checkout vs needing a fresh one.
 outputs:
   version-a:
     description: "Object containing tag, sha, and name of a version checked out"
@@ -42,16 +39,13 @@ runs:
     - name: identify repo urls
       shell: bash
       run: |
+        # Go source builds always come from opentdf/platform (otdfctl moved
+        # there at v0.31.0); pre-v0.31.0 tags are artifact-install-only via
+        # the Go module proxy and never reach the source-checkout path here.
         case "$INPUT_SDK" in
-          "go")
-            echo "STANDALONE_REPO=opentdf/otdfctl" >> "$GITHUB_ENV"
-            ;;
-          "java")
-            echo "STANDALONE_REPO=opentdf/java-sdk" >> "$GITHUB_ENV"
-            ;;
-          "js")
-            echo "STANDALONE_REPO=opentdf/web-sdk" >> "$GITHUB_ENV"
-            ;;
+          "go") ;;
+          "java") echo "STANDALONE_REPO=opentdf/java-sdk" >> "$GITHUB_ENV" ;;
+          "js")   echo "STANDALONE_REPO=opentdf/web-sdk" >> "$GITHUB_ENV" ;;
           *)
             echo "Invalid SDK specified: $INPUT_SDK" >> "$GITHUB_STEP_SUMMARY"
             exit 1
@@ -101,16 +95,10 @@ runs:
           release=$(echo "$row" | jq -r '.release // empty')
           if [[ "$head" != "true" && -n "$release" ]]; then
             echo "Installing $INPUT_SDK $tag from registry (release: $release)"
-            # Sanitize tag for use as an env var name (replace non-alphanumeric/underscore with _)
             tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
-            source=$(echo "$row" | jq -r '.source // empty')
-            source_args=()
-            [[ -n "$source" ]] && source_args=(--source "$source")
             if ! uv run --project "$SDK_MGR_DIR" otdf-sdk-mgr install artifact \
-              --sdk "$INPUT_SDK" --version "$release" \
-              --dist-name "$tag" "${source_args[@]}"; then
-              echo "  Warning: Artifact installation failed for $INPUT_SDK $tag"
-              echo "  Will fall back to building from source"
+              --sdk "$INPUT_SDK" --version "$release" --dist-name "$tag"; then
+              echo "  Warning: Artifact installation failed for $INPUT_SDK $tag; falling back to source"
               echo "BUILD_FROM_SOURCE_${tag_sanitized}=true" >> "$GITHUB_ENV"
             fi
           fi
@@ -124,10 +112,10 @@ runs:
       id: check-source
       shell: bash
       run: |
-        # Determine which version slots need source checkout and from which repo.
-        # A slot needs checkout if it is a head version OR if artifact install failed.
-        # Platform-source versions may reuse the existing platform-otdfctl-dir
-        # (when their SHA matches) or need a fresh opentdf/platform checkout.
+        # A slot needs checkout if it is a head version OR if artifact install
+        # failed. For go, the only source path is opentdf/platform's otdfctl/
+        # subtree — reuse the existing platform checkout when the SHAs match,
+        # otherwise check out a fresh one.
         for slot in a b c d; do
           case "$slot" in
             a) row=$(echo "${version_info}" | jq -rc '.[0] // empty') ;;
@@ -147,7 +135,6 @@ runs:
           tag=$(echo "$row" | jq -r '.tag')
           head=$(echo "$row" | jq -r '.head // false')
           sha=$(echo "$row" | jq -r '.sha')
-          source=$(echo "$row" | jq -r '.source // empty')
           tag_sanitized="${tag//[^a-zA-Z0-9_]/_}"
           build_from_source_var="BUILD_FROM_SOURCE_${tag_sanitized}"
           needs_source=false
@@ -157,30 +144,19 @@ runs:
 
           is_platform=false
           use_existing=false
-          checkout_repo="$STANDALONE_REPO"
+          checkout_repo="${STANDALONE_REPO:-}"
           checkout_path="${INPUT_PATH}/${INPUT_SDK}/src/${tag}"
 
-          if [[ "$source" == "platform" ]]; then
-            # Explicit platform mode: resolver tagged this version as from
-            # opentdf/platform. Use per-version SHA to decide checkout strategy.
+          if [[ "$INPUT_SDK" == "go" && "$needs_source" == "true" ]]; then
             is_platform=true
-            if [[ "$needs_source" == "true" && -n "$PLATFORM_OTDFCTL_DIR" \
-                  && -n "$PLATFORM_OTDFCTL_SHA" && "$sha" == "$PLATFORM_OTDFCTL_SHA" ]]; then
-              # SHA matches existing platform checkout — reuse via symlink
+            if [[ -n "$PLATFORM_OTDFCTL_DIR" && -n "$PLATFORM_OTDFCTL_SHA" \
+                  && "$sha" == "$PLATFORM_OTDFCTL_SHA" ]]; then
               use_existing=true
               needs_source=false
-            elif [[ "$needs_source" == "true" ]]; then
-              # Different SHA — need a fresh platform checkout
+            else
               checkout_repo="$PLATFORM_REPO"
               checkout_path="${INPUT_PATH}/${INPUT_SDK}/platform-src/${tag}"
             fi
-          elif [[ "$INPUT_SDK" == "go" && -n "$PLATFORM_OTDFCTL_DIR" && "$needs_source" == "true" ]]; then
-            # Auto-detect: resolver used standalone repo but detect-otdfctl found
-            # an embedded otdfctl/ in the platform checkout. PLATFORM_OTDFCTL_DIR
-            # is only set after confirming the directory exists, so reuse it directly.
-            echo "::notice::Go version ${tag} resolved from standalone repo; reusing platform-embedded otdfctl at $PLATFORM_OTDFCTL_DIR."
-            use_existing=true
-            needs_source=false
           fi
 
           echo "needs-checkout-${slot}=${needs_source}" >> "$GITHUB_OUTPUT"

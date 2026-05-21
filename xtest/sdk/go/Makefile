@@ -20,8 +20,14 @@ build:
 	@echo "Building binaries for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
 		echo "Building binary for $$version"; \
-		cd $(MAKEFILE_DIR)/src/$$version && \
-		go build -o $(MAKEFILE_DIR)/binary-$$version . || { \
+		src_real="$$(cd $(MAKEFILE_DIR)/src/$$version && pwd -P)"; \
+		gowork=""; \
+		if [ -z "$$GOWORK" ] && [ -f "$$src_real/../go.work" ]; then \
+			gowork="$$(cd $$src_real/.. && pwd -P)/go.work"; \
+			echo "  Using platform go.work: $$gowork"; \
+		fi; \
+		(cd "$$src_real" && \
+		 GOWORK="$${GOWORK:-$$gowork}" go build -o $(MAKEFILE_DIR)/binary-$$version .) || { \
 			echo "Error: Go build failed for $$version"; \
 			exit 1; \
 		}; \

@@ -252,15 +252,16 @@ class TestResolveVersionTags:
 
 class TestResolveLatest:
     def test_non_java_returns_last_stable(self):
+        # For go, "latest" routes to the platform monorepo (otdfctl/ infix).
         ls = make_ls_remote(
-            ("1" * 40, "refs/tags/v0.1.0"),
-            ("2" * 40, "refs/tags/v0.2.0"),
-            ("3" * 40, "refs/tags/v0.3.0"),
+            ("1" * 40, "refs/tags/otdfctl/v0.31.0"),
+            ("2" * 40, "refs/tags/otdfctl/v0.32.0"),
+            ("3" * 40, "refs/tags/otdfctl/v0.33.0"),
         )
         with patch_git(ls):
             result = resolve("go", "latest", None)
         assert is_resolve_success(result)
-        assert result["tag"] == "v0.3.0"
+        assert result["tag"] == "v0.33.0"
 
     def test_java_with_cli_available(self):
         ls = make_ls_remote(
@@ -300,6 +301,33 @@ class TestResolveLatest:
 # ---------------------------------------------------------------------------
 # _try_resolve_js_npm()
 # ---------------------------------------------------------------------------
+
+
+class TestResolveGo:
+    """resolve() — go always tries the platform monorepo first."""
+
+    def test_main_resolves_against_platform(self):
+        ls = make_ls_remote((SHA40, "refs/heads/main"))
+        with patch_git(ls):
+            result = resolve("go", "main", None)
+        assert is_resolve_success(result)
+        assert result.get("head") is True
+
+    def test_prefixed_tag_resolves_in_platform(self):
+        ls = make_ls_remote((SHA40, "refs/tags/otdfctl/v0.32.0"))
+        with patch_git(ls):
+            result = resolve("go", "otdfctl/v0.32.0", None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.32.0"
+
+    def test_platform_miss_falls_back_to_archive(self):
+        # Tags not present in opentdf/platform (e.g. pre-v0.31.0 releases)
+        # fall back to the archived opentdf/otdfctl repo.
+        ls = make_ls_remote((SHA40, "refs/tags/v0.24.0"))
+        with patch_git(ls):
+            result = resolve("go", "v0.24.0", None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.24.0"
 
 
 class TestTryResolveJsNpm:
