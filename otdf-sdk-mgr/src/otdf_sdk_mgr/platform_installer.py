@@ -96,7 +96,9 @@ def _resolve_platform_ref(version_or_ref: str) -> str:
     infix = SDK_TAG_INFIXES.get("platform", "service")
     if "/" in version_or_ref or version_or_ref in ("main", "HEAD"):
         return version_or_ref
-    if len(version_or_ref) >= 7 and all(c in "0123456789abcdef" for c in version_or_ref.lower()):
+    if len(version_or_ref) in (40, 64) and all(
+        c in "0123456789abcdef" for c in version_or_ref.lower()
+    ):
         return version_or_ref
     return f"{infix}/{normalize_version(version_or_ref)}"
 
@@ -143,7 +145,9 @@ def _git_rev_parse(worktree: Path, rev: str) -> str:
         ["git", "-C", str(worktree), "rev-parse", rev], capture_output=True, text=True
     )
     if result.returncode != 0:
-        return ""
+        raise PlatformInstallError(
+            f"git rev-parse {rev} failed in {worktree}: {result.stderr.strip()}"
+        )
     return result.stdout.strip()
 
 
@@ -178,8 +182,8 @@ def install_platform_release(version: str, dist_name: str | None = None) -> Path
 def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
     """Check out provisioning helper scripts from the platform `main` branch.
 
-    Scripts are shared across instances (see plan §1, helper-scripts decision)
-    and refreshed on demand. Returns the scripts directory.
+    Scripts are shared across instances; refreshed on demand. Returns the
+    scripts directory.
     """
     bare = _ensure_bare_repo()
     scripts_dir = _platform_scripts_dir()
@@ -190,16 +194,15 @@ def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
     else:
         print(f"Updating scripts worktree at {worktree}...")
         _run(["git", "-C", str(worktree), "pull", "origin", branch])
-    scripts_dir.mkdir(parents=True, exist_ok=True)
     src_scripts = worktree / "scripts"
-    if src_scripts.exists():
-        # Mirror the platform/scripts/ tree into xtest/platform/scripts/
-        if scripts_dir.exists():
-            shutil.rmtree(scripts_dir)
-        shutil.copytree(src_scripts, scripts_dir)
-        print(f"  Helper scripts copied to {scripts_dir}")
-    else:
-        print(f"  Warning: no scripts/ directory in platform@{branch}; nothing to copy.")
+    if not src_scripts.exists():
+        raise PlatformInstallError(
+            f"no scripts/ directory in platform@{branch}; cannot install helper scripts"
+        )
+    if scripts_dir.exists():
+        shutil.rmtree(scripts_dir)
+    shutil.copytree(src_scripts, scripts_dir)
+    print(f"  Helper scripts copied to {scripts_dir}")
     return scripts_dir
 
 

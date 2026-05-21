@@ -12,7 +12,6 @@ install_app = typer.Typer(help="Install SDK CLI artifacts from registries or sou
 
 
 def _register_scenario_cmd() -> None:
-    """Defer scenario import so pydantic is only imported when needed."""
     from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
 
     install_app.command("scenario")(install_scenario_cmd)
@@ -54,13 +53,13 @@ def lts(
     if "platform" in requested:
         version = LTS_VERSIONS.get("platform")
         if version is None:
-            typer.echo("Warning: no LTS version defined for platform; skipping", err=True)
-        else:
-            try:
-                install_platform_release(version)
-            except PlatformInstallError as e:
-                typer.echo(f"Error: {e}", err=True)
-                raise typer.Exit(1)
+            typer.echo("Error: no LTS version defined for platform", err=True)
+            raise typer.Exit(1)
+        try:
+            install_platform_release(version)
+        except PlatformInstallError as e:
+            typer.echo(f"Error: {e}", err=True)
+            raise typer.Exit(1)
     if sdk_targets:
         cmd_lts(sdk_targets)
 
