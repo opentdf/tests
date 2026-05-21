@@ -71,9 +71,9 @@ def test_platform_pin_requires_exactly_one_source() -> None:
     with pytest.raises(ValidationError):
         PlatformPin()  # no fields set
     with pytest.raises(ValidationError):
-        PlatformPin(dist="v0.9.0", image="ghcr.io/x:v0.9.0")  # two set
+        PlatformPin(dist="v0.9.0", source=SourceRef(ref="main"))  # two set
     with pytest.raises(ValidationError):
-        PlatformPin(dist="", image="ghcr.io/x:v0.9.0")  # presence, not truthiness
+        PlatformPin(dist="", source=SourceRef(ref="main"))  # presence, not truthiness
 
 
 def test_kas_pin_features_pass_through() -> None:

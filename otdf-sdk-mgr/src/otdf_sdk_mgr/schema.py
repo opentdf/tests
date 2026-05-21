@@ -36,21 +36,19 @@ class PlatformPin(_StrictModel):
     """Version pin for the platform service.
 
     `dist` references a built binary at `xtest/platform/dist/<dist>/service`
-    produced by `otdf-sdk-mgr install platform:<version>`. `source.ref` is a
-    git ref to build from on demand. `image` is reserved for forward-compat
-    once container images are published; rejected at run time today.
+    produced by `otdf-sdk-mgr install platform:<version>`.
+    `source.ref` is a git ref to build from on demand.
     """
 
     dist: str | None = None
     source: SourceRef | None = None
-    image: str | None = None
 
     @model_validator(mode="after")
     def _exactly_one(self) -> PlatformPin:
-        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k) is not None]
+        set_fields = [k for k in ("dist", "source") if getattr(self, k) is not None]
         if len(set_fields) != 1:
             raise ValueError(
-                f"PlatformPin must set exactly one of dist|source|image (got {set_fields or 'none'})"
+                f"PlatformPin must set exactly one of dist|source (got {set_fields or 'none'})"
             )
         return self
 
@@ -60,16 +58,15 @@ class KasPin(_StrictModel):
 
     dist: str | None = None
     source: SourceRef | None = None
-    image: str | None = None
     mode: KasMode = "standard"
     features: dict[str, bool] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _exactly_one(self) -> KasPin:
-        set_fields = [k for k in ("dist", "source", "image") if getattr(self, k) is not None]
+        set_fields = [k for k in ("dist", "source") if getattr(self, k) is not None]
         if len(set_fields) != 1:
             raise ValueError(
-                f"KasPin must set exactly one of dist|source|image (got {set_fields or 'none'})"
+                f"KasPin must set exactly one of dist|source (got {set_fields or 'none'})"
             )
         return self
 
