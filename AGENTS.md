@@ -2,15 +2,20 @@
 
 This guide provides essential knowledge for AI agents performing updates, refactorings, and debugging of OpenTDF libraries and applications under test.
 
+## Repository Layout
+
+| Path | Purpose | Has its own AGENTS.md? |
+|------|---------|------------------------|
+| `xtest/` | pytest integration tests (the main test suite) | yes |
+| `otdf-sdk-mgr/` | Python CLI that installs SDK CLIs from releases or source (see `otdf-sdk-mgr/README.md`) | no |
+| `otdf-local/` | Python CLI that runs/stops the platform + KAS instances locally | yes |
+| `vulnerability/` | Playwright UI test suite (run with `npx playwright test`) | no |
+| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) |  |
+
 ## Test Framework Overview
 
-### Structure
-- **Test Directory**: `xtest/` - pytest-based integration tests
-- **SDK Distributions**: `xtest/sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
-- **SDK Configuration**: `otdf-sdk-mgr install` - installs SDK CLIs from released artifacts or delegates to source builds
-- **SDK Version Lookup**: `otdf-sdk-mgr versions list` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
-- **Platform**: `platform/` - OpenTDF platform service
-- **Test Runner**: pytest with custom CLI options
+### Test Runner
+pytest with custom CLI options. Most work happens in `xtest/`.
 
 ### Configuring SDK Artifacts
 
@@ -207,6 +212,29 @@ Restart the platform service after making changes.
 - **Helper functions**: Used across multiple test files
 - **Conftest.py**: Session-scoped fixtures, careful with modifications
 
+### Before Committing Python Changes
+
+**REQUIRED**: Run lint, format, and type-check on any Python package you touched
+(`xtest/`, `otdf-sdk-mgr/`, `otdf-local/`, etc.) before `git commit`. `cd` into
+the package directory first so the tools see the project's venv:
+
+```bash
+cd otdf-sdk-mgr        # or xtest, otdf-local, etc.
+uv run ruff check .    # lint — must pass
+uv run ruff format .   # auto-format — re-stage any reformatted files
+uv run pyright         # type-check — must pass
+```
+
+Use `uv run`, not `uvx`. `uvx` runs the tool in an isolated env that can't
+see the project's dependencies, so `pyright` will produce dozens of spurious
+`Import "foo" could not be resolved` errors. `uv run` uses the project venv
+(after `uv sync` has installed the `dev` dependency group), which is what CI
+does.
+
+Run all three. Don't skip steps because "it's a small change" — CI runs them
+and a failed check round-trips the PR. If `ruff format` rewrites a file you
+already staged, `git add` it again before committing.
+
 ## Test File Organization
 
 ### Key Test Files
@@ -242,24 +270,6 @@ curl localhost:8080/healthz
 yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 ```
 
-## Summary
+## Closing Note
 
-### Preferred Workflow
-
-1. **Build SDK CLIs**: `cd xtest/sdk && make`
-2. **Configure environment**: `cd xtest && set -a && source test.env && set +a`
-3. **Run tests**: `uv run pytest --sdks go -v`
-4. **Restart after config changes**: Restart the affected platform/KAS services
-
-### When Debugging Test Failures
-
-1. Read error messages carefully - they guide you to the root cause
-2. Check platform configuration matches expected test behavior
-3. Verify all KAS instances have consistent keys
-4. Ensure services are running and healthy
-5. Check service logs for errors
-6. Reproduce issues manually when possible
-7. Always restart services after config changes
-8. Read before writing - understand existing code patterns
-
-The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect.
+The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect. See the per-package guides in `xtest/`, `otdf-sdk-mgr/`, and `otdf-local/` for sub-system specifics.
