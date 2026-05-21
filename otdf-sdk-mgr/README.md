@@ -58,13 +58,13 @@ otdf-sdk-mgr java-fixup
 
 ## How Release Installs Work
 
-- **Go**: Writes a `.version` file containing `module-path@version` (e.g., `github.com/opentdf/otdfctl@v0.24.0`); `cli.sh`/`otdfctl.sh` use `go run <module>@<version>` (no local compilation needed, Go caches the binary). The module path is `github.com/opentdf/platform/otdfctl` for platform-embedded releases or `github.com/opentdf/otdfctl` for standalone releases.
+- **Go**: Writes a `.version` file containing `module-path@version`; `cli.sh`/`otdfctl.sh` use `go run <module>@<version>` (no local compilation needed, Go caches the binary). The resolver always targets the opentdf/platform monorepo (`github.com/opentdf/platform/otdfctl`) for v0.31.0 and newer; pre-v0.31.0 tags fall back to the archived standalone repo (`github.com/opentdf/otdfctl`) for artifact install via the Go module proxy. Bare semver inputs like `v0.32.0` are auto-prepended with `otdfctl/` when looking up platform tags.
 - **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
 - **Java**: Downloads `cmdline.jar` from GitHub Releases; `cli.sh` uses `java -jar cmdline.jar`
 
 ## Source Builds
 
-Source builds (`tip` mode) check out source to `sdk/{lang}/src/` and compile via `make` to `sdk/{lang}/dist/`.
+Source builds (`tip` mode) check out source to `sdk/{lang}/src/` and compile via `make` to `sdk/{lang}/dist/`. For Go, the platform monorepo is cloned to `sdk/go/platform-src/{ref}/` and `sdk/go/src/{ref}` is a symlink to its `otdfctl/` subdirectory; `make` discovers the platform's top-level `go.work` automatically so `protocol/go`, `sdk`, and `lib/*` resolve to the local checkout.
 
 After changes to SDK source, rebuild:
 

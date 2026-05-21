@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 
@@ -70,11 +71,23 @@ SDK_GITHUB_REPOS: dict[str, str] = {
     "java": "opentdf/java-sdk",
 }
 
-GO_INSTALL_PREFIX_STANDALONE = "go run github.com/opentdf/otdfctl"
-GO_INSTALL_PREFIX_PLATFORM = "go run github.com/opentdf/platform/otdfctl"
-
-GO_MODULE_PATH = "github.com/opentdf/otdfctl"
+# Canonical post-migration location.
 GO_MODULE_PATH_PLATFORM = "github.com/opentdf/platform/otdfctl"
+# Archived pre-v0.31.0 releases; still installable via the Go module proxy.
+GO_MODULE_PATH_STANDALONE = "github.com/opentdf/otdfctl"
+
+# otdfctl moved into the platform monorepo at v0.31.0; tags below this resolve
+# against the archived standalone module path for artifact install only.
+OTDFCTL_PLATFORM_MIN_VERSION = (0, 31, 0)
+
+
+def go_module_for_tag(tag: str) -> str:
+    """Pick the Go module path for an otdfctl release tag."""
+    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+    if m and (int(m.group(1)), int(m.group(2)), int(m.group(3))) < OTDFCTL_PLATFORM_MIN_VERSION:
+        return GO_MODULE_PATH_STANDALONE
+    return GO_MODULE_PATH_PLATFORM
+
 
 LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
@@ -102,9 +115,9 @@ JAVA_PLATFORM_BRANCH_MAP: dict[str, str] = {
     "0.1.0": "protocol/go/v0.2.3",
 }
 
-# Bare repo names per SDK (used by checkout)
+# Bare repo names per SDK (used by checkout). "go" is intentionally absent —
+# otdfctl source builds come from opentdf/platform via checkout_go_from_platform.
 SDK_BARE_REPOS: dict[str, str] = {
-    "go": "otdfctl.git",
     "java": "java-sdk.git",
     "js": "web-sdk.git",
 }
@@ -114,47 +127,6 @@ SDK_TAG_INFIXES: dict[str, str] = {
     "js": "sdk",
     "platform": "service",
 }
-
-# When resolving go versions from the platform repo, use "otdfctl" infix
-# (tags are otdfctl/vX.Y.Z in the platform monorepo)
-SDK_TAG_INFIXES_PLATFORM_GO = "otdfctl"
-
-_VALID_GO_SOURCES = {None, "standalone", "platform"}
-
-
-def _validate_go_source(source: str | None) -> None:
-    """Raise ValueError if source is not a recognised Go source."""
-    if source not in _VALID_GO_SOURCES:
-        raise ValueError(f"Invalid Go source {source!r}; expected one of {_VALID_GO_SOURCES}")
-
-
-def go_git_url(source: str | None = None) -> str:
-    """Return the git URL for Go SDK resolution based on source.
-
-    Args:
-        source: "platform" to use the platform monorepo, None/"standalone" for the
-                standalone otdfctl repo.
-    """
-    _validate_go_source(source)
-    if source == "platform":
-        return SDK_GIT_URLS["platform"]
-    return SDK_GIT_URLS["go"]
-
-
-def go_tag_infix(source: str | None = None) -> str | None:
-    """Return the tag infix for Go SDK resolution based on source."""
-    _validate_go_source(source)
-    if source == "platform":
-        return SDK_TAG_INFIXES_PLATFORM_GO
-    return None
-
-
-def go_module_path(source: str | None = None) -> str:
-    """Return the Go module path based on source."""
-    _validate_go_source(source)
-    if source == "platform":
-        return GO_MODULE_PATH_PLATFORM
-    return GO_MODULE_PATH
 
 
 ALL_SDKS = ["go", "js", "java"]
