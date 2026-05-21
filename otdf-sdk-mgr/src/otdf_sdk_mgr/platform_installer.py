@@ -63,12 +63,15 @@ def _platform_bare_repo() -> Path:
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> None:
-    """Run a command, raising PlatformInstallError on failure."""
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    """Run a command, streaming output to the terminal.
+
+    Long-running commands (`go build`, `git clone`) need live output so the
+    user can see progress. We don't capture; on failure the user has already
+    seen the diagnostics in their terminal.
+    """
+    result = subprocess.run(cmd, cwd=cwd)
     if result.returncode != 0:
-        raise PlatformInstallError(
-            f"command failed: {' '.join(cmd)}\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        raise PlatformInstallError(f"command failed (exit {result.returncode}): {' '.join(cmd)}")
 
 
 def _ensure_bare_repo() -> Path:
@@ -190,8 +193,10 @@ def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
         print(f"Adding scripts worktree at {worktree} ({branch})...")
         _run(["git", f"--git-dir={bare}", "worktree", "add", str(worktree), branch])
     else:
+        # Worktrees from a bare clone have no `origin` remote, so `git pull`
+        # fails. Reset to the (just-fetched) branch ref in the bare repo.
         print(f"Updating scripts worktree at {worktree}...")
-        _run(["git", "-C", str(worktree), "pull", "origin", branch])
+        _run(["git", "-C", str(worktree), "reset", "--hard", branch])
     src_scripts = worktree / "scripts"
     if not src_scripts.exists():
         raise PlatformInstallError(

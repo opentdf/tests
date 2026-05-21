@@ -20,6 +20,30 @@ def _register_scenario_cmd() -> None:
 _register_scenario_cmd()
 
 
+def _split_platform(sdks: list[str]) -> tuple[bool, list[str]]:
+    """Return (platform_requested, sdks_without_platform)."""
+    return ("platform" in sdks, [s for s in sdks if s != "platform"])
+
+
+def _install_platform_or_exit(
+    install_fn,
+    version: str,
+    *,
+    dist_name: str | None = None,
+) -> None:
+    """Run a platform installer, mapping PlatformInstallError to typer.Exit(1)."""
+    from otdf_sdk_mgr.platform_installer import PlatformInstallError
+
+    try:
+        if dist_name is None:
+            install_fn(version)
+        else:
+            install_fn(version, dist_name=dist_name)
+    except PlatformInstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 @install_app.command()
 def stable(
     sdks: Annotated[
@@ -43,23 +67,15 @@ def lts(
     """Install LTS versions for each SDK."""
     from otdf_sdk_mgr.config import LTS_VERSIONS
     from otdf_sdk_mgr.installers import cmd_lts
-    from otdf_sdk_mgr.platform_installer import (
-        PlatformInstallError,
-        install_platform_release,
-    )
+    from otdf_sdk_mgr.platform_installer import install_platform_release
 
-    requested = sdks or ALL_SDKS
-    sdk_targets = [s for s in requested if s != "platform"]
-    if "platform" in requested:
+    want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
+    if want_platform:
         version = LTS_VERSIONS.get("platform")
         if version is None:
             typer.echo("Error: no LTS version defined for platform", err=True)
             raise typer.Exit(1)
-        try:
-            install_platform_release(version)
-        except PlatformInstallError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
+        _install_platform_or_exit(install_platform_release, version)
     if sdk_targets:
         cmd_lts(sdk_targets)
 
@@ -73,19 +89,11 @@ def tip(
 ) -> None:
     """Source checkout + build from main."""
     from otdf_sdk_mgr.installers import cmd_tip
-    from otdf_sdk_mgr.platform_installer import (
-        PlatformInstallError,
-        install_platform_source,
-    )
+    from otdf_sdk_mgr.platform_installer import install_platform_source
 
-    requested = sdks or ALL_SDKS
-    sdk_targets = [s for s in requested if s != "platform"]
-    if "platform" in requested:
-        try:
-            install_platform_source("main", dist_name="tip")
-        except PlatformInstallError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
+    want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
+    if want_platform:
+        _install_platform_or_exit(install_platform_source, "main", dist_name="tip")
     if sdk_targets:
         cmd_tip(sdk_targets)
 
@@ -104,10 +112,7 @@ def release(
     `opentdf/platform` monorepo.
     """
     from otdf_sdk_mgr.installers import InstallError, cmd_release
-    from otdf_sdk_mgr.platform_installer import (
-        PlatformInstallError,
-        install_platform_release,
-    )
+    from otdf_sdk_mgr.platform_installer import install_platform_release
 
     sdk_specs: list[str] = []
     for spec in specs:
@@ -116,11 +121,7 @@ def release(
             raise typer.Exit(1)
         sdk, version = spec.split(":", 1)
         if sdk == "platform":
-            try:
-                install_platform_release(version)
-            except PlatformInstallError as e:
-                typer.echo(f"Error: {e}", err=True)
-                raise typer.Exit(1)
+            _install_platform_or_exit(install_platform_release, version)
         else:
             sdk_specs.append(spec)
     if sdk_specs:

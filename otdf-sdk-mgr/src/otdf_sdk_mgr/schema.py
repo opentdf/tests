@@ -194,7 +194,8 @@ def _yaml() -> YAML:
     return YAML(typ="safe")
 
 
-def _load_yaml_mapping(path: str | Path) -> dict[str, object]:
+def load_yaml_mapping(path: str | Path) -> dict[str, object]:
+    """Parse `path` as YAML and assert the top-level is a mapping."""
     p = Path(path)
     raw = _yaml().load(p.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -204,12 +205,12 @@ def _load_yaml_mapping(path: str | Path) -> dict[str, object]:
 
 def load_scenario(path: str | Path) -> Scenario:
     """Parse and validate a scenarios.yaml file."""
-    return Scenario.model_validate(_load_yaml_mapping(path))
+    return Scenario.model_validate(load_yaml_mapping(path))
 
 
 def load_instance(path: str | Path) -> Instance:
     """Parse and validate an instance.yaml file."""
-    return Instance.model_validate(_load_yaml_mapping(path))
+    return Instance.model_validate(load_yaml_mapping(path))
 
 
 def dump_instance(instance: Instance, path: str | Path) -> None:
@@ -306,7 +307,7 @@ def _main(argv: list[str] | None = None) -> int:
         return 2
     path = Path(args[1])
     try:
-        raw = _load_yaml_mapping(path)
+        raw = load_yaml_mapping(path)
     except OSError as e:
         print(f"error: cannot read {path}: {e}", file=sys.stderr)
         return 1

@@ -22,7 +22,13 @@ from otdf_sdk_mgr.platform_installer import (
     install_platform_release,
     install_platform_source,
 )
-from otdf_sdk_mgr.schema import KasPin, PlatformPin, Scenario, load_instance, load_scenario
+from otdf_sdk_mgr.schema import (
+    Instance,
+    KasPin,
+    PlatformPin,
+    Scenario,
+    load_yaml_mapping,
+)
 
 
 def _install_platform_pin(pin: PlatformPin | KasPin) -> dict[str, str]:
@@ -46,15 +52,23 @@ def install_scenario_cmd(
         typer.echo(f"Error: {path} not found", err=True)
         raise typer.Exit(1)
 
-    raw_kind = _peek_kind(path)
+    from ruamel.yaml.error import YAMLError
+
+    try:
+        raw = load_yaml_mapping(path)
+    except YAMLError as e:
+        typer.echo(f"Error: {path} is not valid YAML: {e}", err=True)
+        raise typer.Exit(1)
+
+    kind = raw.get("kind") if isinstance(raw.get("kind"), str) else None
     scenario: Scenario | None = None
-    if raw_kind == "Scenario":
-        scenario = load_scenario(path)
+    if kind == "Scenario":
+        scenario = Scenario.model_validate(raw)
         instance = scenario.instance
-    elif raw_kind == "Instance":
-        instance = load_instance(path)
+    elif kind == "Instance":
+        instance = Instance.model_validate(raw)
     else:
-        typer.echo(f"Error: {path} has unknown kind {raw_kind!r}", err=True)
+        typer.echo(f"Error: {path} has unknown kind {kind!r}", err=True)
         raise typer.Exit(1)
 
     installed: dict[str, object] = {
@@ -96,20 +110,3 @@ def install_scenario_cmd(
 
     out.write_text(json.dumps(installed, indent=2) + "\n")
     typer.echo(f"  Wrote {out}")
-
-
-def _peek_kind(path: Path) -> str | None:
-    """Cheap pre-validation read so we can dispatch to the right model loader."""
-    from ruamel.yaml import YAML
-    from ruamel.yaml.error import YAMLError
-
-    y = YAML(typ="safe")
-    try:
-        raw = y.load(path.read_text())
-    except YAMLError as e:
-        typer.echo(f"Error: {path} is not valid YAML: {e}", err=True)
-        raise typer.Exit(1)
-    if isinstance(raw, dict):
-        kind = raw.get("kind")
-        return kind if isinstance(kind, str) else None
-    return None
