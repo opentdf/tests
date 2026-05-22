@@ -26,7 +26,7 @@
       "Skill(*)",
       "Write(xtest/scenarios/**)",
       "Write(xtest/features/**)",
-      "Write(xtest/bug_*_test.py)",
+      "Write(xtest/bugs/*_test.py)",
       "Write(tests/instances/**)",
       "Write(.claude/tmp/**)"
     ]
