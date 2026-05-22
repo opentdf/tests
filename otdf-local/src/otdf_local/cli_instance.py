@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from otdf_sdk_mgr.schema import Instance, Metadata, PlatformPin, PortsConfig, dump_instance
+from otdf_sdk_mgr.schema import (
+    Instance,
+    Metadata,
+    PlatformPin,
+    PortsConfig,
+    dump_instance,
+)
 
 from otdf_local.config.settings import get_settings
 
@@ -19,11 +25,15 @@ def init(
     name: Annotated[str, typer.Argument(help="Instance name (used as directory name)")],
     from_scenario: Annotated[
         Optional[Path],
-        typer.Option("--from-scenario", help="Initialize from a scenarios.yaml or instance.yaml"),
+        typer.Option(
+            "--from-scenario", help="Initialize from a scenarios.yaml or instance.yaml"
+        ),
     ] = None,
     ports_base: Annotated[
         int,
-        typer.Option("--ports-base", help="Base port (KAS ports computed as base+N*101)"),
+        typer.Option(
+            "--ports-base", help="Base port (KAS ports computed as base+N*101)"
+        ),
     ] = 8080,
     platform_dist: Annotated[
         Optional[str],
@@ -38,7 +48,10 @@ def init(
         _init_from_scenario(name, from_scenario, instance_dir)
     else:
         if platform_dist is None:
-            typer.echo("Error: --platform <dist> is required when not using --from-scenario", err=True)
+            typer.echo(
+                "Error: --platform <dist> is required when not using --from-scenario",
+                err=True,
+            )
             raise typer.Exit(2)
         _init_minimal(name, instance_dir, ports_base, platform_dist)
 
@@ -64,7 +77,9 @@ def _init_from_scenario(name: str, scenario_path: Path, instance_dir: Path) -> N
     else:
         raise typer.BadParameter(f"{scenario_path} has unknown kind {kind!r}")
     # Ensure the metadata name matches the chosen directory name.
-    instance.metadata = Metadata(**{**instance.metadata.model_dump(exclude_none=True), "name": name})
+    instance.metadata = Metadata(
+        **{**instance.metadata.model_dump(exclude_none=True), "name": name}
+    )
     instance_dir.mkdir(parents=True, exist_ok=True)
     (instance_dir / "kas").mkdir(parents=True, exist_ok=True)
     (instance_dir / "keys").mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -72,7 +87,9 @@ def _init_from_scenario(name: str, scenario_path: Path, instance_dir: Path) -> N
     dump_instance(instance, instance_dir / "instance.yaml")
 
 
-def _init_minimal(name: str, instance_dir: Path, ports_base: int, platform_dist: str) -> None:
+def _init_minimal(
+    name: str, instance_dir: Path, ports_base: int, platform_dist: str
+) -> None:
     """Create a barebones instance.yaml with default KAS layout."""
     instance = Instance(
         metadata=Metadata(name=name),
@@ -150,7 +167,11 @@ def ls(
                 "name": child.name,
                 "platform": (
                     inst.platform.dist
-                    or (inst.platform.source.ref if inst.platform.source else inst.platform.image)
+                    or (
+                        inst.platform.source.ref
+                        if inst.platform.source
+                        else inst.platform.image
+                    )
                 ),
                 "ports_base": inst.ports.base,
                 "kas": list(inst.kas.keys()),

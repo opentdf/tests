@@ -1,0 +1,35 @@
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+metadata:
+  id: dspx-3356
+  title: "PQC Go test_xwing_roundtrip is failing at o/platform main"
+  created: "2026-05-22"
+instance:
+  metadata:
+    name: dspx-3356
+  platform:
+    source:
+      ref: main
+  ports:
+    base: 8080
+  kas:
+    km1:
+      source:
+        ref: main
+      mode: key_management
+sdks:
+  encrypt:
+    - sdk: go
+      version: main
+      source: platform
+  decrypt:
+    - sdk: go
+      version: main
+      source: platform
+suite:
+  targets:
+    - test_pqc.py::test_xwing_roundtrip
+  containers:
+    - ztdf
+expected: "X-Wing TDF roundtrip completes successfully; wrappedKey in the KAO is 1120 bytes and ephemeralPublicKey is 1216 bytes."
+actual: "AssertionError: X-Wing wrappedKey should be 1120 bytes, got 1190 — KAS returns a ciphertext of the wrong size under platform main."

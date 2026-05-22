@@ -8,7 +8,6 @@ service launchers.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -72,7 +71,11 @@ def test_settings_loads_instance_when_present(tmp_path: Path) -> None:
     assert s.keys_dir == instance_dir / "keys"
 
 
-def test_platform_binary_for_resolves_under_xtest_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_platform_binary_for_resolves_under_xtest_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("OTDF_PLATFORM_DIR", "/tmp/fake-platform")
     s = Settings()
-    assert s.platform_binary_for("v0.9.0") == Path("/tmp/fake-platform/dist/v0.9.0/service")
+    assert s.platform_binary_for("v0.9.0") == Path(
+        "/tmp/fake-platform/dist/v0.9.0/service"
+    )

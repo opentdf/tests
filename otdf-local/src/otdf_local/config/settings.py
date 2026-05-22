@@ -197,8 +197,32 @@ class Settings(BaseSettings):
         return self._require_platform_dir() / "opentdf-kas-mode.yaml"
 
     @property
+    def platform_source_dir(self) -> Path | None:
+        """Return the platform source directory for go run / provisioning.
+
+        Legacy mode: the sibling platform/ checkout.
+        Instance + source build: the platform src worktree (xtest/platform/src/<ref>/).
+        """
+        if self.platform_dir is not None:
+            return self.platform_dir
+        instance = self.load_instance()
+        if instance is not None and instance.platform.source is not None:
+            from otdf_sdk_mgr.platform_installer import get_platform_dir
+
+            safe_ref = instance.platform.source.ref.replace("/", "--")
+            src_worktree = get_platform_dir() / "src" / safe_ref
+            if src_worktree.exists():
+                return src_worktree
+        return None
+
+    @property
     def docker_compose_file(self) -> Path:
         """Docker compose file path."""
+        src = self.platform_source_dir
+        if src is not None:
+            compose = src / "docker-compose.yaml"
+            if compose.exists():
+                return compose
         return self._require_platform_dir() / "docker-compose.yaml"
 
     # Service ports

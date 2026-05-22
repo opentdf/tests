@@ -61,7 +61,7 @@ def _get_platform_version(platform_dir: Path) -> str:
             timeout=60,
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            return (result.stdout or result.stderr).strip()
     except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
         pass
 

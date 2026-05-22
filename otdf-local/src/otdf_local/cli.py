@@ -3,9 +3,9 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
-from pathlib import Path
 from typing import Annotated, Optional
 
 import httpx
@@ -582,11 +582,17 @@ def env(
 
     # Platform configuration
     env_vars["PLATFORMURL"] = settings.platform_url
-    env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
+    _platform_src = settings.platform_source_dir
+    if _platform_src is not None:
+        env_vars["PLATFORM_DIR"] = str(_platform_src.resolve())
 
     # Schema file for manifest validation
-    schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
-    if schema_file.exists():
+    schema_file = (
+        _platform_src / "sdk" / "schema" / "manifest.schema.json"
+        if _platform_src is not None
+        else None
+    )
+    if schema_file is not None and schema_file.exists():
         env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
 
     # Log file paths
@@ -618,7 +624,7 @@ def env(
     except Exception as e:
         print_warning(f"Could not read root key from platform config: {e}")
 
-    # Try to get platform version from API
+    # Try to get platform version from API, then fall back to source detection
     try:
         platform = get_platform_service(settings)
         if platform.is_running():
@@ -631,7 +637,32 @@ def env(
                 if "version" in config:
                     env_vars["PLATFORM_VERSION"] = config["version"]
     except Exception as e:
-        print_warning(f"Could not get platform version: {e}")
+        print_warning(f"Could not get platform version from API: {e}")
+
+    if "PLATFORM_VERSION" not in env_vars:
+        # Try the built binary first (fast), then fall back to go run (slow).
+        instance_paths = get_platform_service(settings)._instance_dist_paths()
+        if instance_paths is not None:
+            binary, _ = instance_paths
+            try:
+                result = subprocess.run(
+                    [str(binary), "version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    v = (result.stdout or result.stderr).strip()
+                    if v:
+                        env_vars["PLATFORM_VERSION"] = v
+            except Exception:
+                pass
+        if "PLATFORM_VERSION" not in env_vars and _platform_src is not None:
+            from otdf_local.config.features import _get_platform_version
+
+            detected = _get_platform_version(_platform_src)
+            if detected and detected != "0.9.0":
+                env_vars["PLATFORM_VERSION"] = detected
 
     # Output in requested format
     if format == "json":

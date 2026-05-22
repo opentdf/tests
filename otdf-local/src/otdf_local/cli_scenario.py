@@ -7,6 +7,7 @@ deferred (see plan §9).
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -34,7 +35,11 @@ def _build_pytest_args(scenario: Scenario, scenario_path: Path) -> list[str]:
     helper raises FileNotFoundError with a clean hint otherwise.
     """
     suite = scenario.suite
-    args: list[str] = [suite.select]
+    # Strip leading "xtest/" from targets — pytest runs from within xtest_root,
+    # so paths prefixed with "xtest/" would be resolved as "xtest/xtest/...".
+    args: list[str] = [
+        t.removeprefix("xtest/") if t.startswith("xtest/") else t for t in suite.targets
+    ]
 
     tokens = scenario_to_pytest_sdks(scenario, installed_json_for(scenario_path))
     if tokens["encrypt"]:
@@ -42,7 +47,7 @@ def _build_pytest_args(scenario: Scenario, scenario_path: Path) -> list[str]:
     if tokens["decrypt"]:
         args.extend(["--sdks-decrypt", " ".join(tokens["decrypt"])])
     if suite.containers:
-        args.extend(["--containers", suite.containers])
+        args.extend(["--containers", " ".join(suite.containers)])
     if suite.markers:
         args.extend(["-m", suite.markers])
     args.extend(suite.extra_args)
@@ -72,12 +77,32 @@ def run(
     scenario = load_scenario(path)
     instance_name = instance or scenario.instance.metadata.name
     if not instance_name:
-        typer.echo("Error: scenario.instance.metadata.name not set; pass --instance", err=True)
+        typer.echo(
+            "Error: scenario.instance.metadata.name not set; pass --instance", err=True
+        )
         raise typer.Exit(2)
 
     settings = get_settings()
     # Force the chosen instance via env so child pytest invocations agree.
     os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance_name
+
+    # Tell xtest's load_otdfctl() which dist to use for the otdfctl admin CLI.
+    # Without this it falls back to sdk/go/dist/main/otdfctl.sh (hardcoded
+    # "main"), which doesn't exist when the resolved dist name is e.g. "vmain".
+    try:
+        installed_data = json.loads(
+            installed_json_for(path).read_text(encoding="utf-8")
+        )
+        go_dists = [
+            Path(e["path"]).name
+            for role in ("encrypt", "decrypt")
+            for e in installed_data.get("sdks", {}).get(role, [])
+            if isinstance(e, dict) and e.get("sdk") == "go" and e.get("path")
+        ]
+        if go_dists:
+            os.environ["OTDFCTL_HEADS"] = json.dumps(list(dict.fromkeys(go_dists)))
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
 
     xtest_root = settings.xtest_root
     if not xtest_root.exists():

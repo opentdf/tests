@@ -15,7 +15,8 @@ from typing import Annotated
 
 import typer
 
-from otdf_sdk_mgr.installers import InstallError, install_release
+from otdf_sdk_mgr.config import get_sdk_dirs
+from otdf_sdk_mgr.installers import InstallError, install_go_from_platform, install_release
 from otdf_sdk_mgr.platform_installer import (
     PlatformInstallError,
     install_helper_scripts,
@@ -29,6 +30,7 @@ from otdf_sdk_mgr.schema import (
     Scenario,
     load_yaml_mapping,
 )
+from otdf_sdk_mgr.semver import normalize_version
 
 
 def _install_platform_pin(pin: PlatformPin | KasPin) -> dict[str, str]:
@@ -97,7 +99,12 @@ def install_scenario_cmd(
         if scenario is not None:
             install_paths: dict[tuple[str, str, str | None], str] = {}
             for entry in scenario.sdks.union():
-                dist_dir = install_release(entry.sdk, entry.version)
+                if entry.sdk == "go" and entry.source == "platform":
+                    sdk_dirs = get_sdk_dirs()
+                    dist_dir = sdk_dirs["go"] / "dist" / normalize_version(entry.version)
+                    install_go_from_platform(entry.version, dist_dir)
+                else:
+                    dist_dir = install_release(entry.sdk, entry.version)
                 install_paths[entry.install_key()] = str(dist_dir)
             for role in ("encrypt", "decrypt"):
                 installed_sdks[role] = [

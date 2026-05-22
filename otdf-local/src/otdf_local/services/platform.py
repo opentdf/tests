@@ -59,15 +59,24 @@ class PlatformService(Service):
         `.version` file records the source worktree path that should be used
         as `cwd` so the binary finds its embedded resources.
         """
+        from otdf_sdk_mgr.semver import normalize_version
+
         instance = self.settings.load_instance()
-        if instance is None or instance.platform.dist is None:
+        if instance is None:
             return None
-        binary = self.settings.platform_binary_for(instance.platform.dist)
+
+        if instance.platform.dist is not None:
+            dist_label = instance.platform.dist
+        elif instance.platform.source is not None:
+            dist_label = normalize_version(instance.platform.source.ref)
+        else:
+            return None
+
+        binary = self.settings.platform_binary_for(dist_label)
         if not binary.exists():
             raise FileNotFoundError(
                 f"Platform binary not found at {binary}. "
-                f"Run `otdf-sdk-mgr install release platform:{instance.platform.dist}` "
-                f"or `otdf-sdk-mgr install scenario` to provision it."
+                f"Run `otdf-sdk-mgr install scenario` to provision it."
             )
         worktree = binary.parent  # safe fallback
         version_file = binary.parent / ".version"
@@ -89,6 +98,8 @@ class PlatformService(Service):
 
         config_path = self.settings.platform_config
         template_path = platform_dir / "opentdf.yaml"
+        if not template_path.exists():
+            template_path = platform_dir / "opentdf-dev.yaml"
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(platform_dir)
@@ -118,8 +129,10 @@ class PlatformService(Service):
         """
         # In multi-instance mode, golden keys live alongside the instance
         # config; otherwise they go into the legacy platform_dir.
-        target_dir = self.settings.keys_dir if self.settings.has_instance() else (
-            self.settings._require_platform_dir()
+        target_dir = (
+            self.settings.keys_dir
+            if self.settings.has_instance()
+            else (self.settings._require_platform_dir())
         )
         golden_keys = setup_golden_keys(
             self.settings.xtest_root,

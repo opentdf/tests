@@ -26,6 +26,46 @@ class InstallError(Exception):
     """Raised when SDK installation fails."""
 
 
+def install_go_from_platform(ref: str, dist_dir: Path) -> None:
+    """Build the Go otdfctl CLI from the platform monorepo at the given ref.
+
+    Checks out the platform monorepo via checkout_go_from_platform, then
+    builds otdfctl using the workspace go.work so all platform modules resolve.
+    """
+    import os
+
+    from otdf_sdk_mgr.checkout import checkout_go_from_platform
+
+    binary = dist_dir / "otdfctl"
+    if binary.exists():
+        print(f"  Go platform build already exists at {dist_dir}; skipping.")
+        return
+
+    print(f"  Building Go SDK from platform@{ref}...")
+    platform_dir = checkout_go_from_platform(ref)
+    otdfctl_src = platform_dir / "otdfctl"
+
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    go_dir = get_sdk_dir() / "go"
+
+    env = os.environ.copy()
+    env["GOWORK"] = str(platform_dir / "go.work")
+    result = subprocess.run(
+        ["go", "build", "-o", str(binary), "."],
+        cwd=otdfctl_src,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise InstallError(f"go build failed for platform@{ref}")
+    if not binary.exists():
+        raise InstallError(f"Build completed but {binary} is missing")
+
+    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
+    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
+    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
+    print(f"  Go SDK from platform@{ref} installed to {dist_dir}")
+
+
 def install_go_release(version: str, dist_dir: Path) -> None:
     """Install a Go CLI release by writing a .version file.
 

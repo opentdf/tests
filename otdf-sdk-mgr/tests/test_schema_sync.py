@@ -27,9 +27,7 @@ def _xtest_schema_dir() -> Path:
 @pytest.mark.parametrize(("model", "filename"), SCHEMAS, ids=lambda v: getattr(v, "__name__", v))
 def test_committed_schema_matches_model(model: type, filename: str) -> None:
     path = _xtest_schema_dir() / filename
-    assert path.is_file(), (
-        f"Missing {path}. Run `uv run otdf-sdk-mgr schema dump` to regenerate."
-    )
+    assert path.is_file(), f"Missing {path}. Run `uv run otdf-sdk-mgr schema dump` to regenerate."
     expected = render(model)
     actual = path.read_text(encoding="utf-8")
     assert actual == expected, (

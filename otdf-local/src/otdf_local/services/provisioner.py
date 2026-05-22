@@ -84,7 +84,7 @@ class Provisioner:
             cmd,
             capture_output=True,
             text=True,
-            cwd=self.settings.platform_dir,
+            cwd=self.settings.platform_source_dir,
         )
 
         # If provisioning failed, extract error message from stderr

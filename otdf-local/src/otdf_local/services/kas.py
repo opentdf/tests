@@ -59,17 +59,25 @@ class KASService(Service):
 
     def _instance_paths(self) -> tuple[Path, Path] | None:
         """Return (binary, worktree) for an instance-pinned KAS, or None."""
+        from otdf_sdk_mgr.semver import normalize_version
+
         instance = self.settings.load_instance()
         if instance is None:
             return None
         pin = instance.kas.get(self._kas_name)
-        if pin is None or pin.dist is None:
+        if pin is None:
             return None
-        binary = self.settings.platform_binary_for(pin.dist)
+        if pin.dist is not None:
+            dist_label = pin.dist
+        elif pin.source is not None:
+            dist_label = normalize_version(pin.source.ref)
+        else:
+            return None
+        binary = self.settings.platform_binary_for(dist_label)
         if not binary.exists():
             raise FileNotFoundError(
                 f"KAS {self._kas_name} binary not found at {binary}. "
-                f"Run `otdf-sdk-mgr install release platform:{pin.dist}`."
+                f"Run `otdf-sdk-mgr install scenario` to provision it."
             )
         worktree = binary.parent
         version_file = binary.parent / ".version"
@@ -111,7 +119,9 @@ class KASService(Service):
         # Per-KAS features from instance.yaml override the legacy heuristic.
         instance = self.settings.load_instance()
         kas_pin = instance.kas.get(self._kas_name) if instance is not None else None
-        extra_features: dict[str, bool] = dict(kas_pin.features) if kas_pin is not None else {}
+        extra_features: dict[str, bool] = (
+            dict(kas_pin.features) if kas_pin is not None else {}
+        )
 
         if self.is_key_management:
             updates["services.kas.preview.key_management"] = True
