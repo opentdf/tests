@@ -1,6 +1,6 @@
 ---
 name: scenario-tear-down
-description: Stop the services for a scenario's instance and optionally delete the instance directory. Use when the user is done with a reproduction or wants to free ports/disk for a different scenario.
+description: Use when the user is done with a scenario or wants to stop, clean up, or free ports/disk.
 allowed-tools: Bash, Read
 ---
 

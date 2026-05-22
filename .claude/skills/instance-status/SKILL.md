@@ -1,6 +1,6 @@
 ---
 name: instance-status
-description: Report which test instances exist on disk, which are running, and the health of each service. Use when the user asks "what's running" or before bringing up another scenario to avoid port collisions.
+description: Use when the user asks what's running, or before starting a scenario to check for port collisions.
 allowed-tools: Bash, Read
 ---
 
