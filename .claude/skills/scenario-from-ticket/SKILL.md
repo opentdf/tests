@@ -1,6 +1,6 @@
 ---
 name: scenario-from-ticket
-description: Pull a Jira ticket of any type (Bug, Story, Task, Spike) into context via `acli jira workitem view` + `acli jira workitem comment list`, then turn it into an xtest/scenarios/<JIRA-KEY>.yaml manifest. Pins platform/KAS/SDKs to a released version (`dist:`), a branch or SHA (`source.ref:`), or the head of a PR — whichever matches the ticket. Optionally drafts xtest/bugs/<jira_key>_test.py when no existing pytest covers the behavior. Use when the user mentions a Jira key like DSPX-1234 (or any [PROJECT]-[NUMBER]) and wants a runnable scenario — reproducing a bug, writing a TDD test for a new feature, or validating behavior at a specific ref.
+description: Use when the user mentions a Jira key ([PROJECT]-[NUMBER]) and wants a scenario — bug repro, TDD test, or behavior validation at a specific ref.
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
