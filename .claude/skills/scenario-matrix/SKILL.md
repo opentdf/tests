@@ -1,6 +1,6 @@
 ---
 name: scenario-matrix
-description: Given a base scenario (or a Jira ticket) plus a list of refs (PRs, branches, released versions), write one scenario file per ref so the same pytest suite runs across all of them. Use to bisect a regression across releases, validate a fix across multiple PRs, or check feature compatibility between versions. Generates files only — does not install or run them.
+description: Use when running the same test suite across multiple refs, branches, PRs, or releases — bisecting regressions or validating a fix across versions. Generates scenario files only; does not run them.
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
