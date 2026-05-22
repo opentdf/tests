@@ -2,15 +2,20 @@
 
 This guide provides essential knowledge for AI agents performing updates, refactorings, and debugging of OpenTDF libraries and applications under test.
 
+## Repository Layout
+
+| Path | Purpose | Has its own AGENTS.md? |
+|------|---------|------------------------|
+| `xtest/` | pytest integration tests (the main test suite) | yes |
+| `otdf-sdk-mgr/` | Python CLI that installs SDK CLIs from releases or source (see `otdf-sdk-mgr/README.md`) | no |
+| `otdf-local/` | Python CLI that runs/stops the platform + KAS instances locally | yes |
+| `vulnerability/` | Playwright UI test suite (run with `npx playwright test`) | no |
+| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) | n/a |
+
 ## Test Framework Overview
 
-### Structure
-- **Test Directory**: `xtest/` - pytest-based integration tests
-- **SDK Distributions**: `xtest/sdk/{go,java,js}/dist/` - built SDK distributions with CLI wrappers
-- **SDK Configuration**: `otdf-sdk-mgr install` - installs SDK CLIs from released artifacts or delegates to source builds
-- **SDK Version Lookup**: `otdf-sdk-mgr versions list` - lists released artifacts across registries (Go git tags, npm, Maven Central, GitHub Releases)
-- **Platform**: `platform/` - OpenTDF platform service
-- **Test Runner**: pytest with custom CLI options
+### Test Runner
+pytest with custom CLI options. Most work happens in `xtest/`.
 
 ### Configuring SDK Artifacts
 
@@ -41,58 +46,42 @@ uv run pytest test_tdfs.py --sdks go -v
 uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
 ```
 
-### Custom pytest Options
-- `--sdks`: Specify which SDKs to test (go, java, js)
-- `--containers`: Specify TDF container types (ztdf, ztdf-ecwrap)
-- `--no-audit-logs`: Disable audit log assertions globally
-- Environment variables:
-  - `PLATFORMURL`: Platform endpoint (default: http://localhost:8080)
-  - `OT_ROOT_KEY`: Root key for key management tests
-  - `SCHEMA_FILE`: Path to manifest schema file
-  - `DISABLE_AUDIT_ASSERTIONS`: Set to `1`, `true`, or `yes` to disable audit log assertions
+### Custom pytest Options and Env Vars
+
+See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
+`--no-audit-logs`, etc. Repo-wide environment variables:
+
+- `PLATFORMURL` — platform endpoint (default `http://localhost:8080`)
+- `OT_ROOT_KEY` — root key for key-management tests
+- `SCHEMA_FILE` — path to manifest schema file
+- `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
 
 ### Audit Log Assertions
 
-**IMPORTANT**: Audit log assertions are **REQUIRED by default**. Tests will fail during setup if KAS log files are not available.
+Audit-log assertions are **on by default** and tests fail loudly during
+setup if KAS log files aren't reachable. This is deliberate — it catches
+audit-event regressions and clock-skew issues that would otherwise hide.
 
-**Why Required by Default:**
-- Ensures comprehensive test coverage of audit logging functionality
-- Catches regressions in audit event generation
-- Validates clock skew handling between test machine and services
+Only disable when running without services (unit-only runs, CI without a
+live platform, debugging unrelated failures):
 
-**Disabling Audit Assertions:**
+- CI: `DISABLE_AUDIT_ASSERTIONS=1` (survives shell wrappers)
+- Local dev: `uv run pytest --sdks go --no-audit-logs -v`
 
-Only disable when:
-- Running tests without services (unit tests only)
-- Debugging non-audit-related issues
-- CI environments where audit logs aren't available
-
-To disable, use either:
-```bash
-# Environment variable (preferred for CI)
-DISABLE_AUDIT_ASSERTIONS=1 uv run pytest --sdks go -v
-
-# CLI flag (preferred for local dev)
-uv run pytest --sdks go --no-audit-logs -v
-```
-
-**Setting Up Log Files:**
-
-Audit log collection requires KAS log files. Set paths via environment variables:
-```bash
-export PLATFORM_LOG_FILE=/path/to/platform.log
-export KAS_ALPHA_LOG_FILE=/path/to/kas-alpha.log
-export KAS_BETA_LOG_FILE=/path/to/kas-beta.log
-# ... etc for kas-gamma, kas-delta, kas-km1, kas-km2
-```
-
-Or ensure services are running with logs in `../../platform/logs/` (auto-discovered).
+For wiring up the log-file env vars, prefer `eval $(uv run otdf-local env)`
+(see Environment Management below). Fixture details and the
+auto-discovery fallback under `../platform/logs/` live in
+`xtest/AGENTS.md`.
 
 ## Environment Management
 
-Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting).
+Use `otdf-local` for all environment management (starting/stopping services, viewing logs, restart procedures, troubleshooting). See `otdf-local/AGENTS.md` for details.
 
-Quick start: `cd otdf-local && uv run otdf-local up`
+Quick start:
+```bash
+cd otdf-local && uv run otdf-local up
+eval $(uv run otdf-local env)   # sets PLATFORM_LOG_FILE / KAS_*_LOG_FILE — required for the default audit-log assertions
+```
 
 ## Key Concepts
 
@@ -108,9 +97,6 @@ Quick start: `cd otdf-local && uv run otdf-local up`
 - Uses ephemeral key pair + key derivation
 - KAO type: "ec-wrapped"
 - Requires: `ec_tdf_enabled: true` in platform config
-
-**Base Key Behavior**:
-- When platform advertises a `base_key` in `.well-known/opentdf-configuration`
 
 **Ensuring Key Consistency**:
 ```bash
@@ -186,13 +172,6 @@ export SCHEMA_FILE=manifest.schema.json
 
 ## Code Modification Best Practices
 
-### Before Making Changes
-
-1. **Always read files first** - use Read tool before Edit/Write
-2. **Understand existing patterns** - check similar code in the codebase
-3. **Check test coverage** - modifications may affect multiple tests
-4. **Review related config** - platform config, KAS config, SDK config
-
 ### When Modifying SDK Code
 
 After changes to SDK source, rebuild with `cd xtest/sdk && make`.
@@ -207,30 +186,41 @@ Restart the platform service after making changes.
 - **Helper functions**: Used across multiple test files
 - **Conftest.py**: Session-scoped fixtures, careful with modifications
 
+### Before Committing Python Changes
+
+**REQUIRED**: Run lint, format, and type-check on any Python package you touched
+(`xtest/`, `otdf-sdk-mgr/`, `otdf-local/`, etc.) before `git commit`. `cd` into
+the package directory first so the tools see the project's venv:
+
+```bash
+cd otdf-sdk-mgr        # or xtest, otdf-local, etc.
+uv run ruff check .    # lint — must pass
+uv run ruff format .   # auto-format — re-stage any reformatted files
+uv run pyright         # type-check — must pass
+```
+
+Use `uv run`, not `uvx`. `uvx` runs the tool in an isolated env that can't
+see the project's dependencies, so `pyright` will produce dozens of spurious
+`Import "foo" could not be resolved` errors. `uv run` uses the project venv
+(after `uv sync` has installed the `dev` dependency group), which is what CI
+does.
+
+Run all three. Don't skip steps because "it's a small change" — CI runs them
+and a failed check round-trips the PR. If `ruff format` rewrites a file you
+already staged, `git add` it again before committing.
+
 ## Test File Organization
 
-### Key Test Files
+For the canonical list of test modules, fixtures, and the SDK abstraction
+layer, see `xtest/AGENTS.md`. The short version:
 
-- `test_tdfs.py` - Core TDF roundtrip, manifest validation, tampering tests
-- `test_abac.py` - ABAC policy, autoconfigure, key management tests
-- `test_legacy.py` - Backward compatibility with golden TDFs (requires golden-r1 key)
-- `test_policytypes.py` - Policy type tests (OR, AND, hierarchy)
-- `test_self.py` - Platform API tests (namespaces, attributes, SCS)
-
-### Important Helper Files
-
-- `tdfs.py` - SDK abstraction layer, core test utilities
-- `fixtures/` - pytest fixtures (attributes, keys, SDKs, etc.)
-- `conftest.py` - pytest configuration and shared fixtures
-
-## Common Pitfalls
-
-1. **Forgetting to rebuild SDK** after code changes
-2. **Modifying wrong config file** (opentdf.yaml vs opentdf-dev.yaml)
-3. **Not restarting services** after config changes
-4. **Root key mismatches** between platform and KAS instances
-5. **Port conflicts** from old processes still running
-6. **Assuming SDK behavior** without checking platform configuration
+- Tests are grouped by concern, not by SDK (`test_tdfs.py`, `test_abac.py`,
+  `test_legacy.py`, `test_audit_logs.py`, `test_pqc.py`, etc.).
+- `xtest/tdfs.py` is the SDK abstraction layer — when a test passes for one
+  SDK and fails for another, suspect the CLI shim or manifest emission, not
+  the test.
+- `xtest/conftest.py` defines the `--sdks` / `--containers` parametrization.
+  Session-scoped fixtures live in `xtest/fixtures/`.
 
 ## Quick Reference
 
@@ -242,24 +232,9 @@ curl localhost:8080/healthz
 yq e '.services.kas.root_key' platform/opentdf-dev.yaml
 ```
 
-## Summary
+## Closing Note
 
-### Preferred Workflow
-
-1. **Build SDK CLIs**: `cd xtest/sdk && make`
-2. **Configure environment**: `cd xtest && set -a && source test.env && set +a`
-3. **Run tests**: `uv run pytest --sdks go -v`
-4. **Restart after config changes**: Restart the affected platform/KAS services
-
-### When Debugging Test Failures
-
-1. Read error messages carefully - they guide you to the root cause
-2. Check platform configuration matches expected test behavior
-3. Verify all KAS instances have consistent keys
-4. Ensure services are running and healthy
-5. Check service logs for errors
-6. Reproduce issues manually when possible
-7. Always restart services after config changes
-8. Read before writing - understand existing code patterns
-
-The test failures are usually symptoms of configuration mismatches, not SDK bugs. Focus on ensuring the local environment matches what the tests expect.
+Test failures are usually configuration mismatches, not SDK bugs. Check
+the local environment against what the tests expect before suspecting the
+code. Per-subsystem details live in `xtest/AGENTS.md`,
+`otdf-local/AGENTS.md`, and `otdf-sdk-mgr/README.md`.

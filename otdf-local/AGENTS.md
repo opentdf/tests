@@ -85,7 +85,7 @@ When using `otdf-local up` or `otdf-local restart platform`, golden keys are aut
 3. The key is added to `cryptoProvider.standard.keys` in the platform config
 4. A legacy keyring entry is added to `services.kas.keyring`
 
-**Manual configuration** (if not using otdf-local):
+**Manual configuration** (emergency fallback only — drifts from current platform schema; check `platform/opentdf-dev.yaml.example` if this fails):
 
 Add to `platform/opentdf-dev.yaml`:
 ```yaml
