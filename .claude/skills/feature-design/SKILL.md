@@ -1,6 +1,6 @@
 ---
 name: feature-design
-description: Turn a multi-repo feature (or cross-repo bug fix) into a concrete spec at xtest/features/<name>.yaml plus the tests-side artifacts that have to land first (scenario, draft pytest, feature_type entry in tdfs.py). Pulls Jira context, drafts a complete spec from the ticket, then iterates with the user. Use when a feature touches more than one repo (e.g. platform + Go SDK + Java SDK + JS SDK) and you want to set up the cross-repo work in one go without manually authoring each piece.
+description: Use when a feature or bug fix spans multiple repos (platform + Go/Java/JS SDKs) and you want the cross-repo spec and test artifacts set up in one pass.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Skill
 ---
 

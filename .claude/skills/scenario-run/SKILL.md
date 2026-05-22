@@ -1,6 +1,6 @@
 ---
 name: scenario-run
-description: Execute the pytest suite declared by a scenarios.yaml against the running instance, then classify the result as "expected outcome", "unexpected outcome", or "unrelated failure" against the scenario's `expected:` / `actual:` fields. Works for bug-repro scenarios, TDD/feature scenarios, and matrix runs. Use after `scenario-up` has confirmed the instance is healthy.
+description: Use after `scenario-up` to run the scenario's test suite and classify results against its expected/actual fields.
 allowed-tools: Bash, Read
 ---
 

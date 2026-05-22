@@ -1,6 +1,6 @@
 ---
 name: scenario-up
-description: Provision artifacts, scaffold the instance directory, and start the test environment for a given xtest/scenarios/<id>.yaml. Use after `scenario-from-ticket` (or `scenario-matrix`, or when the user already has a scenario YAML) and wants the environment running.
+description: Use when the user has a scenario YAML and wants the environment started (before running tests).
 allowed-tools: Bash, Read
 ---
 
