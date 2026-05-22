@@ -1,6 +1,6 @@
 ---
 name: scenario-from-ticket
-description: Pull a Jira ticket of any type (Bug, Story, Task, Spike) into context via `acli jira workitem view` + `acli jira workitem comment list`, then turn it into an xtest/scenarios/<JIRA-KEY>.yaml manifest. Pins platform/KAS/SDKs to a released version (`dist:`), a branch or SHA (`source.ref:`), or the head of a PR — whichever matches the ticket. Optionally drafts xtest/bug_<jira_key>_test.py when no existing pytest covers the behavior. Use when the user mentions a Jira key like DSPX-1234 (or any [PROJECT]-[NUMBER]) and wants a runnable scenario — reproducing a bug, writing a TDD test for a new feature, or validating behavior at a specific ref.
+description: Pull a Jira ticket of any type (Bug, Story, Task, Spike) into context via `acli jira workitem view` + `acli jira workitem comment list`, then turn it into an xtest/scenarios/<JIRA-KEY>.yaml manifest. Pins platform/KAS/SDKs to a released version (`dist:`), a branch or SHA (`source.ref:`), or the head of a PR — whichever matches the ticket. Optionally drafts xtest/bugs/<jira_key>_test.py when no existing pytest covers the behavior. Use when the user mentions a Jira key like DSPX-1234 (or any [PROJECT]-[NUMBER]) and wants a runnable scenario — reproducing a bug, writing a TDD test for a new feature, or validating behavior at a specific ref.
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
@@ -11,7 +11,7 @@ You produce a `xtest/scenarios/<jira-key-lowercased>.yaml` manifest from a Jira 
 Two artifacts:
 
 1. `xtest/scenarios/<jira-key-lowercased>.yaml` — validated against `otdf_sdk_mgr.schema.Scenario`.
-2. (Optional) `xtest/bug_<jira_key_lowercased>_test.py` — only if no existing xtest pytest already exercises the behavior. The `bug_` prefix is a slug, not a type marker: feature-driven tests use it too.
+2. (Optional) `xtest/bugs/<jira_key_lowercased>_test.py` — only if no existing xtest pytest already exercises the behavior.
 
 The Jira key also becomes the working **branch name** (`<JIRA-KEY>-repro` for Bugs, `<JIRA-KEY>-tdd` for Stories/Tasks) and the scenario file's `metadata.id`.
 
@@ -146,7 +146,7 @@ uv run python -m otdf_sdk_mgr.schema validate xtest/scenarios/<id>.yaml
 
 ## Step 6 — If no existing test fits
 
-Draft `xtest/bug_<id>_test.py` using the `encrypt_sdk` / `decrypt_sdk` fixtures (pattern: `xtest/test_tdfs.py`). The `bug_` prefix is a historical slug applied to every scenario-tied test — feature/TDD ones use it too; don't let the name confuse you. Surface the new file in your reply for the user to review — never silently land assertions.
+Draft `xtest/bugs/<id>_test.py` using the `encrypt_sdk` / `decrypt_sdk` fixtures (pattern: `xtest/test_tdfs.py`). Surface the new file in your reply for the user to review — never silently land assertions.
 
 For TDD tests where the underlying feature isn't yet implemented, gate participation behind `<sdk>.supports("<feature>")` and call `pytest.skip(...)` when the gate fails. The scenario then runs as "all skipped" until the SDK supports entry lands, at which point the test becomes a real assertion.
 
