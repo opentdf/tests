@@ -136,8 +136,10 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
 
-        # X-Wing hybrid PQ/T KEM support (ML-KEM-768 + X25519)
-        if self.semver >= (0, 14, 0):
+        # X-Wing / secp+ML-KEM hybrid PQ/T KEM support.
+        # Key management API for hpqt:* algorithms landed after service/v0.15.0;
+        # v0.15.0 rejects them with a key_algorithm validation error.
+        if self.semver >= (0, 16, 0):
             self.features.add("mechanism-xwing")
             self.features.add("mechanism-secpmlkem")
 

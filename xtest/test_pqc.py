@@ -32,17 +32,19 @@ def _pem_decoded_len(pem: str) -> int:
 
 
 def assert_xwing_kao_sizes(kao: KeyAccessObject):
-    """Assert that an X-Wing KAO has correctly sized wrappedKey and ephemeralPublicKey."""
+    """Assert that an X-Wing KAO has correctly sized wrappedKey.
+
+    The wrappedKey is an ASN.1 DER structure containing the X-Wing KEM
+    ciphertext (1120 bytes) plus an AES-GCM encrypted DEK (~60 bytes)
+    and ASN.1 framing overhead, so it must be larger than the raw
+    ciphertext alone.  hybrid-wrapped KAOs do not use ephemeralPublicKey.
+    """
     wrapped_len = _b64_decoded_len(kao.wrappedKey)
-    assert wrapped_len == XWING_CIPHERTEXT_SIZE, (
-        f"X-Wing wrappedKey should be {XWING_CIPHERTEXT_SIZE} bytes, got {wrapped_len}"
+    assert wrapped_len > XWING_CIPHERTEXT_SIZE, (
+        f"X-Wing wrappedKey should be > {XWING_CIPHERTEXT_SIZE} bytes, got {wrapped_len}"
     )
-    assert kao.ephemeralPublicKey is not None, (
-        "X-Wing KAO must include an ephemeralPublicKey"
-    )
-    epk_len = _b64_decoded_len(kao.ephemeralPublicKey)
-    assert epk_len == XWING_ENCAPSULATION_KEY_SIZE, (
-        f"X-Wing ephemeralPublicKey should be {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {epk_len}"
+    assert kao.ephemeralPublicKey is None, (
+        "hybrid-wrapped X-Wing KAO should not have ephemeralPublicKey"
     )
 
 

@@ -312,7 +312,10 @@ class OpentdfCommandLineTool:
         # Handle race condition: if key already exists, return the existing one
         if process.returncode != 0:
             err_str = (err.decode() if err else "") + (out.decode() if out else "")
-            if "Invalid key parameters: invalid algorithm" in err_str:
+            if (
+                "Invalid key parameters: invalid algorithm" in err_str
+                or "key_algorithm_defined" in err_str
+            ):
                 raise InvalidAlgorithm(
                     f"Algorithm not supported by platform: {err_str}"
                 )
