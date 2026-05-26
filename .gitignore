@@ -31,3 +31,10 @@ xtest/sdk/java/cmdline.jar
 /xtest/otdfctl/
 
 /tmp/
+
+# Multi-instance test harness state (DSPX-3302). Per-instance config, logs, and
+# keys live under tests/instances/; otdf-sdk-mgr install scenario writes
+# .installed.json next to each scenarios.yaml.
+/instances/
+xtest/scenarios/*.installed.json
+.claude/tmp/

@@ -1,10 +1,12 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import os
 import shutil
+import subprocess
 import sys
 import time
-from typing import Annotated
+from typing import Annotated, Optional
 
 import httpx
 import typer
@@ -44,6 +46,18 @@ app = typer.Typer(
 )
 
 
+def _register_subapps() -> None:
+    """Defer imports so the schema dependency only loads when needed."""
+    from otdf_local.cli_instance import instance_app
+    from otdf_local.cli_scenario import scenario_app
+
+    app.add_typer(instance_app, name="instance")
+    app.add_typer(scenario_app, name="scenario")
+
+
+_register_subapps()
+
+
 def _show_provision_error(result: ProvisionResult, target: str) -> None:
     """Display provisioning error with stderr details."""
     print_error(f"{target} provisioning failed (exit code {result.return_code})")
@@ -75,9 +89,19 @@ def main(
             is_eager=True,
         ),
     ] = False,
+    instance: Annotated[
+        Optional[str],
+        typer.Option(
+            "--instance",
+            help='Named instance under tests/instances/. Defaults to "default" (or $OTDF_LOCAL_INSTANCE_NAME).',
+        ),
+    ] = None,
 ) -> None:
     """OpenTDF test environment management CLI."""
-    pass
+    if instance is not None:
+        os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance
+        # Invalidate the cached Settings so subsequent commands see the new value
+        get_settings.cache_clear()
 
 
 @app.command()
@@ -558,11 +582,17 @@ def env(
 
     # Platform configuration
     env_vars["PLATFORMURL"] = settings.platform_url
-    env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
+    _platform_src = settings.platform_source_dir
+    if _platform_src is not None:
+        env_vars["PLATFORM_DIR"] = str(_platform_src.resolve())
 
     # Schema file for manifest validation
-    schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
-    if schema_file.exists():
+    schema_file = (
+        _platform_src / "sdk" / "schema" / "manifest.schema.json"
+        if _platform_src is not None
+        else None
+    )
+    if schema_file is not None and schema_file.exists():
         env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
 
     # Log file paths
@@ -594,7 +624,7 @@ def env(
     except Exception as e:
         print_warning(f"Could not read root key from platform config: {e}")
 
-    # Try to get platform version from API
+    # Try to get platform version from API, then fall back to source detection
     try:
         platform = get_platform_service(settings)
         if platform.is_running():
@@ -607,7 +637,32 @@ def env(
                 if "version" in config:
                     env_vars["PLATFORM_VERSION"] = config["version"]
     except Exception as e:
-        print_warning(f"Could not get platform version: {e}")
+        print_warning(f"Could not get platform version from API: {e}")
+
+    if "PLATFORM_VERSION" not in env_vars:
+        # Try the built binary first (fast), then fall back to go run (slow).
+        instance_paths = get_platform_service(settings)._instance_dist_paths()
+        if instance_paths is not None:
+            binary, _ = instance_paths
+            try:
+                result = subprocess.run(
+                    [str(binary), "version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    v = (result.stdout or result.stderr).strip()
+                    if v:
+                        env_vars["PLATFORM_VERSION"] = v
+            except Exception:
+                pass
+        if "PLATFORM_VERSION" not in env_vars and _platform_src is not None:
+            from otdf_local.config.features import _get_platform_version
+
+            detected = _get_platform_version(_platform_src)
+            if detected and detected != "0.9.0":
+                env_vars["PLATFORM_VERSION"] = detected
 
     # Output in requested format
     if format == "json":

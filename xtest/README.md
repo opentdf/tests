@@ -122,3 +122,11 @@ pytest
 rm -rf tmp
 pytest test_tdfs.py
 ```
+
+## Test artifact directories
+
+- **`scenarios/`** — Per-ticket scenario YAMLs that pin a platform / KAS / SDK topology to a specific pytest selection. Consumed by `otdf-local scenario run`.
+- **`features/`** — Multi-repo feature specs: features that touch more than one OpenTDF repo (platform + SDKs) authored as a single declaration of intent. See `features/README.md`.
+- **`schema/`** — Generated JSON Schemas for the canonical scenario / instance models. Regenerate via `uv run otdf-sdk-mgr schema dump` after editing the Pydantic models in `otdf-sdk-mgr/src/otdf_sdk_mgr/schema.py`. See `schema/README.md`.
+
+The first two are produced by the Claude Code skills under `tests/.claude/skills/` (`scenario-from-ticket`, `feature-design`, etc.) and can also be hand-authored.

@@ -1,0 +1,443 @@
+{
+  "$defs": {
+    "Fixtures": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attributes"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy"
+        }
+      },
+      "title": "Fixtures",
+      "type": "object"
+    },
+    "Instance": {
+      "additionalProperties": false,
+      "description": "Standalone instance definition (one platform + N KAS).\n\nPersisted to `tests/instances/<name>/instance.yaml`. Also embedded inside\nScenario to keep the \"describe a bug-repro environment\" entry point a\nsingle file.",
+      "properties": {
+        "apiVersion": {
+          "const": "opentdf.io/v1alpha1",
+          "default": "opentdf.io/v1alpha1",
+          "title": "Apiversion",
+          "type": "string"
+        },
+        "features": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Features",
+          "type": "object"
+        },
+        "fixtures": {
+          "$ref": "#/$defs/Fixtures"
+        },
+        "kas": {
+          "additionalProperties": {
+            "$ref": "#/$defs/KasPin"
+          },
+          "title": "Kas",
+          "type": "object"
+        },
+        "kind": {
+          "const": "Instance",
+          "default": "Instance",
+          "title": "Kind",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "platform": {
+          "$ref": "#/$defs/PlatformPin"
+        },
+        "ports": {
+          "$ref": "#/$defs/PortsConfig"
+        }
+      },
+      "required": [
+        "platform"
+      ],
+      "title": "Instance",
+      "type": "object"
+    },
+    "KasPin": {
+      "additionalProperties": false,
+      "description": "Per-KAS-instance version + mode pin.",
+      "properties": {
+        "dist": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dist"
+        },
+        "features": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Features",
+          "type": "object"
+        },
+        "mode": {
+          "default": "standard",
+          "enum": [
+            "standard",
+            "key_management"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "KasPin",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "PlatformPin": {
+      "additionalProperties": false,
+      "description": "Version pin for the platform service.\n\n`dist` references a built binary at `xtest/platform/dist/<dist>/service`\nproduced by `otdf-sdk-mgr install platform:<version>`.\n`source.ref` is a git ref to build from on demand.",
+      "properties": {
+        "dist": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dist"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "PlatformPin",
+      "type": "object"
+    },
+    "PortsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "default": 8080,
+          "maximum": 60000,
+          "minimum": 1024,
+          "title": "Base",
+          "type": "integer"
+        }
+      },
+      "title": "PortsConfig",
+      "type": "object"
+    },
+    "ScenarioSdk": {
+      "additionalProperties": false,
+      "description": "One ordered SDK selection within a scenario role.",
+      "properties": {
+        "sdk": {
+          "enum": [
+            "go",
+            "java",
+            "js"
+          ],
+          "title": "Sdk",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For Go: \"platform\" to use the monorepo module path",
+          "title": "Source"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sdk",
+        "version"
+      ],
+      "title": "ScenarioSdk",
+      "type": "object"
+    },
+    "ScenarioSdks": {
+      "additionalProperties": false,
+      "description": "Encrypt/decrypt split mirrors xtest's --sdks-encrypt/--sdks-decrypt.\n\nSelections are ordered to preserve the eventual argv order, and are\nde-duplicated within each role by (sdk, version, source).",
+      "properties": {
+        "decrypt": {
+          "items": {
+            "$ref": "#/$defs/ScenarioSdk"
+          },
+          "title": "Decrypt",
+          "type": "array"
+        },
+        "encrypt": {
+          "items": {
+            "$ref": "#/$defs/ScenarioSdk"
+          },
+          "title": "Encrypt",
+          "type": "array"
+        }
+      },
+      "title": "ScenarioSdks",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional local checkout path",
+          "title": "Path"
+        },
+        "ref": {
+          "description": "Git tag, branch, or SHA",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "Suite": {
+      "additionalProperties": false,
+      "description": "Pytest selection + flags.",
+      "properties": {
+        "containers": {
+          "description": "Forwarded to --containers as a whitespace-separated list",
+          "items": {
+            "enum": [
+              "ztdf",
+              "ztdf-ecwrap"
+            ],
+            "type": "string"
+          },
+          "title": "Containers",
+          "type": "array"
+        },
+        "extra_args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Args",
+          "type": "array"
+        },
+        "kexpr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forwarded to pytest -k",
+          "title": "Kexpr"
+        },
+        "markers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forwarded to -m",
+          "title": "Markers"
+        },
+        "targets": {
+          "description": "Positional pytest targets, e.g. test files or path::node ids",
+          "items": {
+            "type": "string"
+          },
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "title": "Suite",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level scenarios.yaml model.\n\nComposes an Instance with SDK pins and a pytest Suite selection.",
+  "properties": {
+    "actual": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actual"
+    },
+    "apiVersion": {
+      "const": "opentdf.io/v1alpha1",
+      "default": "opentdf.io/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "expected": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected"
+    },
+    "instance": {
+      "$ref": "#/$defs/Instance",
+      "description": "Inline instance definition"
+    },
+    "kind": {
+      "const": "Scenario",
+      "default": "Scenario",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "sdks": {
+      "$ref": "#/$defs/ScenarioSdks"
+    },
+    "suite": {
+      "$ref": "#/$defs/Suite"
+    }
+  },
+  "required": [
+    "instance",
+    "suite"
+  ],
+  "title": "Scenario",
+  "type": "object"
+}
