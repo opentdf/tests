@@ -16,6 +16,7 @@ from otdf_sdk_mgr.config import (
     SDK_GIT_URLS,
     SDK_MAVEN_COORDS,
     SDK_NPM_PACKAGES,
+    SDK_TAG_INFIXES,
     go_module_for_tag,
 )
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
@@ -195,6 +196,40 @@ def list_java_github_releases() -> list[dict[str, Any]]:
                 entry["install_method"] = f"download from {cli_asset['browser_download_url']}"
             results.append(entry)
         page += 1
+    results.sort(key=lambda r: semver_sort_key(r["version"]))
+    return results
+
+
+def list_platform_versions() -> list[dict[str, Any]]:
+    """List platform service versions from `service/vX.Y.Z` tags in opentdf/platform."""
+    from git import Git
+
+    results: list[dict[str, Any]] = []
+    raw = Git().ls_remote(SDK_GIT_URLS["platform"], tags=True)
+    infix = SDK_TAG_INFIXES.get("platform", "service")
+
+    for line in raw.strip().split("\n"):
+        if not line:
+            continue
+        _, ref = line.split("\t", 1)
+        if ref.endswith("^{}"):
+            continue
+        tag = ref.removeprefix("refs/tags/")
+        if not tag.startswith(f"{infix}/"):
+            continue
+        version = tag.removeprefix(f"{infix}/")
+        version_normalized = version.lstrip("v")
+        if not parse_semver(version_normalized):
+            continue
+        results.append(
+            {
+                "sdk": "platform",
+                "version": version_normalized,
+                "source": "platform-git-tag",
+                "stable": is_stable(version_normalized),
+                "install_method": f"otdf-sdk-mgr install platform {version_normalized}",
+            }
+        )
     results.sort(key=lambda r: semver_sort_key(r["version"]))
     return results
 

@@ -19,7 +19,7 @@ versions_app = typer.Typer(help="Query SDK version registries.")
 def list_versions(
     sdk: Annotated[
         str,
-        typer.Argument(help="SDK to query (go, js, java, all)"),
+        typer.Argument(help="SDK to query (go, js, java, platform, all)"),
     ] = "all",
     stable: Annotated[bool, typer.Option("--stable", help="Only stable versions")] = False,
     latest: Annotated[
@@ -39,9 +39,10 @@ def list_versions(
         list_java_github_releases,
         list_java_maven_versions,
         list_js_versions,
+        list_platform_versions,
     )
 
-    sdks = ["go", "js", "java"] if sdk == "all" else [sdk]
+    sdks = ["go", "js", "java", "platform"] if sdk == "all" else [sdk]
     all_entries: list[dict[str, Any]] = []
 
     for s in sdks:
@@ -57,6 +58,9 @@ def list_versions(
             if releases:
                 gh_entries = list_java_github_releases()
                 all_entries.extend(apply_filters(gh_entries, stable_only=stable, latest_n=latest))
+        elif s == "platform":
+            entries = list_platform_versions()
+            all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
 
     if output_table:
         _print_rich_table(all_entries)

@@ -188,7 +188,12 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
     """
     full_ref = _resolve_platform_ref(ref)
     if dist_name is None:
-        dist_name = ref_slug(full_ref) if is_mutable_ref(full_ref) else normalize_version(ref)
+        if is_mutable_ref(full_ref):
+            dist_name = ref_slug(full_ref)
+        else:
+            # For immutable refs (tags, SHAs), normalize only the semver tail so
+            # namespaced tags like `service/v0.9.0` produce the same dist_name as `v0.9.0`.
+            dist_name = normalize_version(full_ref.rsplit("/", 1)[-1])
     dist_dir = _platform_dist_root() / dist_name
     binary = dist_dir / "service"
     if binary.exists() and not is_mutable_ref(full_ref):
