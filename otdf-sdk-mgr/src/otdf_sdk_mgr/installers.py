@@ -204,22 +204,35 @@ def cmd_lts(sdks: list[str]) -> None:
         install_release(sdk, version)
 
 
-def cmd_tip(sdks: list[str]) -> None:
-    """Delegate to source checkout + make for head builds."""
+def cmd_tip(sdks: list[str], ref: str = "main") -> None:
+    """Delegate to source checkout + make for source builds at `ref`.
+
+    `ref` defaults to `main` to preserve historical behavior. May be a branch,
+    tag, SHA, `pr:N` shorthand, or raw `refs/...`. The slug derived from the
+    ref is passed to `make` via `VERSIONS=<slug>` so only that checkout is
+    (re)built, not every directory under `sdk/<lang>/src/`.
+    """
     import os
 
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
+    from otdf_sdk_mgr.refs import expand_pr_shorthand
+
+    expanded = expand_pr_shorthand(ref)
+    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
+    # `local_name` calculation in checkout.py.
+    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
-        print(f"Checking out and building {sdk} from source...")
+        print(f"Checking out and building {sdk} from source ({expanded})...")
         make_dir = sdk_dirs[sdk]
         env = os.environ.copy()
+        env["VERSIONS"] = slug
         if sdk == "go":
-            platform_dir = checkout_go_from_platform("main")
+            platform_dir = checkout_go_from_platform(expanded)
             env["GOWORK"] = str(platform_dir / "go.work")
         else:
-            checkout_sdk_branch(sdk, "main")
+            checkout_sdk_branch(sdk, expanded)
         subprocess.check_call(["make"], cwd=make_dir, env=env)
         print(f"  {sdk} built from source")
 

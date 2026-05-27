@@ -29,7 +29,20 @@ gotchas worth knowing before editing this module:
   --hard <branch>` to move the worktree HEAD to the refreshed ref.
 - **Platform tags are namespaced** as `service/vX.Y.Z`. `_resolve_platform_ref`
   prefixes the `service/` infix on plain versions; raw SHAs, refs with a
-  `/`, and `main`/`HEAD` pass through unchanged.
+  `/`, `pr:N` shorthand (expanded to `refs/pull/N/head`), and `main`/`HEAD`
+  pass through unchanged.
+- **PR refs aren't in the default bare-clone refspec.** `git clone --bare`
+  sets `+refs/heads/*:refs/heads/*`, so `fetch --all --tags` never pulls
+  `refs/pull/N/head`. `_ensure_worktree` (and the SDK equivalents in
+  `checkout.py`) explicitly `fetch origin +refs/...:refs/...` for any
+  `refs/...` ref before adding the worktree, otherwise `git worktree add
+  refs/pull/N/head` dies with `invalid reference`.
+- **Mutable refs auto-refresh; immutable refs cache.** `refs.is_mutable_ref`
+  treats full-length hex SHAs and `<infix>/vX.Y.Z` tag forms as immutable
+  (reuse existing dist), and everything else as mutable (re-fetch the bare
+  repo, `git reset --hard` the worktree, drop the stale binary, rebuild).
+  Don't reintroduce an unconditional dist-exists skip — it silently serves
+  stale binaries when a user installs the same branch a second time.
 - Subprocess output is **not captured** — long-running `go build` / `git
   clone` streams to the terminal so users can see progress. On failure the
   error message just reports the command and exit code.

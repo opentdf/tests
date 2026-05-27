@@ -86,16 +86,38 @@ def tip(
         Optional[list[str]],
         typer.Argument(help="SDKs to build from source (default: all)"),
     ] = None,
+    ref: Annotated[
+        str,
+        typer.Option(
+            "--ref",
+            help=(
+                "Git ref to build (branch, tag, SHA, `pr:N`, or `refs/...`). "
+                "Default `main`. Mutable refs (branches, PR heads) are "
+                "re-fetched and rebuilt on each invocation; immutable refs "
+                "(tags, SHAs) reuse the existing build."
+            ),
+        ),
+    ] = "main",
 ) -> None:
-    """Source checkout + build from main."""
+    """Source checkout + build at a git ref (default: main).
+
+    Examples:
+        otdf-sdk-mgr install tip                              # main, all SDKs
+        otdf-sdk-mgr install tip --ref my-branch platform
+        otdf-sdk-mgr install tip --ref pr:42 go
+        otdf-sdk-mgr install tip --ref abc123f platform java
+    """
     from otdf_sdk_mgr.installers import cmd_tip
     from otdf_sdk_mgr.platform_installer import install_platform_source
 
     want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
+    # Preserve historical `dist/tip/` naming when --ref is omitted; otherwise
+    # let the platform installer slugify the ref.
+    platform_dist_name = "tip" if ref == "main" else None
     if want_platform:
-        _install_platform_or_exit(install_platform_source, "main", dist_name="tip")
+        _install_platform_or_exit(install_platform_source, ref, dist_name=platform_dist_name)
     if sdk_targets:
-        cmd_tip(sdk_targets)
+        cmd_tip(sdk_targets, ref=ref)
 
 
 @install_app.command()

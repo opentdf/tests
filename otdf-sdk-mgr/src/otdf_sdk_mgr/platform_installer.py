@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
 from otdf_sdk_mgr.semver import normalize_version
 
 PLATFORM_BARE_REPO = "platform.git"
@@ -92,8 +93,11 @@ def _resolve_platform_ref(version_or_ref: str) -> str:
     """Turn a user-supplied version into the actual git ref to checkout.
 
     `v0.9.0` → `service/v0.9.0` (matches SDK_TAG_INFIXES["platform"]).
+    `pr:42` → `refs/pull/42/head` (expanded first, then passes through the
+    `/` check).
     A ref that already contains `/`, a hex SHA, or `main` is returned as-is.
     """
+    version_or_ref = expand_pr_shorthand(version_or_ref)
     infix = SDK_TAG_INFIXES.get("platform", "service")
     if "/" in version_or_ref or version_or_ref in ("main", "HEAD"):
         return version_or_ref
@@ -105,16 +109,35 @@ def _resolve_platform_ref(version_or_ref: str) -> str:
 
 
 def _worktree_path_for(ref: str) -> Path:
-    safe = ref.replace("/", "--")
-    return _platform_src_root() / safe
+    return _platform_src_root() / ref_slug(ref)
 
 
 def _ensure_worktree(ref: str) -> Path:
-    """Create (or reuse) a git worktree at the given platform ref."""
+    """Create (or reuse) a git worktree at the given platform ref.
+
+    For mutable refs (branches, PR heads), `_ensure_bare_repo` has already
+    re-fetched, and we reset the worktree HEAD to the freshly-fetched ref so
+    a subsequent install picks up new commits. For immutable refs (tags,
+    SHAs) we just reuse.
+    """
     bare = _ensure_bare_repo()
+    # The bare clone's default refspec is `+refs/heads/*:refs/heads/*` plus
+    # `--tags`, so GitHub PR refs (`refs/pull/N/head`) are never pulled.
+    # Fetch any explicit `refs/...` ref by name into the bare repo before we
+    # try to use it.
+    if ref.startswith("refs/"):
+        print(f"Fetching {ref} into bare repo...")
+        _run(["git", f"--git-dir={bare}", "fetch", "origin", f"+{ref}:{ref}"])
     worktree = _worktree_path_for(ref)
     if worktree.exists():
-        print(f"Worktree already exists at {worktree}; reusing.")
+        if is_mutable_ref(ref):
+            print(f"Worktree exists at {worktree}; resetting to {ref}.")
+            # Worktrees from a bare clone have no `origin` remote, so we
+            # reset to the bare repo's just-fetched ref. Mirrors the
+            # `install_helper_scripts` pattern below.
+            _run(["git", "-C", str(worktree), "reset", "--hard", ref])
+        else:
+            print(f"Worktree already exists at {worktree}; reusing.")
         return worktree
     print(f"Adding worktree at {worktree} for ref {ref}...")
     _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), ref])
@@ -156,14 +179,25 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
     """Install a platform build by checking out and building `ref`.
 
     `ref` may be a plain version (`v0.9.0`), a namespaced tag
-    (`service/v0.9.0`), a branch (`main`), or a SHA. Returns the dist dir.
+    (`service/v0.9.0`), a branch (`main`), a PR shorthand (`pr:42`), a raw
+    ref (`refs/pull/42/head`), or a SHA. Returns the dist dir.
+
+    For immutable refs (tags, SHAs) an existing dist is reused. For mutable
+    refs (branches, PR heads) the bare repo is re-fetched, the worktree is
+    reset, the old dist is removed, and the service binary is rebuilt.
     """
     full_ref = _resolve_platform_ref(ref)
-    dist_dir = _platform_dist_root() / (dist_name or normalize_version(ref))
-    if (dist_dir / "service").exists():
+    if dist_name is None:
+        dist_name = ref_slug(full_ref) if is_mutable_ref(full_ref) else normalize_version(ref)
+    dist_dir = _platform_dist_root() / dist_name
+    binary = dist_dir / "service"
+    if binary.exists() and not is_mutable_ref(full_ref):
         print(f"  Dist already present at {dist_dir}; skipping build.")
         return dist_dir
     worktree = _ensure_worktree(full_ref)
+    if binary.exists():
+        # Mutable ref: drop the stale binary so `_build_service` actually rebuilds.
+        binary.unlink()
     _build_service(worktree, dist_dir)
     _record_version(dist_dir, full_ref, worktree)
     print(f"  Platform {ref} → {dist_dir}")
