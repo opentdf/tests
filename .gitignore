@@ -28,6 +28,7 @@ xtest/sdk/java/cmdline.jar
 /xtest/platform/
 /xtest/java-sdk/
 /xtest/sdk/go/otdfctl
+/xtest/sdk/go/platform-src/
 /xtest/otdfctl/
 
 /tmp/
