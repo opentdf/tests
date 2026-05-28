@@ -22,6 +22,16 @@ from otdf_sdk_mgr.config import (
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
 
 
+class RegistryUnreachableError(Exception):
+    """A version registry could not be contacted.
+
+    Distinct from "registry reachable but returned no versions" — callers
+    that care (e.g. `cmd_stable`) should surface this differently so users
+    don't chase nonexistent version-availability bugs when the real problem
+    is a network outage.
+    """
+
+
 def _github_headers() -> dict[str, str]:
     """Return headers for GitHub API requests, including auth if GITHUB_TOKEN is set."""
     headers: dict[str, str] = {"Accept": "application/json"}
@@ -106,8 +116,7 @@ def list_js_versions() -> list[dict[str, Any]]:
     try:
         data = fetch_json(url)
     except urllib.error.URLError as e:
-        print(f"Warning: failed to fetch npm registry: {e}", file=sys.stderr)
-        return []
+        raise RegistryUnreachableError(f"failed to fetch npm registry ({url}): {e}") from e
 
     dist_tags: dict[str, str] = data.get("dist-tags", {})
     tag_lookup: dict[str, list[str]] = {}
@@ -140,8 +149,7 @@ def list_java_maven_versions() -> list[dict[str, Any]]:
     try:
         xml_text = fetch_text(url)
     except urllib.error.URLError as e:
-        print(f"Warning: failed to fetch Maven metadata: {e}", file=sys.stderr)
-        return []
+        raise RegistryUnreachableError(f"failed to fetch Maven metadata ({url}): {e}") from e
 
     versions = re.findall(r"<version>([^<]+)</version>", xml_text)
     results = []
@@ -171,8 +179,7 @@ def list_java_github_releases() -> list[dict[str, Any]]:
         try:
             releases = fetch_json(url)
         except urllib.error.URLError as e:
-            print(f"Warning: failed to fetch GitHub releases: {e}", file=sys.stderr)
-            break
+            raise RegistryUnreachableError(f"failed to fetch GitHub releases ({url}): {e}") from e
         if not releases:
             break
         for release in releases:

@@ -33,18 +33,18 @@ def install_go_release(version: str, dist_dir: Path) -> None:
     `go run <module>@{version}` instead of a local binary. The .version file
     contains `module-path@version` (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`).
     Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path.
+
+    `go install` is run first to surface module-resolution failures eagerly;
+    only after it succeeds do we lay down `.version` + cli wrappers, so a
+    failed install never leaves a directory that looks successful to the
+    `dist_dir.exists()` skip check in `install_release`.
     """
     go_dir = get_sdk_dir() / "go"
-    dist_dir.mkdir(parents=True, exist_ok=True)
     # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
     if "/" in version:
         version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
     module = go_module_for_tag(tag)
-    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
-    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
-    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
-    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
     print(f"  Pre-warming Go cache for {module}@{tag}...")
     result = subprocess.run(
         ["go", "install", f"{module}@{tag}"],
@@ -52,12 +52,17 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         text=True,
     )
     if result.returncode != 0:
-        msg = f"go install pre-warm failed: {result.stderr.strip()}"
+        msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
         if module == GO_MODULE_PATH_PLATFORM:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
-        print(f"  Warning: {msg} (will retry at runtime)")
+        raise InstallError(msg)
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
+    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
+    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
+    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
     print(f"  Go release {tag} installed to {dist_dir}")
 
 

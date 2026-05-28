@@ -52,9 +52,17 @@ def stable(
     ] = None,
 ) -> None:
     """Install latest stable releases for each SDK."""
-    from otdf_sdk_mgr.installers import cmd_stable
+    from otdf_sdk_mgr.installers import InstallError, cmd_stable
+    from otdf_sdk_mgr.registry import RegistryUnreachableError
 
-    cmd_stable(sdks or ALL_SDKS)
+    try:
+        cmd_stable(sdks or ALL_SDKS)
+    except RegistryUnreachableError as e:
+        typer.echo(f"Error: could not reach version registry — check network: {e}", err=True)
+        raise typer.Exit(1)
+    except InstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @install_app.command()
@@ -66,7 +74,7 @@ def lts(
 ) -> None:
     """Install LTS versions for each SDK."""
     from otdf_sdk_mgr.config import LTS_VERSIONS
-    from otdf_sdk_mgr.installers import cmd_lts
+    from otdf_sdk_mgr.installers import InstallError, cmd_lts
     from otdf_sdk_mgr.platform_installer import install_platform_release
 
     want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
@@ -77,7 +85,11 @@ def lts(
             raise typer.Exit(1)
         _install_platform_or_exit(install_platform_release, version)
     if sdk_targets:
-        cmd_lts(sdk_targets)
+        try:
+            cmd_lts(sdk_targets)
+        except InstallError as e:
+            typer.echo(f"Error: {e}", err=True)
+            raise typer.Exit(1)
 
 
 @install_app.command()

@@ -12,7 +12,7 @@ Full command reference: [README.md](README.md).
 |------|------------|----------------|
 | `cli_install.py` | `install {stable,lts,tip,release,scripts,artifact,scenario}` | All `install` subcommands; delegates per-SDK work to `installers.py` and platform work to `platform_installer.py`. |
 | `cli_scenario.py` | `install scenario <path>` | Reads `scenarios.yaml` / `instance.yaml`, installs every referenced artifact, writes `<name>.installed.json`. |
-| `cli_versions.py` | `versions {list,latest}` | Lists released versions across registries. |
+| `cli_versions.py` | `versions {list,resolve}` | Lists released versions (`--latest N` filters most-recent) and resolves tags to SHAs. |
 | `installers.py` | (lib) | Per-SDK install logic for go/java/js. |
 | `platform_installer.py` | (lib) | Builds the platform `service` binary via git worktrees on a bare clone. |
 | `schema.py` | (lib) | Pydantic models for `Scenario` / `Instance` + `load_yaml_mapping`. |

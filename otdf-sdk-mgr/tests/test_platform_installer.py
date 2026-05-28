@@ -17,8 +17,10 @@ from otdf_sdk_mgr.semver import normalize_version
         ("service/v0.9.0", "service/v0.9.0"),
         ("a" * 40, "a" * 40),
         ("b" * 64, "b" * 64),
-        ("abc1234", "service/vabc1234"),
-        ("deadbeef", "service/vdeadbeef"),
+        # 7-39 char hex passes through unchanged; install_platform_source
+        # expands via `git rev-parse` once the bare repo is available.
+        ("abc1234", "abc1234"),
+        ("deadbeef", "deadbeef"),
         # PR shorthand expands before the `/` check, then passes through.
         ("pr:42", "refs/pull/42/head"),
         ("pr:1234", "refs/pull/1234/head"),

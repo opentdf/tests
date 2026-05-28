@@ -89,23 +89,55 @@ def _ensure_bare_repo() -> Path:
     return bare
 
 
+def _is_hex(s: str) -> bool:
+    return bool(s) and all(c in "0123456789abcdef" for c in s.lower())
+
+
 def _resolve_platform_ref(version_or_ref: str) -> str:
     """Turn a user-supplied version into the actual git ref to checkout.
 
     `v0.9.0` → `service/v0.9.0` (matches SDK_TAG_INFIXES["platform"]).
     `pr:42` → `refs/pull/42/head` (expanded first, then passes through the
     `/` check).
-    A ref that already contains `/`, a hex SHA, or `main` is returned as-is.
+    A ref that already contains `/`, a full-length hex SHA, or `main` is
+    returned as-is. 7-39 char hex inputs are returned unchanged — they
+    might be abbreviated SHAs or branch names; `install_platform_source`
+    resolves the ambiguity via `_expand_short_sha` once the bare repo is
+    available.
     """
     version_or_ref = expand_pr_shorthand(version_or_ref)
     infix = SDK_TAG_INFIXES.get("platform", "service")
     if "/" in version_or_ref or version_or_ref in ("main", "HEAD"):
         return version_or_ref
-    if len(version_or_ref) in (40, 64) and all(
-        c in "0123456789abcdef" for c in version_or_ref.lower()
-    ):
+    if len(version_or_ref) in (40, 64) and _is_hex(version_or_ref):
+        return version_or_ref
+    if 7 <= len(version_or_ref) <= 39 and _is_hex(version_or_ref):
         return version_or_ref
     return f"{infix}/{normalize_version(version_or_ref)}"
+
+
+def _expand_short_sha(short: str) -> str:
+    """Expand an abbreviated hex string to a full SHA via the bare repo.
+
+    Returns the full 40-char SHA if git resolves the prefix uniquely.
+    Raises `PlatformInstallError` if git reports the prefix is ambiguous.
+    Returns the input unchanged if git cannot resolve it (caller may then
+    treat it as a branch/tag name; `git worktree add` will produce a clear
+    `invalid reference` error if the name doesn't exist either).
+    """
+    bare = _ensure_bare_repo()
+    result = subprocess.run(
+        ["git", f"--git-dir={bare}", "rev-parse", "--verify", f"{short}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    if "ambiguous" in result.stderr.lower():
+        raise PlatformInstallError(
+            f"ambiguous abbreviated SHA {short!r}: pass at least 8 chars, or the full 40-char SHA"
+        )
+    return short
 
 
 def _worktree_path_for(ref: str) -> Path:
@@ -187,12 +219,17 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
     reset, the old dist is removed, and the service binary is rebuilt.
     """
     full_ref = _resolve_platform_ref(ref)
+    if 7 <= len(full_ref) <= 39 and _is_hex(full_ref):
+        # Abbreviated SHA: resolve to full 40-char SHA so caching matches the
+        # full-SHA case. Falls through to branch-name handling if git can't
+        # resolve the prefix; raises on ambiguity.
+        full_ref = _expand_short_sha(full_ref)
     if dist_name is None:
         if is_mutable_ref(full_ref):
             dist_name = ref_slug(full_ref)
         else:
-            # For immutable refs (tags, SHAs), normalize only the semver tail so
-            # namespaced tags like `service/v0.9.0` produce the same dist_name as `v0.9.0`.
+            # Normalize only the semver tail so namespaced tags like
+            # `service/v0.9.0` produce the same dist_name as `v0.9.0`.
             dist_name = normalize_version(full_ref.rsplit("/", 1)[-1])
     dist_dir = _platform_dist_root() / dist_name
     binary = dist_dir / "service"

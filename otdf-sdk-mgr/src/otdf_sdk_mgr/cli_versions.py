@@ -34,6 +34,7 @@ def list_versions(
 ) -> None:
     """List available released versions of SDK CLIs."""
     from otdf_sdk_mgr.registry import (
+        RegistryUnreachableError,
         apply_filters,
         list_go_versions,
         list_java_github_releases,
@@ -45,22 +46,30 @@ def list_versions(
     sdks = ["go", "js", "java", "platform"] if sdk == "all" else [sdk]
     all_entries: list[dict[str, Any]] = []
 
-    for s in sdks:
-        if s == "go":
-            entries = list_go_versions()
-            all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
-        elif s == "js":
-            entries = list_js_versions()
-            all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
-        elif s == "java":
-            maven_entries = list_java_maven_versions()
-            all_entries.extend(apply_filters(maven_entries, stable_only=stable, latest_n=latest))
-            if releases:
-                gh_entries = list_java_github_releases()
-                all_entries.extend(apply_filters(gh_entries, stable_only=stable, latest_n=latest))
-        elif s == "platform":
-            entries = list_platform_versions()
-            all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
+    try:
+        for s in sdks:
+            if s == "go":
+                entries = list_go_versions()
+                all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
+            elif s == "js":
+                entries = list_js_versions()
+                all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
+            elif s == "java":
+                maven_entries = list_java_maven_versions()
+                all_entries.extend(
+                    apply_filters(maven_entries, stable_only=stable, latest_n=latest)
+                )
+                if releases:
+                    gh_entries = list_java_github_releases()
+                    all_entries.extend(
+                        apply_filters(gh_entries, stable_only=stable, latest_n=latest)
+                    )
+            elif s == "platform":
+                entries = list_platform_versions()
+                all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
+    except RegistryUnreachableError as e:
+        typer.echo(f"Error: could not reach version registry — check network: {e}", err=True)
+        raise typer.Exit(1)
 
     if output_table:
         _print_rich_table(all_entries)
