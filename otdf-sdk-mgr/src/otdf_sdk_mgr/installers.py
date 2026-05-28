@@ -109,7 +109,6 @@ def install_java_release(version: str, dist_dir: Path) -> None:
         print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
         # Proceed with download attempt anyway
 
-    # Download to a temp file first to avoid partial writes
     tmp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jar") as tmp:
@@ -127,17 +126,15 @@ def install_java_release(version: str, dist_dir: Path) -> None:
                 )
             raise
 
-        # Download succeeded — now create dist_dir and move files into place
         dist_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(java_dir / "cli.sh", dist_dir / "cli.sh")
         shutil.move(str(tmp_path), str(dist_dir / "cmdline.jar"))
-        tmp_path = None  # Ownership transferred; don't clean up
-    except BaseException:
+        tmp_path = None
+    finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
         if dist_dir.exists() and not (dist_dir / "cmdline.jar").exists():
             shutil.rmtree(dist_dir, ignore_errors=True)
-        raise
 
     print(f"  Java release {tag} installed to {dist_dir}")
 

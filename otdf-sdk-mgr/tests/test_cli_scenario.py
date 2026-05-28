@@ -65,6 +65,8 @@ def test_install_scenario_writes_consumable_manifest(tmp_path: Path) -> None:
         "path": str(platform_dist),
     }
     assert set(record["kas"].keys()) == {"alpha"}
+    assert record["kas"]["alpha"]["mode"] == "standard"
+    assert record["kas"]["alpha"]["features"] == {}
     assert record["sdks"]["encrypt"] == [
         {
             "sdk": "go",
@@ -102,6 +104,50 @@ def test_install_scenario_writes_consumable_manifest(tmp_path: Path) -> None:
         "encrypt": ["go@v0.24.0", "js@v0.5.0"],
         "decrypt": ["js@v0.5.0", "java@v0.7.8"],
     }
+
+
+def test_install_scenario_preserves_kas_mode_and_features(tmp_path: Path) -> None:
+    """KasPin.mode and KasPin.features round-trip into installed.json."""
+    scenario_yaml = """
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+metadata:
+  id: km-smoke
+instance:
+  platform: { dist: v0.9.0 }
+  kas:
+    alpha:
+      dist: v0.9.0
+      mode: key_management
+      features:
+        ec_tdf_enabled: true
+        rotation_enabled: false
+sdks:
+  encrypt:
+    - { sdk: go, version: v0.24.0 }
+  decrypt:
+    - { sdk: go, version: v0.24.0 }
+suite:
+  targets: ["xtest/test_tdfs.py"]
+"""
+    scenario_path = tmp_path / "s.yaml"
+    scenario_path.write_text(scenario_yaml)
+    platform_dist = tmp_path / "platform-dist" / "v0.9.0"
+
+    with (
+        patch("otdf_sdk_mgr.cli_scenario.install_platform_release", return_value=platform_dist),
+        patch("otdf_sdk_mgr.cli_scenario.install_helper_scripts"),
+        patch(
+            "otdf_sdk_mgr.cli_scenario.install_release",
+            side_effect=lambda sdk, version: tmp_path / "sdk" / sdk / version,
+        ),
+    ):
+        install_scenario_cmd(scenario_path, skip_scripts=True)
+
+    record = json.loads((tmp_path / "s.installed.json").read_text())
+    alpha = record["kas"]["alpha"]
+    assert alpha["mode"] == "key_management"
+    assert alpha["features"] == {"ec_tdf_enabled": True, "rotation_enabled": False}
 
 
 def test_install_scenario_writes_partial_manifest_on_failure(tmp_path: Path) -> None:

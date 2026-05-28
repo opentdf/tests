@@ -76,10 +76,14 @@ Source builds (`tip` mode) check out source to `sdk/{lang}/src/` and compile via
 `refs/pull/N/head`), and raw `refs/...` paths. Mutable refs (branches and
 PR heads) are re-fetched and rebuilt on every invocation so the dist
 matches the latest upstream commit; immutable refs (tags and full-length
-SHAs) reuse the cached build for speed. Dist directories are named after a
-slug of the ref (e.g. `dist/my-branch/`, `dist/pull--42--head/`); `--ref
-main` keeps the historical `dist/tip/` (platform) and `dist/main/` (SDK)
-names.
+SHAs) reuse the cached build for speed.
+
+| Ref form                       | Mutable? | Dist directory name      |
+|--------------------------------|----------|--------------------------|
+| `--ref main` (default)         | yes      | `dist/tip/` (platform), `dist/main/` (SDK) |
+| Other branches, `pr:N`, raw `refs/...` | yes | slug of the ref, e.g. `dist/my-branch/`, `dist/refs--pull--42--head/` |
+| `v0.9.0`, `service/v0.9.0`     | no       | `dist/v0.9.0/`           |
+| Full 40-char SHA               | no       | `dist/v<sha>/`           |
 
 After changes to SDK source, rebuild:
 
