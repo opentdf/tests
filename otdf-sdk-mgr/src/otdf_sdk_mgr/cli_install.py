@@ -6,22 +6,14 @@ from typing import Annotated, Optional
 
 import typer
 
+from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
 from otdf_sdk_mgr.config import ALL_SDKS
 
 install_app = typer.Typer(help="Install SDK CLI artifacts from registries or source.")
-
-
-def _register_scenario_cmd() -> None:
-    from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
-
-    install_app.command("scenario")(install_scenario_cmd)
-
-
-_register_scenario_cmd()
+install_app.command("scenario")(install_scenario_cmd)
 
 
 def _split_platform(sdks: list[str]) -> tuple[bool, list[str]]:
-    """Return (platform_requested, sdks_without_platform)."""
     return ("platform" in sdks, [s for s in sdks if s != "platform"])
 
 

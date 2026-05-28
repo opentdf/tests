@@ -1,9 +1,8 @@
 """Installer for the OpenTDF platform service.
 
-Mirrors the SDK installer pattern but produces a built `service` binary at
-`xtest/platform/dist/<version>/service`. v1 supports source builds only —
-container images and release tarballs are not published by `opentdf/platform`
-today.
+Produces a built `service` binary at `xtest/platform/dist/<version>/service`
+from source — container images and release tarballs are not published by
+`opentdf/platform` today.
 
 Tag namespacing: the platform monorepo tags releases as `service/vX.Y.Z`.
 Users pass plain versions (e.g. `v0.9.0`); the installer prefixes `service/`
@@ -70,7 +69,10 @@ def _run(cmd: list[str], cwd: Path | None = None) -> None:
     user can see progress. We don't capture; on failure the user has already
     seen the diagnostics in their terminal.
     """
-    result = subprocess.run(cmd, cwd=cwd)
+    try:
+        result = subprocess.run(cmd, cwd=cwd)
+    except FileNotFoundError as e:
+        raise PlatformInstallError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
         raise PlatformInstallError(f"command failed (exit {result.returncode}): {' '.join(cmd)}")
 
@@ -177,16 +179,26 @@ def _ensure_worktree(ref: str) -> Path:
 
 
 def _build_service(worktree: Path, dist_dir: Path) -> Path:
-    """Run `go build` to produce `dist_dir/service`."""
+    """Run `go build` to produce `dist_dir/service`.
+
+    Writes a `.complete` marker after the build succeeds. Reuse requires both
+    the binary and the marker — survives Ctrl-C mid-build, which would
+    otherwise leave a half-written binary that the next invocation would
+    happily serve.
+    """
     dist_dir.mkdir(parents=True, exist_ok=True)
     binary = dist_dir / "service"
-    if binary.exists():
+    marker = dist_dir / ".complete"
+    if binary.exists() and marker.exists():
         print(f"  Binary already built at {binary}; reusing.")
         return binary
+    if binary.exists():
+        binary.unlink()
     print(f"  Building platform service binary at {binary} from {worktree}...")
     _run(["go", "build", "-o", str(binary), "./service"], cwd=worktree)
     if not binary.exists():
         raise PlatformInstallError(f"go build completed but {binary} is missing")
+    marker.write_text("")
     return binary
 
 
@@ -233,13 +245,15 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
             dist_name = normalize_version(full_ref.rsplit("/", 1)[-1])
     dist_dir = _platform_dist_root() / dist_name
     binary = dist_dir / "service"
-    if binary.exists() and not is_mutable_ref(full_ref):
+    marker = dist_dir / ".complete"
+    if binary.exists() and marker.exists() and not is_mutable_ref(full_ref):
         print(f"  Dist already present at {dist_dir}; skipping build.")
         return dist_dir
     worktree = _ensure_worktree(full_ref)
     if binary.exists():
-        # Mutable ref: drop the stale binary so `_build_service` actually rebuilds.
         binary.unlink()
+    if marker.exists():
+        marker.unlink()
     _build_service(worktree, dist_dir)
     _record_version(dist_dir, full_ref, worktree)
     print(f"  Platform {ref} → {dist_dir}")
@@ -283,24 +297,3 @@ def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
     shutil.copytree(src_scripts, scripts_dir)
     print(f"  Helper scripts copied to {scripts_dir}")
     return scripts_dir
-
-
-def list_platform_versions() -> list[str]:
-    """Return all `service/vX.Y.Z` tags from the platform repo, version-only."""
-    from git import Git
-
-    repo = Git()
-    raw = repo.ls_remote(SDK_GIT_URLS["platform"], tags=True)
-    infix = SDK_TAG_INFIXES.get("platform", "service")
-    out: list[str] = []
-    for line in raw.strip().splitlines():
-        if not line:
-            continue
-        _, ref = line.split("\t", 1)
-        if ref.endswith("^{}"):
-            continue
-        tag = ref.removeprefix("refs/tags/")
-        if tag.startswith(f"{infix}/"):
-            out.append(tag.removeprefix(f"{infix}/"))
-    out.sort()
-    return out

@@ -10,10 +10,12 @@ plugin skills) can locate the dist paths without re-resolving.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 
 from otdf_sdk_mgr.installers import InstallError, install_release
 from otdf_sdk_mgr.platform_installer import (
@@ -31,13 +33,18 @@ from otdf_sdk_mgr.schema import (
 )
 
 
-def _install_platform_pin(pin: PlatformPin | KasPin) -> dict[str, str]:
+def _install_platform_pin(pin: PlatformPin | KasPin) -> dict[str, object]:
     if pin.dist is not None:
         dist_dir = install_platform_release(pin.dist)
-        return {"kind": "dist", "version": pin.dist, "path": str(dist_dir)}
-    assert pin.source is not None  # by schema invariant
-    dist_dir = install_platform_source(pin.source.ref)
-    return {"kind": "source", "ref": pin.source.ref, "path": str(dist_dir)}
+        record: dict[str, object] = {"kind": "dist", "version": pin.dist, "path": str(dist_dir)}
+    else:
+        assert pin.source is not None  # by schema invariant
+        dist_dir = install_platform_source(pin.source.ref)
+        record = {"kind": "source", "ref": pin.source.ref, "path": str(dist_dir)}
+    if isinstance(pin, KasPin):
+        record["mode"] = pin.mode
+        record["features"] = dict(pin.features)
+    return record
 
 
 def install_scenario_cmd(
@@ -62,17 +69,21 @@ def install_scenario_cmd(
 
     kind = raw.get("kind") if isinstance(raw.get("kind"), str) else None
     scenario: Scenario | None = None
-    if kind == "Scenario":
-        scenario = Scenario.model_validate(raw)
-        instance = scenario.instance
-    elif kind == "Instance":
-        instance = Instance.model_validate(raw)
-    else:
-        typer.echo(f"Error: {path} has unknown kind {kind!r}", err=True)
+    try:
+        if kind == "Scenario":
+            scenario = Scenario.model_validate(raw)
+            instance = scenario.instance
+        elif kind == "Instance":
+            instance = Instance.model_validate(raw)
+        else:
+            typer.echo(f"Error: {path} has unknown kind {kind!r}", err=True)
+            raise typer.Exit(1)
+    except ValidationError as e:
+        typer.echo(f"Error: {path} failed schema validation:\n{e}", err=True)
         raise typer.Exit(1)
 
-    installed_platform: dict[str, str] | None = None
-    installed_kas: dict[str, dict[str, str]] = {}
+    installed_platform: dict[str, object] | None = None
+    installed_kas: dict[str, dict[str, object]] = {}
     installed_sdks: dict[str, list[dict[str, str | None]]] = {"encrypt": [], "decrypt": []}
     out = path.parent / f"{path.stem}.installed.json"
 
@@ -109,7 +120,12 @@ def install_scenario_cmd(
                     }
                     for entry in getattr(scenario.sdks, role)
                 ]
-    except (PlatformInstallError, InstallError) as e:
+    except (
+        PlatformInstallError,
+        InstallError,
+        subprocess.CalledProcessError,
+        OSError,
+    ) as e:
         out.write_text(json.dumps(_snapshot(status="partial"), indent=2) + "\n")
         typer.echo(f"Error: {e}", err=True)
         typer.echo(f"  Wrote partial manifest to {out}", err=True)

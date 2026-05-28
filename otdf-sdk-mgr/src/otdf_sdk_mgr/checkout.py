@@ -12,10 +12,20 @@ from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 
 
 def _run(cmd: list[str], **kwargs: Any) -> None:
-    """Run a command, raising on failure."""
-    result = subprocess.run(cmd, **kwargs)
+    """Run a command, raising on failure with cwd and stderr in the message."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    except FileNotFoundError as e:
+        raise RuntimeError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
-        raise subprocess.CalledProcessError(result.returncode, cmd)
+        cwd = kwargs.get("cwd", "")
+        cwd_str = f" (cwd={cwd})" if cwd else ""
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            cmd,
+            output=result.stdout,
+            stderr=(result.stderr or "") + cwd_str,
+        )
 
 
 def checkout_sdk_branch(language: str, branch: str) -> str:
