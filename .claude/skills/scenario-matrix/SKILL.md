@@ -1,18 +1,18 @@
 ---
 name: scenario-matrix
-description: Use when running the same test suite across multiple refs, branches, PRs, or releases — bisecting regressions or validating a fix across versions. Generates scenario files only; does not run them.
+description: This skill should be used when the user asks to "run the same suite across multiple versions", "bisect a regression across releases", "validate a fix across PRs", "generate a scenario matrix", or wants the same test suite exercised at N different platform / SDK refs. Generates scenario files only; does not run them — hand the output to `scenario-up` / `scenario-run` per cell.
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
 # scenario-matrix
 
-You produce N scenario files from one base scenario, where N = the number of refs the user wants exercised. Each output scenario differs only in `instance.platform` (and optionally any KAS pins the user says should track the same ref). SDK pins are preserved unless explicitly told to vary.
+Produce N scenario files from one base scenario, where N is the number of refs the user wants exercised. Each output scenario differs only in `instance.platform` (and optionally any KAS pins the user says should track the same ref). SDK pins are preserved unless explicitly told to vary.
 
 ## Inputs
 
 - A **base**, either:
   - Path to an existing `xtest/scenarios/<id>.yaml`, OR
-  - A Jira ticket key — in which case invoke `scenario-from-ticket` first to produce the base, then proceed.
+  - A Jira ticket key — invoke `scenario-from-ticket` first to produce the base, then proceed.
 - A **ref list** — any combination of:
   - Released versions: `v0.9.0`, `v0.8.5`
   - Branch names: `main`, `feature/ecdsa-binding`
@@ -26,7 +26,7 @@ You produce N scenario files from one base scenario, where N = the number of ref
 - If given a path: `Read` it.
 - If given a ticket key: invoke `scenario-from-ticket` against the ticket first, then `Read` the produced file.
 
-The base scenario provides everything except `instance.platform` (and tracked KAS pins): metadata.title becomes the title prefix, `suite` is shared across all cells, `sdks` is preserved.
+The base scenario provides everything except `instance.platform` (and tracked KAS pins): `metadata.title` becomes the title prefix, `suite` is shared across all cells, `sdks` is preserved.
 
 ### Step 2 — Resolve each ref to a concrete value
 
@@ -54,7 +54,7 @@ Each cell scenario gets:
 - A unique `instance.metadata.name` (same as `metadata.id`).
 - A unique `instance.ports.base` — start from the base's value and add `+1000` per additional cell. `scenario-up` rejects overlapping port bases between concurrent instances.
 - `metadata.title` gets a ` [<token>]` suffix for at-a-glance identification.
-- `instance.platform` rewritten to the resolved ref. For KAS pins that should track the same ref (default: all of them), rewrite their pin too. KAS pins the user explicitly excluded keep the base's value.
+- `instance.platform` rewritten to the resolved ref. For KAS pins that should track the same ref (default: all of them), rewrite their pin too. Pins the user explicitly excluded keep the base's value.
 - `suite`, `sdks`, `expected`, `actual` — unchanged from the base.
 
 ### Step 4 — Validate every file
@@ -87,5 +87,18 @@ Bail (delete the just-written files) if any cell fails validation — partial ma
 
 - This skill **writes scenario files only**. It does not install artifacts, scaffold instances, or run pytest. Hand the resulting files to `scenario-up` and `scenario-run` per cell.
 - For two PRs that differ in *SDK* (not platform), vary `sdks.<encrypt|decrypt>.<lang>.version` instead of `platform`. Same pattern, different field — `SdkPin.version` accepts the same range of refs (`v0.24.0`, `main`, SHA).
-- For a full platform × SDK matrix, generate N×M scenarios. Be prepared for long install times — each new platform ref triggers a `go build` (~30-60s first time per version); subsequent runs reuse the cached binary.
+- For a full platform × SDK matrix, generate N×M scenarios. Be prepared for long install times — each new platform ref triggers a `go build` (~30–60s first time per version); subsequent runs reuse the cached binary.
 - Don't update `expected:` / `actual:` per cell unless the user specifies that one of the refs is the "known good" or "known broken" baseline.
+
+### Pre-install shared refs (workaround for [DSPX-3417](https://virtru.atlassian.net/browse/DSPX-3417))
+
+`otdf-sdk-mgr install scenario` currently rebuilds the platform once per pin even when N pins share a ref — so an N-cell matrix on the same platform ref triggers N rebuilds, each ~30–60s. Workaround:
+
+```bash
+# Build once.
+uv run otdf-sdk-mgr install tip --ref <shared-ref> platform
+# Then run the per-cell loop in Step 5; each `install scenario` will reuse
+# the cached binary instead of rebuilding.
+```
+
+When DSPX-3417's dedup ships, the workaround becomes unnecessary.
