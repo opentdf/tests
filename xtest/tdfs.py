@@ -60,6 +60,8 @@ feature_type = Literal[
     "mechanism-xwing",
     # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
     "mechanism-secpmlkem",
+    # Support for pure (non-hybrid) ML-KEM key wrapping: mlkem:768 and mlkem:1024.
+    "mechanism-mlkem",
     "ns_grants",
     "obligations",
 ]
@@ -142,6 +144,11 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 17, 0):
             self.features.add("mechanism-xwing")
             self.features.add("mechanism-secpmlkem")
+
+        # Pure ML-KEM (non-hybrid) added by platform PR #3537. Tentatively v0.17.0;
+        # bump when the release target is finalized.
+        if self.semver >= (0, 17, 0):
+            self.features.add("mechanism-mlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
