@@ -8,7 +8,11 @@ from typing import Any
 import pytest
 
 from otdf_sdk_mgr import platform_installer
-from otdf_sdk_mgr.platform_installer import _resolve_platform_ref, install_platform_source
+from otdf_sdk_mgr.platform_installer import (
+    PlatformInstallError,
+    _resolve_platform_ref,
+    install_platform_source,
+)
 
 
 @pytest.mark.parametrize(
@@ -34,6 +38,19 @@ from otdf_sdk_mgr.platform_installer import _resolve_platform_ref, install_platf
 )
 def test_resolve_platform_ref(inp, expected):
     assert _resolve_platform_ref(inp) == expected
+
+
+@pytest.mark.parametrize(
+    "inp",
+    [
+        "ghcr.io/opentdf/platform:v0.9.0",
+        "registry.example.com/opentdf/platform@sha256:" + "a" * 64,
+        "docker.io/library/foo:latest",
+    ],
+)
+def test_resolve_platform_ref_rejects_container_image_refs(inp):
+    with pytest.raises(PlatformInstallError, match="container-image"):
+        _resolve_platform_ref(inp)
 
 
 def _stub_installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:

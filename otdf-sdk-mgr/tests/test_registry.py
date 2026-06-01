@@ -95,9 +95,6 @@ def test_list_java_github_releases_403_rate_limit(monkeypatch: pytest.MonkeyPatc
         fp=None,
     )
 
-    def boom(_url: str):
-        raise err
-
     monkeypatch.setattr(
         registry.urllib.request, "urlopen", lambda *a, **kw: (_ for _ in ()).throw(err)
     )

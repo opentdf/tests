@@ -234,7 +234,7 @@ def list_platform_versions() -> list[dict[str, Any]]:
                 "version": version_normalized,
                 "source": "platform-git-tag",
                 "stable": is_stable(version_normalized),
-                "install_method": f"otdf-sdk-mgr install platform {version_normalized}",
+                "install_method": f"otdf-sdk-mgr install release platform:{version_normalized}",
             }
         )
     results.sort(key=lambda r: semver_sort_key(r["version"]))

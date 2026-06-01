@@ -109,6 +109,11 @@ def _resolve_platform_ref(version_or_ref: str) -> str:
     """
     version_or_ref = expand_pr_shorthand(version_or_ref)
     infix = SDK_TAG_INFIXES.get("platform", "service")
+    if "/" in version_or_ref and (":" in version_or_ref or "@" in version_or_ref):
+        raise PlatformInstallError(
+            f"container-image refs are not supported: {version_or_ref!r}; "
+            "use a git ref like v0.9.0, service/v0.9.0, main, or a SHA"
+        )
     if "/" in version_or_ref or version_or_ref in ("main", "HEAD"):
         return version_or_ref
     if len(version_or_ref) in (40, 64) and _is_hex(version_or_ref):
