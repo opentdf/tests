@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/xtest"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
+
+  - package-ecosystem: "uv"
+    directory: "/otdf-local"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
+
+  - package-ecosystem: "uv"
+    directory: "/otdf-sdk-mgr"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
