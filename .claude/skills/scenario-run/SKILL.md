@@ -18,7 +18,7 @@ Invoke the pytest selection declared by the scenario's `suite` block against the
 ### Step 1 — Invoke the runner
 
 ```bash
-uv run otdf-local scenario run xtest/scenarios/<id>.yaml
+uv run otdf-local scenario run --instance <id> xtest/scenarios/<id>.yaml
 ```
 
 This translates the scenario's `suite.targets` (list — each entry becomes a positional pytest arg), `suite.containers` (list — joined into a single whitespace-separated `--containers` value), `suite.kexpr`, `suite.markers`, and `sdks.{encrypt,decrypt}` into the equivalent `pytest <targets…> --sdks-encrypt … --sdks-decrypt … --containers …` invocation under `xtest/` with `OTDF_LOCAL_INSTANCE_NAME` set. SDK tokens are emitted in xtest's `sdk@version` form; the resolved version names come from the sibling `<scenario>.installed.json`.
