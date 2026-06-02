@@ -78,7 +78,7 @@ Bail (delete the just-written files) if any cell fails validation — partial ma
     uv run otdf-sdk-mgr install scenario "$f"
     uv run otdf-local instance init "$name" --from-scenario "$f"
     uv run otdf-local --instance "$name" up
-    uv run otdf-local scenario run "$f"
+    uv run otdf-local scenario run --instance "$name" "$f"
     uv run otdf-local --instance "$name" down
   done
   ```
