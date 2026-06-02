@@ -36,22 +36,22 @@ alpha     8181  v090...       a1b2c3d4...   200    WRONG-BINARY
 - `EXTRA` — port is occupied by a service the instance didn't declare. Usually a leftover from another instance/worktree.
 - `NO-PIN` — instance manifest didn't pin this service (skip).
 
-### Step 2 — Verify seed files
+### Step 2 — Verify instance-dir seed files
 
-For each unique worktree referenced in the diff output (parse the `expected_sha` rows back to `.version` sidecars), invoke the bootstrap script in dry-run inspection mode — re-using `scenario-up`'s probe so the file checks stay consistent:
+`otdf-local instance init` is responsible for seeding `keys/{ca.jks,localhost.crt,localhost.key}`, `keys/kas-*.pem`, and `instances/<name>/opentdf.yaml` (with a generated `services.kas.root_key`). Confirm they're all present:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT:-.}/skills/scenario-up/scripts/bootstrap-pr-worktree.sh <scenario-path>
+bash ${CLAUDE_PLUGIN_ROOT:-.}/skills/scenario-doctor/scripts/check-instance-seed.sh <name>
 ```
 
-Treat any `state=empty-dir` or `state=missing action=manual-required` row as a real problem worth surfacing — those are the silent-failure shapes (Docker bind-mount stubs, ungenerated dev keys).
+Tab-separated output, one row per artifact, `state ∈ {ok, missing, empty}`. Treat any non-`ok` row as a real problem — re-run `uv run otdf-local instance init <name> --from-scenario <path>` to refresh (existing files are preserved, so this won't churn the root_key).
 
 ### Step 3 — Assign a verdict
 
 Roll up Steps 1–2 into one of three colors. Lead the reply with the verdict; users scan for this.
 
 - **GREEN** — every declared service is `MATCH` + 200, no `EXTRA` rows, every seed file `ok`. Nothing for the user to do.
-- **YELLOW** — at least one `WRONG-BINARY`, `EXTRA`, or `empty-dir`/`missing` row, but the instance is *running*. Tests may pass or fail unpredictably until the drift is resolved.
+- **YELLOW** — at least one `WRONG-BINARY`, `EXTRA`, or `missing`/`empty` seed-file row, but the instance is *running*. Tests may pass or fail unpredictably until the drift is resolved.
 - **RED** — at least one declared service is `NOT-RUNNING`. Tests cannot succeed; recommend `otdf-local --instance <name> up` (fresh start) or per-service `restart`.
 
 ### Step 4 — Per-row remedy
@@ -63,7 +63,7 @@ For each non-`MATCH` row, emit a one-line remedy alongside the diff table:
 | `NOT-RUNNING` | `otdf-local --instance <name> up` (full) or `restart <service>` (single service) |
 | `WRONG-BINARY` | Identify owning PID's worktree via `lsof -p <pid> -d cwd`. If sibling worktree: tear that down first (`OTDF_LOCAL_INSTANCE_NAME=<other> otdf-local down`). If same worktree, stale binary: `otdf-sdk-mgr install tip --ref <expected-ref> platform` then restart. |
 | `EXTRA` | Confirm the PID and its cwd. Stop owning instance or kill the stale PID. |
-| `empty-dir` / `missing` | Re-run `bootstrap-pr-worktree.sh` (Phase B of `scenario-up`) or hand-run `bash .github/scripts/init-temp-keys.sh` in the worktree. |
+| `missing` / `empty` (seed file) | Re-run `otdf-local instance init <name> --from-scenario <path>`. Existing files are preserved; only the missing seed gets regenerated. |
 
 ### Step 5 — Output
 
@@ -86,9 +86,10 @@ For the simpler "what's defined / what's listening here" question without the di
 
 ## Additional Resources
 
-### Script
+### Scripts
 
 - **`scripts/diff-running-vs-intended.sh`** — automates Step 1's expected-vs-actual diff. Takes one positional argument: the instance name. Tab-separated stdout.
+- **`scripts/check-instance-seed.sh`** — read-only verifier for Step 2. Takes one positional argument: the instance name. Confirms `keys/{ca.jks,localhost.crt,localhost.key}`, `keys/kas-*.pem`, and `opentdf.yaml` (with a non-empty `services.kas.root_key`) are present in `tests/instances/<name>/`. Tab-separated stdout.
 
 ### Reference files
 

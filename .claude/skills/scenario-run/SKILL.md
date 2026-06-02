@@ -21,7 +21,7 @@ Invoke the pytest selection declared by the scenario's `suite` block against the
 uv run otdf-local scenario run xtest/scenarios/<id>.yaml
 ```
 
-This translates the scenario's `suite.select`, `suite.containers`, `suite.markers`, and `sdks.{encrypt,decrypt}` into the equivalent `pytest --sdks-encrypt … --sdks-decrypt … --containers …` invocation under `xtest/` with `OTDF_LOCAL_INSTANCE_NAME` set. SDK tokens are emitted in xtest's `sdk@version` form; the resolved version names come from the sibling `<scenario>.installed.json`.
+This translates the scenario's `suite.targets` (list — each entry becomes a positional pytest arg), `suite.containers` (list — joined into a single whitespace-separated `--containers` value), `suite.kexpr`, `suite.markers`, and `sdks.{encrypt,decrypt}` into the equivalent `pytest <targets…> --sdks-encrypt … --sdks-decrypt … --containers …` invocation under `xtest/` with `OTDF_LOCAL_INSTANCE_NAME` set. SDK tokens are emitted in xtest's `sdk@version` form; the resolved version names come from the sibling `<scenario>.installed.json`.
 
 Failure modes:
 - `Error: <path>.installed.json not found` — the user skipped Step 1 of `scenario-up`. Run `uv run otdf-sdk-mgr install scenario <path>` first.
@@ -41,10 +41,10 @@ set +a
 # Map each source-pinned SDK to its dist slug under xtest/sdk/<lang>/dist/.
 # For platform PR #N, the slug is typically `refs--pull--<N>--head`.
 PLATFORM_VERSION=<future-version> OTDFCTL_HEADS='["<go-dist-slug>"]' \
-  uv run pytest <suite.select> \
+  uv run pytest <suite.targets...> \
     --sdks-encrypt <lang>@<dist-slug> \
     --sdks-decrypt <lang>@<dist-slug> \
-    --containers <suite.containers>
+    --containers "<suite.containers joined by space>"
 ```
 
 `PLATFORM_VERSION` and `OTDFCTL_HEADS` defaults are noted in `scenario-up`; pull them from there or from the scenario's source-build env knobs section. This fallback is temporary — tracked at [DSPX-3417](https://virtru.atlassian.net/browse/DSPX-3417) (scenario YAML accepting source builds) and [DSPX-3418](https://virtru.atlassian.net/browse/DSPX-3418) (`OTDFCTL_HEADS` → CLI flag).
@@ -77,7 +77,7 @@ Pytest leaves logs under `tests/instances/<id>/logs/`. List the relevant per-ser
 ## Output format
 
 One-line headline naming the bucket, then a short bulleted summary:
-- `select:` the pytest selector that ran
+- `targets:` the pytest selectors that ran (one per `suite.targets` entry)
 - `exit_code:` the pytest return value
 - `evidence:` 1–2 lines from the output that justify the classification
 - `logs:` paths to the relevant per-service logs

@@ -95,7 +95,7 @@ The ticket asks an open question or lacks enough concrete behavior to encode. Do
 grep -rn "<key_term>" xtest/test_*.py xtest/tdfs.py
 ```
 
-Likely candidates: `test_tdfs.py` (roundtrip), `test_abac.py` (ABAC), `test_legacy.py` (golden), `test_pqc.py`. If a test already asserts the relevant behavior, reuse it via `suite.select` — no draft test needed.
+Likely candidates: `test_tdfs.py` (roundtrip), `test_abac.py` (ABAC), `test_legacy.py` (golden), `test_pqc.py`. If a test already asserts the relevant behavior, reuse it via `suite.targets` (list of pytest selectors) — no draft test needed.
 
 **Don't grep `xtest/sdk/<lang>/cli.sh`.** Those wrappers are reusable infrastructure (versioned alongside each SDK dist) and their contents have nothing to do with scenario YAML fields. The scenario doesn't need to know HOW a feature is plumbed — only WHICH pytest suite exercises it. If a feature's `supports("<name>")` gate isn't in `tdfs.py` yet, that's a signal that supporting infrastructure has to land separately from the scenario — note it in `actual:` and move on.
 
