@@ -18,6 +18,7 @@ from otdf_local.utils.yaml import (
     copy_yaml_with_updates,
     load_yaml,
     save_yaml,
+    set_nested,
 )
 
 
@@ -79,7 +80,13 @@ class PlatformService(Service):
         return binary, worktree
 
     def _generate_config(self) -> Path:
-        """Generate the platform config file from template."""
+        """Generate the platform config file from template.
+
+        When an instance config already exists (written at `instance init`
+        time), we keep its body intact — only patch logger keys + golden
+        keys in place. This preserves the per-instance root_key across
+        restarts.
+        """
         instance_paths = self._instance_dist_paths()
         if instance_paths is not None:
             _, worktree = instance_paths
@@ -88,7 +95,6 @@ class PlatformService(Service):
             platform_dir = self.settings._require_platform_dir()
 
         config_path = self.settings.platform_config
-        template_path = platform_dir / "opentdf.yaml"
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(platform_dir)
@@ -96,14 +102,20 @@ class PlatformService(Service):
         # Use stderr if supported, otherwise stdout (v0.9.0 only supports stdout)
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
-        # Updates for platform config
         updates = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
         }
 
-        copy_yaml_with_updates(template_path, config_path, updates)
+        if config_path.exists():
+            data = load_yaml(config_path)
+            for dot_path, value in updates.items():
+                set_nested(data, dot_path, value)
+            save_yaml(config_path, data)
+        else:
+            template_path = platform_dir / "opentdf.yaml"
+            copy_yaml_with_updates(template_path, config_path, updates)
 
         # Set up golden keys for legacy TDF tests
         self._setup_golden_keys(config_path)
@@ -118,8 +130,10 @@ class PlatformService(Service):
         """
         # In multi-instance mode, golden keys live alongside the instance
         # config; otherwise they go into the legacy platform_dir.
-        target_dir = self.settings.keys_dir if self.settings.has_instance() else (
-            self.settings._require_platform_dir()
+        target_dir = (
+            self.settings.keys_dir
+            if self.settings.has_instance()
+            else (self.settings._require_platform_dir())
         )
         golden_keys = setup_golden_keys(
             self.settings.xtest_root,
