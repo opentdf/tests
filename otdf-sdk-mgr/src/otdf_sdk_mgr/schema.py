@@ -18,6 +18,22 @@ from ruamel.yaml import YAML, YAMLError
 
 API_VERSION = "opentdf.io/v1alpha1"
 
+# KAS Preview Settings
+#
+# The `KasPin.features` dict specifies preview settings written to the generated
+# opentdf.yaml as `services.kas.preview.<key>: <value>`. Available preview
+# settings vary by platform version; common examples include ec_tdf_enabled,
+# hybrid_tdf_enabled, and key_management.
+#
+# Precedence (last wins): template defaults → mode auto-enables → user features
+#
+# Example:
+#   kas:
+#     km1:
+#       mode: key_management
+#       features:
+#         hybrid_tdf_enabled: true  # Enable ML-KEM in addition to auto-enabled features
+
 KasMode = Literal["standard", "key_management"]
 SdkName = Literal["go", "java", "js"]
 ContainerKind = Literal["ztdf", "ztdf-ecwrap"]
@@ -59,7 +75,16 @@ class KasPin(_StrictModel):
     dist: str | None = None
     source: SourceRef | None = None
     mode: KasMode = "standard"
-    features: dict[str, bool] = Field(default_factory=dict)
+    features: dict[str, bool] = Field(
+        default_factory=dict,
+        description=(
+            "KAS preview settings to enable. Keys are preview setting names "
+            "(without the 'services.kas.preview.' prefix); values are booleans. "
+            "Available settings depend on the platform version and may include "
+            "experimental features in PRs. User-specified features override "
+            "mode-based defaults."
+        ),
+    )
 
     @model_validator(mode="after")
     def _exactly_one(self) -> KasPin:
@@ -115,7 +140,13 @@ class Instance(_StrictModel):
     platform: PlatformPin
     ports: PortsConfig = Field(default_factory=PortsConfig)
     kas: dict[str, KasPin] = Field(default_factory=dict)
-    features: dict[str, bool] = Field(default_factory=dict)
+    features: dict[str, bool] = Field(
+        default_factory=dict,
+        description=(
+            "Reserved for future use. Instance-level feature defaults are not "
+            "currently implemented. Use per-KAS features in the kas dict instead."
+        ),
+    )
     fixtures: Fixtures = Field(default_factory=Fixtures)
 
 
