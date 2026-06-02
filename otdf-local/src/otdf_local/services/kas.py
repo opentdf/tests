@@ -111,7 +111,9 @@ class KASService(Service):
         # Per-KAS features from instance.yaml override the legacy heuristic.
         instance = self.settings.load_instance()
         kas_pin = instance.kas.get(self._kas_name) if instance is not None else None
-        extra_features: dict[str, bool] = dict(kas_pin.features) if kas_pin is not None else {}
+        extra_features: dict[str, bool] = (
+            dict(kas_pin.features) if kas_pin is not None else {}
+        )
 
         if self.is_key_management:
             updates["services.kas.preview.key_management"] = True
