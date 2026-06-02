@@ -34,7 +34,7 @@ def _build_pytest_args(scenario: Scenario, scenario_path: Path) -> list[str]:
     helper raises FileNotFoundError with a clean hint otherwise.
     """
     suite = scenario.suite
-    args: list[str] = [suite.select]
+    args: list[str] = list(suite.targets)
 
     tokens = scenario_to_pytest_sdks(scenario, installed_json_for(scenario_path))
     if tokens["encrypt"]:
@@ -42,7 +42,9 @@ def _build_pytest_args(scenario: Scenario, scenario_path: Path) -> list[str]:
     if tokens["decrypt"]:
         args.extend(["--sdks-decrypt", " ".join(tokens["decrypt"])])
     if suite.containers:
-        args.extend(["--containers", suite.containers])
+        args.extend(["--containers", " ".join(suite.containers)])
+    if suite.kexpr:
+        args.extend(["-k", suite.kexpr])
     if suite.markers:
         args.extend(["-m", suite.markers])
     args.extend(suite.extra_args)
@@ -72,7 +74,9 @@ def run(
     scenario = load_scenario(path)
     instance_name = instance or scenario.instance.metadata.name
     if not instance_name:
-        typer.echo("Error: scenario.instance.metadata.name not set; pass --instance", err=True)
+        typer.echo(
+            "Error: scenario.instance.metadata.name not set; pass --instance", err=True
+        )
         raise typer.Exit(2)
 
     settings = get_settings()
