@@ -45,21 +45,7 @@ First `go build` per platform version takes ~30–60s; subsequent runs reuse the
 uv run otdf-local instance init <id> --from-scenario xtest/scenarios/<id>.yaml
 ```
 
-Creates `tests/instances/<id>/`. If the instance already exists, the command is a no-op for existing files. Double-check with `uv run otdf-local instance ls` first to avoid surprising the user with overwrites.
-
-### Step 2.5 — Bootstrap PR worktrees (when source-pinned)
-
-A freshly built PR worktree from `install tip --ref pr:N` ships *templates* but not generated dev keys, and lacks the `opentdf.yaml` filename `otdf-local` expects. Running `up` against it produces cryptic Docker "Is a directory" and platform "no such file" errors. Pre-flight the seed files:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT:-.}/skills/scenario-up/scripts/bootstrap-pr-worktree.sh xtest/scenarios/<id>.yaml
-```
-
-Script behaviour: for each `source.ref` pin in the scenario, resolve the dist's worktree via its `.version` sidecar; check that `kas-*.pem`, `keys/{ca.jks,localhost.crt,localhost.key}`, and `opentdf.yaml` exist as *files* (not Docker-created empty dirs). On miss it generates / copies from `xtest/platform/src/main/` / suggests `bash .github/scripts/init-temp-keys.sh`. Output is tab-separated; review the rows where `action != kept` before proceeding.
-
-Skip this step for scenarios pinned entirely on `dist:` (released versions) — those use pre-baked artifacts and don't need seeding.
-
-[DSPX-3416](https://virtru.atlassian.net/browse/DSPX-3416) tracks moving this bootstrap into `otdf-local up` itself. Until it lands, run the script.
+Creates `tests/instances/<id>/` and **self-provisions the bootstrap bundle**: generates the Keycloak TLS pair + `keys/ca.jks` truststore, creates `kas-*.pem` keys, and copies the platform's `opentdf-dev.yaml` (or `opentdf-example.yaml`) into `instances/<id>/opentdf.yaml` with a freshly generated `services.kas.root_key`. Idempotent — existing files are preserved, so the per-instance root key survives re-runs. Double-check with `uv run otdf-local instance ls` first to avoid surprising the user with overwrites.
 
 ### Step 3 — Bring it up
 
@@ -74,6 +60,14 @@ uv run otdf-local --instance <id> status --json
 ```
 
 If any service stays unhealthy after ~60 seconds, surface the relevant log via `uv run otdf-local --instance <id> logs <service> -n 50` and report the failure mode rather than retrying blindly.
+
+Once healthy, sanity-check the env exports `scenario-run` will rely on:
+
+```bash
+uv run otdf-local --instance <id> env --format json | jq '{PLATFORM_DIR,PLATFORMURL,SCHEMA_FILE,OT_ROOT_KEY}'
+```
+
+All four must be non-null. If `OT_ROOT_KEY` is null, the instance's `opentdf.yaml` is missing or didn't get a `services.kas.root_key` written (re-run `instance init` to refresh).
 
 ## Source-build env knobs
 
@@ -95,11 +89,4 @@ These workarounds are tracked at [DSPX-3418](https://virtru.atlassian.net/browse
 Once healthy, report:
 - The instance name and which ports it occupies (look at `instance.yaml`'s `ports.base`).
 - The path to `<id>.installed.json` (so `scenario-run` can find it).
-- Any unusual rows from the bootstrap probe (e.g. "seeded `keys/ca.jks` from main worktree").
 - The next command the user is likely to run: `scenario-run xtest/scenarios/<id>.yaml`.
-
-## Additional Resources
-
-### Script
-
-- **`scripts/bootstrap-pr-worktree.sh`** — pre-flights a PR worktree's seed files before `otdf-local up`. Takes one positional argument: the scenario YAML path. Tab-separated stdout. Idempotent — safe to re-run.
