@@ -20,8 +20,16 @@ instance:
     beta:  { source: { ref: "pr:3537" }, mode: standard }
     gamma: { source: { ref: "pr:3537" }, mode: standard }
     delta: { source: { ref: "pr:3537" }, mode: standard }
-    km1:   { source: { ref: "pr:3537" }, mode: key_management }
-    km2:   { source: { ref: "pr:3537" }, mode: key_management }
+    km1:
+      source: { ref: "pr:3537" }
+      mode: key_management
+      features:
+        hybrid_tdf_enabled: true  # Required for ML-KEM wrapping
+    km2:
+      source: { ref: "pr:3537" }
+      mode: key_management
+      features:
+        hybrid_tdf_enabled: true  # Required for ML-KEM wrapping
 sdks:
   encrypt:
     - sdk: go
@@ -37,10 +45,11 @@ suite:
     - ztdf
 expected: |
   Platform built from PR #3537 accepts mlkem:768 and mlkem:1024 managed-key
-  registrations on km1 (kids m1 / m2). Encrypt with go@pr:3537 produces a
-  single KAO of type "mlkem-wrapped" whose wrappedKey exceeds the raw
-  ML-KEM ciphertext (>1088 / >1568 bytes). Decrypt with go@pr:3537 succeeds
-  and round-trips the plaintext.
+  registrations on km1 and km2 (kids m1 / m2). KAS instances km1 and km2 have
+  `hybrid_tdf_enabled: true` in their preview settings to accept ML-KEM wrapped
+  KAOs. Encrypt with go@pr:3537 produces a single KAO whose wrappedKey exceeds
+  the raw ML-KEM ciphertext (>1088 / >1568 bytes). Decrypt with go@pr:3537
+  succeeds and round-trips the plaintext.
 actual: |
   Both test_mlkem_768_roundtrip and test_mlkem_1024_roundtrip PASS end-to-end
   with go@refs--pull--3537--head encrypt + decrypt against PR #3537 platform
