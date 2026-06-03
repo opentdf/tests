@@ -110,6 +110,11 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help policy kas-registry key create | grep -i hpqt:secp256r1-mlkem768
       exit $?
       ;;
+    mechanism-mlkem)
+      set -o pipefail
+      "${cmd[@]}" help policy kas-registry key create | grep -iE 'mlkem:768|mlkem:1024'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
