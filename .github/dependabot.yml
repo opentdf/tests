@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/xtest"
+    cooldown:
+      default-days: 7
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
+
+  - package-ecosystem: "uv"
+    directory: "/otdf-local"
+    cooldown:
+      default-days: 7
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
+
+  - package-ecosystem: "uv"
+    directory: "/otdf-sdk-mgr"
+    cooldown:
+      default-days: 7
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "increase"
