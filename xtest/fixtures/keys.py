@@ -267,9 +267,9 @@ def key_mlkem_768(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create pure ML-KEM-768 managed key 'm1' on km1."""
+    """Get or create pure ML-KEM-768 managed key 'mlkem768' on km1."""
     return _get_or_create_key(
-        otdfctl, kas_entry_km1, "m1", "mlkem:768", root_key, "mechanism-mlkem"
+        otdfctl, kas_entry_km1, "mlkem768", "mlkem:768", root_key, "mechanism-mlkem"
     )
 
 
@@ -279,9 +279,9 @@ def key_mlkem_1024(
     kas_entry_km1: abac.KasEntry,
     root_key: str,
 ) -> abac.KasKey:
-    """Get or create pure ML-KEM-1024 managed key 'm2' on km1."""
+    """Get or create pure ML-KEM-1024 managed key 'mlkem1024' on km1."""
     return _get_or_create_key(
-        otdfctl, kas_entry_km1, "m2", "mlkem:1024", root_key, "mechanism-mlkem"
+        otdfctl, kas_entry_km1, "mlkem1024", "mlkem:1024", root_key, "mechanism-mlkem"
     )
 
 
@@ -421,7 +421,7 @@ def attribute_with_mlkem_768_key(
         otdfctl,
         temporary_namespace,
         "mlkem768-test",
-        [("m1", key_mlkem_768)],
+        [("mlkem768", key_mlkem_768)],
         otdf_client_scs,
         "mechanism-mlkem",
     )
@@ -439,7 +439,7 @@ def attribute_with_mlkem_1024_key(
         otdfctl,
         temporary_namespace,
         "mlkem1024-test",
-        [("m2", key_mlkem_1024)],
+        [("mlkem1024", key_mlkem_1024)],
         otdf_client_scs,
         "mechanism-mlkem",
     )
