@@ -5,6 +5,8 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.parse
+import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +21,23 @@ import assertions as tdfassertions
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
+
+
+def _kas_supports_algorithm(algorithm: str) -> bool:
+    """Probe KAS via ConnectRPC to check if a key algorithm is configured."""
+    kasurl = os.getenv("KASURL", os.getenv("PLATFORMURL", "http://localhost:8080/kas"))
+    parsed = urllib.parse.urlparse(kasurl)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    url = f"{base}/kas.AccessService/PublicKey"
+    data = json.dumps({"algorithm": algorithm}).encode()
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
 
 
 sdk_type = Literal["go", "java", "js"]
@@ -138,17 +157,17 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
 
-        # X-Wing / secp+ML-KEM hybrid PQ/T KEM support.
-        # Key management API for hpqt:* algorithms landed after service/v0.16.0;
-        # v0.16.0 rejects them with a key_algorithm validation error.
-        if self.semver >= (0, 17, 0):
-            self.features.add("mechanism-xwing")
-            self.features.add("mechanism-secpmlkem")
-
-        # Pure ML-KEM (non-hybrid) added by platform PR #3537. Tentatively v0.17.0;
-        # bump when the release target is finalized.
-        if self.semver >= (0, 17, 0):
-            self.features.add("mechanism-mlkem")
+        # PQ/T KEM support (xwing, secp+ML-KEM hybrids, pure ML-KEM): probe KAS
+        # directly rather than guessing by version, since release targets shift
+        # and a platform may have keys configured without a finalized version bump.
+        # Only probe on platforms new enough to plausibly have PQ support.
+        if self.semver is None or self.semver >= (0, 13, 0):
+            if _kas_supports_algorithm("hpqt:xwing"):
+                self.features.add("mechanism-xwing")
+            if _kas_supports_algorithm("hpqt:secp256r1-mlkem768"):
+                self.features.add("mechanism-secpmlkem")
+            if _kas_supports_algorithm("mlkem:768"):
+                self.features.add("mechanism-mlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
