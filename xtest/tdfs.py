@@ -24,8 +24,12 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 def _kas_supports_algorithm(algorithm: str) -> bool:
-    """Probe KAS via ConnectRPC to check if a key algorithm is configured."""
-    kasurl = os.getenv("KASURL", os.getenv("PLATFORMURL", "http://localhost:8080/kas"))
+    """Probe the key-management KAS (km1/KASURL5) for PQ algorithm support."""
+    # PQ managed keys live on km1, not the main platform KAS (KASURL/PLATFORMURL).
+    kasurl = os.getenv(
+        "KASURL5",
+        os.getenv("KASURL", os.getenv("PLATFORMURL", "http://localhost:8585")),
+    )
     parsed = urllib.parse.urlparse(kasurl)
     base = f"{parsed.scheme}://{parsed.netloc}"
     url = f"{base}/kas.AccessService/PublicKey"
