@@ -261,6 +261,30 @@ def key_secpmlkem_5(
     )
 
 
+@pytest.fixture(scope="module")
+def key_mlkem_768(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create pure ML-KEM-768 managed key 'mlkem768' on km1."""
+    return _get_or_create_key(
+        otdfctl, kas_entry_km1, "mlkem768", "mlkem:768", root_key, "mechanism-mlkem"
+    )
+
+
+@pytest.fixture(scope="module")
+def key_mlkem_1024(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: abac.KasEntry,
+    root_key: str,
+) -> abac.KasKey:
+    """Get or create pure ML-KEM-1024 managed key 'mlkem1024' on km1."""
+    return _get_or_create_key(
+        otdfctl, kas_entry_km1, "mlkem1024", "mlkem:1024", root_key, "mechanism-mlkem"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Attribute + key assignment fixtures (value-level)
 # ---------------------------------------------------------------------------
@@ -382,6 +406,42 @@ def attribute_with_secpmlkem_5_key(
         [("m5", key_secpmlkem_5)],
         otdf_client_scs,
         "mechanism-secpmlkem",
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_mlkem_768_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_mlkem_768: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """ALL_OF attribute with one pure ML-KEM-768 key assigned at value level."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "mlkem768-test",
+        [("mlkem768", key_mlkem_768)],
+        otdf_client_scs,
+        "mechanism-mlkem",
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_mlkem_1024_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_mlkem_1024: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """ALL_OF attribute with one pure ML-KEM-1024 key assigned at value level."""
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "mlkem1024-test",
+        [("mlkem1024", key_mlkem_1024)],
+        otdf_client_scs,
+        "mechanism-mlkem",
     )
 
 

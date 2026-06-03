@@ -5,6 +5,8 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.parse
+import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +21,66 @@ import assertions as tdfassertions
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
+
+
+def _km1_log_path() -> Path | None:
+    """Return km1's log file path from env or auto-discovery, or None if absent."""
+    if p := os.getenv("KAS_KM1_LOG_FILE"):
+        return Path(p)
+    platform_dir = os.getenv("PLATFORM_DIR", "../../platform")
+    candidate = Path(platform_dir) / "logs" / "kas-km1.log"
+    return candidate if candidate.exists() else None
+
+
+def _algs_from_km1_log() -> set[str]:
+    """Scan km1's startup log to extract the set of configured key algorithms.
+
+    Prefers the INFO 'kas initialized' entry added by DSPX-3456; falls back to
+    the DEBUG 'kas config' entry available on current platform versions.
+    """
+    log = _km1_log_path()
+    if not log or not log.exists():
+        return set()
+    algs: set[str] = set()
+    try:
+        with log.open() as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                # Preferred: explicit INFO summary (DSPX-3456, not yet landed)
+                if entry.get("msg") == "kas initialized" and "mechanisms" in entry:
+                    return set(entry["mechanisms"])
+                # Fallback: DEBUG keyring dump present in current platform
+                if entry.get("msg") == "kas config" and "config" in entry:
+                    for k in entry["config"].get("keyring", []):
+                        if alg := k.get("alg"):
+                            algs.add(alg)
+    except Exception:
+        pass
+    return algs
+
+
+def _kas_supports_algorithm(algorithm: str) -> bool:
+    """HTTP fallback: probe km1 KAS for a specific algorithm when log is unavailable."""
+    # PQ managed keys live on km1, not the main platform KAS (KASURL/PLATFORMURL).
+    kasurl = os.getenv(
+        "KASURL5",
+        os.getenv("KASURL", os.getenv("PLATFORMURL", "http://localhost:8585")),
+    )
+    parsed = urllib.parse.urlparse(kasurl)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    url = f"{base}/kas.AccessService/PublicKey"
+    data = json.dumps({"algorithm": algorithm}).encode()
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
 
 
 sdk_type = Literal["go", "java", "js"]
@@ -60,6 +122,8 @@ feature_type = Literal[
     "mechanism-xwing",
     # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
     "mechanism-secpmlkem",
+    # Support for pure (non-hybrid) ML-KEM key wrapping: mlkem:768 and mlkem:1024.
+    "mechanism-mlkem",
     "ns_grants",
     "obligations",
 ]
@@ -136,12 +200,25 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
 
-        # X-Wing / secp+ML-KEM hybrid PQ/T KEM support.
-        # Key management API for hpqt:* algorithms landed after service/v0.16.0;
-        # v0.16.0 rejects them with a key_algorithm validation error.
-        if self.semver >= (0, 17, 0):
-            self.features.add("mechanism-xwing")
-            self.features.add("mechanism-secpmlkem")
+        # PQ/T KEM support (xwing, secp+ML-KEM hybrids, pure ML-KEM): read km1's
+        # startup log rather than guessing by version, since release targets shift
+        # and a platform may have keys configured without a finalized version bump.
+        # Falls back to HTTP probe if the log file is unavailable.
+        # Only attempt on platforms new enough to plausibly have PQ support.
+        if self.semver is None or self.semver >= (0, 13, 0):
+            algs = _algs_from_km1_log()
+            if not algs:
+                algs = {
+                    a
+                    for a in ("hpqt:xwing", "hpqt:secp256r1-mlkem768", "mlkem:768")
+                    if _kas_supports_algorithm(a)
+                }
+            if "hpqt:xwing" in algs:
+                self.features.add("mechanism-xwing")
+            if any(a.startswith("hpqt:secp") for a in algs):
+                self.features.add("mechanism-secpmlkem")
+            if any(a.startswith("mlkem:") for a in algs):
+                self.features.add("mechanism-mlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
