@@ -19,6 +19,12 @@ from tdfs import KeyAccessObject
 XWING_ENCAPSULATION_KEY_SIZE = 1216  # public key, bytes
 XWING_CIPHERTEXT_SIZE = 1120  # KEM ciphertext (wrappedKey), bytes
 
+# Pure ML-KEM sizes per FIPS 203 §8.
+MLKEM768_ENCAPSULATION_KEY_SIZE = 1184
+MLKEM768_CIPHERTEXT_SIZE = 1088
+MLKEM1024_ENCAPSULATION_KEY_SIZE = 1568
+MLKEM1024_CIPHERTEXT_SIZE = 1568
+
 
 def _b64_decoded_len(s: str) -> int:
     """Return the byte length of a base64-encoded string."""
@@ -231,6 +237,26 @@ def test_secpmlkem_3_roundtrip(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def _assert_mlkem_kao(
+    kao: KeyAccessObject,
+    expected_kids: set[str],
+    expected_url: str,
+    min_ciphertext_size: int,
+) -> None:
+    assert kao.kid in expected_kids
+    assert kao.url == expected_url
+    # PR #3537 currently emits the legacy "wrapped" type for pure ML-KEM. Some
+    # roadmap notes mention "mlkem-wrapped"; accept either so the test records
+    # which one ships without breaking on a naming change.
+    assert kao.type in {"wrapped", "mlkem-wrapped"}, (
+        f"unexpected KAO type for ML-KEM: {kao.type!r}"
+    )
+    wrapped_len = _b64_decoded_len(kao.wrappedKey)
+    assert wrapped_len > min_ciphertext_size, (
+        f"wrappedKey should exceed raw ML-KEM ciphertext ({min_ciphertext_size}), got {wrapped_len}"
+    )
+
+
 def test_secpmlkem_5_roundtrip(
     attribute_with_secpmlkem_5_key: tuple[Attribute, list[str]],
     key_secpmlkem_5: KasKey,
@@ -282,6 +308,108 @@ def test_secpmlkem_5_roundtrip(
     der_len = _pem_decoded_len(pem)
     assert der_len >= XWING_ENCAPSULATION_KEY_SIZE, (
         f"public key DER should be >= {XWING_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
+    )
+
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_mlkem_768_roundtrip(
+    attribute_with_mlkem_768_key: tuple[Attribute, list[str]],
+    key_mlkem_768: KasKey,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
+    """Encrypt with a pure ML-KEM-768 managed key, then attempt decrypt.
+
+    The decrypt SDK is intentionally NOT pre-skipped on `mechanism-mlkem` so
+    we can observe whether SDKs lacking explicit pure-mlkem support can still
+    process the new ``mlkem-wrapped`` KAO type.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-mlkem")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-mlkem"
+    )
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_mlkem_768_key
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    _assert_mlkem_kao(
+        manifest.encryptionInformation.keyAccess[0],
+        expected_kids=set(key_ids),
+        expected_url=kas_url_km1,
+        min_ciphertext_size=MLKEM768_CIPHERTEXT_SIZE,
+    )
+    der_len = _pem_decoded_len(key_mlkem_768.key.public_key_ctx.pem)
+    assert der_len >= MLKEM768_ENCAPSULATION_KEY_SIZE, (
+        f"public key DER should be >= {MLKEM768_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
+    )
+
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_mlkem_1024_roundtrip(
+    attribute_with_mlkem_1024_key: tuple[Attribute, list[str]],
+    key_mlkem_1024: KasKey,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
+    """Encrypt with a pure ML-KEM-1024 managed key, then attempt decrypt.
+
+    See ``test_mlkem_768_roundtrip`` for the decrypt-SDK skip rationale.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("key_management", "autoconfigure", "mechanism-mlkem")
+    encrypt_sdk.skip_if_unsupported(
+        "key_management", "autoconfigure", "mechanism-mlkem"
+    )
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_mlkem_1024_key
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    _assert_mlkem_kao(
+        manifest.encryptionInformation.keyAccess[0],
+        expected_kids=set(key_ids),
+        expected_url=kas_url_km1,
+        min_ciphertext_size=MLKEM1024_CIPHERTEXT_SIZE,
+    )
+    der_len = _pem_decoded_len(key_mlkem_1024.key.public_key_ctx.pem)
+    assert der_len >= MLKEM1024_ENCAPSULATION_KEY_SIZE, (
+        f"public key DER should be >= {MLKEM1024_ENCAPSULATION_KEY_SIZE} bytes, got {der_len}"
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
