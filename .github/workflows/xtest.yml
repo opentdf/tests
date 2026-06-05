@@ -278,12 +278,13 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-up-with-containers@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
+          pqc-enabled: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
@@ -567,69 +568,75 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: alpha
           kas-port: 8181
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: beta
           kas-port: 8282
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: gamma
           kas-port: 8383
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-port: 8484
           kas-name: delta
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-name: km1
           kas-port: 8585
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@998929e5c66d41f928b90e6af7dbaa0a14302ca6  # watch-sh-fix
+        uses: opentdf/platform/test/start-additional-kas@626ce47dd662cb8ff16898e3b6727001a4753d92  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: km2
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-port: 8686
           log-type: json
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Run attribute based configuration tests
