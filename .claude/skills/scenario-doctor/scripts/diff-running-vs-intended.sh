@@ -33,7 +33,10 @@ done
 : "${INST_ROOT:?could not locate tests/instances/ above $PWD}"
 
 inst="$INST_ROOT/$name/instance.yaml"
-[[ -f "$inst" ]] || { echo "no instance.yaml at $inst" >&2; exit 2; }
+[[ -f "$inst" ]] || {
+  echo "no instance.yaml at $inst" >&2
+  exit 2
+}
 
 INST_DIR_PARENT="${INST_ROOT%/instances}"
 PLATFORM_DIST="$INST_DIR_PARENT/xtest/platform/dist"
@@ -51,12 +54,12 @@ declare -A PORT_OF=(
 
 # Helper: resolve a pin (ref or dist) to expected_sha by reading .version.
 expected_sha_for() {
-  local pin="$1"  # could be a ref like 'main' or 'pr:3537', or a dist slug
+  local pin="$1" # could be a ref like 'main' or 'pr:3537', or a dist slug
   for cand in "$PLATFORM_DIST"/*/; do
     [[ -f "$cand/.version" ]] || continue
-    if grep -Fq "ref=$pin" "$cand/.version" \
-      || grep -Fq "ref=refs/pull/${pin#pr:}/head" "$cand/.version" \
-      || [[ "$(basename "${cand%/}")" == "$pin" ]]; then
+    if grep -Fq "ref=$pin" "$cand/.version" ||
+      grep -Fq "ref=refs/pull/${pin#pr:}/head" "$cand/.version" ||
+      [[ "$(basename "${cand%/}")" == "$pin" ]]; then
       awk -F= '/^sha=/ {print substr($2,1,12); exit}' "$cand/.version"
       return
     fi
@@ -69,9 +72,15 @@ actual_sha_for_port() {
   local port="$1"
   local pid binary version
   pid="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $2; exit}')"
-  [[ -z "$pid" ]] && { echo ""; return; }
+  [[ -z "$pid" ]] && {
+    echo ""
+    return
+  }
   binary="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}')"
-  [[ -f "$binary" ]] || { echo "?"; return; }
+  [[ -f "$binary" ]] || {
+    echo "?"
+    return
+  }
   version="$(dirname "$binary")/.version"
   [[ -f "$version" ]] && awk -F= '/^sha=/ {print substr($2,1,12); exit}' "$version" || echo "?"
 }
@@ -84,7 +93,7 @@ health_of() {
 
 # Extract pins from instance.yaml. yq optional; fall back to grep.
 get_pin() {
-  local field="$1"   # e.g. .platform OR .kas.km1
+  local field="$1" # e.g. .platform OR .kas.km1
   if command -v yq >/dev/null 2>&1; then
     yq -r "($field.source.ref? // $field.dist? // \"\")" "$inst"
   else
@@ -117,9 +126,12 @@ pin="$(get_pin .platform)"
 exp="$(expected_sha_for "$pin")"
 act="$(actual_sha_for_port 8080)"
 hc="$(health_of 8080)"
-if [[ -z "$pin" ]]; then status=NO-PIN
-elif [[ -z "$act" ]]; then status=NOT-RUNNING
-elif [[ "$act" == "$exp" ]]; then status=MATCH
+if [[ -z "$pin" ]]; then
+  status=NO-PIN
+elif [[ -z "$act" ]]; then
+  status=NOT-RUNNING
+elif [[ "$act" == "$exp" ]]; then
+  status=MATCH
 else status=WRONG-BINARY; fi
 printf 'platform\t8080\t%s\t%s\t%s\t%s\n' "${exp:-?}" "${act:--}" "$hc" "$status"
 
@@ -140,9 +152,12 @@ for kas in "${kas_names[@]}"; do
   exp="$(expected_sha_for "$pin")"
   act="$(actual_sha_for_port "$port")"
   hc="$([[ "$port" != "?" ]] && health_of "$port" || echo -)"
-  if [[ -z "$pin" ]]; then status=NO-PIN
-  elif [[ -z "$act" ]]; then status=NOT-RUNNING
-  elif [[ "$act" == "$exp" ]]; then status=MATCH
+  if [[ -z "$pin" ]]; then
+    status=NO-PIN
+  elif [[ -z "$act" ]]; then
+    status=NOT-RUNNING
+  elif [[ "$act" == "$exp" ]]; then
+    status=MATCH
   else status=WRONG-BINARY; fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$kas" "$port" "${exp:-?}" "${act:--}" "$hc" "$status"
 done
