@@ -107,6 +107,11 @@ feature_type = Literal[
     "better-messages-2024",
     "bulk_rewrap",
     "connectrpc",
+    # DPoP (RFC 9449): sender-constrained access tokens. SDK signs a DPoP proof
+    # JWT per request; KAS validates the proof and binds the access token to
+    # the proof's JWK thumbprint (cnf.jkt). Includes server-issued DPoP-Nonce
+    # challenge flow (RFC 9449 §8) when the KAS is configured to require nonces.
+    "dpop",
     "ecwrap",
     "hexless",
     "hexaflexible",

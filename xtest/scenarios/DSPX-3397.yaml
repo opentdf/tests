@@ -1,0 +1,60 @@
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+metadata:
+  id: DSPX-3397
+  title: "Keycloak v26 + DPoP-enforced clients (DSPX-3397)"
+  created: 2026-06-08
+instance:
+  metadata:
+    name: DSPX-3397
+  platform:
+    source:
+      ref: main
+  ports:
+    base: 8080
+  kas:
+    alpha:
+      source:
+        ref: main
+      mode: standard
+sdks:
+  encrypt:
+    - sdk: go
+      version: main
+    - sdk: java
+      version: main
+    - sdk: js
+      version: main
+  decrypt:
+    - sdk: go
+      version: main
+    - sdk: java
+      version: main
+    - sdk: js
+      version: main
+suite:
+  targets:
+    - xtest/test_dpop.py
+  containers:
+    - ztdf
+expected: >-
+  Against a Keycloak 26 realm whose OAuth client requires DPoP-bound access
+  tokens (and with `services.kas.dpop.require_nonce: true` on the platform),
+  every SDK pair passes test_dpop.py — the encrypt SDK acquires a DPoP-bound
+  token, signs a fresh DPoP proof for every KAS rewrap call (with the `ath`
+  claim binding the proof to the access token), and the decrypt SDK rewraps
+  successfully. The server-issued nonce flow works end-to-end (first request
+  returns 401 + DPoP-Nonce; SDK retries with the nonce claim; second request
+  succeeds). Negative cases (Authorization: Bearer on a DPoP-bound token,
+  tampered htu, replayed jti, tampered/expired nonce) all return 401 with a
+  fresh DPoP-Nonce challenge.
+actual: >-
+  Feature not yet implemented end-to-end. The platform-service PR
+  (DSPX-3397-platform-service) is needed to wire DPoP validation + nonce
+  issuance into the KAS auth middleware. Each SDK cell PR
+  (DSPX-3397-{platform-go-sdk,java-sdk,web-sdk}) is needed to mint DPoP
+  proofs, set `Authorization: DPoP <token>`, and handle 401+DPoP-Nonce
+  retries. The tests-cell PR (DSPX-3397-kc26-dpop) is needed to bump
+  otdf-local to Keycloak 26 and to flesh out the direct-HTTP negative
+  cases. Until each SDK PR adds its `supports dpop` case to its cli.sh and
+  the platform PR exposes `pfs.supports("dpop")`, the suite skips uniformly.

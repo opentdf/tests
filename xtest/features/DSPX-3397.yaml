@@ -1,0 +1,53 @@
+apiVersion: opentdf.io/v1alpha1
+kind: Feature
+metadata:
+  name: dpop
+  jira: DSPX-3397
+  title: "Keycloak v26 upgrade and comprehensive DPoP (RFC 9449) support"
+  created: 2026-06-08
+repos:
+  tests:
+    branch: DSPX-3397-kc26-dpop
+    todo:
+      - "\"dpop\" is already registered in xtest/tdfs.py feature_type (alphabetical, between connectrpc and ecwrap) — verify."
+      - Update otdf-local to default to Keycloak 26 unconditionally (bump container/version pin, refresh realm import). Validate `uv run otdf-local up` boots KC26 and the platform authenticates. Document the bump in otdf-local/README.md.
+      - Bump any docker-compose / helm / CI workflow files in xtest/ that reference an older Keycloak version so the entire test harness defaults to KC26.
+      - Flesh out xtest/test_dpop.py negatives (Bearer-on-DPoP, tampered htu, replayed jti, tampered/expired nonce) — direct-HTTP cases against the platform's KAS endpoint with hand-minted proofs (see python `cryptography` and `jwcrypto` already in the dev deps).
+      - PR description should link to the four implementation PRs once they exist (`gh pr list --search "head:DSPX-3397"`).
+  platform-service:
+    path: platform
+    branch: DSPX-3397-platform-service
+    todo:
+      - Audit `service/pkg/auth/` (or wherever the access-token middleware lives). `enforceDPoP: false` already exists in opentdf-*.yaml plus `Dpop` listed in auth mechanisms — extend rather than rewrite. Reuse the DPoP key+proof helpers in `test/integration/oauth/oauth_test.go`.
+      - Update the middleware to accept both `Authorization: Bearer <token>` and `Authorization: DPoP <token>` schemes.
+      - For `DPoP` scheme, validate the proof end-to-end per RFC 9449 §4.3 + §7.1 — header `typ=dpop+jwt` + `alg=ES256/RS256/PS256`; jwk extraction; verify signature; `htm` matches the request method; `htu` matches the normalized URI (lowercase scheme/host, default ports stripped, query+fragment stripped per spec §HTTP URI Normalization); `ath = base64url(SHA-256(access_token))`; RFC 7638 JWK thumbprint matches `cnf.jkt` in the access token.
+      - "Server-issued DPoP-Nonce challenges (RFC 9449 §8) — gated by a new config key `services.kas.dpop.require_nonce` (default false). When enabled, the middleware mints a short-lived opaque nonce, returns it via the `DPoP-Nonce` response header on every successful response *and* in 401 challenges (`use_dpop_nonce` error) when a proof arrives without the expected `nonce` claim. Validate the proof's `nonce` claim against the active nonce window (current + previous), rotate on a configurable interval, and reject tampered/expired nonces with 401 + fresh `DPoP-Nonce`."
+      - For gRPC paths, map `htm: \"POST\"` and `htu` to the full gRPC service path (spec §Edge Cases). Propagate `DPoP-Nonce` via response headers/trailers.
+      - Verify the platform boots and authenticates against a local KC26 once the tests-cell otdf-local bump lands. Add at least one Go unit test per validation rule (signature, htm, htu, ath, jkt, nonce-current, nonce-rotated, nonce-tampered).
+      - Add `supports dpop` case to the platform's policy/KAS-side feature gate so `pfs.skip_if_unsupported(\"dpop\")` in tests sees it.
+  platform-go-sdk:
+    path: platform
+    branch: DSPX-3397-platform-go-sdk
+    todo:
+      - Add DPoP client support to the Go SDK auth layer (likely `sdk/auth/` or `sdk/oauth/`). Generate an ephemeral EC P-256 (ES256) key per SDK instance by default; accept a caller-supplied `crypto.Signer` for persistence (HSM is out of scope).
+      - "HTTP interceptor compatible with the SDK's HTTP client. Token endpoint: emit proof with claims `jti, htm=\"POST\", htu=<token-endpoint>, iat`. Resource endpoints (KAS / policy / kasregistry): when the access token is DPoP-bound (`token_type=DPoP`), emit proof with added `ath = base64url(SHA-256(token))`, set `Authorization: DPoP <token>` instead of `Bearer`."
+      - "Handle server-issued nonce: on 401 with a `DPoP-Nonce` response header, cache the nonce (per-origin), regenerate the proof with the `nonce` claim, retry once. Refresh cached nonces from successful responses too."
+      - Add `supports dpop` case to xtest/sdk/go/cli.sh source — the awk predicate should match a stable DPoP-related flag or feature string introduced by this PR.
+  java-sdk:
+    path: java-sdk
+    branch: DSPX-3397-java-sdk
+    todo:
+      - Same shape as the Go SDK but for Java. Use Nimbus JOSE+JWT (already a likely dep) or BouncyCastle for EC P-256 + ES256 signing. Audit existing `DefaultSrtSigner` scaffolding in `sdk/src/test/java/io/opentdf/platform/sdk/{KASClientTest,SDKBuilderTest}.java` — extend or align with the production flow rather than introducing a parallel signer abstraction.
+      - HTTP interceptor for the SDK's OkHttp client (or `java.net.http.HttpClient`) with the same proof-generation rules (`htm/htu/iat/jti` always; `ath` on resource calls; `nonce` retry on 401+DPoP-Nonce).
+      - Surface a `DpopConfig` (or similar) in `SDKBuilder` so callers can pass a `KeyPair` or `PrivateKey`, or rely on the SDK's auto-generated ephemeral key.
+      - Add `supports dpop` case to xtest/sdk/java/cli.sh source.
+  web-sdk:
+    path: web-sdk
+    branch: DSPX-3397-web-sdk
+    todo:
+      - Audit existing DPoP integration in `lib/src/session.ts` (uses the `dpop` npm package). Confirm proofs for both the token endpoint and KAS exchanges include `ath` on resource calls and that the JWK thumbprint flows through to `cnf.jkt`.
+      - Implement / verify the `DPoP-Nonce` 401 retry loop in the SDK's HTTP layer (not just the OIDC client). Refresh the cached nonce from successful responses' `DPoP-Nonce` header.
+      - Ensure every KAS-facing client (rewrap, policy, kasregistry — `lib/src/access.ts` and related) propagates DPoP headers, not only the OIDC token-exchange path.
+      - Add `supports dpop` case to xtest/sdk/js/cli.sh source. Coordinate the CLI flag exposure in `cli/src/cli.ts` (currently `--dpop` is wired up — verify and document).
+scenarios:
+  - xtest/scenarios/DSPX-3397.yaml
