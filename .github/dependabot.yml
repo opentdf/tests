@@ -8,8 +8,8 @@ updates:
       interval: "weekly"
     versioning-strategy: "increase"
     commit-message:
-      prefix: "fix(dependabot)"
-      prefix-development: "chore(dependabot)"
+      prefix: "fix(dependabot): "
+      prefix-development: "chore(dependabot): "
 
   - package-ecosystem: "uv"
     directory: "/otdf-local"
@@ -19,8 +19,8 @@ updates:
       interval: "weekly"
     versioning-strategy: "increase"
     commit-message:
-      prefix: "fix(dependabot)"
-      prefix-development: "chore(dependabot)"
+      prefix: "fix(dependabot): "
+      prefix-development: "chore(dependabot): "
 
   - package-ecosystem: "uv"
     directory: "/otdf-sdk-mgr"
@@ -30,5 +30,5 @@ updates:
       interval: "weekly"
     versioning-strategy: "increase"
     commit-message:
-      prefix: "fix(dependabot)"
-      prefix-development: "chore(dependabot)"
+      prefix: "fix(dependabot): "
+      prefix-development: "chore(dependabot): "
