@@ -52,7 +52,6 @@ declare -A PORT_OF=(
 # Helper: resolve a pin (ref or dist) to expected_sha by reading .version.
 expected_sha_for() {
   local pin="$1"  # could be a ref like 'main' or 'pr:3537', or a dist slug
-  local slug
   for cand in "$PLATFORM_DIST"/*/; do
     [[ -f "$cand/.version" ]] || continue
     if grep -Fq "ref=$pin" "$cand/.version" \
