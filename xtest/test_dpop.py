@@ -43,19 +43,12 @@ def _kas_url() -> str:
     )
 
 
-def _env(name: str, default: str) -> str:
-    value = os.getenv(name)
-    if value:
-        return value
-    return default
-
-
 def _token_endpoint() -> str:
     if endpoint := os.getenv("TOKENENDPOINT"):
         return endpoint
-    kc_full_url = _env(
+    kc_full_url = os.getenv(
         "KCFULLURL",
-        f"{_env('KCHOST', 'http://localhost:8888')}/auth/realms/{_env('REALM', 'opentdf')}",
+        f"{os.getenv('KCHOST', 'http://localhost:8888')}/auth/realms/{os.getenv('REALM', 'opentdf')}",
     )
     return f"{kc_full_url}/protocol/openid-connect/token"
 
@@ -91,6 +84,10 @@ def _sign_jwt(
     signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
     signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
     return f"{header_b64}.{payload_b64}.{_b64u(signature)}"
+
+
+def time_now() -> int:
+    return int(time.time())
 
 
 @dataclass(frozen=True)
@@ -175,10 +172,6 @@ class DPoPKey:
         )
 
 
-def time_now() -> int:
-    return int(time.time())
-
-
 @dataclass(frozen=True)
 class DPoPAccessToken:
     token: str
@@ -195,8 +188,8 @@ class RewrapCall:
 def _get_dpop_access_token() -> DPoPAccessToken:
     key = DPoPKey.generate()
     token_endpoint = _token_endpoint()
-    client_id = _env("CLIENTID", "opentdf")
-    client_secret = _env("CLIENTSECRET", "secret")
+    client_id = os.getenv("CLIENTID", "opentdf")
+    client_secret = os.getenv("CLIENTSECRET", "secret")
 
     def post_token(nonce: str | None = None) -> requests.Response:
         proof = key.sign_dpop_proof(
@@ -223,7 +216,11 @@ def _get_dpop_access_token() -> DPoPAccessToken:
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body.get("token_type") == "DPoP", body
+    if body.get("token_type") != "DPoP":
+        pytest.skip(
+            f"Keycloak realm not configured for DPoP (token_type={body.get('token_type')!r}); "
+            "set the realm's OAuth client to require DPoP-bound tokens"
+        )
     access_token = body["access_token"]
 
     token_payload = _jwt_payload(access_token)
@@ -236,42 +233,14 @@ def _connect_rewrap_url(kas_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}/kas.AccessService/Rewrap"
 
 
-def _rewrap_htu() -> str:
-    # This matches the ConnectRPC procedure string used by the platform SDK and
-    # server interceptor for KAS Rewrap.
-    return "/kas.AccessService/Rewrap"
-
-
-def _policy_binding(kao: tdfs.KeyAccessObject) -> dict[str, str]:
-    binding = kao.policyBinding
-    if isinstance(binding, str):
-        return {"hash": binding}
-    return {"alg": binding.alg, "hash": binding.hash}
-
-
-def _key_access_object(kao: tdfs.KeyAccessObject) -> dict[str, Any]:
-    value: dict[str, Any] = {
-        "type": kao.type,
-        "url": kao.url,
-        "protocol": kao.protocol,
-        "wrappedKey": kao.wrappedKey,
-        "policyBinding": _policy_binding(kao),
-    }
-    optional = {
-        "encryptedMetadata": kao.encryptedMetadata,
-        "kid": kao.kid,
-        "sid": kao.sid,
-        "ephemeralPublicKey": kao.ephemeralPublicKey,
-    }
-    value.update({k: v for k, v in optional.items() if v is not None})
-    return value
-
-
 def _rewrap_request_body(
     tdf_file: Path, session_public_key_pem: str
 ) -> tuple[str, str]:
     manifest = tdfs.manifest(tdf_file)
     kao = manifest.encryptionInformation.keyAccess[0]
+    # KeyAccessObject's Pydantic field names already match Connect-RPC's JSON
+    # shape for kas.proto's KeyAccess message; the extra tdf_spec_version
+    # field is ignored by the platform's lenient decoder.
     request_body = {
         "clientPublicKey": session_public_key_pem,
         "requests": [
@@ -279,7 +248,7 @@ def _rewrap_request_body(
                 "keyAccessObjects": [
                     {
                         "keyAccessObjectId": "kao-0",
-                        "keyAccessObject": _key_access_object(kao),
+                        "keyAccessObject": kao.model_dump(exclude_none=True),
                     }
                 ],
                 "policy": {
@@ -341,6 +310,10 @@ def _post_rewrap(
 
 def _assert_unauthorized(response: requests.Response) -> None:
     assert response.status_code == 401, response.text
+    # Confirm the rejection is actually a DPoP-related challenge so a 401
+    # from an unrelated misconfiguration doesn't silently "pass" the test.
+    auth = response.headers.get("WWW-Authenticate", "")
+    assert auth.startswith("DPoP"), f"expected DPoP challenge, got: {auth!r}"
 
 
 def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) -> None:
@@ -465,9 +438,13 @@ def test_dpop_rejects_tampered_proof_htu(
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
+    # Well-formed full URL pointing at a wrong path — exercises "tampered to
+    # a valid-shape but wrong endpoint" rather than "malformed string".
+    tampered_htu = rewrap_call.url.replace("/Rewrap", "/WrongRewrap")
+    assert tampered_htu != rewrap_call.url, "htu tamper must actually differ"
     proof = dpop_access.key.sign_dpop_proof(
         htm="POST",
-        htu="/kas.AccessService/WrongRewrap",
+        htu=tampered_htu,
         access_token=dpop_access.token,
     )
 
@@ -486,7 +463,9 @@ def test_dpop_rejects_replayed_jti(
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
 ):
-    """Replaying the same DPoP proof `jti` MUST be rejected the second time."""
+    """Replaying a DPoP proof `jti` MUST be rejected — both as a byte-identical
+    replay and as a freshly signed proof reusing the known jti (RFC 9449 §11.1).
+    """
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
     attr, _ = attribute_single_kas_grant
@@ -494,11 +473,12 @@ def test_dpop_rejects_replayed_jti(
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
 
+    replayed_jti = f"xtest-{secrets.token_urlsafe(16)}"
     proof = dpop_access.key.sign_dpop_proof(
         htm="POST",
-        htu=_rewrap_htu(),
+        htu=rewrap_call.url,
         access_token=dpop_access.token,
-        jti=f"xtest-{secrets.token_urlsafe(16)}",
+        jti=replayed_jti,
     )
     first = _post_rewrap(
         rewrap_call,
@@ -507,12 +487,13 @@ def test_dpop_rejects_replayed_jti(
     )
     nonce = first.headers.get("DPoP-Nonce")
     if first.status_code == 401 and nonce:
+        # KAS is enforcing nonces — retry once with the issued nonce.
         proof = dpop_access.key.sign_dpop_proof(
             htm="POST",
-            htu=_rewrap_htu(),
+            htu=rewrap_call.url,
             access_token=dpop_access.token,
             nonce=nonce,
-            jti=f"xtest-{secrets.token_urlsafe(16)}",
+            jti=replayed_jti,
         )
         first = _post_rewrap(
             rewrap_call,
@@ -522,22 +503,38 @@ def test_dpop_rejects_replayed_jti(
 
     assert first.status_code == 200, first.text
 
+    # 1. Byte-identical replay of the accepted proof.
     second = _post_rewrap(
         rewrap_call,
         access_token=dpop_access.token,
         dpop_proof=proof,
     )
-
     _assert_unauthorized(second)
 
+    # 2. Fresh proof reusing the same jti — the server must remember jti values
+    # across requests, not just deduplicate identical bytes.
+    fresh_proof_same_jti = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=rewrap_call.url,
+        access_token=dpop_access.token,
+        nonce=nonce,
+        jti=replayed_jti,
+    )
+    third = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=fresh_proof_same_jti,
+    )
+    _assert_unauthorized(third)
 
-def test_dpop_rejects_tampered_or_expired_nonce(
+
+def test_dpop_rejects_tampered_nonce(
     attribute_single_kas_grant: tuple[Attribute, list[str]],
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
 ):
-    """When `require_nonce: true`, an unknown/tampered/expired nonce MUST 401 with a fresh DPoP-Nonce."""
+    """When `require_nonce: true`, a tampered nonce MUST 401 with a fresh DPoP-Nonce."""
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
     attr, _ = attribute_single_kas_grant
@@ -547,7 +544,7 @@ def test_dpop_rejects_tampered_or_expired_nonce(
 
     initial_proof = dpop_access.key.sign_dpop_proof(
         htm="POST",
-        htu=_rewrap_htu(),
+        htu=rewrap_call.url,
         access_token=dpop_access.token,
     )
     challenge = _post_rewrap(
@@ -561,7 +558,7 @@ def test_dpop_rejects_tampered_or_expired_nonce(
 
     tampered_proof = dpop_access.key.sign_dpop_proof(
         htm="POST",
-        htu=_rewrap_htu(),
+        htu=rewrap_call.url,
         access_token=dpop_access.token,
         nonce=f"tampered-{issued_nonce}",
     )
