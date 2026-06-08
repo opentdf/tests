@@ -8,17 +8,32 @@ from pathlib import Path
 from typing import Any
 
 from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 
 
 def _run(cmd: list[str], **kwargs: Any) -> None:
-    """Run a command, raising on failure."""
-    result = subprocess.run(cmd, **kwargs)
+    """Run a command, raising on failure with cwd and stderr in the message."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    except FileNotFoundError as e:
+        raise RuntimeError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
-        raise subprocess.CalledProcessError(result.returncode, cmd)
+        cwd = kwargs.get("cwd", "")
+        cwd_str = f" (cwd={cwd})" if cwd else ""
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            cmd,
+            output=result.stdout,
+            stderr=(result.stderr or "") + cwd_str,
+        )
 
 
-def checkout_sdk_branch(language: str, branch: str) -> None:
+def checkout_sdk_branch(language: str, branch: str) -> str:
     """Clone bare repo and create/update a worktree for the given branch.
+
+    Returns the slug used for the local worktree directory under
+    `sdk/<lang>/src/<slug>` — callers use this as the dist-dir name and
+    as the `VERSIONS=` override when invoking `make`.
 
     For "go", use checkout_go_from_platform instead — the standalone
     opentdf/otdfctl repo is archived; otdfctl source builds come from the
@@ -36,6 +51,8 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
             f"Unsupported language '{language}'. Supported values are: {', '.join(sdk_dirs)}"
         )
 
+    branch = expand_pr_shorthand(branch)
+
     sdk_dir = sdk_dirs[language]
     bare_repo_name = SDK_BARE_REPOS[language]
     # Strip .git suffix to get the base URL for git clone
@@ -52,11 +69,31 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
         _run(["git", "clone", "--bare", repo_url, str(bare_repo_path)])
     else:
         print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all"])
+        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+
+    # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
+    # fetch any explicit `refs/...` ref by name so worktree-add can find it.
+    if branch.startswith("refs/"):
+        print(f"Fetching {branch} into bare repo...")
+        _run(
+            [
+                "git",
+                f"--git-dir={bare_repo_path}",
+                "fetch",
+                "origin",
+                f"+{branch}:{branch}",
+            ]
+        )
 
     if worktree_path.exists():
-        print(f"Worktree for branch '{branch}' already exists at {worktree_path}. Updating...")
-        _run(["git", "-C", str(worktree_path), "pull", "origin", branch])
+        if is_mutable_ref(branch):
+            print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
+            # Worktrees from a bare clone have no `origin` remote, so reset
+            # to the just-fetched ref in the bare repo instead of `git pull`.
+            _run(["git", "-C", str(worktree_path), "fetch", "origin", branch])
+            _run(["git", "-C", str(worktree_path), "reset", "--hard", "FETCH_HEAD"])
+        else:
+            print(f"Worktree for '{branch}' already exists at {worktree_path}; reusing.")
     else:
         print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
         _run(
@@ -69,15 +106,21 @@ def checkout_sdk_branch(language: str, branch: str) -> None:
                 branch,
             ]
         )
+    return local_name
 
 
 def checkout_go_from_platform(ref: str) -> Path:
-    """Check out the opentdf/platform monorepo and arrange xtest/sdk/go/src/<ref>
+    """Check out the opentdf/platform monorepo and arrange xtest/sdk/go/src/<slug>
     as a symlink to the otdfctl subdir of that checkout.
 
     Returns the platform checkout directory so callers can locate go.work for
-    GOWORK-based source builds.
+    GOWORK-based source builds. The slug (`Path.name` of the worktree dir) is
+    also the dist-dir name used by the go SDK Makefile.
+
+    Accepts `pr:N` shorthand in addition to branches, tags, and SHAs.
     """
+    ref = expand_pr_shorthand(ref)
+
     go_dir = get_sdk_dirs()["go"]
     platform_url = SDK_GIT_URLS["platform"].removesuffix(".git")
     platform_src_dir = go_dir / "platform-src"
@@ -94,12 +137,29 @@ def checkout_go_from_platform(ref: str) -> Path:
         _run(["git", "clone", "--bare", platform_url, str(bare_repo_path)])
     else:
         print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all"])
+        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+
+    # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
+    # fetch any explicit `refs/...` ref by name so worktree-add can find it.
+    if ref.startswith("refs/"):
+        print(f"Fetching {ref} into bare repo...")
+        _run(
+            [
+                "git",
+                f"--git-dir={bare_repo_path}",
+                "fetch",
+                "origin",
+                f"+{ref}:{ref}",
+            ]
+        )
 
     if worktree_path.exists():
-        print(f"Worktree for ref '{ref}' already exists at {worktree_path}. Updating...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "origin", ref, "--tags"])
-        _run(["git", "-C", str(worktree_path), "checkout", "--force", "FETCH_HEAD"])
+        if is_mutable_ref(ref):
+            print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
+            _run(["git", f"--git-dir={bare_repo_path}", "fetch", "origin", ref, "--tags"])
+            _run(["git", "-C", str(worktree_path), "checkout", "--force", "FETCH_HEAD"])
+        else:
+            print(f"Worktree for ref '{ref}' already exists at {worktree_path}; reusing.")
     else:
         print(f"Setting up worktree for ref '{ref}' at {worktree_path}...")
         _run(
