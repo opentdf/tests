@@ -36,7 +36,7 @@ for port in "${PORTS[@]}"; do
     esac
     # Refine kind if process command says otherwise (e.g. a misbound port).
     case "$cmd" in
-      *"/service "*|*"/service start"*) kind=platform ;;
+      *"/service "*) kind=platform ;;
       *opentdf-kas*|*"kas start"*) kind=kas ;;
     esac
 
