@@ -229,7 +229,11 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-mlkem")
 
         # Pure ML-KEM-768 KEM support (FIPS 203 / CRYSTALS-Kyber-768)
-        if self.semver >= (0, 15, 0):  # version TBD — update when platform milestone is set
+        if self.semver >= (
+            0,
+            15,
+            0,
+        ):  # version TBD — update when platform milestone is set
             self.features.add("mechanism-mlkem")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
