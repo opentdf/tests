@@ -29,15 +29,15 @@ for port in "${PORTS[@]}"; do
     cmd="$(ps -o command= -p "$pid" 2>/dev/null | head -c 200)"
     case "$port" in
       8080) kind=platform ;;
-      8181|8282|8383|8484|8585|8686) kind=kas ;;
+      8181 | 8282 | 8383 | 8484 | 8585 | 8686) kind=kas ;;
       8888) kind=docker-keycloak ;;
       5432) kind=docker-postgres ;;
-      *)    kind=unknown ;;
+      *) kind=unknown ;;
     esac
     # Refine kind if process command says otherwise (e.g. a misbound port).
     case "$cmd" in
       *"/service "*) kind=platform ;;
-      *opentdf-kas*|*"kas start"*) kind=kas ;;
+      *opentdf-kas* | *"kas start"*) kind=kas ;;
     esac
 
     printf '%s\ttcp\t%s\t%s\t%s\n' "$port" "$pid" "$cwd" "$kind"
@@ -51,7 +51,7 @@ done
 docker ps --format '{{.Names}}' 2>/dev/null | while IFS= read -r name; do
   [[ -z "$name" ]] && continue
   case "$name" in
-    *-keycloak-*)  printf 'compose\tdocker\t-\t%s\tcompose-project\n' "${name%-keycloak-*}" ;;
+    *-keycloak-*) printf 'compose\tdocker\t-\t%s\tcompose-project\n' "${name%-keycloak-*}" ;;
     *-opentdfdb-*) printf 'compose\tdocker\t-\t%s\tcompose-project\n' "${name%-opentdfdb-*}" ;;
   esac
 done | sort -u
