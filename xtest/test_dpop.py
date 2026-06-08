@@ -13,12 +13,23 @@ intentionally do not expose hooks to mis-sign or tamper with their own proofs
 
 import base64
 import filecmp
+import hashlib
+import json
 import os
+import secrets
 import time
-import urllib.request
+import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 import pytest
+import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 import tdfs
 from abac import Attribute
@@ -30,6 +41,314 @@ def _kas_url() -> str:
     return os.getenv(
         "KASURL", os.getenv("PLATFORMURL", "http://localhost:8080") + "/kas"
     )
+
+
+def _env(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    return default
+
+
+def _token_endpoint() -> str:
+    if endpoint := os.getenv("TOKENENDPOINT"):
+        return endpoint
+    kc_full_url = _env(
+        "KCFULLURL",
+        f"{_env('KCHOST', 'http://localhost:8888')}/auth/realms/{_env('REALM', 'opentdf')}",
+    )
+    return f"{kc_full_url}/protocol/openid-connect/token"
+
+
+def _b64u(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64u_int(value: int) -> str:
+    length = (value.bit_length() + 7) // 8
+    return _b64u(value.to_bytes(length, "big"))
+
+
+def _jwt_payload(token: str) -> dict[str, Any]:
+    parts = token.split(".")
+    if len(parts) < 2:
+        raise AssertionError("expected access token to be a JWT")
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    return json.loads(base64.urlsafe_b64decode(payload))
+
+
+def _sign_jwt(
+    private_key: RSAPrivateKey,
+    header: Mapping[str, Any],
+    payload: Mapping[str, Any],
+) -> str:
+    header_b64 = _b64u(
+        json.dumps(header, separators=(",", ":"), sort_keys=True).encode()
+    )
+    payload_b64 = _b64u(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    )
+    signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+    signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+    return f"{header_b64}.{payload_b64}.{_b64u(signature)}"
+
+
+@dataclass(frozen=True)
+class DPoPKey:
+    private_key: RSAPrivateKey
+    public_jwk: dict[str, str]
+
+    @classmethod
+    def generate(cls) -> DPoPKey:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_numbers = private_key.public_key().public_numbers()
+        return cls(
+            private_key=private_key,
+            public_jwk={
+                "kty": "RSA",
+                "n": _b64u_int(public_numbers.n),
+                "e": _b64u_int(public_numbers.e),
+            },
+        )
+
+    @property
+    def thumbprint(self) -> str:
+        # RFC 7638 canonical member set for RSA public keys.
+        canonical = json.dumps(
+            {
+                "e": self.public_jwk["e"],
+                "kty": self.public_jwk["kty"],
+                "n": self.public_jwk["n"],
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+        return _b64u(hashlib.sha256(canonical).digest())
+
+    @property
+    def public_pem(self) -> str:
+        return (
+            self.private_key.public_key()
+            .public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("ascii")
+        )
+
+    def sign(self, payload: Mapping[str, Any], typ: str = "JWT") -> str:
+        return _sign_jwt(
+            self.private_key,
+            {"alg": "RS256", "typ": typ},
+            payload,
+        )
+
+    def sign_dpop_proof(
+        self,
+        *,
+        htm: str,
+        htu: str,
+        access_token: str | None = None,
+        nonce: str | None = None,
+        jti: str | None = None,
+    ) -> str:
+        payload: dict[str, Any] = {
+            "htm": htm,
+            "htu": htu,
+            "iat": int(time_now()),
+            "jti": jti or str(uuid.uuid4()),
+        }
+        if access_token is not None:
+            payload["ath"] = _b64u(
+                hashlib.sha256(access_token.encode("ascii")).digest()
+            )
+        if nonce is not None:
+            payload["nonce"] = nonce
+        return _sign_jwt(
+            self.private_key,
+            {
+                "alg": "RS256",
+                "jwk": self.public_jwk,
+                "typ": "dpop+jwt",
+            },
+            payload,
+        )
+
+
+def time_now() -> int:
+    return int(time.time())
+
+
+@dataclass(frozen=True)
+class DPoPAccessToken:
+    token: str
+    key: DPoPKey
+
+
+@dataclass(frozen=True)
+class RewrapCall:
+    url: str
+    headers: dict[str, str]
+    body: str
+
+
+def _get_dpop_access_token() -> DPoPAccessToken:
+    key = DPoPKey.generate()
+    token_endpoint = _token_endpoint()
+    client_id = _env("CLIENTID", "opentdf")
+    client_secret = _env("CLIENTSECRET", "secret")
+
+    def post_token(nonce: str | None = None) -> requests.Response:
+        proof = key.sign_dpop_proof(
+            htm="POST",
+            htu=token_endpoint,
+            nonce=nonce,
+        )
+        return requests.post(
+            token_endpoint,
+            auth=(client_id, client_secret),
+            data={"grant_type": "client_credentials"},
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "DPoP": proof,
+            },
+            timeout=15,
+        )
+
+    response = post_token()
+    nonce = response.headers.get("DPoP-Nonce")
+    if response.status_code == 400 and nonce:
+        response = post_token(nonce)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("token_type") == "DPoP", body
+    access_token = body["access_token"]
+
+    token_payload = _jwt_payload(access_token)
+    assert token_payload.get("cnf", {}).get("jkt") == key.thumbprint
+    return DPoPAccessToken(token=access_token, key=key)
+
+
+def _connect_rewrap_url(kas_url: str) -> str:
+    parsed = urlparse(kas_url)
+    return f"{parsed.scheme}://{parsed.netloc}/kas.AccessService/Rewrap"
+
+
+def _rewrap_htu() -> str:
+    # This matches the ConnectRPC procedure string used by the platform SDK and
+    # server interceptor for KAS Rewrap.
+    return "/kas.AccessService/Rewrap"
+
+
+def _policy_binding(kao: tdfs.KeyAccessObject) -> dict[str, str]:
+    binding = kao.policyBinding
+    if isinstance(binding, str):
+        return {"hash": binding}
+    return {"alg": binding.alg, "hash": binding.hash}
+
+
+def _key_access_object(kao: tdfs.KeyAccessObject) -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "type": kao.type,
+        "url": kao.url,
+        "protocol": kao.protocol,
+        "wrappedKey": kao.wrappedKey,
+        "policyBinding": _policy_binding(kao),
+    }
+    optional = {
+        "encryptedMetadata": kao.encryptedMetadata,
+        "kid": kao.kid,
+        "sid": kao.sid,
+        "ephemeralPublicKey": kao.ephemeralPublicKey,
+    }
+    value.update({k: v for k, v in optional.items() if v is not None})
+    return value
+
+
+def _rewrap_request_body(
+    tdf_file: Path, session_public_key_pem: str
+) -> tuple[str, str]:
+    manifest = tdfs.manifest(tdf_file)
+    kao = manifest.encryptionInformation.keyAccess[0]
+    request_body = {
+        "clientPublicKey": session_public_key_pem,
+        "requests": [
+            {
+                "keyAccessObjects": [
+                    {
+                        "keyAccessObjectId": "kao-0",
+                        "keyAccessObject": _key_access_object(kao),
+                    }
+                ],
+                "policy": {
+                    "id": "policy",
+                    "body": manifest.encryptionInformation.policy,
+                },
+            }
+        ],
+    }
+    return kao.url, json.dumps(request_body, separators=(",", ":"), sort_keys=True)
+
+
+def _signed_rewrap_request(tdf_file: Path, key: DPoPKey) -> RewrapCall:
+    kas_url, request_body = _rewrap_request_body(tdf_file, key.public_pem)
+    now = time_now()
+    signed_request_token = key.sign(
+        {
+            "exp": now + 60,
+            "iat": now,
+            "requestBody": request_body,
+        }
+    )
+    additional_context = base64.b64encode(
+        json.dumps(
+            {"obligations": {"fulfillableFQNs": []}},
+            separators=(",", ":"),
+        ).encode("ascii")
+    ).decode("ascii")
+    return RewrapCall(
+        url=_connect_rewrap_url(kas_url),
+        headers={
+            "Accept": "application/json",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/json",
+            "X-Rewrap-Additional-Context": additional_context,
+        },
+        body=json.dumps({"signedRequestToken": signed_request_token}),
+    )
+
+
+def _post_rewrap(
+    call: RewrapCall,
+    *,
+    access_token: str,
+    dpop_proof: str | None,
+    auth_scheme: str = "DPoP",
+) -> requests.Response:
+    headers = dict(call.headers)
+    headers["Authorization"] = f"{auth_scheme} {access_token}"
+    if dpop_proof is not None:
+        headers["DPoP"] = dpop_proof
+    return requests.post(
+        call.url,
+        data=call.body,
+        headers=headers,
+        timeout=15,
+    )
+
+
+def _assert_unauthorized(response: requests.Response) -> None:
+    assert response.status_code == 401, response.text
+
+
+def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) -> None:
+    if encrypt_sdk not in in_focus:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("dpop")
+    encrypt_sdk.skip_if_unsupported("dpop")
 
 
 def test_dpop_happy_path_roundtrip(
@@ -103,14 +422,12 @@ def test_dpop_server_issued_nonce_retry(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def _b64u(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-
-@pytest.mark.skip(
-    reason="TODO(tests-cell, DSPX-3397): wire up direct-HTTP DPoP negative tests once the platform-service PR lands."
-)
-def test_dpop_rejects_bearer_scheme_on_dpop_token():
+def test_dpop_rejects_bearer_scheme_on_dpop_token(
+    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
     """A DPoP-bound access token presented with `Authorization: Bearer` MUST be rejected.
 
     Plan:
@@ -118,50 +435,141 @@ def test_dpop_rejects_bearer_scheme_on_dpop_token():
       2. Hit KAS /rewrap with `Authorization: Bearer <token>` and no DPoP header.
       3. Expect 401 (and a `WWW-Authenticate: DPoP error=\"invalid_token\"` challenge).
     """
-    pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    pytest.fail("Not yet implemented")
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+
+    attr, _ = attribute_single_kas_grant
+    ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
+    dpop_access = _get_dpop_access_token()
+    rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
+
+    response = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=None,
+        auth_scheme="Bearer",
+    )
+
+    _assert_unauthorized(response)
 
 
-@pytest.mark.skip(
-    reason="TODO(tests-cell, DSPX-3397): wire up direct-HTTP DPoP negative tests once the platform-service PR lands."
-)
-def test_dpop_rejects_tampered_proof_htu():
+def test_dpop_rejects_tampered_proof_htu(
+    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
     """A DPoP proof whose `htu` claim does not match the request URI MUST be rejected."""
-    pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    # 1. Acquire a DPoP-bound token.
-    # 2. Mint a proof with htu=https://kas.example.com/wrong-path, ath=correct.
-    # 3. POST to _kas_url() + "/v2/rewrap" with that proof.
-    # 4. Expect 401.
-    _ = _kas_url()
-    pytest.fail("Not yet implemented")
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+
+    attr, _ = attribute_single_kas_grant
+    ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
+    dpop_access = _get_dpop_access_token()
+    rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
+    proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu="/kas.AccessService/WrongRewrap",
+        access_token=dpop_access.token,
+    )
+
+    response = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=proof,
+    )
+
+    _assert_unauthorized(response)
 
 
-@pytest.mark.skip(
-    reason="TODO(tests-cell, DSPX-3397): wire up direct-HTTP DPoP negative tests once the platform-service PR lands."
-)
-def test_dpop_rejects_replayed_jti():
+def test_dpop_rejects_replayed_jti(
+    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
     """Replaying the same DPoP proof `jti` MUST be rejected the second time."""
-    pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    # 1. Acquire a DPoP-bound token.
-    # 2. Mint a proof with a fixed jti and submit it. Expect 200.
-    # 3. Submit the byte-identical proof again. Expect 401.
-    pytest.fail("Not yet implemented")
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+
+    attr, _ = attribute_single_kas_grant
+    ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
+    dpop_access = _get_dpop_access_token()
+    rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
+
+    proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=_rewrap_htu(),
+        access_token=dpop_access.token,
+        jti=f"xtest-{secrets.token_urlsafe(16)}",
+    )
+    first = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=proof,
+    )
+    nonce = first.headers.get("DPoP-Nonce")
+    if first.status_code == 401 and nonce:
+        proof = dpop_access.key.sign_dpop_proof(
+            htm="POST",
+            htu=_rewrap_htu(),
+            access_token=dpop_access.token,
+            nonce=nonce,
+            jti=f"xtest-{secrets.token_urlsafe(16)}",
+        )
+        first = _post_rewrap(
+            rewrap_call,
+            access_token=dpop_access.token,
+            dpop_proof=proof,
+        )
+
+    assert first.status_code == 200, first.text
+
+    second = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=proof,
+    )
+
+    _assert_unauthorized(second)
 
 
-@pytest.mark.skip(
-    reason="TODO(tests-cell, DSPX-3397): wire up direct-HTTP DPoP negative tests once the platform-service PR lands."
-)
-def test_dpop_rejects_tampered_or_expired_nonce():
+def test_dpop_rejects_tampered_or_expired_nonce(
+    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
     """When `require_nonce: true`, an unknown/tampered/expired nonce MUST 401 with a fresh DPoP-Nonce."""
-    pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    # 1. Trigger the nonce challenge (request without nonce → 401 + DPoP-Nonce).
-    # 2. Submit a proof with nonce="not-the-issued-one".
-    # 3. Expect 401 and a `DPoP-Nonce: <fresh>` header on the response.
-    _ = time.time()
-    _ = urllib.request  # silence linter on stub; used by the real impl
-    _ = _b64u
-    pytest.fail("Not yet implemented")
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+
+    attr, _ = attribute_single_kas_grant
+    ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
+    dpop_access = _get_dpop_access_token()
+    rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
+
+    initial_proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=_rewrap_htu(),
+        access_token=dpop_access.token,
+    )
+    challenge = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=initial_proof,
+    )
+    issued_nonce = challenge.headers.get("DPoP-Nonce")
+    if challenge.status_code != 401 or not issued_nonce:
+        pytest.skip("KAS resource-server DPoP nonce enforcement is not enabled")
+
+    tampered_proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=_rewrap_htu(),
+        access_token=dpop_access.token,
+        nonce=f"tampered-{issued_nonce}",
+    )
+    response = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=tampered_proof,
+    )
+
+    _assert_unauthorized(response)
+    assert response.headers.get("DPoP-Nonce")
