@@ -35,8 +35,8 @@ def _km1_log_path() -> Path | None:
 def _algs_from_km1_log() -> set[str]:
     """Scan km1's startup log to extract the set of configured key algorithms.
 
-    Prefers the INFO 'kas initialized' entry added by DSPX-3456; falls back to
-    the DEBUG 'kas config' entry available on current platform versions.
+    Prefers the INFO 'kas trust mechanisms initialized' summary; falls back to
+    the DEBUG 'kas config loaded' keyring dump.
     """
     log = _km1_log_path()
     if not log or not log.exists():
@@ -49,11 +49,12 @@ def _algs_from_km1_log() -> set[str]:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                # Preferred: explicit INFO summary (DSPX-3456, not yet landed)
-                if entry.get("msg") == "kas initialized" and "mechanisms" in entry:
+                if (
+                    entry.get("msg") == "kas trust mechanisms initialized"
+                    and "mechanisms" in entry
+                ):
                     return set(entry["mechanisms"])
-                # Fallback: DEBUG keyring dump present in current platform
-                if entry.get("msg") == "kas config" and "config" in entry:
+                if entry.get("msg") == "kas config loaded" and "config" in entry:
                     for k in entry["config"].get("keyring", []):
                         if alg := k.get("alg"):
                             algs.add(alg)
