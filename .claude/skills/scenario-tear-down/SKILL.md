@@ -20,10 +20,10 @@ Stop a running scenario cleanly and optionally remove its on-disk state. Confirm
 Before stopping anything, list the docker compose projects currently sharing the host daemon:
 
 ```bash
-docker ps --format '{{.Names}}' |
-	grep -E -- '-keycloak-|-opentdfdb-' |
-	sed -E 's/-(keycloak|opentdfdb)-[0-9]+$//' |
-	sort -u
+docker ps --format '{{.Names}}' \
+  | grep -E -- '-keycloak-|-opentdfdb-' \
+  | sed -E 's/-(keycloak|opentdfdb)-[0-9]+$//' \
+  | sort -u
 ```
 
 Each line is a compose-project name — typically the directory name where `docker compose` was invoked (a worktree's `xtest/platform/src/<slug>/`). If more than one project appears, surface this in the reply: `down` will *keep* docker keycloak/postgres running because another instance still uses them. The user's expectation that "ports 5432 and 8888 are now free" would be wrong.
