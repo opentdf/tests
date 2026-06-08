@@ -278,7 +278,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
@@ -568,7 +568,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -580,7 +580,7 @@ jobs:
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -592,7 +592,7 @@ jobs:
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -604,7 +604,7 @@ jobs:
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -616,7 +616,7 @@ jobs:
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -629,7 +629,7 @@ jobs:
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@29f065e3c406bb5eb4a0926890f2a7b75e76aa2c  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
         with:
           ec-tdf-enabled: true
           kas-name: km2
