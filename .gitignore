@@ -12,7 +12,6 @@ vulnerability/tilt_modules/
 
 /xtest/node_modules/
 /xtest/tilt_modules/
-/xtest/tmp/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
 
@@ -31,11 +30,10 @@ xtest/sdk/java/cmdline.jar
 /xtest/sdk/go/platform-src/
 /xtest/otdfctl/
 
-/tmp/
+tmp/
 
 # Multi-instance test harness state (DSPX-3302). Per-instance config, logs, and
 # keys live under tests/instances/; otdf-sdk-mgr install scenario writes
 # .installed.json next to each scenarios.yaml.
 /instances/
 xtest/scenarios/*.installed.json
-.claude/tmp/
