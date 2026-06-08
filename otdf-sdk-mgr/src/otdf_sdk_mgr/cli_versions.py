@@ -43,6 +43,10 @@ def list_versions(
         list_platform_versions,
     )
 
+    allowed = {"go", "js", "java", "platform", "all"}
+    if sdk not in allowed:
+        typer.echo(f"Unknown SDK: {sdk!r}. Choose from: go, js, java, platform, all.", err=True)
+        raise typer.Exit(2)
     sdks = ["go", "js", "java", "platform"] if sdk == "all" else [sdk]
     all_entries: list[dict[str, Any]] = []
 

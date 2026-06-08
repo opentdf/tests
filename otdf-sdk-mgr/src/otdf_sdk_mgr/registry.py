@@ -178,6 +178,8 @@ def list_java_github_releases() -> list[dict[str, Any]]:
         url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
         try:
             releases = fetch_json(url)
+        except urllib.error.HTTPError:
+            raise  # rate-limit warning already printed in fetch_json; endpoint is reachable
         except urllib.error.URLError as e:
             raise RegistryUnreachableError(f"failed to fetch GitHub releases ({url}): {e}") from e
         if not releases:
