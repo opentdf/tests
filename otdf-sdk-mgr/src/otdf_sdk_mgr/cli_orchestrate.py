@@ -89,9 +89,7 @@ def load_spec(path: Path) -> FeatureSpec:
             raise ValueError(f"{path}: repos.{key}.depends_on must be a list")
         repo_path = entry.get("path")
         if key != "tests" and not isinstance(repo_path, str):
-            raise ValueError(
-                f"{path}: repos.{key}.path is required for non-tests cells"
-            )
+            raise ValueError(f"{path}: repos.{key}.path is required for non-tests cells")
         cells[key] = Cell(
             key=key,
             path=repo_path,
@@ -120,9 +118,7 @@ def load_spec(path: Path) -> FeatureSpec:
 # ------------------------------------------------------------------ topo sort
 
 
-def topological_waves(
-    cells: dict[str, Cell], *, skip: Iterable[str] = ()
-) -> list[list[Cell]]:
+def topological_waves(cells: dict[str, Cell], *, skip: Iterable[str] = ()) -> list[list[Cell]]:
     """Group cells into dependency waves; cells within a wave are independent.
 
     Skipped cells are treated as already-done (their dependents see them as
@@ -158,7 +154,6 @@ def topological_waves(
 
 OPENTDF_ROOT = Path.home() / "Documents/GitHub/opentdf"
 WORKTREES_ROOT = Path.home() / "Documents/GitHub/worktrees"
-TESTS_REPO = OPENTDF_ROOT / "tests"
 
 
 def worktree_for(spec: FeatureSpec, cell: Cell) -> Path:
@@ -370,10 +365,14 @@ def run_cell(
     transcript = transcripts_dir / f"{spec.jira or spec.name}-{cell.key}.jsonl"
 
     cmd = [
-        "claude", "-p",
-        "--model", model,
-        "--permission-mode", "acceptEdits",
-        "--output-format", "stream-json",
+        "claude",
+        "-p",
+        "--model",
+        model,
+        "--permission-mode",
+        "acceptEdits",
+        "--output-format",
+        "stream-json",
         "--verbose",
         build_prompt(spec, cell),
     ]
@@ -403,13 +402,27 @@ def run_cell(
 def run_tests_cell(spec: FeatureSpec, cell: Cell) -> CellResult:
     """Push the tests branch and open a draft PR without launching a subagent.
 
+    The tests repo is resolved from the orchestrator's CWD via
+    `git rev-parse --show-toplevel` — orchestrate is meant to run from a tests
+    worktree already on the feature branch, not from a hardcoded checkout.
+
     feature-design already wrote the tests-side artifacts; this step makes them
     visible to downstream CI by pushing the branch and opening a PR. Commits
     were made by the user (signed normally), so deferred signing doesn't apply.
     """
-    repo = TESTS_REPO
-    if not repo.is_dir():
-        return CellResult(cell, Path(), Path(), False, None, f"tests repo not found: {repo}")
+    try:
+        repo = Path(
+            subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+        )
+    except subprocess.CalledProcessError as e:
+        return CellResult(
+            cell,
+            Path(),
+            Path(),
+            False,
+            None,
+            f"could not resolve current git repo (run from a tests worktree): {e}",
+        )
 
     try:
         current = subprocess.check_output(
@@ -420,9 +433,13 @@ def run_tests_cell(spec: FeatureSpec, cell: Cell) -> CellResult:
 
     if current != cell.branch:
         return CellResult(
-            cell, Path(), Path(), False, None,
-            f"tests repo is on branch '{current}', expected '{cell.branch}' — "
-            "did feature-design run on this branch?",
+            cell,
+            Path(),
+            Path(),
+            False,
+            None,
+            f"current repo {repo} is on branch '{current}', expected '{cell.branch}' — "
+            "run orchestrate from a tests worktree on the feature branch.",
         )
 
     try:
@@ -478,12 +495,8 @@ def run(
         list[str] | None,
         typer.Option("--only", help="Only run these cell keys (repeatable)."),
     ] = None,
-    timeout_s: Annotated[
-        int, typer.Option("--timeout", help="Per-cell timeout (seconds).")
-    ] = 1800,
-    model: Annotated[
-        str, typer.Option("--model", help="Sub-agent model alias.")
-    ] = "sonnet",
+    timeout_s: Annotated[int, typer.Option("--timeout", help="Per-cell timeout (seconds).")] = 1800,
+    model: Annotated[str, typer.Option("--model", help="Sub-agent model alias.")] = "sonnet",
     force: Annotated[
         bool,
         typer.Option("--force", help="Re-run cells even if they already have open PRs."),
@@ -523,11 +536,21 @@ def run(
 
     if dry_run:
         typer.echo(f"Feature: {spec.name} ({spec.jira or 'no Jira'}) — {spec.title}")
+        try:
+            tests_repo: Path | None = Path(
+                subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+            )
+        except subprocess.CalledProcessError:
+            tests_repo = None
         for i, wave in enumerate(waves, 1):
             typer.echo(f"  Wave {i}:")
             for cell in wave:
                 if cell.key == "tests":
-                    existing = check_existing_pr(TESTS_REPO, cell.branch)
+                    existing = (
+                        check_existing_pr(tests_repo, cell.branch)
+                        if tests_repo is not None
+                        else None
+                    )
                     pr_note = f" [PR EXISTS: {existing}]" if existing else ""
                     typer.echo(
                         f"    - {cell.key}: path=(tests repo) branch={cell.branch}"
@@ -560,7 +583,8 @@ def run(
             if c.key == "tests":
                 return run_tests_cell(spec, c)
             return run_cell(
-                spec, c,
+                spec,
+                c,
                 transcripts_dir=transcripts_dir,
                 timeout_s=timeout_s,
                 model=model,

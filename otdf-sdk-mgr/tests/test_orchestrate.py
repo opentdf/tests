@@ -7,12 +7,13 @@ sorting, cycle detection, and pure path resolution.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
+from otdf_sdk_mgr import cli_orchestrate
 from otdf_sdk_mgr.cli_orchestrate import (
     Cell,
-    FeatureSpec,
     load_spec,
     topological_waves,
     worktree_for,
@@ -184,3 +185,89 @@ repos:
     spec = load_spec(_write_spec(tmp_path, body))
     wt = worktree_for(spec, spec.cells["platform-proto"])
     assert wt.name == "ad_hoc-platform-proto"
+
+
+# ------------------------------------------------------------ run_tests_cell
+#
+# These tests mock subprocess to verify that run_tests_cell resolves the tests
+# repo from the current working directory (via `git rev-parse --show-toplevel`)
+# rather than from a hardcoded path. The orchestrator is invoked from a tests
+# worktree on the feature branch, not from the canonical tests checkout.
+
+
+def test_run_tests_cell_resolves_repo_from_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_repo = tmp_path / "worktrees" / "TEST-1-tests" / "tests"
+    fake_repo.mkdir(parents=True)
+
+    check_output_calls: list[list[str]] = []
+    check_call_calls: list[list[str]] = []
+    run_calls: list[list[str]] = []
+
+    def fake_check_output(args: list[str], text: bool = False, **kwargs: object) -> str:
+        check_output_calls.append(list(args))
+        if list(args[:3]) == ["git", "rev-parse", "--show-toplevel"]:
+            return f"{fake_repo}\n"
+        if "branch" in args and "--show-current" in args:
+            return "TEST-1-tdd\n"
+        if args[0] == "gh" and "pr" in args and "create" in args:
+            return "Draft PR created: https://github.com/org/repo/pull/42\n"
+        raise AssertionError(f"unexpected check_output args: {args}")
+
+    def fake_check_call(args: list[str], **kwargs: object) -> int:
+        check_call_calls.append(list(args))
+        return 0
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        run_calls.append(list(args))
+        # gh pr list — return no existing PR.
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli_orchestrate.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(cli_orchestrate.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(cli_orchestrate.subprocess, "run", fake_run)
+
+    spec = load_spec(_write_spec(tmp_path, _minimal_spec_yaml()))
+    result = cli_orchestrate.run_tests_cell(spec, spec.cells["tests"])
+
+    assert result.success is True, f"expected success, got error={result.error}"
+    assert result.pr_url == "https://github.com/org/repo/pull/42"
+
+    # All git/gh interactions must target the CWD-resolved repo, not TESTS_REPO.
+    fake_repo_str = str(fake_repo)
+    branch_check = ["git", "-C", fake_repo_str, "branch", "--show-current"]
+    push = ["git", "-C", fake_repo_str, "push", "-u", "origin", "TEST-1-tdd"]
+    assert branch_check in check_output_calls
+    assert push in check_call_calls
+    # gh subprocess.run / check_output calls run with cwd=fake_repo (not asserted
+    # explicitly — fake_run/fake_check_output don't capture cwd — but the
+    # branch check + push above prove the resolved path flows through).
+
+
+def test_run_tests_cell_errors_on_wrong_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_repo = tmp_path / "opentdf" / "tests"
+    fake_repo.mkdir(parents=True)
+
+    def fake_check_output(args: list[str], text: bool = False, **kwargs: object) -> str:
+        if list(args[:3]) == ["git", "rev-parse", "--show-toplevel"]:
+            return f"{fake_repo}\n"
+        if "branch" in args and "--show-current" in args:
+            return "main\n"
+        raise AssertionError(f"unexpected check_output args: {args}")
+
+    def fail_call(args: list[str], **kwargs: object) -> int:
+        raise AssertionError(f"push must not happen on wrong branch: {args}")
+
+    monkeypatch.setattr(cli_orchestrate.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(cli_orchestrate.subprocess, "check_call", fail_call)
+
+    spec = load_spec(_write_spec(tmp_path, _minimal_spec_yaml()))
+    result = cli_orchestrate.run_tests_cell(spec, spec.cells["tests"])
+
+    assert result.success is False
+    assert result.error is not None
+    assert "TEST-1-tdd" in result.error
+    assert "main" in result.error
