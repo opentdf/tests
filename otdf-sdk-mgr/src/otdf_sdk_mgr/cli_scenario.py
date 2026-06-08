@@ -29,6 +29,7 @@ from otdf_sdk_mgr.schema import (
     KasPin,
     PlatformPin,
     Scenario,
+    dump_instance,
     load_yaml_mapping,
 )
 
@@ -104,6 +105,15 @@ def install_scenario_cmd(
             installed_kas[kas_name] = _install_platform_pin(kas_pin)
         if not skip_scripts:
             install_helper_scripts()
+
+        # Convert platform.source → platform.dist after successful build
+        # so otdf-local uses the built binary instead of falling back to go run
+        if instance.platform.source is not None:
+            assert isinstance(installed_platform, dict)
+            dist_name = Path(str(installed_platform["path"])).name
+            typer.echo(f"  Updating instance to use platform dist: {dist_name}")
+            instance.platform = PlatformPin(dist=dist_name)
+            dump_instance(instance, path)
 
         if scenario is not None:
             install_paths: dict[tuple[str, str, str | None], str] = {}

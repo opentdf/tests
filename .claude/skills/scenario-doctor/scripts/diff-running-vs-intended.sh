@@ -35,7 +35,8 @@ done
 inst="$INST_ROOT/$name/instance.yaml"
 [[ -f "$inst" ]] || { echo "no instance.yaml at $inst" >&2; exit 2; }
 
-PLATFORM_DIST="${INST_ROOT%/instances}/xtest/platform/dist"
+INST_DIR_PARENT="${INST_ROOT%/instances}"
+PLATFORM_DIST="$INST_DIR_PARENT/xtest/platform/dist"
 
 # Port map (matches otdf-local's Ports defaults).
 declare -A PORT_OF=(
@@ -98,6 +99,19 @@ get_pin() {
 }
 
 printf 'service\tport\texpected_sha\tactual_sha\thealth\tstatus\n'
+
+# Check if platform is configured for source mode (pre-PR#510 instances).
+platform_uses_source=0
+if command -v yq >/dev/null 2>&1; then
+  [[ -n "$(yq -r '.platform.source.ref // ""' "$inst")" ]] && platform_uses_source=1
+else
+  grep -q 'source:' "$inst" && platform_uses_source=1
+fi
+if [[ "$platform_uses_source" == 1 ]]; then
+  echo "⚠️  WARNING: instance uses platform.source; binary builds are ignored" >&2
+  echo "    Run: otdf-sdk-mgr install scenario $inst" >&2
+  echo "    This will update instance.yaml to use platform.dist" >&2
+fi
 
 # Platform first.
 pin="$(get_pin .platform)"

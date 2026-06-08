@@ -149,6 +149,17 @@ class PlatformService(Service):
 
         # Build the command — pinned binary when an instance is loaded,
         # legacy `go run ./service` otherwise.
+        instance = self.settings.load_instance()
+        if instance and instance.platform.source:
+            self.logger.warning(
+                "instance uses platform.source; binary builds are ignored",
+                extra={
+                    "instance": instance.metadata.name or self.settings.instance,
+                    "ref": instance.platform.source.ref,
+                    "hint": "run 'otdf-sdk-mgr install scenario <instance.yaml>' to use built binary",
+                },
+            )
+
         instance_paths = self._instance_dist_paths()
         if instance_paths is not None:
             binary, worktree = instance_paths
