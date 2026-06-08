@@ -43,13 +43,13 @@ PLATFORM_DIST="$INST_DIR_PARENT/xtest/platform/dist"
 
 # Port map (matches otdf-local's Ports defaults).
 declare -A PORT_OF=(
-  [platform]=8080
-  [alpha]=8181
-  [beta]=8282
-  [gamma]=8383
-  [delta]=8484
-  [km1]=8585
-  [km2]=8686
+   [platform]=8080
+   [alpha]=8181
+   [beta]=8282
+   [gamma]=8383
+   [delta]=8484
+   [km1]=8585
+   [km2]=8686
 )
 
 # Helper: resolve a pin (ref or dist) to expected_sha by reading .version.
