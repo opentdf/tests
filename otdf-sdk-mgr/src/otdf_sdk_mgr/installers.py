@@ -33,18 +33,18 @@ def install_go_release(version: str, dist_dir: Path) -> None:
     `go run <module>@{version}` instead of a local binary. The .version file
     contains `module-path@version` (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`).
     Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path.
+
+    `go install` is run first to surface module-resolution failures eagerly;
+    only after it succeeds do we lay down `.version` + cli wrappers, so a
+    failed install never leaves a directory that looks successful to the
+    `dist_dir.exists()` skip check in `install_release`.
     """
     go_dir = get_sdk_dir() / "go"
-    dist_dir.mkdir(parents=True, exist_ok=True)
     # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
     if "/" in version:
         version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
     module = go_module_for_tag(tag)
-    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
-    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
-    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
-    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
     print(f"  Pre-warming Go cache for {module}@{tag}...")
     result = subprocess.run(
         ["go", "install", f"{module}@{tag}"],
@@ -52,12 +52,17 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         text=True,
     )
     if result.returncode != 0:
-        msg = f"go install pre-warm failed: {result.stderr.strip()}"
+        msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
         if module == GO_MODULE_PATH_PLATFORM:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
-        print(f"  Warning: {msg} (will retry at runtime)")
+        raise InstallError(msg)
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
+    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
+    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
+    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
     print(f"  Go release {tag} installed to {dist_dir}")
 
 
@@ -104,7 +109,6 @@ def install_java_release(version: str, dist_dir: Path) -> None:
         print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
         # Proceed with download attempt anyway
 
-    # Download to a temp file first to avoid partial writes
     tmp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jar") as tmp:
@@ -122,17 +126,15 @@ def install_java_release(version: str, dist_dir: Path) -> None:
                 )
             raise
 
-        # Download succeeded — now create dist_dir and move files into place
         dist_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(java_dir / "cli.sh", dist_dir / "cli.sh")
         shutil.move(str(tmp_path), str(dist_dir / "cmdline.jar"))
-        tmp_path = None  # Ownership transferred; don't clean up
-    except BaseException:
+        tmp_path = None
+    finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
         if dist_dir.exists() and not (dist_dir / "cmdline.jar").exists():
             shutil.rmtree(dist_dir, ignore_errors=True)
-        raise
 
     print(f"  Java release {tag} installed to {dist_dir}")
 
@@ -204,22 +206,35 @@ def cmd_lts(sdks: list[str]) -> None:
         install_release(sdk, version)
 
 
-def cmd_tip(sdks: list[str]) -> None:
-    """Delegate to source checkout + make for head builds."""
+def cmd_tip(sdks: list[str], ref: str = "main") -> None:
+    """Delegate to source checkout + make for source builds at `ref`.
+
+    `ref` defaults to `main` to preserve historical behavior. May be a branch,
+    tag, SHA, `pr:N` shorthand, or raw `refs/...`. The slug derived from the
+    ref is passed to `make` via `VERSIONS=<slug>` so only that checkout is
+    (re)built, not every directory under `sdk/<lang>/src/`.
+    """
     import os
 
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
+    from otdf_sdk_mgr.refs import expand_pr_shorthand
+
+    expanded = expand_pr_shorthand(ref)
+    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
+    # `local_name` calculation in checkout.py.
+    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
-        print(f"Checking out and building {sdk} from source...")
+        print(f"Checking out and building {sdk} from source ({expanded})...")
         make_dir = sdk_dirs[sdk]
         env = os.environ.copy()
+        env["VERSIONS"] = slug
         if sdk == "go":
-            platform_dir = checkout_go_from_platform("main")
+            platform_dir = checkout_go_from_platform(expanded)
             env["GOWORK"] = str(platform_dir / "go.work")
         else:
-            checkout_sdk_branch(sdk, "main")
+            checkout_sdk_branch(sdk, expanded)
         subprocess.check_call(["make"], cwd=make_dir, env=env)
         print(f"  {sdk} built from source")
 

@@ -16,9 +16,20 @@ from otdf_sdk_mgr.config import (
     SDK_GIT_URLS,
     SDK_MAVEN_COORDS,
     SDK_NPM_PACKAGES,
+    SDK_TAG_INFIXES,
     go_module_for_tag,
 )
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
+
+
+class RegistryUnreachableError(Exception):
+    """A version registry could not be contacted.
+
+    Distinct from "registry reachable but returned no versions" — callers
+    that care (e.g. `cmd_stable`) should surface this differently so users
+    don't chase nonexistent version-availability bugs when the real problem
+    is a network outage.
+    """
 
 
 def _github_headers() -> dict[str, str]:
@@ -105,8 +116,7 @@ def list_js_versions() -> list[dict[str, Any]]:
     try:
         data = fetch_json(url)
     except urllib.error.URLError as e:
-        print(f"Warning: failed to fetch npm registry: {e}", file=sys.stderr)
-        return []
+        raise RegistryUnreachableError(f"failed to fetch npm registry ({url}): {e}") from e
 
     dist_tags: dict[str, str] = data.get("dist-tags", {})
     tag_lookup: dict[str, list[str]] = {}
@@ -139,8 +149,7 @@ def list_java_maven_versions() -> list[dict[str, Any]]:
     try:
         xml_text = fetch_text(url)
     except urllib.error.URLError as e:
-        print(f"Warning: failed to fetch Maven metadata: {e}", file=sys.stderr)
-        return []
+        raise RegistryUnreachableError(f"failed to fetch Maven metadata ({url}): {e}") from e
 
     versions = re.findall(r"<version>([^<]+)</version>", xml_text)
     results = []
@@ -169,9 +178,10 @@ def list_java_github_releases() -> list[dict[str, Any]]:
         url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
         try:
             releases = fetch_json(url)
+        except urllib.error.HTTPError:
+            raise  # rate-limit warning already printed in fetch_json; endpoint is reachable
         except urllib.error.URLError as e:
-            print(f"Warning: failed to fetch GitHub releases: {e}", file=sys.stderr)
-            break
+            raise RegistryUnreachableError(f"failed to fetch GitHub releases ({url}): {e}") from e
         if not releases:
             break
         for release in releases:
@@ -195,6 +205,40 @@ def list_java_github_releases() -> list[dict[str, Any]]:
                 entry["install_method"] = f"download from {cli_asset['browser_download_url']}"
             results.append(entry)
         page += 1
+    results.sort(key=lambda r: semver_sort_key(r["version"]))
+    return results
+
+
+def list_platform_versions() -> list[dict[str, Any]]:
+    """List platform service versions from `service/vX.Y.Z` tags in opentdf/platform."""
+    from git import Git
+
+    results: list[dict[str, Any]] = []
+    raw = Git().ls_remote(SDK_GIT_URLS["platform"], tags=True)
+    infix = SDK_TAG_INFIXES.get("platform", "service")
+
+    for line in raw.strip().split("\n"):
+        if not line:
+            continue
+        _, ref = line.split("\t", 1)
+        if ref.endswith("^{}"):
+            continue
+        tag = ref.removeprefix("refs/tags/")
+        if not tag.startswith(f"{infix}/"):
+            continue
+        version = tag.removeprefix(f"{infix}/")
+        version_normalized = version.lstrip("v")
+        if not parse_semver(version_normalized):
+            continue
+        results.append(
+            {
+                "sdk": "platform",
+                "version": version_normalized,
+                "source": "platform-git-tag",
+                "stable": is_stable(version_normalized),
+                "install_method": f"otdf-sdk-mgr install release platform:{version_normalized}",
+            }
+        )
     results.sort(key=lambda r: semver_sort_key(r["version"]))
     return results
 
