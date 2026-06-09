@@ -581,12 +581,14 @@ def env(
 
     # Platform configuration
     env_vars["PLATFORMURL"] = settings.platform_url
-    env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
+    if settings.platform_dir is not None:
+        env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
 
     # Schema file for manifest validation
-    schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
-    if schema_file.exists():
-        env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
+    if settings.platform_dir is not None:
+        schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
+        if schema_file.exists():
+            env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
 
     # Log file paths
     platform_log = settings.logs_dir / "platform.log"

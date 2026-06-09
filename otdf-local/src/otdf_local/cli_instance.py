@@ -244,11 +244,7 @@ def ls(
                 "name": child.name,
                 "platform": (
                     inst.platform.dist
-                    or (
-                        inst.platform.source.ref
-                        if inst.platform.source
-                        else inst.platform.image
-                    )
+                    or (inst.platform.source.ref if inst.platform.source else "unknown")
                 ),
                 "ports_base": inst.ports.base,
                 "kas": list(inst.kas.keys()),
