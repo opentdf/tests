@@ -80,9 +80,10 @@ def run(
         )
         raise typer.Exit(2)
 
-    settings = get_settings()
     # Force the chosen instance via env so child pytest invocations agree.
     os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance_name
+    get_settings.cache_clear()
+    settings = get_settings()
 
     xtest_root = settings.xtest_root
     if not xtest_root.exists():

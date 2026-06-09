@@ -234,41 +234,23 @@ def generate_localhost_cert(key_dir: Path) -> tuple[Path, Path]:
 
 
 def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
-    """Convert the keycloak CA into the JKS truststore Keycloak mounts.
+    """Convert the keycloak CA certificate into a JKS truststore Keycloak mounts.
 
     Uses keytool inside the keycloak/keycloak:25.0 image so we don't need a
     local JDK — docker is already a hard dependency for the test env.
     Requires generate_localhost_cert() to have run first.
+
+    Only the CA certificate (public) is imported — not the private key — so the
+    JKS is a proper truststore, not a keystore.
     """
-    ca_key = key_dir / "keycloak-ca-private.pem"
     ca_cert = key_dir / "keycloak-ca.pem"
-    if not ca_key.exists() or not ca_cert.exists():
+    if not ca_cert.exists():
         raise FileNotFoundError(
-            f"CA files missing in {key_dir}; call generate_localhost_cert() first"
+            f"CA certificate missing in {key_dir}; call generate_localhost_cert() first"
         )
-    p12 = key_dir / "ca.p12"
     jks = key_dir / "ca.jks"
 
-    subprocess.run(
-        [
-            "openssl",
-            "pkcs12",
-            "-export",
-            "-in",
-            str(ca_cert),
-            "-inkey",
-            str(ca_key),
-            "-out",
-            str(p12),
-            "-nodes",
-            "-passout",
-            f"pass:{password}",
-        ],
-        check=True,
-        capture_output=True,
-    )
-
-    # keytool -importkeystore via the keycloak image (matches init-temp-keys.sh)
+    # keytool -importcert via the keycloak image: cert-only truststore entry
     result = subprocess.run(
         [
             "docker",
@@ -281,18 +263,16 @@ def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
             "--user",
             f"{os.getuid()}:{os.getgid()}",
             "keycloak/keycloak:25.0",
-            "-importkeystore",
-            "-srckeystore",
-            "/keys/ca.p12",
-            "-srcstoretype",
-            "PKCS12",
-            "-destkeystore",
+            "-importcert",
+            "-file",
+            "/keys/keycloak-ca.pem",
+            "-alias",
+            "ca",
+            "-keystore",
             "/keys/ca.jks",
-            "-deststoretype",
+            "-storetype",
             "JKS",
-            "-srcstorepass",
-            password,
-            "-deststorepass",
+            "-storepass",
             password,
             "-noprompt",
         ],
@@ -301,7 +281,7 @@ def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"keytool failed converting PKCS12 → JKS:\n{result.stderr}\n"
+            f"keytool failed importing CA cert into JKS truststore:\n{result.stderr}\n"
             "Ensure Docker is running and `keycloak/keycloak:25.0` is pullable."
         )
     return jks
@@ -323,24 +303,30 @@ def ensure_keys_exist(key_dir: Path, force: bool = False) -> bool:
         True if any keys were generated, False if everything already existed
     """
     rsa_private = key_dir / "kas-private.pem"
+    rsa_cert = key_dir / "kas-cert.pem"
     ec_private = key_dir / "kas-ec-private.pem"
+    ec_cert = key_dir / "kas-ec-cert.pem"
     localhost_key = key_dir / "localhost.key"
+    localhost_cert = key_dir / "localhost.crt"
     ca_jks = key_dir / "ca.jks"
 
     if (
         not force
         and rsa_private.exists()
+        and rsa_cert.exists()
         and ec_private.exists()
+        and ec_cert.exists()
         and localhost_key.exists()
+        and localhost_cert.exists()
         and ca_jks.exists()
     ):
         return False
 
-    if force or not rsa_private.exists():
+    if force or not rsa_private.exists() or not rsa_cert.exists():
         generate_rsa_keypair(key_dir, "kas")
-    if force or not ec_private.exists():
+    if force or not ec_private.exists() or not ec_cert.exists():
         generate_ec_keypair(key_dir, "kas-ec")
-    if force or not localhost_key.exists():
+    if force or not localhost_key.exists() or not localhost_cert.exists():
         generate_localhost_cert(key_dir)
     if force or not ca_jks.exists():
         generate_ca_jks(key_dir)
