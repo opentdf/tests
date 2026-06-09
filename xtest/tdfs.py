@@ -14,7 +14,7 @@ from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import assertions as tdfassertions
 
@@ -91,6 +91,10 @@ def is_sdk_type(val: str) -> TypeIs[sdk_type]:
     return val in get_args(sdk_type)
 
 
+def is_feature_type(val: str) -> "TypeIs[feature_type]":
+    return val in get_args(feature_type)
+
+
 focus_type = Literal[sdk_type, "all"]
 
 container_type = Literal[
@@ -151,6 +155,9 @@ class PlatformFeatureSet(BaseModel):
         "autoconfigure",
         "better-messages-2024",
     }
+    # Features whose absence routes through pytest.fail (not pytest.skip).
+    # Populated from --require-features / XTEST_REQUIRE_FEATURES.
+    require_features: set[feature_type] = Field(default_factory=set)
 
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
@@ -238,13 +245,39 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    def skip_if_unsupported(self, *features: feature_type):
-        """Skip the current test if any of the given features are unsupported."""
-        missing = [f for f in features if f not in self.features]
-        if missing:
-            pytest.skip(
-                f"platform service {self.version} doesn't yet support {missing}"
+        req = os.getenv("XTEST_REQUIRE_FEATURES", "")
+        if req:
+            requested = [f for f in req.split() if f]
+            unknown = [f for f in requested if not is_feature_type(f)]
+            if unknown:
+                raise ValueError(
+                    f"XTEST_REQUIRE_FEATURES contains unknown features {unknown}; "
+                    f"valid features: {sorted(get_args(feature_type))}"
+                )
+            self.require_features = {f for f in requested if is_feature_type(f)}
+            print(
+                f"XTEST_REQUIRE_FEATURES forces [{', '.join(sorted(self.require_features))}]"
             )
+
+    def skip_if_unsupported(self, *features: feature_type):
+        """Skip or fail the current test if any of the given features are unsupported.
+
+        Missing features in `require_features` trigger `pytest.fail` so the
+        author sees a real red signal during TDD. Other missing features still
+        `pytest.skip` — the historical behaviour for opt-in feature gates.
+        """
+        missing = [f for f in features if f not in self.features]
+        if not missing:
+            return
+        required_missing = [f for f in missing if f in self.require_features]
+        if required_missing:
+            pytest.fail(
+                f"platform service {self.version} is missing required features "
+                f"{required_missing} (declared via --require-features / "
+                f"XTEST_REQUIRE_FEATURES); detected features: "
+                f"{sorted(self.features)}"
+            )
+        pytest.skip(f"platform service {self.version} doesn't yet support {missing}")
 
 
 _cached_pfs: PlatformFeatureSet | None = None

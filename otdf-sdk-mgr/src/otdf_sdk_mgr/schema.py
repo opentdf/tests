@@ -202,6 +202,10 @@ class Suite(_StrictModel):
         description="Forwarded to --containers as a whitespace-separated list",
     )
     markers: str | None = Field(default=None, description="Forwarded to -m")
+    require_features: list[str] = Field(
+        default_factory=list,
+        description="Forwarded to --require-features; flips skip→fail for listed feature gates",
+    )
     extra_args: list[str] = Field(default_factory=list)
 
 

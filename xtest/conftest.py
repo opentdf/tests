@@ -138,6 +138,11 @@ def pytest_addoption(parser: pytest.Parser):
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
     )
+    parser.addoption(
+        "--require-features",
+        help=f"fail (instead of skip) when these platform features are missing; one or more of {englist(typing.get_args(tdfs.feature_type))}",
+        type=is_type_or_list_of_types(tdfs.feature_type),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -154,6 +159,13 @@ def pytest_configure(config: pytest.Config) -> None:
     instance = config.getoption("--instance")
     if instance:
         os.environ["OTDF_LOCAL_INSTANCE_NAME"] = instance
+
+    # PlatformFeatureSet reads XTEST_REQUIRE_FEATURES at __init__; pytest
+    # options aren't visible from there. Mirror the CLI option to the env var
+    # before any code path can early-return below.
+    req = config.getoption("--require-features")
+    if req:
+        os.environ["XTEST_REQUIRE_FEATURES"] = req
 
     scenario_path = config.getoption("--scenario")
     if not scenario_path:
@@ -188,6 +200,9 @@ def pytest_configure(config: pytest.Config) -> None:
             config.option.sdks_decrypt = " ".join(tokens["decrypt"])
     if not config.getoption("--containers") and scenario.suite.containers:
         config.option.containers = scenario.suite.containers
+    if not config.getoption("--require-features") and scenario.suite.require_features:
+        config.option.require_features = " ".join(scenario.suite.require_features)
+        os.environ["XTEST_REQUIRE_FEATURES"] = config.option.require_features
     if not instance and scenario.instance.metadata.name:
         os.environ["OTDF_LOCAL_INSTANCE_NAME"] = scenario.instance.metadata.name
 

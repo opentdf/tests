@@ -48,6 +48,8 @@ def _build_pytest_args(scenario: Scenario, scenario_path: Path) -> list[str]:
         args.extend(["-k", suite.kexpr])
     if suite.markers:
         args.extend(["-m", suite.markers])
+    if suite.require_features:
+        args.extend(["--require-features", " ".join(suite.require_features)])
     args.extend(suite.extra_args)
     return args
 
