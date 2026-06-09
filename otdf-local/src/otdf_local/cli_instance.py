@@ -22,6 +22,17 @@ from otdf_local.utils.yaml import copy_yaml_with_updates
 instance_app = typer.Typer(help="Manage named test environment instances.")
 
 
+def _validate_instance_name(name: str) -> None:
+    """Reject names that could escape the instances root via path traversal."""
+    from pathlib import PurePosixPath
+
+    p = PurePosixPath(name)
+    if not name or p.is_absolute() or len(p.parts) != 1 or name in {".", ".."}:
+        raise typer.BadParameter(
+            f"instance name must be a single directory name, got {name!r}"
+        )
+
+
 @instance_app.command("init")
 def init(
     name: Annotated[str, typer.Argument(help="Instance name (used as directory name)")],
@@ -41,10 +52,23 @@ def init(
         Optional[str],
         typer.Option("--platform", help="Platform dist version (e.g., v0.9.0)"),
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite existing instance directory"),
+    ] = False,
 ) -> None:
     """Scaffold a new instance directory at tests/instances/<name>/."""
+    _validate_instance_name(name)
     settings = get_settings()
     instance_dir = settings.instances_root / name
+
+    if instance_dir.exists() and not force:
+        typer.echo(
+            f"Error: instance '{name}' already exists at {instance_dir}. "
+            "Pass --force to overwrite.",
+            err=True,
+        )
+        raise typer.Exit(2)
 
     if from_scenario is not None:
         _init_from_scenario(name, from_scenario, instance_dir)
@@ -263,6 +287,7 @@ def rm(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation")] = False,
 ) -> None:
     """Remove an instance directory."""
+    _validate_instance_name(name)
     settings = get_settings()
     instance_dir = settings.instances_root / name
     if not instance_dir.exists():
