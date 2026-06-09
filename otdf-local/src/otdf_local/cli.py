@@ -220,7 +220,7 @@ def up(
             raise typer.Exit(1)
 
         with status_spinner("Waiting for KAS instances..."):
-            for kas_name in kas_manager._instances:
+            for kas_name in kas_manager.get_instance_names():
                 port = settings.get_kas_port(kas_name)
                 try:
                     wait_for_health(
