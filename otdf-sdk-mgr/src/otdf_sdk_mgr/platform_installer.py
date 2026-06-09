@@ -120,7 +120,14 @@ def _resolve_platform_ref(version_or_ref: str) -> str:
         return version_or_ref
     if 7 <= len(version_or_ref) <= 39 and _is_hex(version_or_ref):
         return version_or_ref
-    return f"{infix}/{normalize_version(version_or_ref)}"
+    # Only apply the `service/v…` infix when the input parses as semver. Plain
+    # branch names like `DSPX-3397-platform-service` pass through unchanged
+    # so `_ensure_worktree` can resolve them via the standard branch path.
+    from otdf_sdk_mgr.semver import parse_semver
+
+    if parse_semver(version_or_ref) is not None:
+        return f"{infix}/{normalize_version(version_or_ref)}"
+    return version_or_ref
 
 
 def _expand_short_sha(short: str) -> str:

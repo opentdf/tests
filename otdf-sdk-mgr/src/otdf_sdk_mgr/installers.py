@@ -206,6 +206,30 @@ def cmd_lts(sdks: list[str]) -> None:
         install_release(sdk, version)
 
 
+def _source_dist_slug(ref: str) -> str:
+    """Compute the dist-dir slug for a source build at `ref`.
+
+    Mirrors the per-SDK `local_name` calculation in checkout.py. Exported so
+    callers (e.g. `install_source`, `install_scenario`) can locate the dist
+    dir produced by a source build without re-running the build.
+    """
+    from otdf_sdk_mgr.refs import expand_pr_shorthand
+
+    expanded = expand_pr_shorthand(ref)
+    return expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+
+
+def install_source(sdk: str, ref: str) -> Path:
+    """Source-build a single SDK at `ref` and return its dist directory.
+
+    Mirrors `install_release`'s signature for the source-build path so callers
+    can pick install path based on `source` pin without bespoke slug math.
+    Branch refs are re-fetched and rebuilt every call (see `is_mutable_ref`).
+    """
+    cmd_tip([sdk], ref=ref)
+    return get_sdk_dirs()[sdk] / "dist" / _source_dist_slug(ref)
+
+
 def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     """Delegate to source checkout + make for source builds at `ref`.
 
@@ -220,9 +244,7 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     from otdf_sdk_mgr.refs import expand_pr_shorthand
 
     expanded = expand_pr_shorthand(ref)
-    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
-    # `local_name` calculation in checkout.py.
-    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+    slug = _source_dist_slug(ref)
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:

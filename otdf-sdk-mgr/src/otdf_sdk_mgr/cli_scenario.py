@@ -17,7 +17,8 @@ from typing import Annotated
 import typer
 from pydantic import ValidationError
 
-from otdf_sdk_mgr.installers import InstallError, install_release
+from otdf_sdk_mgr.installers import InstallError, install_release, install_source
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 from otdf_sdk_mgr.platform_installer import (
     PlatformInstallError,
     install_helper_scripts,
@@ -107,8 +108,12 @@ def install_scenario_cmd(
             install_helper_scripts()
 
         # Convert platform.source → platform.dist after successful build
-        # so otdf-local uses the built binary instead of falling back to go run
-        if instance.platform.source is not None:
+        # so otdf-local uses the built binary instead of falling back to go run.
+        # Only safe to dump when `path` IS an Instance YAML; for Scenario YAMLs
+        # the instance is inline and dumping just the instance clobbers the
+        # surrounding kind/sdks/suite/expected/actual blocks. installed.json
+        # already records the dist path for otdf-local to discover.
+        if scenario is None and instance.platform.source is not None:
             assert isinstance(installed_platform, dict)
             dist_name = Path(str(installed_platform["path"])).name
             typer.echo(f"  Updating instance to use platform dist: {dist_name}")
@@ -118,7 +123,16 @@ def install_scenario_cmd(
         if scenario is not None:
             install_paths: dict[tuple[str, str, str | None], str] = {}
             for entry in scenario.sdks.union():
-                dist_dir = install_release(entry.sdk, entry.version)
+                # Branches/PR-heads/SHAs go through the source-build path so
+                # the dist is rebuilt on every install (matching the platform
+                # source-pin behaviour). Semver release tags stay on the
+                # release download path. `entry.source` remains free-text
+                # metadata for the go-from-platform vs go-from-otdfctl-repo
+                # disambiguation inside cmd_tip — not a routing switch here.
+                if is_mutable_ref(expand_pr_shorthand(entry.version)):
+                    dist_dir = install_source(entry.sdk, entry.version)
+                else:
+                    dist_dir = install_release(entry.sdk, entry.version)
                 install_paths[entry.install_key()] = str(dist_dir)
             for role in ("encrypt", "decrypt"):
                 installed_sdks[role] = [

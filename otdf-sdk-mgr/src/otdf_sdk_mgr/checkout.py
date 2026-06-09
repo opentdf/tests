@@ -156,8 +156,12 @@ def checkout_go_from_platform(ref: str) -> Path:
     if worktree_path.exists():
         if is_mutable_ref(ref):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
+            # Fetch into the bare repo and then reset the worktree to the
+            # freshly-fetched ref. Using `FETCH_HEAD` here doesn't work because
+            # the fetch writes FETCH_HEAD into the bare's git dir, not the
+            # worktree's — git inside the worktree can't see it.
             _run(["git", f"--git-dir={bare_repo_path}", "fetch", "origin", ref, "--tags"])
-            _run(["git", "-C", str(worktree_path), "checkout", "--force", "FETCH_HEAD"])
+            _run(["git", "-C", str(worktree_path), "reset", "--hard", ref])
         else:
             print(f"Worktree for ref '{ref}' already exists at {worktree_path}; reusing.")
     else:
