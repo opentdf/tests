@@ -234,23 +234,42 @@ def generate_localhost_cert(key_dir: Path) -> tuple[Path, Path]:
 
 
 def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
-    """Convert the keycloak CA certificate into a JKS truststore Keycloak mounts.
+    """Convert the keycloak CA into the JKS file Keycloak mounts.
 
+    Mirrors the PKCS12 → JKS flow in the platform's init-temp-keys.sh exactly.
     Uses keytool inside the keycloak/keycloak:25.0 image so we don't need a
     local JDK — docker is already a hard dependency for the test env.
     Requires generate_localhost_cert() to have run first.
-
-    Only the CA certificate (public) is imported — not the private key — so the
-    JKS is a proper truststore, not a keystore.
     """
+    ca_key = key_dir / "keycloak-ca-private.pem"
     ca_cert = key_dir / "keycloak-ca.pem"
-    if not ca_cert.exists():
+    if not ca_key.exists() or not ca_cert.exists():
         raise FileNotFoundError(
-            f"CA certificate missing in {key_dir}; call generate_localhost_cert() first"
+            f"CA files missing in {key_dir}; call generate_localhost_cert() first"
         )
+    p12 = key_dir / "ca.p12"
     jks = key_dir / "ca.jks"
 
-    # keytool -importcert via the keycloak image: cert-only truststore entry
+    subprocess.run(
+        [
+            "openssl",
+            "pkcs12",
+            "-export",
+            "-in",
+            str(ca_cert),
+            "-inkey",
+            str(ca_key),
+            "-out",
+            str(p12),
+            "-nodes",
+            "-passout",
+            f"pass:{password}",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    # keytool -importkeystore via the keycloak image (matches init-temp-keys.sh)
     result = subprocess.run(
         [
             "docker",
@@ -263,16 +282,18 @@ def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
             "--user",
             f"{os.getuid()}:{os.getgid()}",
             "keycloak/keycloak:25.0",
-            "-importcert",
-            "-file",
-            "/keys/keycloak-ca.pem",
-            "-alias",
-            "ca",
-            "-keystore",
+            "-importkeystore",
+            "-srckeystore",
+            "/keys/ca.p12",
+            "-srcstoretype",
+            "PKCS12",
+            "-destkeystore",
             "/keys/ca.jks",
-            "-storetype",
+            "-deststoretype",
             "JKS",
-            "-storepass",
+            "-srcstorepass",
+            password,
+            "-deststorepass",
             password,
             "-noprompt",
         ],
@@ -281,7 +302,7 @@ def generate_ca_jks(key_dir: Path, password: str = "password") -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"keytool failed importing CA cert into JKS truststore:\n{result.stderr}\n"
+            f"keytool failed converting PKCS12 → JKS:\n{result.stderr}\n"
             "Ensure Docker is running and `keycloak/keycloak:25.0` is pullable."
         )
     return jks
