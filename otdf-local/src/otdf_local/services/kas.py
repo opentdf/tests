@@ -251,6 +251,10 @@ class KASManager:
         """Get info for all KAS instances."""
         return [instance.get_info() for instance in self._instances.values()]
 
+    def get_instance_names(self) -> list[str]:
+        """Return names of all managed KAS instances."""
+        return list(self._instances.keys())
+
     def get_running(self) -> list[str]:
         """Get names of running KAS instances."""
         return [name for name, inst in self._instances.items() if inst.is_running()]
