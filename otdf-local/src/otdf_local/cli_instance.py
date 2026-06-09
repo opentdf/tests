@@ -79,9 +79,7 @@ def _init_from_scenario(name: str, scenario_path: Path, instance_dir: Path) -> N
     else:
         raise typer.BadParameter(f"{scenario_path} has unknown kind {kind!r}")
     # Ensure the metadata name matches the chosen directory name.
-    instance.metadata = Metadata(
-        **{**instance.metadata.model_dump(exclude_none=True), "name": name}
-    )
+    instance.metadata.name = name
     instance_dir.mkdir(parents=True, exist_ok=True)
     (instance_dir / "kas").mkdir(parents=True, exist_ok=True)
     (instance_dir / "keys").mkdir(mode=0o700, parents=True, exist_ok=True)

@@ -8,6 +8,7 @@ deferred (see plan §9).
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Annotated
@@ -100,6 +101,6 @@ def run(
         pytest_args.extend(extra)
 
     cmd = ["uv", "run", "pytest", *pytest_args]
-    typer.echo(f"  Running: {' '.join(cmd)} (cwd={xtest_root})")
+    typer.echo(f"  Running: {shlex.join(cmd)} (cwd={xtest_root})")
     completed = subprocess.run(cmd, cwd=xtest_root)
     raise typer.Exit(completed.returncode)
