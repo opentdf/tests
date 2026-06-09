@@ -2,8 +2,12 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import Field
+
+if TYPE_CHECKING:
+    from otdf_sdk_mgr.schema import Instance
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from otdf_local.config.ports import Ports
@@ -228,7 +232,14 @@ class Settings(BaseSettings):
             return Ports.get_kas_port(name, base=instance.ports.base)
         return Ports.get_kas_port(name)
 
-    def load_instance(self):
+    def get_platform_port(self) -> int:
+        """Get the platform port, respecting instance ports.base."""
+        instance = self.load_instance()
+        if instance is not None:
+            return Ports.platform_port_for(instance.ports.base)
+        return Ports.PLATFORM
+
+    def load_instance(self) -> "Instance | None":
         """Load the per-instance manifest, or return None when not present."""
         if not self.has_instance():
             return None
