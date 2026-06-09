@@ -56,6 +56,9 @@ suite:
     - xtest/test_dpop.py
   containers:
     - ztdf
+  require_features:
+    - dpop
+    - dpop_nonce_challenge
 expected: >-
   Against a Keycloak 26 realm whose OAuth client requires DPoP-bound access
   tokens (and with `services.kas.dpop.require_nonce: true` on the platform),

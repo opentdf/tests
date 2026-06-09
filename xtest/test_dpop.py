@@ -188,7 +188,10 @@ class RewrapCall:
 def _get_dpop_access_token() -> DPoPAccessToken:
     key = DPoPKey.generate()
     token_endpoint = _token_endpoint()
-    client_id = os.getenv("CLIENTID", "opentdf")
+    # The dpop-bound client is provisioned alongside the default `opentdf`
+    # client by `service provision keycloak`. We default to it here so tests
+    # that mint DPoP-bound tokens via Keycloak don't need extra env wiring.
+    client_id = os.getenv("CLIENTID", "opentdf-dpop")
     client_secret = os.getenv("CLIENTSECRET", "secret")
 
     def post_token(nonce: str | None = None) -> requests.Response:
@@ -380,9 +383,9 @@ def test_dpop_server_issued_nonce_retry(
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    encrypt_sdk.skip_if_unsupported("dpop")
-    decrypt_sdk.skip_if_unsupported("dpop")
+    pfs.skip_if_unsupported("dpop", "dpop_nonce_challenge")
+    encrypt_sdk.skip_if_unsupported("dpop", "dpop_nonce_challenge")
+    decrypt_sdk.skip_if_unsupported("dpop", "dpop_nonce_challenge")
 
     attr, _ = attribute_single_kas_grant
     ct_file = encrypted_tdf(

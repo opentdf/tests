@@ -96,6 +96,10 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep -i xwing
       exit $?
       ;;
+    dpop | dpop_nonce_challenge)
+      npx $CTL help encrypt | grep -iE -- '--dpop'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
