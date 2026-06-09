@@ -5,7 +5,6 @@ import os
 import shutil
 import sys
 import time
-from pathlib import Path
 from typing import Annotated, Optional
 
 import httpx
@@ -189,7 +188,7 @@ def up(
         with status_spinner("Waiting for Platform..."):
             try:
                 wait_for_health(
-                    f"http://localhost:{Ports.PLATFORM}/healthz",
+                    f"http://localhost:{settings.get_platform_port()}/healthz",
                     timeout=120,
                     service_name="Platform",
                 )
@@ -221,8 +220,8 @@ def up(
             raise typer.Exit(1)
 
         with status_spinner("Waiting for KAS instances..."):
-            for kas_name in Ports.all_kas_names():
-                port = Ports.get_kas_port(kas_name)
+            for kas_name in kas_manager._instances:
+                port = settings.get_kas_port(kas_name)
                 try:
                     wait_for_health(
                         f"http://localhost:{port}/healthz",
