@@ -28,6 +28,58 @@ def _run(cmd: list[str], **kwargs: Any) -> None:
         )
 
 
+def _ensure_clean_bare_repo(bare_repo_path: Path, repo_url: str) -> None:
+    """Clone the bare repo, replacing it if a previous attempt left it corrupt.
+
+    A Ctrl-C'd `git clone --bare` leaves a directory that has `config`/`HEAD`
+    but no `refs/`, which git rejects as "not a git repository" forever after.
+    Probe with `rev-parse --is-bare-repository` before trusting an existing
+    dir.
+    """
+    if bare_repo_path.exists():
+        probe = subprocess.run(
+            ["git", f"--git-dir={bare_repo_path}", "rev-parse", "--is-bare-repository"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0 or probe.stdout.strip() != "true":
+            print(
+                f"Bare clone at {bare_repo_path} looks corrupt ({probe.stderr.strip()}); removing."
+            )
+            shutil.rmtree(bare_repo_path)
+    if not bare_repo_path.exists():
+        print(f"Cloning {repo_url} as a bare repository into {bare_repo_path}...")
+        _run(["git", "clone", "--bare", repo_url, str(bare_repo_path)])
+    else:
+        print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
+        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+
+
+def _drop_orphaned_worktree(worktree_path: Path) -> bool:
+    """Remove a worktree dir whose admin metadata is gone.
+
+    Returns True if the dir was orphaned and removed (caller falls through to
+    re-add); False if the worktree is healthy and the caller should reuse it.
+    A bare-clone re-clone wipes the per-worktree admin dirs under
+    `<bare>/worktrees/<slug>/`, leaving sibling worktree dirs as ghosts whose
+    next `git -C` invocation dies with `fatal: not a git repository`.
+    """
+    if not worktree_path.exists():
+        return False
+    probe = subprocess.run(
+        ["git", "-C", str(worktree_path), "rev-parse", "--git-dir"],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0:
+        print(
+            f"Worktree at {worktree_path} is orphaned ({probe.stderr.strip()}); removing and re-adding."
+        )
+        shutil.rmtree(worktree_path)
+        return True
+    return False
+
+
 def checkout_sdk_branch(language: str, branch: str) -> str:
     """Clone bare repo and create/update a worktree for the given branch.
 
@@ -64,12 +116,7 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
         local_name = local_name.removeprefix("sdk--")
     worktree_path = sdk_dir / "src" / local_name
 
-    if not bare_repo_path.exists():
-        print(f"Cloning {repo_url} as a bare repository into {bare_repo_path}...")
-        _run(["git", "clone", "--bare", repo_url, str(bare_repo_path)])
-    else:
-        print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+    _ensure_clean_bare_repo(bare_repo_path, repo_url)
 
     # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
     # fetch any explicit `refs/...` ref by name so worktree-add can find it.
@@ -85,7 +132,11 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
             ]
         )
 
-    if worktree_path.exists():
+    # Orphaned worktrees (admin metadata gone after a bare re-clone) are
+    # rmtree'd here, so the worktree_path.exists() branch below sees a fresh
+    # slate and falls through to "add".
+    orphan_removed = _drop_orphaned_worktree(worktree_path)
+    if worktree_path.exists() and not orphan_removed:
         if is_mutable_ref(branch):
             print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
             # Worktrees from a bare clone have no `origin` remote, so reset
@@ -94,18 +145,19 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
             _run(["git", "-C", str(worktree_path), "reset", "--hard", "FETCH_HEAD"])
         else:
             print(f"Worktree for '{branch}' already exists at {worktree_path}; reusing.")
-    else:
-        print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
-        _run(
-            [
-                "git",
-                f"--git-dir={bare_repo_path}",
-                "worktree",
-                "add",
-                str(worktree_path),
-                branch,
-            ]
-        )
+        return local_name
+
+    print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
+    _run(
+        [
+            "git",
+            f"--git-dir={bare_repo_path}",
+            "worktree",
+            "add",
+            str(worktree_path),
+            branch,
+        ]
+    )
     return local_name
 
 
@@ -132,12 +184,7 @@ def checkout_go_from_platform(ref: str) -> Path:
 
     platform_src_dir.mkdir(parents=True, exist_ok=True)
 
-    if not bare_repo_path.exists():
-        print(f"Cloning {platform_url} as a bare repository into {bare_repo_path}...")
-        _run(["git", "clone", "--bare", platform_url, str(bare_repo_path)])
-    else:
-        print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+    _ensure_clean_bare_repo(bare_repo_path, platform_url)
 
     # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
     # fetch any explicit `refs/...` ref by name so worktree-add can find it.
@@ -153,7 +200,8 @@ def checkout_go_from_platform(ref: str) -> Path:
             ]
         )
 
-    if worktree_path.exists():
+    orphan_removed = _drop_orphaned_worktree(worktree_path)
+    if worktree_path.exists() and not orphan_removed:
         if is_mutable_ref(ref):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
             # Fetch into the bare repo and then reset the worktree to the

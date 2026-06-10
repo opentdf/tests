@@ -78,9 +78,25 @@ def _run(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def _ensure_bare_repo() -> Path:
-    """Clone the platform bare repo if missing; fetch updates otherwise."""
+    """Clone the platform bare repo if missing or corrupt; fetch updates otherwise.
+
+    `bare.exists()` alone is too loose: a Ctrl-C'd `git clone --bare` leaves a
+    directory with `config`, `HEAD`, and `objects/` but no `refs/`, and git
+    rejects it as "not a git repository" on every subsequent operation. Probe
+    with `rev-parse --is-bare-repository` and re-clone on failure rather than
+    leaving the user to manually `rm -rf` the dist tree.
+    """
     bare = _platform_bare_repo()
     bare.parent.mkdir(parents=True, exist_ok=True)
+    if bare.exists():
+        probe = subprocess.run(
+            ["git", f"--git-dir={bare}", "rev-parse", "--is-bare-repository"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0 or probe.stdout.strip() != "true":
+            print(f"Bare clone at {bare} looks corrupt ({probe.stderr.strip()}); removing.")
+            shutil.rmtree(bare)
     if not bare.exists():
         url = SDK_GIT_URLS["platform"].removesuffix(".git")
         print(f"Cloning {url} as a bare repository into {bare}...")
@@ -165,6 +181,10 @@ def _ensure_worktree(ref: str) -> Path:
     re-fetched, and we reset the worktree HEAD to the freshly-fetched ref so
     a subsequent install picks up new commits. For immutable refs (tags,
     SHAs) we just reuse.
+
+    An on-disk worktree dir whose `.git` file points to a missing admin
+    location (orphaned by a re-cloned bare repo) is removed and re-added
+    rather than re-used — git treats reuse as fatal.
     """
     bare = _ensure_bare_repo()
     # The bare clone's default refspec is `+refs/heads/*:refs/heads/*` plus
@@ -176,15 +196,26 @@ def _ensure_worktree(ref: str) -> Path:
         _run(["git", f"--git-dir={bare}", "fetch", "origin", f"+{ref}:{ref}"])
     worktree = _worktree_path_for(ref)
     if worktree.exists():
-        if is_mutable_ref(ref):
+        probe = subprocess.run(
+            ["git", "-C", str(worktree), "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0:
+            print(
+                f"Worktree at {worktree} is orphaned ({probe.stderr.strip()}); removing and re-adding."
+            )
+            shutil.rmtree(worktree)
+        elif is_mutable_ref(ref):
             print(f"Worktree exists at {worktree}; resetting to {ref}.")
             # Worktrees from a bare clone have no `origin` remote, so we
             # reset to the bare repo's just-fetched ref. Mirrors the
             # `install_helper_scripts` pattern below.
             _run(["git", "-C", str(worktree), "reset", "--hard", ref])
+            return worktree
         else:
             print(f"Worktree already exists at {worktree}; reusing.")
-        return worktree
+            return worktree
     print(f"Adding worktree at {worktree} for ref {ref}...")
     _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), ref])
     return worktree
