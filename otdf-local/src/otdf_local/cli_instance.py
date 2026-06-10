@@ -130,49 +130,6 @@ def _init_minimal(
     _provision_instance_dir(instance_dir, instance)
 
 
-def _resolve_platform_worktree(instance: Instance) -> Path:
-    """Find the platform source worktree for this instance's pin.
-
-    For both `dist` and `source` pins, the platform installer writes a
-    `.version` file next to the binary with `worktree=<path>`. We follow
-    that pointer because the binary's parent directory only holds the
-    built artifact — the YAML templates live in the source tree.
-    """
-    from otdf_sdk_mgr.platform_installer import get_platform_dir
-    from otdf_sdk_mgr.refs import expand_pr_shorthand, ref_slug
-
-    settings = Settings()
-    pin = instance.platform
-    if pin.dist is not None:
-        dist_name = pin.dist
-    elif pin.source is not None:
-        dist_name = ref_slug(expand_pr_shorthand(pin.source.ref))
-    else:
-        raise typer.BadParameter("instance.platform must set dist or source")
-
-    binary = get_platform_dir() / "dist" / dist_name / "service"
-    if not binary.exists():
-        raise FileNotFoundError(
-            f"Platform binary not found at {binary}. "
-            f"Run `otdf-sdk-mgr install scenario` (or `install release platform:<v>`) "
-            f"to provision it before `instance init`."
-        )
-    version_file = binary.parent / ".version"
-    if version_file.exists():
-        for line in version_file.read_text().splitlines():
-            if line.startswith("worktree="):
-                worktree = Path(line.split("=", 1)[1].strip())
-                if worktree.is_dir():
-                    return worktree
-    # Fallback to sibling platform dir (legacy single-instance layout).
-    if settings.platform_dir is not None:
-        return settings.platform_dir
-    raise FileNotFoundError(
-        f"Could not resolve platform source worktree from {version_file}; "
-        f"no sibling platform/ directory available either."
-    )
-
-
 def _provision_instance_dir(instance_dir: Path, instance: Instance) -> None:
     """Generate the bootstrap bundle: keys + opentdf.yaml with a fresh root_key.
 
@@ -188,7 +145,18 @@ def _provision_instance_dir(instance_dir: Path, instance: Instance) -> None:
     if config_path.exists():
         return
 
-    worktree = _resolve_platform_worktree(instance)
+    pin = instance.platform
+    if pin.dist is not None:
+        dist_name = pin.dist
+    elif pin.source is not None:
+        from otdf_sdk_mgr.refs import expand_pr_shorthand, ref_slug
+
+        dist_name = ref_slug(expand_pr_shorthand(pin.source.ref))
+    else:
+        raise typer.BadParameter("instance.platform must set dist or source")
+
+    _, worktree = Settings().resolve_binary_worktree(dist_name)
+
     template = worktree / "opentdf-dev.yaml"
     if not template.is_file():
         template = worktree / "opentdf-example.yaml"
