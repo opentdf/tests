@@ -54,30 +54,11 @@ class PlatformService(Service):
         return f"http://localhost:{self.port}/healthz"
 
     def _instance_dist_paths(self) -> tuple[Path, Path] | None:
-        """Return (binary, worktree) for an instance-pinned platform, or None.
-
-        The platform binary is at `xtest/platform/dist/<dist>/service` and its
-        `.version` file records the source worktree path that should be used
-        as `cwd` so the binary finds its embedded resources.
-        """
+        """Return (binary, worktree) for an instance-pinned platform, or None."""
         instance = self.settings.load_instance()
         if instance is None or instance.platform.dist is None:
             return None
-        binary = self.settings.platform_binary_for(instance.platform.dist)
-        if not binary.exists():
-            raise FileNotFoundError(
-                f"Platform binary not found at {binary}. "
-                f"Run `otdf-sdk-mgr install release platform:{instance.platform.dist}` "
-                f"or `otdf-sdk-mgr install scenario` to provision it."
-            )
-        worktree = binary.parent  # safe fallback
-        version_file = binary.parent / ".version"
-        if version_file.exists():
-            for line in version_file.read_text().splitlines():
-                if line.startswith("worktree="):
-                    worktree = Path(line.split("=", 1)[1].strip())
-                    break
-        return binary, worktree
+        return self.settings.resolve_binary_worktree(instance.platform.dist)
 
     def _generate_config(self) -> Path:
         """Generate the platform config file from template.
