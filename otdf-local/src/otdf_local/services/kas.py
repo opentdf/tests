@@ -65,20 +65,7 @@ class KASService(Service):
         pin = instance.kas.get(self._kas_name)
         if pin is None or pin.dist is None:
             return None
-        binary = self.settings.platform_binary_for(pin.dist)
-        if not binary.exists():
-            raise FileNotFoundError(
-                f"KAS {self._kas_name} binary not found at {binary}. "
-                f"Run `otdf-sdk-mgr install release platform:{pin.dist}`."
-            )
-        worktree = binary.parent
-        version_file = binary.parent / ".version"
-        if version_file.exists():
-            for line in version_file.read_text().splitlines():
-                if line.startswith("worktree="):
-                    worktree = Path(line.split("=", 1)[1].strip())
-                    break
-        return binary, worktree
+        return self.settings.resolve_binary_worktree(pin.dist)
 
     def _generate_config(self) -> Path:
         """Generate the KAS config file from template."""
