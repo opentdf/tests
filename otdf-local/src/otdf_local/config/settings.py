@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 if TYPE_CHECKING:
     from otdf_sdk_mgr.schema import Instance
@@ -108,6 +108,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    _instance_cache: object = PrivateAttr(default=None)
+
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
     platform_dir: Path | None = Field(
@@ -152,6 +154,26 @@ class Settings(BaseSettings):
         from otdf_sdk_mgr.platform_installer import get_platform_dir
 
         return get_platform_dir() / "dist" / dist / "service"
+
+    def resolve_binary_worktree(self, dist: str) -> tuple[Path, Path]:
+        """Resolve a dist string to (binary, worktree), raising if the binary is missing.
+
+        Reads the `.version` file next to the binary for a `worktree=<path>` line;
+        falls back to `binary.parent` when the file is absent or has no such line.
+        """
+        binary = self.platform_binary_for(dist)
+        if not binary.exists():
+            raise FileNotFoundError(
+                f"Binary not found at {binary}. Run `otdf-sdk-mgr install` to provision it."
+            )
+        worktree = binary.parent
+        version_file = binary.parent / ".version"
+        if version_file.exists():
+            for line in version_file.read_text().splitlines():
+                if line.startswith("worktree="):
+                    worktree = Path(line.split("=", 1)[1].strip())
+                    break
+        return binary, worktree
 
     @property
     def logs_dir(self) -> Path:
@@ -240,12 +262,17 @@ class Settings(BaseSettings):
         return Ports.PLATFORM
 
     def load_instance(self) -> "Instance | None":
-        """Load the per-instance manifest, or return None when not present."""
-        if not self.has_instance():
-            return None
-        from otdf_sdk_mgr.schema import load_instance as _load
+        """Load the per-instance manifest, cached on first call."""
+        if self._instance_cache is None:
+            if not self.has_instance():
+                self._instance_cache = False
+            else:
+                from otdf_sdk_mgr.schema import load_instance as _load
 
-        return _load(self.instance_yaml)
+                self._instance_cache = _load(self.instance_yaml)
+        if self._instance_cache is False:
+            return None
+        return self._instance_cache  # type: ignore[return-value]
 
     def get_kas_config_path(self, name: str) -> Path:
         """Get config file path for a KAS instance."""
