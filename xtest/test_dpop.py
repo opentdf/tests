@@ -328,7 +328,7 @@ def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) ->
 
 
 def test_dpop_happy_path_roundtrip(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -350,7 +350,7 @@ def test_dpop_happy_path_roundtrip(
     encrypt_sdk.skip_if_unsupported("dpop")
     decrypt_sdk.skip_if_unsupported("dpop")
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(
         encrypt_sdk,
         attr_values=attr.value_fqns,
@@ -362,7 +362,7 @@ def test_dpop_happy_path_roundtrip(
 
 
 def test_dpop_server_issued_nonce_retry(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -387,7 +387,7 @@ def test_dpop_server_issued_nonce_retry(
     encrypt_sdk.skip_if_unsupported("dpop", "dpop_nonce_challenge")
     decrypt_sdk.skip_if_unsupported("dpop", "dpop_nonce_challenge")
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(
         encrypt_sdk,
         attr_values=attr.value_fqns,
@@ -399,7 +399,7 @@ def test_dpop_server_issued_nonce_retry(
 
 
 def test_dpop_rejects_bearer_scheme_on_dpop_token(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
@@ -413,7 +413,7 @@ def test_dpop_rejects_bearer_scheme_on_dpop_token(
     """
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
@@ -429,7 +429,7 @@ def test_dpop_rejects_bearer_scheme_on_dpop_token(
 
 
 def test_dpop_rejects_tampered_proof_htu(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
@@ -437,7 +437,7 @@ def test_dpop_rejects_tampered_proof_htu(
     """A DPoP proof whose `htu` claim does not match the request URI MUST be rejected."""
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
@@ -461,7 +461,7 @@ def test_dpop_rejects_tampered_proof_htu(
 
 
 def test_dpop_rejects_replayed_jti(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
@@ -471,7 +471,7 @@ def test_dpop_rejects_replayed_jti(
     """
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
@@ -532,7 +532,7 @@ def test_dpop_rejects_replayed_jti(
 
 
 def test_dpop_rejects_tampered_nonce(
-    attribute_single_kas_grant: tuple[Attribute, list[str]],
+    attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
@@ -540,7 +540,7 @@ def test_dpop_rejects_tampered_nonce(
     """When `require_nonce: true`, a tampered nonce MUST 401 with a fresh DPoP-Nonce."""
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
-    attr, _ = attribute_single_kas_grant
+    attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)

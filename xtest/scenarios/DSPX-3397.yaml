@@ -53,7 +53,7 @@ sdks:
       version: DSPX-3397-web-sdk
 suite:
   targets:
-    - xtest/test_dpop.py
+    - test_dpop.py
   containers:
     - ztdf
   require_features:
