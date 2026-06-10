@@ -264,7 +264,7 @@ class PlatformFeatureSet(BaseModel):
         # so we probe the live endpoint instead of gating by version.
         wk = _fetch_well_known()
         if wk:
-            algs = wk.get("dpop_supported_alg_values")
+            algs = wk.get("dpop_signing_alg_values_supported")
             if isinstance(algs, list) and algs:
                 self.features.add("dpop")
             if wk.get("dpop_nonce_required") is True:
