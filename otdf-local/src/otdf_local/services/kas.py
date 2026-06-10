@@ -12,7 +12,13 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
-from otdf_local.utils.yaml import copy_yaml_with_updates, get_nested, load_yaml
+from otdf_local.utils.yaml import (
+    copy_yaml_with_updates,
+    get_nested,
+    load_yaml,
+    rewrite_crypto_keys_to_absolute,
+    save_yaml,
+)
 
 
 class KASService(Service):
@@ -113,6 +119,13 @@ class KASService(Service):
             updates[f"services.kas.preview.{feature_key}"] = feature_val
 
         copy_yaml_with_updates(template_path, config_path, updates)
+        # KAS runs with cwd=<platform-worktree>, so the template's relative
+        # `kas-private.pem` paths can't resolve to instances/<id>/keys/.
+        # Resolve to absolute against the instance keys dir; drop entries
+        # whose backing files don't exist (e.g. PQC keys not provisioned).
+        data = load_yaml(config_path)
+        rewrite_crypto_keys_to_absolute(data, self.settings.instance_dir / "keys")
+        save_yaml(config_path, data)
         return config_path
 
     def start(self) -> bool:

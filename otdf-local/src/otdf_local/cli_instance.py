@@ -171,6 +171,18 @@ def _provision_instance_dir(instance_dir: Path, instance: Instance) -> None:
         config_path,
         {"services.kas.root_key": generate_root_key()},
     )
+    # Rewrite cryptoProvider key paths against the instance's keys dir.
+    # The platform binary runs with cwd=<worktree>, so the template's
+    # relative paths can't resolve to instances/<id>/keys/.
+    from otdf_local.utils.yaml import (
+        load_yaml,
+        rewrite_crypto_keys_to_absolute,
+        save_yaml,
+    )
+
+    data = load_yaml(config_path)
+    rewrite_crypto_keys_to_absolute(data, keys_dir)
+    save_yaml(config_path, data)
 
 
 def _validate_port_uniqueness(instances_root: Path, new_name: str) -> None:

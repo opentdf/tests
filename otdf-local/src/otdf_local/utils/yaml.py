@@ -122,3 +122,41 @@ def copy_yaml_with_updates(source: Path, dest: Path, updates: dict[str, Any]) ->
     for dot_path, value in updates.items():
         set_nested(data, dot_path, value)
     save_yaml(dest, data)
+
+
+def rewrite_crypto_keys_to_absolute(data: dict[str, Any], keys_dir: Path) -> None:
+    """Rewrite relative `private`/`cert` paths under cryptoProvider.standard.keys to absolute.
+
+    Platform and KAS binaries both run with `cwd=<platform-worktree>` (the
+    Go source dir), not the instance dir, so the template's relative
+    `kas-private.pem` / `./keys/kas-private.pem` paths fail to open.
+    Resolve each entry against `keys_dir` (the instance's `keys/`); leave
+    absolute paths untouched. Entries whose target file isn't on disk are
+    dropped from the list so callers don't ship a broken keyring.
+    """
+    keys_list = get_nested(data, "server.cryptoProvider.standard.keys", None)
+    if not isinstance(keys_list, list):
+        return
+    surviving: list[Any] = []
+    for entry in keys_list:
+        if not isinstance(entry, dict):
+            surviving.append(entry)
+            continue
+        keep = True
+        for field in ("private", "cert"):
+            raw = entry.get(field)
+            if not isinstance(raw, str):
+                continue
+            candidate = Path(raw)
+            if not candidate.is_absolute():
+                # Strip a leading `./keys/` prefix so we don't end up with
+                # `<keys_dir>/keys/...`. Bare filenames pass through.
+                rel = Path(raw.removeprefix("./").removeprefix("keys/"))
+                candidate = keys_dir / rel.name
+            if not candidate.exists():
+                keep = False
+                break
+            entry[field] = str(candidate)
+        if keep:
+            surviving.append(entry)
+    set_nested(data, "server.cryptoProvider.standard.keys", surviving)
