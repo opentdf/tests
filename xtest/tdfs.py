@@ -221,6 +221,11 @@ class PlatformFeatureSet(BaseModel):
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
 
+        # Pure ML-KEM (non-hybrid) added by platform PR #3537. Tentatively v0.17.0;
+        # bump when the release target is finalized.
+        if self.semver >= (0, 17, 0):
+            self.features.add("mechanism-mlkem")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
     def skip_if_unsupported(self, *features: feature_type):

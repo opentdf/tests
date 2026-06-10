@@ -1,0 +1,75 @@
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+metadata:
+  id: pure-mlkem
+  name: pure-mlkem
+  title: "Pure ML-KEM (mlkem:768 / mlkem:1024) — platform PR #3537"
+  created: "2026-05-29"
+instance:
+  apiVersion: opentdf.io/v1alpha1
+  kind: Instance
+  metadata:
+    name: pure-mlkem
+  platform:
+    source:
+      ref: pr:3537
+  ports:
+    base: 8080
+  kas:
+    alpha: { source: { ref: "pr:3537" }, mode: standard }
+    beta:  { source: { ref: "pr:3537" }, mode: standard }
+    gamma: { source: { ref: "pr:3537" }, mode: standard }
+    delta: { source: { ref: "pr:3537" }, mode: standard }
+    km1:
+      source: { ref: "pr:3537" }
+      mode: key_management
+      features:
+        hybrid_tdf_enabled: true  # Required for ML-KEM wrapping
+    km2:
+      source: { ref: "pr:3537" }
+      mode: key_management
+      features:
+        hybrid_tdf_enabled: true  # Required for ML-KEM wrapping
+sdks:
+  encrypt:
+    - sdk: go
+      version: refs--pull--3537--head
+  decrypt:
+    - sdk: go
+      version: refs--pull--3537--head
+suite:
+  targets:
+    - test_pqc.py::test_mlkem_768_roundtrip
+    - test_pqc.py::test_mlkem_1024_roundtrip
+  containers:
+    - ztdf
+expected: |
+  Platform built from PR #3537 accepts mlkem:768 and mlkem:1024 managed-key
+  registrations on km1 and km2 (kids m1 / m2). KAS instances km1 and km2 have
+  `hybrid_tdf_enabled: true` in their preview settings to accept ML-KEM wrapped
+  KAOs. Encrypt with go@pr:3537 produces a single KAO whose wrappedKey exceeds
+  the raw ML-KEM ciphertext (>1088 / >1568 bytes). Decrypt with go@pr:3537
+  succeeds and round-trips the plaintext.
+actual: |
+  Both test_mlkem_768_roundtrip and test_mlkem_1024_roundtrip PASS end-to-end
+  with go@refs--pull--3537--head encrypt + decrypt against PR #3537 platform
+  (head 08ab3a0a, "refactor(ocrypto): encode pure ML-KEM keys as SPKI/PKCS#8
+  with NIST OIDs"). Observed: KAS Registry accepts algorithm enum 20/21,
+  emits SPKI/PKCS#8 PEMs of the expected sizes (mlkem:768 ≥ 1184B encap key,
+  mlkem:1024 ≥ 1568B). The KAO `type` field is "wrapped" (the existing
+  generic type), NOT "mlkem-wrapped" as some PR notes hint — algorithm is
+  disambiguated via key registry / kid, not a new KAO type. Test assertion
+  was relaxed to accept either; revisit if the PR later adds a distinct type.
+
+  Decrypt with non-PR clients (Java, JS, older Go) not yet observed — those
+  SDKs aren't installed in this scenario. Add them to sdks.decrypt and rerun
+  to answer the "can older clients decrypt mlkem?" question empirically.
+
+  Setup notes (one-time per PR worktree):
+    1. Symlinked xtest/platform and xtest/sdk/go/dist → DSPX-3302-02-platform-installer
+       worktree (uv-tool-installed otdf-sdk-mgr/otdf-local anchor to that worktree).
+    2. Seeded PR worktree with kas-*.pem + keys/ + opentdf.yaml from main
+       (PR source tree ships templates but not generated keys; init-temp-keys.sh
+       would generate them properly).
+    3. Set PLATFORM_VERSION=0.17.0 (override; PR build reports version "0.9.0")
+       and OTDFCTL_HEADS='["refs--pull--3537--head"]' for the test invocation.

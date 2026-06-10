@@ -47,6 +47,7 @@
           "additionalProperties": {
             "type": "boolean"
           },
+          "description": "Reserved for future use. Instance-level feature defaults are not currently implemented. Use per-KAS features in the kas dict instead.",
           "title": "Features",
           "type": "object"
         },
@@ -102,6 +103,7 @@
           "additionalProperties": {
             "type": "boolean"
           },
+          "description": "KAS preview settings to enable. Keys are preview setting names (without the 'services.kas.preview.' prefix); values are booleans. Available settings depend on the platform version and may include experimental features in PRs. User-specified features override mode-based defaults.",
           "title": "Features",
           "type": "object"
         },
