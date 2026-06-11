@@ -33,6 +33,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 import tdfs
 from abac import Attribute
+from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 
 
@@ -398,18 +399,25 @@ def test_dpop_server_issued_nonce_retry(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-def test_dpop_rejects_bearer_scheme_on_dpop_token(
+def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
 ):
-    """A DPoP-bound access token presented with `Authorization: Bearer` MUST be rejected.
+    """A DPoP-bound access token presented with `Authorization: Bearer` is currently
+    accepted (provided a valid DPoP proof header is attached) but the platform emits
+    a WARN log to surface non-compliant SDK behavior. This is the SDK-drift scenario:
+    the proof is correct, only the Authorization scheme is wrong.
 
-    Plan:
-      1. Acquire a DPoP-bound access token (mint a proof for the token endpoint).
-      2. Hit KAS /rewrap with `Authorization: Bearer <token>` and no DPoP header.
-      3. Expect 401 (and a `WWW-Authenticate: DPoP error=\"invalid_token\"` challenge).
+    Per RFC 9449 §7.1 the request SHOULD be rejected with 401. The platform's WARN
+    is the deliberate intermediate state while SDKs are brought into compliance.
+
+    TODO(DSPX-3573): once all SDKs send the correct DPoP scheme, flip this test:
+      - drop the WARN assertion
+      - assert the Bearer-scheme call is rejected with 401 + WWW-Authenticate: DPoP
+      - rename to test_dpop_rejects_bearer_scheme_on_dpop_token
     """
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
 
@@ -418,14 +426,40 @@ def test_dpop_rejects_bearer_scheme_on_dpop_token(
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
 
-    response = _post_rewrap(
+    bearer_proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=rewrap_call.url,
+        access_token=dpop_access.token,
+    )
+    mark = audit_logs.mark("before_bearer_scheme_request")
+    bearer_response = _post_rewrap(
         rewrap_call,
         access_token=dpop_access.token,
-        dpop_proof=None,
+        dpop_proof=bearer_proof,
         auth_scheme="Bearer",
     )
 
-    _assert_unauthorized(response)
+    # Current (lenient) behavior: accepted. Will become 401 under DSPX-3573.
+    assert bearer_response.status_code == 200, bearer_response.text
+    audit_logs.assert_contains(
+        r"DPoP-bound access token presented under Bearer Authorization scheme",
+        since_mark=mark,
+    )
+
+    # Compliant path control: same proof key, same token, just the right scheme.
+    # Distinct jti via fresh proof so the server's replay cache doesn't reject it.
+    dpop_proof = dpop_access.key.sign_dpop_proof(
+        htm="POST",
+        htu=rewrap_call.url,
+        access_token=dpop_access.token,
+    )
+    dpop_response = _post_rewrap(
+        rewrap_call,
+        access_token=dpop_access.token,
+        dpop_proof=dpop_proof,
+        auth_scheme="DPoP",
+    )
+    assert dpop_response.status_code == 200, dpop_response.text
 
 
 def test_dpop_rejects_tampered_proof_htu(
