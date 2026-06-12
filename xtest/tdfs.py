@@ -63,6 +63,20 @@ def _algs_from_km1_log() -> set[str]:
     return algs
 
 
+def _fetch_well_known() -> dict[str, Any] | None:
+    """Fetch the platform's /.well-known/opentdf-configuration. Returns None on error."""
+    base = os.getenv("PLATFORMURL", "http://localhost:8080")
+    url = f"{base.rstrip('/')}/.well-known/opentdf-configuration"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                return None
+            return json.loads(resp.read())
+    except Exception:
+        logger.exception("Failed to fetch well-known configuration", exc_info=True)
+        return None
+
+
 def _kas_supports_algorithm(algorithm: str) -> bool:
     """HTTP fallback: probe km1 KAS for a specific algorithm when log is unavailable."""
     # PQ managed keys live on km1, not the main platform KAS (KASURL/PLATFORMURL).
@@ -107,6 +121,14 @@ feature_type = Literal[
     "better-messages-2024",
     "bulk_rewrap",
     "connectrpc",
+    # DPoP (RFC 9449): sender-constrained access tokens. SDK signs a DPoP proof
+    # JWT per request; KAS validates the proof and binds the access token to
+    # the proof's JWK thumbprint (cnf.jkt).
+    "dpop",
+    # Server-issued DPoP-Nonce challenge flow (RFC 9449 §8). Gated separately
+    # because SDKs can support `dpop` without yet implementing the 401-retry
+    # required by nonce mode (e.g. java-sdk's deferred 401-retry).
+    "dpop_nonce_challenge",
     "ecwrap",
     "hexless",
     "hexaflexible",
@@ -220,6 +242,16 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+
+        # DPoP capabilities via well-known. Branch builds report stale semver
+        # so we probe the live endpoint instead of gating by version.
+        wk = _fetch_well_known()
+        if wk:
+            algs = wk.get("dpop_signing_alg_values_supported")
+            if isinstance(algs, list) and algs:
+                self.features.add("dpop")
+            if wk.get("dpop_nonce_required") is True:
+                self.features.add("dpop_nonce_challenge")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 

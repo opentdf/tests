@@ -669,7 +669,7 @@ jobs:
             --sdks-encrypt "${ENCRYPT_SDK}" \
             --focus "$FOCUS_SDK" \
             $skip_flag \
-            test_abac.py test_pqc.py
+            test_abac.py test_pqc.py test_dpop.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
