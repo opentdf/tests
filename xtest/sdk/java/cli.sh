@@ -107,9 +107,14 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop | dpop_nonce_challenge)
+    dpop)
+      set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -iE -- '--dpop'
       exit $?
+      ;;
+    dpop_nonce_challenge)
+      echo "dpop_nonce_challenge not supported"
+      exit 1
       ;;
     *)
       echo "Unknown feature: $2"

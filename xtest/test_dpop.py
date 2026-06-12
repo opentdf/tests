@@ -328,6 +328,13 @@ def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) ->
     encrypt_sdk.skip_if_unsupported("dpop")
 
 
+@pytest.fixture(autouse=True)
+def _dpop_client_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SDK CLI shims read CLIENTID from the environment; tests in this module
+    # must use the DPoP-bound client provisioned by `service provision keycloak`.
+    monkeypatch.setenv("CLIENTID", "opentdf-dpop")
+
+
 def test_dpop_happy_path_roundtrip(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -359,7 +366,7 @@ def test_dpop_happy_path_roundtrip(
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 def test_dpop_server_issued_nonce_retry(
@@ -396,7 +403,7 @@ def test_dpop_server_issued_nonce_retry(
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(

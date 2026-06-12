@@ -120,6 +120,7 @@ if [ "$1" == "supports" ]; then
       # The same probe covers nonce-challenge support: when nonce mode is
       # required by the server, the SDK's existing 401-retry uses the same
       # plumbing as the base DPoP path.
+      set -o pipefail
       "${cmd[@]}" help encrypt | grep -iE -- '--dpop'
       exit $?
       ;;
