@@ -96,6 +96,14 @@ if [ "$1" == "supports" ]; then
       npx $CTL help | grep -i xwing
       exit $?
       ;;
+    dpop | dpop_nonce_challenge)
+      # JS CLI: top-level `help` only (no `help <subcommand>`); `--dpop` alone
+      # exists as an unwired boolean on pre-DPoP main, so discriminate on the
+      # companion --dpop-key flag that ships with the real implementation.
+      set -o pipefail
+      npx $CTL help | grep -iE -- '--dpop-key|--dpopKey'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

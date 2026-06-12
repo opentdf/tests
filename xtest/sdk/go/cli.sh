@@ -115,6 +115,15 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help policy kas-registry key create | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
       ;;
+    dpop | dpop_nonce_challenge)
+      # DPoP support is signalled by the --dpop / --dpop-key flag on encrypt.
+      # The same probe covers nonce-challenge support: when nonce mode is
+      # required by the server, the SDK's existing 401-retry uses the same
+      # plumbing as the base DPoP path.
+      set -o pipefail
+      "${cmd[@]}" help encrypt | grep -iE -- '--dpop'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
