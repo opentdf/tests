@@ -10,6 +10,7 @@ from typing import Annotated, Optional
 import typer
 
 from otdf_sdk_mgr.cli_install import install_app
+from otdf_sdk_mgr.cli_schema import schema_app
 from otdf_sdk_mgr.cli_versions import versions_app
 from otdf_sdk_mgr.config import ALL_SDKS, get_sdk_dirs
 
@@ -20,6 +21,7 @@ app = typer.Typer(
 )
 
 app.add_typer(install_app, name="install")
+app.add_typer(schema_app, name="schema")
 app.add_typer(versions_app, name="versions")
 
 
