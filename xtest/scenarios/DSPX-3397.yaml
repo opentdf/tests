@@ -1,0 +1,84 @@
+apiVersion: opentdf.io/v1alpha1
+kind: Scenario
+metadata:
+  id: DSPX-3397
+  title: "Keycloak v26 + DPoP-enforced clients (DSPX-3397)"
+  created: 2026-06-08
+instance:
+  metadata:
+    name: DSPX-3397
+  platform:
+    source:
+      ref: DSPX-3397-platform-service
+  ports:
+    base: 8080
+  kas:
+    alpha:
+      source:
+        ref: DSPX-3397-platform-service
+      mode: standard
+sdks:
+  # Each SDK is tested at both `main` (compatibility — verifies the
+  # DPoP-validating platform still serves pre-DPoP clients) and its
+  # DSPX-3397 branch (happy path — verifies the DPoP flow end-to-end).
+  # Cross-SDK pairs (encrypt with one, decrypt with another) fall out of
+  # the encrypt/decrypt matrix automatically.
+  encrypt:
+    - sdk: go
+      version: main
+    - sdk: go
+      version: DSPX-3397-platform-go-sdk
+      source: platform
+    - sdk: java
+      version: main
+    - sdk: java
+      version: DSPX-3397-java-sdk
+    - sdk: js
+      version: main
+    - sdk: js
+      version: DSPX-3397-web-sdk
+  decrypt:
+    - sdk: go
+      version: main
+    - sdk: go
+      version: DSPX-3397-platform-go-sdk
+      source: platform
+    - sdk: java
+      version: main
+    - sdk: java
+      version: DSPX-3397-java-sdk
+    - sdk: js
+      version: main
+    - sdk: js
+      version: DSPX-3397-web-sdk
+suite:
+  targets:
+    - test_dpop.py
+  containers:
+    - ztdf
+  require_features:
+    - dpop
+    - dpop_nonce_challenge
+expected: >-
+  Against a Keycloak 26 realm whose OAuth client requires DPoP-bound access
+  tokens (and with `services.kas.dpop.require_nonce: true` on the platform),
+  every SDK pair passes test_dpop.py — the encrypt SDK acquires a DPoP-bound
+  token, signs a fresh DPoP proof for every KAS rewrap call (with the `ath`
+  claim binding the proof to the access token), and the decrypt SDK rewraps
+  successfully. The server-issued nonce flow works end-to-end (first request
+  returns 401 + DPoP-Nonce; SDK retries with the nonce claim; second request
+  succeeds). Negative cases (Authorization: Bearer on a DPoP-bound token,
+  tampered htu, replayed jti, tampered nonce) all return 401 with a fresh
+  DPoP-Nonce challenge. Pairs that include a `main`-version SDK on either
+  end skip the test_dpop suite via `sdk.skip_if_unsupported("dpop")` rather
+  than fail — main SDKs predate the supports-dpop gate.
+actual: >-
+  In progress. Per-repo PRs are open: opentdf/tests#485 (this scenario +
+  draft tests + otdf-local KC26 bump), opentdf/platform#3582
+  (DSPX-3397-platform-service, DPoP middleware + server-issued nonce),
+  opentdf/platform#3581 (DSPX-3397-platform-go-sdk, http.RoundTripper
+  client), opentdf/java-sdk#374 (DSPX-3397-java-sdk, RS256 DPoP +
+  nonce cache; 401-retry deferred), opentdf/web-sdk#939
+  (DSPX-3397-web-sdk, dpop-nonce.ts + interceptor retry). Until each
+  PR's CI activates its `supports dpop` case in cli.sh, the
+  test_dpop.py lane skips uniformly.

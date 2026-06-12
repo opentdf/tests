@@ -275,25 +275,6 @@ jobs:
         run: |-
           echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
 
-      - name: Check PQC support based on platform tag
-        id: pqc-check
-        run: |-
-          if [[ "$PLATFORM_TAG" == "main" ]]; then
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$PLATFORM_TAG" =~ ^v([0-9]+)\.([0-9]+) ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            if [[ "$MAJOR" -gt 0 ]] || [[ "$MINOR" -ge 17 ]]; then
-              echo "supported=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "supported=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "supported=true" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_TAG: ${{ matrix.platform-tag }}
-
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
@@ -303,7 +284,7 @@ jobs:
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
@@ -593,7 +574,7 @@ jobs:
           kas-name: alpha
           kas-port: 8181
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -605,7 +586,7 @@ jobs:
           kas-name: beta
           kas-port: 8282
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -617,7 +598,7 @@ jobs:
           kas-name: gamma
           kas-port: 8383
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional kas
@@ -629,7 +610,7 @@ jobs:
           kas-port: 8484
           kas-name: delta
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km1)
@@ -642,7 +623,7 @@ jobs:
           kas-name: km1
           kas-port: 8585
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Start additional KM kas (km2)
@@ -655,7 +636,7 @@ jobs:
           key-management: ${{ steps.km-check.outputs.supported }}
           kas-port: 8686
           log-type: json
-          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          pqc-enabled: true
           root-key: ${{ steps.km-check.outputs.root_key }}
 
       - name: Run attribute based configuration tests
@@ -669,7 +650,7 @@ jobs:
             --sdks-encrypt "${ENCRYPT_SDK}" \
             --focus "$FOCUS_SDK" \
             $skip_flag \
-            test_abac.py test_pqc.py
+            test_abac.py test_pqc.py test_dpop.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"

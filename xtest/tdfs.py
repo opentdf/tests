@@ -14,7 +14,7 @@ from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import assertions as tdfassertions
 
@@ -63,6 +63,19 @@ def _algs_from_km1_log() -> set[str]:
     return algs
 
 
+def _fetch_well_known() -> dict[str, Any] | None:
+    """Fetch the platform's /.well-known/opentdf-configuration. Returns None on error."""
+    base = os.getenv("PLATFORMURL", "http://localhost:8080")
+    url = f"{base.rstrip('/')}/.well-known/opentdf-configuration"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                return None
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
 def _kas_supports_algorithm(algorithm: str) -> bool:
     """HTTP fallback: probe km1 KAS for a specific algorithm when log is unavailable."""
     # PQ managed keys live on km1, not the main platform KAS (KASURL/PLATFORMURL).
@@ -107,6 +120,14 @@ feature_type = Literal[
     "better-messages-2024",
     "bulk_rewrap",
     "connectrpc",
+    # DPoP (RFC 9449): sender-constrained access tokens. SDK signs a DPoP proof
+    # JWT per request; KAS validates the proof and binds the access token to
+    # the proof's JWK thumbprint (cnf.jkt).
+    "dpop",
+    # Server-issued DPoP-Nonce challenge flow (RFC 9449 §8). Gated separately
+    # because SDKs can support `dpop` without yet implementing the 401-retry
+    # required by nonce mode (e.g. java-sdk's deferred 401-retry).
+    "dpop_nonce_challenge",
     "ecwrap",
     "hexless",
     "hexaflexible",
@@ -119,6 +140,8 @@ feature_type = Literal[
     "mechanism-rsa-4096",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
     "mechanism-ec-curves-384-521",
+    # Support for encrypting with pure ML-KEM-768 post-quantum KEM (FIPS 203 / CRYSTALS-Kyber-768).
+    "mechanism-mlkem",
     # Support for encrypting with X-Wing hybrid post-quantum/traditional KEM.
     "mechanism-xwing",
     # Support for encrypting with hybrid post-quantum/traditional KEM with NIST Elliptic Curves.
@@ -128,6 +151,11 @@ feature_type = Literal[
     "ns_grants",
     "obligations",
 ]
+
+
+def is_feature_type(val: str) -> TypeIs[feature_type]:
+    return val in get_args(feature_type)
+
 
 container_version = Literal["4.2.2", "4.3.0"]
 
@@ -144,6 +172,9 @@ class PlatformFeatureSet(BaseModel):
         "autoconfigure",
         "better-messages-2024",
     }
+    # Features whose absence routes through pytest.fail (not pytest.skip).
+    # Populated from --require-features / XTEST_REQUIRE_FEATURES.
+    require_features: set[feature_type] = Field(default_factory=set)
 
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
@@ -221,15 +252,59 @@ class PlatformFeatureSet(BaseModel):
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
 
+        # Pure ML-KEM-768 KEM support (FIPS 203 / CRYSTALS-Kyber-768)
+        if self.semver >= (
+            0,
+            15,
+            0,
+        ):  # version TBD — update when platform milestone is set
+            self.features.add("mechanism-mlkem")
+
+        # DPoP capabilities via well-known. Branch builds report stale semver
+        # so we probe the live endpoint instead of gating by version.
+        wk = _fetch_well_known()
+        if wk:
+            algs = wk.get("dpop_signing_alg_values_supported")
+            if isinstance(algs, list) and algs:
+                self.features.add("dpop")
+            if wk.get("dpop_nonce_required") is True:
+                self.features.add("dpop_nonce_challenge")
+
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    def skip_if_unsupported(self, *features: feature_type):
-        """Skip the current test if any of the given features are unsupported."""
-        missing = [f for f in features if f not in self.features]
-        if missing:
-            pytest.skip(
-                f"platform service {self.version} doesn't yet support {missing}"
+        req = os.getenv("XTEST_REQUIRE_FEATURES", "")
+        if req:
+            requested = [f for f in req.split() if f]
+            unknown = [f for f in requested if not is_feature_type(f)]
+            if unknown:
+                raise ValueError(
+                    f"XTEST_REQUIRE_FEATURES contains unknown features {unknown}; "
+                    f"valid features: {sorted(get_args(feature_type))}"
+                )
+            self.require_features = {f for f in requested if is_feature_type(f)}
+            print(
+                f"XTEST_REQUIRE_FEATURES forces [{', '.join(sorted(self.require_features))}]"
             )
+
+    def skip_if_unsupported(self, *features: feature_type):
+        """Skip or fail the current test if any of the given features are unsupported.
+
+        Missing features in `require_features` trigger `pytest.fail` so the
+        author sees a real red signal during TDD. Other missing features still
+        `pytest.skip` — the historical behaviour for opt-in feature gates.
+        """
+        missing = [f for f in features if f not in self.features]
+        if not missing:
+            return
+        required_missing = [f for f in missing if f in self.require_features]
+        if required_missing:
+            pytest.fail(
+                f"platform service {self.version} is missing required features "
+                f"{required_missing} (declared via --require-features / "
+                f"XTEST_REQUIRE_FEATURES); detected features: "
+                f"{sorted(self.features)}"
+            )
+        pytest.skip(f"platform service {self.version} doesn't yet support {missing}")
 
 
 _cached_pfs: PlatformFeatureSet | None = None
