@@ -150,7 +150,7 @@ def test_tdf_spec_target_430(
         pytest.skip("Not in focus")
     if not encrypt_sdk.supports("hexaflexible"):
         pytest.skip(
-            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.3.0"
         )
     if not decrypt_sdk.supports("hexless"):
         pytest.skip(
