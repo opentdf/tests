@@ -50,13 +50,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "otdf-sdk-mgr",
     "pyright>=1.1.408",
     "ruff>=0.15.14",
 ]
-
-[tool.uv.sources]
-otdf-sdk-mgr = { path = "../otdf-sdk-mgr", editable = true }
 
 # Note: This is a test suite, not a distributable package.
 # Use `uv pip install -r pyproject.toml` or `uv sync` for dependencies.

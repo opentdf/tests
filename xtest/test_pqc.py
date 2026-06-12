@@ -1,8 +1,7 @@
-"""Tests for hybrid and pure post-quantum KEM mechanisms.
+"""Tests for hybrid post-quantum/traditional KEM.
 
 These tests verify that TDF encryption and decryption work correctly when
-X-Wing, NIST-curve hybrid, and pure ML-KEM managed keys are assigned to attributes
-via the policy service.
+X-Wing and NIST approved hybrid managed keys are assigned to attributes via the policy service.
 """
 
 import base64
