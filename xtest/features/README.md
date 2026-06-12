@@ -6,8 +6,8 @@ Each `<feature-name>.yaml` captures:
 
 - The feature flag name — the `supports("<name>")` gate string in `xtest/tdfs.py`.
 - The Jira ticket driving the work, if any.
-- Per-repo todo lists and the shared branch name to use across them.
-- The scenario(s) under `xtest/scenarios/` that exercise the feature once each repo's PR lands.
+- A list of *cells of effort*, each with a target repo (`path:`), a branch, a todo list, and an optional `depends_on:` edge to other cells. A single feature can have multiple cells in the same repo (e.g. `platform-proto`, `platform-service`, `platform-go-sdk` all targeting `platform`), which the orchestrator runs in separate git worktrees.
+- The scenario(s) under `xtest/scenarios/` that exercise the feature once each cell's PR lands.
 
 Specs are declarative — they describe intent, not status. PR state (open / merged / CI passing) is auto-discovered from `gh pr list --search "head:<branch>"` per repo, not stored here.
 
