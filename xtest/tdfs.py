@@ -151,7 +151,6 @@ feature_type = Literal[
     "obligations",
 ]
 
-
 container_version = Literal["4.2.2", "4.3.0"]
 
 policy_type = Literal["plaintext", "encrypted"]
@@ -256,9 +255,9 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-
     def skip_if_unsupported(self, *features: feature_type):
-        """Skip the current test if any of the given features are unsupported."""        missing = [f for f in features if f not in self.features]
+        """Skip the current test if any of the given features are unsupported."""
+        missing = [f for f in features if f not in self.features]
         if missing:
             pytest.skip(
                 f"platform service {self.version} doesn't yet support {missing}"
