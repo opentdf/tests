@@ -37,13 +37,6 @@ from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 
 
-def _kas_url() -> str:
-    """KAS endpoint for direct-HTTP negative tests. Mirrors test.env."""
-    return os.getenv(
-        "KASURL", os.getenv("PLATFORMURL", "http://localhost:8080") + "/kas"
-    )
-
-
 def _token_endpoint() -> str:
     if endpoint := os.getenv("TOKENENDPOINT"):
         return endpoint
@@ -580,6 +573,8 @@ def test_dpop_rejects_tampered_nonce(
 ):
     """When `require_nonce: true`, a tampered nonce MUST 401 with a fresh DPoP-Nonce."""
     _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("dpop", "dpop_nonce_challenge")
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
@@ -597,8 +592,10 @@ def test_dpop_rejects_tampered_nonce(
         dpop_proof=initial_proof,
     )
     issued_nonce = challenge.headers.get("DPoP-Nonce")
-    if challenge.status_code != 401 or not issued_nonce:
-        pytest.skip("KAS resource-server DPoP nonce enforcement is not enabled")
+    assert challenge.status_code == 401 and issued_nonce is not None, (
+        "Expected initial request to be challenged with 401 + DPoP-Nonce, got: "
+        f"{challenge.status_code} + {challenge.headers}"
+    )
 
     tampered_proof = dpop_access.key.sign_dpop_proof(
         htm="POST",
