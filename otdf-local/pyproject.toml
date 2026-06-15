@@ -9,7 +9,7 @@ dependencies = [
     "pydantic-settings>=2.14.1",
     "rich>=15.0.0",
     "ruamel.yaml>=0.18.0",
-    "typer>=0.26.6",
+    "typer>=0.26.7",
 ]
 
 [dependency-groups]
