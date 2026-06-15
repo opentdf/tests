@@ -138,6 +138,36 @@ def test_tdf_spec_target_422(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def test_tdf_spec_target_430(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+):
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not encrypt_sdk.supports("hexaflexible"):
+        pytest.skip(
+            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.3.0"
+        )
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip(
+            f"Decrypt SDK {decrypt_sdk} doesn't support hexless integrity information in container format 4.3.0"
+        )
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode="4.3.0",
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
 def looks_like_422(manifest: tdfs.Manifest):
     assert manifest.schemaVersion is None
 

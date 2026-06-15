@@ -22,7 +22,7 @@ jobs:
       - name: Check shell script formatting with shfmt
         run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" mvdan/shfmt:v3 -d .
       - name: Install uv
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: false
       - name: Install dependencies
