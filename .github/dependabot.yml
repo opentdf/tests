@@ -4,15 +4,39 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      github-actions-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
     commit-message:
       prefix: "chore(ci): "
 
   - package-ecosystem: "uv"
     directory: "/xtest"
     cooldown:
-      default-days: 7
+      default-days: 14
     schedule:
       interval: "weekly"
+    groups:
+      uv-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      uv-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
     versioning-strategy: "increase"
     commit-message:
       prefix: "fix(dependabot): "
@@ -21,9 +45,21 @@ updates:
   - package-ecosystem: "uv"
     directory: "/otdf-local"
     cooldown:
-      default-days: 7
+      default-days: 14
     schedule:
       interval: "weekly"
+    groups:
+      uv-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      uv-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
     versioning-strategy: "increase"
     commit-message:
       prefix: "fix(dependabot): "
@@ -32,9 +68,21 @@ updates:
   - package-ecosystem: "uv"
     directory: "/otdf-sdk-mgr"
     cooldown:
-      default-days: 7
+      default-days: 14
     schedule:
       interval: "weekly"
+    groups:
+      uv-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      uv-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
     versioning-strategy: "increase"
     commit-message:
       prefix: "fix(dependabot): "
