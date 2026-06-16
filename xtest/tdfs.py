@@ -544,6 +544,10 @@ class SDK:
         env |= local_env
         result = subprocess.run(c, env=env, capture_output=True)
         if result.returncode != 0:
+            if result.stdout:
+                logger.error("enc stdout: %s", result.stdout.decode(errors="replace"))
+            if result.stderr:
+                logger.error("enc stderr: %s", result.stderr.decode(errors="replace"))
             raise subprocess.CalledProcessError(
                 result.returncode, c, output=result.stdout, stderr=result.stderr
             )
@@ -589,6 +593,14 @@ class SDK:
         else:
             result = subprocess.run(c, env=env, capture_output=True)
             if result.returncode != 0:
+                if result.stdout:
+                    logger.error(
+                        "dec stdout: %s", result.stdout.decode(errors="replace")
+                    )
+                if result.stderr:
+                    logger.error(
+                        "dec stderr: %s", result.stderr.decode(errors="replace")
+                    )
                 raise subprocess.CalledProcessError(
                     result.returncode, c, output=result.stdout, stderr=result.stderr
                 )
