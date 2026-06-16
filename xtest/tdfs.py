@@ -542,7 +542,11 @@ class SDK:
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
-        subprocess.check_call(c, env=env)
+        result = subprocess.run(c, env=env, capture_output=True)
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(
+                result.returncode, c, output=result.stdout, stderr=result.stderr
+            )
 
     def decrypt(
         self,
@@ -583,7 +587,11 @@ class SDK:
         if expect_error:
             subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
         else:
-            subprocess.check_call(c, env=env)
+            result = subprocess.run(c, env=env, capture_output=True)
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    result.returncode, c, output=result.stdout, stderr=result.stderr
+                )
 
     def supports(self, feature: feature_type) -> bool:
         if feature in self._supports:
