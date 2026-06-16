@@ -323,9 +323,11 @@ def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) ->
 
 @pytest.fixture(autouse=True)
 def _dpop_client_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    # SDK CLI shims read CLIENTID from the environment; tests in this module
-    # must use the DPoP-bound client provisioned by `service provision keycloak`.
+    # SDK CLI shims read CLIENTID/XT_WITH_DPOP from the environment; tests in
+    # this module must use the DPoP-bound client provisioned by
+    # `service provision keycloak` and enable DPoP proof generation.
     monkeypatch.setenv("CLIENTID", "opentdf-dpop")
+    monkeypatch.setenv("XT_WITH_DPOP", "ES256")
 
 
 def test_dpop_happy_path_roundtrip(

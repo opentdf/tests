@@ -18,6 +18,10 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
+#  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  CLIENTID [string] - Override OIDC client ID (default: opentdf)
+#  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -124,8 +128,16 @@ if [ "$XTEST_DIR" = "/" ]; then
   exit 1
 fi
 
+# Capture any caller-set overrides before test.env unconditionally resets them.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
+
 # shellcheck disable=SC1091
 source "$XTEST_DIR"/test.env
+
+# Restore caller overrides (e.g. from pytest monkeypatch for DPoP client).
+[ -n "$_pre_clientid" ] && CLIENTID="$_pre_clientid"
+[ -n "$_pre_clientsecret" ] && CLIENTSECRET="$_pre_clientsecret"
 
 src_file=$(realpath "$2")
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
@@ -134,8 +146,15 @@ args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
   --oidcEndpoint "$KCFULLURL"
-  --auth opentdf:secret
+  --auth "${CLIENTID:-opentdf}:${CLIENTSECRET:-secret}"
 )
+
+if [ -n "$XT_WITH_DPOP" ]; then
+  args+=(--dpop "$XT_WITH_DPOP")
+fi
+if [ -n "$XT_WITH_DPOP_KEY" ]; then
+  args+=(--dpop-key "$XT_WITH_DPOP_KEY")
+fi
 
 args+=(--containerType tdf3)
 
