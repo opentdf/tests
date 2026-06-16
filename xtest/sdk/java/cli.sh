@@ -192,5 +192,9 @@ if [ -n "$XT_WITH_TARGET_MODE" ]; then
   args+=(--with-target-mode "$XT_WITH_TARGET_MODE")
 fi
 
+if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep -q -- '--verbose'; then
+  args+=(--verbose)
+fi
+
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" >"$3"
