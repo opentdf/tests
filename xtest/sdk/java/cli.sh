@@ -118,8 +118,8 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     dpop_nonce_challenge)
-      echo "dpop_nonce_challenge not supported"
-      exit 1
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+      exit $?
       ;;
     *)
       echo "Unknown feature: $2"
