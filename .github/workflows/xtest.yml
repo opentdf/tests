@@ -297,7 +297,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-up-with-containers@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
@@ -592,7 +592,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -604,7 +604,7 @@ jobs:
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -616,7 +616,7 @@ jobs:
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -628,7 +628,7 @@ jobs:
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -640,7 +640,7 @@ jobs:
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -653,7 +653,7 @@ jobs:
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@24d7101c094baff0c2ac31b852f929786942fded  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
         with:
           ec-tdf-enabled: true
           kas-name: km2
