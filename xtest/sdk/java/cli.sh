@@ -42,6 +42,25 @@ else
   exit 1
 fi
 
+# Cache `java -jar cmdline.jar help [...]` output to avoid paying JVM startup
+# (typically 150-500ms) for the capability probes on every encrypt/decrypt.
+# Keyed by the jar's mtime so a reinstall invalidates the cache. stderr is
+# discarded to keep JVM warnings (reflective-access, agent notices) out of logs.
+jar_help() {
+  local jar="$SCRIPT_DIR/cmdline.jar"
+  local mtime
+  mtime=$(stat -c %Y "$jar" 2>/dev/null || stat -f %m "$jar" 2>/dev/null || echo 0)
+  local key
+  key=$(printf '%s' "$*" | tr -c 'a-zA-Z0-9' '_')
+  local uid
+  uid=$(id -u 2>/dev/null || echo default)
+  local cache="${TMPDIR:-/tmp}/xtest-java-help-${uid}-${mtime}-${key}"
+  if [ ! -f "$cache" ]; then
+    java -jar "$jar" help "$@" >"$cache" 2>/dev/null
+  fi
+  cat "$cache"
+}
+
 if [ "$1" == "supports" ]; then
   case "$2" in
     autoconfigure | ns_grants)
@@ -135,7 +154,7 @@ args=(
 )
 
 # when we added support for KAS allowlist, we changed the platform endpoint format to require scheme
-if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist; then
+if jar_help decrypt | grep -q kas-allowlist; then
   args+=("--platform-endpoint=$PLATFORMURL")
 else
   args+=("--platform-endpoint=$PLATFORMENDPOINT")
@@ -197,7 +216,7 @@ if [ -n "$XT_WITH_TARGET_MODE" ]; then
   args+=(--with-target-mode "$XT_WITH_TARGET_MODE")
 fi
 
-if java -jar "$SCRIPT_DIR"/cmdline.jar help | grep -q -- '--verbose'; then
+if jar_help | grep -q -- '--verbose'; then
   args+=(--verbose)
 fi
 
