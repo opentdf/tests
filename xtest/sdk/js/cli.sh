@@ -136,8 +136,8 @@ _pre_clientsecret="${CLIENTSECRET:-}"
 source "$XTEST_DIR"/test.env
 
 # Restore caller overrides (e.g. from pytest monkeypatch for DPoP client).
-[ -n "$_pre_clientid" ] && CLIENTID="$_pre_clientid"
-[ -n "$_pre_clientsecret" ] && CLIENTSECRET="$_pre_clientsecret"
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 src_file=$(realpath "$2")
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
@@ -204,6 +204,24 @@ if ! cd "$SCRIPT_DIR"; then
   exit 1
 fi
 
+# Echo a CLI invocation with the --auth secret masked, so CI logs never capture
+# client credentials. The real (unmasked) args are still used for execution.
+echo_redacted() {
+  local out=() a mask_next=0
+  for a in "$@"; do
+    if [[ "$mask_next" == 1 ]]; then
+      out+=("${a%%:*}:***")
+      mask_next=0
+    elif [[ "$a" == "--auth" ]]; then
+      out+=("$a")
+      mask_next=1
+    else
+      out+=("$a")
+    fi
+  done
+  echo "${out[@]}"
+}
+
 if [ "$1" == "encrypt" ]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
@@ -224,7 +242,7 @@ if [ "$1" == "encrypt" ]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
-  echo npx $CTL encrypt "$src_file" "${args[@]}"
+  echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"
   npx $CTL encrypt "$src_file" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
@@ -246,7 +264,7 @@ elif [ "$1" == "decrypt" ]; then
     args+=(--ignoreAllowList)
   fi
 
-  echo npx $CTL decrypt "$src_file" "${args[@]}"
+  echo_redacted npx $CTL decrypt "$src_file" "${args[@]}"
   npx $CTL decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"

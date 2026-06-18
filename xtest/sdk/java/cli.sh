@@ -55,8 +55,12 @@ jar_help() {
   local uid
   uid=$(id -u 2>/dev/null || echo default)
   local cache="${TMPDIR:-/tmp}/xtest-java-help-${uid}-${mtime}-${key}"
-  if [ ! -f "$cache" ]; then
-    java -jar "$jar" help "$@" >"$cache" 2>/dev/null
+  if [[ ! -f "$cache" ]]; then
+    # Write to a process-unique temp file, then rename: concurrent xdist
+    # workers see either no cache or the complete file, never a partial read.
+    local tmp="${cache}.$$"
+    java -jar "$jar" help "$@" >"$tmp" 2>/dev/null
+    mv -f "$tmp" "$cache"
   fi
   cat "$cache"
 }
