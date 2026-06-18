@@ -703,6 +703,21 @@ jobs:
           path: otdftests/xtest/test-results/audit-logs/*.log
           if-no-files-found: ignore
 
+      - name: Upload server logs on failure
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: failure()
+        with:
+          name: server-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
+          path: |
+            ${{ steps.run-platform.outputs.platform-log-file }}
+            ${{ steps.kas-alpha.outputs.log-file }}
+            ${{ steps.kas-beta.outputs.log-file }}
+            ${{ steps.kas-gamma.outputs.log-file }}
+            ${{ steps.kas-delta.outputs.log-file }}
+            ${{ steps.kas-km1.outputs.log-file }}
+            ${{ steps.kas-km2.outputs.log-file }}
+          if-no-files-found: ignore
+
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
