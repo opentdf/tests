@@ -314,7 +314,7 @@ jobs:
           version: "1.56.0"
 
       - name: Set up JDK
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287
         with:
           java-version: "11"
           distribution: "adopt"
@@ -701,6 +701,21 @@ jobs:
         with:
           name: audit-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
           path: otdftests/xtest/test-results/audit-logs/*.log
+          if-no-files-found: ignore
+
+      - name: Upload server logs on failure
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: failure()
+        with:
+          name: server-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
+          path: |
+            ${{ steps.run-platform.outputs.platform-log-file }}
+            ${{ steps.kas-alpha.outputs.log-file }}
+            ${{ steps.kas-beta.outputs.log-file }}
+            ${{ steps.kas-gamma.outputs.log-file }}
+            ${{ steps.kas-delta.outputs.log-file }}
+            ${{ steps.kas-km1.outputs.log-file }}
+            ${{ steps.kas-km2.outputs.log-file }}
           if-no-files-found: ignore
 
   publish-results:
