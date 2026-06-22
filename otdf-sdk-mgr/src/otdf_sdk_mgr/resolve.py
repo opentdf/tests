@@ -91,28 +91,19 @@ def _classify_sha_match(
 
     mq_match = re.match(MERGE_QUEUE_REGEX, ref)
     if mq_match:
-        to_branch = mq_match.group("branch")
-        pr_number = mq_match.group("pr_number")
-        if to_branch and pr_number:
-            return {
-                "sdk": sdk,
-                "alias": version,
-                "head": True,
-                "pr": pr_number,
-                "sha": sha,
-                "tag": f"mq-{to_branch}-{pr_number}",
-            }
-        suffix = ref.split("refs/heads/gh-readonly-queue/")[-1]
+        # Both named groups are required by MERGE_QUEUE_REGEX, so a match
+        # guarantees they are non-empty.
         return {
             "sdk": sdk,
             "alias": version,
             "head": True,
+            "pr": mq_match.group("pr_number"),
             "sha": sha,
-            "tag": "mq--" + suffix.replace("/", "--"),
+            "tag": f"mq-{mq_match.group('branch')}-{mq_match.group('pr_number')}",
         }
 
     if ref.startswith("refs/heads/"):
-        branch = ref.split("refs/heads/")[-1]
+        branch = ref.removeprefix("refs/heads/")
         return {
             "sdk": sdk,
             "alias": version,
@@ -121,11 +112,9 @@ def _classify_sha_match(
             "tag": branch.replace("/", "--"),
         }
 
-    tag = ref
-    if tag.startswith("refs/tags/"):
-        tag = tag.split("refs/tags/")[-1]
+    tag = ref.removeprefix("refs/tags/")
     if infix:
-        tag = tag.split(f"{infix}/")[-1]
+        tag = tag.removeprefix(f"{infix}/")
     return {
         "sdk": sdk,
         "alias": version,
