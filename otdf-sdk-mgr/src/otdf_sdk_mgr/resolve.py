@@ -119,7 +119,9 @@ def _classify_sha_match(
         "sdk": sdk,
         "alias": version,
         "sha": sha,
-        "tag": tag,
+        # Flatten any slashes left in a namespaced tag (no-op for plain semver)
+        # so it can't reintroduce a nested dist/<tag>/ path.
+        "tag": tag.replace("/", "--"),
     }
 
 
