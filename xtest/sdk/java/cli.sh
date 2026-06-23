@@ -102,7 +102,7 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }'
       exit $?
       ;;
-    mechanism-mechanism-secpmlkem)
+    mechanism-secpmlkem)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i secp256r1-mlkem768
       exit $?
