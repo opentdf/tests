@@ -40,6 +40,7 @@ def _algs_from_km1_log() -> set[str]:
     """
     log = _km1_log_path()
     if not log or not log.exists():
+        logger.debug("km1 log not found (path=%s); no algs from log", log)
         return set()
     algs: set[str] = set()
     try:
@@ -59,7 +60,7 @@ def _algs_from_km1_log() -> set[str]:
                         if alg := k.get("alg"):
                             algs.add(alg)
     except Exception:
-        pass
+        logger.debug("failed reading km1 log %s", log, exc_info=True)
     return algs
 
 
@@ -94,7 +95,8 @@ def _kas_supports_algorithm(algorithm: str) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status == 200
-    except Exception:
+    except Exception as e:
+        logger.debug("KAS algorithm probe for %s at %s failed: %s", algorithm, url, e)
         return False
 
 

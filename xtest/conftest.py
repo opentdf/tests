@@ -27,6 +27,22 @@ from otdfctl import OpentdfCommandLineTool
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
+
+def pytest_report_header() -> list[str]:
+    """Surface PlatformFeatureSet detection in the always-visible session header.
+
+    Feature detection drives skips (e.g. mechanism-xwing gates the PQ/T tests),
+    and pytest does not show captured output for skipped tests. Echoing the
+    detected version and feature set into the report header makes it visible in
+    CI even when every gated test skips.
+    """
+    pfs = tdfs.get_platform_features()
+    return [
+        f"platform version: {pfs.version} (semver={pfs.semver})",
+        f"detected features: {', '.join(sorted(pfs.features))}",
+    ]
+
+
 # Load all fixture modules
 pytest_plugins = [
     "fixtures.kas",

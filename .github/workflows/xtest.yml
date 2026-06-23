@@ -524,6 +524,7 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Validate otdf-local integration tests
         if: ${{ !inputs }}
@@ -543,6 +544,7 @@ jobs:
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
@@ -554,6 +556,7 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
@@ -565,6 +568,7 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
@@ -674,6 +678,7 @@ jobs:
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
           KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
           KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
