@@ -117,12 +117,12 @@ jobs:
           sparse-checkout: |
             xtest/sdk
             otdf-sdk-mgr
-      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - id: version-info
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
         with:
           script: |
             function htmlEscape(str) {
@@ -361,7 +361,7 @@ jobs:
 
       - name: Cache npm
         if: fromJson(steps.configure-js.outputs.heads)[0] != null
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
@@ -389,7 +389,7 @@ jobs:
 
       - name: Cache Go modules
         if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: |
             ~/.cache/go-build
@@ -424,7 +424,7 @@ jobs:
 
       - name: Cache Maven repository
         if: fromJson(steps.configure-java.outputs.heads)[0] != null
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
@@ -709,7 +709,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload server logs on failure
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: server-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ matrix.platform-tag }}
@@ -731,7 +731,7 @@ jobs:
       pull-requests: write # Add comments to PRs
     steps:
       - id: comment-artifact-list
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea #v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
         env:
           XCT_RESULT: ${{ needs.xct.result }}
         with:
