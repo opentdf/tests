@@ -159,6 +159,29 @@ class TestResolveSHA:
         assert result.get("head") is True
         assert result["tag"] == "feature--my-branch"
 
+    def test_single_match_merge_queue(self):
+        # A merge-queue commit is usually pointed at by exactly one ref (the
+        # gh-readonly-queue branch). It must still flatten to an mq tag and be
+        # flagged as a head so the caller builds it from source.
+        mq_ref = f"refs/heads/gh-readonly-queue/main/pr-3630-{SHA40}"
+        ls = make_ls_remote((SHA40, mq_ref))
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "mq-main-3630"
+        assert result.get("pr") == "3630"
+        assert result.get("head") is True
+
+    def test_single_match_branch_flagged_head(self):
+        # A SHA that points at a single branch ref must flatten slashes and be
+        # flagged as a head (it has no released artifact to install).
+        ls = make_ls_remote((SHA40, "refs/heads/feature/my-branch"))
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result.get("head") is True
+        assert result["tag"] == "feature--my-branch"
+
 
 # ---------------------------------------------------------------------------
 # resolve() — refs/pull/NNN
