@@ -26,9 +26,22 @@ logging.getLogger().setLevel(logging.DEBUG)
 def _km1_log_path() -> Path | None:
     """Return km1's log file path from env or auto-discovery, or None if absent."""
     if p := os.getenv("KAS_KM1_LOG_FILE"):
-        return Path(p)
+        resolved = Path(p)
+        logger.debug(
+            "pqc-detect: KAS_KM1_LOG_FILE=%r -> %s (cwd=%s, exists=%s)",
+            p,
+            resolved.resolve(),
+            Path.cwd(),
+            resolved.exists(),
+        )
+        return resolved
     platform_dir = os.getenv("PLATFORM_DIR", "../../platform")
     candidate = Path(platform_dir) / "logs" / "kas-km1.log"
+    logger.debug(
+        "pqc-detect: KAS_KM1_LOG_FILE unset; auto-discovery candidate=%s (exists=%s)",
+        candidate.resolve(),
+        candidate.exists(),
+    )
     return candidate if candidate.exists() else None
 
 
@@ -40,26 +53,50 @@ def _algs_from_km1_log() -> set[str]:
     """
     log = _km1_log_path()
     if not log or not log.exists():
+        logger.debug(
+            "pqc-detect: km1 log unavailable (path=%s); algs from log = {}",
+            log,
+        )
         return set()
     algs: set[str] = set()
+    lines_read = 0
+    json_lines = 0
     try:
         with log.open() as f:
             for line in f:
+                lines_read += 1
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                json_lines += 1
                 if (
                     entry.get("msg") == "kas trust mechanisms initialized"
                     and "mechanisms" in entry
                 ):
-                    return set(entry["mechanisms"])
+                    mechs = set(entry["mechanisms"])
+                    logger.debug(
+                        "pqc-detect: matched 'kas trust mechanisms initialized' "
+                        "after %d lines (%d json); mechanisms=%s",
+                        lines_read,
+                        json_lines,
+                        sorted(mechs),
+                    )
+                    return mechs
                 if entry.get("msg") == "kas config loaded" and "config" in entry:
                     for k in entry["config"].get("keyring", []):
                         if alg := k.get("alg"):
                             algs.add(alg)
     except Exception:
-        pass
+        logger.exception("pqc-detect: failed reading km1 log %s", log)
+    logger.debug(
+        "pqc-detect: no 'kas trust mechanisms initialized' line found in %s "
+        "(read %d lines, %d json); falling back to keyring algs=%s",
+        log,
+        lines_read,
+        json_lines,
+        sorted(algs),
+    )
     return algs
 
 
@@ -93,8 +130,16 @@ def _kas_supports_algorithm(algorithm: str) -> bool:
     )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.status == 200
-    except Exception:
+            ok = resp.status == 200
+            logger.debug(
+                "pqc-detect: HTTP probe %s for %s -> status=%s",
+                url,
+                algorithm,
+                resp.status,
+            )
+            return ok
+    except Exception as e:
+        logger.debug("pqc-detect: HTTP probe %s for %s failed: %s", url, algorithm, e)
         return False
 
 
@@ -230,18 +275,37 @@ class PlatformFeatureSet(BaseModel):
         # Only attempt on platforms new enough to plausibly have PQ support.
         if self.semver is None or self.semver >= (0, 13, 0):
             algs = _algs_from_km1_log()
+            source = "km1-log"
             if not algs:
+                source = "http-probe"
                 algs = {
                     a
                     for a in ("hpqt:xwing", "hpqt:secp256r1-mlkem768", "mlkem:768")
                     if _kas_supports_algorithm(a)
                 }
+            added: set[str] = set()
             if "hpqt:xwing" in algs:
                 self.features.add("mechanism-xwing")
+                added.add("mechanism-xwing")
             if any(a.startswith("hpqt:secp") for a in algs):
                 self.features.add("mechanism-secpmlkem")
+                added.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+                added.add("mechanism-mlkem")
+            logger.debug(
+                "pqc-detect: semver=%s gate=open source=%s algs=%s -> added %s",
+                self.semver,
+                source,
+                sorted(algs),
+                sorted(added) or "<none>",
+            )
+        else:
+            logger.debug(
+                "pqc-detect: semver=%s < (0, 13, 0); skipping PQ/T mechanism "
+                "detection entirely (mechanism-xwing/secpmlkem/mlkem will be absent)",
+                self.semver,
+            )
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
