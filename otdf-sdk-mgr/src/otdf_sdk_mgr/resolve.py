@@ -54,12 +54,24 @@ SHA_REGEX = r"^[a-f0-9]{7,64}$"
 
 
 def _ref_specificity(ref: str) -> int:
-    """Sort key for refs that share a SHA: PR head, then merge-queue, then rest."""
+    """Sort key for refs that share a SHA, lowest wins.
+
+    PR head, then merge-queue, then a branch, then a tag, then anything else
+    (e.g. the symbolic ``HEAD`` that ``ls-remote`` lists alongside the branch
+    it points at — never a useful dist tag on its own). A branch is preferred
+    over a tag because the SHA path resolves a commit-under-test: the branch
+    case flags it as a ``head`` so it is built from source, whereas a tag that
+    happens to point at the same commit would not be.
+    """
     if ref.startswith("refs/pull/"):
         return 0
     if re.match(MERGE_QUEUE_REGEX, ref):
         return 1
-    return 2
+    if ref.startswith("refs/heads/"):
+        return 2
+    if ref.startswith("refs/tags/"):
+        return 3
+    return 4
 
 
 def _classify_sha_match(
