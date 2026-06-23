@@ -62,9 +62,16 @@ def _get_or_create_key(
                 wrapping_key=root_key,
                 wrapping_key_id="root",
             )
-        except InvalidAlgorithm:
+        except InvalidAlgorithm as e:
             if required_features:
-                pytest.skip(f"Algorithm {algorithm} not supported by platform")
+                # Surface the underlying platform/otdfctl error so we can tell a
+                # client-side mapping rejection ("invalid algorithm" from
+                # otdfctl sdkHelpers) apart from a server-side protovalidate
+                # rejection ("key_algorithm_defined" CEL on the policy service).
+                pytest.skip(
+                    f"Algorithm {algorithm} not supported by platform "
+                    f"(features={required_features!r}): {e}"
+                )
             raise
     return key
 
