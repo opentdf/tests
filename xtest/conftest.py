@@ -31,35 +31,16 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 def pytest_report_header() -> list[str]:
     """Surface PlatformFeatureSet detection in the always-visible session header.
 
-    PQ/T mechanism detection (mechanism-xwing, mechanism-secpmlkem, ...) reads
-    km1's startup log and falls back to an HTTP probe. When a mechanism is
-    undetected the corresponding tests *skip*, and pytest does not show captured
-    log output for skipped tests -- so the per-step `pqc-detect:` DEBUG lines
-    would otherwise be invisible in CI. Forcing detection here and echoing the
-    captured `xtest` logs into the report header makes them always visible.
+    Feature detection drives skips (e.g. mechanism-xwing gates the PQ/T tests),
+    and pytest does not show captured output for skipped tests. Echoing the
+    detected version and feature set into the report header makes it visible in
+    CI even when every gated test skips.
     """
-    records: list[str] = []
-
-    class _Collector(logging.Handler):
-        def emit(self, record: logging.LogRecord) -> None:
-            records.append(self.format(record))
-
-    handler = _Collector()
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-    xlog = logging.getLogger("xtest")
-    xlog.addHandler(handler)
-    try:
-        pfs = tdfs.get_platform_features()
-    finally:
-        xlog.removeHandler(handler)
-
-    lines = [
+    pfs = tdfs.get_platform_features()
+    return [
         f"platform version: {pfs.version} (semver={pfs.semver})",
         f"detected features: {', '.join(sorted(pfs.features))}",
     ]
-    lines += [f"  {r}" for r in records if "pqc-detect:" in r]
-    return lines
 
 
 # Load all fixture modules
