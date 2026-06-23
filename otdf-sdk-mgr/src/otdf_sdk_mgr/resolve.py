@@ -53,6 +53,90 @@ MERGE_QUEUE_REGEX = (
 SHA_REGEX = r"^[a-f0-9]{7,64}$"
 
 
+def _ref_specificity(ref: str) -> int:
+    """Sort key for refs that share a SHA, lowest wins.
+
+    PR head, then merge-queue, then a branch, then a tag, then anything else
+    (e.g. the symbolic ``HEAD`` that ``ls-remote`` lists alongside the branch
+    it points at — never a useful dist tag on its own). A branch is preferred
+    over a tag because the SHA path resolves a commit-under-test: the branch
+    case flags it as a ``head`` so it is built from source, whereas a tag that
+    happens to point at the same commit would not be.
+    """
+    if ref.startswith("refs/pull/"):
+        return 0
+    if re.match(MERGE_QUEUE_REGEX, ref):
+        return 1
+    if ref.startswith("refs/heads/"):
+        return 2
+    if ref.startswith("refs/tags/"):
+        return 3
+    return 4
+
+
+def _classify_sha_match(
+    sdk: str,
+    version: str,
+    sha: str,
+    ref: str,
+    infix: str | None,
+) -> ResolveSuccess:
+    """Turn a single (sha, ref) pair matched by a SHA lookup into a result.
+
+    Normalizes the ref into a filesystem-safe ``tag`` (slashes flattened to
+    ``--``) and flags branch-like refs (PR heads, merge-queue refs, branches)
+    as ``head`` so callers know to build from source rather than fetch a
+    released artifact. Shared by both single- and multi-match SHA lookups so a
+    merge-queue commit pointed at by only one ref is handled the same as one
+    pointed at by several.
+    """
+    if ref.startswith("refs/pull/"):
+        pr_number = ref.split("/")[2]
+        return {
+            "sdk": sdk,
+            "alias": version,
+            "head": True,
+            "pr": pr_number,
+            "sha": sha,
+            "tag": f"pull-{pr_number}",
+        }
+
+    mq_match = re.match(MERGE_QUEUE_REGEX, ref)
+    if mq_match:
+        # Both named groups are required by MERGE_QUEUE_REGEX, so a match
+        # guarantees they are non-empty.
+        return {
+            "sdk": sdk,
+            "alias": version,
+            "head": True,
+            "pr": mq_match.group("pr_number"),
+            "sha": sha,
+            "tag": f"mq-{mq_match.group('branch')}-{mq_match.group('pr_number')}",
+        }
+
+    if ref.startswith("refs/heads/"):
+        branch = ref.removeprefix("refs/heads/")
+        return {
+            "sdk": sdk,
+            "alias": version,
+            "head": True,
+            "sha": sha,
+            "tag": branch.replace("/", "--"),
+        }
+
+    tag = ref.removeprefix("refs/tags/")
+    if infix:
+        tag = tag.removeprefix(f"{infix}/")
+    return {
+        "sdk": sdk,
+        "alias": version,
+        "sha": sha,
+        # Flatten any slashes left in a namespaced tag (no-op for plain semver)
+        # so it can't reintroduce a nested dist/<tag>/ path.
+        "tag": tag.replace("/", "--"),
+    }
+
+
 def _try_resolve_js_npm(
     sdk: str,
     version: str,
@@ -170,72 +254,12 @@ def _resolve_against(
                     "sha": version,
                     "tag": version,
                 }
-            if len(matching_tags) > 1:
-                for sha, tag in matching_tags:
-                    if tag.startswith("refs/pull/"):
-                        pr_number = tag.split("/")[2]
-                        return {
-                            "sdk": sdk,
-                            "alias": version,
-                            "head": True,
-                            "sha": sha,
-                            "tag": f"pull-{pr_number}",
-                        }
-                for sha, tag in matching_tags:
-                    mq_match = re.match(MERGE_QUEUE_REGEX, tag)
-                    if mq_match:
-                        to_branch = mq_match.group("branch")
-                        pr_number = mq_match.group("pr_number")
-                        if to_branch and pr_number:
-                            return {
-                                "sdk": sdk,
-                                "alias": version,
-                                "head": True,
-                                "pr": pr_number,
-                                "sha": sha,
-                                "tag": f"mq-{to_branch}-{pr_number}",
-                            }
-                        suffix = tag.split("refs/heads/gh-readonly-queue/")[-1]
-                        flattag = "mq--" + suffix.replace("/", "--")
-                        return {
-                            "sdk": sdk,
-                            "alias": version,
-                            "head": True,
-                            "sha": sha,
-                            "tag": flattag,
-                        }
-                    head = False
-                    if tag.startswith("refs/heads/"):
-                        head = True
-                        tag = tag.split("refs/heads/")[-1]
-                    flattag = tag.replace("/", "--")
-                    return {
-                        "sdk": sdk,
-                        "alias": version,
-                        "head": head,
-                        "sha": sha,
-                        "tag": flattag,
-                    }
-
-                return {
-                    "sdk": sdk,
-                    "alias": version,
-                    "err": (
-                        f"SHA {version} points to multiple tags, unable to differentiate: "
-                        f"{', '.join(tag for _, tag in matching_tags)}"
-                    ),
-                }
-            (sha, tag) = matching_tags[0]
-            if tag.startswith("refs/tags/"):
-                tag = tag.split("refs/tags/")[-1]
-            if infix:
-                tag = tag.split(f"{infix}/")[-1]
-            return {
-                "sdk": sdk,
-                "alias": version,
-                "sha": sha,
-                "tag": tag,
-            }
+            # A SHA can be pointed at by several refs at once — e.g. a merge-queue
+            # commit that is both a branch tip and a `gh-readonly-queue` ref.
+            # Prefer the most specific (PR > merge-queue > branch/tag) so the dist
+            # tag is meaningful and source-built refs get flagged as heads.
+            sha, ref = min(matching_tags, key=lambda st: _ref_specificity(st[1]))
+            return _classify_sha_match(sdk, version, sha, ref, infix)
 
         if version.startswith("refs/pull/"):
             merge_heads = [

@@ -159,6 +159,57 @@ class TestResolveSHA:
         assert result.get("head") is True
         assert result["tag"] == "feature--my-branch"
 
+    def test_single_match_merge_queue(self):
+        # A merge-queue commit is usually pointed at by exactly one ref (the
+        # gh-readonly-queue branch). It must still flatten to an mq tag and be
+        # flagged as a head so the caller builds it from source.
+        mq_ref = f"refs/heads/gh-readonly-queue/main/pr-3630-{SHA40}"
+        ls = make_ls_remote((SHA40, mq_ref))
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "mq-main-3630"
+        assert result.get("pr") == "3630"
+        assert result.get("head") is True
+
+    def test_single_match_branch_flagged_head(self):
+        # A SHA that points at a single branch ref must flatten slashes and be
+        # flagged as a head (it has no released artifact to install).
+        ls = make_ls_remote((SHA40, "refs/heads/feature/my-branch"))
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result.get("head") is True
+        assert result["tag"] == "feature--my-branch"
+
+    def test_head_and_branch_prefers_branch(self):
+        # On a push to main the tip SHA is listed by ls-remote as both the
+        # symbolic HEAD and refs/heads/main. Prefer the branch so the dist tag
+        # is "main" (built as a head), not the useless "HEAD".
+        ls = make_ls_remote(
+            (SHA40, "HEAD"),
+            (SHA40, "refs/heads/main"),
+        )
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "main"
+        assert result.get("head") is True
+
+    def test_branch_preferred_over_tag(self):
+        # A commit-under-test that is both a branch tip and a release tag must
+        # resolve to the branch so it gets head=True (and a source build),
+        # rather than a tag that would not be built.
+        ls = make_ls_remote(
+            (SHA40, "refs/tags/otdfctl/v0.33.0"),
+            (SHA40, "refs/heads/main"),
+        )
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "main"
+        assert result.get("head") is True
+
 
 # ---------------------------------------------------------------------------
 # resolve() — refs/pull/NNN
