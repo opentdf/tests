@@ -182,6 +182,34 @@ class TestResolveSHA:
         assert result.get("head") is True
         assert result["tag"] == "feature--my-branch"
 
+    def test_head_and_branch_prefers_branch(self):
+        # On a push to main the tip SHA is listed by ls-remote as both the
+        # symbolic HEAD and refs/heads/main. Prefer the branch so the dist tag
+        # is "main" (built as a head), not the useless "HEAD".
+        ls = make_ls_remote(
+            (SHA40, "HEAD"),
+            (SHA40, "refs/heads/main"),
+        )
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "main"
+        assert result.get("head") is True
+
+    def test_branch_preferred_over_tag(self):
+        # A commit-under-test that is both a branch tip and a release tag must
+        # resolve to the branch so it gets head=True (and a source build),
+        # rather than a tag that would not be built.
+        ls = make_ls_remote(
+            (SHA40, "refs/tags/otdfctl/v0.33.0"),
+            (SHA40, "refs/heads/main"),
+        )
+        with patch_git(ls):
+            result = resolve("go", SHA40, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "main"
+        assert result.get("head") is True
+
 
 # ---------------------------------------------------------------------------
 # resolve() — refs/pull/NNN
