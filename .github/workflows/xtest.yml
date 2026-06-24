@@ -687,7 +687,6 @@ jobs:
           KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
           KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
-          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
       - name: Sanitize sdk-version for artifact name
         id: artifact-name
