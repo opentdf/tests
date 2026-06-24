@@ -592,7 +592,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -600,11 +600,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -612,11 +613,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -624,11 +626,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -636,11 +639,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -649,11 +653,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@70cb173a4858f80ac9e8ac9b4949ceac6ac72b4b  # dpop-nonce-challenge
+        uses: opentdf/platform/test/start-additional-kas@2305c4ab986b49774b5b4f50f19dce6e30c8bec4  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: km2
@@ -662,6 +667,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
