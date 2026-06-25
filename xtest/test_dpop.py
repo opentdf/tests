@@ -305,6 +305,37 @@ def _post_rewrap(
     )
 
 
+def _post_rewrap_with_nonce_retry(
+    call: RewrapCall,
+    key: DPoPKey,
+    *,
+    access_token: str,
+    auth_scheme: str = "DPoP",
+) -> requests.Response:
+    """POST a rewrap, transparently satisfying a `require_nonce` challenge.
+
+    Mints a fresh DPoP proof (no nonce) and sends it. If the KAS replies with a
+    `401` carrying a `DPoP-Nonce` header (the `use_dpop_nonce` challenge), the
+    proof is re-minted with that nonce and the request is retried once, keeping
+    the same `auth_scheme`. This makes callers agnostic to whether
+    `require_nonce` is enabled on the target KAS: with it off the first request
+    is returned as-is; with it on the second (nonce-bearing) request is.
+    """
+    proof = key.sign_dpop_proof(htm="POST", htu=call.url, access_token=access_token)
+    response = _post_rewrap(
+        call, access_token=access_token, dpop_proof=proof, auth_scheme=auth_scheme
+    )
+    nonce = response.headers.get("DPoP-Nonce")
+    if response.status_code == 401 and nonce:
+        proof = key.sign_dpop_proof(
+            htm="POST", htu=call.url, access_token=access_token, nonce=nonce
+        )
+        response = _post_rewrap(
+            call, access_token=access_token, dpop_proof=proof, auth_scheme=auth_scheme
+        )
+    return response
+
+
 def _assert_unauthorized(response: requests.Response) -> None:
     assert response.status_code == 401, response.text
     # Confirm the rejection is actually a DPoP-related challenge so a 401
@@ -428,16 +459,14 @@ def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(
     dpop_access = _get_dpop_access_token()
     rewrap_call = _signed_rewrap_request(ct_file, dpop_access.key)
 
-    bearer_proof = dpop_access.key.sign_dpop_proof(
-        htm="POST",
-        htu=rewrap_call.url,
-        access_token=dpop_access.token,
-    )
+    # Both calls go through the nonce-retry helper so the test passes whether or
+    # not the target KAS has `require_nonce` enabled: when it is, the lenient
+    # accept (and the WARN) only happen after the nonce challenge is satisfied.
     mark = audit_logs.mark("before_bearer_scheme_request")
-    bearer_response = _post_rewrap(
+    bearer_response = _post_rewrap_with_nonce_retry(
         rewrap_call,
+        dpop_access.key,
         access_token=dpop_access.token,
-        dpop_proof=bearer_proof,
         auth_scheme="Bearer",
     )
 
@@ -449,16 +478,10 @@ def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(
     )
 
     # Compliant path control: same proof key, same token, just the right scheme.
-    # Distinct jti via fresh proof so the server's replay cache doesn't reject it.
-    dpop_proof = dpop_access.key.sign_dpop_proof(
-        htm="POST",
-        htu=rewrap_call.url,
-        access_token=dpop_access.token,
-    )
-    dpop_response = _post_rewrap(
+    dpop_response = _post_rewrap_with_nonce_retry(
         rewrap_call,
+        dpop_access.key,
         access_token=dpop_access.token,
-        dpop_proof=dpop_proof,
         auth_scheme="DPoP",
     )
     assert dpop_response.status_code == 200, dpop_response.text
