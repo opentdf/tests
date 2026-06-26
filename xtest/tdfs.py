@@ -700,6 +700,42 @@ def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatur
     return False
 
 
+def _otdfctl_semver() -> tuple[int, int, int] | None:
+    """Parse otdfctl version from OTDFCTL_HEADS; None if unresolvable (main, dev, etc.)."""
+    oh = os.environ.get("OTDFCTL_HEADS", "[]")
+    try:
+        heads = json.loads(oh)
+    except json.JSONDecodeError:
+        return None
+    if not heads:
+        return None
+    m = _version_re.match(str(heads[0]).lstrip("v"))
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def skip_pqc_hybrid_format_skew() -> None:
+    """Skip if otdfctl predates the lib/ocrypto v0.13.0 hybrid-KEM format change.
+
+    otdfctl ≤ 0.33.0 produces non-conformant X-Wing / secp+ML-KEM key material.
+    When the platform has hybrid PQC support enabled (new-format KAS), the mismatch
+    causes opaque crypto failures; skip early with a clear message instead.
+    """
+    pfs = get_platform_features()
+    if (
+        "mechanism-xwing" not in pfs.features
+        and "mechanism-secpmlkem" not in pfs.features
+    ):
+        return
+    otdfctl_ver = _otdfctl_semver()
+    if otdfctl_ver is not None and otdfctl_ver <= (0, 33, 0):
+        pytest.skip(
+            f"otdfctl v{'.'.join(map(str, otdfctl_ver))} predates lib/ocrypto v0.13.0; "
+            "hybrid key material format is incompatible with this platform"
+        )
+
+
 def select_target_version(
     encrypt_sdk: SDK, decrypt_sdk: SDK
 ) -> container_version | None:
