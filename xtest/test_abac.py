@@ -11,9 +11,7 @@ from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 from test_policytypes import skip_rts_as_needed
 
-rewrap_403_pattern = (
-    "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
-)
+rewrap_403_pattern = tdfs.PERMISSION_DENIED_RE.pattern
 
 
 dspx1153Fails = []

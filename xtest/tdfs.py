@@ -380,6 +380,18 @@ _partial_version_re = re.compile(
     r"^(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-([0-9a-zA-Z.-]*))?(?:\+([0-9a-zA-Z.-]*))?$"
 )
 
+# SDK-agnostic matcher for KAS 403 / policy-denial errors from any supported SDK.
+# Intentionally broad and case-insensitive so SDK message tweaks don't break xtest.
+# Current SDK phrasings covered:
+#   go:    "tdf: rewrap request 403"
+#   js:    "403 for [http://...]; rewrap permission denied: forbidden"
+#   gRPC:  "PermissionDenied" / "permission denied" / "permission_denied"
+#   multi-KAS aggregate: "unable to reconstruct split key"
+PERMISSION_DENIED_RE = re.compile(
+    r"403|forbidden|permission.?denied|unable to reconstruct split key",
+    re.IGNORECASE,
+)
+
 
 def manifest(tdf_file: Path) -> Manifest:
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
