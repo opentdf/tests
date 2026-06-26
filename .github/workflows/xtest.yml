@@ -297,13 +297,14 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-up-with-containers@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          dpop-challenge-enabled: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -591,7 +592,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -599,11 +600,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -611,11 +613,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -623,11 +626,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -635,11 +639,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -648,11 +653,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@8ccc608d2947f7f868d63e3741d3e78dc0ee88ce  # DSPX-3397-platform-go-sdk: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: km2
@@ -661,6 +667,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: true
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}

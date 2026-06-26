@@ -18,6 +18,10 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
+#  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  CLIENTID [string] - Override OIDC client ID (default: opentdf)
+#  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -124,8 +128,16 @@ if [ "$XTEST_DIR" = "/" ]; then
   exit 1
 fi
 
+# Capture any caller-set overrides before test.env unconditionally resets them.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
+
 # shellcheck disable=SC1091
 source "$XTEST_DIR"/test.env
+
+# Restore caller overrides (e.g. from pytest monkeypatch for DPoP client).
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 src_file=$(realpath "$2")
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
@@ -134,8 +146,15 @@ args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
   --oidcEndpoint "$KCFULLURL"
-  --auth opentdf:secret
+  --auth "${CLIENTID:-opentdf}:${CLIENTSECRET:-secret}"
 )
+
+if [ -n "$XT_WITH_DPOP" ]; then
+  args+=(--dpop "$XT_WITH_DPOP")
+fi
+if [ -n "$XT_WITH_DPOP_KEY" ]; then
+  args+=(--dpop-key "$XT_WITH_DPOP_KEY")
+fi
 
 args+=(--containerType tdf3)
 
@@ -185,6 +204,24 @@ if ! cd "$SCRIPT_DIR"; then
   exit 1
 fi
 
+# Echo a CLI invocation with the --auth secret masked, so CI logs never capture
+# client credentials. The real (unmasked) args are still used for execution.
+echo_redacted() {
+  local out=() a mask_next=0
+  for a in "$@"; do
+    if [[ "$mask_next" == 1 ]]; then
+      out+=("${a%%:*}:***")
+      mask_next=0
+    elif [[ "$a" == "--auth" ]]; then
+      out+=("$a")
+      mask_next=1
+    else
+      out+=("$a")
+    fi
+  done
+  echo "${out[@]}"
+}
+
 if [ "$1" == "encrypt" ]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
@@ -205,7 +242,7 @@ if [ "$1" == "encrypt" ]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
-  echo npx $CTL encrypt "$src_file" "${args[@]}"
+  echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"
   npx $CTL encrypt "$src_file" "${args[@]}"
 elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
@@ -227,7 +264,7 @@ elif [ "$1" == "decrypt" ]; then
     args+=(--ignoreAllowList)
   fi
 
-  echo npx $CTL decrypt "$src_file" "${args[@]}"
+  echo_redacted npx $CTL decrypt "$src_file" "${args[@]}"
   npx $CTL decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"
