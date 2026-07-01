@@ -30,7 +30,7 @@ if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
   CTL=@opentdf/cli
 fi
 
-if [ "$1" == "supports" ]; then
+if [[ "$1" == "supports" ]]; then
   if ! cd "$SCRIPT_DIR"; then
     echo "failed: [cd $SCRIPT_DIR]"
     exit 1
@@ -116,14 +116,14 @@ if [ "$1" == "supports" ]; then
 fi
 
 XTEST_DIR=$SCRIPT_DIR
-while [ "$XTEST_DIR" != "/" ]; do
-  if [ -f "$XTEST_DIR/pyproject.toml" ] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
+while [[ "$XTEST_DIR" != "/" ]]; do
+  if [[ -f "$XTEST_DIR/pyproject.toml" ]] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
     break
   fi
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
 
-if [ "$XTEST_DIR" = "/" ]; then
+if [[ "$XTEST_DIR" = "/" ]]; then
   echo "xtest root (pyproject.toml with name = \"xtest\") not found."
   exit 1
 fi
@@ -149,18 +149,18 @@ args=(
   --auth "${CLIENTID:-opentdf}:${CLIENTSECRET:-secret}"
 )
 
-if [ -n "$XT_WITH_DPOP" ]; then
+if [[ -n "$XT_WITH_DPOP" ]]; then
   args+=(--dpop "$XT_WITH_DPOP")
 fi
-if [ -n "$XT_WITH_DPOP_KEY" ]; then
+if [[ -n "$XT_WITH_DPOP_KEY" ]]; then
   args+=(--dpop-key "$XT_WITH_DPOP_KEY")
 fi
 
 args+=(--containerType tdf3)
 
-if [ -n "$XT_WITH_ATTRIBUTES" ]; then
+if [[ -n "$XT_WITH_ATTRIBUTES" ]]; then
   attributes="$XT_WITH_ATTRIBUTES"
-  if [ -f "$attributes" ]; then
+  if [[ -f "$attributes" ]]; then
     attributes=$(realpath "$attributes")
     echo "Attributes are a file: $attributes"
     args+=(--attributes "$attributes")
@@ -171,13 +171,13 @@ if [ -n "$XT_WITH_ATTRIBUTES" ]; then
   fi
 fi
 
-if [ -n "$XT_WITH_ASSERTIONS" ]; then
+if [[ -n "$XT_WITH_ASSERTIONS" ]]; then
   assertions="$XT_WITH_ASSERTIONS"
-  if [ -f "$assertions" ]; then
+  if [[ -f "$assertions" ]]; then
     assertions=$(realpath "$assertions")
     echo "Assertions are a file: $assertions"
     args+=(--assertions "$assertions")
-  elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+  elif [[ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]]; then
     # Assertions are plain json
     echo "Assertions are plain json: $assertions"
     args+=(--assertions "$assertions")
@@ -187,9 +187,9 @@ if [ -n "$XT_WITH_ASSERTIONS" ]; then
   fi
 fi
 
-if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
+if [[ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]]; then
   verification_keys="$XT_WITH_ASSERTION_VERIFICATION_KEYS"
-  if [ -f "$verification_keys" ]; then
+  if [[ -f "$verification_keys" ]]; then
     verification_keys=$(realpath "$verification_keys")
     echo "Verification keys are a file: $verification_keys"
     args+=(--assertionVerificationKeys "$verification_keys")
@@ -222,39 +222,39 @@ echo_redacted() {
   echo "${out[@]}"
 }
 
-if [ "$1" == "encrypt" ]; then
+if [[ "$1" == "encrypt" ]]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-  if [ -n "$XT_WITH_ECDSA_BINDING" ]; then
-    if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
+  if [[ -n "$XT_WITH_ECDSA_BINDING" ]]; then
+    if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
       args+=(--policyBinding ecdsa)
     fi
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
+  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
     args+=(--encapKeyType "ec:secp256r1")
   fi
 
-  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+  if [[ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]]; then
     args+=(--policyType plaintext)
   fi
-  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+  if [[ -n "$XT_WITH_TARGET_MODE" ]]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
   echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"
   npx $CTL encrypt "$src_file" "${args[@]}"
-elif [ "$1" == "decrypt" ]; then
-  if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
+elif [[ "$1" == "decrypt" ]]; then
+  if [[ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]]; then
     args+=(--noVerifyAssertions)
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
+  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
     args+=(--rewrapKeyType "ec:secp256r1")
   fi
-  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+  if [[ -n "$XT_WITH_KAS_ALLOW_LIST" ]]; then
     args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")
   fi
-  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+  if [[ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]]; then
     args+=(--ignoreAllowList)
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
