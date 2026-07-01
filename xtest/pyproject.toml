@@ -36,7 +36,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic_core>=2.41.5",
     "Pygments>=2.19.2",
-    "pytest>=9.0.3",
+    "pytest>=9.1.0",
     "pytest-html>=4.2.0",
     "pytest-xdist>=3.6.1",
     "pytest-metadata>=3.1.1",
@@ -51,7 +51,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pyright>=1.1.410",
-    "ruff>=0.15.16",
+    "ruff>=0.15.17",
 ]
 
 # Note: This is a test suite, not a distributable package.
