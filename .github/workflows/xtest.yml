@@ -313,7 +313,7 @@ jobs:
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -609,7 +609,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-beta
@@ -622,7 +622,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-gamma
@@ -635,7 +635,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-delta
@@ -648,7 +648,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional KM kas (km1)
         id: kas-km1
@@ -662,7 +662,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional KM kas (km2)
         id: kas-km2
@@ -676,7 +676,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
-          dpop-challenge-enabled: ${{ inputs.dpop-challenge }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
