@@ -42,6 +42,30 @@ else
   exit 1
 fi
 
+# Cache `java -jar cmdline.jar help [...]` output to avoid paying JVM startup
+# (typically 150-500ms) for the capability probes on every encrypt/decrypt.
+# Keyed by the jar's mtime so a reinstall invalidates the cache. stderr is
+# discarded to keep JVM warnings (reflective-access, agent notices) out of logs.
+jar_help() {
+  local jar="$SCRIPT_DIR/cmdline.jar"
+  local mtime
+  mtime=$(stat -c %Y "$jar" 2>/dev/null || stat -f %m "$jar" 2>/dev/null || echo 0)
+  local key
+  key=$(printf '%s' "$*" | tr -c 'a-zA-Z0-9' '_')
+  local uid
+  uid=$(id -u 2>/dev/null || echo default)
+  local cache="${TMPDIR:-/tmp}/xtest-java-help-${uid}-${mtime}-${key}"
+  if [[ ! -f "$cache" ]]; then
+    # Write to a process-unique temp file, then rename: concurrent xdist
+    # workers see either no cache or the complete file, never a partial read.
+    local tmp="${cache}.$$"
+    java -jar "$jar" help "$@" >"$tmp" 2>/dev/null
+    mv -f "$tmp" "$cache"
+  fi
+  cat "$cache"
+  return 0
+}
+
 if [ "$1" == "supports" ]; then
   case "$2" in
     autoconfigure | ns_grants)
@@ -118,8 +142,8 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     dpop_nonce_challenge)
-      echo "dpop_nonce_challenge not supported"
-      exit 1
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+      exit $?
       ;;
     *)
       echo "Unknown feature: $2"
@@ -135,7 +159,7 @@ args=(
 )
 
 # when we added support for KAS allowlist, we changed the platform endpoint format to require scheme
-if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist; then
+if jar_help decrypt | grep -q kas-allowlist; then
   args+=("--platform-endpoint=$PLATFORMURL")
 else
   args+=("--platform-endpoint=$PLATFORMENDPOINT")
@@ -195,6 +219,10 @@ fi
 
 if [ -n "$XT_WITH_TARGET_MODE" ]; then
   args+=(--with-target-mode "$XT_WITH_TARGET_MODE")
+fi
+
+if jar_help | grep -q -- '--verbose'; then
+  args+=(--verbose)
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
