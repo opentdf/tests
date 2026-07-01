@@ -220,16 +220,15 @@ echo_redacted() {
     fi
   done
   echo "${out[@]}"
+  return 0
 }
 
 if [[ "$1" == "encrypt" ]]; then
   if npx $CTL help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-  if [[ -n "$XT_WITH_ECDSA_BINDING" ]]; then
-    if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
-      args+=(--policyBinding ecdsa)
-    fi
+  if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
+    args+=(--policyBinding ecdsa)
   fi
   if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
     args+=(--encapKeyType "ec:secp256r1")

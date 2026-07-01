@@ -63,6 +63,7 @@ jar_help() {
     mv -f "$tmp" "$cache"
   fi
   cat "$cache"
+  return 0
 }
 
 if [ "$1" == "supports" ]; then
