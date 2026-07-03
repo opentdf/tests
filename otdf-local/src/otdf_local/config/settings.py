@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -145,6 +146,25 @@ class Settings(BaseSettings):
 
     # Log level
     log_level: str = "info"
+
+    # OpenTelemetry tracing (opt-in via `otdf-local up --tracing`)
+    tracing: bool = False
+    otlp_endpoint: str = "localhost:4317"
+    jaeger_ui_url: str = "http://localhost:16686"
+
+    def trace_config_updates(self) -> dict[str, Any]:
+        """Platform/KAS config overrides that export OTel traces to the local
+        collector (Jaeger). Empty when tracing is disabled so the generated
+        config is unchanged for normal runs.
+        """
+        if not self.tracing:
+            return {}
+        return {
+            "server.trace.enabled": True,
+            "server.trace.provider.name": "otlp",
+            "server.trace.provider.otlp.endpoint": self.otlp_endpoint,
+            "server.trace.provider.otlp.insecure": True,
+        }
 
     def get_kas_port(self, name: str) -> int:
         """Get port for a KAS instance."""

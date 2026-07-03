@@ -32,13 +32,22 @@ class DockerService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{Ports.KEYCLOAK}/auth/realms/master"
 
+    def _compose_cmd(self, *args: str) -> list[str]:
+        """Build a `docker compose` command, opting into the `tracing` profile
+        (which includes the Jaeger all-in-one container) when tracing is enabled.
+        """
+        cmd = ["docker", "compose", "-f", str(self._compose_file)]
+        if self.settings.tracing:
+            cmd += ["--profile", "tracing"]
+        return cmd + list(args)
+
     def start(self) -> bool:
         """Start Docker compose services."""
         if not self._compose_file.exists():
             return False
 
         result = subprocess.run(
-            ["docker", "compose", "-f", str(self._compose_file), "up", "-d"],
+            self._compose_cmd("up", "-d"),
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
@@ -51,7 +60,7 @@ class DockerService(Service):
             return False
 
         result = subprocess.run(
-            ["docker", "compose", "-f", str(self._compose_file), "down"],
+            self._compose_cmd("down"),
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
