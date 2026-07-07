@@ -91,6 +91,11 @@ if [ "$1" == "supports" ]; then
       npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
       exit $?
       ;;
+    mechanism-mlkem)
+      set -o pipefail
+      npx $CTL encrypt --help | grep -i 'mlkem:768'
+      exit $?
+      ;;
     mechanism-xwing)
       set -o pipefail
       npx $CTL help | grep -i xwing
