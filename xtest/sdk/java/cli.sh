@@ -96,6 +96,11 @@ if [ "$1" == "supports" ]; then
       exit 1
       ;;
 
+    mechanism-mlkem)
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i "mlkem:768"
+      exit $?
+      ;;
     mechanism-rsa-4096 | mechanism-ec-curves-384-521)
       # rsa4096 support in >= 0.13.0
       set -o pipefail
