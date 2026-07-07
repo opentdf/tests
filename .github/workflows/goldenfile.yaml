@@ -1,0 +1,268 @@
+name: GoldenFile
+on:
+  workflow_dispatch:
+    inputs:
+      platform-sdk-ref:
+        description: 'Platform SDK reference branch or tag'
+        required: false
+        default: 'main'
+        type: string
+      otdfctl-ref:
+        description: 'OTDFCTL reference branch or tag'
+        required: false
+        default: 'main'
+        type: string
+      java-ref:
+        description: 'Java reference branch or tag'
+        required: false
+        default: 'main'
+        type: string
+      js:
+        description: 'JS configuration (ref or version)'
+        required: false
+        type: string # Optional, as this will be treated as a JSON string
+  workflow_call:
+    inputs:
+      platform-sdk-ref:
+        description: 'Platform SDK reference commit or tag'
+        required: false
+        default: 'main'
+        type: string
+      otdfctl-ref:
+        description: 'OTDFCTL reference commit or tag'
+        required: false
+        default: 'main'
+        type: string
+      java-ref:
+        description: 'Java reference commit or tag'
+        required: false
+        default: 'main'
+        type: string
+      js:
+        description: 'JS ref json (commit/tag or npm pkg version), ex: {"ref": "some-tag"} or {"version": "0.2.0-beta.1758"}'
+        required: false
+        default: '{"ref": "main"}'
+        type: string # this will be treated as a JSON string
+      create-golden:
+        description: 'List of sdks for creating golden files (comma-separated), can include "js", "java", and/or "go"'
+        required: false
+        default: ''
+        type: string # this will be treated as a comma seperated list
+
+jobs:
+  golden-file-creation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    env:
+      PLATFORM_REF: "${{ inputs.platform-sdk-ref || 'main' }}"
+      OTDFCTL_REF: "${{ inputs.otdfctl-ref || 'main' }}"
+      JAVA_REF: "${{ inputs.java-ref || 'main' }}"
+      CREATE_GOLDEN: "${{ inputs.create-golden }}"
+    steps:
+      - name: Parse inputs and set environment variables
+        id: set_env_vars
+        run: |
+          # Parse the js input
+          echo "${{ github.event.inputs.js }}" > js_input.json
+          JS_REF=$(jq -r '.ref // empty' js_input.json)
+          JS_VERSION=$(jq -r '.version // empty' js_input.json)
+
+          # Check if neither ref nor version is set
+          if [ -z "$JS_REF" ] && [ -z "$JS_VERSION" ]; then
+            echo "Error: JS input must include either 'ref' or 'version'." >&2
+            exit 1
+          fi
+
+          # Export JS_REF and JS_VERSION
+          if [ -n "$JS_REF" ]; then
+            echo "JS_REF=$JS_REF" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$JS_VERSION" ]; then
+            echo "JS_VERSION=$JS_VERSION" >> $GITHUB_ENV
+          fi
+          
+          # Log the results for debugging
+          echo "Platform SDK Ref: ${{ github.event.inputs['platform-sdk-ref'] }}"
+          echo "OTDFCTL Ref: ${{ github.event.inputs['otdfctl-ref'] }}"
+          echo "Java Ref: ${{ github.event.inputs['java-ref'] }}"
+          echo "JS Ref: $JS_REF"
+          echo "JS Version: $JS_VERSION"
+          echo "Create Golden List: $CREATE_GOLDEN"
+
+      ######## SPIN UP PLATFORM BACKEND #############
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@main
+        with:
+          platform-ref: ${{ env.PLATFORM_REF }}
+          extra-keys: >- 
+            [{
+              "kid": "golden-r1",
+              "alg": "rsa:2048",
+              "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDxAXgP2SjRPhKe\nO1OdLco7zsU+uMnvQFnTrc0W8eQ/vUGjP8HNABA3kKUeJZUGb4lyE5u62sBqD+Va\nOWh0tIRCIEPRC/tF3hTE5TeDJLJiY9N3R5P9OjWuFewnQFXIfTPqmrny1pYowfkd\nnbxBSzb/xTpk6K+yzkyrZdW1JvYdW/1CBGpo7qtfxflR3Cy13V15YDuVTD2rHUSj\nM2eYUU+b4HLoHvKZ87y18nwaOMOMMqbvp4xFoxckoE/XkuaHyH1UWI9HqCyFBrh+\nf24OPMP0N3qMCseXJc2CTBGSX4jKdB0WGqOpZdBxKWlKxLGlKAe9Ko1eYzUHdhhN\npBRmU4HzAgMBAAECggEAHRHhSoAWJU8Ibd+YEVBxoU8qiYs+iEZJz3eaUlcxAeMx\nJKDPHowQaLNgx0cfN5yChqkI0rwKE4EBWCWujM0tWtCLfY6la2MDPFCtpnrprWZ/\nHlca6aN40BvC1WU0M6+ucHDjVwA9MoNbKhBZocKRyr4ecgeDEd1CcDYjVetyKk4v\nTKIa7mvoNfRMT5dsmvUdRgtkvIaomLYoCVc7nK2d7C0WP/RaUWpJUUpZE+8lP3ze\no44HMMpeq+yyeXJhq6+PIErJfOChYJVjwOWCVJ99NRJ2RFU4kNu4gY2YcL6IRCV5\n6rfwsJwdKlLxTKVEZPCWVEa0TS+G4yQV8gu1LtvAwQKBgQD6Z5Hxw2R+bTFFyeOx\nMlDno8PvBlw4B3QrrWppk3f+m4261eSFdCMkZTZw81QjdGCJ/BTtMASaNWIWVyc1\nkslSg+ARPF5XEBEGpUmINRUotV9B7Wtq5Nid9xTlUoUPiuVVVU+eEvwTw8F/tgOu\nITwUM/uOYJdI16XfL4qtGxab0wKBgQD2ZCIbXK4BO5+8YC23YWymspTK/YShfoYA\nM8Ktxdp+xHGZoNzbx+mSd6vvvtWPhiayje2ppc82OsB+q6BYQOYTRowwdidWBETd\nM7/Q/QKg9Zn3kM+WA71KDtK3VIQBqZfYjevpTEqGjG9XN1apWZh80YeU3uhBuaSZ\nKns62AxNYQKBgAj8jpBOotymro4CoNlLJPwrNGzvnX+lRNYMczU2xaetjXiXFIx1\njo1P1JRZJzvegVhyY43fm0qtf8eteQrDKdZ8RR5ZPEmDmhjS9cCdpxS+7ZxAGQrN\nC7kflPBl9cCJC5H0bdcOd11+OQOMVLV7G9zdwLlrXgKPOrS30BJGVplhAoGAU+YM\n5xxL9AeFgPOPHZ6DDNBKckSZYRRgNLlrVRjGKdxiglmQWxZbppAxb9Wfitu3WZ2S\ni+31/RVMbtWqJ+MRdQbUvbu98UBK4re4XUWKG50F7JLW3NIxJoKdpeeVe6twFUFe\nT3a2+dHgJ+akD85+aiI+9KZil97K+YzJoWPn7IECgYB9O3ZiTlT3N3iuML+CCrv/\nEttS+1sWf1fdwq1Roosw3JWxuXC45KNn/lUsk0jvVJkMM/XDxG19E3NyltMWr2de\nj0o4TgFsOvXh6k1k7ftMwauFooAdIgkn9HPU7zwv7eAwWfOOxz57RvVnKKvcUq9F\nrELh+ivyqdpAYiJ1z4+0LA==\n-----END PRIVATE KEY-----\n",
+              "cert": "-----BEGIN CERTIFICATE-----\nMIIC/TCCAeWgAwIBAgIUDiCm76cjcg4Wd862cEzTzLqSzFswDQYJKoZIhvcNAQEL\nBQAwDjEMMAoGA1UEAwwDa2FzMB4XDTI0MTIxODIwMzUxNFoXDTI1MTIxODIwMzUx\nNFowDjEMMAoGA1UEAwwDa2FzMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\nAQEA8QF4D9ko0T4SnjtTnS3KO87FPrjJ70BZ063NFvHkP71Boz/BzQAQN5ClHiWV\nBm+JchObutrAag/lWjlodLSEQiBD0Qv7Rd4UxOU3gySyYmPTd0eT/To1rhXsJ0BV\nyH0z6pq58taWKMH5HZ28QUs2/8U6ZOivss5Mq2XVtSb2HVv9QgRqaO6rX8X5Udws\ntd1deWA7lUw9qx1EozNnmFFPm+By6B7ymfO8tfJ8GjjDjDKm76eMRaMXJKBP15Lm\nh8h9VFiPR6gshQa4fn9uDjzD9Dd6jArHlyXNgkwRkl+IynQdFhqjqWXQcSlpSsSx\npSgHvSqNXmM1B3YYTaQUZlOB8wIDAQABo1MwUTAdBgNVHQ4EFgQUVl6EWRsZE5kf\nXR6EC9LDStsR1howHwYDVR0jBBgwFoAUVl6EWRsZE5kfXR6EC9LDStsR1howDwYD\nVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAJysUw1bQkm+UdIWubPVo\nh/h1YoSHMEmwtphLflMDiJvm1GIjFM5zVgnpmkiI9DVCAs8vyhHe+UVCgiCAMqU9\nuu1jYxXY54v8nx+Ps3X1snylIs82JHKXT1AJaXECSi0DwIuF3hIyPUJpK9AJ/PqC\nOvhq3sMX5p0D3bmk8518rRwkSZ2a7jn5qvLa6P0g4Ph32j5UdRmgvsgh/jJk7PkK\nHuf86yZ4KbkgU6kMs4rTOLNIBmMJlm7R9xrGMVwK8X/NPZWV4fBNQZPIJw7svNzo\npe60OK4cT0G0/LHEOGxCLpmxjq2+xedKkrmq6PrRZquL386RyjkCZh6F5AWJCqB9\n4g==\n-----END CERTIFICATE-----\n"
+            }]
+
+      ######## CHECKOUT TESTS AND SETUP DEPS #############
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: opentdf/tests
+          path: otdftests # use different name bc other repos might have tests directories
+      - name: Set up Python 3.10
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.10"
+      - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+
+      ######## CHECKOUT WEB SDK #############
+      - name: Check out web-sdk
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: opentdf/web-sdk
+          path: web-sdk
+          ref: ${{ env.JS_REF || 'main' }}
+      - name: Set up Node 22
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: "22.x"
+          cache-dependency-path: web-sdk/lib/package-lock.json web-sdk/cli/package-lock.json
+
+      ######## SETUP THE JS CLI #############
+      - name: build the js cli
+        id: build-web-sdk
+        if: ${{ !env.JS_VERSION }}
+        run: |
+          make clean
+          make cli
+          CLI_NAME=$(cd cli && npm pkg get name | tr -d \")
+          CLI_VERSION=$(cd cli && npm pkg get version | tr -d \")
+          echo "CLI_PATH=cli/$(echo "$CLI_NAME" | tr -d @ | sed s1/1-1)-$CLI_VERSION.tgz" >>$GITHUB_OUTPUT
+        working-directory: web-sdk
+      - name: update packages
+        run: |-
+          npm un @opentdf/cli || true
+          npm ci
+          if [ -n "$JS_VERSION" ]; then
+            echo "Installing specific JS SDK version: $JS_VERSION"
+            npm i @opentdf/cli@$JS_VERSION
+          else
+            echo "Installing CLI from local path: ../../web-sdk/${{ steps.build-web-sdk.outputs.CLI_PATH }}"
+            npm i ../../web-sdk/${{ steps.build-web-sdk.outputs.CLI_PATH }}
+          fi
+          npm list
+        working-directory: otdftests/xtest
+
+      ######## CHECKOUT GO CLI #############
+      - name: Check out otdfctl
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: opentdf/otdfctl
+          path: otdfctl
+          ref: ${{ env.OTDFCTL_REF }}
+
+      ######## SETUP THE GO CLI #############
+      - name: Prepare go cli
+        run: |-
+          for m in lib/fixtures lib/ocrypto protocol/go sdk; do
+            go mod edit -replace github.com/opentdf/platform/${m}=../${{ steps.run-platform.outputs.platform-working-dir }}/${m}
+          done
+          go mod tidy
+          go build .
+          cp ./otdfctl ../otdftests/xtest/sdk/go/otdfctl
+        working-directory: otdfctl
+
+      ####### CHECKOUT JAVA SDK ##############
+
+      - name: Check out java-sdk
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: opentdf/java-sdk
+          path: java-sdk
+          ref: ${{ env.JAVA_REF }}
+
+      ####### SETUP JAVA CLI ##############
+
+      - name: Build java cli
+        run: |
+          mvn --batch-mode clean install -DskipTests
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+        working-directory: java-sdk
+
+      - name: Move java cli to xtest
+        run: |-
+          cp cmdline/target/cmdline.jar ../otdftests/xtest/sdk/java/cmdline.jar
+
+      ######## CREATE THE GOLDEN FILES #############
+      - name: Install test dependencies
+        run: |-
+          pip install -r requirements.txt
+        working-directory: otdftests/xtest
+
+      - name: Create the files
+        run: |-
+          python3 create_golden_files.py
+        working-directory: otdftests/xtest
+
+      - name: create a new branch
+        run: |-
+          git checkout -b job-update-golden-files-${{ github.run_id }}
+          git push origin job-update-golden-files-${{ github.run_id }}
+        working-directory: otdftests
+
+      - name: commit the yaml changes
+        working-directory: otdftests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DESTINATION_BRANCH: job-update-golden-files-${{ github.run_id }}
+        run: |
+          # Ensure there are .tdf files to commit
+          # Check for changed .tdf files
+          CHANGED_TDF_FILES=$(git status --porcelain | awk '/\.tdf$/ {print $2}')
+          if [ -z "$CHANGED_TDF_FILES" ]; then
+            echo "No changed .tdf files to commit. Skipping."
+            exit 0
+          fi
+
+          # Create a new branch
+          gh api -X POST /repos/${{ github.repository }}/git/refs \
+            -F ref="refs/heads/$DESTINATION_BRANCH" \
+            -F sha="$(git rev-parse HEAD)"
+
+          PR_BODY="This PR adds the following .tdf files:\n"
+          # Commit changed .tdf files using gh API
+          for FILE in $CHANGED_TDF_FILES; do
+            FILENAME=$(basename "$FILE")
+            CONTENT=$(base64 "$FILE")
+            # CONTENT=$( base64 -i $FILENAME )
+            PR_BODY="${PR_BODY}- $FILENAME\n"
+
+            gh api -X PUT /repos/${{ github.repository }}/contents/$FILENAME \
+              -F message="Update $FILENAME" \
+              -F encoding="base64" \
+              -F content="$CONTENT" \
+              -F branch="$DESTINATION_BRANCH"
+          done
+
+          gh pr create \
+          --title "chore(ci): Golden files" \
+          --body "$PR_BODY" \
+          --base main \
+          --head "$DESTINATION_BRANCH"
+
+
+
