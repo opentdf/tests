@@ -96,6 +96,13 @@ if [ "$1" == "supports" ]; then
       npx $CTL encrypt --help | grep -i 'mlkem:768'
       exit $?
       ;;
+    multikao)
+      # Tolerate a KAO array where the same KAS wraps the same split more than
+      # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
+      set -o pipefail
+      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     mechanism-xwing)
       set -o pipefail
       npx $CTL help | grep -i xwing
