@@ -117,7 +117,7 @@ if [ "$1" == "supports" ]; then
       ;;
     dpop | dpop_nonce_challenge)
       set -o pipefail
-      "${cmd[@]}" --version --json | jq -e --arg f "$1" '.supported_features |
+      "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
  index($f)'
       exit $?
       ;;
