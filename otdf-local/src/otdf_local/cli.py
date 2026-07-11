@@ -94,13 +94,26 @@ def up(
         bool,
         typer.Option("--no-provision", help="Skip provisioning step"),
     ] = False,
+    tracing: Annotated[
+        bool,
+        typer.Option(
+            "--tracing",
+            help="Start Jaeger and export OpenTelemetry traces from platform/KAS",
+        ),
+    ] = False,
 ) -> None:
     """Start the test environment.
 
     By default starts all services: docker (keycloak, postgres), platform, and all KAS instances.
     """
     settings = get_settings()
+    # Enable tracing on the shared settings so every service (docker profile,
+    # platform/KAS config generation) picks it up.
+    settings.tracing = tracing
     settings.ensure_directories()
+
+    if tracing:
+        print_info(f"Tracing enabled — Jaeger UI at {settings.jaeger_ui_url}")
 
     # Parse services to start
     if services:
@@ -591,6 +604,16 @@ def env(
         root_key = get_nested(platform_config, "services.kas.root_key")
         if root_key:
             env_vars["OT_ROOT_KEY"] = root_key
+
+        # If the running platform is exporting traces, point clients (pytest,
+        # SDK CLIs) at the same collector so their spans join the trace.
+        if get_nested(platform_config, "server.trace.enabled"):
+            endpoint = get_nested(
+                platform_config,
+                "server.trace.provider.otlp.endpoint",
+                settings.otlp_endpoint,
+            )
+            env_vars["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint
     except Exception as e:
         print_warning(f"Could not read root key from platform config: {e}")
 
