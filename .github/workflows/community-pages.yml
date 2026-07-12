@@ -1,5 +1,8 @@
-# Deploy community conformance report to GitHub Pages (main branch only).
-# Consumes artifacts from Community X-Test runs or regenerates from a dispatch.
+# Deploy the community SDK conformance homepage to GitHub Pages (main only).
+# Consumes every community-* artifact (python/rust/swift stage-1 + stage-2)
+# from the triggering Community X-Test run, or from the latest completed
+# main-branch run on manual dispatch. Deploys on failure conclusions too, so
+# the page honestly shows red instead of going stale.
 name: Community Conformance Pages
 
 on:
@@ -22,6 +25,7 @@ jobs:
   build-site:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -32,74 +36,67 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Download latest community artifacts
+      - name: Locate source Community X-Test run
+        id: source-run
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
-            const fs = require('fs');
-            const path = require('path');
-            fs.mkdirSync('artifact-download', { recursive: true });
-            let runId = context.payload.workflow_run?.id;
-            if (!runId) {
+            let run = context.payload.workflow_run;
+            if (!run) {
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 workflow_id: 'community-xtest.yml',
                 branch: 'main',
+                status: 'completed',
                 per_page: 1,
               });
-              runId = runs.data.workflow_runs[0]?.id;
+              run = runs.data.workflow_runs[0];
             }
-            if (!runId) {
-              core.warning('No Community X-Test run found; generating empty site shell');
+            if (!run) {
+              core.warning('No completed Community X-Test run found; publishing empty site shell');
               return;
             }
-            core.info(`Using run ${runId}`);
-            const arts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: runId,
-            });
-            for (const art of arts.data.artifacts) {
-              if (!art.name.includes('community-python')) continue;
-              const { data } = await github.rest.actions.downloadArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: art.id,
-                archive_format: 'zip',
-              });
-              const zipPath = path.join('artifact-download', `${art.id}.zip`);
-              fs.writeFileSync(zipPath, Buffer.from(data));
-              const { execSync } = require('child_process');
-              execSync(`unzip -o "${zipPath}" -d artifact-download/unpacked`, { stdio: 'inherit' });
-            }
+            core.info(`Using run ${run.id} (${run.html_url})`);
+            core.setOutput('run-id', run.id);
+            core.setOutput('run-url', run.html_url);
+
+      # Artifact names look like "✅ community-python-stage1"; the stage filter
+      # excludes the failure-only community-*-server-logs artifacts.
+      - name: Download community artifacts
+        if: steps.source-run.outputs.run-id != ''
+        continue-on-error: true # a run with no artifacts still gets a page
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*community-*stage*"
+          run-id: ${{ steps.source-run.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: artifact-download
 
       - name: Generate site
         working-directory: xtest
+        env:
+          SOURCE_RUN_ID: ${{ steps.source-run.outputs.run-id }}
+          SOURCE_RUN_URL: ${{ steps.source-run.outputs.run-url }}
         run: |
           uv sync
-          mkdir -p test-results
-          if [ -d ../artifact-download/unpacked ]; then
-            find ../artifact-download/unpacked -name 'supports.json' -print
-            mkdir -p test-results/report-python-ubuntu-latest
-            find ../artifact-download/unpacked -name 'supports.json' -exec cp {} test-results/report-python-ubuntu-latest/ \;
-            find ../artifact-download/unpacked -name '*.junit.xml' -exec cp {} test-results/report-python-ubuntu-latest/ \; || true
-          fi
+          mkdir -p ../artifact-download
           uv run python -m reporting.generate_site \
-            --input-dir test-results \
+            --input-dir ../artifact-download \
             --output-dir site
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: xtest/site
 
   deploy:
     needs: build-site
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

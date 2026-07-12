@@ -350,6 +350,7 @@ jobs:
           SCHEMA_FILE: "manifest.schema.json"
           # Dist channel stays `main` (single under-test build); peer is go@GO_CHANNEL.
         run: |-
+          set -o pipefail
           mkdir -p test-results
           GO_CH="${GO_CHANNEL}"
           uv run pytest -n auto --dist loadscope \
@@ -369,50 +370,19 @@ jobs:
         if: success() || failure()
         working-directory: otdftests/xtest
         run: |-
-          mkdir -p test-results/report-python-ubuntu-latest
-          uv run python - <<'PY'
-          import json, subprocess, os
-          from pathlib import Path
-          from datetime import UTC, datetime
+          uv run python -m reporting.export_supports \
+            --sdk python --sdk-ref "${PYTHON_REF}" --os ubuntu-latest
 
-          features = [
-              "assertions","assertion_verification","attribute_traversal","audit_logging",
-              "autoconfigure","better-messages-2024","bulk_rewrap","connectrpc","dpop",
-              "dpop_nonce_challenge","ecwrap","hexless","hexaflexible","kasallowlist",
-              "key_management","mechanism-rsa-4096","mechanism-ec-curves-384-521",
-              "mechanism-xwing","mechanism-secpmlkem","mechanism-mlkem","ns_grants","obligations",
-          ]
-          cli = Path("sdk/python/dist/main/cli.sh")
-          supports = {}
-          for f in features:
-              try:
-                  r = subprocess.run([str(cli), "supports", f], capture_output=True, timeout=30)
-                  supports[f] = "supported" if r.returncode == 0 else ("unsupported" if r.returncode == 1 else "unknown")
-              except Exception as e:
-                  supports[f] = f"error:{e}"
-
-          out = {
-              "schema_version": 1,
-              "generated_at": datetime.now(UTC).isoformat(),
-              "sdk": "python",
-              "sdk_ref": os.environ.get("PYTHON_REF", "latest"),
-              "platform_ref": os.environ.get("PLATFORM_REF", "latest"),
-              "go_channel": os.environ.get("GO_CHANNEL", "latest"),
-              "tier": "kas-ready",
-              "stage": 1,
-              "supports": supports,
-              "run_id": os.environ.get("GITHUB_RUN_ID"),
-              "repo": os.environ.get("GITHUB_REPOSITORY"),
-          }
-          dest = Path("test-results/report-python-ubuntu-latest")
-          dest.mkdir(parents=True, exist_ok=True)
-          (dest / "supports.json").write_text(json.dumps(out, indent=2))
-          (dest / "meta.json").write_text(json.dumps({
-              "sdk": "python", "os": "ubuntu-latest", "stage": 1,
-              "run_id": os.environ.get("GITHUB_RUN_ID"),
-          }, indent=2))
-          print(json.dumps(out, indent=2))
-          PY
+      # The go reference peer gets a snapshot too (only here, to avoid
+      # duplicate exports across jobs), so the capability matrix can compare
+      # community SDKs against the reference implementation.
+      - name: Export go peer capability snapshot
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          uv run python -m reporting.export_supports \
+            --sdk go --version "${GO_CHANNEL}" --sdk-ref "${OTDFCTL_REF}" \
+            --tier reference --os ubuntu-latest
 
       - name: Upload results
         if: success() || failure()
@@ -559,6 +529,13 @@ jobs:
             -ra -v \
             test_tdfs.py
 
+      - name: Export capability snapshot
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          uv run python -m reporting.export_supports \
+            --sdk rust --sdk-ref "${RUST_REF}" --os ubuntu-latest
+
       - if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -702,6 +679,13 @@ jobs:
             -ra -v \
             test_tdfs.py
 
+      - name: Export capability snapshot
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          uv run python -m reporting.export_supports \
+            --sdk swift --sdk-ref "${SWIFT_REF}" --os macos-latest
+
       - if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -834,6 +818,7 @@ jobs:
           PLATFORM_TAG: ${{ env.PLATFORM_TAG }}
           SCHEMA_FILE: "manifest.schema.json"
         run: |-
+          set -o pipefail
           mkdir -p test-results
           # Community-only encrypt/decrypt matrix; go remains for attribute fixtures.
           uv run pytest -n auto --dist loadscope \
@@ -991,6 +976,7 @@ jobs:
           PLATFORM_TAG: ${{ env.PLATFORM_TAG }}
           SCHEMA_FILE: "manifest.schema.json"
         run: |-
+          set -o pipefail
           mkdir -p test-results
           uv run pytest -n auto --dist loadscope \
             --html=test-results/community-stage2-swift-peers.html \
