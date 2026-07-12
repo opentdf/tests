@@ -646,7 +646,7 @@ sequenceDiagram
 
 **Stage-0 (optional, offline SDKs):** golden/fixture decrypt-only or offline self-roundtrip under `XT_ALLOW_OFFLINE=1` — **not** branded as KAS interop on Pages (label `offline`).
 
-**Stage-2:** when ≥2 community SDKs are `kas-partial`+ for ztdf; optional nightly; not a blocking plan item if only python is ready.
+**Stage-2:** when ≥2 community SDKs are kas-ready for Base TDF — **enabled** (python × rust on ubuntu; python × rust × swift on macos). Same `test_tdf_roundtrip` / `-m stage1` cell; encrypt/decrypt peers are community-only (go remains for attribute fixtures).
 
 ### Python hybrid mode (detailed)
 
