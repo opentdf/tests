@@ -1,0 +1,709 @@
+# Community SDK cross-tests (fork of opentdf/tests).
+#
+# Stage-1 (this workflow): community SDK ↔ go@latest (floating release), Base TDF
+# (tdf) only, -m stage1. (Not NATO ZTDF; not NanoTDF. See docs/FORMATS.md.)
+# Enabled: python (ubuntu), rust (ubuntu), swift (macos-latest, native platform deps).
+# Swift stays on macOS (CryptoKit). Platform stack is native Postgres+Keycloak+go
+# (no Docker/Colima — nested virt / Keycloak healthchecks are unreliable on GHA macOS).
+# No nanoTDF in Stage-1.
+#
+# Defaults are floating `latest` (resolved each run to the current stable release).
+# Pass an explicit branch/tag/SHA via workflow_dispatch to override (e.g. main).
+#
+# Does NOT expand the official xtest.yml matrix.
+name: Community X-Test
+
+on:
+  pull_request:
+    paths:
+      - "xtest/**"
+      - "otdf-sdk-mgr/**"
+      - ".github/workflows/community-xtest.yml"
+      - ".github/actions/**"
+      - "docs/community-xtest-design.md"
+  push:
+    branches: [main, community-xtest-stage1]
+  workflow_dispatch:
+    inputs:
+      python-ref:
+        required: false
+        type: string
+        default: latest
+        description: "opentdf-python-sdk ref: 'latest' (floating release), branch, tag, or SHA"
+      rust-ref:
+        required: false
+        type: string
+        # opentdf-rs 0.14.0+ is Stage-1 capable (hexless + RSA wrap/rewrap).
+        # Floating latest tracks current stable release.
+        default: latest
+        description: "opentdf-rs ref: 'latest' (floating release), branch, tag, or SHA"
+      swift-ref:
+        required: false
+        type: string
+        # OpenTDFKit 4.0.0+ is Stage-1 capable (KAS well-known fallback, OAEP-SHA1,
+        # GMAC integrity). Floating latest tracks current stable release.
+        default: latest
+        description: "OpenTDFKit ref: 'latest' (floating release), branch, tag, or SHA"
+      platform-ref:
+        required: false
+        type: string
+        default: latest
+        description: "opentdf/platform ref: 'latest'/'lts', branch, tag (service/vX.Y.Z), or SHA"
+      otdfctl-ref:
+        required: false
+        type: string
+        default: latest
+        description: "otdfctl / go peer ref: 'latest'/'lts', branch, tag, or SHA"
+
+# One run per branch: push + PR + workflow_dispatch share the same group so a
+# new commit cancels both the prior push run and the prior PR run (avoids
+# double macos/ubuntu spend when the branch has an open PR).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Expand floating `latest`/`lts` aliases once per workflow run. Concrete tags
+  # are pinned only for this run (not hard-coded in YAML).
+  resolve-refs:
+    name: Resolve floating release pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      platform-ref: ${{ steps.resolve.outputs.platform-ref }}
+      platform-tag: ${{ steps.resolve.outputs.platform-tag }}
+      go-ref: ${{ steps.resolve.outputs.go-ref }}
+      go-channel: ${{ steps.resolve.outputs.go-channel }}
+      python-ref: ${{ steps.resolve.outputs.python-ref }}
+      rust-ref: ${{ steps.resolve.outputs.rust-ref }}
+      swift-ref: ${{ steps.resolve.outputs.swift-ref }}
+    env:
+      PLATFORM_REF_IN: ${{ inputs.platform-ref || 'latest' }}
+      OTDFCTL_REF_IN: ${{ inputs.otdfctl-ref || 'latest' }}
+      PYTHON_REF_IN: ${{ inputs.python-ref || 'latest' }}
+      RUST_REF_IN: ${{ inputs.rust-ref || 'latest' }}
+      SWIFT_REF_IN: ${{ inputs.swift-ref || 'latest' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: otdftests
+          persist-credentials: false
+          sparse-checkout: |
+            otdf-sdk-mgr
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Resolve latest → concrete refs
+        id: resolve
+        working-directory: otdftests
+        run: |
+          set -euo pipefail
+
+          # Official platform/go: otdf-sdk-mgr understands latest/lts.
+          resolve_mgr() {
+            local sdk="$1" alias="$2"
+            local info
+            info=$(uv run --project otdf-sdk-mgr otdf-sdk-mgr versions resolve "$sdk" "$alias")
+            echo "$info" | jq -e '.[0] | select(.err == null)' >/dev/null \
+              || { echo "$info" | jq .; echo "failed to resolve $sdk@$alias" >&2; exit 1; }
+            echo "$info"
+          }
+
+          # Community SDKs: floating GitHub latest non-prerelease release tag.
+          # Falls back to highest pure-semver git tag if the repo has no Releases.
+          resolve_github_latest() {
+            local repo="$1"
+            local tag=""
+            if tag=$(gh api "repos/${repo}/releases/latest" --jq .tag_name 2>/dev/null); then
+              if [[ -n "$tag" && "$tag" != "null" ]]; then
+                echo "$tag"
+                return 0
+              fi
+            fi
+            # Fallback: max stable x.y.z / vX.Y.Z tag (full-string match only).
+            git ls-remote --tags --refs "https://github.com/${repo}.git" \
+              | awk '{print $2}' | sed 's#refs/tags/##' \
+              | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -t. -k1,1V -k2,2V -k3,3V \
+              | tail -1
+          }
+
+          resolve_or_pass() {
+            local input="$1" repo="$2"
+            if [[ "$input" == "latest" ]]; then
+              resolve_github_latest "$repo"
+            else
+              echo "$input"
+            fi
+          }
+
+          if [[ "$PLATFORM_REF_IN" == "latest" || "$PLATFORM_REF_IN" == "lts" ]]; then
+            PINFO=$(resolve_mgr platform "$PLATFORM_REF_IN")
+            PLATFORM_REF=$(echo "$PINFO" | jq -r '.[0].release // .[0].tag')
+            PLATFORM_TAG=$(echo "$PINFO" | jq -r '.[0].alias')
+          else
+            PLATFORM_REF="$PLATFORM_REF_IN"
+            PLATFORM_TAG="$PLATFORM_REF_IN"
+          fi
+
+          if [[ "$OTDFCTL_REF_IN" == "latest" || "$OTDFCTL_REF_IN" == "lts" ]]; then
+            GINFO=$(resolve_mgr go "$OTDFCTL_REF_IN")
+            GO_REF=$(echo "$GINFO" | jq -r '.[0].release // .[0].tag')
+            GO_CHANNEL=$(echo "$GINFO" | jq -r '.[0].tag // .[0].alias')
+          else
+            GO_REF="$OTDFCTL_REF_IN"
+            GO_CHANNEL="$OTDFCTL_REF_IN"
+          fi
+
+          PYTHON_REF=$(resolve_or_pass "$PYTHON_REF_IN" "b-long/opentdf-python-sdk")
+          RUST_REF=$(resolve_or_pass "$RUST_REF_IN" "arkavo-org/opentdf-rs")
+          SWIFT_REF=$(resolve_or_pass "$SWIFT_REF_IN" "arkavo-org/OpenTDFKit")
+
+          {
+            echo "platform-ref=${PLATFORM_REF}"
+            echo "platform-tag=${PLATFORM_TAG}"
+            echo "go-ref=${GO_REF}"
+            echo "go-channel=${GO_CHANNEL}"
+            echo "python-ref=${PYTHON_REF}"
+            echo "rust-ref=${RUST_REF}"
+            echo "swift-ref=${SWIFT_REF}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Resolved floating pins"
+            echo ""
+            echo "| Component | Input | Resolved |"
+            echo "|---|---|---|"
+            echo "| platform | \`${PLATFORM_REF_IN}\` | \`${PLATFORM_REF}\` |"
+            echo "| go/otdfctl | \`${OTDFCTL_REF_IN}\` | \`${GO_REF}\` (channel \`${GO_CHANNEL}\`) |"
+            echo "| python | \`${PYTHON_REF_IN}\` | \`${PYTHON_REF}\` |"
+            echo "| rust | \`${RUST_REF_IN}\` | \`${RUST_REF}\` |"
+            echo "| swift | \`${SWIFT_REF_IN}\` | \`${SWIFT_REF}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Resolved pins:"
+          echo "  platform=${PLATFORM_REF} (tag alias=${PLATFORM_TAG})"
+          echo "  go=${GO_REF} (channel=${GO_CHANNEL})"
+          echo "  python=${PYTHON_REF}"
+          echo "  rust=${RUST_REF}"
+          echo "  swift=${SWIFT_REF}"
+
+  community-python:
+    name: "python ↔ go@latest stage1"
+    needs: [resolve-refs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    env:
+      PYTHON_REF: ${{ needs.resolve-refs.outputs.python-ref }}
+      PLATFORM_REF: ${{ needs.resolve-refs.outputs.platform-ref }}
+      PLATFORM_TAG: ${{ needs.resolve-refs.outputs.platform-tag }}
+      OTDFCTL_REF: ${{ needs.resolve-refs.outputs.go-ref }}
+      GO_CHANNEL: ${{ needs.resolve-refs.outputs.go-channel }}
+      FOCUS_SDK: python
+
+    steps:
+      - name: Checkout tests fork
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: otdftests
+          persist-credentials: false
+
+      - name: Load extra keys
+        id: load-extra-keys
+        run: echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      - name: Start platform with containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393
+        with:
+          platform-ref: ${{ env.PLATFORM_REF }}
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.14"
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version: "1.24.x"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22.x"
+
+      ######## go peer (otdfctl from floating latest / platform checkout) #############
+      - name: Capture platform otdfctl location
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      - name: Resolve go peer
+        id: resolve-go
+        working-directory: otdftests
+        run: |-
+          INFO=$(uv run --project otdf-sdk-mgr otdf-sdk-mgr versions resolve go "${OTDFCTL_REF}")
+          echo "version-info=$INFO" >> "$GITHUB_OUTPUT"
+          echo "$INFO" | jq .
+
+      - name: Configure otdfctl (go)
+        id: configure-go
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: ${{ steps.resolve-go.outputs.version-info }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Build go CLI
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+
+      ######## Community Python SDK #############
+      - name: Checkout python SDK
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: b-long/opentdf-python-sdk
+          ref: ${{ env.PYTHON_REF }}
+          path: otdftests/xtest/sdk/python/src/main
+          persist-credentials: false
+
+      - name: Build python CLI dist
+        run: make VERSIONS=main
+        working-directory: otdftests/xtest/sdk/python
+
+      - name: Probe python supports
+        working-directory: otdftests/xtest
+        run: |-
+          set -e
+          ./sdk/python/dist/main/cli.sh supports autoconfigure
+          ./sdk/python/dist/main/cli.sh supports hexless
+          ! ./sdk/python/dist/main/cli.sh supports ecwrap || { echo "python should not claim ecwrap yet"; exit 1; }
+
+      - name: Platform version
+        id: platform-version
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        run: |-
+          if PLATFORM_VERSION=$(go run ./service version 2>&1); then
+            echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
+          else
+            echo "PLATFORM_VERSION=${PLATFORM_TAG}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install xtest deps
+        run: uv sync
+        working-directory: otdftests/xtest
+
+      - name: Run Stage-1 community tests (python × go)
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          PLATFORM_TAG: ${{ env.PLATFORM_TAG }}
+          SCHEMA_FILE: "manifest.schema.json"
+          # Dist channel stays `main` (single under-test build); peer is go@GO_CHANNEL.
+        run: |-
+          mkdir -p test-results
+          GO_CH="${GO_CHANNEL}"
+          uv run pytest -n auto --dist loadscope \
+            --html=test-results/community-python-stage1.html \
+            --self-contained-html \
+            --junitxml=test-results/community-python-stage1.junit.xml \
+            --sdks-encrypt "python@main go@${GO_CH}" \
+            --sdks-decrypt "python@main go@${GO_CH}" \
+            --containers tdf \
+            --focus python \
+            -m stage1 \
+            -ra -v \
+            test_tdfs.py \
+            | tee test-results/community-python-stage1.log
+
+      - name: Export capability snapshot
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          mkdir -p test-results/report-python-ubuntu-latest
+          uv run python - <<'PY'
+          import json, subprocess, os
+          from pathlib import Path
+          from datetime import UTC, datetime
+
+          features = [
+              "assertions","assertion_verification","attribute_traversal","audit_logging",
+              "autoconfigure","better-messages-2024","bulk_rewrap","connectrpc","dpop",
+              "dpop_nonce_challenge","ecwrap","hexless","hexaflexible","kasallowlist",
+              "key_management","mechanism-rsa-4096","mechanism-ec-curves-384-521",
+              "mechanism-xwing","mechanism-secpmlkem","mechanism-mlkem","ns_grants","obligations",
+          ]
+          cli = Path("sdk/python/dist/main/cli.sh")
+          supports = {}
+          for f in features:
+              try:
+                  r = subprocess.run([str(cli), "supports", f], capture_output=True, timeout=30)
+                  supports[f] = "supported" if r.returncode == 0 else ("unsupported" if r.returncode == 1 else "unknown")
+              except Exception as e:
+                  supports[f] = f"error:{e}"
+
+          out = {
+              "schema_version": 1,
+              "generated_at": datetime.now(UTC).isoformat(),
+              "sdk": "python",
+              "sdk_ref": os.environ.get("PYTHON_REF", "latest"),
+              "platform_ref": os.environ.get("PLATFORM_REF", "latest"),
+              "go_channel": os.environ.get("GO_CHANNEL", "latest"),
+              "tier": "kas-ready",
+              "stage": 1,
+              "supports": supports,
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "repo": os.environ.get("GITHUB_REPOSITORY"),
+          }
+          dest = Path("test-results/report-python-ubuntu-latest")
+          dest.mkdir(parents=True, exist_ok=True)
+          (dest / "supports.json").write_text(json.dumps(out, indent=2))
+          (dest / "meta.json").write_text(json.dumps({
+              "sdk": "python", "os": "ubuntu-latest", "stage": 1,
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+          }, indent=2))
+          print(json.dumps(out, indent=2))
+          PY
+
+      - name: Upload results
+        if: success() || failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} community-python-stage1
+          path: |
+            otdftests/xtest/test-results/**
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: community-python-server-logs
+          path: ${{ steps.run-platform.outputs.platform-log-file }}
+          if-no-files-found: ignore
+
+  community-rust:
+    name: "rust ↔ go@latest stage1"
+    needs: [resolve-refs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    env:
+      RUST_REF: ${{ needs.resolve-refs.outputs.rust-ref }}
+      PLATFORM_REF: ${{ needs.resolve-refs.outputs.platform-ref }}
+      PLATFORM_TAG: ${{ needs.resolve-refs.outputs.platform-tag }}
+      OTDFCTL_REF: ${{ needs.resolve-refs.outputs.go-ref }}
+      GO_CHANNEL: ${{ needs.resolve-refs.outputs.go-channel }}
+      FOCUS_SDK: rust
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: otdftests
+          persist-credentials: false
+
+      - id: load-extra-keys
+        run: echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      - id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393
+        with:
+          platform-ref: ${{ env.PLATFORM_REF }}
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version: "1.24.x"
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture platform otdfctl location
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      - id: resolve-go
+        working-directory: otdftests
+        run: |-
+          INFO=$(uv run --project otdf-sdk-mgr otdf-sdk-mgr versions resolve go "${OTDFCTL_REF}")
+          echo "version-info=$INFO" >> "$GITHUB_OUTPUT"
+
+      - id: configure-go
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: ${{ steps.resolve-go.outputs.version-info }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: arkavo-org/opentdf-rs
+          ref: ${{ env.RUST_REF }}
+          path: otdftests/xtest/sdk/rust/src/main
+          persist-credentials: false
+
+      - name: Build rust CLI
+        run: make VERSIONS=main
+        working-directory: otdftests/xtest/sdk/rust
+
+      - name: Probe rust supports
+        working-directory: otdftests/xtest
+        run: |-
+          ./sdk/rust/dist/main/cli.sh supports hexless
+          ./sdk/rust/dist/main/cli.sh supports connectrpc
+          ! ./sdk/rust/dist/main/cli.sh supports ecwrap || exit 1
+
+      - name: Platform version
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        run: |-
+          if PLATFORM_VERSION=$(go run ./service version 2>&1); then
+            echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
+          else
+            echo "PLATFORM_VERSION=${PLATFORM_TAG}" >> "$GITHUB_ENV"
+          fi
+
+      - run: uv sync
+        working-directory: otdftests/xtest
+
+      - name: Run Stage-1 community tests (rust × go)
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          PLATFORM_TAG: ${{ env.PLATFORM_TAG }}
+          SCHEMA_FILE: "manifest.schema.json"
+        run: |-
+          mkdir -p test-results
+          GO_CH="${GO_CHANNEL}"
+          uv run pytest -n auto --dist loadscope \
+            --html=test-results/community-rust-stage1.html \
+            --self-contained-html \
+            --junitxml=test-results/community-rust-stage1.junit.xml \
+            --sdks-encrypt "rust@main go@${GO_CH}" \
+            --sdks-decrypt "rust@main go@${GO_CH}" \
+            --containers tdf \
+            --focus rust \
+            -m stage1 \
+            -ra -v \
+            test_tdfs.py
+
+      - if: success() || failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} community-rust-stage1
+          path: otdftests/xtest/test-results/**
+
+  # OpenTDFKit needs Apple CryptoKit/Security — macOS only (not Linux Swift).
+  # Platform deps run natively on the runner (Postgres + Keycloak JVM + platform binary).
+  # No Docker/Colima: nested virt unavailable on arm64 GHA, and Keycloak compose healthchecks flake.
+  community-swift:
+    name: "swift ↔ go@latest stage1"
+    needs: [resolve-refs]
+    runs-on: macos-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    env:
+      SWIFT_REF: ${{ needs.resolve-refs.outputs.swift-ref }}
+      PLATFORM_REF: ${{ needs.resolve-refs.outputs.platform-ref }}
+      PLATFORM_TAG: ${{ needs.resolve-refs.outputs.platform-tag }}
+      OTDFCTL_REF: ${{ needs.resolve-refs.outputs.go-ref }}
+      GO_CHANNEL: ${{ needs.resolve-refs.outputs.go-channel }}
+      FOCUS_SDK: swift
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: otdftests
+          persist-credentials: false
+
+      - id: load-extra-keys
+        run: echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      # Native macOS platform bootstrap (Homebrew Postgres, Keycloak release tarball).
+      - id: run-platform
+        uses: ./otdftests/.github/actions/start-up-with-containers-macos
+        with:
+          platform-ref: ${{ env.PLATFORM_REF }}
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version: "1.24.x"
+
+      - name: Capture platform otdfctl location
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      - id: resolve-go
+        working-directory: otdftests
+        run: |-
+          INFO=$(uv run --project otdf-sdk-mgr otdf-sdk-mgr versions resolve go "${OTDFCTL_REF}")
+          echo "version-info=$INFO" >> "$GITHUB_OUTPUT"
+
+      - id: configure-go
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: ${{ steps.resolve-go.outputs.version-info }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: arkavo-org/OpenTDFKit
+          ref: ${{ env.SWIFT_REF }}
+          path: otdftests/xtest/sdk/swift/src/main
+          persist-credentials: false
+
+      - name: Build swift CLI
+        run: make VERSIONS=main
+        working-directory: otdftests/xtest/sdk/swift
+
+      - name: Probe swift supports
+        working-directory: otdftests/xtest
+        run: |-
+          ./sdk/swift/dist/main/cli.sh supports tdf || ./sdk/swift/dist/main/cli.sh supports ztdf
+          ./sdk/swift/dist/main/cli.sh supports hexless
+          ! ./sdk/swift/dist/main/cli.sh supports ecwrap || exit 1
+
+      - name: Platform version
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        run: |-
+          if PLATFORM_VERSION=$(go run ./service version 2>&1); then
+            echo "PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
+          else
+            echo "PLATFORM_VERSION=${PLATFORM_TAG}" >> "$GITHUB_ENV"
+          fi
+
+      - run: uv sync
+        working-directory: otdftests/xtest
+
+      - name: Run Stage-1 community tests (swift × go)
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          PLATFORM_TAG: ${{ env.PLATFORM_TAG }}
+          SCHEMA_FILE: "manifest.schema.json"
+        run: |-
+          mkdir -p test-results
+          GO_CH="${GO_CHANNEL}"
+          uv run pytest -n auto --dist loadscope \
+            --html=test-results/community-swift-stage1.html \
+            --self-contained-html \
+            --junitxml=test-results/community-swift-stage1.junit.xml \
+            --sdks-encrypt "swift@main go@${GO_CH}" \
+            --sdks-decrypt "swift@main go@${GO_CH}" \
+            --containers tdf \
+            --focus swift \
+            -m stage1 \
+            -ra -v \
+            test_tdfs.py
+
+      - if: success() || failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} community-swift-stage1
+          path: otdftests/xtest/test-results/**
+
+  # Capstone: require python + rust + swift Stage-1 (all kas-ready peers).
+  community-xtest:
+    runs-on: ubuntu-latest
+    needs: [resolve-refs, community-python, community-rust, community-swift]
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - name: Assert required community jobs passed
+        if: ${{ needs.community-python.result != 'success' || needs.community-rust.result != 'success' || needs.community-swift.result != 'success' }}
+        run: |
+          echo "python=${{ needs.community-python.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "rust=${{ needs.community-rust.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "swift=${{ needs.community-swift.result }}" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - name: Success
+        if: ${{ needs.community-python.result == 'success' && needs.community-rust.result == 'success' && needs.community-swift.result == 'success' }}
+        run: |
+          echo "Community Stage-1 required jobs (python + rust + swift) succeeded." >> "$GITHUB_STEP_SUMMARY"

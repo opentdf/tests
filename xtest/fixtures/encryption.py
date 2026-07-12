@@ -35,7 +35,7 @@ class EncryptFactory:
         self,
         encrypt_sdk: tdfs.SDK,
         *,
-        container: tdfs.container_type = "ztdf",
+        container: tdfs.container_type = "tdf",
         attr_values: list[str] | None = None,
         target_mode: tdfs.container_version | None = None,
         az: str = "",

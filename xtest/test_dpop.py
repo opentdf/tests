@@ -358,7 +358,7 @@ def test_dpop_happy_path_roundtrip(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
@@ -395,7 +395,7 @@ def test_dpop_server_issued_nonce_retry(
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 

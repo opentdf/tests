@@ -1,0 +1,105 @@
+# Deploy community conformance report to GitHub Pages (main branch only).
+# Consumes artifacts from Community X-Test runs or regenerates from a dispatch.
+name: Community Conformance Pages
+
+on:
+  workflow_run:
+    workflows: ["Community X-Test"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: community-pages
+  cancel-in-progress: false
+
+jobs:
+  build-site:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.14"
+
+      - name: Download latest community artifacts
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            fs.mkdirSync('artifact-download', { recursive: true });
+            let runId = context.payload.workflow_run?.id;
+            if (!runId) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'community-xtest.yml',
+                branch: 'main',
+                per_page: 1,
+              });
+              runId = runs.data.workflow_runs[0]?.id;
+            }
+            if (!runId) {
+              core.warning('No Community X-Test run found; generating empty site shell');
+              return;
+            }
+            core.info(`Using run ${runId}`);
+            const arts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            for (const art of arts.data.artifacts) {
+              if (!art.name.includes('community-python')) continue;
+              const { data } = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: art.id,
+                archive_format: 'zip',
+              });
+              const zipPath = path.join('artifact-download', `${art.id}.zip`);
+              fs.writeFileSync(zipPath, Buffer.from(data));
+              const { execSync } = require('child_process');
+              execSync(`unzip -o "${zipPath}" -d artifact-download/unpacked`, { stdio: 'inherit' });
+            }
+
+      - name: Generate site
+        working-directory: xtest
+        run: |
+          uv sync
+          mkdir -p test-results
+          if [ -d ../artifact-download/unpacked ]; then
+            find ../artifact-download/unpacked -name 'supports.json' -print
+            mkdir -p test-results/report-python-ubuntu-latest
+            find ../artifact-download/unpacked -name 'supports.json' -exec cp {} test-results/report-python-ubuntu-latest/ \;
+            find ../artifact-download/unpacked -name '*.junit.xml' -exec cp {} test-results/report-python-ubuntu-latest/ \; || true
+          fi
+          uv run python -m reporting.generate_site \
+            --input-dir test-results \
+            --output-dir site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: xtest/site
+
+  deploy:
+    needs: build-site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

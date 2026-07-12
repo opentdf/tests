@@ -25,7 +25,7 @@ def test_decrypt_small(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / f"small-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
@@ -45,7 +45,7 @@ def test_decrypt_big(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / f"big-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 10 * 2**20
     expected_bytes = bytes([0] * 1024)
@@ -66,7 +66,7 @@ def test_decrypt_SDKv0_7_5(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
     rt_file = tmp_dir / f"0.7.5-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 102
 
@@ -83,7 +83,7 @@ def test_decrypt_SDKv0_7_8(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
     rt_file = tmp_dir / f"0.7.8-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 92
 
@@ -100,7 +100,7 @@ def test_decrypt_SDKv0_9_0(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.9.0-2de6a49-DSP2.0.5.1_and_2.0.6.tdf")
     rt_file = tmp_dir / f"0.9.0-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 92
 
@@ -116,7 +116,7 @@ def test_decrypt_no_splitid(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = tmp_dir / f"no-splitids-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 5 * 2**10
     expected_bytes = bytes([0] * 1024)
@@ -136,6 +136,6 @@ def test_decrypt_object_statement_value_json(
         pytest.skip("assertion_verification is not supported")
     ct_file = get_golden_file("with-json-object-assertions-java.tdf")
     rt_file = tmp_dir / f"with-json-object-assertions-java-{decrypt_sdk}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf", verify_assertions=False)
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf", verify_assertions=False)
     with rt_file.open("rb") as f:
         assert f.read().decode("utf-8") == "text"

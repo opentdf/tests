@@ -25,6 +25,7 @@ except FileNotFoundError:
 #### BASIC ROUNDTRIP TESTS
 
 
+@pytest.mark.stage1
 def test_tdf_roundtrip(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
@@ -35,14 +36,14 @@ def test_tdf_roundtrip(
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
 ):
-    if container == "ztdf" and decrypt_sdk in dspx1153Fails:
+    if container == "tdf" and decrypt_sdk in dspx1153Fails:
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
     pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if container == "ztdf-ecwrap":
+    if container == "tdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
         if "ecwrap" not in pfs.features:
@@ -58,7 +59,7 @@ def test_tdf_roundtrip(
     target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
     # Use explicit RSA attribute when not using EC wrapping to avoid base_key interference
     attr_values = (
-        None if container == "ztdf-ecwrap" else attribute_default_rsa.value_fqns
+        None if container == "tdf-ecwrap" else attribute_default_rsa.value_fqns
     )
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -71,7 +72,7 @@ def test_tdf_roundtrip(
     assert manifest.payload.isEncrypted
     assert len(manifest.encryptionInformation.keyAccess) == 1
     kao = manifest.encryptionInformation.keyAccess[0]
-    if container == "ztdf-ecwrap":
+    if container == "tdf-ecwrap":
         assert kao.type == "ec-wrapped"
         assert kao.ephemeralPublicKey is not None
     else:
@@ -96,7 +97,7 @@ def test_tdf_roundtrip(
     audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
     if (
-        container.startswith("ztdf")
+        container.startswith("tdf")
         and decrypt_sdk.supports("ecwrap")
         and "ecwrap" in pfs.features
     ):
@@ -134,7 +135,7 @@ def test_tdf_spec_target_422(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -164,7 +165,7 @@ def test_tdf_spec_target_430(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -303,7 +304,7 @@ def test_tdf_assertions_unkeyed(
         attr_values=attribute_default_rsa.value_fqns,
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -337,7 +338,7 @@ def test_tdf_assertions_with_keys(
     decrypt_sdk.decrypt(
         ct_file,
         rt_file,
-        "ztdf",
+        "tdf",
         assertion_verification_file_rs_and_hs_keys,
     )
     assert filecmp.cmp(pt_file, rt_file)
@@ -378,7 +379,7 @@ def test_tdf_assertions_422_format(
     decrypt_sdk.decrypt(
         ct_file,
         rt_file,
-        "ztdf",
+        "tdf",
         assertion_verification_file_rs_and_hs_keys,
     )
     assert filecmp.cmp(pt_file, rt_file)
@@ -559,7 +560,7 @@ def test_tdf_with_unbound_policy(
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_kas_request_error(exc, decrypt_sdk)
@@ -587,7 +588,7 @@ def test_tdf_with_altered_policy_binding(
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_kas_request_error(exc, decrypt_sdk)
@@ -616,7 +617,7 @@ def test_tdf_with_altered_root_sig(
     b_file = tdfs.update_manifest("broken_root_sig", ct_file, change_root_signature)
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "root", decrypt_sdk)
@@ -643,7 +644,7 @@ def test_tdf_with_altered_seg_sig_wrong(
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
         decrypt_sdk.decrypt(
-            b_file, rt_file, "ztdf", expect_error=True, verify_assertions=False
+            b_file, rt_file, "tdf", expect_error=True, verify_assertions=False
         )
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
@@ -675,7 +676,7 @@ def test_tdf_with_altered_enc_seg_size(
     )
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "", decrypt_sdk)
@@ -712,7 +713,7 @@ def test_tdf_with_altered_assertion_statement(
     )
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "assertion", decrypt_sdk)
@@ -750,7 +751,7 @@ def test_tdf_with_altered_assertion_with_keys(
         decrypt_sdk.decrypt(
             b_file,
             rt_file,
-            "ztdf",
+            "tdf",
             assertion_verification_file_rs_and_hs_keys,
             expect_error=True,
         )
@@ -784,7 +785,7 @@ def test_tdf_altered_payload_end(
     b_file = tdfs.update_payload("altered_payload_end", ct_file, change_payload_end)
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "segment", decrypt_sdk)
@@ -820,7 +821,7 @@ def test_tdf_with_malicious_kao(
     _mark = audit_logs.mark("before_malicious_kao_decrypt")
 
     try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        decrypt_sdk.decrypt(b_file, rt_file, "tdf", expect_error=True)
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert re.search(

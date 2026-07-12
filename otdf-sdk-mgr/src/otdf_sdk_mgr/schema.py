@@ -13,7 +13,14 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from ruamel.yaml import YAML, YAMLError
 
 API_VERSION = "opentdf.io/v1alpha1"
@@ -36,7 +43,18 @@ API_VERSION = "opentdf.io/v1alpha1"
 
 KasMode = Literal["standard", "key_management"]
 SdkName = Literal["go", "java", "js"]
-ContainerKind = Literal["ztdf", "ztdf-ecwrap"]
+# Canonical Base TDF profiles (docs/FORMATS.md). Legacy "ztdf" normalizes to tdf.
+ContainerKind = Literal["tdf", "tdf-ecwrap"]
+
+_CONTAINER_ALIASES: dict[str, ContainerKind] = {
+    "tdf": "tdf",
+    "base-tdf": "tdf",
+    "standard-tdf": "tdf",
+    "ztdf": "tdf",  # legacy OpenTDF tooling name for Base TDF ZIP
+    "tdf-ecwrap": "tdf-ecwrap",
+    "base-tdf-ecwrap": "tdf-ecwrap",
+    "ztdf-ecwrap": "tdf-ecwrap",
+}
 
 
 class _StrictModel(BaseModel):
@@ -199,10 +217,27 @@ class Suite(_StrictModel):
     kexpr: str | None = Field(default=None, description="Forwarded to pytest -k")
     containers: list[ContainerKind] = Field(
         default_factory=list,
-        description="Forwarded to --containers as a whitespace-separated list",
+        description=(
+            "Format profiles for --containers: tdf (Base TDF), tdf-ecwrap. "
+            "Legacy aliases ztdf / ztdf-ecwrap normalize to tdf / tdf-ecwrap."
+        ),
     )
     markers: str | None = Field(default=None, description="Forwarded to -m")
     extra_args: list[str] = Field(default_factory=list)
+
+    @field_validator("containers", mode="before")
+    @classmethod
+    def _normalize_containers(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        out: list[str] = []
+        for item in value:
+            key = str(item).strip().lower()
+            if key in _CONTAINER_ALIASES:
+                out.append(_CONTAINER_ALIASES[key])
+            else:
+                out.append(str(item))
+        return out
 
 
 class Scenario(_StrictModel):

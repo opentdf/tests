@@ -38,21 +38,30 @@ def get_sdk_dir() -> Path:
 
 
 def get_sdk_dirs() -> dict[str, Path]:
-    """Return per-SDK directories keyed by SDK name."""
+    """Return per-SDK directories keyed by SDK name (official + community)."""
     sdk_dir = get_sdk_dir()
     return {
         "go": sdk_dir / "go",
         "js": sdk_dir / "js",
         "java": sdk_dir / "java",
+        "rust": sdk_dir / "rust",
+        "swift": sdk_dir / "swift",
+        "python": sdk_dir / "python",
     }
 
 
-# Git repository URLs
+# Git repository URLs (overridable via OTDF_*_GIT_URL env vars in CI)
 SDK_GIT_URLS: dict[str, str] = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
     "js": "https://github.com/opentdf/web-sdk.git",
     "platform": "https://github.com/opentdf/platform.git",
+    # Community SDKs (fork defaults; override with OTDF_RUST_GIT_URL etc.)
+    "rust": os.environ.get("OTDF_RUST_GIT_URL", "https://github.com/arkavo-org/opentdf-rs.git"),
+    "swift": os.environ.get("OTDF_SWIFT_GIT_URL", "https://github.com/arkavo-org/OpenTDFKit.git"),
+    "python": os.environ.get(
+        "OTDF_PYTHON_GIT_URL", "https://github.com/b-long/opentdf-python-sdk.git"
+    ),
 }
 
 SDK_NPM_PACKAGES: dict[str, str] = {
@@ -120,6 +129,9 @@ JAVA_PLATFORM_BRANCH_MAP: dict[str, str] = {
 SDK_BARE_REPOS: dict[str, str] = {
     "java": "java-sdk.git",
     "js": "web-sdk.git",
+    "rust": "opentdf-rs.git",
+    "swift": "OpenTDFKit.git",
+    "python": "opentdf-python-sdk.git",
 }
 
 # Tag infixes for monorepo tag resolution
@@ -129,4 +141,11 @@ SDK_TAG_INFIXES: dict[str, str] = {
 }
 
 
+# Official SDKs only — default install/checkout/clean must not pull community.
 ALL_SDKS = ["go", "js", "java"]
+
+# Community SDKs (fork). Explicit install/checkout only; never folded into ALL_SDKS.
+COMMUNITY_SDKS = ["rust", "swift", "python"]
+
+# All SDKs known to otdf-sdk-mgr (official + community).
+KNOWN_SDKS = ALL_SDKS + COMMUNITY_SDKS

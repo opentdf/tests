@@ -100,3 +100,7 @@ testpaths = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-ra -v"
+markers = [
+    "stage1: community Stage-1 basic Base TDF (tdf) roundtrip (community ↔ go)",
+    "integration: requires a running platform",
+]

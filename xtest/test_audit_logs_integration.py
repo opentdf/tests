@@ -68,13 +68,13 @@ class TestRewrapAudit:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=attribute_default_rsa.value_fqns,
         )
 
         mark = audit_logs.mark("before_decrypt")
         rt_file = tmp_dir / f"rewrap-success-{encrypt_sdk}-{decrypt_sdk}.untdf"
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+        decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
         assert filecmp.cmp(pt_file, rt_file)
 
         # Verify rewrap success was logged with structured assertion
@@ -118,7 +118,7 @@ class TestRewrapAudit:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=attribute_single_kas_grant.value_fqns,
         )
 
@@ -126,7 +126,7 @@ class TestRewrapAudit:
         rt_file = tmp_dir / f"rewrap-access-{encrypt_sdk}-{decrypt_sdk}.untdf"
 
         # This should succeed if the client has access
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+        decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
         assert filecmp.cmp(pt_file, rt_file)
 
         # Verify rewrap success with attribute FQNs
@@ -163,7 +163,7 @@ class TestRewrapAudit:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=[
                 attribute_two_kas_grant_and.value_fqns[0],
                 attribute_two_kas_grant_and.value_fqns[1],
@@ -180,7 +180,7 @@ class TestRewrapAudit:
         ):
             tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
 
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+        decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
         assert filecmp.cmp(pt_file, rt_file)
 
         # For AND policy, should have 2 rewrap success events (one per KAS)
@@ -317,13 +317,13 @@ class TestDecisionAudit:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=attribute_single_kas_grant.value_fqns,
         )
 
         mark = audit_logs.mark("before_decision_decrypt")
         rt_file = tmp_dir / f"decision-success-{encrypt_sdk}-{decrypt_sdk}.untdf"
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+        decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
         assert filecmp.cmp(pt_file, rt_file)
 
         # Verify both rewrap and decision were logged
@@ -379,7 +379,7 @@ class TestEdgeCases:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=attribute_default_rsa.value_fqns,
         )
 
@@ -403,7 +403,7 @@ class TestEdgeCases:
         rt_file = tmp_dir / f"tamper-audit-{encrypt_sdk}-{decrypt_sdk}.untdf"
 
         try:
-            decrypt_sdk.decrypt(tampered_file, rt_file, "ztdf", expect_error=True)
+            decrypt_sdk.decrypt(tampered_file, rt_file, "tdf", expect_error=True)
             pytest.fail("Expected decrypt to fail")
         except subprocess.CalledProcessError:
             pass  # Expected
@@ -440,7 +440,7 @@ class TestEdgeCases:
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
-            container="ztdf",
+            container="tdf",
             attr_values=attribute_default_rsa.value_fqns,
         )
 
@@ -449,7 +449,7 @@ class TestEdgeCases:
         # Perform multiple decrypts
         for i in range(num_decrypts):
             rt_file = tmp_dir / f"load-test-{encrypt_sdk}-{decrypt_sdk}-{i}.untdf"
-            decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+            decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
             assert filecmp.cmp(pt_file, rt_file)
 
         # Verify we got audit events for all decrypts

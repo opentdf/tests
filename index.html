@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>OpenTDF Community SDK Conformance</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #121a2b;
+      --text: #e8eef7;
+      --muted: #9fb0c7;
+      --accent: #3d9cf0;
+      --ok: #2ecc71;
+      --bad: #e74c3c;
+      --warn: #f1c40f;
+      --border: #243147;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2a44 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 2.5rem 1.5rem 1rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 { margin: 0 0 0.4rem; font-size: 1.85rem; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); max-width: 70ch; }
+    main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 1.5rem 0; }
+    .card {
+      background: color-mix(in srgb, var(--card) 92%, white 8%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+    }
+    .card h2 { margin: 0 0 0.35rem; font-size: 1rem; color: var(--muted); font-weight: 600; }
+    .card .value { font-size: 1.35rem; font-weight: 700; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 0.92rem;
+    }
+    th, td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; }
+    th { background: #182338; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .pill.ok { background: rgba(46,204,113,0.15); color: var(--ok); }
+    .pill.fail { background: rgba(231,76,60,0.15); color: var(--bad); }
+    .pill.skip { background: rgba(241,196,15,0.12); color: var(--warn); }
+    .pill.na { background: rgba(159,176,199,0.12); color: var(--muted); }
+    a { color: var(--accent); }
+    footer { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OpenTDF Community SDK Conformance</h1>
+    <p class="sub">
+      Cross-SDK Stage-1 confidence for adopters: community encrypt ↔ go decrypt and the reverse,
+      <strong>Base TDF (<code>tdf</code>) only</strong> — not NATO ZTDF, not NanoTDF. Source:
+      <a href="https://github.com/arkavo-org/opentdf-tests/tree/community-xtest-stage1">arkavo-org/opentdf-tests</a>
+      · workflow <code>Community X-Test</code>.
+    </p>
+  </header>
+  <main>
+    <div class="grid">
+      <div class="card">
+        <h2>Stage-1 format</h2>
+        <div class="value">Base TDF (tdf)</div>
+      </div>
+      <div class="card">
+        <h2>Peer SDK</h2>
+        <div class="value">go@main</div>
+      </div>
+      <div class="card">
+        <h2>Platform</h2>
+        <div class="value">opentdf/platform@main</div>
+      </div>
+      <div class="card">
+        <h2>Pages source</h2>
+        <div class="value">community-xtest-stage1</div>
+      </div>
+    </div>
+
+    <h2>SDK readiness</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>SDK</th>
+          <th>Repo</th>
+          <th>Stage-1 path</th>
+          <th>CI job</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>python</strong></td>
+          <td><a href="https://github.com/b-long/opentdf-python-sdk">b-long/opentdf-python-sdk</a></td>
+          <td>platform auth + TDF CLI</td>
+          <td><span class="pill ok">ubuntu</span></td>
+          <td>First green path</td>
+        </tr>
+        <tr>
+          <td><strong>rust</strong></td>
+          <td><a href="https://github.com/arkavo-org/opentdf-rs">arkavo-org/opentdf-rs</a></td>
+          <td>RSA wrap + KasClient rewrap</td>
+          <td><span class="pill ok">ubuntu</span></td>
+          <td>schema 4.3.0 + RSA session-optional rewrap</td>
+        </tr>
+        <tr>
+          <td><strong>swift</strong></td>
+          <td><a href="https://github.com/arkavo-org/OpenTDFKit">arkavo-org/OpenTDFKit</a></td>
+          <td>OAuth + RSA wrap + ephemeral rewrap</td>
+          <td><span class="pill ok">macos-latest</span></td>
+          <td>CryptoKit/Security require Apple; Docker via Colima for platform</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:2rem">Capability matrix (advertised <code>supports</code>)</h2>
+    <p class="sub">Conservative honesty: only claim features Stage-1 exercises or that the CLI proves.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>python</th>
+          <th>rust</th>
+          <th>swift</th>
+          <th>go (peer)</th>
+        </tr>
+      </thead>
+      <tbody id="cap-body">
+        <!-- filled by script from summary.json if present -->
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:2rem">Interop (Stage-1 directions)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Encrypt → Decrypt</th>
+          <th>Expected</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>python → go</td><td><span class="pill ok">pass</span></td></tr>
+        <tr><td>go → python</td><td><span class="pill ok">pass</span></td></tr>
+        <tr><td>rust → go</td><td><span class="pill ok">target</span></td></tr>
+        <tr><td>go → rust</td><td><span class="pill ok">target</span></td></tr>
+        <tr><td>swift → go</td><td><span class="pill skip">macos CI</span></td></tr>
+        <tr><td>go → swift</td><td><span class="pill skip">macos CI</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:2rem">Bug metrics</h2>
+    <p class="sub">
+      Historical fingerprints will roll up from CI junit artifacts (<code>supports.json</code> +
+      <code>*.junit.xml</code>). Live run artifacts are on
+      <a href="https://github.com/arkavo-org/opentdf-tests/actions/workflows/community-xtest.yml">Actions → Community X-Test</a>.
+    </p>
+    <div class="card" id="metrics-card">
+      <h2>Latest summary</h2>
+      <div class="value" id="metrics-value">Load <code>summary.json</code> after next CI publish…</div>
+    </div>
+
+    <footer>
+      <p>
+        Design: <a href="docs/community-xtest-design.md">docs/community-xtest-design.md</a>
+        · Adopter guide: <a href="docs/community-conformance.md">docs/community-conformance.md</a>
+        · Stage-1 is Base TDF only (see docs/FORMATS.md).
+      </p>
+      <p id="generated">Generated statically on branch community-xtest-stage1. CI can overwrite summary.json.</p>
+    </footer>
+  </main>
+  <script>
+    const FEATURES = [
+      "autoconfigure","connectrpc","hexless","hexaflexible","ecwrap","kasallowlist",
+      "assertions","dpop","key_management","obligations"
+    ];
+    const DEFAULT = {
+      python: { autoconfigure:"supported", connectrpc:"supported", hexless:"supported", hexaflexible:"unsupported", ecwrap:"unsupported", kasallowlist:"supported", assertions:"unsupported", dpop:"unsupported", key_management:"unsupported", obligations:"unsupported" },
+      rust:   { autoconfigure:"unsupported", connectrpc:"supported", hexless:"supported", hexaflexible:"unsupported", ecwrap:"unsupported", kasallowlist:"unsupported", assertions:"unsupported", dpop:"unsupported", key_management:"unsupported", obligations:"unsupported" },
+      swift:  { autoconfigure:"unsupported", connectrpc:"supported", hexless:"supported", hexaflexible:"unsupported", ecwrap:"unsupported", kasallowlist:"unsupported", assertions:"unsupported", dpop:"unsupported", key_management:"unsupported", obligations:"unsupported" },
+      go:     { autoconfigure:"supported", connectrpc:"supported", hexless:"supported", hexaflexible:"supported", ecwrap:"supported", kasallowlist:"supported", assertions:"supported", dpop:"supported", key_management:"supported", obligations:"supported" },
+    };
+    function cell(v) {
+      if (v === "supported") return '<span class="pill ok">supported</span>';
+      if (v === "unsupported") return '<span class="pill fail">unsupported</span>';
+      return '<span class="pill na">' + (v || "—") + '</span>';
+    }
+    function render(matrix) {
+      const body = document.getElementById("cap-body");
+      body.innerHTML = FEATURES.map(f => {
+        return `<tr><td><code>${f}</code></td><td>${cell(matrix.python[f])}</td><td>${cell(matrix.rust[f])}</td><td>${cell(matrix.swift[f])}</td><td>${cell(matrix.go[f])}</td></tr>`;
+      }).join("");
+    }
+    render(DEFAULT);
+    fetch("summary.json").then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return;
+      document.getElementById("metrics-value").textContent =
+        `reports=${(data.reports||[]).length} generated_at=${data.generated_at || "n/a"}`;
+      document.getElementById("generated").textContent = "Last summary.json: " + (data.generated_at || "");
+    }).catch(() => {});
+  </script>
+</body>
+</html>

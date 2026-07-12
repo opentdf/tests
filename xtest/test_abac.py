@@ -102,7 +102,7 @@ def test_key_mapping_multiple_mechanisms(
 
     tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -170,7 +170,7 @@ def test_key_mapping_extended_mechanisms(
 
     # Decrypt and verify
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -231,7 +231,7 @@ def test_key_mapping_extended_ec_mechanisms(
 
     # Decrypt and verify
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -291,7 +291,7 @@ def test_key_mapping_extended_rsa_mechanisms(
 
     # Decrypt and verify
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -330,7 +330,7 @@ def test_autoconfigure_one_attribute_standard(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
     # Verify rewrap was logged with expected attribute FQNs
@@ -386,7 +386,7 @@ def test_autoconfigure_two_kas_or_standard(
     mark = audit_logs.mark("before_decrypt")
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
     # Verify rewrap was logged - for OR policy, SDK only needs one KAS to succeed
@@ -440,7 +440,7 @@ def test_autoconfigure_double_kas_and(
     mark = audit_logs.mark("before_decrypt")
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
     # Verify rewrap was logged - for AND policy, SDK must contact both KASes
@@ -481,7 +481,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -526,7 +526,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -571,7 +571,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -608,7 +608,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -653,7 +653,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -698,7 +698,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -726,7 +726,7 @@ def test_obligations_not_entitled(
     attr, _ = obligation_setup_no_scs_unscoped_trigger
 
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / "test-obligations.ztdf"
+    ct_file = tmp_dir / "test-obligations.tdf"
     assert attr.values, "Attribute has no values"
     attr_val = attr.values[0]
     assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
@@ -779,7 +779,7 @@ def test_obligations_not_fulfillable(
     assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
+    ct_file = tmp_dir / "test-obligations-fulfillable.tdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
@@ -827,7 +827,7 @@ def test_obligations_client_not_scoped(
     assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
+    ct_file = tmp_dir / "test-obligations-fulfillable.tdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
@@ -870,7 +870,7 @@ def test_obligations_client_scoped(
     assert attr_val is not None and attr_val.fqn, "Attribute value is invalid"
 
     # Encrypt the file with the attribute
-    ct_file = tmp_dir / "test-obligations-fulfillable.ztdf"
+    ct_file = tmp_dir / "test-obligations-fulfillable.tdf"
     encrypt_sdk.encrypt(
         pt_file,
         ct_file,
@@ -946,7 +946,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -1000,7 +1000,7 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
     golden_file_name = "key-management-no-split-golden"
     ct_file = get_golden_file(f"{golden_file_name}.tdf")
     rt_file = tmp_dir / f"{golden_file_name}.untdf"
-    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="tdf")
     with rt_file.open("r", encoding="utf-8") as f:
         assert f.read().strip() == "hello"
 

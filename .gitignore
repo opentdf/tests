@@ -31,4 +31,9 @@ xtest/sdk/java/cmdline.jar
 /xtest/sdk/go/platform-src/
 /xtest/otdfctl/
 
+# Community + official SDK checkouts and build products
+/xtest/sdk/*/src/
+/xtest/sdk/*/dist/
+/xtest/test-results/
+
 /tmp/

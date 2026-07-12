@@ -47,7 +47,7 @@ suite:
   targets:
     - "xtest/test_tdfs.py::test_tdf_roundtrip"
   containers:
-    - ztdf
+    - tdf
 """
 
 
@@ -64,7 +64,7 @@ def test_scenario_roundtrip(tmp_path: Path) -> None:
     assert scenario.sdks.decrypt[0].sdk == "java"
     assert scenario.sdks.decrypt[0].version == "0.7.8"
     assert scenario.suite.targets == ["xtest/test_tdfs.py::test_tdf_roundtrip"]
-    assert scenario.suite.containers == ["ztdf"]
+    assert scenario.suite.containers == ["tdf"]
 
 
 def test_platform_pin_requires_exactly_one_source() -> None:

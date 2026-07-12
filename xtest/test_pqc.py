@@ -110,7 +110,7 @@ def test_xwing_roundtrip(
     assert_xwing_public_key_size(key_xwing)
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -175,7 +175,7 @@ def test_xwing_with_ec_roundtrip(
     ):
         tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -233,7 +233,7 @@ def test_secpmlkem_3_roundtrip(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -311,7 +311,7 @@ def test_secpmlkem_5_roundtrip(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -363,7 +363,7 @@ def test_mlkem_768_roundtrip(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)
 
 
@@ -413,5 +413,5 @@ def test_mlkem_1024_roundtrip(
     )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    decrypt_sdk.decrypt(ct_file, rt_file, "tdf")
     assert filecmp.cmp(pt_file, rt_file)

@@ -88,10 +88,22 @@ def pytest_addoption(parser: pytest.Parser):
         help="comma-separated list of docker compose services to monitor for audit logs",
         type=lambda s: [s.strip() for s in s.split(",")],
     )
+
+    def containers_opt(v: str) -> str:
+        """Validate whitespace-separated container profiles (canonical or aliases)."""
+        if not v.strip():
+            raise ValueError("At least one container profile is required")
+        for tok in v.split():
+            tdfs.normalize_container(tok)  # raises ValueError if unknown
+        return v
+
     parser.addoption(
         "--containers",
-        help=f"which container formats to test, one or more of {englist(typing.get_args(tdfs.container_type))}",
-        type=is_type_or_list_of_types(tdfs.container_type),
+        help=(
+            "which container profiles to test: tdf (Base TDF), tdf-ecwrap; "
+            "aliases: base-tdf, ztdf (legacy→tdf), ztdf-ecwrap. See docs/FORMATS.md"
+        ),
+        type=containers_opt,
     )
     parser.addoption(
         "--focus",
@@ -138,7 +150,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     - encrypt_sdk: which SDK(s) to use for encryption
     - decrypt_sdk: which SDK(s) to use for decryption
     - in_focus: filter tests by SDK focus
-    - container: which container formats to test (ztdf, ztdf-ecwrap)
+    - container: which container profiles to test (tdf, tdf-ecwrap; aliases ok)
     """
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
@@ -160,13 +172,33 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return a
 
+    def containers_list_opt() -> list[tdfs.container_type]:
+        v = metafunc.config.getoption("--containers")
+        if not v:
+            return list(typing.get_args(tdfs.container_type))
+        if type(v) is not str:
+            raise ValueError(f"Invalid value for --containers: {v}")
+        # Preserve order, drop duplicate canonical names
+        seen: set[tdfs.container_type] = set()
+        out: list[tdfs.container_type] = []
+        for tok in v.split():
+            c = tdfs.normalize_container(tok)
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
     def sdk_specs_opt(names: list[str]) -> list[str]:
-        """Return SDK specifier tokens from the first matching option, or all sdk types."""
+        """Return SDK specifier tokens from the first matching option.
+
+        Default is official SDKs only (go/java/js) so community dists are
+        opt-in via --sdks / --sdks-encrypt / --sdks-decrypt.
+        """
         for name in names:
             v = metafunc.config.getoption(name)
             if v:
                 return v.split()
-        return list(typing.get_args(tdfs.sdk_type))
+        return list(tdfs.OFFICIAL_SDKS)
 
     subject_sdks: set[tdfs.SDK] = set()
 
@@ -206,13 +238,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         metafunc.parametrize("in_focus", [focused_sdks])
 
     if "container" in metafunc.fixturenames:
-        containers: list[tdfs.container_type] = []
-        if metafunc.config.getoption("--containers"):
-            containers = cast(
-                list[tdfs.container_type], list_opt("--containers", tdfs.container_type)
-            )
-        else:
-            containers = list(typing.get_args(tdfs.container_type))
+        try:
+            containers = containers_list_opt()
+        except ValueError as e:
+            raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("container", containers)
 
 
