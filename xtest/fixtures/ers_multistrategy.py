@@ -13,6 +13,8 @@ kas_entry_alpha / kas_entry_beta / ... pattern in fixtures.kas.
 import os
 import random
 import string
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import pytest
 
@@ -28,6 +30,32 @@ def platform_url_ers_ms() -> str:
 
 
 @pytest.fixture(scope="session")
+def _require_ers_ms_platform(platform_url_ers_ms: str) -> None:
+    """Skip tests that depend on the ers-ms platform when it isn't running.
+
+    The multi-strategy platform requires both opentdf/platform#3645 and
+    opentdf/platform#3543 to be present. Until both land upstream, CI will
+    start the ers-ms platform on a best-effort basis and this fixture is
+    what keeps the test from producing a hard failure that masks unrelated
+    xtest results.
+    """
+    healthz = f"{platform_url_ers_ms}/healthz"
+    try:
+        with urlopen(healthz, timeout=3.0) as resp:
+            if resp.status == 200:
+                return
+            pytest.skip(
+                f"ers-ms platform at {platform_url_ers_ms} not healthy (HTTP {resp.status}); "
+                "requires opentdf/platform#3645 and #3543 to be present"
+            )
+    except (URLError, TimeoutError, OSError) as e:
+        pytest.skip(
+            f"ers-ms platform at {platform_url_ers_ms} not reachable ({e}); "
+            "requires opentdf/platform#3645 and #3543 to be present"
+        )
+
+
+@pytest.fixture(scope="session")
 def kas_url_ers_ms(platform_url_ers_ms: str) -> str:
     """KAS URL colocated with the multi-strategy ERS platform."""
     return f"{platform_url_ers_ms}/kas"
@@ -38,6 +66,7 @@ def kas_entry_ers_ms(
     otdfctl: OpentdfCommandLineTool,
     cached_kas_keys: abac.PublicKey,
     kas_url_ers_ms: str,
+    _require_ers_ms_platform: None,
 ) -> abac.KasEntry:
     """KAS registry entry for the multi-strategy-ERS platform's KAS."""
     return otdfctl.kas_registry_create_if_not_present(kas_url_ers_ms, cached_kas_keys)
@@ -80,6 +109,7 @@ def attribute_ers_ms_finance_grant(
     kas_entry_ers_ms: abac.KasEntry,
     kas_public_key_r1: abac.KasPublicKey,
     scs_department_finance: abac.SubjectConditionSet,
+    _require_ers_ms_platform: None,
 ) -> abac.AttributeValue:
     """Attribute value `department/finance` granted to the ers-ms KAS.
 

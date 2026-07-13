@@ -684,9 +684,17 @@ jobs:
       # ers-postgres container). Tests that don't reference the ers-ms
       # fixtures are unaffected. See test_ers_multistrategy.py for the
       # regression test that consumes this instance.
+      # These three steps are best-effort: while opentdf/platform#3645 and
+      # #3543 are still open, they will fail on any platform tag that lacks
+      # both. `continue-on-error: true` keeps the rest of the xct matrix
+      # (test_abac, test_pqc, test_dpop, ...) running. The multi-strategy
+      # test itself skips at fixture setup when localhost:8090 isn't
+      # reachable, so a failed startup here does not fail the pytest run.
       - name: Start ers-postgres for multi-strategy ERS
         id: ers-postgres
         if: ${{ steps.multikas.outputs.supported == 'true' }}
+        continue-on-error: true
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
         run: |-
           docker compose --profile ers-test up -d ers-postgres
           # Wait for the container to become healthy so the seed step below
@@ -701,10 +709,10 @@ jobs:
           echo "ers-postgres failed to become ready"
           docker compose --profile ers-test logs ers-postgres
           exit 1
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Seed ers-postgres
         if: ${{ steps.multikas.outputs.supported == 'true' }}
+        continue-on-error: true
         run: |-
           docker exec -i ers_test_postgres psql \
             -U ers_test_user -d ers_test -v ON_ERROR_STOP=1 <<'SQL'
@@ -721,22 +729,26 @@ jobs:
       - name: Start multi-strategy ERS platform (port 8090)
         id: platform-ers-ms
         if: ${{ steps.multikas.outputs.supported == 'true' }}
+        continue-on-error: true
         run: |-
           set -euo pipefail
           config_src="$GITHUB_WORKSPACE/otdftests/xtest/platform-configs/opentdf-multistrategy.yaml"
-          config_dst="$PLATFORM_DIR/opentdf-ers-ms.yaml"
-          cp "$config_src" "$config_dst"
+          platform_dir="$GITHUB_WORKSPACE/${PLATFORM_WORKING_DIR}"
+          cp "$config_src" "$platform_dir/opentdf-ers-ms.yaml"
           log_file="$GITHUB_WORKSPACE/platform-ers-ms.log"
           echo "log-file=platform-ers-ms.log" >> "$GITHUB_OUTPUT"
 
           # Run the second platform in the background. Uses the same source
           # tree as the default platform so both share the policy DB, KAS
           # keys, and cryptoProvider config -- only entityresolution differs.
+          cd "$platform_dir"
           nohup go run ./service start --config-file opentdf-ers-ms.yaml \
             >"$log_file" 2>&1 &
           echo $! > "$GITHUB_WORKSPACE/platform-ers-ms.pid"
 
-          # Wait for /healthz.
+          # Wait for /healthz. Expected to fail on any platform tag that
+          # doesn't include both opentdf/platform#3645 and #3543 -- the
+          # SQL provider panics at startup on #3543-less platforms.
           for _ in $(seq 1 60); do
             if curl -sf http://localhost:8090/healthz >/dev/null; then
               echo "platform-ers-ms ready"
@@ -747,9 +759,8 @@ jobs:
           echo "platform-ers-ms failed to become ready; last 200 log lines:"
           tail -n 200 "$log_file" || true
           exit 1
-        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
         env:
-          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+          PLATFORM_WORKING_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
