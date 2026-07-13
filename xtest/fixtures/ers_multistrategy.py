@@ -11,9 +11,8 @@ kas_entry_alpha / kas_entry_beta / ... pattern in fixtures.kas.
 """
 
 import os
-import random
+import secrets
 import string
-from urllib.error import URLError
 from urllib.request import urlopen
 
 import pytest
@@ -41,14 +40,16 @@ def _require_ers_ms_platform(platform_url_ers_ms: str) -> None:
     """
     healthz = f"{platform_url_ers_ms}/healthz"
     try:
-        with urlopen(healthz, timeout=3.0) as resp:
+        with urlopen(healthz, timeout=3.0) as resp:  # noqa: S310 -- localhost health probe
             if resp.status == 200:
                 return
             pytest.skip(
                 f"ers-ms platform at {platform_url_ers_ms} not healthy (HTTP {resp.status}); "
                 "requires opentdf/platform#3645 and #3543 to be present"
             )
-    except (URLError, TimeoutError, OSError) as e:
+    except (TimeoutError, OSError) as e:
+        # URLError is a subclass of OSError, so OSError covers both connection
+        # and DNS failures without a redundant except clause.
         pytest.skip(
             f"ers-ms platform at {platform_url_ers_ms} not reachable ({e}); "
             "requires opentdf/platform#3645 and #3543 to be present"
@@ -118,7 +119,8 @@ def attribute_ers_ms_finance_grant(
     multi-strategy platform. Access is gated by the .department=finance
     subject condition.
     """
-    ns_name = "ersms-" + "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
+    suffix = "".join(secrets.choice(string.ascii_lowercase) for _ in range(8))
+    ns_name = f"ersms-{suffix}.com"
     ns = otdfctl.namespace_create(ns_name)
 
     attr = otdfctl.attribute_create(
