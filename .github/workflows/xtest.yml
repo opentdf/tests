@@ -678,6 +678,79 @@ jobs:
           root-key: ${{ steps.km-check.outputs.root_key }}
           dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
+      # ####### START ERS-POSTGRES + MULTI-STRATEGY PLATFORM ##########
+      # Mirrors the multi-KAS pattern: a second `platform` process on port
+      # 8090 running in multi-strategy ERS mode (SQL provider against the
+      # ers-postgres container). Tests that don't reference the ers-ms
+      # fixtures are unaffected. See test_ers_multistrategy.py for the
+      # regression test that consumes this instance.
+      - name: Start ers-postgres for multi-strategy ERS
+        id: ers-postgres
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        run: |-
+          docker compose --profile ers-test up -d ers-postgres
+          # Wait for the container to become healthy so the seed step below
+          # doesn't race the container's init scripts.
+          for _ in $(seq 1 30); do
+            if docker exec ers_test_postgres pg_isready -U ers_test_user -d ers_test >/dev/null 2>&1; then
+              echo "ers-postgres ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ers-postgres failed to become ready"
+          docker compose --profile ers-test logs ers-postgres
+          exit 1
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      - name: Seed ers-postgres
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        run: |-
+          docker exec -i ers_test_postgres psql \
+            -U ers_test_user -d ers_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE IF NOT EXISTS ers_attributes (
+              username   TEXT PRIMARY KEY,
+              department TEXT NOT NULL,
+              active     BOOLEAN NOT NULL DEFAULT true
+          );
+          INSERT INTO ers_attributes (username, department)
+          VALUES ('opentdf', 'finance')
+          ON CONFLICT (username) DO NOTHING;
+          SQL
+
+      - name: Start multi-strategy ERS platform (port 8090)
+        id: platform-ers-ms
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        run: |-
+          set -euo pipefail
+          config_src="$GITHUB_WORKSPACE/otdftests/xtest/platform-configs/opentdf-multistrategy.yaml"
+          config_dst="$PLATFORM_DIR/opentdf-ers-ms.yaml"
+          cp "$config_src" "$config_dst"
+          log_file="$GITHUB_WORKSPACE/platform-ers-ms.log"
+          echo "log-file=platform-ers-ms.log" >> "$GITHUB_OUTPUT"
+
+          # Run the second platform in the background. Uses the same source
+          # tree as the default platform so both share the policy DB, KAS
+          # keys, and cryptoProvider config -- only entityresolution differs.
+          nohup go run ./service start --config-file opentdf-ers-ms.yaml \
+            >"$log_file" 2>&1 &
+          echo $! > "$GITHUB_WORKSPACE/platform-ers-ms.pid"
+
+          # Wait for /healthz.
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:8090/healthz >/dev/null; then
+              echo "platform-ers-ms ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "platform-ers-ms failed to become ready; last 200 log lines:"
+          tail -n 200 "$log_file" || true
+          exit 1
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
@@ -689,13 +762,15 @@ jobs:
             --sdks-encrypt "${ENCRYPT_SDK}" \
             --focus "$FOCUS_SDK" \
             $skip_flag \
-            test_abac.py test_pqc.py test_dpop.py
+            test_abac.py test_pqc.py test_dpop.py test_ers_multistrategy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          PLATFORMURL_ERS_MS: "http://localhost:8090"
+          PLATFORM_ERS_MS_LOG_FILE: "../../platform-ers-ms.log"
           KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
           KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
           KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"

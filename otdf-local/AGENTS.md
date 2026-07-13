@@ -18,7 +18,29 @@ uv run pytest --sdks go -v
 
 Auto-configured by otdf-local:
 - Keycloak: 8888, Postgres: 5432, Platform: 8080
+- Multi-strategy ERS platform: 8090 (backed by ers-postgres on 5433)
 - KAS: alpha=8181, beta=8282, gamma=8383, delta=8484, km1=8585, km2=8686
+
+## Multi-strategy ERS platform
+
+`otdf-local up` boots a **second `platform` process** (`platform-ers-ms`)
+on port 8090 alongside the default Keycloak-ERS platform. It runs with
+`entityresolution: type: multi-strategy` and a SQL provider pointed at the
+`ers-postgres` container (docker compose profile `ers-test`, port 5433).
+Both platforms share the same policy DB, KAS keys, and cryptoProvider
+config — only the entity-resolution block differs. This mirrors the
+multi-KAS pattern: extra infrastructure is always up; tests that don't
+reference the ers-ms fixtures are unaffected.
+
+- Template config: `xtest/platform-configs/opentdf-multistrategy.yaml`.
+- Generated config: `xtest/tmp/config/opentdf-ers-ms.yaml`.
+- Log file: `xtest/tmp/logs/platform-ers-ms.log`.
+- Env vars exported by `otdf-local env`: `PLATFORMURL_ERS_MS`, `PLATFORM_ERS_MS_LOG_FILE`.
+- Restart just this instance: `uv run otdf-local restart platform-ers-ms`.
+
+The seed row for the multi-strategy SQL provider (`INSERT INTO
+ers_attributes VALUES ('opentdf', 'finance')`) is applied during the
+`provision` step and is idempotent, so `otdf-local restart` is safe.
 
 ## Restart Procedures
 
