@@ -23,7 +23,7 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
-from otdf_local.utils.yaml import copy_yaml_with_updates
+from otdf_local.utils.yaml import copy_yaml_with_updates, get_nested, load_yaml
 
 
 class PlatformERSMultiStrategyService(Service):
@@ -65,12 +65,18 @@ class PlatformERSMultiStrategyService(Service):
         features = PlatformFeatures.detect(self.settings.platform_dir)
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
+        # Sync the primary platform's root_key so both KAS instances can
+        # unwrap each other's wrapped DEKs. Mirrors KASService's approach.
+        primary_config = load_yaml(self.settings.platform_config)
+        root_key = get_nested(primary_config, "services.kas.root_key", "")
+
         updates = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
             "server.port": self.port,
             "services.kas.registered_kas_uri": f"http://localhost:{self.port}",
+            "services.kas.root_key": root_key,
         }
         dest = self.settings.platform_ers_ms_config
         copy_yaml_with_updates(template_path, dest, updates)

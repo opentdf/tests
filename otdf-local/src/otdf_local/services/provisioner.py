@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS ers_attributes (
 );
 INSERT INTO ers_attributes (username, department)
 VALUES ('opentdf', 'finance')
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT (username) DO UPDATE
+SET department = EXCLUDED.department,
+    active     = true;
 """
 
 
@@ -84,7 +86,32 @@ class Provisioner:
 
         Executes CREATE TABLE + INSERT via `docker exec ers_test_postgres psql`.
         Idempotent so `otdf-local restart` doesn't fail on repeat runs.
+
+        No-op when the ers_test_postgres container isn't running — otdf-local
+        is used by many contributors who don't need multi-strategy ERS, and
+        a missing container is not a provisioning failure for them.
         """
+        # Skip cleanly if the container is not running (users who aren't
+        # exercising multi-strategy ERS don't need this seed).
+        check_running = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-q",
+                "-f",
+                "name=ers_test_postgres",
+                "-f",
+                "status=running",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if not check_running.stdout.strip():
+            return ProvisionResult(
+                success=True,
+                stdout="ers_test_postgres container not running; skipping seed.",
+            )
+
         cmd = [
             "docker",
             "exec",

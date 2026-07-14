@@ -735,6 +735,18 @@ jobs:
           config_src="$GITHUB_WORKSPACE/otdftests/xtest/platform-configs/opentdf-multistrategy.yaml"
           platform_dir="$GITHUB_WORKSPACE/${PLATFORM_WORKING_DIR}"
           cp "$config_src" "$platform_dir/opentdf-ers-ms.yaml"
+
+          # Sync root_key with the primary platform's opentdf.yaml so both
+          # KAS instances can unwrap each other's wrapped DEKs. The template
+          # ships with a placeholder that yq overwrites here.
+          primary_root_key="$(yq e '.services.kas.root_key' "$platform_dir/opentdf.yaml")"
+          if [ -z "$primary_root_key" ] || [ "$primary_root_key" = "null" ]; then
+            echo "could not read services.kas.root_key from $platform_dir/opentdf.yaml"
+            exit 1
+          fi
+          yq e -i ".services.kas.root_key = \"$primary_root_key\"" \
+            "$platform_dir/opentdf-ers-ms.yaml"
+
           log_file="$GITHUB_WORKSPACE/platform-ers-ms.log"
           echo "log-file=platform-ers-ms.log" >> "$GITHUB_OUTPUT"
 

@@ -1,7 +1,7 @@
 """Multi-strategy ERS fixtures.
 
 Fixtures for tests that target the second platform instance (`platform-ers-ms`
-on port 8090) which runs with `entityresolution: type: multi-strategy` and a
+on port 8090) which runs with `entityresolution: mode: multi-strategy` and a
 SQL provider. otdf-local boots this instance alongside the default
 Keycloak-ERS platform; CI does the equivalent via a start-additional-platform
 step.
@@ -47,9 +47,9 @@ def _require_ers_ms_platform(platform_url_ers_ms: str) -> None:
                 f"ers-ms platform at {platform_url_ers_ms} not healthy (HTTP {resp.status}); "
                 "requires opentdf/platform#3645 and #3543 to be present"
             )
-    except (TimeoutError, OSError) as e:
-        # URLError is a subclass of OSError, so OSError covers both connection
-        # and DNS failures without a redundant except clause.
+    except OSError as e:
+        # OSError covers URLError, TimeoutError, and socket errors —
+        # both are subclasses of OSError in Python 3.11+.
         pytest.skip(
             f"ers-ms platform at {platform_url_ers_ms} not reachable ({e}); "
             "requires opentdf/platform#3645 and #3543 to be present"

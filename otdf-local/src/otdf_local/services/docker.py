@@ -47,9 +47,10 @@ class DockerService(Service):
             return False
 
         # Additionally boot the ers-test profile so multi-strategy ERS has
-        # its Postgres backend available. The container (ers_test_postgres)
-        # is defined in platform/docker-compose.yaml under profile 'ers-test'
-        # and is a no-op when not requested elsewhere.
+        # its Postgres backend available. Best-effort: don't fail the core
+        # Docker startup for users who aren't exercising multi-strategy ERS
+        # (a missing image, private-registry auth issue, or older checkout
+        # that lacks the profile should not block Keycloak/Postgres).
         ers = subprocess.run(
             [
                 "docker",
@@ -66,7 +67,13 @@ class DockerService(Service):
             text=True,
             cwd=self._compose_file.parent,
         )
-        return ers.returncode == 0
+        if ers.returncode != 0:
+            print(
+                "warning: failed to start ers-postgres "
+                "(multi-strategy ERS tests will be skipped): "
+                f"{ers.stderr.strip()}"
+            )
+        return True
 
     def stop(self) -> bool:
         """Stop Docker compose services."""
@@ -82,12 +89,15 @@ class DockerService(Service):
         return result.returncode == 0
 
     def is_running(self) -> bool:
-        """Check if Docker services are running."""
-        # Check if Keycloak, PostgreSQL, and ers-postgres ports are open
+        """Check if the core Docker services are running.
+
+        ers-postgres is optional (profile 'ers-test'); its status is
+        reported separately in get_all_info() so tests unrelated to
+        multi-strategy ERS aren't blocked by its absence.
+        """
         keycloak_up = check_port("localhost", Ports.KEYCLOAK)
         postgres_up = check_port("localhost", Ports.POSTGRES)
-        ers_postgres_up = check_port("localhost", Ports.ERS_POSTGRES)
-        return keycloak_up and postgres_up and ers_postgres_up
+        return keycloak_up and postgres_up
 
     def is_healthy(self) -> bool | None:
         """Check if Keycloak is responding."""

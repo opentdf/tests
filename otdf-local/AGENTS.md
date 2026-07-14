@@ -25,7 +25,7 @@ Auto-configured by otdf-local:
 
 `otdf-local up` boots a **second `platform` process** (`platform-ers-ms`)
 on port 8090 alongside the default Keycloak-ERS platform. It runs with
-`entityresolution: type: multi-strategy` and a SQL provider pointed at the
+`entityresolution: mode: multi-strategy` and a SQL provider pointed at the
 `ers-postgres` container (docker compose profile `ers-test`, port 5433).
 Both platforms share the same policy DB, KAS keys, and cryptoProvider
 config — only the entity-resolution block differs. This mirrors the

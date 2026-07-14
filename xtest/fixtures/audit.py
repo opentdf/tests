@@ -139,6 +139,7 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
 
     Environment Variables:
         PLATFORM_LOG_FILE: Main KAS/platform log
+        PLATFORM_ERS_MS_LOG_FILE: Multi-strategy ERS platform log (port 8090)
         KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Additional KAS logs
     """
     log_files = {}
@@ -147,6 +148,13 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
     platform_log = os.getenv("PLATFORM_LOG_FILE")
     if platform_log:
         log_files["kas"] = Path(platform_log)
+
+    # Multi-strategy ERS platform runs on 8090 and emits its own audit
+    # events; tests using audit_logs.assert_rewrap_success against the
+    # ers-ms KAS need this log tailed too.
+    ers_ms_log = os.getenv("PLATFORM_ERS_MS_LOG_FILE")
+    if ers_ms_log:
+        log_files["platform-ers-ms"] = Path(ers_ms_log)
 
     # Check for additional KAS logs
     kas_mapping = {

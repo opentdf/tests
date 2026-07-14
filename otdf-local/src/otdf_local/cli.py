@@ -197,26 +197,33 @@ def up(
             print_success("ers-postgres seeded")
 
     # Step 2b: Start multi-strategy ERS platform (second platform instance).
-    # Mirrors additional-KAS pattern: always up, dedicated port, per-instance
-    # fixtures in xtest. Existing tests that don't reference the ers-ms
-    # fixtures are unaffected.
+    # Mirrors additional-KAS pattern: always up (when its template config is
+    # available), dedicated port, per-instance fixtures in xtest. Existing
+    # tests that don't reference the ers-ms fixtures are unaffected.
     if start_platform:
-        print_info("Starting multi-strategy ERS platform...")
-        platform_ers_ms = get_platform_ers_ms_service(settings)
-        if not platform_ers_ms.start():
-            print_error("Failed to start multi-strategy ERS platform")
-            raise typer.Exit(1)
+        template_path = settings.platform_ers_ms_template_config
+        if not template_path.exists():
+            print_warning(
+                f"Multi-strategy platform template not found at {template_path}; "
+                "skipping ers-ms platform startup."
+            )
+        else:
+            print_info("Starting multi-strategy ERS platform...")
+            platform_ers_ms = get_platform_ers_ms_service(settings)
+            if not platform_ers_ms.start():
+                print_error("Failed to start multi-strategy ERS platform")
+                raise typer.Exit(1)
 
-        with status_spinner("Waiting for multi-strategy ERS platform..."):
-            try:
-                wait_for_health(
-                    f"http://localhost:{Ports.PLATFORM_ERS_MS}/healthz",
-                    timeout=120,
-                    service_name="Platform (ERS-MS)",
-                )
-            except WaitTimeoutError as e:
-                print_warning(str(e))
-        print_success("Multi-strategy ERS platform is ready")
+            with status_spinner("Waiting for multi-strategy ERS platform..."):
+                try:
+                    wait_for_health(
+                        f"http://localhost:{Ports.PLATFORM_ERS_MS}/healthz",
+                        timeout=120,
+                        service_name="Platform (ERS-MS)",
+                    )
+                except WaitTimeoutError as e:
+                    print_warning(str(e))
+            print_success("Multi-strategy ERS platform is ready")
 
     # Step 4: Start KAS instances
     if start_kas:

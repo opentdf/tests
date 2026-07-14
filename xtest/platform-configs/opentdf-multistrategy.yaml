@@ -7,10 +7,16 @@ services:
   kas:
     registered_kas_uri: http://localhost:8090
     preview:
-      ec_tdf_enabled: false
+      # EC keys are registered below, so EC TDF wrapping must be enabled
+      # for tests that route EC-wrapped TDFs through this KAS.
+      ec_tdf_enabled: true
       hybrid_tdf_enabled: false
       key_management: false
-    root_key: a8c4824daafcfa38ed0d13002e92b08720e6c4fcee67d52e954c1a6e045907d1
+    # NOTE: root_key here is a placeholder. PlatformERSMultiStrategyService
+    # overwrites it at config-generation time with the primary platform's
+    # root_key (read from opentdf-dev.yaml) so both KAS instances can unwrap
+    # each other's wrapped DEKs. Do not treat this literal as a real key.
+    root_key: PLACEHOLDER_OVERWRITTEN_BY_OTDF_LOCAL_AT_STARTUP
     keyring:
       - kid: e1
         alg: ec:secp256r1
