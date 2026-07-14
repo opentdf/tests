@@ -137,8 +137,7 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     dpop)
-      set -o pipefail
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -iE -- '--dpop'
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
       exit $?
       ;;
     dpop_nonce_challenge)
