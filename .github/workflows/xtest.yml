@@ -306,7 +306,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main
+        uses: opentdf/platform/test/start-up-with-containers@c4038bdd72b8777654aa36266ad721710d220f4d  # fix/ci-startup-yaml-pqc-guard (opentdf/platform#3750) — DO NOT MERGE until that PR lands, then re-pin to main
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
