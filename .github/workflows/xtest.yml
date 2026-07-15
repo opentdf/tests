@@ -306,7 +306,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@c4038bdd72b8777654aa36266ad721710d220f4d  # fix/ci-startup-yaml-pqc-guard (opentdf/platform#3750) — DO NOT MERGE until that PR lands, then re-pin to main
+        uses: opentdf/platform/test/start-up-with-containers@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix (opentdf/platform#3750)
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
@@ -601,7 +601,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -614,7 +614,7 @@ jobs:
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -627,7 +627,7 @@ jobs:
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -640,7 +640,7 @@ jobs:
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -653,7 +653,7 @@ jobs:
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -667,7 +667,7 @@ jobs:
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@0612ea897264e3c621ce076029a5e1e3f2d3971e  # main: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: km2
