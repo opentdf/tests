@@ -20,6 +20,7 @@ from otdf_local.services import (
     ProvisionResult,
     get_docker_service,
     get_kas_manager,
+    get_platform_ers_ms_service,
     get_platform_service,
     get_provisioner,
 )
@@ -185,6 +186,45 @@ def up(
         else:
             print_success("Provisioning complete")
 
+        print_info("Seeding ers-postgres for multi-strategy ERS...")
+        seed_result = provisioner.provision_ers_ms_seed()
+        if not seed_result:
+            _show_provision_error(seed_result, "ers-postgres seed")
+            print_warning(
+                "ers-postgres seed failed - multi-strategy ERS tests will fail"
+            )
+        else:
+            print_success("ers-postgres seeded")
+
+    # Step 2b: Start multi-strategy ERS platform (second platform instance).
+    # Mirrors additional-KAS pattern: always up (when its template config is
+    # available), dedicated port, per-instance fixtures in xtest. Existing
+    # tests that don't reference the ers-ms fixtures are unaffected.
+    if start_platform:
+        template_path = settings.platform_ers_ms_template_config
+        if not template_path.exists():
+            print_warning(
+                f"Multi-strategy platform template not found at {template_path}; "
+                "skipping ers-ms platform startup."
+            )
+        else:
+            print_info("Starting multi-strategy ERS platform...")
+            platform_ers_ms = get_platform_ers_ms_service(settings)
+            if not platform_ers_ms.start():
+                print_error("Failed to start multi-strategy ERS platform")
+                raise typer.Exit(1)
+
+            with status_spinner("Waiting for multi-strategy ERS platform..."):
+                try:
+                    wait_for_health(
+                        f"http://localhost:{Ports.PLATFORM_ERS_MS}/healthz",
+                        timeout=120,
+                        service_name="Platform (ERS-MS)",
+                    )
+                except WaitTimeoutError as e:
+                    print_warning(str(e))
+            print_success("Multi-strategy ERS platform is ready")
+
     # Step 4: Start KAS instances
     if start_kas:
         print_info("Starting KAS instances...")
@@ -227,6 +267,11 @@ def down(
     kas_manager = get_kas_manager(settings)
     kas_manager.stop_all()
 
+    # Stop multi-strategy ERS platform
+    print_info("Stopping multi-strategy ERS platform...")
+    platform_ers_ms = get_platform_ers_ms_service(settings)
+    platform_ers_ms.stop()
+
     # Stop Platform
     print_info("Stopping Platform...")
     platform = get_platform_service(settings)
@@ -266,6 +311,7 @@ def list_services(
     all_info = []
     all_info.extend(docker.get_all_info())
     all_info.append(platform.get_info())
+    all_info.append(get_platform_ers_ms_service(settings).get_info())
     all_info.extend(kas_manager.get_all_info())
 
     # Filter if not showing all
@@ -370,6 +416,7 @@ def logs(
 
     # Add all services to aggregator
     aggregator.add_service("platform")
+    aggregator.add_service("platform-ers-ms")
     for kas_name in Ports.all_kas_names():
         aggregator.add_service(f"kas-{kas_name}")
 
@@ -493,6 +540,13 @@ def restart(
         print_success("Platform restarted")
         return
 
+    if service == "platform-ers-ms":
+        print_info("Restarting multi-strategy ERS platform...")
+        platform_ers_ms = get_platform_ers_ms_service(settings)
+        platform_ers_ms.restart()
+        print_success("Multi-strategy ERS platform restarted")
+        return
+
     if service.startswith("kas-"):
         kas_name = service[4:]  # Remove "kas-" prefix
         if kas_name not in Ports.all_kas_names():
@@ -523,7 +577,8 @@ def restart(
 
     print_error(f"Unknown service: {service}")
     print_info(
-        "Valid services: docker, platform, kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2"
+        "Valid services: docker, platform, platform-ers-ms, "
+        "kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2"
     )
     raise typer.Exit(1)
 
@@ -558,6 +613,7 @@ def env(
 
     # Platform configuration
     env_vars["PLATFORMURL"] = settings.platform_url
+    env_vars["PLATFORMURL_ERS_MS"] = f"http://localhost:{Ports.PLATFORM_ERS_MS}"
     env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
 
     # Schema file for manifest validation
@@ -569,6 +625,10 @@ def env(
     platform_log = settings.logs_dir / "platform.log"
     if platform_log.exists():
         env_vars["PLATFORM_LOG_FILE"] = str(platform_log.resolve())
+
+    platform_ers_ms_log = settings.platform_ers_ms_log_path
+    if platform_ers_ms_log.exists():
+        env_vars["PLATFORM_ERS_MS_LOG_FILE"] = str(platform_ers_ms_log.resolve())
 
     # KAS log files
     kas_env_mapping = {

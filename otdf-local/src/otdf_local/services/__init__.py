@@ -4,6 +4,10 @@ from otdf_local.services.base import Service, ServiceInfo, ServiceType
 from otdf_local.services.docker import DockerService, get_docker_service
 from otdf_local.services.kas import KASManager, KASService, get_kas_manager
 from otdf_local.services.platform import PlatformService, get_platform_service
+from otdf_local.services.platform_ers_ms import (
+    PlatformERSMultiStrategyService,
+    get_platform_ers_ms_service,
+)
 from otdf_local.services.provisioner import (
     Provisioner,
     ProvisionResult,
@@ -21,6 +25,8 @@ __all__ = [
     "get_kas_manager",
     "PlatformService",
     "get_platform_service",
+    "PlatformERSMultiStrategyService",
+    "get_platform_ers_ms_service",
     "Provisioner",
     "ProvisionResult",
     "get_provisioner",

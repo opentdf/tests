@@ -126,6 +126,21 @@ class Settings(BaseSettings):
         return self.platform_dir / "opentdf-kas-mode.yaml"
 
     @property
+    def platform_ers_ms_template_config(self) -> Path:
+        """Multi-strategy ERS platform config template path (in xtest repo)."""
+        return self.xtest_root / "platform-configs" / "opentdf-multistrategy.yaml"
+
+    @property
+    def platform_ers_ms_config(self) -> Path:
+        """Generated multi-strategy ERS platform config path."""
+        return self.config_dir / "opentdf-ers-ms.yaml"
+
+    @property
+    def platform_ers_ms_log_path(self) -> Path:
+        """Log file path for the multi-strategy ERS platform instance."""
+        return self.logs_dir / "platform-ers-ms.log"
+
+    @property
     def docker_compose_file(self) -> Path:
         """Docker compose file path."""
         return self.platform_dir / "docker-compose.yaml"
