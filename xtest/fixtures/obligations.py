@@ -17,7 +17,8 @@ from otdfctl import OpentdfCommandLineTool
 def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet:
     """
     Creates a standard subject condition set for OpenTDF clients.
-    This condition set matches client IDs 'opentdf' or 'opentdf-sdk'.
+    This condition set matches client IDs 'opentdf', 'opentdf-sdk', or
+    'opentdf-dpop' (the DPoP-bound client used by the DPoP tests).
 
     Returns:
         abac.SubjectConditionSet: The created subject condition set
@@ -32,7 +33,11 @@ def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet
                             abac.Condition(
                                 subject_external_selector_value=".clientId",
                                 operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=["opentdf", "opentdf-sdk"],
+                                subject_external_values=[
+                                    "opentdf",
+                                    "opentdf-sdk",
+                                    "opentdf-dpop",
+                                ],
                             )
                         ],
                     )

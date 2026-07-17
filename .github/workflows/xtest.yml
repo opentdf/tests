@@ -28,6 +28,11 @@ on:
         type: string
         default: all
         description: "SDK to focus on (go, js, java, all)"
+      dpop-challenge:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable DPoP nonce challenge on KAS instances"
   workflow_call:
     inputs:
       platform-ref:
@@ -50,6 +55,10 @@ on:
         required: false
         type: string
         default: all
+      dpop-challenge:
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -297,13 +306,14 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-up-with-containers@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix (opentdf/platform#3750)
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -591,7 +601,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -599,11 +609,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -611,11 +622,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -623,11 +635,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -635,11 +648,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -648,11 +662,12 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # pqc-enabled
+        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
         with:
           ec-tdf-enabled: true
           kas-name: km2
@@ -661,6 +676,7 @@ jobs:
           log-type: json
           pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
