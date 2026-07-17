@@ -1,5 +1,4 @@
 import filecmp
-import re
 import subprocess
 from pathlib import Path
 
@@ -96,11 +95,7 @@ def decrypt_or_dont(
             assert isinstance(stderr_content, str)
 
             combined_output = output_content + stderr_content
-            assert re.search(
-                r"forbidden|unable to reconstruct split key",
-                combined_output,
-                re.IGNORECASE,
-            ), (
+            assert tdfs.PERMISSION_DENIED_RE.search(combined_output), (
                 f"decrypt failed with unexpected error: {exc}\nstdout: {output_content}\nstderr: {stderr_content}"
             )
 
