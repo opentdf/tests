@@ -149,6 +149,10 @@ feature_type = Literal[
     "mechanism-secpmlkem",
     # Support for pure (non-hybrid) ML-KEM key wrapping: mlkem:768 and mlkem:1024.
     "mechanism-mlkem",
+    # Decrypt a KAO array that has two entries with the same split id and KAS
+    # URI (the same KAS wrapping the same split more than once). go/java have
+    # always tolerated this; web-sdk gained it in 0.20.0 (DSPX-3379).
+    "multikao",
     "ns_grants",
     "obligations",
 ]
@@ -624,6 +628,10 @@ class SDK:
                 # JS SDK v0.2.0 incorrectly reports support for key_management.
                 return False
             case ("autoconfigure", ("go" | "java")):
+                return True
+            case ("multikao", ("go" | "java")):
+                # go/java reconstruct by skipping already-satisfied splits, so a
+                # duplicate KAS on the same split has always decrypted.
                 return True
             case ("better-messages-2024", ("js" | "java")):
                 return True
