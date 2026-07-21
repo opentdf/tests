@@ -18,6 +18,7 @@ from otdf_local.utils.yaml import (
     copy_yaml_with_updates,
     load_yaml,
     save_yaml,
+    set_nested,
 )
 
 
@@ -39,6 +40,9 @@ class PlatformService(Service):
 
     @property
     def port(self) -> int:
+        instance = self.settings.load_instance()
+        if instance is not None:
+            return Ports.platform_port_for(instance.ports.base)
         return Ports.PLATFORM
 
     @property
@@ -49,25 +53,50 @@ class PlatformService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
+    def _instance_dist_paths(self) -> tuple[Path, Path] | None:
+        """Return (binary, worktree) for an instance-pinned platform, or None."""
+        instance = self.settings.load_instance()
+        if instance is None or instance.platform.dist is None:
+            return None
+        return self.settings.resolve_binary_worktree(instance.platform.dist)
+
     def _generate_config(self) -> Path:
-        """Generate the platform config file from template."""
+        """Generate the platform config file from template.
+
+        When an instance config already exists (written at `instance init`
+        time), we keep its body intact — only patch logger keys + golden
+        keys in place. This preserves the per-instance root_key across
+        restarts.
+        """
+        instance_paths = self._instance_dist_paths()
+        if instance_paths is not None:
+            _, worktree = instance_paths
+            platform_dir = worktree
+        else:
+            platform_dir = self.settings._require_platform_dir()
+
         config_path = self.settings.platform_config
-        template_path = self.settings.platform_template_config
 
         # Detect platform features to determine supported config options
-        features = PlatformFeatures.detect(self.settings.platform_dir)
+        features = PlatformFeatures.detect(platform_dir)
 
         # Use stderr if supported, otherwise stdout (v0.9.0 only supports stdout)
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
-        # Updates for platform config
         updates = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
         }
 
-        copy_yaml_with_updates(template_path, config_path, updates)
+        if config_path.exists():
+            data = load_yaml(config_path)
+            for dot_path, value in updates.items():
+                set_nested(data, dot_path, value)
+            save_yaml(config_path, data)
+        else:
+            template_path = platform_dir / "opentdf.yaml"
+            copy_yaml_with_updates(template_path, config_path, updates)
 
         # Set up golden keys for legacy TDF tests
         self._setup_golden_keys(config_path)
@@ -80,10 +109,16 @@ class PlatformService(Service):
         Extracts keys from extra-keys.json and adds them to the platform config
         so legacy golden TDFs can be decrypted.
         """
-        # Set up golden key files and get their config entries
+        # In multi-instance mode, golden keys live alongside the instance
+        # config; otherwise they go into the legacy platform_dir.
+        target_dir = (
+            self.settings.keys_dir
+            if self.settings.has_instance()
+            else (self.settings._require_platform_dir())
+        )
         golden_keys = setup_golden_keys(
             self.settings.xtest_root,
-            self.settings.platform_dir,
+            target_dir,
         )
 
         if not golden_keys:
@@ -112,15 +147,16 @@ class PlatformService(Service):
         # Generate config
         config_path = self._generate_config()
 
-        # Build the command
-        cmd = [
-            "go",
-            "run",
-            "./service",
-            "start",
-            "--config-file",
-            str(config_path),
-        ]
+        # Build the command — pinned binary when an instance is loaded,
+        # legacy `go run ./service` otherwise.
+        instance_paths = self._instance_dist_paths()
+        if instance_paths is not None:
+            binary, worktree = instance_paths
+            cmd = [str(binary), "start", "--config-file", str(config_path)]
+            cwd = worktree
+        else:
+            cmd = ["go", "run", "./service", "start", "--config-file", str(config_path)]
+            cwd = self.settings._require_platform_dir()
 
         # Start the process
         log_file = self.settings.logs_dir / "platform.log"
@@ -128,7 +164,7 @@ class PlatformService(Service):
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,
-            cwd=self.settings.platform_dir,
+            cwd=cwd,
             log_file=log_file,
             env={"OPENTDF_LOG_LEVEL": "info"},
         )
