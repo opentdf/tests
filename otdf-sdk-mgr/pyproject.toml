@@ -8,14 +8,14 @@ dependencies = [
     "pydantic>=2.6.0",
     "rich>=15.0.0",
     "ruamel.yaml>=0.18.0",
-    "typer>=0.26.7",
+    "typer>=0.26.8",
 ]
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1.410",
-    "pytest>=9.0.3",
-    "ruff>=0.15.16",
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
 ]
 
 [project.scripts]
