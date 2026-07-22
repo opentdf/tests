@@ -16,9 +16,9 @@ classifiers = [
 dependencies = [
     "annotated-types>=0.7.0",
     "attrs>=26.1.0",
-    "certifi>=2026.5.20",
-    "cffi>=2.0.0",
-    "charset-normalizer>=3.4.7",
+    "certifi>=2026.6.17",
+    "cffi>=2.1.0",
+    "charset-normalizer>=3.4.9",
     "construct>=2.10.70",
     "construct-typing>=0.7.0",
     "cryptography>=49.0.0",
@@ -36,22 +36,22 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic_core>=2.41.5",
     "Pygments>=2.19.2",
-    "pytest>=9.0.3",
+    "pytest>=9.1.1",
     "pytest-html>=4.2.0",
     "pytest-xdist>=3.6.1",
     "pytest-metadata>=3.1.1",
     "referencing>=0.37.0",
     "requests>=2.34.2",
-    "rpds-py>=2026.5.1",
+    "rpds-py>=2026.6.3",
     "smmap>=5.0.3",
-    "typing_extensions>=4.15.0",
+    "typing_extensions>=4.16.0",
     "urllib3>=2.7.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pyright>=1.1.410",
-    "ruff>=0.15.16",
+    "pyright>=1.1.411",
+    "ruff>=0.15.20",
 ]
 
 # Note: This is a test suite, not a distributable package.
