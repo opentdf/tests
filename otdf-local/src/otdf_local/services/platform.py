@@ -67,6 +67,9 @@ class PlatformService(Service):
             "logger.output": logger_output,
         }
 
+        # Export traces to the local collector (Jaeger) when tracing is enabled
+        updates.update(self.settings.trace_config_updates())
+
         copy_yaml_with_updates(template_path, config_path, updates)
 
         # Set up golden keys for legacy TDF tests

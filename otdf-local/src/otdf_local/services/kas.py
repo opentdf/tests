@@ -81,6 +81,9 @@ class KASService(Service):
             # registered_kas_uri should NOT have /kas suffix
             updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
 
+        # Export traces to the local collector (Jaeger) when tracing is enabled
+        updates.update(self.settings.trace_config_updates())
+
         copy_yaml_with_updates(template_path, config_path, updates)
         return config_path
 
