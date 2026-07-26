@@ -139,6 +139,9 @@ feature_type = Literal[
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
     "key_management",
+    # Platform exposes the narrow GetKeyMappingsByFqns RPC (server-side
+    # value > definition > namespace key resolution for client key splits).
+    "key_mapping_resolution",
     # Support for encrypting with RSA-4096 managed keys.
     "mechanism-rsa-4096",
     # Support for encrypting with EC curves secp384r1 and secp521r1 managed keys.
@@ -219,6 +222,12 @@ class PlatformFeatureSet(BaseModel):
         # Included in platform v0.12.0
         if self.semver >= (0, 12, 0):
             self.features.add("attribute_traversal")
+
+        # GetKeyMappingsByFqns RPC. TODO: pin to the actual release version once
+        # the proto change (opentdf/platform#3634) is released; gated
+        # conservatively until then.
+        if self.semver >= (0, 14, 0):
+            self.features.add("key_mapping_resolution")
         # In ocrypto < 0.10.0, there was a bug that hardcoded to P256 on uncompressing the EC public key,
         # even if the key was actually P384 or P521. This was fixed in ocrypto 0.10.0, so we can only support EC
         # wrapping with those curves on platforms v0.13.0 and later.
