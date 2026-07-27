@@ -306,8 +306,13 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix (opentdf/platform#3750)
+        uses: opentdf/platform/test/start-up-with-containers@d1081e925e320d620a07f481d108cc7d9f76ec52  # DSPX-4190: bootstrap-ref support (Keycloak 26.4 validation) — roll back to pqc-enabled/main SHA after
         with:
+          # DSPX-4190 validation: source docker-compose.yaml (Keycloak 26.4.0),
+          # init-temp-keys.sh, and watch.sh from the DSPX-4190 branch instead of
+          # the frozen pqc-enabled tag (Keycloak 25.0). Drop once pqc-enabled is
+          # re-pointed to carry the 26.4 bootstrap files.
+          bootstrap-ref: DSPX-4190
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
