@@ -473,6 +473,16 @@ def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
+def duplicate_first_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    # DSPX-3379: append a byte-identical copy of the first KAO so the same KAS
+    # holds two copies of the same split (same sid + url + wrappedKey). This is
+    # a valid, decryptable duplicate (either copy unwraps the split).
+    assert manifest.encryptionInformation.keyAccess
+    first = manifest.encryptionInformation.keyAccess[0]
+    manifest.encryptionInformation.keyAccess.append(first.model_copy(deep=True))
+    return manifest
+
+
 ### TAMPER TESTS
 
 
@@ -831,3 +841,49 @@ def test_tdf_with_malicious_kao(
 
     # Note: We don't assert on audit logs here because the SDK should reject
     # the malicious KAO client-side before making a rewrap request to the KAS
+
+
+def test_tdf_with_duplicate_kao_same_kas(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> None:
+    """DSPX-3379: when a KAO array has two elements with the same split id and
+    the same KAS URI, the file must still decrypt (the same KAS is allowed to
+    wrap the same split more than once). It should behave exactly as it would if
+    the copies lived on distinct URIs.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    # Only the decrypt side needs to tolerate the duplicate KAO; the encrypt
+    # side just produces a normal TDF that we mutate below.
+    if not decrypt_sdk.supports("multikao"):
+        pytest.skip(
+            f"{decrypt_sdk} sdk doesn't support duplicate KAOs on the same KAS+split"
+        )
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    original = tdfs.manifest(ct_file).encryptionInformation.keyAccess
+    assert original, "expected at least one KAO to duplicate"
+
+    b_file = tdfs.update_manifest(
+        "duplicate_kao_same_kas", ct_file, duplicate_first_kao
+    )
+    # Confirm the mutation produced a genuine same-(sid, url) duplicate.
+    kaos = tdfs.manifest(b_file).encryptionInformation.keyAccess
+    assert len(kaos) == len(original) + 1
+    assert kaos[0].url == kaos[-1].url
+    assert kaos[0].sid == kaos[-1].sid
+
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+    decrypt_sdk.decrypt(b_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
