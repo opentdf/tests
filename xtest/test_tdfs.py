@@ -102,10 +102,15 @@ def test_tdf_roundtrip(
     ):
         ert_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="ecrewrap")
         ec_mark = audit_logs.mark("before_ecwrap_decrypt")
-        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
+        decrypt_sdk.decrypt(
+            ct_file, ert_file, container, session_key_algorithm="ec:secp256r1"
+        )
         assert filecmp.cmp(pt_file, ert_file)
-        # Verify ecwrap rewrap was also logged
-        audit_logs.assert_rewrap_success(min_count=1, since_mark=ec_mark)
+        # Verify ecwrap rewrap was also logged, with the negotiated session-key
+        # type recorded correctly. Safe to pin here (unlike the plain decrypt
+        # above) since session_key_algorithm explicitly requests EC rather than
+        # relying on whatever an SDK's default happens to be.
+        audit_logs.assert_rewrap_session_key_type("ec:secp256r1", since_mark=ec_mark)
 
 
 def test_tdf_spec_target_422(
