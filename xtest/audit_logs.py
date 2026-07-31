@@ -437,6 +437,16 @@ class ParsedAuditEvent:
         return self.event_metadata.get("algorithm")
 
     @property
+    def session_key_type(self) -> str | None:
+        """Get the client's rewrap session-key type from rewrap event metadata.
+
+        This is the ephemeral key the client generated and sent as
+        clientPublicKey (e.g. "rsa:2048", "ec:secp256r1", "mlkem:768") --
+        distinct from `algorithm`, which is the KAO/TDF wrapping algorithm.
+        """
+        return self.event_metadata.get("sessionKeyType")
+
+    @property
     def tdf_format(self) -> str | None:
         """Get the TDF format from rewrap event metadata."""
         return self.event_metadata.get("tdfFormat")
@@ -467,6 +477,7 @@ class ParsedAuditEvent:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
     ) -> bool:
         """Check if this event matches rewrap criteria.
@@ -476,6 +487,7 @@ class ParsedAuditEvent:
             policy_uuid: Expected policy UUID (object ID)
             key_id: Expected key ID from metadata
             algorithm: Expected algorithm from metadata
+            session_key_type: Expected client session-key type from metadata
             attr_fqns: Expected attribute FQNs (all must be present)
 
         Returns:
@@ -490,6 +502,8 @@ class ParsedAuditEvent:
         if key_id is not None and self.key_id != key_id:
             return False
         if algorithm is not None and self.algorithm != algorithm:
+            return False
+        if session_key_type is not None and self.session_key_type != session_key_type:
             return False
         if attr_fqns is not None:
             event_attrs = set(self.object_attrs)
@@ -1254,6 +1268,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1264,13 +1279,16 @@ class AuditLogAsserter:
         Looks for audit log entries with:
         - msg='rewrap'
         - action.result=<result>
-        - Optionally matching policy_uuid, key_id, algorithm, attr_fqns
+        - Optionally matching policy_uuid, key_id, algorithm, session_key_type, attr_fqns
 
         Args:
             result: Expected action result ('success', 'failure', 'error', 'cancel')
             policy_uuid: Expected policy UUID (object.id)
             key_id: Expected key ID from eventMetaData.keyID
             algorithm: Expected algorithm from eventMetaData.algorithm
+            session_key_type: Expected client session-key type from
+                eventMetaData.sessionKeyType (e.g. "mlkem:768") -- the
+                client's ephemeral rewrap key, not the KAO wrap algorithm
             attr_fqns: Expected attribute FQNs (all must be present)
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
@@ -1306,6 +1324,7 @@ class AuditLogAsserter:
                     policy_uuid=policy_uuid,
                     key_id=key_id,
                     algorithm=algorithm,
+                    session_key_type=session_key_type,
                     attr_fqns=attr_fqns,
                 ):
                     matching.append(event)
@@ -1331,6 +1350,8 @@ class AuditLogAsserter:
             criteria.append(f"key_id={key_id}")
         if algorithm:
             criteria.append(f"algorithm={algorithm}")
+        if session_key_type:
+            criteria.append(f"session_key_type={session_key_type}")
         if attr_fqns:
             criteria.append(f"attr_fqns={attr_fqns}")
 
@@ -1349,6 +1370,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1363,10 +1385,85 @@ class AuditLogAsserter:
             policy_uuid=policy_uuid,
             key_id=key_id,
             algorithm=algorithm,
+            session_key_type=session_key_type,
             attr_fqns=attr_fqns,
             min_count=min_count,
             since_mark=since_mark,
             timeout=timeout,
+        )
+
+    def assert_rewrap_session_key_type(
+        self,
+        expected: str,
+        since_mark: str | None = None,
+        min_count: int = 1,
+        timeout: float = 20.0,
+    ) -> None:
+        """Assert a successful rewrap negotiated the expected client session-key type.
+
+        Tolerant of platform builds that don't emit eventMetaData.sessionKeyType
+        at all: that field was added by DSPX-4221 and isn't behind any version
+        or preview flag we can check statically, so a plain
+        assert_rewrap_success(session_key_type=expected) call would spuriously
+        find zero matches (not "wrong type") against a baseline/pre-fix
+        platform build -- indistinguishable, from the caller's perspective,
+        from a real negotiation bug.
+
+        Waits (up to `timeout`) for an event matching the expected type first,
+        rather than accepting the first bare "result=success" match: log
+        collection is poll-based, so when two rewraps for different session
+        keys happen back-to-back in the same test (e.g. a plain decrypt
+        immediately followed by one requesting a specific algorithm), the
+        earlier rewrap's log line can still be un-tailed at the time of the
+        later mark and get folded into the same collection batch -- a bare
+        count check would then report success using the wrong (earlier)
+        event instead of waiting for the right one. Only after that wait
+        fails do we check whether the field is present at all, to tell
+        "platform doesn't support this field" apart from a real negotiation
+        bug.
+
+        TODO(DSPX-4221): once the platform PR that adds sessionKeyType
+        (opentdf/platform#3814) merges and cuts a release, add a
+        version-gated "audit-session-key-type" feature to PlatformFeatureSet
+        (mirroring the existing `audit_logging` gate: `self.semver >= (0, 10,
+        0)`), and have callers hard-fail here instead of warning when
+        `"audit-session-key-type" in pfs.features` -- there's no way to
+        detect this statically before that release exists, so until then a
+        platform build too old to emit the field is indistinguishable, to
+        this method, from one new enough but paired with a client that
+        silently sends the wrong session-key type. That gap is real, not
+        hypothetical: it currently masks an unpatched web-sdk (main) sending
+        the wrong session-key algorithm on EC rewrap when paired with a
+        platform build that does emit the field -- see the stacked draft PR
+        demonstrating this failure.
+        """
+        try:
+            self.assert_rewrap(
+                result="success",
+                session_key_type=expected,
+                min_count=min_count,
+                since_mark=since_mark,
+                timeout=timeout,
+            )
+            return
+        except AssertionError:
+            pass
+
+        events = self.assert_rewrap_success(
+            min_count=min_count, since_mark=since_mark, timeout=1.0
+        )
+        reported = {
+            e.session_key_type for e in events if e.session_key_type is not None
+        }
+        if not reported:
+            logger.warning(
+                "Platform build doesn't emit eventMetaData.sessionKeyType; "
+                f"skipping the check that the session key type was {expected!r} "
+                "(the rewrap itself succeeded)."
+            )
+            return
+        assert expected in reported, (
+            f"Expected rewrap session_key_type={expected!r}, but platform reported {reported!r}"
         )
 
     def assert_rewrap_failure(
@@ -1374,6 +1471,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1389,6 +1487,7 @@ class AuditLogAsserter:
             policy_uuid=policy_uuid,
             key_id=key_id,
             algorithm=algorithm,
+            session_key_type=session_key_type,
             attr_fqns=attr_fqns,
             min_count=min_count,
             since_mark=since_mark,

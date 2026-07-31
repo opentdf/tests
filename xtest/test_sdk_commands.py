@@ -110,9 +110,11 @@ class TestDecryptCommand:
         assert "XT_WITH_VERIFY_ASSERTIONS" not in on
         assert off["XT_WITH_VERIFY_ASSERTIONS"] == "false"
 
-    def test_ecwrap_flag(self, sdk: tdfs.SDK):
-        _, env = sdk.decrypt_command(Path("in.tdf"), Path("out.txt"), ecwrap=True)
-        assert env["XT_WITH_ECWRAP"] == "true"
+    def test_session_key_algorithm(self, sdk: tdfs.SDK):
+        _, env = sdk.decrypt_command(
+            Path("in.tdf"), Path("out.txt"), session_key_algorithm="mlkem:768"
+        )
+        assert env["XT_WITH_SESSION_KEY_ALGORITHM"] == "mlkem:768"
 
     def test_kas_allowlist(self, sdk: tdfs.SDK):
         _, env = sdk.decrypt_command(

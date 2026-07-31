@@ -11,7 +11,7 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
+#  XT_WITH_ECWRAP [boolean] - Use EC wrap for the TDF's own KAO wrapping key on encryption (use XT_WITH_SESSION_KEY_ALGORITHM for decryption)
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
@@ -20,6 +20,7 @@
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
 #  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
 #
@@ -122,6 +123,17 @@ if [[ "$1" == "supports" ]]; then
       # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
       set -o pipefail
       npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    session-key-mlkem)
+      # --rewrapKeyType has long accepted "mlkem:768" as a choice (it shares
+      # PUBLIC_KEY_ALGORITHMS with --encapKeyType, used for KAS-managed-key
+      # mechanisms), so grepping --help for it would false-positive on builds
+      # that predate decryptStreamFrom() actually forwarding the requested
+      # algorithm to unwrapKey(). Use the explicit supportedFeatures list from
+      # --version instead, which is hardcoded and scoped to this capability.
+      set -o pipefail
+      npx $CTL --version | jq -e '.supportedFeatures | index("session-key-mlkem")' >/dev/null
       exit $?
       ;;
     mechanism-xwing)
@@ -288,8 +300,8 @@ elif [[ "$1" == "decrypt" ]]; then
   if [[ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]]; then
     args+=(--noVerifyAssertions)
   fi
-  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
-    args+=(--rewrapKeyType "ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    args+=(--rewrapKeyType "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
   if [[ -n "$XT_WITH_KAS_ALLOW_LIST" ]]; then
     args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")

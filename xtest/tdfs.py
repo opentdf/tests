@@ -192,6 +192,11 @@ feature_type = Literal[
     # URI (the same KAS wrapping the same split more than once). go/java have
     # always tolerated this; web-sdk gained it in 0.20.0 (DSPX-3379).
     "multikao",
+    # Support for a client-generated ML-KEM key pair as the rewrap "session key"
+    # (the ephemeral key used to wrap the KAS's rewrap response back to the
+    # client), as opposed to "mechanism-mlkem" which covers ML-KEM as the
+    # KAS-managed TDF/KAO wrapping key.
+    "session-key-mlkem",
     "ns_grants",
     "obligations",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
@@ -400,6 +405,21 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+                # The rewrap session-key ML-KEM path is gated server-side by the
+                # same Preview.MLKEMTDFEnabled flag as the KAS-managed mechanism,
+                # so a platform with ML-KEM keyring algs also accepts an ML-KEM
+                # client session key.
+                #
+                # Known imprecision: Preview.MLKEMTDFEnabled predates the
+                # rewrap-session-key code path (DSPX-4221), so this reports
+                # "supported" for any platform build with the mechanism enabled,
+                # even one that predates the session-key fix and would reject an
+                # ML-KEM clientPublicKey outright. Harmless today because every
+                # SDK's own "session-key-mlkem" probe (a hardcoded feature list,
+                # not a live capability check) independently gates on its own
+                # fix landing; revisit if a platform-only version skew scenario
+                # is ever needed here too.
+                self.features.add("session-key-mlkem")
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
@@ -864,9 +884,9 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ) -> tuple[list[str], dict[str, str]]:
         """Build the argv and CLI-specific env vars for a decrypt invocation.
 
@@ -887,8 +907,8 @@ class SDK:
         local_env: dict[str, str] = {}
         if assert_keys:
             local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
-        if ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
+        if session_key_algorithm:
+            local_env |= {"XT_WITH_SESSION_KEY_ALGORITHM": session_key_algorithm}
         if not verify_assertions:
             local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
         if kasallowlist:
@@ -904,10 +924,10 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ):
         c, local_env = self.decrypt_command(
             ct_file,
@@ -915,9 +935,9 @@ class SDK:
             container=container,
             assert_keys=assert_keys,
             verify_assertions=verify_assertions,
-            ecwrap=ecwrap,
             kasallowlist=kasallowlist,
             ignore_kas_allowlist=ignore_kas_allowlist,
+            session_key_algorithm=session_key_algorithm,
         )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
