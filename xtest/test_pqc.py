@@ -472,6 +472,53 @@ def test_session_key_rsa_roundtrip(
     audit_logs.assert_rewrap_session_key_type("rsa:2048", since_mark=mark)
 
 
+def test_session_key_ec_roundtrip(
+    attribute_default_rsa: Attribute,
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """Rewrap with an explicitly-requested EC session key.
+
+    Sibling of test_session_key_rsa_roundtrip and
+    test_session_key_mlkem_roundtrip, added to demonstrate a real gap: an
+    SDK that silently ignores the requested session-key algorithm (sending
+    an EC clientPublicKey but the wrong algorithm, or vice versa) is only
+    caught here if the platform under test actually emits
+    eventMetaData.sessionKeyType (opentdf/platform#3814, unreleased as of
+    this test). Against an unpatched platform, assert_rewrap_session_key_type
+    can't tell "platform too old to report this" apart from "platform new
+    enough, but the client sent the wrong type" -- see its docstring TODO.
+
+    This is the same underlying gap as test_tdf_roundtrip's ecwrap block,
+    isolated into its own test so a failure here is unambiguous: run
+    against an unpatched web-sdk (main) paired with a platform build that
+    does emit the field, this fails with the client having negotiated
+    rsa:2048 instead of the requested ec:secp256r1.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip(f"Not in focus: encrypt={encrypt_sdk}, decrypt={decrypt_sdk}")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attribute_default_rsa.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+
+    mark = audit_logs.mark("before_decrypt")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="ec:secp256r1")
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", session_key_algorithm="ec:secp256r1")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
+
+    audit_logs.assert_rewrap_session_key_type("ec:secp256r1", since_mark=mark)
+
+
 def test_mlkem_1024_roundtrip(
     attribute_with_mlkem_1024_key: tuple[Attribute, list[str]],
     key_mlkem_1024: KasKey,
