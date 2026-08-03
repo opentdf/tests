@@ -149,6 +149,11 @@ feature_type = Literal[
     "mechanism-secpmlkem",
     # Support for pure (non-hybrid) ML-KEM key wrapping: mlkem:768 and mlkem:1024.
     "mechanism-mlkem",
+    # Support for a client-generated ML-KEM key pair as the rewrap "session key"
+    # (the ephemeral key used to wrap the KAS's rewrap response back to the
+    # client), as opposed to "mechanism-mlkem" which covers ML-KEM as the
+    # KAS-managed TDF/KAO wrapping key.
+    "session-key-mlkem",
     "ns_grants",
     "obligations",
 ]
@@ -244,6 +249,21 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+                # The rewrap session-key ML-KEM path is gated server-side by the
+                # same Preview.MLKEMTDFEnabled flag as the KAS-managed mechanism,
+                # so a platform with ML-KEM keyring algs also accepts an ML-KEM
+                # client session key.
+                #
+                # Known imprecision: Preview.MLKEMTDFEnabled predates the
+                # rewrap-session-key code path (DSPX-4221), so this reports
+                # "supported" for any platform build with the mechanism enabled,
+                # even one that predates the session-key fix and would reject an
+                # ML-KEM clientPublicKey outright. Harmless today because every
+                # SDK's own "session-key-mlkem" probe (a hardcoded feature list,
+                # not a live capability check) independently gates on its own
+                # fix landing; revisit if a platform-only version skew scenario
+                # is ever needed here too.
+                self.features.add("session-key-mlkem")
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
@@ -561,10 +581,10 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ):
         fmt = simple_container(container)
 
@@ -579,8 +599,8 @@ class SDK:
         local_env: dict[str, str] = {}
         if assert_keys:
             local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
-        if ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
+        if session_key_algorithm:
+            local_env |= {"XT_WITH_SESSION_KEY_ALGORITHM": session_key_algorithm}
         if not verify_assertions:
             local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
         if kasallowlist:
