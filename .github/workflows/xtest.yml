@@ -306,9 +306,17 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix (opentdf/platform#3750)
+        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
+          # The action overlays docker-compose.yaml from bootstrap-ref, independent
+          # of platform-ref. The default `pqc-enabled` tag is still Keycloak 25.0,
+          # which cannot issue DPoP-bound access tokens, so test_dpop.py roundtrips
+          # fail with a plain Bearer token. main's compose is Keycloak 26.4 with
+          # KC_FEATURES: dpop. Only the main lane gets it -- released platform tags
+          # predate the switch to standard Keycloak token exchange and still need
+          # the 25.0 bootstrap.
+          bootstrap-ref: ${{ matrix.platform-tag == 'main' && 'main' || 'pqc-enabled' }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
