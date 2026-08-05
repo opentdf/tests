@@ -14,6 +14,10 @@ class Ports:
 
     # Platform
     PLATFORM: int = 8080
+    PLATFORM_ERS_MS: int = 8090
+
+    # ERS test Postgres (docker profile 'ers-test'), used by multi-strategy platform
+    ERS_POSTGRES: int = 5433
 
     # KAS instances
     KAS_ALPHA: int = 8181
