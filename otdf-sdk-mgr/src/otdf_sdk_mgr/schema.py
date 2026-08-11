@@ -36,7 +36,7 @@ API_VERSION = "opentdf.io/v1alpha1"
 
 KasMode = Literal["standard", "key_management"]
 SdkName = Literal["go", "java", "js"]
-ContainerKind = Literal["ztdf", "ztdf-ecwrap"]
+ContainerKind = Literal["ztdf"]
 
 
 class _StrictModel(BaseModel):

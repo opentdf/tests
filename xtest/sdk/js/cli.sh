@@ -11,7 +11,6 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for the TDF's own KAO wrapping key on encryption (use XT_WITH_SESSION_KEY_ALGORITHM for decryption)
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
@@ -247,10 +246,6 @@ if [[ "$1" == "encrypt" ]]; then
   if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
     args+=(--policyBinding ecdsa)
   fi
-  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
-    args+=(--encapKeyType "ec:secp256r1")
-  fi
-
   if [[ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]]; then
     args+=(--policyType plaintext)
   fi

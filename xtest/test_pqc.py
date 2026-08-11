@@ -16,10 +16,16 @@ from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 from tdfs import KeyAccessObject
 
-# Pure ML-KEM session-key algorithm identifiers, as passed to
-# SDK.decrypt(session_key_algorithm=...) / the CLI wrappers.
-SESSION_KEY_MLKEM_768 = "mlkem:768"
-SESSION_KEY_MLKEM_1024 = "mlkem:1024"
+# Rewrap session-key algorithms, as passed to SDK.decrypt(session_key_algorithm=...)
+# / the CLI wrappers, mapped to the features that must be present to try them.
+# RSA is every SDK's default and needs no gate; EC rides on the existing "ecwrap"
+# feature, which also covers the corrected HKDF salt.
+SESSION_KEY_FEATURES: dict[str, tuple[tdfs.feature_type, ...]] = {
+    "rsa:2048": (),
+    "ec:secp256r1": ("ecwrap",),
+    "mlkem:768": ("session-key-mlkem",),
+    "mlkem:1024": ("session-key-mlkem",),
+}
 
 # X-Wing KEM sizes per draft-connolly-cfrg-xwing-kem-10
 XWING_ENCAPSULATION_KEY_SIZE = 1216  # public key, bytes
@@ -377,10 +383,8 @@ def test_mlkem_768_roundtrip(
     assert filecmp.cmp(pt_file, rt_file)
 
 
-@pytest.mark.parametrize(
-    "session_key_algorithm", [SESSION_KEY_MLKEM_768, SESSION_KEY_MLKEM_1024]
-)
-def test_session_key_mlkem_roundtrip(
+@pytest.mark.parametrize("session_key_algorithm", list(SESSION_KEY_FEATURES))
+def test_session_key_roundtrip(
     session_key_algorithm: str,
     attribute_default_rsa: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -390,26 +394,30 @@ def test_session_key_mlkem_roundtrip(
     encrypted_tdf: EncryptFactory,
     audit_logs: AuditLogAsserter,
 ):
-    """Rewrap with a client-generated ML-KEM ephemeral "session key".
+    """Rewrap with an explicitly-requested client-generated ephemeral session key.
 
-    This exercises the rewrap response transport (the KAS wraps the DEK back
-    to a client-supplied ephemeral public key), which is independent of the
-    TDF's own KAO wrapping mechanism -- here a plain RSA-wrapped attribute key
-    is used so a failure can only be attributed to the session-key channel,
-    not to KAS-managed PQC mechanism support (see mechanism-mlkem tests above).
+    The session key is the ephemeral key the KAS wraps its rewrap response back
+    to. It is a separate axis from the TDF's own KAO wrapping mechanism, so
+    every case here encrypts against a plain RSA-wrapped attribute key: a
+    failure can then only be attributed to the session-key channel, not to
+    KAS-managed mechanism support (covered by the mechanism-* tests above).
 
-    A successful decrypt alone doesn't prove KAS actually used an ML-KEM
-    session key -- decrypt would still succeed if the SDK silently fell back
-    to its default (RSA) and KAS just answered in kind. So this asserts on
-    KAS's rewrap audit log, which records the parsed clientPublicKey's type
-    (eventMetaData.sessionKeyType) independently of anything the client
-    reports about itself.
+    A successful decrypt alone doesn't prove KAS honored the request -- it
+    would also succeed if the SDK silently fell back to its default and KAS
+    answered in kind. So each case asserts on KAS's rewrap audit log, which
+    records the parsed clientPublicKey's type (eventMetaData.sessionKeyType)
+    independently of anything the client reports about itself.
+
+    rsa:2048 is included even though it is every SDK's default, because it is
+    requested *explicitly* here -- ordinary roundtrip tests can't pin a
+    session_key_type without becoming brittle to a future default change.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip(f"Not in focus: encrypt={encrypt_sdk}, decrypt={decrypt_sdk}")
     pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("session-key-mlkem")
-    decrypt_sdk.skip_if_unsupported("session-key-mlkem")
+    required = SESSION_KEY_FEATURES[session_key_algorithm]
+    pfs.skip_if_unsupported(*required)
+    decrypt_sdk.skip_if_unsupported(*required)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
 
@@ -431,45 +439,6 @@ def test_session_key_mlkem_roundtrip(
     assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
     audit_logs.assert_rewrap_session_key_type(session_key_algorithm, since_mark=mark)
-
-
-def test_session_key_rsa_roundtrip(
-    attribute_default_rsa: Attribute,
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    in_focus: set[tdfs.SDK],
-    encrypted_tdf: EncryptFactory,
-    audit_logs: AuditLogAsserter,
-):
-    """Rewrap with an explicitly-requested RSA session key.
-
-    RSA is every SDK's default when no session-key algorithm is requested at
-    all, so ordinary roundtrip tests never pin an explicit session_key_type in
-    their audit assertions -- doing so would make them brittle to a future
-    default change. This test sidesteps that by requesting "rsa:2048"
-    explicitly (same as test_session_key_mlkem_roundtrip does for ML-KEM),
-    confirming the audit log's sessionKeyType field is correct for the
-    classical algorithm too, not just the PQC ones.
-    """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip(f"Not in focus: encrypt={encrypt_sdk}, decrypt={decrypt_sdk}")
-    pfs = tdfs.get_platform_features()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        attr_values=attribute_default_rsa.value_fqns,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-    )
-
-    mark = audit_logs.mark("before_decrypt")
-    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="rsa:2048")
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", session_key_algorithm="rsa:2048")
-    assert filecmp.cmp(pt_file, rt_file, shallow=False)
-
-    audit_logs.assert_rewrap_session_key_type("rsa:2048", since_mark=mark)
 
 
 def test_mlkem_1024_roundtrip(
