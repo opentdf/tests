@@ -109,16 +109,16 @@ def is_sdk_type(val: str) -> TypeIs[sdk_type]:
 
 focus_type = Literal[sdk_type, "all"]
 
-container_type = Literal[
-    "ztdf",
-    "ztdf-ecwrap",
-]
+container_type = Literal["ztdf"]
 
 feature_type = Literal[
     "assertions",
     "assertion_verification",
     "attribute_traversal",
     "audit_logging",
+    # Platform: rewrap audit events record the parsed client session-key type
+    # as eventMetaData.sessionKeyType (opentdf/platform#3814, service v0.29.0).
+    "audit-session-key-type",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -232,7 +232,9 @@ ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
 #: ``autoconfigure`` and ``ecwrap`` need the SDK to emit them *and* the platform
 #: to honour them, so forcing either side alone is a reasonable thing to ask for.
 #: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
-PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset({"kas_uri_from_kao"})
+PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
+    {"audit-session-key-type", "kas_uri_from_kao"}
+)
 
 SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
 
@@ -373,6 +375,11 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 10, 0):
             self.features.add("audit_logging")
 
+        # Both added by opentdf/platform#3814, released in service v0.29.0.
+        session_key_fix = self.semver >= (0, 29, 0)
+        if session_key_fix:
+            self.features.add("audit-session-key-type")
+
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
@@ -407,19 +414,10 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-mlkem")
                 # The rewrap session-key ML-KEM path is gated server-side by the
                 # same Preview.MLKEMTDFEnabled flag as the KAS-managed mechanism,
-                # so a platform with ML-KEM keyring algs also accepts an ML-KEM
-                # client session key.
-                #
-                # Known imprecision: Preview.MLKEMTDFEnabled predates the
-                # rewrap-session-key code path (DSPX-4221), so this reports
-                # "supported" for any platform build with the mechanism enabled,
-                # even one that predates the session-key fix and would reject an
-                # ML-KEM clientPublicKey outright. Harmless today because every
-                # SDK's own "session-key-mlkem" probe (a hardcoded feature list,
-                # not a live capability check) independently gates on its own
-                # fix landing; revisit if a platform-only version skew scenario
-                # is ever needed here too.
-                self.features.add("session-key-mlkem")
+                # but that flag predates the session-key code path, so also
+                # require a release that has it.
+                if session_key_fix:
+                    self.features.add("session-key-mlkem")
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
@@ -747,12 +745,6 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
-def simple_container(container: container_type) -> container_type:
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
-
-
 class SDK:
     sdk: sdk_type
     version: str
@@ -827,14 +819,12 @@ class SDK:
         The returned env holds only the CLI-specific overrides; merge it over
         ``os.environ`` before handing it to a subprocess.
         """
-        use_ecwrap = container == "ztdf-ecwrap"
-        fmt = simple_container(container)
         c = [
             self.path,
             "encrypt",
             str(pt_file),
             str(ct_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
@@ -847,11 +837,9 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if fmt == "ztdf" and target_mode:
+        if target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
-        if use_ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
         return c, local_env
 
     def encrypt(
@@ -905,14 +893,12 @@ class SDK:
         has no counterpart here: it selects how the caller runs the command,
         not what the command is.
         """
-        fmt = simple_container(container)
-
         c = [
             self.path,
             "decrypt",
             str(ct_file),
             str(rt_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}

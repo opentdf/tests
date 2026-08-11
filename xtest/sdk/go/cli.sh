@@ -11,7 +11,6 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for the TDF's own KAO wrapping key on encryption (use XT_WITH_SESSION_KEY_ALGORITHM for decryption)
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
@@ -134,6 +133,9 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     session-key-mlkem)
+      # Unlike the java/js help text, otdfctl's decrypt help enum and its
+      # --session-key-algorithm parser gained mlkem:* in the same commit
+      # (opentdf/platform#3814), so the help text is a reliable signal here.
       set -o pipefail
       "${cmd[@]}" help decrypt | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
@@ -220,9 +222,6 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$XT_WITH_ASSERTIONS" ]; then
     args+=(--with-assertions "$XT_WITH_ASSERTIONS")
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--wrapping-key-algorithm "ec:secp256r1")
-  fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
@@ -245,6 +244,13 @@ elif [ "$1" == "decrypt" ]; then
     args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
   fi
   if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    # otdfctl quietly falls back to rsa:2048 for any value its parser doesn't
+    # know, so refuse anything this build's help doesn't list rather than let a
+    # forced run (XT_FORCE_SUPPORTS) pass with the wrong session key.
+    if ! "${cmd[@]}" help decrypt | grep -F -- "$XT_WITH_SESSION_KEY_ALGORITHM" >/dev/null; then
+      echo "otdfctl does not list session key algorithm [$XT_WITH_SESSION_KEY_ALGORITHM]" >&2
+      exit 1
+    fi
     args+=(--session-key-algorithm "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
