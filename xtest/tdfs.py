@@ -109,10 +109,7 @@ def is_sdk_type(val: str) -> TypeIs[sdk_type]:
 
 focus_type = Literal[sdk_type, "all"]
 
-container_type = Literal[
-    "ztdf",
-    "ztdf-ecwrap",
-]
+container_type = Literal["ztdf"]
 
 feature_type = Literal[
     "assertions",
@@ -736,12 +733,6 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
-def simple_container(container: container_type) -> container_type:
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
-
-
 class SDK:
     sdk: sdk_type
     version: str
@@ -816,14 +807,12 @@ class SDK:
         The returned env holds only the CLI-specific overrides; merge it over
         ``os.environ`` before handing it to a subprocess.
         """
-        use_ecwrap = container == "ztdf-ecwrap"
-        fmt = simple_container(container)
         c = [
             self.path,
             "encrypt",
             str(pt_file),
             str(ct_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
@@ -836,11 +825,9 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if fmt == "ztdf" and target_mode:
+        if target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
-        if use_ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
         return c, local_env
 
     def encrypt(
@@ -894,14 +881,12 @@ class SDK:
         has no counterpart here: it selects how the caller runs the command,
         not what the command is.
         """
-        fmt = simple_container(container)
-
         c = [
             self.path,
             "decrypt",
             str(ct_file),
             str(rt_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
