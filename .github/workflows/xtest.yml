@@ -33,6 +33,11 @@ on:
         type: boolean
         default: false
         description: "Enable DPoP nonce challenge on KAS instances"
+      run-benchmarks:
+        required: false
+        type: boolean
+        default: false
+        description: "Run the SDK performance regression benchmarks (adds ~45m per SDK)"
   workflow_call:
     inputs:
       platform-ref:
@@ -56,6 +61,10 @@ on:
         type: string
         default: all
       dpop-challenge:
+        required: false
+        type: boolean
+        default: false
+      run-benchmarks:
         required: false
         type: boolean
         default: false
@@ -746,6 +755,224 @@ jobs:
             ${{ steps.kas-delta.outputs.log-file }}
             ${{ steps.kas-km1.outputs.log-file }}
             ${{ steps.kas-km2.outputs.log-file }}
+          if-no-files-found: ignore
+
+  # Paired A/B performance regression benchmark.
+  #
+  # Absolute timings from a GitHub-hosted runner are not comparable to
+  # timings from any other runner -- CPU model, tenancy, and steal time all
+  # vary more than any regression worth catching. So nothing is compared to
+  # history. Instead both builds under comparison run on *this* runner, in
+  # the same interleaved round, and only their ratio is reported. Runner
+  # speed divides out.
+  #
+  # Never runs on pull requests: 30 minutes of serial measurement is too slow
+  # for a PR gate, and a PR runner is the noisiest place to measure.
+  bench:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    needs: resolve-versions
+    # Nightly cron only, not the Mon/Wed or weekly ones: three runs a week of
+    # the same comparison would tell us nothing the first one did not.
+    if: >-
+      github.event.schedule == '30 6 * * *' ||
+      ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+       && inputs.run-benchmarks)
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      # One runner per SDK. Two SDKs on one runner would contend for the very
+      # CPU being measured.
+      fail-fast: false
+      matrix:
+        sdk: [go, java, js]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: opentdf/tests
+          path: otdftests
+          persist-credentials: false
+
+      - name: load extra keys from file
+        id: load-extra-keys
+        run: |-
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      ######## SPIN UP PLATFORM BACKEND #############
+      # Pinned to main, and to the default KAS only. We are measuring SDK
+      # regressions, so the server is held constant; and the six extra KAS
+      # instances the ABAC tests need would draw background CPU on the runner
+      # doing the measuring, which is noise rather than merely waste.
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
+        with:
+          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          bootstrap-ref: main
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff # v1.4.0
+        if: matrix.sdk == 'java'
+        with:
+          setup_only: true
+          token: ${{ secrets.BUF_TOKEN }}
+          version: "1.56.0"
+
+      - name: Set up JDK
+        if: matrix.sdk == 'java'
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+
+      - name: Set up Node 22
+        if: matrix.sdk == 'js'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22.x"
+
+      - name: Capture platform otdfctl location
+        if: matrix.sdk == 'go'
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
+              echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
+              exit 1
+            }
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      ######## INSTALL BOTH ARMS OF THE COMPARISON #############
+      # The whole design rests on this step laying down two builds side by
+      # side under sdk/<sdk>/dist/: the branch head (candidate) and the
+      # newest release (baseline). Arm selection picks them up from there.
+      - name: Configure ${{ matrix.sdk }} sdk
+        id: configure-sdk
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: ${{ matrix.sdk }}
+          version-info: "${{ needs.resolve-versions.outputs[matrix.sdk] }}"
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Cache Go modules
+        if: matrix.sdk == 'go'
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Cache npm
+        if: matrix.sdk == 'js'
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Cache Maven repository
+        if: matrix.sdk == 'java'
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      - name: point java heads at the platform under test
+        if: matrix.sdk == 'java' && fromJson(steps.configure-sdk.outputs.heads)[0] != null
+        run: |-
+          for row in $(echo "$java_version_info" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            if [[ "$HEAD" == "true" ]]; then
+              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
+            fi
+          done
+        env:
+          java_version_info: ${{ needs.resolve-versions.outputs.java }}
+          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+
+      - name: Build the ${{ matrix.sdk }} cli
+        if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/${{ matrix.sdk }}
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      ######## MEASURE #############
+      # --locked --no-build: install exactly what uv.lock pins, and run no
+      # setup scripts doing it. A benchmark that measured a differently
+      # resolved dependency set would be measuring the wrong thing anyway.
+      - name: Install test dependencies
+        run: uv sync --locked --no-build
+        working-directory: otdftests/xtest
+
+      # Deliberately serial: no -n / --dist. Parallel pytest workers contend
+      # for the CPU under measurement and would invalidate every number here.
+      # conftest.py refuses to run --bench under xdist for the same reason.
+      - name: Run performance benchmarks
+        id: bench
+        run: |-
+          uv run --frozen --no-build pytest -ra -v \
+            --bench \
+            --sdks "$BENCH_SDK" \
+            --bench-budget-seconds 1500 \
+            --bench-out test-results/benchmarks \
+            --html "test-results/bench-${BENCH_SDK}.html" \
+            --self-contained-html \
+            test_benchmarks.py
+        working-directory: otdftests/xtest
+        env:
+          BENCH_SDK: ${{ matrix.sdk }}
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
+          PLATFORM_TAG: main
+          OTDFCTL_HEADS: ${{ steps.configure-sdk.outputs.heads }}
+          # The benchmark never touches the audit-log fixture; asserting on
+          # logs would also add file IO to the measured path.
+          DISABLE_AUDIT_ASSERTIONS: "1"
+
+      # Raw per-round samples, not just the verdict. Re-analysing a
+      # surprising result offline beats re-running a 30-minute job to look at
+      # the same numbers again.
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: success() || failure()
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} bench-${{ matrix.sdk }}
+          path: |
+            otdftests/xtest/test-results/benchmarks/*.json
+            otdftests/xtest/test-results/*.html
+          if-no-files-found: warn
+
+      - name: Upload server logs on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: bench-server-logs-${{ matrix.sdk }}
+          path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
 
   publish-results:

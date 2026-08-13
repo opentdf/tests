@@ -29,6 +29,7 @@ jobs:
             java
             web
             xtest
+            perf
             ci
             dependabot
         env:
