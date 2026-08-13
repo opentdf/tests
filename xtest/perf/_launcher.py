@@ -53,7 +53,7 @@ def _current_rss_bytes() -> int:
     try:
         with open("/proc/self/statm", "rb") as f:
             pages = int(f.read().split()[1])
-    except OSError, IndexError, ValueError:
+    except (OSError, IndexError, ValueError):
         # macOS has no /proc. Its ru_maxrss is already bytes, and it does not
         # show the inheritance above, so a high-water reading is close enough.
         import resource

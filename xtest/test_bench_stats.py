@@ -130,6 +130,7 @@ class TestCompare:
         r = stats.compare(v, v, seed=0, n_resamples=RESAMPLES)
         assert r.ratio == pytest.approx(1.0)
         assert r.p_value == 1.0
+        assert r.p_value_faster == 1.0
 
     def test_constant_offset_has_degenerate_interval(self):
         # Every round shows exactly a 2x slowdown: there is no sampling
@@ -185,7 +186,10 @@ class TestDecisionRule:
         g = gate_one(
             stats.compare(b, c, seed=12, n_resamples=RESAMPLES), control=quiet_control()
         )
-        assert g.comparisons["cell"].verdict is Verdict.IMPROVED
+        result = g.comparisons["cell"]
+        assert result.verdict is Verdict.IMPROVED
+        assert result.p_adjusted_faster is not None
+        assert result.p_adjusted_faster < stats.DEFAULT_ALPHA
         assert not g.should_fail
 
     def test_borderline_effect_without_power_is_inconclusive_not_pass(self):
@@ -301,6 +305,26 @@ class TestMultiplicityControl:
         assert math.isnan(adj[1])
         assert all(math.isfinite(a) for a in (adj[0], adj[2]))
 
+    def test_faster_tail_is_adjusted_directly(self):
+        cells = {}
+        for i, ratio in enumerate((0.70, 0.75, 0.80)):
+            rng = np.random.default_rng(2900 + i)
+            b, c = synth(rng, ratio, n=60)
+            cells[f"cell{i}"] = stats.compare(b, c, seed=i, n_resamples=RESAMPLES)
+        cells["control"] = quiet_control()
+
+        g = stats.apply_multiplicity_control(
+            cells, controls=all_under_one_control(cells)
+        )
+        expected = stats.benjamini_hochberg(
+            [cells[f"cell{i}"].p_value_faster for i in range(3)]
+        )
+        actual = [g.comparisons[f"cell{i}"].p_adjusted_faster for i in range(3)]
+        assert actual == pytest.approx(expected)
+        assert all(
+            g.comparisons[f"cell{i}"].verdict is Verdict.IMPROVED for i in range(3)
+        )
+
     def test_correction_suppresses_lone_lucky_cell(self):
         # 20 pure-noise cells: without BH one of them firing is expected.
         cells = {}
@@ -338,6 +362,51 @@ class TestMultiplicityControl:
         assert g.comparisons["cpu"].verdict is Verdict.REGRESSION
         assert g.regressions == ["wall"], "cpu is reported but never gates"
 
+    def test_the_three_families_are_corrected_separately(self):
+        # A bake-off adds head-to-head contrasts that cannot fail the build.
+        # Folding them into the gate's family would raise every gated p-value
+        # for the sake of tests nobody gates on, which is precisely the trade
+        # the gated/ungated split already refuses to make.
+        rng = np.random.default_rng(41)
+        b, c = synth(rng, 1.4, n=60)
+        regressed = stats.compare(b, c, seed=41, n_resamples=RESAMPLES)
+        cells = {"wall": regressed, "control": quiet_control()}
+        alone = stats.apply_multiplicity_control(
+            cells, gated={"wall"}, controls=all_under_one_control(cells)
+        )
+
+        crowded = dict(cells)
+        for i in range(10):
+            r = np.random.default_rng(4100 + i)
+            x, y = synth(r, 1.0, n=60)
+            crowded[f"h2h{i}"] = stats.compare(x, y, seed=i, n_resamples=RESAMPLES)
+        with_h2h = stats.apply_multiplicity_control(
+            crowded,
+            gated={"wall"},
+            symmetric={f"h2h{i}" for i in range(10)},
+            controls=all_under_one_control(crowded),
+        )
+        assert with_h2h.comparisons["wall"].p_adjusted == pytest.approx(
+            alone.comparisons["wall"].p_adjusted
+        ), "ten head-to-heads must not dilute the one contrast that can gate"
+        assert with_h2h.regressions == ["wall"]
+
+    def test_a_symmetric_key_that_is_also_gated_stays_gated(self):
+        # Only reachable through a caller bug, and the safe resolution is the
+        # rule that can still fail the build rather than the one that cannot.
+        rng = np.random.default_rng(42)
+        b, c = synth(rng, 1.4, n=60)
+        cells = {"wall": stats.compare(b, c, seed=42, n_resamples=RESAMPLES)}
+        cells["control"] = quiet_control()
+        g = stats.apply_multiplicity_control(
+            cells,
+            gated={"wall"},
+            symmetric={"wall"},
+            controls=all_under_one_control(cells),
+        )
+        assert g.comparisons["wall"].verdict is Verdict.REGRESSION
+        assert g.regressions == ["wall"]
+
     def test_empty_run_reports_no_regressions(self):
         g = stats.apply_multiplicity_control({})
         assert not g.should_fail, "nothing measured is not a regression"
@@ -359,3 +428,121 @@ class TestMultiplicityControl:
             stats.compare(b, c, seed=33, n_resamples=RESAMPLES), control=quiet_control()
         )
         assert not g.nothing_measured
+
+
+class TestSymmetricVerdicts:
+    """The bake-off rule: which of two candidates is faster, if either.
+
+    Neither arm is an incumbent, so the one-sided vocabulary does not apply.
+    PASS would let a slower arm read as a clean result, and REGRESSION would
+    imply the other arm was the thing that changed.
+    """
+
+    def h2h(
+        self,
+        true_ratio: float,
+        *,
+        n: int = 60,
+        seed: int = 51,
+        sigma: float = NOISE_SIGMA,
+    ):
+        rng = np.random.default_rng(seed)
+        a, b = synth(rng, true_ratio, n=n, sigma=sigma)
+        cells = {
+            "h2h": stats.compare(a, b, seed=seed, n_resamples=RESAMPLES),
+            "control": quiet_control(),
+        }
+        g = stats.apply_multiplicity_control(
+            cells,
+            gated=set(),
+            symmetric={"h2h"},
+            controls=all_under_one_control(cells),
+        )
+        return g, g.comparisons["h2h"]
+
+    def test_a_clearly_slower_arm_is_slower(self):
+        _, c = self.h2h(1.5)
+        assert c.verdict is Verdict.SLOWER
+
+    def test_a_clearly_faster_arm_is_faster(self):
+        _, c = self.h2h(1 / 1.5)
+        assert c.verdict is Verdict.FASTER
+        assert c.p_adjusted_faster is not None
+        assert c.p_adjusted_faster < stats.DEFAULT_ALPHA
+
+    def test_indistinguishable_arms_are_tied(self):
+        # A positive finding, and the most likely honest answer for two
+        # implementations of the same idea. Not PASS: that is a one-sided
+        # claim about an incumbent that does not exist here.
+        _, c = self.h2h(1.0, n=120, sigma=0.02)
+        assert c.verdict is Verdict.TIED
+        assert 1 / 1.15 < c.ci_low and c.ci_high < 1.15
+
+    def test_an_interval_straddling_the_band_edge_is_inconclusive(self):
+        # A real but unresolved difference. Calling it TIED would claim an
+        # equivalence the interval does not support.
+        _, c = self.h2h(1.15, n=20, sigma=0.15)
+        assert c.verdict is Verdict.INCONCLUSIVE
+        assert "cannot be ranked" in c.note
+
+    def test_a_head_to_head_never_gates(self):
+        g, c = self.h2h(1.5)
+        assert c.verdict is Verdict.SLOWER
+        assert not g.should_fail, "a bake-off ranks; it does not fail the build"
+        assert g.regressions == [] and g.improvements == []
+
+    def test_a_decided_head_to_head_is_ranked(self):
+        g, _ = self.h2h(1.5)
+        assert g.ranked == ["h2h"]
+
+    def test_a_tie_is_not_ranked(self):
+        # Nothing to rank: naming a winner from a tie is the failure mode this
+        # verdict exists to prevent.
+        g, c = self.h2h(1.0, n=120, sigma=0.02)
+        assert c.verdict is Verdict.TIED
+        assert g.ranked == []
+
+    def test_without_a_noise_floor_nothing_is_ranked(self):
+        # Invariant 4 covers TIED as much as PASS: a tie nobody had the power
+        # to tell from a difference is not a tie.
+        rng = np.random.default_rng(52)
+        a, b = synth(rng, 1.0, n=120, sigma=0.02)
+        cells = {"h2h": stats.compare(a, b, seed=52, n_resamples=RESAMPLES)}
+        g = stats.apply_multiplicity_control(cells, gated=set(), symmetric={"h2h"})
+        assert g.comparisons["h2h"].verdict is Verdict.INCONCLUSIVE
+        assert g.ranked == []
+
+
+class TestWorstControlKey:
+    """A K-arm control yields C(K,2) A/A contrasts, and they are not equal.
+
+    Arm 3 runs two invocations after arm 1, so it carries more within-round
+    drift. Taking whichever came first would let dict ordering decide how
+    noisy the run is allowed to look.
+    """
+
+    def controls(self) -> dict[str, stats.PairedComparison]:
+        rng = np.random.default_rng(61)
+        tight_b, tight_c = synth(rng, 1.0, n=120, sigma=0.02)
+        wide_b, wide_c = synth(rng, 1.0, n=25, sigma=0.25)
+        return {
+            "tight": stats.compare(tight_b, tight_c, seed=61, n_resamples=RESAMPLES),
+            "wide": stats.compare(wide_b, wide_c, seed=62, n_resamples=RESAMPLES),
+        }
+
+    def test_the_widest_contrast_is_the_floor(self):
+        c = self.controls()
+        assert stats.worst_control_key(c, ["tight", "wide"]) == "wide"
+
+    def test_the_answer_does_not_depend_on_input_order(self):
+        c = self.controls()
+        assert stats.worst_control_key(c, ["wide", "tight"]) == "wide"
+
+    def test_a_missing_contrast_is_worse_than_any_real_one(self):
+        # An absent control is not a quiet one; `assess_noise_floor(None)`
+        # calls it underpowered, and that must win over a real interval.
+        c = self.controls()
+        assert stats.worst_control_key(c, ["tight", "absent"]) == "absent"
+
+    def test_no_keys_means_no_floor(self):
+        assert stats.worst_control_key({}, []) is None
