@@ -338,7 +338,24 @@ class TestMultiplicityControl:
         assert g.comparisons["cpu"].verdict is Verdict.REGRESSION
         assert g.regressions == ["wall"], "cpu is reported but never gates"
 
-    def test_empty_run_is_not_a_failure(self):
+    def test_empty_run_reports_no_regressions(self):
         g = stats.apply_multiplicity_control({})
-        assert not g.should_fail
+        assert not g.should_fail, "nothing measured is not a regression"
         assert g.regressions == []
+
+    def test_empty_run_says_it_measured_nothing(self):
+        # The dangerous case: an empty run and a clean run have the same empty
+        # regression list, so without this the report of a benchmark that
+        # skipped every cell is indistinguishable from one that passed.
+        g = stats.apply_multiplicity_control({})
+        assert g.nothing_measured
+        assert "NOTHING MEASURED" in g.summary
+        assert "no regressions" not in g.summary.lower()
+
+    def test_a_run_with_comparisons_measured_something(self):
+        rng = np.random.default_rng(33)
+        b, c = synth(rng, 1.0, n=40)
+        g = gate_one(
+            stats.compare(b, c, seed=33, n_resamples=RESAMPLES), control=quiet_control()
+        )
+        assert not g.nothing_measured

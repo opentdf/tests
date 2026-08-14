@@ -425,7 +425,12 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
 
     if config.getoption("--bench-no-gate", default=False):
         return
-    if gate.should_fail:
+    # A run that measured nothing fails too, and not only one that found a
+    # regression. --bench is an explicit request for a measurement; answering
+    # it with a green tick and an empty table is the one outcome nobody
+    # inspects, so a benchmark that has quietly stopped measuring can survive
+    # indefinitely. Every reason a cell skips is already in the report.
+    if gate.should_fail or gate.nothing_measured:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 

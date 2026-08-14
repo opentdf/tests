@@ -368,6 +368,19 @@ class GateResult:
     def should_fail(self) -> bool:
         return self.trustworthy and bool(self.regressions)
 
+    @property
+    def nothing_measured(self) -> bool:
+        """True if the run produced no comparisons at all.
+
+        Not the same thing as "no regressions", though the two are identical
+        from the outside: both have an empty ``regressions`` list. A run where
+        every cell was skipped -- no baseline installed, an SDK that would not
+        build -- reports the cheerful summary of a clean one, which is how a
+        benchmark that quietly stopped measuring anything survives for months.
+        Callers gate on this separately.
+        """
+        return not self.comparisons
+
 
 def apply_multiplicity_control(
     comparisons: dict[str, PairedComparison],
@@ -519,6 +532,14 @@ def _verdict_for(
 
 
 def _summarize(result: GateResult, noise: NoiseFloor, threshold: float) -> str:
+    if result.nothing_measured:
+        # Before the noise check: with nothing measured there is no control
+        # either, and "the A/A control failed" would misdescribe a run that
+        # never got as far as running one.
+        return (
+            "NOTHING MEASURED: no cell produced a comparison, so this run says "
+            "nothing about performance either way."
+        )
     if noise.tripped:
         return (
             f"INCONCLUSIVE: the A/A control failed its own comparison. {noise.detail}. "

@@ -37,7 +37,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: "Run the SDK performance regression benchmarks (adds ~45m per SDK)"
+        description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
   workflow_call:
     inputs:
       platform-ref:
@@ -838,8 +838,10 @@ jobs:
         with:
           node-version: "22.x"
 
+      # Not gated on matrix.sdk: every bench runner needs otdfctl now, and
+      # leaving these outputs empty on the java and js runners would send
+      # setup-cli-tool off to make its own platform checkout to build it from.
       - name: Capture platform otdfctl location
-        if: matrix.sdk == 'go'
         id: platform-otdfctl
         run: |-
           if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
@@ -870,8 +872,25 @@ jobs:
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
+      # otdfctl provisions the attributes and KAS registry every cell needs,
+      # whichever SDK is under measurement, and conftest.py loads it at import
+      # time. The go runner already has it from the step above; without this
+      # the java and js runners fail during collection, before a single
+      # measurement is taken.
+      - name: Configure otdfctl
+        id: configure-otdfctl
+        if: matrix.sdk != 'go'
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: "${{ needs.resolve-versions.outputs.go }}"
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      # Unconditional: every bench runner builds go now, either as the SDK
+      # under measurement or as otdfctl.
       - name: Cache Go modules
-        if: matrix.sdk == 'go'
         uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: |
@@ -921,6 +940,14 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
+      - name: Build otdfctl
+        if: matrix.sdk != 'go' && fromJson(steps.configure-otdfctl.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
       ######## MEASURE #############
       # --locked --no-build: install exactly what uv.lock pins, and run no
       # setup scripts doing it. A benchmark that measured a differently
@@ -949,7 +976,12 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          OTDFCTL_HEADS: ${{ steps.configure-sdk.outputs.heads }}
+          # go's heads, not the matrix SDK's: conftest reads this to locate
+          # otdfctl under sdk/go/dist/<head>/, so pointing it at java's or
+          # js's head names a directory that does not exist.
+          OTDFCTL_HEADS: >-
+            ${{ matrix.sdk == 'go' && steps.configure-sdk.outputs.heads
+                || steps.configure-otdfctl.outputs.heads }}
           # The benchmark never touches the audit-log fixture; asserting on
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"

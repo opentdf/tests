@@ -91,6 +91,15 @@ regressions, so without this a benchmark that had quietly stopped measuring
 would keep reporting a green tick. The "Not measured" section of the report
 lists the reason for each cell.
 
+> One cause looks like a bug and is not. If an SDK's newest release tags the same
+> commit as `main` — java sat at `v0.18.0 == main == dev == 57d070b0` through
+> August 2026 — then `main latest` resolves both arms to one SHA, `otdf-sdk-mgr`
+> installs a single build, and every cell skips with *"no final release to compare
+> against; installed: main"*. The message is true from where the harness stands, but
+> the release it is looking for does exist; the two arms are just the same code.
+> Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
+> instead of two means there is nothing to measure until `main` moves.
+
 ### The A/A control
 
 Each SDK gets a control cell that compares the baseline build **against itself**
