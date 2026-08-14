@@ -9,4 +9,8 @@ Modules:
 - ``stats``: the paired statistical comparison and its decision rule.
 - ``runner``: the round loop that produces paired samples.
 - ``report``: JSON artifacts and GitHub step-summary markdown.
+
+``README.md`` in this directory covers how to read a result and why the harness
+is shaped the way it is. Read it before changing anything here: most of the
+design decisions fail silently and plausibly when undone.
 """
