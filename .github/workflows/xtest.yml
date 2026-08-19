@@ -506,10 +506,11 @@ jobs:
         run: |-
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           echo "OT_CONFIG_FILE=$OT_CONFIG_FILE" >> "$GITHUB_ENV"
-          # Determine if the config declares the key_management field
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false)
+          # Determine if the config declares either key_management field
+          key_management=$(yq e '.services.kas.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          preview_key_management=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$key_management:$preview_key_management" in
+            true:*|false:*|*:true|*:false)
               echo "KEY_MANAGEMENT_SUPPORTED=true" >> "$GITHUB_ENV"
               echo "supported=true" >> "$GITHUB_OUTPUT"
               ;;
