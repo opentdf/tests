@@ -11,13 +11,13 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -125,6 +125,16 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i "mlkem:768"
       exit $?
       ;;
+    session-key-mlkem)
+      # --rewrap-key-type has long accepted "mlkem:768" as a value (its choices
+      # come from the same KeyType enum used for KAS-managed-key mechanisms),
+      # so grepping --help for it would false-positive on builds that predate
+      # KASClient actually decapsulating an ML-KEM rewrap response. Use the
+      # explicit `supports` subcommand instead, which is a hardcoded,
+      # source-controlled feature list scoped to this exact capability.
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports session-key-mlkem
+      exit $?
+      ;;
     mechanism-rsa-4096 | mechanism-ec-curves-384-521)
       # rsa4096 support in >= 0.13.0
       set -o pipefail
@@ -178,16 +188,12 @@ if [ "$1" == "encrypt" ]; then
     args+=(--ecdsa-binding)
   fi
 
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--encap-key-type="ec:secp256r1")
-  fi
-
   if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
     args+=(--policy-type="plaintext")
   fi
 else
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--rewrap-key-type="ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    args+=(--rewrap-key-type="$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
 fi
 

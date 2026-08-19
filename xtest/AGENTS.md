@@ -24,7 +24,7 @@ fixture system.
 |--------|---------|
 | `--sdks "go java js"` | Which SDKs to use for both encrypt and decrypt. |
 | `--sdks-encrypt`, `--sdks-decrypt` | Asymmetric encrypt/decrypt SDK selection (use when reproducing cross-SDK interop bugs). |
-| `--containers ztdf ztdf-ecwrap` | Which TDF container types to exercise. |
+| `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
 
 ## Authoring a New Test
