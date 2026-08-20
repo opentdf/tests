@@ -86,6 +86,38 @@ class TestBaselineSelection:
         with pytest.raises(bench.ArmSelectionError, match="nothing to compare"):
             bench.select_arms("go", baseline_spec="go@main", candidate_spec="go@main")
 
+    def test_two_branch_builds_need_explicit_specs(self, cwd: Path):
+        # What a branch-vs-branch dispatch installs: two heads and no release
+        # at all. Named explicitly it is a fine comparison; left to the default
+        # there is no baseline, and "newest final release" cannot invent one.
+        install(cwd, "go", "main", "feat--DSPX-2604-createtdf-chunked")
+        baseline, candidate = bench.select_arms(
+            "go",
+            baseline_spec="go@main",
+            candidate_spec="go@feat--DSPX-2604-createtdf-chunked",
+        )
+        assert baseline.version == "main"
+        assert candidate.version == "feat--DSPX-2604-createtdf-chunked"
+        with pytest.raises(bench.ArmSelectionError, match="no final go release"):
+            bench.select_arms("go")
+
+
+class TestDistTagShape:
+    def test_a_slashed_tag_breaks_discovery(self, cwd: Path):
+        # Why otdf-sdk-mgr flattens '/' to '--' in a resolved ref. A branch
+        # installed as dist/feat/x/ is listed as a build named "feat", which
+        # has no cli.sh -- and this raises during collection, before any cell
+        # has a chance to report why.
+        install(cwd, "go", "feat/DSPX-2604-createtdf-chunked")
+        with pytest.raises(FileNotFoundError):
+            tdfs.all_versions_of("go")
+
+    def test_a_flattened_tag_is_discovered(self, cwd: Path):
+        install(cwd, "go", "feat--DSPX-2604-createtdf-chunked")
+        assert [s.version for s in tdfs.all_versions_of("go")] == [
+            "feat--DSPX-2604-createtdf-chunked"
+        ]
+
 
 #: The fixture body, called directly: these tests are about the bytes it
 #: writes, not about pytest's fixture wiring.

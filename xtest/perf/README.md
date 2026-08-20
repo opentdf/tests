@@ -19,6 +19,10 @@ measure.
 > baseline — and every cell skips. The run fails rather than passing empty
 > (see [NOTHING MEASURED](#the-verdicts)), but it will have wasted 45 minutes
 > to tell you that.
+>
+> To compare **two named refs** instead — a branch against `main`, say — use
+> `bench-baseline-ref` / `bench-candidate-ref` and skip all of the above; see
+> [Benchmarking one branch against another](#benchmarking-one-branch-against-another).
 
 - **Section 1 — [Reading a result](#1-reading-a-result)** is for developers on
   the SDKs and the platform: your build got flagged, what does that mean.
@@ -169,6 +173,42 @@ Useful knobs while investigating:
 
 A local run is noisier than CI unless the machine is otherwise idle. Close
 things; the noise floor will tell you whether you succeeded.
+
+### Benchmarking one branch against another
+
+The nightly comparison is newest-release vs branch head, which is the right
+question to ask every night and the wrong one to ask about a specific change:
+the baseline carries every other commit that landed since the release. To
+point the harness at two refs you name, dispatch X-Test with:
+
+| Input | Example | Meaning |
+| --- | --- | --- |
+| `run-benchmarks` | ✅ | Required; the bench job is off otherwise |
+| `focus-sdk` | `go` | Must name one SDK — the matrix runs only this one |
+| `bench-baseline-ref` | `main` | The build you are comparing *against* |
+| `bench-candidate-ref` | `feat/DSPX-2604-createtdf-chunked` | The build under suspicion |
+
+Either ref can be anything `otdf-sdk-mgr versions resolve` accepts: a branch, a
+tag, a full or short SHA, or `refs/pull/N/head`. Both are built from source and
+installed side by side, and arm selection is told which is which explicitly —
+so neither has to be a release, which is the whole point.
+
+The `*-ref` inputs are ignored by the bench job in this mode. They still drive
+the functional test matrix, so a dispatch can answer "is it slower?" without
+also changing what the rest of the run tests.
+
+Two things this mode does **not** change, both of which bound what a result
+means:
+
+- **The server stays on `main`.** The bench job pins the platform and runs a
+  single KAS, whatever the refs say. A candidate whose speed depends on a
+  matching server change will not show it here.
+- **The baseline is whatever you named.** For a stacked branch, `main` as the
+  baseline measures the whole stack. Name the parent branch instead to isolate
+  the top commit.
+
+It fails fast, before spending a runner, when the two refs resolve to the same
+commit or when `focus-sdk` is `all`.
 
 ### What this benchmark cannot tell you
 
@@ -326,6 +366,18 @@ show up as a difference in how fast they read one.
 and the directory listing breaks the tie. That is a baseline nobody chose, and it
 differs run to run. Baseline selection uses `is_final_release()`, which matches
 only a plain `vX.Y.Z`.
+
+#### A dist tag is one path component
+
+`otdf-sdk-mgr` flattens `/` to `--` when it resolves a ref, so
+`feat/DSPX-2604-createtdf-chunked` installs as
+`dist/feat--DSPX-2604-createtdf-chunked/`. Everything downstream walks those
+directories exactly one level deep — `tdfs.all_versions_of()` lists `dist/*/`,
+the go `Makefile` finds `src/*/` — so a slash that survives resolution is
+discovered as a build named `feat` with no `cli.sh` in it, which
+`all_versions_of()` raises on before any cell runs. Branch-vs-branch dispatch
+is the first thing to routinely feed it a slashed ref, and the `--bench-*`
+specs name the flattened tag: `go@feat--DSPX-2604-createtdf-chunked`.
 
 #### Payloads are seeded per payload, not per run
 

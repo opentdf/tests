@@ -38,6 +38,16 @@ on:
         type: boolean
         default: false
         description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
+      bench-baseline-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Benchmark the ref named here against bench-candidate-ref, instead of the default newest-release-vs-branch-head comparison. Any ref otdf-sdk-mgr resolves: 'main', a branch, a tag, a SHA, 'refs/pull/N/head'. Requires bench-candidate-ref and a focus-sdk naming one SDK; ignores the *-ref inputs, which drive the functional matrix rather than this."
+      bench-candidate-ref:
+        required: false
+        type: string
+        default: ""
+        description: "The build under suspicion, measured against bench-baseline-ref. e.g. 'feat/DSPX-2604-createtdf-chunked'."
   workflow_call:
     inputs:
       platform-ref:
@@ -68,6 +78,14 @@ on:
         required: false
         type: boolean
         default: false
+      bench-baseline-ref:
+        required: false
+        type: string
+        default: ""
+      bench-candidate-ref:
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -88,6 +106,7 @@ jobs:
       platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
+      bench-sdks: ${{ steps.bench-inputs.outputs.sdks }}
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
@@ -107,6 +126,31 @@ jobs:
             echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+      # Decided here rather than in the bench job because a matrix cannot be
+      # narrowed from inside the job it belongs to: a bad combination would
+      # already have spun up three runners for 45 minutes each.
+      - name: Validate benchmark inputs and pick the bench matrix
+        id: bench-inputs
+        env:
+          FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
+          BASELINE_REF: ${{ inputs.bench-baseline-ref }}
+          CANDIDATE_REF: ${{ inputs.bench-candidate-ref }}
+        run: |-
+          if [[ -n "$BASELINE_REF" && -z "$CANDIDATE_REF" ]] \
+             || [[ -z "$BASELINE_REF" && -n "$CANDIDATE_REF" ]]; then
+            echo "::error::bench-baseline-ref and bench-candidate-ref must be set together; a comparison needs both arms named."
+            exit 1
+          fi
+          if [[ -n "$CANDIDATE_REF" && "$FOCUS_SDK" == "all" ]]; then
+            echo "::error::bench-baseline-ref/bench-candidate-ref name refs of one SDK, so focus-sdk must be go, java, or js -- not 'all'."
+            exit 1
+          fi
+          if [[ "$FOCUS_SDK" == "all" ]]; then
+            echo 'sdks=["go","java","js"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "sdks=[\"${FOCUS_SDK}\"]" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Default Versions depend on context
         id: default-tags
         run: |-
@@ -783,10 +827,11 @@ jobs:
       packages: read
     strategy:
       # One runner per SDK. Two SDKs on one runner would contend for the very
-      # CPU being measured.
+      # CPU being measured. Narrowed by focus-sdk, so investigating one SDK
+      # does not spend 45 minutes measuring the two nobody asked about.
       fail-fast: false
       matrix:
-        sdk: [go, java, js]
+        sdk: ${{ fromJSON(needs.resolve-versions.outputs.bench-sdks) }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -859,16 +904,57 @@ jobs:
           PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       ######## INSTALL BOTH ARMS OF THE COMPARISON #############
+      # Two named refs instead of the default release-vs-branch pair. Resolved
+      # here rather than in resolve-versions because the *-ref inputs there
+      # drive the functional matrix, and a benchmark wants to name its two
+      # arms without also changing what the rest of the workflow tests.
+      #
+      # Baseline first: the tag order becomes configure-sdk's `heads` output,
+      # and conftest.py takes heads[0] as the otdfctl that provisions
+      # attributes and the KAS registry. That provisioning is not measured,
+      # and it should be the same build for both arms.
+      - name: Resolve the two benchmark arms
+        id: bench-arms
+        if: inputs.bench-candidate-ref != ''
+        working-directory: otdftests/otdf-sdk-mgr
+        env:
+          SDK: ${{ matrix.sdk }}
+          BASELINE_REF: ${{ inputs.bench-baseline-ref }}
+          CANDIDATE_REF: ${{ inputs.bench-candidate-ref }}
+        run: |-
+          info=$(uv run --project . otdf-sdk-mgr versions resolve \
+                   "$SDK" "$BASELINE_REF" "$CANDIDATE_REF")
+          jq . <<<"$info"
+          err=$(jq -r '[.[] | select(.err != null) | .err] | join("; ")' <<<"$info")
+          if [[ -n "$err" ]]; then
+            echo "::error::Could not resolve benchmark arms: $err"
+            exit 1
+          fi
+          # `versions resolve` drops a ref whose SHA it has already seen, so
+          # two names for one commit come back as a single entry. Left alone
+          # that installs one build, fails arm selection in every cell, and
+          # spends the runner's 45 minutes arriving at NOTHING MEASURED.
+          if [[ "$(jq 'length' <<<"$info")" -ne 2 ]]; then
+            echo "::error::${BASELINE_REF} and ${CANDIDATE_REF} resolve to the same commit -- nothing to compare."
+            exit 1
+          fi
+          {
+            echo "version-info=$(jq -c . <<<"$info")"
+            echo "baseline-spec=${SDK}@$(jq -r '.[0].tag' <<<"$info")"
+            echo "candidate-spec=${SDK}@$(jq -r '.[1].tag' <<<"$info")"
+          } >> "$GITHUB_OUTPUT"
+
       # The whole design rests on this step laying down two builds side by
-      # side under sdk/<sdk>/dist/: the branch head (candidate) and the
-      # newest release (baseline). Arm selection picks them up from there.
+      # side under sdk/<sdk>/dist/: by default the branch head (candidate) and
+      # the newest release (baseline), or the two refs resolved above. Arm
+      # selection picks them up from there.
       - name: Configure ${{ matrix.sdk }} sdk
         id: configure-sdk
         uses: ./otdftests/xtest/setup-cli-tool
         with:
           path: otdftests/xtest/sdk
           sdk: ${{ matrix.sdk }}
-          version-info: "${{ needs.resolve-versions.outputs[matrix.sdk] }}"
+          version-info: "${{ steps.bench-arms.outputs.version-info || needs.resolve-versions.outputs[matrix.sdk] }}"
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
@@ -929,7 +1015,7 @@ jobs:
             fi
           done
         env:
-          java_version_info: ${{ needs.resolve-versions.outputs.java }}
+          java_version_info: ${{ steps.bench-arms.outputs.version-info || needs.resolve-versions.outputs.java }}
           platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
 
       - name: Build the ${{ matrix.sdk }} cli
@@ -962,9 +1048,19 @@ jobs:
       - name: Run performance benchmarks
         id: bench
         run: |-
+          # Empty unless the two arms were named explicitly, in which case
+          # arm selection must not fall back to "newest release vs branch
+          # head": neither named ref need be a release, and with two branch
+          # builds installed the default would pick the wrong pair or none.
+          arms=()
+          if [[ -n "$BENCH_BASELINE_SPEC" ]]; then
+            arms=(--bench-baseline "$BENCH_BASELINE_SPEC"
+                  --bench-candidate "$BENCH_CANDIDATE_SPEC")
+          fi
           uv run --frozen --no-build pytest -ra -v \
             --bench \
             --sdks "$BENCH_SDK" \
+            "${arms[@]}" \
             --bench-budget-seconds 1500 \
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
@@ -973,6 +1069,8 @@ jobs:
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
+          BENCH_BASELINE_SPEC: ${{ steps.bench-arms.outputs.baseline-spec }}
+          BENCH_CANDIDATE_SPEC: ${{ steps.bench-arms.outputs.candidate-spec }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
