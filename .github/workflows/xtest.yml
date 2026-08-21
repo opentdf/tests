@@ -854,7 +854,14 @@ jobs:
   # Never runs on pull requests: 30 minutes of serial measurement is too slow
   # for a PR gate, and a PR runner is the noisiest place to measure.
   bench:
-    timeout-minutes: 45
+    # Has to cover setup plus the whole of bench-budget-seconds, and setup is
+    # not a small constant: a warm Go module cache builds both arms in ~3
+    # minutes, a cold one took 19. At 45 this job could not even finish its
+    # own default 1500s budget after a cold start -- it would be killed
+    # mid-measurement, which loses the report entirely rather than reporting
+    # fewer rounds. The budget is the knob that bounds the run; this is only
+    # the backstop for a hung one.
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     needs: resolve-versions
     # Nightly cron only, not the Mon/Wed or weekly ones: three runs a week of
