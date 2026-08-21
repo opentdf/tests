@@ -48,6 +48,21 @@ on:
         type: string
         default: ""
         description: "The build under suspicion, measured against bench-baseline-ref. e.g. 'feat/DSPX-2604-createtdf-chunked'."
+      bench-payloads:
+        required: false
+        type: string
+        default: ""
+        description: "Payload sizes to benchmark, comma-separated, e.g. '1KiB,1MiB,32MiB,1GiB'. Default is 1KiB,1MiB,32MiB, at which ~86% of a go encrypt is fixed startup cost -- so the 1.15x gate is wider than the whole payload-dependent part and no throughput change can fail a cell. Add 1GiB to actually gate throughput; it needs a bench-budget-seconds to match and ~5 GiB of runner disk."
+      bench-budget-seconds:
+        required: false
+        type: string
+        default: ""
+        description: "Wall-clock allowance shared by every benchmark cell (default 1500). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start."
+      bench-max-rounds:
+        required: false
+        type: string
+        default: ""
+        description: "Hard cap on paired rounds per cell (default 60). Raise it together with the budget: at the default, cells routinely stop on max_rounds with budget left over, and every unspent round is interval width that could have been bought."
   workflow_call:
     inputs:
       platform-ref:
@@ -83,6 +98,18 @@ on:
         type: string
         default: ""
       bench-candidate-ref:
+        required: false
+        type: string
+        default: ""
+      bench-payloads:
+        required: false
+        type: string
+        default: ""
+      bench-budget-seconds:
+        required: false
+        type: string
+        default: ""
+      bench-max-rounds:
         required: false
         type: string
         default: ""
@@ -135,7 +162,21 @@ jobs:
           FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
           BASELINE_REF: ${{ inputs.bench-baseline-ref }}
           CANDIDATE_REF: ${{ inputs.bench-candidate-ref }}
+          BUDGET_SECONDS: ${{ inputs.bench-budget-seconds }}
+          MAX_ROUNDS: ${{ inputs.bench-max-rounds }}
         run: |-
+          # Only the numeric inputs are checked here. bench-payloads has a
+          # grammar, and a second copy of it in bash would drift from the one
+          # pytest enforces and start rejecting runs that would have worked;
+          # the bench job validates it with the real parser instead.
+          for pair in "bench-budget-seconds:$BUDGET_SECONDS" "bench-max-rounds:$MAX_ROUNDS"; do
+            name=${pair%%:*}
+            value=${pair#*:}
+            if [[ -n "$value" && ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::${name} must be a positive whole number, got '${value}'."
+              exit 1
+            fi
+          done
           if [[ -n "$BASELINE_REF" && -z "$CANDIDATE_REF" ]] \
              || [[ -z "$BASELINE_REF" && -n "$CANDIDATE_REF" ]]; then
             echo "::error::bench-baseline-ref and bench-candidate-ref must be set together; a comparison needs both arms named."
@@ -839,6 +880,30 @@ jobs:
           path: otdftests
           persist-credentials: false
 
+      # Before the platform, which takes ~15 minutes to come up: a typo'd size
+      # is worth catching in the first thirty seconds. This calls the harness's
+      # own parser rather than reimplementing the grammar in bash -- perf.cells
+      # imports nothing outside the standard library, so a bare python3 can
+      # read it, and a bash copy that drifted would start refusing specs the
+      # run itself would have accepted.
+      - name: Validate benchmark payload sizes
+        if: inputs.bench-payloads != ''
+        working-directory: otdftests/xtest
+        env:
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads }}
+        run: |-
+          python3 - "$BENCH_PAYLOADS" <<'PY'
+          import sys
+
+          from perf.cells import parse_payloads
+
+          try:
+              sizes = parse_payloads(sys.argv[1])
+          except ValueError as e:
+              raise SystemExit(f"::error::invalid bench-payloads: {e}")
+          print("payload sizes:", ", ".join(p.label for p in sizes))
+          PY
+
       - name: load extra keys from file
         id: load-extra-keys
         run: |-
@@ -1061,7 +1126,9 @@ jobs:
             --bench \
             --sdks "$BENCH_SDK" \
             "${arms[@]}" \
-            --bench-budget-seconds 1500 \
+            --bench-payloads "$BENCH_PAYLOADS" \
+            --bench-budget-seconds "$BENCH_BUDGET_SECONDS" \
+            --bench-max-rounds "$BENCH_MAX_ROUNDS" \
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
@@ -1071,6 +1138,12 @@ jobs:
           BENCH_SDK: ${{ matrix.sdk }}
           BENCH_BASELINE_SPEC: ${{ steps.bench-arms.outputs.baseline-spec }}
           BENCH_CANDIDATE_SPEC: ${{ steps.bench-arms.outputs.candidate-spec }}
+          # Fallbacks rather than input defaults: the scheduled nightly
+          # supplies no inputs at all, so `inputs.*` is empty there and these
+          # are what keeps its matrix and budget where they have always been.
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads || '1KiB,1MiB,32MiB' }}
+          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
+          BENCH_MAX_ROUNDS: ${{ inputs.bench-max-rounds || '60' }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main

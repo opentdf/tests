@@ -261,66 +261,76 @@ def run_cell(
             for metric in METRICS:
                 into[arm.name][metric].append(sample.metric(metric))
 
-    for i in range(config.warmup):
-        # Warm-up rounds pay the one-time costs -- page cache, `go build`
-        # cache, npx package resolution, JIT warm-up -- that would otherwise
-        # land unevenly and show up as a difference between builds. Their
-        # samples are collected into a throwaway dict and dropped.
-        #
-        # The deadline is checked here too, and not only in the measured loop
-        # below. The budget's end is absolute, so warm-ups that overrun it
-        # spend the *following* cells' time and then reach the measured loop
-        # with nothing left -- paying the full cost of the cell and producing
-        # no data. Better to give up here and say why.
-        if deadline is not None and clock() >= deadline:
-            raise BudgetExhausted(
-                f"{cell_id}: budget ran out after {i} of {config.warmup} "
-                f"warm-up rounds ({clock() - started:.0f}s), "
-                "before any measurement began"
-            )
-        one_round(_empty_samples())
+    try:
+        for i in range(config.warmup):
+            # Warm-up rounds pay the one-time costs -- page cache, `go build`
+            # cache, npx package resolution, JIT warm-up -- that would
+            # otherwise land unevenly and show up as a difference between
+            # builds. Their samples are collected into a throwaway dict and
+            # dropped.
+            #
+            # The deadline is checked here too, and not only in the measured
+            # loop below. The budget's end is absolute, so warm-ups that
+            # overrun it spend the *following* cells' time and then reach the
+            # measured loop with nothing left -- paying the full cost of the
+            # cell and producing no data. Better to give up here and say why.
+            if deadline is not None and clock() >= deadline:
+                raise BudgetExhausted(
+                    f"{cell_id}: budget ran out after {i} of {config.warmup} "
+                    f"warm-up rounds ({clock() - started:.0f}s), "
+                    "before any measurement began"
+                )
+            one_round(_empty_samples())
 
-    stopped_because = "max_rounds"
-    for _ in range(config.max_rounds):
-        round_start = clock()
-        if deadline is not None and round_start >= deadline:
-            stopped_because = "budget"
-            break
-        if deadline is not None and round_durations:
-            # Do not start a round we cannot finish: a half-measured round is
-            # unpaired data, and unpaired data is exactly what this design
-            # exists to avoid.
-            expected = float(np.median(round_durations))
-            if round_start + expected > deadline:
+        stopped_because = "max_rounds"
+        for _ in range(config.max_rounds):
+            round_start = clock()
+            if deadline is not None and round_start >= deadline:
                 stopped_because = "budget"
                 break
-        one_round(samples)
-        round_durations.append(clock() - round_start)
+            if deadline is not None and round_durations:
+                # Do not start a round we cannot finish: a half-measured round
+                # is unpaired data, and unpaired data is exactly what this
+                # design exists to avoid.
+                expected = float(np.median(round_durations))
+                if round_start + expected > deadline:
+                    stopped_because = "budget"
+                    break
+            one_round(samples)
+            round_durations.append(clock() - round_start)
 
+            n = len(samples["baseline"]["wall"])
+            if n >= config.min_rounds and _precise_enough(samples, config):
+                stopped_because = "precision"
+                break
+
+        elapsed = clock() - started
         n = len(samples["baseline"]["wall"])
-        if n >= config.min_rounds and _precise_enough(samples, config):
-            stopped_because = "precision"
-            break
-
-    elapsed = clock() - started
-    n = len(samples["baseline"]["wall"])
-    if n < stats.MIN_USABLE_ROUNDS:
-        raise BudgetExhausted(
-            f"{cell_id}: only {n} rounds completed in {elapsed:.0f}s, "
-            f"below the {stats.MIN_USABLE_ROUNDS} needed for any verdict"
+        if n < stats.MIN_USABLE_ROUNDS:
+            raise BudgetExhausted(
+                f"{cell_id}: only {n} rounds completed in {elapsed:.0f}s, "
+                f"below the {stats.MIN_USABLE_ROUNDS} needed for any verdict"
+            )
+        return CellResult(
+            cell_id=cell_id,
+            baseline_label=baseline.label,
+            candidate_label=candidate.label,
+            samples=samples,
+            n_warmup=config.warmup,
+            elapsed_s=elapsed,
+            stopped_because=stopped_because,
+            control=control,
+            sdk=sdk,
+            rss_floor_bytes=rss_floor,
         )
-    return CellResult(
-        cell_id=cell_id,
-        baseline_label=baseline.label,
-        candidate_label=candidate.label,
-        samples=samples,
-        n_warmup=config.warmup,
-        elapsed_s=elapsed,
-        stopped_because=stopped_because,
-        control=control,
-        sdk=sdk,
-        rss_floor_bytes=rss_floor,
-    )
+    finally:
+        # Each arm leaves behind an output the size of the payload, and
+        # nothing reads it once the cell is done. Keeping them costs 2 GiB per
+        # 1 GiB cell, which every later cell then has to fit around -- so the
+        # cell that fails on disk is not the one that filled it.
+        for arm in arms:
+            if arm.invocation.output is not None:
+                arm.invocation.output.unlink(missing_ok=True)
 
 
 def _precise_enough(

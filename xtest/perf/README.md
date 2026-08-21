@@ -53,7 +53,9 @@ a 30-minute job to look at the same numbers again.
 ```
 
 - **cell** — `<sdk>-<operation>-<payload>`, plus `-control` for the A/A cell.
-  Payload sizes are 1 KiB, 1 MiB, and 32 MiB.
+  Payload sizes default to 1 KiB, 1 MiB, and 32 MiB; `--bench-payloads` selects
+  others. See [Payload sizes and what they can gate](#payload-sizes-and-what-they-can-gate)
+  before reading a throughput result — at the default sizes there is not one.
 - **ratio** — candidate ÷ baseline. `1.208x` means the candidate took 20.8%
   longer. Below 1.0 means faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
@@ -145,8 +147,10 @@ Censored cells report inconclusive with the floor named in the note.
 2. **Check the control row.** If the A/A cell for your SDK also looks strange,
    suspect the runner before your code.
 3. **Look at which cells fired.** Only the 1 KiB cells means startup cost —
-   process boot, package resolution, TLS handshake, token fetch. Only 32 MiB
-   means throughput — the crypto and IO path. Both means something structural.
+   process boot, package resolution, TLS handshake, token fetch. The largest
+   cell firing on its own points at throughput — the crypto and IO path — but
+   only if that cell is large enough for throughput to be most of it, which at
+   32 MiB it is not. Both means something structural.
 4. **Reproduce locally.** The comparison is self-contained; it does not need CI.
 
 ```bash
@@ -164,6 +168,7 @@ Useful knobs while investigating:
 | Option | Default | Use |
 | --- | --- | --- |
 | `--bench-threshold` | `1.15` | Smallest slowdown worth failing on |
+| `--bench-payloads` | `1KiB,1MiB,32MiB` | Sizes to measure, e.g. `1KiB,1GiB` |
 | `--bench-min-rounds` / `--bench-max-rounds` | `20` / `60` | Rounds per cell |
 | `--bench-warmup` | `5` | Discarded rounds paying one-time costs |
 | `--bench-budget-seconds` | `1500` | Wall-clock allowance shared by all cells |
@@ -173,6 +178,56 @@ Useful knobs while investigating:
 
 A local run is noisier than CI unless the machine is otherwise idle. Close
 things; the noise floor will tell you whether you succeeded.
+
+### Payload sizes and what they can gate
+
+**At the default sizes this harness cannot fail a build on throughput.** Not
+"is unlikely to" — cannot. On a 4-core Linux runner a go encrypt costs about
+450 ms before it touches the payload: runtime start, config load, TLS
+handshake, token fetch, KAS key fetch. Going from 1 KiB to 32 MiB — a 32,000x
+increase in bytes — adds about 72 ms on top of that.
+
+| operation | 1 KiB | 1 MiB | 32 MiB | payload-dependent |
+| --- | --- | --- | --- | --- |
+| encrypt | 455.0 ms | 447.6 ms | 526.7 ms | ~72 ms (13.6%) |
+| decrypt | 533.6 ms | 513.1 ms | 600.7 ms | ~67 ms (11.2%) |
+
+The gate is 1.15x of the *whole cell*, which at 32 MiB encrypt is +79 ms —
+more than the entire payload-dependent portion. A candidate that doubled every
+per-segment cost would come in at 1.136x and report **PASS**. The 1 MiB cells
+are worse: indistinguishable from 1 KiB, so they measure startup twice.
+
+This is not a statistics problem. The intervals are tight and the control is
+clean; the matrix is simply asking the wrong sizes. To gate throughput the
+payload term has to dominate, which means going much larger:
+
+```bash
+uv run pytest --bench --sdks go \
+  --bench-payloads 1KiB,1GiB \
+  --bench-budget-seconds 5400 --bench-max-rounds 200 \
+  -v test_benchmarks.py
+```
+
+At 1 GiB the payload term is ~2.3 s against the same ~450 ms fixed cost, so it
+is ~84% of the cell and a 15% gate lands inside the part being tested.
+
+Three things to know before adding a large size:
+
+- **Budget.** Each size adds an encrypt and a decrypt cell, and the budget is
+  divided evenly as cells start. A 1 GiB round costs ~6 s against ~1 s at 32
+  MiB, so the default 1500 s will not reach `min_rounds` on both new cells.
+- **Disk.** A run holds roughly twice the payload total plus the largest size
+  twice over. 1 GiB needs ~5 GiB free. This is checked before the first
+  measurement, because running out mid-run arrives as a non-zero exit from the
+  CLI under test and reads as "this build is broken".
+- **`max_rounds` binds before the budget does.** In the run these numbers come
+  from, 3 of 7 cells stopped on `max_rounds` while only 418 s of 1500 s was
+  spent. Raising the budget alone buys nothing; raise both.
+
+The control stays at 1 MiB whatever you select. Its CI width is the run's noise
+floor and every other cell is judged against it, so it must not move with the
+matrix — otherwise two runs of the same comparison can disagree about which
+cells were trustworthy for a reason unrelated to either build.
 
 ### Benchmarking one branch against another
 
@@ -187,6 +242,16 @@ point the harness at two refs you name, dispatch X-Test with:
 | `focus-sdk` | `go` | Must name one SDK — the matrix runs only this one |
 | `bench-baseline-ref` | `main` | The build you are comparing *against* |
 | `bench-candidate-ref` | `feat/DSPX-2604-createtdf-chunked` | The build under suspicion |
+| `bench-payloads` | `1KiB,1GiB` | Sizes to measure; default `1KiB,1MiB,32MiB` |
+| `bench-budget-seconds` | `5400` | Shared allowance; default `1500` |
+| `bench-max-rounds` | `200` | Cap per cell; default `60` |
+
+The last three are why a dispatch can answer a question the nightly cannot. A
+nightly runs unattended every day and has to stay inside a sensible cost; a
+dispatch is asked for, once, about one thing. If the change is a throughput
+claim, spend the budget — see [Payload sizes and what they can
+gate](#payload-sizes-and-what-they-can-gate), because at the defaults the
+answer will be **PASS** whatever the change did.
 
 Either ref can be anything `otdf-sdk-mgr versions resolve` accepts: a branch, a
 tag, a full or short SHA, or `refs/pull/N/head`. Both are built from source and
@@ -389,6 +454,12 @@ be comparable with. Each payload derives from `f"{seed}:{label}"` instead.
 Content is random rather than repetitive because compressible input would let an
 SDK that happens to compress look faster for reasons unrelated to crypto.
 
+Large payloads are written in chunks so a 1 GiB file is not first built as a
+1 GiB `bytes` in RAM. The chunk size must stay a multiple of 4: CPython's
+`randbytes` draws a 32-bit word at a time, so a 4-byte-aligned split produces
+the same stream as one call would, and the seed-to-bytes promise survives both
+the constant changing and a payload growing past it.
+
 #### Cells record; the session gates
 
 The verdict cannot be reached cell by cell — the multiplicity correction spans
@@ -421,11 +492,13 @@ CPU under measurement.
 
 ### Adding to it
 
-**A new payload size** — add a `Payload` to `PAYLOADS` in `cells.py`. Note that
-`CONTROL_PAYLOAD = PAYLOADS[1]`, so inserting at the front moves the control.
-Cell count per SDK is `1 + 2 × len(PAYLOADS)`; the 1500s budget is divided
-across all of them, so adding sizes makes every cell poorer unless the budget
-grows too.
+**A new payload size** — no code change: `--bench-payloads 1KiB,1GiB` (or the
+`bench-payloads` dispatch input). Sizes parse as a count and a binary unit —
+`B`, `KiB`, `MiB`, `GiB` — and the list is sorted ascending and deduplicated by
+byte count, so `1KiB,1024B` is one cell rather than two identical ones. Changing
+`DEFAULT_PAYLOAD_SPEC` in `cells.py` changes what the nightly measures; think
+about the budget first. Cell count per SDK is `1 + 2 × len(payloads)`, and the
+budget is divided evenly across all of them.
 
 **A new metric** — add it to `METRICS` and `METRIC_LABELS` in `measure.py`, teach
 `Sample.metric()` and `format_metric()` about it, and decide whether it belongs

@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import platform
 import random
+import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -21,7 +23,7 @@ import pytest
 import abac
 import tdfs
 from perf import report
-from perf.cells import PAYLOADS, BenchCell
+from perf.cells import BenchCell, Payload, parse_payloads, payloads_to_generate
 from perf.runner import Arm, BenchConfig, Budget, Invocation
 
 
@@ -133,8 +135,77 @@ def bench_config(request: pytest.FixtureRequest) -> BenchConfig:
     return config_from_options(request.config)
 
 
+def payloads_from_options(config: pytest.Config) -> tuple[Payload, ...]:
+    """The run's payload set, from ``--bench-payloads``."""
+    spec = cast(str, config.getoption("--bench-payloads"))
+    try:
+        return parse_payloads(spec)
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid --bench-payloads: {e}") from e
+
+
 @pytest.fixture(scope="session")
-def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
+def bench_payload_set(request: pytest.FixtureRequest) -> tuple[Payload, ...]:
+    """Payload sizes this run measures, from --bench-payloads."""
+    return payloads_from_options(request.config)
+
+
+#: Bytes generated per ``randbytes`` call. Must stay a multiple of 4: CPython
+#: draws a 32-bit word at a time, so chunking on a 4-byte boundary yields the
+#: same stream as one call for the whole payload, and the promise below --
+#: that a given seed and label always produce the same bytes -- survives both
+#: this constant changing and a payload growing past it.
+_CHUNK_BYTES = 8 * 2**20
+
+#: Free space a run keeps in hand beyond its payload arithmetic, for the
+#: platform's own logs and database growth over a long benchmark.
+_DISK_HEADROOM_BYTES = 2**30
+
+
+def write_payload(path: Path, payload: Payload, seed: int) -> None:
+    """Write one payload file, in chunks so a 1 GiB file is not built in RAM."""
+    rng = random.Random(f"{seed}:{payload.label}")
+    remaining = payload.n_bytes
+    with path.open("wb") as f:
+        while remaining > 0:
+            n = min(remaining, _CHUNK_BYTES)
+            f.write(rng.randbytes(n))
+            remaining -= n
+
+
+def disk_shortfall(tmp_dir: Path, payloads: Sequence[Payload]) -> str | None:
+    """Return why ``payloads`` will not fit in ``tmp_dir``, or None.
+
+    Checked up front because the alternative is finding out mid-run: ENOSPC
+    reaches the harness as a non-zero exit from the CLI under measurement,
+    which is reported as a failed measurement of that build. A run can lose
+    an hour before anyone notices the disk was the problem, and the report
+    points at the wrong thing while they look.
+
+    The estimate is the plaintexts, plus a cached ciphertext for each (the
+    decrypt cells share one per size), plus the two output files the largest
+    cell holds while it runs. Outputs are deleted as each cell finishes, so
+    only one cell's worth is ever live.
+    """
+    total = sum(p.n_bytes for p in payloads)
+    largest = max(p.n_bytes for p in payloads)
+    need = 2 * total + 2 * largest + _DISK_HEADROOM_BYTES
+    free = shutil.disk_usage(tmp_dir).free
+    if free >= need:
+        return None
+    gib = 2**30
+    sizes = ", ".join(p.label for p in payloads)
+    return (
+        f"payloads {sizes} need about {need / gib:.1f} GiB of scratch space "
+        f"in {tmp_dir} but only {free / gib:.1f} GiB is free; drop the largest "
+        "size from --bench-payloads or run somewhere with more disk"
+    )
+
+
+@pytest.fixture(scope="session")
+def bench_payloads(
+    tmp_dir: Path, bench_config: BenchConfig, bench_payload_set: tuple[Payload, ...]
+) -> dict[str, Path]:
     """Generate one plaintext file per payload size, shared by both arms.
 
     Content is pseudo-random but seeded, so a rerun measures byte-identical
@@ -147,13 +218,19 @@ def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
     calls and shifts the stream for every payload after it. Deriving each
     payload's bytes from the seed *and* its label keeps the promise above true
     whether the cache is empty, full, or half there.
+
+    The control's payload is generated whether or not it was selected -- see
+    :func:`perf.cells.payloads_to_generate`.
     """
+    wanted = payloads_to_generate(bench_payload_set)
+    shortfall = disk_shortfall(tmp_dir, wanted)
+    if shortfall:
+        raise pytest.UsageError(shortfall)
     out: dict[str, Path] = {}
-    for payload in PAYLOADS:
+    for payload in wanted:
         path = tmp_dir / f"bench-plain-{payload.label}.bin"
         if not path.is_file() or path.stat().st_size != payload.n_bytes:
-            rng = random.Random(f"{bench_config.seed}:{payload.label}")
-            path.write_bytes(rng.randbytes(payload.n_bytes))
+            write_payload(path, payload, bench_config.seed)
         out[payload.label] = path
     return out
 
