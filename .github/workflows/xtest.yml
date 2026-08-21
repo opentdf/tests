@@ -1017,6 +1017,30 @@ jobs:
           path: otdftests
           persist-credentials: false
 
+      # Before the platform, which takes ~15 minutes to come up: a typo'd size
+      # is worth catching in the first thirty seconds. This calls the harness's
+      # own parser rather than reimplementing the grammar in bash -- perf.cells
+      # imports nothing outside the standard library, so a bare python3 can
+      # read it, and a bash copy that drifted would start refusing specs the
+      # run itself would have accepted.
+      - name: Validate benchmark payload sizes
+        if: inputs.bench-payloads != ''
+        working-directory: otdftests/xtest
+        env:
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads }}
+        run: |-
+          python3 - "$BENCH_PAYLOADS" <<'PY'
+          import sys
+
+          from perf.cells import parse_payloads
+
+          try:
+              sizes = parse_payloads(sys.argv[1])
+          except ValueError as e:
+              raise SystemExit(f"::error::invalid bench-payloads: {e}")
+          print("payload sizes:", ", ".join(p.label for p in sizes))
+          PY
+
       - name: load extra keys from file
         id: load-extra-keys
         run: |-
@@ -1239,7 +1263,9 @@ jobs:
             --bench \
             --sdks "$BENCH_SDK" \
             "${arms[@]}" \
-            --bench-budget-seconds 1500 \
+            --bench-payloads "$BENCH_PAYLOADS" \
+            --bench-budget-seconds "$BENCH_BUDGET_SECONDS" \
+            --bench-max-rounds "$BENCH_MAX_ROUNDS" \
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
@@ -1249,6 +1275,12 @@ jobs:
           BENCH_SDK: ${{ matrix.sdk }}
           BENCH_BASELINE_SPEC: ${{ steps.bench-arms.outputs.baseline-spec }}
           BENCH_CANDIDATE_SPEC: ${{ steps.bench-arms.outputs.candidate-spec }}
+          # Fallbacks rather than input defaults: the scheduled nightly
+          # supplies no inputs at all, so `inputs.*` is empty there and these
+          # are what keeps its matrix and budget where they have always been.
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads || '1KiB,1MiB,32MiB' }}
+          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
+          BENCH_MAX_ROUNDS: ${{ inputs.bench-max-rounds || '60' }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main

@@ -199,7 +199,7 @@ def _bootstrap_ci(
         high = float(res.confidence_interval.high)
         if math.isfinite(low) and math.isfinite(high):
             return low, high
-    except (ValueError, RuntimeWarning):
+    except ValueError, RuntimeWarning:
         pass
     res = _scipy_stats.bootstrap(
         (d,),
