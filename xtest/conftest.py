@@ -23,7 +23,7 @@ from typing import cast
 import pytest
 
 import tdfs
-from fixtures.bench import payloads_from_options
+from fixtures.bench import MAX_ARMS, payloads_from_options
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
 from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
@@ -173,14 +173,23 @@ def _add_benchmark_options(parser: pytest.Parser):
         "are opt-in and collect nothing otherwise)",
     )
     group.addoption(
+        "--bench-refs",
+        help=f"builds to compare, comma- or space-separated, e.g. "
+        f"'go@main,go@my-branch'. The first is the reference: every gated "
+        f"contrast is taken against it, and the rest are ranked head-to-head "
+        f"as a bake-off. 2 to {MAX_ARMS} entries (the ceiling is how "
+        f"many builds setup-cli-tool can install side by side). Defaults to "
+        f"the newest installed release against the branch build",
+    )
+    group.addoption(
         "--bench-baseline",
-        help="build to compare against, e.g. go@v0.29.0; defaults to the newest "
-        "installed release of each sdk",
+        help="two-arm shorthand for the reference half of --bench-refs, e.g. "
+        "go@v0.29.0; must be given with --bench-candidate",
     )
     group.addoption(
         "--bench-candidate",
-        help="build under test, e.g. go@main; defaults to the installed "
-        "unreleased build of each sdk",
+        help="two-arm shorthand for the candidate half of --bench-refs, e.g. "
+        "go@main; must be given with --bench-baseline",
     )
     group.addoption(
         "--bench-payloads",
@@ -189,8 +198,8 @@ def _add_benchmark_options(parser: pytest.Parser):
         "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
         "default are opt-in because they are what a throughput gate actually "
         "needs and what a nightly cannot afford: each one adds two cells, and "
-        "a run holds roughly twice the total plus the largest twice over on "
-        "disk",
+        "a run holds roughly twice the total plus one live output per arm of "
+        "the largest on disk",
     )
     group.addoption(
         "--bench-threshold",
@@ -222,8 +231,11 @@ def _add_benchmark_options(parser: pytest.Parser):
     group.addoption(
         "--bench-budget-seconds",
         type=float,
-        default=1500.0,
-        help="wall-clock allowance shared by every cell (default: %(default)s)",
+        default=None,
+        help="wall-clock allowance shared by every cell. Defaults to "
+        "1500s scaled by (arms / 2), because a K-arm round costs K "
+        "invocations and holding the same precision costs proportionally "
+        "more time",
     )
     group.addoption(
         "--bench-seed",
@@ -348,7 +360,7 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
         return
 
     # --sdks may be version-qualified (go@main); benchmark arms come from
-    # --bench-baseline/--bench-candidate instead, so only the name matters.
+    # --bench-refs instead, so only the name matters here.
     specs = metafunc.config.getoption("--sdks") or " ".join(
         typing.get_args(tdfs.sdk_type)
     )
@@ -372,6 +384,11 @@ def pytest_configure(config: pytest.Config):
             "--bench cannot run under pytest-xdist: parallel workers compete "
             "for the CPU being measured. Drop -n / --dist."
         )
+    # Resolve the arm specs now so a malformed --bench-refs is a usage error
+    # before anything is installed or measured, not an hour into the run.
+    from fixtures import bench
+
+    bench.arm_specs_from_options(config)
 
 
 def pytest_collection_modifyitems(
@@ -432,6 +449,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")
         reporter.write_line(gate.summary)
+        # Repeated on the terminal as well as in the step summary: "the run
+        # was too short for the number of arms you asked for" is the one
+        # finding a reader is most likely to mistake for a real result.
+        underpowered = report.underpowered_warning(recorder, bench_config, gate)
+        if underpowered:
+            reporter.write_line(underpowered)
+        for bake_off in report.bake_offs(recorder, bench_config, gate):
+            reporter.write_line(
+                f"{bake_off.cell_id} [{bake_off.metric}]: {bake_off.detail}"
+            )
         reporter.write_line(f"raw samples and statistics: {json_path}")
 
     if config.getoption("--bench-no-gate", default=False):

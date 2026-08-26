@@ -38,16 +38,21 @@ on:
         type: boolean
         default: false
         description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
+      bench-refs:
+        required: false
+        type: string
+        default: ""
+        description: "Benchmark these refs against each other instead of the default newest-release-vs-branch-head pair. Comma-separated, 2 to 4 entries, first is the reference every other arm is gated against: 'main,fix/streaming-writer,DSPX-4499-streaming-codec'. Any ref otdf-sdk-mgr resolves works: a branch, a tag, a SHA, 'refs/pull/N/head'. The 4-arm ceiling is setup-cli-tool's -- it installs at most four builds side by side. All arms are measured in the same rounds on this one runner, so every pair is comparable, including two candidates against each other. For a bake-off between two implementations of the same feature, make the reference their shared parent rather than 'main' if they are stacked: 'main' then measures each candidate's whole stack, though the head-to-head that decides the bake-off is unaffected either way. Requires a focus-sdk naming one SDK; ignores the *-ref inputs, which drive the functional matrix rather than this."
       bench-baseline-ref:
         required: false
         type: string
         default: ""
-        description: "Benchmark the ref named here against bench-candidate-ref, instead of the default newest-release-vs-branch-head comparison. Any ref otdf-sdk-mgr resolves: 'main', a branch, a tag, a SHA, 'refs/pull/N/head'. Requires bench-candidate-ref and a focus-sdk naming one SDK; ignores the *-ref inputs, which drive the functional matrix rather than this."
+        description: "Deprecated two-arm spelling of bench-refs; 'X' here and 'Y' in bench-candidate-ref means bench-refs='X,Y'. Setting both forms is an error."
       bench-candidate-ref:
         required: false
         type: string
         default: ""
-        description: "The build under suspicion, measured against bench-baseline-ref. e.g. 'feat/DSPX-2604-createtdf-chunked'."
+        description: "Deprecated: the second arm of the bench-baseline-ref pair. e.g. 'feat/DSPX-2604-createtdf-chunked'."
       bench-payloads:
         required: false
         type: string
@@ -57,7 +62,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Wall-clock allowance shared by every benchmark cell (default 1500). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start."
+        description: "Wall-clock allowance shared by every benchmark cell (default 1500 for two arms, scaled by K/2 for K arms). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start. A K-arm round costs K invocations rather than 2, so at a fixed budget every interval widens by ~sqrt(K/2); the scaled default buys that back."
       bench-max-rounds:
         required: false
         type: string
@@ -93,6 +98,10 @@ on:
         required: false
         type: boolean
         default: false
+      bench-refs:
+        required: false
+        type: string
+        default: ""
       bench-baseline-ref:
         required: false
         type: string
@@ -134,6 +143,10 @@ jobs:
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
       bench-sdks: ${{ steps.bench-inputs.outputs.sdks }}
+      # Normalized here so the bench job never sees the deprecated pair, and
+      # so the arm count that scales the budget is counted once.
+      bench-refs: ${{ steps.bench-inputs.outputs.refs }}
+      bench-budget-seconds: ${{ steps.bench-inputs.outputs.budget-seconds }}
       go: ${{ steps.version-info.outputs.go-version-info }}
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
@@ -160,6 +173,7 @@ jobs:
         id: bench-inputs
         env:
           FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
+          BENCH_REFS: ${{ inputs.bench-refs }}
           BASELINE_REF: ${{ inputs.bench-baseline-ref }}
           CANDIDATE_REF: ${{ inputs.bench-candidate-ref }}
           BUDGET_SECONDS: ${{ inputs.bench-budget-seconds }}
@@ -177,15 +191,51 @@ jobs:
               exit 1
             fi
           done
-          if [[ -n "$BASELINE_REF" && -z "$CANDIDATE_REF" ]] \
-             || [[ -z "$BASELINE_REF" && -n "$CANDIDATE_REF" ]]; then
-            echo "::error::bench-baseline-ref and bench-candidate-ref must be set together; a comparison needs both arms named."
-            exit 1
+          # Fold the deprecated pair into bench-refs, so everything downstream
+          # of this step deals with one list and one arm count.
+          refs=$BENCH_REFS
+          if [[ -n "$BASELINE_REF" || -n "$CANDIDATE_REF" ]]; then
+            if [[ -n "$refs" ]]; then
+              echo "::error::bench-refs replaces bench-baseline-ref/bench-candidate-ref -- give one form or the other, not both."
+              exit 1
+            fi
+            if [[ -z "$BASELINE_REF" || -z "$CANDIDATE_REF" ]]; then
+              echo "::error::bench-baseline-ref and bench-candidate-ref must be set together; a comparison needs both arms named."
+              exit 1
+            fi
+            refs="${BASELINE_REF},${CANDIDATE_REF}"
           fi
-          if [[ -n "$CANDIDATE_REF" && "$FOCUS_SDK" == "all" ]]; then
-            echo "::error::bench-baseline-ref/bench-candidate-ref name refs of one SDK, so focus-sdk must be go, java, or js -- not 'all'."
-            exit 1
+          # Two arms unless told otherwise: with no refs at all the bench job
+          # falls back to newest-release-vs-branch-head, which is a pair.
+          n_arms=2
+          if [[ -n "$refs" ]]; then
+            read -r -a arms <<<"${refs//,/ }"
+            n_arms=${#arms[@]}
+            # 4 is setup-cli-tool's ceiling (slots a/b/c/d); a 5th arm would
+            # be silently dropped there and then missing from every round.
+            if ((n_arms < 2 || n_arms > 4)); then
+              echo "::error::bench-refs needs 2 to 4 refs, got ${n_arms}: '${refs}'. The 4-arm cap is setup-cli-tool's, which installs at most four builds side by side."
+              exit 1
+            fi
+            if [[ "$(printf '%s\n' "${arms[@]}" | sort -u | wc -l)" -ne "$n_arms" ]]; then
+              echo "::error::bench-refs names the same ref twice: '${refs}'. Every arm has to be a distinct build."
+              exit 1
+            fi
+            if [[ "$FOCUS_SDK" == "all" ]]; then
+              echo "::error::bench-refs names refs of one SDK, so focus-sdk must be go, java, or js -- not 'all'."
+              exit 1
+            fi
+            printf -v refs '%s,' "${arms[@]}"
+            refs=${refs%,}
           fi
+          # A K-arm round costs K invocations, so a fixed budget buys K/2 as
+          # many rounds and every interval widens by ~sqrt(K/2). Scaling the
+          # default keeps a 3-arm run as precise as the 2-arm one it replaces.
+          budget=${BUDGET_SECONDS:-$((1500 * n_arms / 2))}
+          {
+            echo "refs=${refs}"
+            echo "budget-seconds=${budget}"
+          } >> "$GITHUB_OUTPUT"
           if [[ "$FOCUS_SDK" == "all" ]]; then
             echo 'sdks=["go","java","js"]' >> "$GITHUB_OUTPUT"
           else
@@ -842,14 +892,19 @@ jobs:
             ${{ steps.kas-km2.outputs.log-file }}
           if-no-files-found: ignore
 
-  # Paired A/B performance regression benchmark.
+  # Paired performance regression benchmark: two arms by default, up to four
+  # with bench-refs.
   #
   # Absolute timings from a GitHub-hosted runner are not comparable to
   # timings from any other runner -- CPU model, tenancy, and steal time all
   # vary more than any regression worth catching. So nothing is compared to
-  # history. Instead both builds under comparison run on *this* runner, in
-  # the same interleaved round, and only their ratio is reported. Runner
+  # history. Instead every build under comparison runs on *this* runner, in
+  # the same interleaved round, and only their ratios are reported. Runner
   # speed divides out.
+  #
+  # That is also why a bake-off has to be one job rather than two dispatches:
+  # two runs put the candidates on different runners, so their ratios share
+  # no denominator and the comparison is invalid by the premise above.
   #
   # Never runs on pull requests: 30 minutes of serial measurement is too slow
   # for a PR gate, and a PR runner is the noisiest place to measure.
@@ -860,8 +915,10 @@ jobs:
     # own default 1500s budget after a cold start -- it would be killed
     # mid-measurement, which loses the report entirely rather than reporting
     # fewer rounds. The budget is the knob that bounds the run; this is only
-    # the backstop for a hung one.
-    timeout-minutes: 90
+    # the backstop for a hung one. 240 rather than 90 because a K-arm run
+    # scales its budget by K/2 and adds a build per arm: three arms at 1 GiB
+    # want 8100s = 135 minutes of measurement before any setup at all.
+    timeout-minutes: 240
     runs-on: ubuntu-latest
     needs: resolve-versions
     # Nightly cron only, not the Mon/Wed or weekly ones: three runs a week of
@@ -975,27 +1032,27 @@ jobs:
         env:
           PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
-      ######## INSTALL BOTH ARMS OF THE COMPARISON #############
-      # Two named refs instead of the default release-vs-branch pair. Resolved
+      ######## INSTALL EVERY ARM OF THE COMPARISON #############
+      # Named refs instead of the default release-vs-branch pair. Resolved
       # here rather than in resolve-versions because the *-ref inputs there
-      # drive the functional matrix, and a benchmark wants to name its two
+      # drive the functional matrix, and a benchmark wants to name its own
       # arms without also changing what the rest of the workflow tests.
       #
-      # Baseline first: the tag order becomes configure-sdk's `heads` output,
-      # and conftest.py takes heads[0] as the otdfctl that provisions
-      # attributes and the KAS registry. That provisioning is not measured,
-      # and it should be the same build for both arms.
-      - name: Resolve the two benchmark arms
+      # Reference first, and input order preserved throughout: the tag order
+      # becomes configure-sdk's `heads` output, and conftest.py takes heads[0]
+      # as the otdfctl that provisions attributes and the KAS registry. That
+      # provisioning is not measured, and it should be the same build for
+      # every arm.
+      - name: Resolve the benchmark arms
         id: bench-arms
-        if: inputs.bench-candidate-ref != ''
+        if: needs.resolve-versions.outputs.bench-refs != ''
         working-directory: otdftests/otdf-sdk-mgr
         env:
           SDK: ${{ matrix.sdk }}
-          BASELINE_REF: ${{ inputs.bench-baseline-ref }}
-          CANDIDATE_REF: ${{ inputs.bench-candidate-ref }}
+          BENCH_REFS: ${{ needs.resolve-versions.outputs.bench-refs }}
         run: |-
-          info=$(uv run --project . otdf-sdk-mgr versions resolve \
-                   "$SDK" "$BASELINE_REF" "$CANDIDATE_REF")
+          read -r -a refs <<<"${BENCH_REFS//,/ }"
+          info=$(uv run --project . otdf-sdk-mgr versions resolve "$SDK" "${refs[@]}")
           jq . <<<"$info"
           err=$(jq -r '[.[] | select(.err != null) | .err] | join("; ")' <<<"$info")
           if [[ -n "$err" ]]; then
@@ -1003,23 +1060,22 @@ jobs:
             exit 1
           fi
           # `versions resolve` drops a ref whose SHA it has already seen, so
-          # two names for one commit come back as a single entry. Left alone
-          # that installs one build, fails arm selection in every cell, and
-          # spends the runner's 45 minutes arriving at NOTHING MEASURED.
-          if [[ "$(jq 'length' <<<"$info")" -ne 2 ]]; then
-            echo "::error::${BASELINE_REF} and ${CANDIDATE_REF} resolve to the same commit -- nothing to compare."
+          # two names for one commit come back as one entry. Left alone that
+          # installs fewer builds than there are arms, fails arm selection in
+          # every cell, and spends the runner arriving at NOTHING MEASURED.
+          if [[ "$(jq 'length' <<<"$info")" -ne "${#refs[@]}" ]]; then
+            echo "::error::${BENCH_REFS} does not name ${#refs[@]} distinct commits -- two of these refs are the same build, so there is nothing to compare between them."
             exit 1
           fi
           {
             echo "version-info=$(jq -c . <<<"$info")"
-            echo "baseline-spec=${SDK}@$(jq -r '.[0].tag' <<<"$info")"
-            echo "candidate-spec=${SDK}@$(jq -r '.[1].tag' <<<"$info")"
+            echo "refs-spec=$(jq -r --arg sdk "$SDK" '[.[] | "\($sdk)@\(.tag)"] | join(",")' <<<"$info")"
           } >> "$GITHUB_OUTPUT"
 
-      # The whole design rests on this step laying down two builds side by
-      # side under sdk/<sdk>/dist/: by default the branch head (candidate) and
-      # the newest release (baseline), or the two refs resolved above. Arm
-      # selection picks them up from there.
+      # The whole design rests on this step laying down every arm side by side
+      # under sdk/<sdk>/dist/: by default the branch head (candidate) and the
+      # newest release (baseline), or the refs resolved above. Arm selection
+      # picks them up from there.
       - name: Configure ${{ matrix.sdk }} sdk
         id: configure-sdk
         uses: ./otdftests/xtest/setup-cli-tool
@@ -1120,14 +1176,13 @@ jobs:
       - name: Run performance benchmarks
         id: bench
         run: |-
-          # Empty unless the two arms were named explicitly, in which case
-          # arm selection must not fall back to "newest release vs branch
-          # head": neither named ref need be a release, and with two branch
-          # builds installed the default would pick the wrong pair or none.
+          # Empty unless the arms were named explicitly, in which case arm
+          # selection must not fall back to "newest release vs branch head":
+          # no named ref need be a release, and with several branch builds
+          # installed the default would pick the wrong pair or none.
           arms=()
-          if [[ -n "$BENCH_BASELINE_SPEC" ]]; then
-            arms=(--bench-baseline "$BENCH_BASELINE_SPEC"
-                  --bench-candidate "$BENCH_CANDIDATE_SPEC")
+          if [[ -n "$BENCH_REFS_SPEC" ]]; then
+            arms=(--bench-refs "$BENCH_REFS_SPEC")
           fi
           uv run --frozen --no-build pytest -ra -v \
             --bench \
@@ -1143,13 +1198,13 @@ jobs:
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
-          BENCH_BASELINE_SPEC: ${{ steps.bench-arms.outputs.baseline-spec }}
-          BENCH_CANDIDATE_SPEC: ${{ steps.bench-arms.outputs.candidate-spec }}
+          BENCH_REFS_SPEC: ${{ steps.bench-arms.outputs.refs-spec }}
           # Fallbacks rather than input defaults: the scheduled nightly
           # supplies no inputs at all, so `inputs.*` is empty there and these
           # are what keeps its matrix and budget where they have always been.
           BENCH_PAYLOADS: ${{ inputs.bench-payloads || '1KiB,1MiB,32MiB' }}
-          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
+          # Already defaulted (and scaled by arm count) in resolve-versions.
+          BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
           BENCH_MAX_ROUNDS: ${{ inputs.bench-max-rounds || '60' }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"

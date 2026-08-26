@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -27,6 +27,7 @@ from perf.runner import (
     BudgetExhausted,
     Invocation,
     analyze,
+    contrast_key,
     run_cell,
 )
 
@@ -34,14 +35,18 @@ BASELINE_WALL_S = 1.0
 BASELINE_RSS = 100_000_000
 BASELINE_CPU = 0.8
 
+#: Arm id of the reference in every cell built here.
+REF = "base"
 
-def arm(role: str, key: str, output: Path | None = None) -> Arm:
-    """An arm whose argv is a single token, so ``FakeRuns`` can recognize it.
 
-    ``role`` is what the runner keys samples by ("baseline"/"candidate");
-    ``key`` is the stand-in for the build.
-    """
-    return Arm(role, f"sdk@{key}", Invocation([key], {}, output))
+def arm(name: str, output: Path | None = None) -> Arm:
+    """An arm whose argv is its own id, so ``FakeRuns`` can recognize it."""
+    return Arm(name, f"sdk@{name}", Invocation([name], {}, output))
+
+
+def key(cell_id: str, metric: str, *, a: str = REF, b: str = "cand") -> str:
+    """The contrast key for ``b`` against ``a`` -- the default vs-reference."""
+    return contrast_key(cell_id, a, b, metric)
 
 
 def config(**overrides: object) -> BenchConfig:
@@ -108,7 +113,7 @@ def clock_from(runs: FakeRuns) -> Callable[[], float]:
 
 
 def run(
-    ratio: float,
+    ratios: float | Mapping[str, float],
     *,
     cfg: BenchConfig | None = None,
     noise: float = 0.05,
@@ -118,14 +123,21 @@ def run(
     sdk: str = "",
     rss_floor: int = 0,
 ):
-    """Run one cell where the candidate costs ``ratio`` times the baseline."""
-    runs = FakeRuns(
-        {"base": 1.0, "cand": ratio}, noise=noise, seed=seed, rss_floor=rss_floor
+    """Run one cell whose arms cost ``ratios`` times the reference.
+
+    A bare float is the two-arm shorthand: a reference at 1.0 and one
+    candidate at that ratio. A mapping names the arms, and the first key is
+    the reference -- which is how a bake-off is set up here.
+    """
+    costs = (
+        {REF: 1.0, "cand": float(ratios)}
+        if isinstance(ratios, (int, float))
+        else dict(ratios)
     )
+    runs = FakeRuns(costs, noise=noise, seed=seed, rss_floor=rss_floor)
     result = run_cell(
         cell_id,
-        arm("baseline", "base"),
-        arm("candidate", "cand"),
+        [arm(name) for name in costs],
         cfg or config(),
         control=control,
         sdk=sdk,
@@ -138,18 +150,46 @@ def run(
 class TestRoundLoop:
     def test_arms_are_paired_every_round(self):
         _, runs = run(1.0)
-        assert runs.calls.count("base") == runs.calls.count("cand")
+        assert runs.calls.count(REF) == runs.calls.count("cand")
         # Every consecutive pair holds one of each: that is what pairing means.
         pairs = [set(runs.calls[i : i + 2]) for i in range(0, len(runs.calls), 2)]
-        assert all(p == {"base", "cand"} for p in pairs)
+        assert all(p == {REF, "cand"} for p in pairs)
+
+    def test_every_arm_runs_once_per_round_at_three_arms(self):
+        # The whole reason a bake-off is answerable: all three arms share a
+        # round, so the a-vs-b contrast is a within-round ratio like any other.
+        _, runs = run({REF: 1.0, "a": 1.1, "b": 1.2})
+        rounds = [set(runs.calls[i : i + 3]) for i in range(0, len(runs.calls), 3)]
+        assert all(r == {REF, "a", "b"} for r in rounds)
 
     def test_order_within_rounds_is_shuffled(self):
         _, runs = run(1.0)
         firsts = runs.calls[::2]
-        assert "base" in firsts and "cand" in firsts, (
+        assert REF in firsts and "cand" in firsts, (
             "a fixed within-round order lets the second arm inherit the first "
             "one's cache state"
         )
+
+    def test_all_three_arms_take_turns_going_first(self):
+        _, runs = run({REF: 1.0, "a": 1.0, "b": 1.0})
+        assert set(runs.calls[::3]) == {REF, "a", "b"}, (
+            "an arm pinned to one slot in the round inherits the same cache "
+            "state every time, which is a confounder and not a measurement"
+        )
+
+    def test_rejects_a_single_arm(self):
+        with pytest.raises(ValueError, match="at least two arms"):
+            run_cell("cell", [arm(REF)], config())
+
+    def test_rejects_colliding_arm_ids(self):
+        # Ids key the sample vectors, so a collision would interleave two
+        # builds' measurements into one arm and compare it with itself.
+        with pytest.raises(ValueError, match="unique"):
+            run_cell("cell", [arm(REF), arm(REF)], config())
+
+    def test_rejects_a_reference_that_is_not_an_arm(self):
+        with pytest.raises(ValueError, match="reference"):
+            run_cell("cell", [arm(REF), arm("cand")], config(), reference="other")
 
     def test_warmup_rounds_are_discarded(self):
         cfg = config(warmup=3, max_rounds=stats.MIN_USABLE_ROUNDS)
@@ -173,10 +213,10 @@ class TestRoundLoop:
         out = tmp_path / "out.tdf"
         out.write_bytes(b"stale")
         seen: list[bool] = []
-        runs = FakeRuns({"base": 1.0, "cand": 1.0})
+        runs = FakeRuns({REF: 1.0, "cand": 1.0})
 
         def observe(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
-            if argv[0] == "base":
+            if argv[0] == REF:
                 # What the arm that owns this output sees when it starts.
                 seen.append(out.exists())
                 out.write_bytes(b"produced")
@@ -184,8 +224,7 @@ class TestRoundLoop:
 
         run_cell(
             "cell",
-            arm("baseline", "base", out),
-            arm("candidate", "cand"),
+            [arm(REF, out), arm("cand")],
             config(max_rounds=stats.MIN_USABLE_ROUNDS),
             clock=clock_from(runs),
             run=observe,
@@ -194,9 +233,31 @@ class TestRoundLoop:
 
     def test_samples_are_collected_for_every_metric(self):
         result, _ = run(1.0)
-        for name in ("baseline", "candidate"):
+        for name in (REF, "cand"):
             for metric in ("wall", "cpu", "rss"):
                 assert len(result.samples[name][metric]) == result.n_rounds
+
+    def test_records_its_arms_and_which_one_is_the_reference(self):
+        result, _ = run({REF: 1.0, "a": 1.0, "b": 1.0})
+        assert result.arm_ids == (REF, "a", "b")
+        assert result.reference == REF
+        assert result.arm_labels == {REF: "sdk@base", "a": "sdk@a", "b": "sdk@b"}
+
+    def test_contrast_pairs_cover_every_pair_once(self):
+        result, _ = run({REF: 1.0, "a": 1.0, "b": 1.0})
+        # Reference contrasts first, then the head-to-head. A pair and its
+        # inverse are the same measurement, so only one of each appears.
+        assert result.contrast_pairs() == [(REF, "a"), (REF, "b"), ("a", "b")]
+
+    def test_contrast_direction_is_b_over_a(self):
+        result, _ = run({REF: 1.0, "slow": 1.5}, noise=0.01)
+        cfg = config()
+        assert result.contrast(REF, "slow", "wall", cfg).ratio == pytest.approx(
+            1.5, rel=0.1
+        )
+        assert result.contrast("slow", REF, "wall", cfg).ratio == pytest.approx(
+            1 / 1.5, rel=0.1
+        )
 
 
 class TestStopping:
@@ -215,13 +276,47 @@ class TestStopping:
         result, _ = run(1.0, cfg=cfg, noise=0.0001)
         assert result.n_rounds >= 25
 
+    def test_precision_waits_for_the_slowest_contrast_to_converge(self):
+        # One quiet candidate and one noisy one. Stopping as soon as *some*
+        # contrast is precise would leave the noisy arm unresolved with budget
+        # still on the table -- and at K arms the slowest contrast to converge
+        # is exactly the one someone is waiting on.
+        cfg = config(max_rounds=40)
+        quiet, _ = run({REF: 1.0, "cand": 1.0}, cfg=cfg, noise=0.005)
+        assert quiet.stopped_because == "precision"
+
+        runs = FakeRuns({REF: 1.0, "quiet": 1.0, "noisy": 1.0}, noise=0.005)
+        real_call = runs.__call__
+
+        def jittery(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
+            sample = real_call(argv, env, **kwargs)
+            if argv[0] != "noisy":
+                return sample
+            spike = math.exp(runs.rng.gauss(0.0, 0.5))
+            return Sample(
+                wall_ns=int(sample.wall_ns * spike),
+                cpu_s=sample.cpu_s * spike,
+                max_rss_bytes=int(sample.max_rss_bytes * spike),
+                exit_code=0,
+            )
+
+        mixed = run_cell(
+            "cell",
+            [arm(REF), arm("quiet"), arm("noisy")],
+            cfg,
+            clock=clock_from(runs),
+            run=jittery,
+        )
+        assert mixed.stopped_because == "max_rounds", (
+            "the loop stopped on the quiet contrast and left the noisy one unresolved"
+        )
+
     def test_deadline_stops_the_loop(self):
-        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.3)
+        runs = FakeRuns({REF: 1.0, "cand": 1.0}, noise=0.3)
         clock = clock_from(runs)
         result = run_cell(
             "cell",
-            arm("baseline", "base"),
-            arm("candidate", "cand"),
+            [arm(REF), arm("cand")],
             config(warmup=0, max_rounds=200),
             deadline=clock() + 60.0,  # each round costs ~2 simulated seconds
             clock=clock,
@@ -230,18 +325,34 @@ class TestStopping:
         assert result.stopped_because == "budget"
         assert result.elapsed_s <= 60.0, "a round we could not finish was started"
 
+    def test_a_three_arm_round_costs_three_invocations_of_budget(self):
+        # Rounds get more expensive as arms are added, which is the whole
+        # reason the default budget scales with K.
+        runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0}, noise=0.3)
+        clock = clock_from(runs)
+        result = run_cell(
+            "cell",
+            [arm(REF), arm("a"), arm("b")],
+            config(warmup=0, max_rounds=200),
+            deadline=clock() + 60.0,  # each round now costs ~3 simulated seconds
+            clock=clock,
+            run=runs,
+        )
+        assert result.stopped_because == "budget"
+        assert len(runs.calls) == 3 * result.n_rounds
+        assert result.n_rounds < 30, "three-arm rounds cost more than two-arm ones"
+
     def test_warmup_gives_up_when_the_budget_runs_out(self):
         # The budget's end is absolute, so warm-ups that run past it are
         # spending the *following* cells' time -- and then reaching the
         # measured loop with nothing left, paying the whole cost of the cell
         # for no data at all. Stop at the deadline and say where it went.
-        runs = FakeRuns({"base": 1.0, "cand": 1.0})
+        runs = FakeRuns({REF: 1.0, "cand": 1.0})
         clock = clock_from(runs)
         with pytest.raises(BudgetExhausted, match="warm-up"):
             run_cell(
                 "cell",
-                arm("baseline", "base"),
-                arm("candidate", "cand"),
+                [arm(REF), arm("cand")],
                 config(warmup=10),
                 deadline=clock() + 4.0,  # each round costs ~2 simulated seconds
                 clock=clock,
@@ -250,13 +361,12 @@ class TestStopping:
         assert len(runs.calls) < 2 * 10, "warm-up ran past its own deadline"
 
     def test_budget_below_min_usable_rounds_refuses_a_verdict(self):
-        runs = FakeRuns({"base": 1.0, "cand": 1.0})
+        runs = FakeRuns({REF: 1.0, "cand": 1.0})
         clock = clock_from(runs)
         with pytest.raises(BudgetExhausted, match="below the"):
             run_cell(
                 "cell",
-                arm("baseline", "base"),
-                arm("candidate", "cand"),
+                [arm(REF), arm("cand")],
                 config(warmup=0),
                 deadline=clock() + 4.0,
                 clock=clock,
@@ -334,8 +444,8 @@ class TestGateOnPlantedEffects:
     def test_planted_25_percent_slowdown_is_caught(self):
         gate = self.gate(1.25)
         assert gate.should_fail
-        assert "encrypt/wall" in gate.regressions
-        c = gate.comparisons["encrypt/wall"]
+        assert key("encrypt", "wall") in gate.regressions
+        c = gate.comparisons[key("encrypt", "wall")]
         assert c.verdict is stats.Verdict.REGRESSION
         assert c.ci_low > 1.15, "the interval must exclude the threshold, not just 1.0"
         assert c.ratio == pytest.approx(1.25, rel=0.1)
@@ -343,7 +453,10 @@ class TestGateOnPlantedEffects:
     def test_planted_3_percent_slowdown_is_ignored(self):
         gate = self.gate(1.03)
         assert not gate.should_fail
-        assert gate.comparisons["encrypt/wall"].verdict is not stats.Verdict.REGRESSION
+        assert (
+            gate.comparisons[key("encrypt", "wall")].verdict
+            is not stats.Verdict.REGRESSION
+        )
 
     def test_no_effect_does_not_fire(self):
         gate = self.gate(1.0)
@@ -353,8 +466,10 @@ class TestGateOnPlantedEffects:
     def test_planted_speedup_is_reported_not_failed(self):
         gate = self.gate(0.7)
         assert not gate.should_fail
-        assert gate.comparisons["encrypt/wall"].verdict is stats.Verdict.IMPROVED
-        assert "encrypt/wall" in gate.improvements
+        assert (
+            gate.comparisons[key("encrypt", "wall")].verdict is stats.Verdict.IMPROVED
+        )
+        assert key("encrypt", "wall") in gate.improvements
 
     def test_the_control_cell_never_fails_the_build(self):
         # Both arms of the control are the same build, so any verdict it
@@ -369,9 +484,11 @@ class TestGateOnPlantedEffects:
         gate = analyze([control, measured], cfg)
         # CPU time moved with everything else and is reported as such; it
         # simply is not allowed to turn the build red.
-        assert gate.comparisons["encrypt/cpu"].verdict is stats.Verdict.REGRESSION
-        assert "encrypt/cpu" not in gate.regressions
-        assert "encrypt/wall" in gate.regressions
+        assert (
+            gate.comparisons[key("encrypt", "cpu")].verdict is stats.Verdict.REGRESSION
+        )
+        assert key("encrypt", "cpu") not in gate.regressions
+        assert key("encrypt", "wall") in gate.regressions
 
     def test_rss_pinned_to_the_measurement_floor_cannot_report_pass(self):
         # A command whose peak sits at the floor is not measured, it is
@@ -384,14 +501,14 @@ class TestGateOnPlantedEffects:
         measured, _ = run(1.25, cfg=cfg, seed=12, cell_id="encrypt", rss_floor=floor)
         gate = analyze([control, measured], cfg)
 
-        rss = gate.comparisons["encrypt/rss"]
+        rss = gate.comparisons[key("encrypt", "rss")]
         assert rss.ratio == pytest.approx(1.0), "the floor clipped both arms"
         assert rss.verdict is stats.Verdict.INCONCLUSIVE
         assert "floor" in rss.note
-        assert "encrypt/rss" not in gate.regressions
-        assert "encrypt/rss" not in gate.improvements
+        assert key("encrypt", "rss") not in gate.regressions
+        assert key("encrypt", "rss") not in gate.improvements
         # Wall clock is untouched by a memory floor and still does its job.
-        assert "encrypt/wall" in gate.regressions
+        assert key("encrypt", "wall") in gate.regressions
 
     def test_rss_above_the_floor_is_still_gated(self):
         cfg = config(max_rounds=40)
@@ -402,7 +519,7 @@ class TestGateOnPlantedEffects:
             1.25, cfg=cfg, seed=12, cell_id="encrypt", rss_floor=BASELINE_RSS // 10
         )
         gate = analyze([control, measured], cfg)
-        assert "encrypt/rss" in gate.regressions
+        assert key("encrypt", "rss") in gate.regressions
 
     def test_each_sdk_is_judged_against_its_own_control(self):
         # One control per SDK: they are different harness paths with different
@@ -433,9 +550,10 @@ class TestGateOnPlantedEffects:
         gate = analyze([go_aa, go_cell, java_aa, java_cell], cfg)
 
         assert len(gate.noise_by_control) == 2, "one noise floor per SDK"
-        assert gate.comparisons["go-encrypt/wall"].verdict is stats.Verdict.PASS
+        assert gate.comparisons[key("go-encrypt", "wall")].verdict is stats.Verdict.PASS
         assert (
-            gate.comparisons["java-encrypt/wall"].verdict is stats.Verdict.INCONCLUSIVE
+            gate.comparisons[key("java-encrypt", "wall")].verdict
+            is stats.Verdict.INCONCLUSIVE
         ), "java's own control had no power, whatever go's control managed"
 
     def test_a_run_with_no_control_cannot_report_pass(self):
@@ -443,5 +561,101 @@ class TestGateOnPlantedEffects:
         measured, _ = run(1.0, cfg=cfg, cell_id="encrypt")
         gate = analyze([measured], cfg)
         assert gate.noise is not None and gate.noise.underpowered
-        assert gate.comparisons["encrypt/wall"].verdict is stats.Verdict.INCONCLUSIVE
+        assert (
+            gate.comparisons[key("encrypt", "wall")].verdict
+            is stats.Verdict.INCONCLUSIVE
+        )
         assert not gate.should_fail, "an unassessed run warns; it does not fail"
+
+
+class TestGateAtThreeArms:
+    """What the extra arms buy, and what they must not be allowed to do.
+
+    Every contrast here is a within-round ratio measured on one runner, which
+    is the only reason a candidate-versus-candidate question is answerable at
+    all. But only the vs-reference contrasts may fail a build: a bake-off
+    ranks implementations, it does not decide whether the branch is shippable.
+    """
+
+    def gate(self, costs: Mapping[str, float], *, noise: float = 0.05, seed: int = 11):
+        cfg = config(max_rounds=40)
+        control_costs = dict.fromkeys(costs, 1.0)
+        control, _ = run(
+            control_costs, cfg=cfg, noise=noise, seed=seed, cell_id="aa", control=True
+        )
+        measured, _ = run(costs, cfg=cfg, noise=noise, seed=seed + 1, cell_id="encrypt")
+        return analyze([control, measured], cfg)
+
+    def test_both_candidates_are_gated_against_the_reference(self):
+        gate = self.gate({REF: 1.0, "slow": 1.3, "quick": 1.0})
+        assert gate.should_fail
+        assert key("encrypt", "wall", b="slow") in gate.regressions
+        assert key("encrypt", "wall", b="quick") not in gate.regressions
+
+    def test_a_head_to_head_gap_never_fails_the_build(self):
+        # Neither candidate regressed against the reference; one is simply
+        # slower than the other. That is a ranking, and rankings do not turn
+        # the build red -- invariant #9.
+        gate = self.gate({REF: 1.3, "slow": 1.3, "quick": 1.0})
+        h2h = key("encrypt", "wall", a="slow", b="quick")
+        assert gate.comparisons[h2h].verdict is stats.Verdict.FASTER
+        assert not gate.should_fail
+        assert h2h not in gate.regressions and h2h not in gate.improvements
+
+    def test_a_head_to_head_is_judged_symmetrically(self):
+        # The one-sided vocabulary would call this PASS or REGRESSION, both of
+        # which presume an incumbent. Between two candidates there is none.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
+        h2h = gate.comparisons[key("encrypt", "wall", a="a", b="b")]
+        assert h2h.verdict is stats.Verdict.SLOWER
+        assert h2h.verdict not in {stats.Verdict.PASS, stats.Verdict.REGRESSION}
+
+    def test_indistinguishable_candidates_are_tied_not_passed(self):
+        # PASS is a one-sided claim -- "not slower". For a bake-off the answer
+        # worth reporting is that the two are the same, and TIED says so.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0}, noise=0.01)
+        assert (
+            gate.comparisons[key("encrypt", "wall", a="a", b="b")].verdict
+            is stats.Verdict.TIED
+        )
+
+    def test_head_to_head_covers_ungated_metrics_too(self):
+        # "Which arm is faster" has no privileged direction on cpu either, and
+        # none of these gate, so they all share the symmetric vocabulary.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
+        assert gate.comparisons[key("encrypt", "cpu", a="a", b="b")].verdict in {
+            stats.Verdict.FASTER,
+            stats.Verdict.SLOWER,
+            stats.Verdict.TIED,
+            stats.Verdict.INCONCLUSIVE,
+        }
+
+    def test_a_decided_head_to_head_is_recorded_for_ranking(self):
+        gate = self.gate({REF: 1.0, "slow": 1.4, "quick": 1.0})
+        # ``ranked`` carries the material a report turns into a winner; it is
+        # keys only, because at this layer an arm id is opaque.
+        assert key("encrypt", "wall", a="slow", b="quick") in gate.ranked
+        assert not any(
+            k in gate.regressions or k in gate.improvements for k in gate.ranked
+        )
+
+    def test_the_control_yields_one_contrast_per_pair(self):
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0})
+        aa = [
+            k for k in gate.comparisons if k.startswith("aa/") and k.endswith("/wall")
+        ]
+        assert len(aa) == 3, "C(3,2) pairs, not one -- arm 3 drifts further than arm 2"
+
+    def test_the_noise_floor_is_the_worst_control_pair(self):
+        # A 2-arm control measures adjacent invocations only, and so understates
+        # the drift carried by the widest contrast the run actually judges.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0})
+        aa = [
+            k for k in gate.comparisons if k.startswith("aa/") and k.endswith("/wall")
+        ]
+        assert len(gate.noise_by_control) == 1, "exactly one of the pairs is the floor"
+        assert gate.noise is not None
+        widest = max(
+            stats.assess_noise_floor(gate.comparisons[k]).width_ratio for k in aa
+        )
+        assert gate.noise.width_ratio == pytest.approx(widest)

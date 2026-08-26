@@ -1,7 +1,8 @@
 """SDK performance regression cells.
 
-One test per cell: an operation at a payload size, measuring the newest
-installed release against the branch build on the same runner, in the same
+One test per cell: an operation at a payload size, measuring every arm of the
+run -- by default the newest installed release against the branch build, and
+in a bake-off several candidates at once -- on the same runner, in the same
 round, in a randomized order.
 
 **These tests do not assert.** Each one records its raw samples and passes.
@@ -66,7 +67,7 @@ def test_sdk_performance(
         if bench_cell.operation == "decrypt"
         else None
     )
-    baseline, candidate = bench.build_arms(
+    cell_arms = bench.build_arms(
         bench_cell,
         arms,
         pt_file=bench_payloads[bench_cell.payload.label],
@@ -78,8 +79,7 @@ def test_sdk_performance(
     try:
         result = runner.run_cell(
             bench_cell.id,
-            baseline,
-            candidate,
+            cell_arms,
             bench_config,
             deadline=bench_budget.next_deadline(),
             control=bench_cell.control,
