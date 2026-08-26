@@ -647,8 +647,10 @@ directories exactly one level deep — `tdfs.all_versions_of()` lists `dist/*/`,
 the go `Makefile` finds `src/*/` — so a slash that survives resolution is
 discovered as a build named `feat` with no `cli.sh` in it, which
 `all_versions_of()` raises on before any cell runs. Branch-vs-branch dispatch
-is the first thing to routinely feed it a slashed ref, and the `--bench-*`
-specs name the flattened tag: `go@feat--DSPX-2604-createtdf-chunked`.
+is the first thing to routinely feed it a slashed ref, and `--bench-refs` names
+the flattened tag: `go@feat--DSPX-2604-createtdf-chunked`. The workflow input
+`bench-refs` takes the *unflattened* ref, because it hands it to
+`versions resolve`, which is what does the flattening.
 
 #### Payloads are seeded per payload, not per run
 
