@@ -1206,6 +1206,15 @@ jobs:
           # Already defaulted (and scaled by arm count) in resolve-versions.
           BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
           BENCH_MAX_ROUNDS: ${{ inputs.bench-max-rounds || '60' }}
+          # Structured resolver output: original alias, immutable SHA, PR,
+          # release tag, and source/head classification. The report turns it
+          # into links instead of guessing provenance from a dist directory.
+          BENCH_VERSION_INFO: >-
+            ${{ steps.bench-arms.outputs.version-info
+                || needs.resolve-versions.outputs[matrix.sdk] }}
+          # pytest writes a summary template beside the JSON. Publish it only
+          # after upload-artifact gives us the direct evidence URL.
+          BENCH_DEFER_SUMMARY: "1"
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
@@ -1223,14 +1232,42 @@ jobs:
       # surprising result offline beats re-running a 30-minute job to look at
       # the same numbers again.
       - name: Upload benchmark results
+        id: benchmark-results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: success() || failure()
         with:
-          name: ${{ job.status == 'success' && '✅' || '❌' }} bench-${{ matrix.sdk }}
+          name: bench-result-${{ matrix.sdk }}
           path: |
             otdftests/xtest/test-results/benchmarks/*.json
+            otdftests/xtest/test-results/benchmarks/*.summary.md
             otdftests/xtest/test-results/*.html
           if-no-files-found: warn
+
+      - name: Publish benchmark summary
+        if: always()
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.benchmark-results.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SUMMARY_DIR: otdftests/xtest/test-results/benchmarks
+        run: |-
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          summaries = sorted(Path(os.environ["SUMMARY_DIR"]).glob("*.summary.md"))
+          target = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not summaries:
+              target.write_text(
+                  "## SDK performance benchmark — NO SUMMARY\n\n"
+                  "> The benchmark stopped before session-final reporting. "
+                  f"[Inspect the workflow run]({os.environ['RUN_URL']}).\n"
+              )
+          else:
+              evidence = os.environ.get("ARTIFACT_URL") or f"{os.environ['RUN_URL']}#artifacts"
+              text = summaries[0].read_text().replace("@@BENCH_ARTIFACT_URL@@", evidence)
+              target.write_text(text)
+          PY
 
       - name: Upload server logs on failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1239,6 +1276,61 @@ jobs:
           name: bench-server-logs-${{ matrix.sdk }}
           path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
+
+  benchmark-summary:
+    name: Performance benchmark roll-up
+    runs-on: ubuntu-latest
+    needs: [resolve-versions, bench]
+    if: >-
+      always() && (
+        github.event.schedule == '30 6 * * *' ||
+        ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+         && inputs.run-benchmarks)
+      )
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: opentdf/tests
+          path: otdftests
+          persist-credentials: false
+
+      - name: Download SDK benchmark results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          pattern: bench-result-*
+          path: benchmark-results
+          merge-multiple: true
+
+      - name: Resolve benchmark artifact links
+        id: benchmark-artifacts
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { owner, repo, run_id: context.runId, per_page: 100 },
+            );
+            const urls = {};
+            for (const artifact of artifacts) {
+              const match = artifact.name.match(/^bench-result-(.+)$/);
+              if (match) {
+                urls[match[1]] = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${artifact.id}`;
+              }
+            }
+            core.setOutput('urls', JSON.stringify(urls));
+
+      - name: Publish combined benchmark summary
+        env:
+          BENCH_ARTIFACT_URLS: ${{ steps.benchmark-artifacts.outputs.urls }}
+          BENCH_EXPECTED_SDKS: ${{ needs.resolve-versions.outputs.bench-sdks }}
+          BENCH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |-
+          python3 otdftests/xtest/perf/aggregate.py benchmark-results >> "$GITHUB_STEP_SUMMARY"
 
   publish-results:
     runs-on: ubuntu-latest

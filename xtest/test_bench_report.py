@@ -163,6 +163,15 @@ class TestJsonArtifact:
         wall = next(b for b in doc["bake_off"] if b["metric"] == "wall")
         assert wall["winner"] == "quick"
 
+    def test_both_directional_p_values_are_recorded(self, tmp_path: Path):
+        doc = self.artifact(tmp_path, {REF: 1.0, "cand": 0.7})
+        cell = next(c for c in doc["cells"] if c["id"] == "encrypt")
+        wall = cell["contrasts"][f"cand_vs_{REF}"]["wall"]
+        assert wall["p_value"] is not None
+        assert wall["p_adjusted"] is not None
+        assert wall["p_value_faster"] is not None
+        assert wall["p_adjusted_faster"] is not None
+
     def test_the_file_is_valid_json_despite_nan(self, tmp_path: Path):
         # A cell with no usable interval produces NaN, which `json.dumps`
         # would happily write as a bare `NaN` that no strict parser accepts.
@@ -193,3 +202,103 @@ class TestMarkdown:
         assert "### Bake-off" not in report.markdown(two, cfg, two.gate(cfg))
         three = recorder({REF: 1.0, "a": 1.0, "b": 1.3}, cfg=cfg, noise=0.02)
         assert "### Bake-off" in report.markdown(three, cfg, three.gate(cfg))
+
+    def test_the_bottom_line_precedes_supporting_detail(self):
+        cfg = config(max_rounds=40)
+        rec = recorder({REF: 1.0, "cand": 1.35}, cfg=cfg, noise=0.01)
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+
+        assert md.index("### TL;DR") < md.index("### Compared builds")
+        assert md.index("### Compared builds") < md.index("### What changed")
+        assert md.index("### What changed") < md.index("All measurements")
+        assert md.index("All measurements") < md.index("### Run facts")
+
+    def test_provenance_links_releases_prs_commits_and_the_diff(self):
+        cfg = config(max_rounds=40)
+        rec = recorder({REF: 1.0, "cand": 1.35}, cfg=cfg, noise=0.01)
+        repo = "https://github.com/opentdf/platform"
+        rec.metadata = {
+            "github_run_url": "https://github.com/opentdf/tests/actions/runs/42",
+            "arm_sources": [
+                {
+                    "tag": REF,
+                    "alias": "latest",
+                    "release": "otdfctl/v0.40.0",
+                    "sha": "a" * 40,
+                    "repo_url": repo,
+                },
+                {
+                    "tag": "cand",
+                    "alias": "feature",
+                    "pr": 123,
+                    "head": True,
+                    "sha": "b" * 40,
+                    "repo_url": repo,
+                },
+            ],
+        }
+        md = report.markdown(
+            rec,
+            cfg,
+            rec.gate(cfg),
+            artifact_url="https://github.com/opentdf/tests/actions/runs/42/artifacts/7",
+        )
+
+        assert f"{repo}/releases/tag/otdfctl%2Fv0.40.0" in md
+        assert f"{repo}/pull/123" in md
+        assert f"{repo}/commit/{'b' * 40}" in md
+        assert f"{repo}/compare/{'a' * 40}...{'b' * 40}" in md
+        assert "actions/runs/42/artifacts/7" in md
+        assert "actions/runs/42" in md
+
+    def test_the_primary_table_omits_clean_rows_but_the_full_table_keeps_them(self):
+        cfg = config(min_rounds=10, max_rounds=60)
+        rec = recorder({REF: 1.0, "clean": 1.0, "slow": 1.4}, cfg=cfg, noise=0.005)
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+        primary = md.split("### What changed", 1)[1].split("### Bake-off", 1)[0]
+
+        assert "`slow` vs `base`" in primary
+        assert "`clean` vs `base`" not in primary
+        assert "`clean` vs `base`" in md
+
+    def test_attention_rows_get_fixed_scale_unicode_views(self):
+        cfg = config(max_rounds=40)
+        rec = recorder({REF: 1.0, "cand": 1.35}, cfg=cfg, noise=0.01)
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+
+        assert "#### Effect at a glance" in md
+        assert "┆" in md and "│" in md and "●" in md
+        assert "Round stability for attention rows" in md
+        assert any("\u2800" <= char <= "\u28ff" for char in md)
+
+    def test_run_facts_end_the_summary_with_reproducibility_context(self):
+        cfg = config(max_rounds=40, seed=91)
+        rec = recorder({REF: 1.0, "cand": 1.0}, cfg=cfg, noise=0.01)
+        rec.metadata = {
+            "platform_version": "v0.4.50",
+            "runner_os": "Linux",
+        }
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+
+        assert "### Run facts" in md
+        assert "v0.4.50" in md and "Linux" in md
+        assert "seed 91" in md
+        assert md.rstrip().endswith("cells skipped.</sub>")
+
+    def test_braille_trace_is_compact_and_deterministic(self):
+        values = [0.9, 1.0, 1.1, 1.2] * 20
+        trace = report._braille_sparkline(values, 1.15)
+
+        assert trace == report._braille_sparkline(values, 1.15)
+        assert len(trace) == 24
+        assert all("\u2800" <= char <= "\u28ff" for char in trace)
+
+
+class TestMarkdownTemplate:
+    def test_it_can_be_published_after_the_artifact_url_is_known(self, tmp_path: Path):
+        path = report.write_markdown(
+            tmp_path / "go.summary.md",
+            f"[evidence]({report.ARTIFACT_URL_PLACEHOLDER})\n",
+        )
+
+        assert report.ARTIFACT_URL_PLACEHOLDER in path.read_text()

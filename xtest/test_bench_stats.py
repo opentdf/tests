@@ -130,6 +130,7 @@ class TestCompare:
         r = stats.compare(v, v, seed=0, n_resamples=RESAMPLES)
         assert r.ratio == pytest.approx(1.0)
         assert r.p_value == 1.0
+        assert r.p_value_faster == 1.0
 
     def test_constant_offset_has_degenerate_interval(self):
         # Every round shows exactly a 2x slowdown: there is no sampling
@@ -185,7 +186,10 @@ class TestDecisionRule:
         g = gate_one(
             stats.compare(b, c, seed=12, n_resamples=RESAMPLES), control=quiet_control()
         )
-        assert g.comparisons["cell"].verdict is Verdict.IMPROVED
+        result = g.comparisons["cell"]
+        assert result.verdict is Verdict.IMPROVED
+        assert result.p_adjusted_faster is not None
+        assert result.p_adjusted_faster < stats.DEFAULT_ALPHA
         assert not g.should_fail
 
     def test_borderline_effect_without_power_is_inconclusive_not_pass(self):
@@ -300,6 +304,26 @@ class TestMultiplicityControl:
         adj = stats.benjamini_hochberg([0.01, float("nan"), 0.02])
         assert math.isnan(adj[1])
         assert all(math.isfinite(a) for a in (adj[0], adj[2]))
+
+    def test_faster_tail_is_adjusted_directly(self):
+        cells = {}
+        for i, ratio in enumerate((0.70, 0.75, 0.80)):
+            rng = np.random.default_rng(2900 + i)
+            b, c = synth(rng, ratio, n=60)
+            cells[f"cell{i}"] = stats.compare(b, c, seed=i, n_resamples=RESAMPLES)
+        cells["control"] = quiet_control()
+
+        g = stats.apply_multiplicity_control(
+            cells, controls=all_under_one_control(cells)
+        )
+        expected = stats.benjamini_hochberg(
+            [cells[f"cell{i}"].p_value_faster for i in range(3)]
+        )
+        actual = [g.comparisons[f"cell{i}"].p_adjusted_faster for i in range(3)]
+        assert actual == pytest.approx(expected)
+        assert all(
+            g.comparisons[f"cell{i}"].verdict is Verdict.IMPROVED for i in range(3)
+        )
 
     def test_correction_suppresses_lone_lucky_cell(self):
         # 20 pure-noise cells: without BH one of them firing is expected.
@@ -443,6 +467,8 @@ class TestSymmetricVerdicts:
     def test_a_clearly_faster_arm_is_faster(self):
         _, c = self.h2h(1 / 1.5)
         assert c.verdict is Verdict.FASTER
+        assert c.p_adjusted_faster is not None
+        assert c.p_adjusted_faster < stats.DEFAULT_ALPHA
 
     def test_indistinguishable_arms_are_tied(self):
         # A positive finding, and the most likely honest answer for two

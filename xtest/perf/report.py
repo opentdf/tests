@@ -21,8 +21,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import statistics
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -37,6 +40,10 @@ CELLS_KEY: pytest.StashKey[list[BenchCell]] = pytest.StashKey()
 
 #: The session's recorder, reachable from both fixtures and session hooks.
 RECORDER_KEY: pytest.StashKey[BenchmarkRecorder] = pytest.StashKey()
+
+# Replaced by the workflow after upload-artifact returns its authenticated URL.
+# Kept conspicuous so a failed substitution cannot look like a real link.
+ARTIFACT_URL_PLACEHOLDER = "@@BENCH_ARTIFACT_URL@@"
 
 
 def recorder_for(config: pytest.Config) -> BenchmarkRecorder:
@@ -90,6 +97,19 @@ class BakeOff:
     #: The winning arm id, or None when the top two could not be separated.
     winner: str | None
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReportRow:
+    """One reportable contrast/metric with enough context to render it."""
+
+    result: CellResult
+    a: str
+    b: str
+    metric: str
+    comparison: stats.PairedComparison
+    gated: bool
+    head_to_head: bool
 
 
 def bake_offs(
@@ -214,6 +234,7 @@ def to_dict(
         "noise_floor_by_control": {
             k: _noise_dict(n) for k, n in gate.noise_by_control.items()
         },
+        "nothing_measured": gate.nothing_measured,
         "trustworthy": gate.trustworthy,
         "regressions": gate.regressions,
         "improvements": gate.improvements,
@@ -273,8 +294,13 @@ def _comparison_dict(c: stats.PairedComparison) -> dict[str, object]:
         "ratio": _jsonable(c.ratio),
         "ci_low": _jsonable(c.ci_low),
         "ci_high": _jsonable(c.ci_high),
+        # `p_value`/`p_adjusted` retain their historical meaning: the
+        # one-sided "b is slower than a" tail. The faster tail is separate so
+        # consumers never have to reverse an adjusted upper-tail probability.
         "p_value": _jsonable(c.p_value),
         "p_adjusted": _jsonable(c.p_adjusted),
+        "p_value_faster": _jsonable(c.p_value_faster),
+        "p_adjusted_faster": _jsonable(c.p_adjusted_faster),
         "verdict": str(c.verdict),
         "note": c.note,
     }
@@ -295,6 +321,13 @@ def write_json(
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(to_dict(recorder, config, gate), indent=2))
+    return path
+
+
+def write_markdown(path: Path, text: str) -> Path:
+    """Write a summary template for CI to publish after artifact upload."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
     return path
 
 
@@ -347,41 +380,88 @@ def underpowered_warning(
 
 
 def markdown(
-    recorder: BenchmarkRecorder, config: BenchConfig, gate: stats.GateResult
+    recorder: BenchmarkRecorder,
+    config: BenchConfig,
+    gate: stats.GateResult,
+    *,
+    artifact_url: str = "",
 ) -> str:
-    """Render the run as a GitHub step summary."""
-    threshold_pct = (config.threshold - 1) * 100
+    """Render a decision-first GitHub job summary with progressive disclosure."""
+    rows = _report_rows(recorder, config, gate)
+    gated_rows = [r for r in rows if r.gated]
+    attention = [
+        r
+        for r in gated_rows
+        if r.comparison.verdict
+        in (
+            stats.Verdict.REGRESSION,
+            stats.Verdict.INCONCLUSIVE,
+            stats.Verdict.IMPROVED,
+        )
+    ]
+    attention.sort(key=_attention_sort_key)
+    sdk = next((r.sdk for r in recorder.results if r.sdk), "SDK")
+    status, headline = _headline(gate, gated_rows)
     n_arms = max((len(r.arm_ids) for r in recorder.results), default=2)
+
     lines = [
-        "## SDK performance regression benchmark",
+        f"## {sdk.upper()} SDK performance — {status}",
         "",
-        f"Paired {n_arms}-arm comparison, all arms in the same rounds on one "
-        f"runner. A contrast against the reference fails only if the 95% CI "
-        f"lower bound exceeds **{config.threshold:.2f}x** (+{threshold_pct:.0f}%) "
-        f"*and* the BH-adjusted p < {stats.DEFAULT_ALPHA}.",
+        "### TL;DR",
         "",
-        f"**{gate.summary}**",
+        f"> **{headline}**",
+        ">",
+        f"> {gate.summary}",
         "",
     ]
+    lines += _quick_links(recorder.metadata, artifact_url)
+    lines += _provenance(recorder)
 
     warning = underpowered_warning(recorder, config, gate)
     if warning:
         lines += ["> [!WARNING]", f"> {warning}", ""]
-
     noise = gate.noise
     if noise is not None and noise.detail:
         lines += [f"> {noise.detail}", ""]
-    elif noise is not None and math.isfinite(noise.width_ratio):
+
+    lines += ["### What changed", ""]
+    if attention:
         lines += [
-            f"A/A noise floor: +/-{(noise.width_ratio - 1) * 100:.1f}% "
-            f"(the smallest effect this run could resolve).",
+            "Only gated regressions, unresolved measurements, and confirmed "
+            "improvements are shown here. Clean rows and diagnostic metrics are below.",
+            "",
+            "| measurement | contrast | observed cost | change (95% CI) | gate margin | result |",
+            "| --- | --- | --- | --- | ---: | --- |",
+        ]
+        for row in attention:
+            c = row.comparison
+            lines.append(
+                f"| {_cell_label(row.result)} · {METRIC_LABELS[row.metric][0]} "
+                f"| `{row.b}` vs `{row.a}` | {_cost_change(row.metric, c)} "
+                f"| {_percent_change(c)} | {_gate_margin(c, config.threshold)} "
+                f"| {_verdict_cell(c)} |"
+            )
+        lines += _effect_overview(attention, config.threshold)
+    else:
+        lines += [
+            "No gated comparison requires attention: every measured wall-clock and "
+            "RSS contrast passed with enough precision.",
             "",
         ]
 
-    lines += [
-        "| cell | contrast | metric | a | b | ratio (95% CI) | p (BH) | n | verdict |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ]
+    lines += _bake_off_section(recorder, config, gate)
+    lines += _diagnostics(recorder, attention, config)
+    lines += _full_measurements(rows)
+    lines += _not_measured(recorder)
+    lines += _method(config, n_arms)
+    lines += _run_facts(recorder, config, gate, artifact_url)
+    return "\n".join(lines) + "\n"
+
+
+def _report_rows(
+    recorder: BenchmarkRecorder, config: BenchConfig, gate: stats.GateResult
+) -> list[ReportRow]:
+    rows: list[ReportRow] = []
     for result in recorder.results:
         for a, b in result.contrast_pairs():
             head_to_head = result.reference not in (a, b)
@@ -389,49 +469,441 @@ def markdown(
                 c = gate.comparisons.get(contrast_key(result.cell_id, a, b, metric))
                 if c is None:
                     continue
-                gated = (
-                    metric in config.gated_metrics
-                    and not result.control
-                    and not head_to_head
+                rows.append(
+                    ReportRow(
+                        result=result,
+                        a=a,
+                        b=b,
+                        metric=metric,
+                        comparison=c,
+                        gated=(
+                            metric in config.gated_metrics
+                            and not result.control
+                            and not head_to_head
+                        ),
+                        head_to_head=head_to_head,
+                    )
                 )
-                label = METRIC_LABELS[metric][0] + ("" if gated else " (ungated)")
-                lines.append(
-                    f"| {result.cell_id} | `{b}` vs `{a}` | {label} "
-                    f"| {format_metric(metric, c.baseline_median)} "
-                    f"| {format_metric(metric, c.candidate_median)} "
-                    f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
-                    f"| {_verdict_cell(c)} |"
-                )
+    return rows
 
-    rankings = bake_offs(recorder, config, gate)
-    if rankings:
-        lines += [
-            "",
-            "### Bake-off",
-            "",
-            "Head-to-head between candidates, measured in the same rounds as "
-            "everything else. Ranking only -- these contrasts never fail the "
-            "build.",
-            "",
-        ]
-        for bo in rankings:
-            order = " < ".join(f"`{a}`" for a in bo.order)
-            lines.append(
-                f"- **{bo.cell_id}** ({METRIC_LABELS[bo.metric][0]}): "
-                f"{order} -- {bo.detail}"
-            )
 
-    if recorder.skipped:
-        lines += ["", "### Not measured", ""]
-        lines += [f"- `{cid}`: {why}" for cid, why in sorted(recorder.skipped.items())]
+def _headline(gate: stats.GateResult, gated_rows: list[ReportRow]) -> tuple[str, str]:
+    inconclusive = sum(
+        r.comparison.verdict is stats.Verdict.INCONCLUSIVE for r in gated_rows
+    )
+    improvements = sum(
+        r.comparison.verdict is stats.Verdict.IMPROVED for r in gated_rows
+    )
+    if gate.nothing_measured:
+        return "NOTHING MEASURED", "The benchmark produced no comparisons."
+    if not gate.trustworthy:
+        return (
+            "UNTRUSTWORTHY",
+            "The A/A control detected bias; results are visible but cannot fail the build.",
+        )
+    if gate.regressions:
+        return (
+            "REGRESSION",
+            f"{len(gate.regressions)} confirmed regression(s); "
+            f"{inconclusive} unresolved and {improvements} improved gated comparison(s).",
+        )
+    if inconclusive:
+        return (
+            "INCONCLUSIVE",
+            f"No confirmed regressions, but {inconclusive} gated comparison(s) "
+            "could not be resolved.",
+        )
+    return (
+        "PASS",
+        f"No confirmed regressions; {improvements} gated comparison(s) improved.",
+    )
 
-    lines += [
+
+def _quick_links(metadata: Mapping[str, object], artifact_url: str) -> list[str]:
+    links: list[str] = []
+    if artifact_url:
+        links.append(f"[Download raw samples and HTML report]({artifact_url})")
+    run_url = str(metadata.get("github_run_url", ""))
+    if run_url:
+        links.append(f"[Workflow run]({run_url})")
+    return [" · ".join(links), ""] if links else []
+
+
+def _provenance(recorder: BenchmarkRecorder) -> list[str]:
+    result = next((r for r in recorder.results if not r.control), None)
+    if result is None:
+        result = next(iter(recorder.results), None)
+    if result is None:
+        return []
+
+    raw_sources = recorder.metadata.get("arm_sources", [])
+    sources = (
+        {
+            str(s.get("tag", "")): s
+            for s in raw_sources
+            if isinstance(s, dict) and s.get("tag")
+        }
+        if isinstance(raw_sources, list)
+        else {}
+    )
+    lines = [
+        "### Compared builds",
         "",
-        f"<sub>seed {config.seed}; warm-up {config.warmup} rounds; "
-        f"{config.min_rounds}-{config.max_rounds} measured rounds per cell; "
-        "stopping on attained CI width, never on significance.</sub>",
+        "| arm | role | source | commit | compare to reference |",
+        "| --- | --- | --- | --- | --- |",
     ]
-    return "\n".join(lines) + "\n"
+    reference_source = sources.get(result.reference)
+    for arm in result.arm_ids:
+        source = sources.get(arm)
+        role = "**reference**" if arm == result.reference else "candidate"
+        label = result.arm_labels.get(arm, arm)
+        source_link = _source_link(source, label)
+        commit_link = _commit_link(source)
+        compare_link = (
+            "—" if arm == result.reference else _compare_link(reference_source, source)
+        )
+        lines.append(
+            f"| `{_md(arm)}` | {role} | {source_link} | {commit_link} | {compare_link} |"
+        )
+    lines.append("")
+    warning = recorder.metadata.get("arm_sources_warning")
+    if warning:
+        lines += [f"> Provenance unavailable: {_md(str(warning))}", ""]
+    return lines
+
+
+def _source_link(source: object, fallback: str) -> str:
+    if not isinstance(source, dict):
+        return _md(fallback)
+    repo = str(source.get("repo_url", ""))
+    tag = str(source.get("tag", fallback))
+    alias = str(source.get("alias", tag))
+    pr = str(source.get("pr", ""))
+    release = str(source.get("release", ""))
+    sha = str(source.get("sha", ""))
+    if repo and pr:
+        return f"[PR #{_md(pr)}]({repo}/pull/{quote(pr, safe='')}) · `{_md(tag)}`"
+    if repo and release:
+        return f"[{_md(tag)}]({repo}/releases/tag/{quote(release, safe='')}) · release"
+    if repo and sha:
+        kind = "branch" if source.get("head") else "commit"
+        return f"[{_md(alias)}]({repo}/tree/{quote(sha, safe='')}) · {kind}"
+    return _md(fallback)
+
+
+def _commit_link(source: object) -> str:
+    if not isinstance(source, dict):
+        return "—"
+    repo = str(source.get("repo_url", ""))
+    sha = str(source.get("sha", ""))
+    if not (repo and sha):
+        return "—"
+    return f"[`{_md(sha[:7])}`]({repo}/commit/{quote(sha, safe='')})"
+
+
+def _compare_link(reference: object, candidate: object) -> str:
+    if not (isinstance(reference, dict) and isinstance(candidate, dict)):
+        return "—"
+    repo = str(reference.get("repo_url", ""))
+    if not repo or repo != str(candidate.get("repo_url", "")):
+        return "—"
+    a, b = str(reference.get("sha", "")), str(candidate.get("sha", ""))
+    if not (a and b):
+        return "—"
+    return f"[diff]({repo}/compare/{quote(a, safe='')}...{quote(b, safe='')})"
+
+
+def _md(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")
+
+
+def _attention_sort_key(row: ReportRow) -> tuple[int, float, str, int]:
+    order = {
+        stats.Verdict.REGRESSION: 0,
+        stats.Verdict.INCONCLUSIVE: 1,
+        stats.Verdict.IMPROVED: 2,
+    }
+    ratio = row.comparison.ratio
+    magnitude = abs(math.log(ratio)) if math.isfinite(ratio) and ratio > 0 else 0
+    return (
+        order.get(row.comparison.verdict, 3),
+        -round(magnitude, 3),
+        row.result.cell_id,
+        METRICS.index(row.metric),
+    )
+
+
+def _cell_label(result: CellResult) -> str:
+    return result.cell_id.removeprefix(f"{result.sdk}-").replace("-", " / ")
+
+
+def _cost_change(metric: str, c: stats.PairedComparison) -> str:
+    if not (math.isfinite(c.baseline_median) and math.isfinite(c.candidate_median)):
+        return "—"
+    delta = c.candidate_median - c.baseline_median
+    sign = "+" if delta >= 0 else "−"
+    return (
+        f"{format_metric(metric, c.baseline_median)} → "
+        f"{format_metric(metric, c.candidate_median)} "
+        f"({sign}{format_metric(metric, abs(delta))})"
+    )
+
+
+def _pct(ratio: float) -> str:
+    if not math.isfinite(ratio):
+        return "—"
+    return f"{(ratio - 1) * 100:+.1f}%"
+
+
+def _percent_change(c: stats.PairedComparison) -> str:
+    point = _pct(c.ratio)
+    if not (math.isfinite(c.ci_low) and math.isfinite(c.ci_high)):
+        return point
+    return f"{point} [{_pct(c.ci_low)}, {_pct(c.ci_high)}]"
+
+
+def _gate_margin(c: stats.PairedComparison, threshold: float) -> str:
+    if c.verdict is stats.Verdict.REGRESSION and math.isfinite(c.ci_low):
+        return f"+{(c.ci_low - threshold) * 100:.1f} pp"
+    if c.verdict is stats.Verdict.IMPROVED and math.isfinite(c.ci_high):
+        return f"+{(1 / threshold - c.ci_high) * 100:.1f} pp"
+    return "—"
+
+
+def _effect_overview(rows: list[ReportRow], threshold: float) -> list[str]:
+    labels = [f"{_cell_label(r.result)} {METRIC_LABELS[r.metric][0]}" for r in rows]
+    label_width = min(30, max(map(len, labels), default=0))
+    width = 57
+    axis = [" "] * width
+    for text, start in (
+        ("← faster", 0),
+        ("no change", (width - len("no change")) // 2),
+        ("slower →", width - len("slower →")),
+    ):
+        axis[start : start + len(text)] = text
+    lines = [
+        "",
+        "#### Effect at a glance",
+        "",
+        "Fixed log-ratio scale; `┆` marks ±the practical threshold and `│` no change.",
+        "",
+        "```text",
+        f"{'measurement':<{label_width}}  {''.join(axis)}",
+    ]
+    for label, row in zip(labels, rows, strict=True):
+        lines.append(
+            f"{label[:label_width]:<{label_width}}  "
+            f"{_effect_strip(row.comparison, threshold, width=width)} "
+            f"{_pct(row.comparison.ratio):>7} {row.comparison.verdict}"
+        )
+    lines += ["```", ""]
+    return lines
+
+
+def _effect_strip(
+    c: stats.PairedComparison, threshold: float, *, width: int = 57
+) -> str:
+    """A fixed-width CI forest strip on a symmetric log-ratio scale."""
+    chars = [" "] * width
+    # Show three threshold-widths in each direction. That keeps the practical
+    # boundary near the center while leaving enough room to draw the interval
+    # of an ordinary 20–40% regression instead of collapsing it to an arrow.
+    span = 3 * math.log(threshold)
+
+    def pos(ratio: float) -> int:
+        value = math.log(ratio) if math.isfinite(ratio) and ratio > 0 else 0.0
+        unit = max(-1.0, min(1.0, value / span))
+        return round((unit + 1) * (width - 1) / 2)
+
+    for ratio, marker in ((1 / threshold, "┆"), (1.0, "│"), (threshold, "┆")):
+        chars[pos(ratio)] = marker
+    if math.isfinite(c.ci_low) and math.isfinite(c.ci_high):
+        lo, hi = sorted((pos(c.ci_low), pos(c.ci_high)))
+        for i in range(lo, hi + 1):
+            if chars[i] == " ":
+                chars[i] = "━"
+        chars[lo], chars[hi] = "[", "]"
+    if math.isfinite(c.ratio) and c.ratio > 0:
+        chars[pos(c.ratio)] = "●"
+        if math.log(c.ratio) < -span:
+            chars[0] = "◀"
+        elif math.log(c.ratio) > span:
+            chars[-1] = "▶"
+    return "".join(chars)
+
+
+def _bake_off_section(
+    recorder: BenchmarkRecorder, config: BenchConfig, gate: stats.GateResult
+) -> list[str]:
+    rankings = bake_offs(recorder, config, gate)
+    if not rankings:
+        return []
+    lines = [
+        "### Bake-off",
+        "",
+        "Candidate-to-candidate ranking only; these contrasts never fail the build.",
+        "",
+    ]
+    for bo in rankings:
+        order = " < ".join(f"`{a}`" for a in bo.order)
+        lines.append(
+            f"- **{_cell_label(next(r for r in recorder.results if r.cell_id == bo.cell_id))}** "
+            f"({METRIC_LABELS[bo.metric][0]}): {order} — {bo.detail}"
+        )
+    return lines + [""]
+
+
+def _diagnostics(
+    recorder: BenchmarkRecorder,
+    attention: list[ReportRow],
+    config: BenchConfig,
+) -> list[str]:
+    if not attention:
+        return []
+    lines = [
+        "<details>",
+        "<summary><strong>Round stability for attention rows</strong></summary>",
+        "",
+        "Each Braille glyph carries two rounds at four vertical levels. The scale "
+        "is centered on 1.0 and is never tighter than the practical threshold.",
+        "",
+        "```text",
+    ]
+    for row in attention:
+        values = _paired_ratios(row)
+        if not values:
+            continue
+        slower = sum(v > 1 for v in values)
+        label = f"{_cell_label(row.result)} {METRIC_LABELS[row.metric][0]}"
+        lines.append(
+            f"{label[:28]:<28} {_braille_sparkline(values, config.threshold):<24} "
+            f"{slower}/{len(values)} rounds slower; median {_pct(statistics.median(values))}"
+        )
+    lines += ["```", "", "</details>", ""]
+    return lines
+
+
+def _paired_ratios(row: ReportRow) -> list[float]:
+    baseline = row.result.samples.get(row.a, {}).get(row.metric, [])
+    candidate = row.result.samples.get(row.b, {}).get(row.metric, [])
+    return [c / b for b, c in zip(baseline, candidate, strict=True) if b > 0 and c > 0]
+
+
+def _braille_sparkline(
+    values: Iterable[float], threshold: float, *, max_chars: int = 24
+) -> str:
+    """Render positive ratios as a compact two-samples-per-glyph trace."""
+    logs = [math.log(v) for v in values if math.isfinite(v) and v > 0]
+    if not logs:
+        return "—"
+    limit = max_chars * 2
+    if len(logs) > limit:
+        # Median bins retain the robust character of the reported estimator.
+        logs = [
+            statistics.median(
+                logs[round(i * len(logs) / limit) : round((i + 1) * len(logs) / limit)]
+            )
+            for i in range(limit)
+        ]
+    span = max(math.log(threshold), max(abs(v) for v in logs), 1e-12)
+    dot_bits = ((0, 1, 2, 6), (3, 4, 5, 7))
+    glyphs: list[str] = []
+    for i in range(0, len(logs), 2):
+        bits = 0
+        for column, value in enumerate(logs[i : i + 2]):
+            # Braille rows run top to bottom; positive/slower belongs at top.
+            row = round((span - value) / (2 * span) * 3)
+            row = max(0, min(3, row))
+            bits |= 1 << dot_bits[column][row]
+        glyphs.append(chr(0x2800 + bits))
+    return "".join(glyphs)
+
+
+def _full_measurements(rows: list[ReportRow]) -> list[str]:
+    lines = [
+        "<details>",
+        "<summary><strong>All measurements, controls, and statistical details</strong></summary>",
+        "",
+        "| cell | contrast | metric | a | b | ratio (95% CI) | p (BH) | n | verdict |",
+        "| --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
+    ]
+    for row in rows:
+        c = row.comparison
+        label = METRIC_LABELS[row.metric][0] + ("" if row.gated else " (ungated)")
+        lines.append(
+            f"| {row.result.cell_id} | `{row.b}` vs `{row.a}` | {label} "
+            f"| {format_metric(row.metric, c.baseline_median)} "
+            f"| {format_metric(row.metric, c.candidate_median)} "
+            f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
+            f"| {_verdict_cell(c)} |"
+        )
+    return lines + ["", "</details>", ""]
+
+
+def _not_measured(recorder: BenchmarkRecorder) -> list[str]:
+    if not recorder.skipped:
+        return []
+    lines = [
+        "<details open>",
+        "<summary><strong>Not measured</strong></summary>",
+        "",
+    ]
+    lines += [f"- `{cid}`: {why}" for cid, why in sorted(recorder.skipped.items())]
+    return lines + ["", "</details>", ""]
+
+
+def _method(config: BenchConfig, n_arms: int) -> list[str]:
+    threshold_pct = (config.threshold - 1) * 100
+    return [
+        "<details>",
+        "<summary><strong>How to read this gate</strong></summary>",
+        "",
+        f"This is a paired {n_arms}-arm comparison: every arm ran in the same "
+        "randomized rounds on one runner. A reference contrast regresses only "
+        f"when its 95% CI is wholly beyond +{threshold_pct:.0f}% "
+        f"and its directional BH-adjusted p-value is below {stats.DEFAULT_ALPHA}. "
+        "The loop stops on attained interval width, never significance.",
+        "",
+        "PASS means the run was precise enough to have found an effect at the "
+        "threshold; INCONCLUSIVE does not mean no change.",
+        "",
+        "</details>",
+        "",
+    ]
+
+
+def _run_facts(
+    recorder: BenchmarkRecorder,
+    config: BenchConfig,
+    gate: stats.GateResult,
+    artifact_url: str,
+) -> list[str]:
+    rounds = [r.n_rounds for r in recorder.results if not r.control]
+    elapsed = sum(r.elapsed_s for r in recorder.results)
+    noise = gate.noise
+    noise_text = (
+        f"±{(noise.width_ratio - 1) * 100:.1f}%"
+        if noise is not None and math.isfinite(noise.width_ratio)
+        else "unavailable"
+    )
+    metadata = recorder.metadata
+    artifact = f"[JSON + HTML]({artifact_url})" if artifact_url else "local output"
+    round_text = f"{min(rounds)}–{max(rounds)}" if rounds else "0"
+    return [
+        "### Run facts",
+        "",
+        "| result cells | rounds/cell | elapsed | A/A noise | platform | runner | evidence |",
+        "| ---: | ---: | ---: | ---: | --- | --- | --- |",
+        f"| {sum(not r.control for r in recorder.results)} "
+        f"| {round_text} | {elapsed:.0f}s | {noise_text} "
+        f"| {_md(str(metadata.get('platform_version', 'unknown')))} "
+        f"| {_md(str(metadata.get('runner_os') or metadata.get('platform', 'unknown')))} "
+        f"| {artifact} |",
+        "",
+        f"<sub>seed {config.seed}; {config.warmup} warm-up rounds; "
+        f"{config.min_rounds}–{config.max_rounds} measured rounds allowed; "
+        f"{len(recorder.skipped)} cells skipped.</sub>",
+    ]
 
 
 def _ratio_cell(c: stats.PairedComparison) -> str:
@@ -443,7 +915,13 @@ def _ratio_cell(c: stats.PairedComparison) -> str:
 
 
 def _p_cell(c: stats.PairedComparison) -> str:
-    p = c.p_adjusted if c.p_adjusted is not None else c.p_value
+    # Show the one-sided tail matching the observed effect. For a ratio below
+    # one that is the explicit faster-tail test; adjusted upper-tail p-values
+    # cannot be interpreted backwards after BH correction.
+    if c.ratio < 1:
+        p = c.p_adjusted_faster if c.p_adjusted_faster is not None else c.p_value_faster
+    else:
+        p = c.p_adjusted if c.p_adjusted is not None else c.p_value
     if p is None or not math.isfinite(p):
         return "-"
     return f"{p:.3f}" if p >= 0.001 else "<0.001"

@@ -28,13 +28,12 @@ A cell is a regression iff **both**:
 
 Requiring both is deliberate, and neither clause is redundant:
 
-- Clause 1 alone would fire on a real-but-trivial effect measured precisely
-  enough -- a reproducible 0.5% slowdown is not worth a red build.
-  It cannot fire on pure noise, since that would require the interval to
-  exclude an effect that is not there.
-- Clause 2 alone would fire on noise roughly ``alpha`` of the time per cell,
-  and a run has enough cells that "roughly alpha" becomes "most nights".
-  BH adjustment across cells controls the false discovery rate.
+- Clause 1 establishes that the effect is larger than the practical threshold,
+  but an unadjusted 95% interval on every cell does not control false
+  discoveries across the run.
+- Clause 2 supplies that multiplicity control, but alone would flag both
+  real-but-trivial effects and pure-noise false positives. A reproducible 0.5%
+  slowdown is statistically real and still not worth a red build.
 
 Together they answer the only question worth gating on: is the slowdown both
 real and large enough to care about?
@@ -122,9 +121,15 @@ class PairedComparison:
     ratio: float
     ci_low: float
     ci_high: float
+    #: One-sided p-value for "candidate is slower". Retains the original field
+    #: name for artifact/API compatibility; the opposite direction is explicit.
     p_value: float
+    #: One-sided p-value for "candidate is faster".
+    p_value_faster: float
     #: Set by :func:`apply_multiplicity_control` once every cell is known.
     p_adjusted: float | None = None
+    #: BH-adjusted form of :attr:`p_value_faster`.
+    p_adjusted_faster: float | None = None
     verdict: Verdict = Verdict.INCONCLUSIVE
     note: str = ""
 
@@ -207,18 +212,22 @@ def _bootstrap_ci(
     return float(res.confidence_interval.low), float(res.confidence_interval.high)
 
 
-def _one_sided_p(d: np.ndarray) -> float:
-    """One-sided Wilcoxon signed-rank p-value for "candidate is slower".
+def _one_sided_ps(d: np.ndarray) -> tuple[float, float]:
+    """Wilcoxon signed-rank p-values for slower and faster, respectively.
 
-    Signed-rank rather than a t-test because latency distributions are
-    skewed and occasionally have a stray outlier round; we do not want a
-    single stalled invocation to drive the verdict.
+    Signed-rank does not require normally distributed raw latencies and a
+    single stalled invocation cannot drive it by magnitude alone. Interpreting
+    it as a location test does assume the *paired log differences* are roughly
+    symmetric; the log transform and multiplicative-jitter measurement model
+    are intended to make that a reasonable assumption.
     """
     if np.all(d == 0):
         # No difference whatsoever. Wilcoxon rejects an all-zero input.
-        return 1.0
+        return 1.0, 1.0
     # scipy's stubs type the result as an opaque tuple-like; index and cast.
-    return cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    slower = cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    faster = cast(float, _scipy_stats.wilcoxon(d, alternative="less")[1])
+    return slower, faster
 
 
 def compare(
@@ -249,12 +258,14 @@ def compare(
             ci_low=math.nan,
             ci_high=math.nan,
             p_value=math.nan,
+            p_value_faster=math.nan,
             note=f"only {n} usable rounds; need at least {MIN_USABLE_ROUNDS}",
         )
 
     lo_log, hi_log = _bootstrap_ci(
         d, confidence=confidence, seed=seed, n_resamples=n_resamples
     )
+    p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
         baseline_median=b_med,
@@ -262,7 +273,8 @@ def compare(
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),
-        p_value=_one_sided_p(d),
+        p_value=p_slower,
+        p_value_faster=p_faster,
     )
 
 
@@ -530,6 +542,7 @@ def apply_multiplicity_control(
     symmetric_set = set(symmetric_family)
     rest = [k for k in adjustable if k not in gated_set and k not in symmetric_set]
     p_adj: dict[str, float] = {}
+    p_adj_faster: dict[str, float] = {}
     for family in (gated_family, symmetric_family, rest):
         p_adj.update(
             zip(
@@ -538,11 +551,23 @@ def apply_multiplicity_control(
                 strict=True,
             )
         )
+        # The opposite direction needs its own lower-tail p-value and its own
+        # adjustment. Reading an adjusted upper-tail value as `p > 1-alpha`
+        # is invalid: BH controls small p-values and generally pushes large
+        # ones toward 1, making that backwards test easier rather than safer.
+        p_adj_faster.update(
+            zip(
+                family,
+                benjamini_hochberg([comparisons[k].p_value_faster for k in family]),
+                strict=True,
+            )
+        )
 
     result = GateResult(noise=noise, noise_by_control=noise_by_control)
     for key in keys:
         c = comparisons[key]
         pa = p_adj.get(key)
+        pa_faster = p_adj_faster.get(key)
         key_noise = noise_by_control.get(controls.get(key, ""), uncontrolled)
         if key in censored:
             verdict, note = Verdict.INCONCLUSIVE, censored[key]
@@ -553,6 +578,7 @@ def apply_multiplicity_control(
             verdict, note = _verdict_for(
                 c,
                 pa,
+                pa_faster,
                 threshold=threshold,
                 alpha=alpha,
                 noise=key_noise,
@@ -560,12 +586,18 @@ def apply_multiplicity_control(
             )
         elif key in symmetric_set:
             verdict, note = _symmetric_verdict_for(
-                c, pa, threshold=threshold, alpha=alpha, noise=key_noise
+                c,
+                pa,
+                pa_faster,
+                threshold=threshold,
+                alpha=alpha,
+                noise=key_noise,
             )
         else:
             verdict, note = _verdict_for(
                 c,
                 pa,
+                pa_faster,
                 threshold=threshold,
                 alpha=alpha,
                 noise=key_noise,
@@ -579,7 +611,9 @@ def apply_multiplicity_control(
             ci_low=c.ci_low,
             ci_high=c.ci_high,
             p_value=c.p_value,
+            p_value_faster=c.p_value_faster,
             p_adjusted=pa,
+            p_adjusted_faster=pa_faster,
             verdict=verdict,
             note=note or c.note,
         )
@@ -600,6 +634,7 @@ def apply_multiplicity_control(
 def _verdict_for(
     c: PairedComparison,
     p_adjusted: float | None,
+    p_adjusted_faster: float | None,
     *,
     threshold: float,
     alpha: float,
@@ -609,13 +644,16 @@ def _verdict_for(
     if c.n_rounds < MIN_USABLE_ROUNDS or not math.isfinite(c.ci_low):
         return Verdict.INCONCLUSIVE, c.note or "no usable interval"
 
-    p = c.p_value if is_control else p_adjusted
-    if p is None or not math.isfinite(p):
+    p_slower = c.p_value if is_control else p_adjusted
+    p_faster = c.p_value_faster if is_control else p_adjusted_faster
+    if p_slower is None or p_faster is None:
+        return Verdict.INCONCLUSIVE, "no p-value"
+    if not (math.isfinite(p_slower) and math.isfinite(p_faster)):
         return Verdict.INCONCLUSIVE, "no p-value"
 
-    if c.ci_low > threshold and p < alpha:
+    if c.ci_low > threshold and p_slower < alpha:
         return Verdict.REGRESSION, ""
-    if c.ci_high < 1 / threshold and p > 1 - alpha:
+    if c.ci_high < 1 / threshold and p_faster < alpha:
         return Verdict.IMPROVED, ""
 
     # Not a regression. But "we looked and found nothing" only counts as PASS
@@ -635,6 +673,7 @@ def _verdict_for(
 def _symmetric_verdict_for(
     c: PairedComparison,
     p_adjusted: float | None,
+    p_adjusted_faster: float | None,
     *,
     threshold: float,
     alpha: float,
@@ -674,15 +713,16 @@ def _symmetric_verdict_for(
     if noise.underpowered:
         return Verdict.INCONCLUSIVE, noise.detail
 
-    p = p_adjusted
-    if p is None or not math.isfinite(p):
+    if p_adjusted is None or p_adjusted_faster is None:
+        return Verdict.INCONCLUSIVE, "no p-value"
+    if not (math.isfinite(p_adjusted) and math.isfinite(p_adjusted_faster)):
         return Verdict.INCONCLUSIVE, "no p-value"
 
-    # Direction clauses mirror REGRESSION and IMPROVED exactly, including the
-    # upper-tail read of the one-sided p for the faster direction.
-    if c.ci_low > threshold and p < alpha:
+    # Direction clauses mirror REGRESSION and IMPROVED exactly. Each direction
+    # uses its own BH-adjusted one-sided p-value.
+    if c.ci_low > threshold and p_adjusted < alpha:
         return Verdict.SLOWER, ""
-    if c.ci_high < 1 / threshold and p > 1 - alpha:
+    if c.ci_high < 1 / threshold and p_adjusted_faster < alpha:
         return Verdict.FASTER, ""
     if c.ci_low > 1 / threshold and c.ci_high < threshold:
         return Verdict.TIED, ""

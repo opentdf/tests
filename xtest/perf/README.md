@@ -40,8 +40,9 @@ measure.
 
 | Artifact | Where | Contents |
 | --- | --- | --- |
-| Job summary | The Actions run page | The table below, plus the verdict |
-| `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
+| SDK job summary | Each matrix job | TL;DR, linked build provenance, attention rows, Unicode effect views, and run facts |
+| Workflow roll-up | `Performance benchmark roll-up` job | One bottom line across Go, Java, and JS, with matrix health and links to each artifact |
+| `bench-result-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, the rendered summary, and an HTML report |
 | Terminal | Job log tail | One-line summary and the JSON path |
 
 The JSON is the useful one. It holds each cell's full per-round vectors for
@@ -50,9 +51,37 @@ re-running a 30-minute job to look at the same numbers again. It is `"schema":
 2`: each cell carries `arms`, `reference`, and `contrasts` keyed `"<b>_vs_<a>"`.
 `baseline` and `candidate` are still there for readers that predate the K-arm
 schema, but past two arms they name only the reference and the *first*
-candidate — use `arms` and `contrasts`.
+candidate — use `arms` and `contrasts`. Resolver metadata beside it records the
+immutable commit and whether each arm came from a PR, branch, or release.
 
-### The table
+### Reading the summary
+
+The summary is ordered for progressive disclosure:
+
+1. **TL;DR** gives the run status and counts of confirmed, unresolved, and
+   improved gated comparisons.
+2. **Compared builds** links each arm to its PR, release/tag, commit, and GitHub
+   diff against the reference where those links exist.
+3. **What changed** shows only regressions, inconclusive rows, and confirmed
+   improvements. Clean and ungated rows do not crowd the decision.
+4. **Effect at a glance** puts those rows on one fixed log-ratio scale. `┆`
+   marks the practical threshold, `│` means no change, the bracket is the 95%
+   interval, and `●` is the point estimate.
+5. Expandable blocks hold per-round Braille traces, all measurements and
+   controls, skipped cells, and the statistical rule.
+6. **Run facts** closes the SDK summary with rounds, elapsed time, A/A noise,
+   platform/runner identity, seed, and a direct evidence link.
+7. After every matrix job finishes, the workflow roll-up combines verdicts and
+   run health across SDKs. It deliberately does not compare absolute timings
+   from different runners.
+
+The Unicode plots are plain text, so they remain legible in copied comments,
+logs, dark mode, and restricted GitHub Markdown without external image assets.
+
+### The full measurement table
+
+The complete table is collapsed by default under **All measurements, controls,
+and statistical details**:
 
 ```
 | cell            | contrast          | metric     | a        | b        | ratio (95% CI)        | p (BH) | n  | verdict |
@@ -71,7 +100,9 @@ candidate — use `arms` and `contrasts`.
   `b` is faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
   this run could measure; a wide interval means a noisy runner, not a big change.
-- **p (BH)** — one-sided p-value, Benjamini–Hochberg adjusted across the run.
+- **p (BH)** — one-sided p-value in the direction of the observed effect,
+  Benjamini–Hochberg adjusted across the run. Slower and faster tails are
+  calculated and adjusted separately; the JSON records both.
 - **n** — paired rounds actually measured (20–60; the loop stops early once the
   interval is narrow enough).
 
@@ -79,9 +110,10 @@ candidate — use `arms` and `contrasts`.
 
 **REGRESSION** — the CI lower bound exceeds the threshold (default **1.15x**,
 i.e. 15% slower) *and* the adjusted p < 0.05. Both clauses are required, and
-neither is redundant: the threshold alone would fire on a reproducible 0.5%
-slowdown nobody cares about, and significance alone would fire on noise often
-enough to be ignored within a week. This fails the job.
+neither is redundant: the CI establishes that the effect exceeds the practical
+threshold but is not multiplicity-adjusted, while significance alone would
+flag both reproducible 0.5% slowdowns nobody cares about and pure-noise false
+positives. This fails the job.
 
 **PASS** — not a regression, *and* the run had enough precision to have found
 one. "We looked and found nothing" only counts when we could have found
@@ -396,7 +428,8 @@ A 3-arm 1 GiB run wants roughly `--bench-payloads 1KiB,1GiB
 | `_launcher.py` | The separate process that actually forks the measured command |
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
-| `report.py` | Session recorder, JSON artifact, step-summary markdown |
+| `report.py` | Session recorder, JSON artifact, decision-first SDK summary markdown |
+| `aggregate.py` | Pure-stdlib workflow roll-up over downloaded SDK JSON artifacts |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
@@ -406,7 +439,8 @@ Offline tests, no platform and no subprocesses needed:
 ```bash
 cd xtest
 uv run pytest -q test_bench_stats.py test_bench_measure.py \
-                 test_bench_runner.py test_bench_arms.py test_bench_report.py
+                 test_bench_runner.py test_bench_arms.py test_bench_report.py \
+                 test_bench_aggregate.py
 ```
 
 These run on every PR via `check.yml`, so the harness is exercised continuously
@@ -470,9 +504,18 @@ because a NaN width must read as "keep going" and `NaN > target` is `False`.
 #### Both clauses of the decision rule
 
 A cell is a regression iff the CI lower bound exceeds `threshold` **and** the
-BH-adjusted p is below alpha. Clause 1 alone fires on real-but-trivial effects
-measured precisely; clause 2 alone fires on noise roughly alpha of the time per
-cell, and a run has enough cells that "roughly alpha" becomes "most nights".
+BH-adjusted p is below alpha. Clause 1 establishes practical significance but
+does not adjust the many intervals examined in a run. Clause 2 supplies
+multiplicity control but, alone, fires on real-but-trivial effects and on
+pure-noise false positives. Faster findings use a separately computed and
+BH-adjusted lower-tail p-value; an adjusted upper-tail probability cannot be
+read backwards as evidence for the opposite direction.
+
+The signed-rank test does not require normal raw latencies and is resistant to
+the magnitude of a stray stalled invocation. Its location-test interpretation
+does assume the paired *log differences* are approximately symmetric. The log
+transform and the harness's multiplicative-jitter model are intended to make
+that reasonable; the raw vectors remain in the artifact for checking it.
 
 #### The symmetric rule for head-to-heads
 

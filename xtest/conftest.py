@@ -443,8 +443,15 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
         out_dir / f"{name}.json", recorder, bench_config, gate
     )
 
-    summary = report.markdown(recorder, bench_config, gate)
-    report.append_step_summary(summary)
+    artifact_url = (
+        report.ARTIFACT_URL_PLACEHOLDER
+        if os.environ.get("BENCH_DEFER_SUMMARY", "").lower() in {"1", "true", "yes"}
+        else ""
+    )
+    summary = report.markdown(recorder, bench_config, gate, artifact_url=artifact_url)
+    report.write_markdown(out_dir / f"{name}.summary.md", summary)
+    if not artifact_url:
+        report.append_step_summary(summary)
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")

@@ -10,6 +10,7 @@ No platform and no real SDK; the builds are stub ``cli.sh`` trees in
 ``tmp_path``.
 """
 
+import json
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -209,6 +210,59 @@ class TestArmOptions:
 
     def test_the_arm_count_follows_the_refs(self):
         assert bench.arm_count(options(bench_refs="go@a,go@b,go@c")) == 3
+
+
+class TestRunnerMetadata:
+    def test_resolver_provenance_is_preserved_and_enriched(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv(
+            "BENCH_VERSION_INFO",
+            json.dumps(
+                [
+                    {
+                        "sdk": "go",
+                        "tag": "v0.30.0",
+                        "release": "v0.30.0",
+                        "sha": "a" * 40,
+                    },
+                    {
+                        "sdk": "go",
+                        "tag": "feature",
+                        "pr": 42,
+                        "head": True,
+                        "sha": "b" * 40,
+                    },
+                ]
+            ),
+        )
+
+        sources, warning = bench._arm_sources()
+
+        assert warning == ""
+        assert sources[0]["repo_url"] == "https://github.com/opentdf/otdfctl"
+        assert sources[1]["repo_url"] == "https://github.com/opentdf/platform"
+
+    def test_bad_resolver_metadata_degrades_to_an_explanation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("BENCH_VERSION_INFO", "not-json")
+
+        sources, warning = bench._arm_sources()
+
+        assert sources == []
+        assert "not valid JSON" in warning
+
+    def test_workflow_url_needs_all_three_parts(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+        monkeypatch.setenv("GITHUB_REPOSITORY", "opentdf/tests")
+        monkeypatch.setenv("GITHUB_RUN_ID", "123")
+        assert bench._github_run_url() == (
+            "https://github.com/opentdf/tests/actions/runs/123"
+        )
+
+        monkeypatch.delenv("GITHUB_RUN_ID")
+        assert bench._github_run_url() == ""
 
 
 class TestDefaultBudget:
