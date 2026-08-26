@@ -9,6 +9,7 @@ pytest's world (options, fixtures, SDK discovery) into the runner's world
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import random
@@ -599,7 +600,8 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
     here feeds the decision rule. It is recorded so that a human reading an
     old artifact can tell what they are looking at.
     """
-    return {
+    metadata: dict[str, object] = {
+        "sdk": os.environ.get("BENCH_SDK", ""),
         "python": platform.python_version(),
         "platform": platform.platform(),
         "processor": platform.processor() or "unknown",
@@ -607,9 +609,69 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
         "runner_os": os.environ.get("RUNNER_OS", ""),
         "runner_arch": os.environ.get("RUNNER_ARCH", ""),
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "github_run_url": _github_run_url(),
         "platform_version": _platform_version(),
         "seed": config.getoption("--bench-seed"),
     }
+    sources, warning = _arm_sources()
+    metadata["arm_sources"] = sources
+    if warning:
+        metadata["arm_sources_warning"] = warning
+    return metadata
+
+
+def _github_run_url() -> str:
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if not (server and repository and run_id):
+        return ""
+    return f"{server}/{repository}/actions/runs/{run_id}"
+
+
+def _arm_sources() -> tuple[list[dict[str, object]], str]:
+    """Resolver metadata for the builds, enriched with their GitHub repository.
+
+    CI already paid to resolve every ref to an immutable SHA before installing
+    it. Carry that result into the benchmark rather than trying to infer a PR,
+    release, or branch from the flattened dist-directory name afterward.
+    """
+    raw = os.environ.get("BENCH_VERSION_INFO", "").strip()
+    if not raw:
+        return [], ""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return [], f"BENCH_VERSION_INFO was not valid JSON: {e}"
+    if not isinstance(parsed, list) or not all(isinstance(v, dict) for v in parsed):
+        return [], "BENCH_VERSION_INFO must be a JSON array of objects"
+
+    sources: list[dict[str, object]] = []
+    for value in parsed:
+        source = {str(k): v for k, v in value.items()}
+        source["repo_url"] = _repo_url_for(source)
+        sources.append(source)
+    return sources, ""
+
+
+def _repo_url_for(source: dict[str, object]) -> str:
+    sdk = str(source.get("sdk", ""))
+    if sdk == "java":
+        return "https://github.com/opentdf/java-sdk"
+    if sdk == "js":
+        return "https://github.com/opentdf/web-sdk"
+    if sdk != "go":
+        return ""
+
+    # otdfctl moved into the platform monorepo at v0.31.0. Resolver results
+    # from there use the namespaced release tag; old standalone releases do
+    # not. Branch/PR/SHA builds resolve against platform first.
+    release = str(source.get("release", ""))
+    if release and not release.startswith("otdfctl/"):
+        match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", release)
+        if match and tuple(map(int, match.groups())) < (0, 31, 0):
+            return "https://github.com/opentdf/otdfctl"
+    return "https://github.com/opentdf/platform"
 
 
 def _platform_version() -> str:
