@@ -400,9 +400,18 @@ def markdown(
         )
     ]
     attention.sort(key=_attention_sort_key)
-    sdk = next((r.sdk for r in recorder.results if r.sdk), "SDK")
-    status, headline = _headline(gate, gated_rows)
+    sdk = next(
+        (r.sdk for r in recorder.results if r.sdk),
+        str(recorder.metadata.get("sdk") or "SDK"),
+    )
+    equivalent = same_commit(recorder.metadata)
+    status, headline = _headline(gate, gated_rows, recorder.metadata)
     n_arms = max((len(r.arm_ids) for r in recorder.results), default=2)
+    summary = (
+        str(recorder.metadata.get("comparison_note", gate.summary))
+        if equivalent
+        else gate.summary
+    )
 
     lines = [
         f"## {sdk.upper()} SDK performance — {status}",
@@ -411,7 +420,7 @@ def markdown(
         "",
         f"> **{headline}**",
         ">",
-        f"> {gate.summary}",
+        f"> {summary}",
         "",
     ]
     lines += _quick_links(recorder.metadata, artifact_url)
@@ -421,11 +430,17 @@ def markdown(
     if warning:
         lines += ["> [!WARNING]", f"> {warning}", ""]
     noise = gate.noise
-    if noise is not None and noise.detail:
+    if noise is not None and noise.detail and not equivalent:
         lines += [f"> {noise.detail}", ""]
 
     lines += ["### What changed", ""]
-    if attention:
+    if equivalent:
+        lines += [
+            "No performance comparison was necessary: the requested refs identify "
+            "the same source commit.",
+            "",
+        ]
+    elif attention:
         lines += [
             "Only gated regressions, unresolved measurements, and confirmed "
             "improvements are shown here. Clean rows and diagnostic metrics are below.",
@@ -442,6 +457,12 @@ def markdown(
                 f"| {_verdict_cell(c)} |"
             )
         lines += _effect_overview(attention, config.threshold)
+    elif gate.nothing_measured:
+        lines += [
+            "No comparison ran. Expand **Not measured** below for the cell-level "
+            "reasons; this is not a passing performance result.",
+            "",
+        ]
     else:
         lines += [
             "No gated comparison requires attention: every measured wall-clock and "
@@ -451,9 +472,10 @@ def markdown(
 
     lines += _bake_off_section(recorder, config, gate)
     lines += _diagnostics(recorder, attention, config)
-    lines += _full_measurements(rows)
+    lines += _full_measurements(rows, recorder.metadata)
     lines += _not_measured(recorder)
-    lines += _method(config, n_arms)
+    if not equivalent:
+        lines += _method(config, n_arms)
     lines += _run_facts(recorder, config, gate, artifact_url)
     return "\n".join(lines) + "\n"
 
@@ -487,13 +509,24 @@ def _report_rows(
     return rows
 
 
-def _headline(gate: stats.GateResult, gated_rows: list[ReportRow]) -> tuple[str, str]:
+def same_commit(metadata: Mapping[str, object]) -> bool:
+    """Whether multiple requested names resolved to one immutable commit."""
+    return metadata.get("comparison_status") == "same_commit"
+
+
+def _headline(
+    gate: stats.GateResult,
+    gated_rows: list[ReportRow],
+    metadata: Mapping[str, object],
+) -> tuple[str, str]:
     inconclusive = sum(
         r.comparison.verdict is stats.Verdict.INCONCLUSIVE for r in gated_rows
     )
     improvements = sum(
         r.comparison.verdict is stats.Verdict.IMPROVED for r in gated_rows
     )
+    if same_commit(metadata):
+        return "SAME COMMIT", "No code difference to benchmark."
     if gate.nothing_measured:
         return "NOTHING MEASURED", "The benchmark produced no comparisons."
     if not gate.trustworthy:
@@ -533,25 +566,29 @@ def _provenance(recorder: BenchmarkRecorder) -> list[str]:
     result = next((r for r in recorder.results if not r.control), None)
     if result is None:
         result = next(iter(recorder.results), None)
-    if result is None:
-        return []
-
-    raw_sources = recorder.metadata.get("arm_sources", [])
-    sources = (
-        {
-            str(s.get("tag", "")): s
-            for s in raw_sources
-            if isinstance(s, dict) and s.get("tag")
-        }
-        if isinstance(raw_sources, list)
-        else {}
-    )
+    sources = _sources_by_tag(recorder.metadata)
     lines = [
         "### Compared builds",
         "",
         "| arm | role | source | commit | compare to reference |",
         "| --- | --- | --- | --- | --- |",
     ]
+    if result is None:
+        if not (same_commit(recorder.metadata) and sources):
+            return []
+        source = next(iter(sources.values()))
+        requested = recorder.metadata.get("requested_refs", [])
+        arms = [str(arm) for arm in requested] if isinstance(requested, list) else []
+        for index, arm in enumerate(arms):
+            resolution = (
+                _source_link(source, arm) if index == 0 else "same resolved source"
+            )
+            lines.append(
+                f"| {_linked_arm(arm, sources, fallback_source=source)} "
+                f"| **same commit** | {resolution} | {_commit_link(source)} | — |"
+            )
+        return lines + [""]
+
     reference_source = sources.get(result.reference)
     for arm in result.arm_ids:
         source = sources.get(arm)
@@ -564,13 +601,57 @@ def _provenance(recorder: BenchmarkRecorder) -> list[str]:
             "—" if arm == result.reference else _compare_link(reference_source, source)
         )
         lines.append(
-            f"| `{_md(arm)}` | {role} | {source_link} | {commit_link} | {compare_link} |"
+            f"| {_linked_arm(arm, sources)} | {role} | {source_link} "
+            f"| {commit_link} | {compare_link} |"
         )
     lines.append("")
     warning = recorder.metadata.get("arm_sources_warning")
     if warning:
         lines += [f"> Provenance unavailable: {_md(str(warning))}", ""]
     return lines
+
+
+def _sources_by_tag(metadata: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    raw_sources = metadata.get("arm_sources", [])
+    if not isinstance(raw_sources, list):
+        return {}
+    sources: dict[str, dict[str, object]] = {}
+    for source in raw_sources:
+        if not isinstance(source, dict) or not source.get("tag"):
+            continue
+        normalized = {str(key): value for key, value in source.items()}
+        sources[str(normalized["tag"])] = normalized
+    return sources
+
+
+def _source_url(source: object) -> str:
+    if not isinstance(source, dict):
+        return ""
+    repo = str(source.get("repo_url", ""))
+    pr = str(source.get("pr", ""))
+    release = str(source.get("release", ""))
+    sha = str(source.get("sha", ""))
+    if repo and pr:
+        return f"{repo}/pull/{quote(pr, safe='')}"
+    if repo and release:
+        return f"{repo}/releases/tag/{quote(release, safe='')}"
+    if repo and sha:
+        return f"{repo}/tree/{quote(sha, safe='')}"
+    return ""
+
+
+def _linked_arm(
+    arm: str,
+    sources: Mapping[str, object],
+    *,
+    fallback_source: object = None,
+) -> str:
+    base, separator, copy = arm.partition("#")
+    label = f"{base} copy {copy}" if separator else arm
+    source = sources.get(base, fallback_source)
+    url = _source_url(source)
+    code = f"`{_md(label)}`"
+    return f"[{code}]({url})" if url else code
 
 
 def _source_link(source: object, fallback: str) -> str:
@@ -877,19 +958,44 @@ def _braille_sparkline(
     return "".join(glyphs)
 
 
-def _full_measurements(rows: list[ReportRow]) -> list[str]:
+def _full_measurements(
+    rows: list[ReportRow], metadata: Mapping[str, object]
+) -> list[str]:
+    if not rows:
+        return []
+    sources = _sources_by_tag(metadata)
     lines = [
         "<details>",
         "<summary><strong>All measurements, controls, and statistical details</strong></summary>",
         "",
-        "| cell | contrast | metric | a | b | ratio (95% CI) | p (BH) | n | verdict |",
+    ]
+    if any(row.result.control for row in rows):
+        lines += [
+            "**A/A control** rows intentionally run multiple copies of the reference "
+            "build against itself on a fixed 1 MiB encrypt operation. They measure "
+            "runner noise; they are not candidate comparisons.",
+            "",
+        ]
+    lines += [
+        "| cell | contrast | metric | a median | b median | ratio b/a (95% CI) | p (BH) | n | verdict |",
         "| --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
     ]
     for row in rows:
         c = row.comparison
-        label = METRIC_LABELS[row.metric][0] + ("" if row.gated else " (ungated)")
+        qualifier = (
+            "A/A control"
+            if row.result.control
+            else "head-to-head"
+            if row.head_to_head
+            else ""
+            if row.gated
+            else "ungated"
+        )
+        label = METRIC_LABELS[row.metric][0] + (f" ({qualifier})" if qualifier else "")
         lines.append(
-            f"| {row.result.cell_id} | `{row.b}` vs `{row.a}` | {label} "
+            f"| {_detail_cell_label(row.result)} "
+            f"| {_linked_arm(row.b, sources)} vs {_linked_arm(row.a, sources)} "
+            f"| {label} "
             f"| {format_metric(row.metric, c.baseline_median)} "
             f"| {format_metric(row.metric, c.candidate_median)} "
             f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
@@ -898,12 +1004,26 @@ def _full_measurements(rows: list[ReportRow]) -> list[str]:
     return lines + ["", "</details>", ""]
 
 
+def _detail_cell_label(result: CellResult) -> str:
+    label = _cell_label(result)
+    if result.control:
+        operation = label.removesuffix(" / control").replace("1MiB", "1 MiB")
+        return f"**A/A control** · {operation}"
+    return label
+
+
 def _not_measured(recorder: BenchmarkRecorder) -> list[str]:
     if not recorder.skipped:
         return []
     lines = [
         "<details open>",
-        "<summary><strong>Not measured</strong></summary>",
+        "<summary><strong>"
+        + (
+            "Cells not run (same commit)"
+            if same_commit(recorder.metadata)
+            else "Not measured"
+        )
+        + "</strong></summary>",
         "",
     ]
     lines += [f"- `{cid}`: {why}" for cid, why in sorted(recorder.skipped.items())]
@@ -960,7 +1080,8 @@ def _run_facts(
         "",
         f"<sub>seed {config.seed}; {config.warmup} warm-up rounds; "
         f"{config.min_rounds}–{config.max_rounds} measured rounds allowed; "
-        f"{len(recorder.skipped)} cells skipped.</sub>",
+        f"{len(recorder.skipped)} "
+        f"{'cell' if len(recorder.skipped) == 1 else 'cells'} skipped.</sub>",
     ]
 
 

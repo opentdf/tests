@@ -264,6 +264,29 @@ class TestRunnerMetadata:
         monkeypatch.delenv("GITHUB_RUN_ID")
         assert bench._github_run_url() == ""
 
+    def test_requested_names_survive_resolver_deduplication(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("BENCH_REQUESTED_REFS", "main latest")
+
+        assert bench._requested_refs() == ["main", "latest"]
+
+    def test_one_resolved_sha_from_two_names_is_marked_same_commit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("BENCH_REQUESTED_REFS", "main latest")
+        monkeypatch.setattr(
+            bench,
+            "_arm_sources",
+            lambda: ([{"tag": "main", "sha": "a" * 40}], ""),
+        )
+        monkeypatch.setattr(bench, "_platform_version", lambda: "test")
+
+        metadata = bench.runner_metadata(options(bench_seed="0"))
+
+        assert metadata["comparison_status"] == "same_commit"
+        assert "main, latest" in str(metadata["comparison_note"])
+
 
 class TestDefaultBudget:
     def test_two_arms_keep_the_number_the_default_was_chosen_for(self):

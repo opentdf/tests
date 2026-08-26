@@ -151,6 +151,11 @@ reported as TIED rather than PASS because PASS is a one-sided claim.
 **inconclusive** — the CI straddles a band edge, so the run cannot say which of
 the three it is.
 
+**SAME COMMIT** — the caller requested two names (typically `main latest`) but
+both resolved to one immutable SHA. There is no code difference that could
+produce a performance difference, so no cell runs and the job remains neutral.
+This is distinct from an empty or broken benchmark.
+
 **NOTHING MEASURED** — no cell produced a comparison at all, usually because
 only one build was installed so there was no baseline to compare against. This
 **fails the job**. An empty run and a clean run have the same empty list of
@@ -160,10 +165,9 @@ lists the reason for each cell.
 
 > One cause looks like a bug and is not. If an SDK's newest release tags the same
 > commit as `main` — java sat at `v0.18.0 == main == dev == 57d070b0` through
-> August 2026 — then `main latest` resolves both arms to one SHA, `otdf-sdk-mgr`
-> installs a single build, and every cell skips with *"no final release to compare
-> against; installed: main"*. The message is true from where the harness stands, but
-> the release it is looking for does exist; the two arms are just the same code.
+> August 2026 — then `main latest` resolves both arms to one SHA and
+> `otdf-sdk-mgr` installs a single build. The report calls this **SAME COMMIT**,
+> not NOTHING MEASURED: the release exists, but the two arms are the same code.
 > Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
 > instead of two means there is nothing to measure until `main` moves.
 
@@ -717,7 +721,8 @@ two builds doing different amounts of work) is invisible in the output.
 5. Never let the arms differ in anything but the build.
 6. Never run the measured command from a process holding memory.
 7. Never run the benchmark in parallel with anything, including itself.
-8. Never let a run that measured nothing report success.
+8. Never let a run that measured nothing report success, unless every requested
+   arm resolved to the same immutable commit and there is no difference to test.
 9. Never gate a contrast that does not involve the reference. A bake-off ranks;
    it does not fail the build.
 

@@ -1212,6 +1212,15 @@ jobs:
           BENCH_VERSION_INFO: >-
             ${{ steps.bench-arms.outputs.version-info
                 || needs.resolve-versions.outputs[matrix.sdk] }}
+          # Keep the names the caller asked for even when the resolver folds
+          # aliases at one SHA into a single install. That is how reporting can
+          # distinguish "main == latest" from a benchmark that broke before it
+          # found its second arm.
+          BENCH_REQUESTED_REFS: >-
+            ${{ needs.resolve-versions.outputs.bench-refs
+                || (matrix.sdk == 'go' && (inputs.otdfctl-ref || 'main latest'))
+                || (matrix.sdk == 'java' && (inputs.java-ref || 'main latest'))
+                || (inputs.js-ref || 'main latest') }}
           # pytest writes a summary template beside the JSON. Publish it only
           # after upload-artifact gives us the direct evidence URL.
           BENCH_DEFER_SUMMARY: "1"

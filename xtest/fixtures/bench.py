@@ -615,6 +615,16 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
     }
     sources, warning = _arm_sources()
     metadata["arm_sources"] = sources
+    requested = _requested_refs()
+    metadata["requested_refs"] = requested
+    if len(requested) >= 2 and len(sources) == 1 and sources[0].get("sha"):
+        sha = str(sources[0].get("sha", ""))
+        names = ", ".join(requested)
+        metadata["comparison_status"] = "same_commit"
+        metadata["comparison_note"] = (
+            f"{names} resolve to the same commit"
+            f"{f' {sha[:7]}' if sha else ''}; there is no code difference to benchmark."
+        )
     if warning:
         metadata["arm_sources_warning"] = warning
     return metadata
@@ -627,6 +637,12 @@ def _github_run_url() -> str:
     if not (server and repository and run_id):
         return ""
     return f"{server}/{repository}/actions/runs/{run_id}"
+
+
+def _requested_refs() -> list[str]:
+    """The caller's names, retained even when resolution deduplicates a SHA."""
+    value = os.environ.get("BENCH_REQUESTED_REFS", "")
+    return [part for part in re.split(r"[,\s]+", value.strip()) if part]
 
 
 def _arm_sources() -> tuple[list[dict[str, object]], str]:

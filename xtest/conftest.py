@@ -455,7 +455,11 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")
-        reporter.write_line(gate.summary)
+        reporter.write_line(
+            str(recorder.metadata.get("comparison_note", gate.summary))
+            if report.same_commit(recorder.metadata)
+            else gate.summary
+        )
         # Repeated on the terminal as well as in the step summary: "the run
         # was too short for the number of arms you asked for" is the one
         # finding a reader is most likely to mistake for a real result.
@@ -474,8 +478,12 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     # regression. --bench is an explicit request for a measurement; answering
     # it with a green tick and an empty table is the one outcome nobody
     # inspects, so a benchmark that has quietly stopped measuring can survive
-    # indefinitely. Every reason a cell skips is already in the report.
-    if gate.should_fail or gate.nothing_measured:
+    # indefinitely. The exception is two requested names resolving to one SHA:
+    # that is a complete, neutral answer (there is no code difference to test),
+    # not a harness that failed to measure an existing difference.
+    if gate.should_fail or (
+        gate.nothing_measured and not report.same_commit(recorder.metadata)
+    ):
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 

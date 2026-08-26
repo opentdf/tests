@@ -252,6 +252,70 @@ class TestMarkdown:
         assert "actions/runs/42" in md
         assert "candidate A" in md
 
+    def test_short_arm_names_are_links_and_controls_explain_the_same_build(self):
+        cfg = config(max_rounds=40)
+        rec = recorder({REF: 1.0, "cand": 1.0}, cfg=cfg, noise=0.01)
+        repo = "https://github.com/opentdf/platform"
+        rec.metadata = {
+            "arm_sources": [
+                {
+                    "tag": REF,
+                    "release": "otdfctl/v0.37.0",
+                    "sha": "a" * 40,
+                    "repo_url": repo,
+                },
+                {
+                    "tag": "cand",
+                    "pr": 321,
+                    "sha": "b" * 40,
+                    "repo_url": repo,
+                },
+            ]
+        }
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+
+        assert f"[`{REF}`]({repo}/releases/tag/otdfctl%2Fv0.37.0)" in md
+        assert f"[`cand`]({repo}/pull/321)" in md
+        assert "**A/A control** rows intentionally run multiple copies" in md
+        sources = report._sources_by_tag(rec.metadata)
+        assert report._linked_arm(f"{REF}#2", sources) == (
+            f"[`{REF} copy 2`]({repo}/releases/tag/otdfctl%2Fv0.37.0)"
+        )
+        assert "ratio b/a (95% CI)" in md
+
+    def test_same_commit_is_neutral_and_explains_why_nothing_ran(self):
+        cfg = config(max_rounds=25)
+        rec = report.BenchmarkRecorder(
+            skipped={"java-encrypt-1KiB": "only one build installed"},
+            metadata={
+                "sdk": "java",
+                "comparison_status": "same_commit",
+                "comparison_note": (
+                    "main, latest resolve to the same commit 57d070b; "
+                    "there is no code difference to benchmark."
+                ),
+                "requested_refs": ["main", "latest"],
+                "arm_sources": [
+                    {
+                        "tag": "main",
+                        "head": True,
+                        "sha": "57d070b075a9134a11f8926b8898ac19b8cb6718",
+                        "repo_url": "https://github.com/opentdf/java-sdk",
+                    }
+                ],
+            },
+        )
+        gate = rec.gate(cfg)
+        md = report.markdown(rec, cfg, gate)
+
+        assert gate.nothing_measured
+        assert report.same_commit(rec.metadata)
+        assert md.startswith("## JAVA SDK performance — SAME COMMIT")
+        assert "No performance comparison was necessary" in md
+        assert "every measured wall-clock" not in md
+        assert "### Compared builds" in md
+        assert "[`latest`](https://github.com/opentdf/java-sdk/tree/57d070" in md
+
     def test_the_primary_table_omits_clean_rows_but_the_full_table_keeps_them(self):
         cfg = config(min_rounds=10, max_rounds=60)
         rec = recorder({REF: 1.0, "clean": 1.0, "slow": 1.4}, cfg=cfg, noise=0.005)
