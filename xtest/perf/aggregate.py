@@ -1,8 +1,10 @@
 """Pure-stdlib cross-SDK renderer for benchmark JSON artifacts.
 
-The workflow runs this after downloading every matrix artifact. Keeping it
-free of pytest/numpy/scipy means the roll-up needs no environment setup and can
-still explain a partially failed matrix whose artifact set is incomplete.
+The workflow runs this after downloading every matrix artifact. It has no
+third-party imports, so the roll-up needs no dependency sync and can still
+explain a partially failed matrix whose artifact set is incomplete. It does
+run through xtest's pinned interpreter: stdlib-only does not imply that a
+hosted runner's older Python understands the repository's target syntax.
 """
 
 from __future__ import annotations

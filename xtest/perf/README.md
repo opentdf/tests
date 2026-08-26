@@ -40,9 +40,8 @@ measure.
 
 | Artifact | Where | Contents |
 | --- | --- | --- |
-| SDK job summary | Each matrix job | TL;DR, linked build provenance, attention rows, Unicode effect views, and run facts |
-| Workflow roll-up | `Performance benchmark roll-up` job | One bottom line across Go, Java, and JS, with matrix health and links to each artifact |
-| `bench-result-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, the rendered summary, and an HTML report |
+| Job summary | The Actions run page | The table below, plus the verdict |
+| `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
 | Terminal | Job log tail | One-line summary and the JSON path |
 
 The JSON is the useful one. It holds each cell's full per-round vectors for
@@ -103,9 +102,7 @@ and statistical details**:
   `b` is faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
   this run could measure; a wide interval means a noisy runner, not a big change.
-- **p (BH)** — one-sided p-value in the direction of the observed effect,
-  Benjamini–Hochberg adjusted across the run. Slower and faster tails are
-  calculated and adjusted separately; the JSON records both.
+- **p (BH)** — one-sided p-value, Benjamini–Hochberg adjusted across the run.
 - **n** — paired rounds actually measured (20–60; the loop stops early once the
   interval is narrow enough).
 
@@ -113,10 +110,9 @@ and statistical details**:
 
 **REGRESSION** — the CI lower bound exceeds the threshold (default **1.15x**,
 i.e. 15% slower) *and* the adjusted p < 0.05. Both clauses are required, and
-neither is redundant: the CI establishes that the effect exceeds the practical
-threshold but is not multiplicity-adjusted, while significance alone would
-flag both reproducible 0.5% slowdowns nobody cares about and pure-noise false
-positives. This fails the job.
+neither is redundant: the threshold alone would fire on a reproducible 0.5%
+slowdown nobody cares about, and significance alone would fire on noise often
+enough to be ignored within a week. This fails the job.
 
 **PASS** — not a regression, *and* the run had enough precision to have found
 one. "We looked and found nothing" only counts when we could have found
@@ -435,8 +431,7 @@ A 3-arm 1 GiB run wants roughly `--bench-payloads 1KiB,1GiB
 | `_launcher.py` | The separate process that actually forks the measured command |
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
-| `report.py` | Session recorder, JSON artifact, decision-first SDK summary markdown |
-| `aggregate.py` | Pure-stdlib workflow roll-up over downloaded SDK JSON artifacts |
+| `report.py` | Session recorder, JSON artifact, step-summary markdown |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
@@ -446,8 +441,7 @@ Offline tests, no platform and no subprocesses needed:
 ```bash
 cd xtest
 uv run pytest -q test_bench_stats.py test_bench_measure.py \
-                 test_bench_runner.py test_bench_arms.py test_bench_report.py \
-                 test_bench_aggregate.py
+                 test_bench_runner.py test_bench_arms.py test_bench_report.py
 ```
 
 These run on every PR via `check.yml`, so the harness is exercised continuously
@@ -511,18 +505,9 @@ because a NaN width must read as "keep going" and `NaN > target` is `False`.
 #### Both clauses of the decision rule
 
 A cell is a regression iff the CI lower bound exceeds `threshold` **and** the
-BH-adjusted p is below alpha. Clause 1 establishes practical significance but
-does not adjust the many intervals examined in a run. Clause 2 supplies
-multiplicity control but, alone, fires on real-but-trivial effects and on
-pure-noise false positives. Faster findings use a separately computed and
-BH-adjusted lower-tail p-value; an adjusted upper-tail probability cannot be
-read backwards as evidence for the opposite direction.
-
-The signed-rank test does not require normal raw latencies and is resistant to
-the magnitude of a stray stalled invocation. Its location-test interpretation
-does assume the paired *log differences* are approximately symmetric. The log
-transform and the harness's multiplicative-jitter model are intended to make
-that reasonable; the raw vectors remain in the artifact for checking it.
+BH-adjusted p is below alpha. Clause 1 alone fires on real-but-trivial effects
+measured precisely; clause 2 alone fires on noise roughly alpha of the time per
+cell, and a run has enough cells that "roughly alpha" becomes "most nights".
 
 #### The symmetric rule for head-to-heads
 
