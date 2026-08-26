@@ -555,7 +555,8 @@ def _provenance(recorder: BenchmarkRecorder) -> list[str]:
     reference_source = sources.get(result.reference)
     for arm in result.arm_ids:
         source = sources.get(arm)
-        role = "**reference**" if arm == result.reference else "candidate"
+        role_name = _arm_role(result, arm)
+        role = f"**{role_name}**" if arm == result.reference else role_name
         label = result.arm_labels.get(arm, arm)
         source_link = _source_link(source, label)
         commit_link = _commit_link(source)
@@ -637,6 +638,19 @@ def _cell_label(result: CellResult) -> str:
     return result.cell_id.removeprefix(f"{result.sdk}-").replace("-", " / ")
 
 
+def _arm_role(result: CellResult, arm: str) -> str:
+    """A short, stable role that maps plot rows back to the build table."""
+    if arm == result.reference:
+        return "reference"
+    candidates = [
+        candidate for candidate in result.arm_ids if candidate != result.reference
+    ]
+    try:
+        return f"candidate {chr(ord('A') + candidates.index(arm))}"
+    except ValueError:
+        return arm
+
+
 def _cost_change(metric: str, c: stats.PairedComparison) -> str:
     if not (math.isfinite(c.baseline_median) and math.isfinite(c.candidate_median)):
         return "—"
@@ -672,8 +686,26 @@ def _gate_margin(c: stats.PairedComparison, threshold: float) -> str:
 
 def _effect_overview(rows: list[ReportRow], threshold: float) -> list[str]:
     labels = [f"{_cell_label(r.result)} {METRIC_LABELS[r.metric][0]}" for r in rows]
+    roles = [_arm_role(row.result, row.b) for row in rows]
     label_width = min(30, max(map(len, labels), default=0))
+    role_width = max(map(len, roles), default=0)
     width = 57
+    threshold_log = math.log(threshold)
+    observed_logs = [
+        abs(math.log(value))
+        for row in rows
+        for value in (
+            row.comparison.ratio,
+            row.comparison.ci_low,
+            row.comparison.ci_high,
+        )
+        if math.isfinite(value) and value > 0
+    ]
+    # Preserve room around the practical band, but expand far enough that the
+    # largest interval gets brackets rather than an off-scale arrow. The tail
+    # transform in `_effect_strip` prevents an epic result from squeezing the
+    # gate markers and every merely-large result into the center character.
+    span = max(3 * threshold_log, max(observed_logs, default=0) * 1.05)
     axis = [" "] * width
     for text, start in (
         ("← faster", 0),
@@ -685,15 +717,18 @@ def _effect_overview(rows: list[ReportRow], threshold: float) -> list[str]:
         "",
         "#### Effect at a glance",
         "",
-        "Fixed log-ratio scale; `┆` marks ±the practical threshold and `│` no change.",
+        "Shared tail-compressed log-ratio scale; `┆` marks ±the practical "
+        "threshold and `│` no change. Candidate letters match the build table; "
+        "exact changes are printed at right, and `◆` means the CI is narrower "
+        "than one character.",
         "",
         "```text",
-        f"{'measurement':<{label_width}}  {''.join(axis)}",
+        f"{'arm':<{role_width}}  {'measurement':<{label_width}}  {''.join(axis)}",
     ]
-    for label, row in zip(labels, rows, strict=True):
+    for role, label, row in zip(roles, labels, rows, strict=True):
         lines.append(
-            f"{label[:label_width]:<{label_width}}  "
-            f"{_effect_strip(row.comparison, threshold, width=width)} "
+            f"{role:<{role_width}}  {label[:label_width]:<{label_width}}  "
+            f"{_effect_strip(row.comparison, threshold, width=width, span=span)} "
             f"{_pct(row.comparison.ratio):>7} {row.comparison.verdict}"
         )
     lines += ["```", ""]
@@ -701,30 +736,53 @@ def _effect_overview(rows: list[ReportRow], threshold: float) -> list[str]:
 
 
 def _effect_strip(
-    c: stats.PairedComparison, threshold: float, *, width: int = 57
+    c: stats.PairedComparison,
+    threshold: float,
+    *,
+    width: int = 57,
+    span: float | None = None,
 ) -> str:
-    """A fixed-width CI forest strip on a symmetric log-ratio scale."""
+    """A fixed-width CI forest strip on a symmetric compressed-log scale."""
     chars = [" "] * width
-    # Show three threshold-widths in each direction. That keeps the practical
-    # boundary near the center while leaving enough room to draw the interval
-    # of an ordinary 20–40% regression instead of collapsing it to an arrow.
-    span = 3 * math.log(threshold)
+    threshold_log = math.log(threshold)
+    span = span or 3 * threshold_log
+
+    def unit(value: float) -> float:
+        """Keep the gate at 1/3 width and compress the dynamic tails."""
+        magnitude = abs(value)
+        if magnitude <= threshold_log:
+            scaled = magnitude / threshold_log / 3
+        else:
+            tail = max(span - threshold_log, 1e-12)
+            # Keep ten percent of either edge as breathing room: the largest
+            # observed effect should look extreme without masquerading as a
+            # clipped value.
+            scaled = 1 / 3 + (0.9 - 1 / 3) * (
+                math.log1p((magnitude - threshold_log) / threshold_log)
+                / math.log1p(tail / threshold_log)
+            )
+        return math.copysign(max(-1.0, min(1.0, scaled)), value)
 
     def pos(ratio: float) -> int:
         value = math.log(ratio) if math.isfinite(ratio) and ratio > 0 else 0.0
-        unit = max(-1.0, min(1.0, value / span))
-        return round((unit + 1) * (width - 1) / 2)
+        return round((unit(value) + 1) * (width - 1) / 2)
 
     for ratio, marker in ((1 / threshold, "┆"), (1.0, "│"), (threshold, "┆")):
         chars[pos(ratio)] = marker
+    collapsed_ci_at: int | None = None
     if math.isfinite(c.ci_low) and math.isfinite(c.ci_high):
         lo, hi = sorted((pos(c.ci_low), pos(c.ci_high)))
-        for i in range(lo, hi + 1):
-            if chars[i] == " ":
-                chars[i] = "━"
-        chars[lo], chars[hi] = "[", "]"
+        if lo == hi:
+            collapsed_ci_at = lo
+            chars[lo] = "◆"
+        else:
+            for i in range(lo, hi + 1):
+                if chars[i] == " ":
+                    chars[i] = "━"
+            chars[lo], chars[hi] = "[", "]"
     if math.isfinite(c.ratio) and c.ratio > 0:
-        chars[pos(c.ratio)] = "●"
+        point = pos(c.ratio)
+        chars[point] = "◆" if point == collapsed_ci_at else "●"
         if math.log(c.ratio) < -span:
             chars[0] = "◀"
         elif math.log(c.ratio) > span:

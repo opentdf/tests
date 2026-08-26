@@ -64,9 +64,12 @@ The summary is ordered for progressive disclosure:
    diff against the reference where those links exist.
 3. **What changed** shows only regressions, inconclusive rows, and confirmed
    improvements. Clean and ungated rows do not crowd the decision.
-4. **Effect at a glance** puts those rows on one fixed log-ratio scale. `┆`
-   marks the practical threshold, `│` means no change, the bracket is the 95%
-   interval, and `●` is the point estimate.
+4. **Effect at a glance** puts those rows on one shared, tail-compressed
+   log-ratio scale. This preserves space around the practical gate while still
+   fitting unusually large effects. `┆` marks the threshold, `│` means no
+   change, the bracket is the 95% interval, `●` is the point estimate, and `◆`
+   is an interval narrower than one character. Stable candidate letters map
+   duplicate measurement names back to the **Compared builds** table.
 5. Expandable blocks hold per-round Braille traces, all measurements and
    controls, skipped cells, and the statistical rule.
 6. **Run facts** closes the SDK summary with rounds, elapsed time, A/A noise,

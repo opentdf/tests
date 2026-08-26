@@ -1297,6 +1297,16 @@ jobs:
           path: otdftests
           persist-credentials: false
 
+      # aggregate.py follows xtest's Python target. The hosted runner's system
+      # Python can lag it (Ubuntu 24.04 currently supplies 3.12), so run through
+      # the same pinned uv/Python toolchain as the benchmark rather than hoping
+      # stdlib-only also means syntax-compatible.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
       - name: Download SDK benchmark results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
@@ -1330,7 +1340,9 @@ jobs:
           BENCH_EXPECTED_SDKS: ${{ needs.resolve-versions.outputs.bench-sdks }}
           BENCH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |-
-          python3 otdftests/xtest/perf/aggregate.py benchmark-results >> "$GITHUB_STEP_SUMMARY"
+          uv run --project otdftests/xtest --frozen --no-sync \
+            python otdftests/xtest/perf/aggregate.py benchmark-results \
+            >> "$GITHUB_STEP_SUMMARY"
 
   publish-results:
     runs-on: ubuntu-latest

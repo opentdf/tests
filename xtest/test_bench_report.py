@@ -250,6 +250,7 @@ class TestMarkdown:
         assert f"{repo}/compare/{'a' * 40}...{'b' * 40}" in md
         assert "actions/runs/42/artifacts/7" in md
         assert "actions/runs/42" in md
+        assert "candidate A" in md
 
     def test_the_primary_table_omits_clean_rows_but_the_full_table_keeps_them(self):
         cfg = config(min_rounds=10, max_rounds=60)
@@ -261,7 +262,7 @@ class TestMarkdown:
         assert "`clean` vs `base`" not in primary
         assert "`clean` vs `base`" in md
 
-    def test_attention_rows_get_fixed_scale_unicode_views(self):
+    def test_attention_rows_get_shared_scale_unicode_views(self):
         cfg = config(max_rounds=40)
         rec = recorder({REF: 1.0, "cand": 1.35}, cfg=cfg, noise=0.01)
         md = report.markdown(rec, cfg, rec.gate(cfg))
@@ -270,6 +271,17 @@ class TestMarkdown:
         assert "┆" in md and "│" in md and "●" in md
         assert "Round stability for attention rows" in md
         assert any("\u2800" <= char <= "\u28ff" for char in md)
+
+    def test_extreme_effects_fit_and_name_their_candidate(self):
+        cfg = config(min_rounds=12, max_rounds=40)
+        rec = recorder({REF: 1.0, "epic": 0.02, "fast": 0.5}, cfg=cfg, noise=0.005)
+        md = report.markdown(rec, cfg, rec.gate(cfg))
+        effect = md.split("#### Effect at a glance", 1)[1].split("### Bake-off", 1)[0]
+
+        assert "candidate A" in effect and "candidate B" in effect
+        assert "-98.0%" in effect and "-49.7%" in effect
+        assert "◀" not in effect
+        assert "◆" in effect
 
     def test_run_facts_end_the_summary_with_reproducibility_context(self):
         cfg = config(max_rounds=40, seed=91)
