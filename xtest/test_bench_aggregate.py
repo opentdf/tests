@@ -112,3 +112,53 @@ def test_a_control_without_a_result_cell_is_nothing_measured():
     doc["cells"] = [{"id": "go-control", "control": True, "contrasts": {}}]
 
     assert aggregate.Run("go", doc).status == "NOTHING MEASURED"
+
+
+def test_same_commit_is_neutral_and_names_both_requested_refs():
+    doc = document("java", "PASS")
+    doc["nothing_measured"] = True
+    doc["cells"] = []
+    metadata = doc["metadata"]
+    assert isinstance(metadata, dict)
+    metadata.update(
+        {
+            "comparison_status": "same_commit",
+            "requested_refs": ["main", "latest"],
+            "arm_sources": [
+                {
+                    "tag": "main",
+                    "sha": "a" * 40,
+                    "repo_url": "https://github.com/opentdf/java-sdk",
+                }
+            ],
+        }
+    )
+    run = aggregate.Run("java", doc)
+    md = aggregate.markdown([run], expected_sdks=["java"])
+
+    assert run.status == "SAME COMMIT"
+    assert "roll-up — SAME COMMIT" in md
+    assert "`main`" in md and "`latest`" in md and "same commit" in md
+
+
+def test_rollup_uses_measured_reference_order_and_links_sources():
+    doc = document("go", "PASS")
+    metadata = doc["metadata"]
+    assert isinstance(metadata, dict)
+    metadata["arm_sources"] = [
+        {
+            "tag": "main",
+            "sha": "b" * 40,
+            "repo_url": "https://github.com/opentdf/platform",
+        },
+        {
+            "tag": "v1",
+            "release": "otdfctl/v1.0.0",
+            "sha": "a" * 40,
+            "repo_url": "https://github.com/opentdf/platform",
+        },
+    ]
+    md = aggregate.markdown([aggregate.Run("go", doc)])
+
+    assert "releases/tag/otdfctl%2Fv1.0.0" in md
+    assert md.index("`v1`") < md.index("`main`")

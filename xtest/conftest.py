@@ -592,6 +592,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     ):
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
+
 def pytest_runtest_setup(item: pytest.Item):
     if not item.config.getoption("--skip-released-pairs", default=False):
         return

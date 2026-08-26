@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +53,15 @@ class Run:
         return [r for r in self.gated if r[2].get("verdict") == "REGRESSION"]
 
     @property
+    def same_commit(self) -> bool:
+        return (
+            self.document.get("metadata", {}).get("comparison_status") == "same_commit"
+        )
+
+    @property
     def status(self) -> str:
+        if self.same_commit:
+            return "SAME COMMIT"
         if self.document.get("nothing_measured") or not self.gated:
             return "NOTHING MEASURED"
         if not self.document.get("trustworthy", True):
@@ -178,6 +187,8 @@ def _overall_status(runs: list[Run], missing: list[str]) -> str:
         return "INCOMPLETE"
     if any(r.status == "INCONCLUSIVE" for r in runs):
         return "INCONCLUSIVE"
+    if runs and all(r.same_commit for r in runs):
+        return "SAME COMMIT"
     return "PASS" if runs else "NO RESULTS"
 
 
@@ -186,23 +197,63 @@ def _overall_headline(runs: list[Run], missing: list[str]) -> str:
         return "No benchmark result artifacts were found."
     regressions = sum(len(r.regressions) for r in runs)
     unresolved = sum(r.inconclusive for r in runs)
+    same = sum(r.same_commit for r in runs)
     outcomes = ", ".join(f"{r.sdk}: {r.status}" for r in runs)
     missing_text = f" Missing result(s): {', '.join(missing)}." if missing else ""
     return (
         f"{regressions} confirmed regression(s), {unresolved} unresolved gated "
-        f"comparison(s) across {len(runs)} available SDK result(s). {outcomes}."
+        f"comparison(s), and {same} same-commit result(s) across {len(runs)} "
+        f"available SDK result(s). {outcomes}."
         f"{missing_text}"
     )
 
 
 def _arms(run: Run) -> str:
     sources = run.document.get("metadata", {}).get("arm_sources", [])
-    if isinstance(sources, list) and sources:
-        return " → ".join(
-            f"`{s.get('tag', '?')}`" for s in sources if isinstance(s, dict)
-        )
+    source_list = [source for source in sources if isinstance(source, dict)]
+    by_tag = {str(source.get("tag", "")): source for source in source_list}
+    if run.same_commit:
+        requested = run.document.get("metadata", {}).get("requested_refs", [])
+        source = source_list[0] if source_list else None
+        if isinstance(requested, list):
+            return (
+                " = ".join(_aggregate_arm(str(arm), source) for arm in requested)
+                + " (same commit)"
+            )
     cells = [c for c in run.document.get("cells", []) if not c.get("control")]
-    return " → ".join(f"`{a}`" for a in cells[0].get("arms", [])) if cells else "—"
+    if cells:
+        return " → ".join(
+            _aggregate_arm(str(arm), by_tag.get(str(arm)))
+            for arm in cells[0].get("arms", [])
+        )
+    if source_list:
+        return " → ".join(
+            _aggregate_arm(str(source.get("tag", "?")), source)
+            for source in source_list
+        )
+    return "—"
+
+
+def _aggregate_arm(arm: str, source: object) -> str:
+    url = _aggregate_source_url(source)
+    code = f"`{arm}`"
+    return f"[{code}]({url})" if url else code
+
+
+def _aggregate_source_url(source: object) -> str:
+    if not isinstance(source, dict):
+        return ""
+    repo = str(source.get("repo_url", ""))
+    pr = str(source.get("pr", ""))
+    release = str(source.get("release", ""))
+    sha = str(source.get("sha", ""))
+    if repo and pr:
+        return f"{repo}/pull/{quote(pr, safe='')}"
+    if repo and release:
+        return f"{repo}/releases/tag/{quote(release, safe='')}"
+    if repo and sha:
+        return f"{repo}/tree/{quote(sha, safe='')}"
+    return ""
 
 
 def _change(comparison: dict[str, Any]) -> str:
