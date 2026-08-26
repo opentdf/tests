@@ -1,4 +1,4 @@
-"""Paired statistical comparison of two SDK builds.
+"""Paired statistical comparison of SDK builds.
 
 Why this shape
 --------------
@@ -28,16 +28,33 @@ A cell is a regression iff **both**:
 
 Requiring both is deliberate, and neither clause is redundant:
 
-- Clause 1 alone would fire on a real-but-trivial effect measured precisely
-  enough -- a reproducible 0.5% slowdown is not worth a red build.
-  It cannot fire on pure noise, since that would require the interval to
-  exclude an effect that is not there.
-- Clause 2 alone would fire on noise roughly ``alpha`` of the time per cell,
-  and a run has enough cells that "roughly alpha" becomes "most nights".
-  BH adjustment across cells controls the false discovery rate.
+- Clause 1 establishes that the effect is larger than the practical threshold,
+  but an unadjusted 95% interval on every cell does not control false
+  discoveries across the run.
+- Clause 2 supplies that multiplicity control, but alone would flag both
+  real-but-trivial effects and pure-noise false positives. A reproducible 0.5%
+  slowdown is statistically real and still not worth a red build.
 
 Together they answer the only question worth gating on: is the slowdown both
 real and large enough to care about?
+
+Head-to-head contrasts
+----------------------
+A run may measure more than two arms. Every arm runs once per round, so any
+*pair* of them is a valid within-round comparison -- which is what makes a
+bake-off between two competing implementations possible at all, and what two
+separate two-arm runs on two different runners could never give you.
+
+Contrasts against the run's designated reference keep the rule above and can
+fail the build. Contrasts between two non-reference arms are judged by
+:func:`_symmetric_verdict_for` instead, which reads the same threshold as a
+two-sided equivalence band and returns FASTER, SLOWER, or TIED. They never
+gate: a bake-off ranks candidates, it does not decide whether the build is
+broken, and there is no incumbent for "regression" to be relative to.
+
+The three families -- gated, head-to-head, and ungated -- are BH-corrected
+separately, so adding candidates to a bake-off does not cost the regression
+gate any power.
 """
 
 from __future__ import annotations
@@ -67,12 +84,27 @@ DEFAULT_BOOTSTRAP_RESAMPLES = 10000
 
 
 class Verdict(StrEnum):
-    """Outcome for a single comparison cell."""
+    """Outcome for a single comparison.
+
+    The first four are the *gated* vocabulary, used for a contrast against the
+    run's reference build: the question is one-sided ("did the candidate get
+    slower?") and only REGRESSION can turn the build red.
+
+    The last three are the *symmetric* vocabulary, used for a head-to-head
+    between two non-reference arms in a bake-off. There the question has no
+    privileged direction -- neither arm is the incumbent -- and "no measurable
+    difference" is a real answer rather than the absence of one, so TIED exists
+    instead of reusing PASS.
+    """
 
     PASS = "PASS"
     REGRESSION = "REGRESSION"
     IMPROVED = "IMPROVED"
     INCONCLUSIVE = "INCONCLUSIVE"
+
+    FASTER = "FASTER"
+    SLOWER = "SLOWER"
+    TIED = "TIED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +121,15 @@ class PairedComparison:
     ratio: float
     ci_low: float
     ci_high: float
+    #: One-sided p-value for "candidate is slower". Retains the original field
+    #: name for artifact/API compatibility; the opposite direction is explicit.
     p_value: float
+    #: One-sided p-value for "candidate is faster".
+    p_value_faster: float
     #: Set by :func:`apply_multiplicity_control` once every cell is known.
     p_adjusted: float | None = None
+    #: BH-adjusted form of :attr:`p_value_faster`.
+    p_adjusted_faster: float | None = None
     verdict: Verdict = Verdict.INCONCLUSIVE
     note: str = ""
 
@@ -174,18 +212,22 @@ def _bootstrap_ci(
     return float(res.confidence_interval.low), float(res.confidence_interval.high)
 
 
-def _one_sided_p(d: np.ndarray) -> float:
-    """One-sided Wilcoxon signed-rank p-value for "candidate is slower".
+def _one_sided_ps(d: np.ndarray) -> tuple[float, float]:
+    """Wilcoxon signed-rank p-values for slower and faster, respectively.
 
-    Signed-rank rather than a t-test because latency distributions are
-    skewed and occasionally have a stray outlier round; we do not want a
-    single stalled invocation to drive the verdict.
+    Signed-rank does not require normally distributed raw latencies and a
+    single stalled invocation cannot drive it by magnitude alone. Interpreting
+    it as a location test does assume the *paired log differences* are roughly
+    symmetric; the log transform and multiplicative-jitter measurement model
+    are intended to make that a reasonable assumption.
     """
     if np.all(d == 0):
         # No difference whatsoever. Wilcoxon rejects an all-zero input.
-        return 1.0
+        return 1.0, 1.0
     # scipy's stubs type the result as an opaque tuple-like; index and cast.
-    return cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    slower = cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    faster = cast(float, _scipy_stats.wilcoxon(d, alternative="less")[1])
+    return slower, faster
 
 
 def compare(
@@ -216,12 +258,14 @@ def compare(
             ci_low=math.nan,
             ci_high=math.nan,
             p_value=math.nan,
+            p_value_faster=math.nan,
             note=f"only {n} usable rounds; need at least {MIN_USABLE_ROUNDS}",
         )
 
     lo_log, hi_log = _bootstrap_ci(
         d, confidence=confidence, seed=seed, n_resamples=n_resamples
     )
+    p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
         baseline_median=b_med,
@@ -229,7 +273,8 @@ def compare(
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),
-        p_value=_one_sided_p(d),
+        p_value=p_slower,
+        p_value_faster=p_faster,
     )
 
 
@@ -312,6 +357,13 @@ def assess_noise_floor(
     )
 
 
+def _noise_rank(n: NoiseFloor) -> tuple[bool, bool, float]:
+    """Order noise floors from most to least reassuring."""
+    # A NaN width is an unusable interval, which is worse than any real one.
+    width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
+    return (n.tripped, n.underpowered, width)
+
+
 def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     """The least reassuring control in the run, or None if there were none.
 
@@ -319,13 +371,31 @@ def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     harness may be biased on this runner, and averaging that away with two
     quiet ones is exactly the reassurance the control exists to withhold.
     """
+    return max(noises, key=_noise_rank, default=None)
 
-    def rank(n: NoiseFloor) -> tuple[bool, bool, float]:
-        # A NaN width is an unusable interval, which is worse than any real one.
-        width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
-        return (n.tripped, n.underpowered, width)
 
-    return max(noises, key=rank, default=None)
+def worst_control_key(
+    comparisons: Mapping[str, PairedComparison],
+    keys: Sequence[str],
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+) -> str | None:
+    """Which of several A/A contrasts should stand as the noise floor.
+
+    A K-arm control cell yields C(K,2) A/A contrasts rather than one, and they
+    are not interchangeable: arm 3 runs two invocations after arm 1, so it
+    carries more within-round drift than an adjacent pair does. Taking the
+    worst of them keeps the floor honest for the widest-spaced contrast the
+    run actually judges. Taking whichever came first would let dict ordering
+    decide how noisy the run is allowed to look.
+
+    Ties break on input order, so the choice is reproducible across runs.
+    """
+    ranked = [
+        (_noise_rank(assess_noise_floor(comparisons.get(k), threshold=threshold)), i, k)
+        for i, k in enumerate(keys)
+    ]
+    return max(ranked, key=lambda r: (r[0], -r[1]))[2] if ranked else None
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
@@ -359,6 +429,12 @@ class GateResult:
     #: Keys of cells that are confirmed regressions on a gated metric.
     regressions: list[str] = field(default_factory=list)
     improvements: list[str] = field(default_factory=list)
+    #: Head-to-head keys that came back FASTER or SLOWER -- a bake-off contrast
+    #: between two non-reference arms that the run was able to decide. Never
+    #: gates anything; this is the material a caller ranks arms from. Naming a
+    #: winner needs to know which arm is which, and a key is opaque here, so
+    #: that lives in the reporting layer.
+    ranked: list[str] = field(default_factory=list)
     #: True if the run may fail the build. False when the A/A control tripped:
     #: we still report, but a gate we cannot trust must not turn the build red.
     trustworthy: bool = True
@@ -386,6 +462,7 @@ def apply_multiplicity_control(
     comparisons: dict[str, PairedComparison],
     *,
     gated: set[str] | None = None,
+    symmetric: set[str] | None = None,
     controls: Mapping[str, str] | None = None,
     control_keys: set[str] | None = None,
     censored: dict[str, str] | None = None,
@@ -399,6 +476,11 @@ def apply_multiplicity_control(
         gated: keys allowed to fail the build. Keys outside this set are still
             given a verdict and reported, but never counted as a regression.
             ``None`` means every key is gated.
+        symmetric: keys judged by the two-sided FASTER/SLOWER/TIED rule instead
+            of the one-sided regression rule -- head-to-head contrasts between
+            two arms neither of which is the run's reference. They are reported
+            and ranked but never gate, so a bake-off cannot turn the build red
+            on the strength of a comparison that has no incumbent.
         controls: comparison key -> the A/A control key that assesses *its*
             noise floor. A run measuring several SDKs has one control each,
             and a cell judged against another SDK's control is judged against
@@ -421,6 +503,7 @@ def apply_multiplicity_control(
     """
     keys = list(comparisons)
     controls = controls or {}
+    symmetric = symmetric or set()
     # The keys actually doing the assessing: one metric of one control cell
     # per SDK. A control cell's other metrics are still control keys -- kept
     # out of the gate -- but they are not anybody's noise floor.
@@ -444,15 +527,38 @@ def apply_multiplicity_control(
     # reason: adjusting them against metrics nobody gates on only makes a real
     # regression harder to confirm. Ungated metrics still get a family of
     # their own so that they carry a reportable verdict.
+    #
+    # Head-to-head contrasts get a third family on the same argument. A
+    # bake-off between two candidates is a question of interest, not a build
+    # gate, and correcting the gate against it would cost the gate power for
+    # tests that cannot fail the build -- which is the exact trade the
+    # gated/ungated split already refuses to make.
     adjustable = [k for k in keys if k not in control_keys and k not in censored]
     gated_family = [k for k in adjustable if gated is None or k in gated]
-    rest = [k for k in adjustable if k not in set(gated_family)]
+    gated_set = set(gated_family)
+    # Gated wins a tie. A key that is somehow both is a vs-reference contrast,
+    # and the one-sided rule is the one that can fail the build.
+    symmetric_family = [k for k in adjustable if k not in gated_set and k in symmetric]
+    symmetric_set = set(symmetric_family)
+    rest = [k for k in adjustable if k not in gated_set and k not in symmetric_set]
     p_adj: dict[str, float] = {}
-    for family in (gated_family, rest):
+    p_adj_faster: dict[str, float] = {}
+    for family in (gated_family, symmetric_family, rest):
         p_adj.update(
             zip(
                 family,
                 benjamini_hochberg([comparisons[k].p_value for k in family]),
+                strict=True,
+            )
+        )
+        # The opposite direction needs its own lower-tail p-value and its own
+        # adjustment. Reading an adjusted upper-tail value as `p > 1-alpha`
+        # is invalid: BH controls small p-values and generally pushes large
+        # ones toward 1, making that backwards test easier rather than safer.
+        p_adj_faster.update(
+            zip(
+                family,
+                benjamini_hochberg([comparisons[k].p_value_faster for k in family]),
                 strict=True,
             )
         )
@@ -461,16 +567,41 @@ def apply_multiplicity_control(
     for key in keys:
         c = comparisons[key]
         pa = p_adj.get(key)
+        pa_faster = p_adj_faster.get(key)
+        key_noise = noise_by_control.get(controls.get(key, ""), uncontrolled)
         if key in censored:
             verdict, note = Verdict.INCONCLUSIVE, censored[key]
+        elif key in control_keys:
+            # A control's own contrast is reported in the gated vocabulary
+            # whatever kind of pair it is: its job is to say what the harness's
+            # error looks like in the same terms the gate uses.
+            verdict, note = _verdict_for(
+                c,
+                pa,
+                pa_faster,
+                threshold=threshold,
+                alpha=alpha,
+                noise=key_noise,
+                is_control=True,
+            )
+        elif key in symmetric_set:
+            verdict, note = _symmetric_verdict_for(
+                c,
+                pa,
+                pa_faster,
+                threshold=threshold,
+                alpha=alpha,
+                noise=key_noise,
+            )
         else:
             verdict, note = _verdict_for(
                 c,
                 pa,
+                pa_faster,
                 threshold=threshold,
                 alpha=alpha,
-                noise=noise_by_control.get(controls.get(key, ""), uncontrolled),
-                is_control=key in control_keys,
+                noise=key_noise,
+                is_control=False,
             )
         result.comparisons[key] = PairedComparison(
             n_rounds=c.n_rounds,
@@ -480,7 +611,9 @@ def apply_multiplicity_control(
             ci_low=c.ci_low,
             ci_high=c.ci_high,
             p_value=c.p_value,
+            p_value_faster=c.p_value_faster,
             p_adjusted=pa,
+            p_adjusted_faster=pa_faster,
             verdict=verdict,
             note=note or c.note,
         )
@@ -490,6 +623,8 @@ def apply_multiplicity_control(
             result.regressions.append(key)
         elif verdict is Verdict.IMPROVED:
             result.improvements.append(key)
+        elif verdict in (Verdict.FASTER, Verdict.SLOWER):
+            result.ranked.append(key)
 
     result.trustworthy = not noise.tripped
     result.summary = _summarize(result, noise, threshold)
@@ -499,6 +634,7 @@ def apply_multiplicity_control(
 def _verdict_for(
     c: PairedComparison,
     p_adjusted: float | None,
+    p_adjusted_faster: float | None,
     *,
     threshold: float,
     alpha: float,
@@ -508,13 +644,16 @@ def _verdict_for(
     if c.n_rounds < MIN_USABLE_ROUNDS or not math.isfinite(c.ci_low):
         return Verdict.INCONCLUSIVE, c.note or "no usable interval"
 
-    p = c.p_value if is_control else p_adjusted
-    if p is None or not math.isfinite(p):
+    p_slower = c.p_value if is_control else p_adjusted
+    p_faster = c.p_value_faster if is_control else p_adjusted_faster
+    if p_slower is None or p_faster is None:
+        return Verdict.INCONCLUSIVE, "no p-value"
+    if not (math.isfinite(p_slower) and math.isfinite(p_faster)):
         return Verdict.INCONCLUSIVE, "no p-value"
 
-    if c.ci_low > threshold and p < alpha:
+    if c.ci_low > threshold and p_slower < alpha:
         return Verdict.REGRESSION, ""
-    if c.ci_high < 1 / threshold and p > 1 - alpha:
+    if c.ci_high < 1 / threshold and p_faster < alpha:
         return Verdict.IMPROVED, ""
 
     # Not a regression. But "we looked and found nothing" only counts as PASS
@@ -529,6 +668,69 @@ def _verdict_for(
             f"than the {(threshold - 1) * 100:.0f}% threshold",
         )
     return Verdict.PASS, ""
+
+
+def _symmetric_verdict_for(
+    c: PairedComparison,
+    p_adjusted: float | None,
+    p_adjusted_faster: float | None,
+    *,
+    threshold: float,
+    alpha: float,
+    noise: NoiseFloor,
+) -> tuple[Verdict, str]:
+    """Rank two arms against each other, with no privileged direction.
+
+    Used for a head-to-head between two candidates in a bake-off, where the
+    one-sided regression rule does not apply: neither arm is the incumbent, so
+    there is no "did it get worse" to ask.
+
+    The band is ``[1/threshold, threshold]`` -- the same effect size the gate
+    cares about, read in both directions:
+
+    - interval entirely above the band -> SLOWER
+    - interval entirely below the band -> FASTER
+    - interval entirely *inside* the band -> TIED, meaning any real difference
+      is smaller than the effect anybody has claimed to care about. This is a
+      positive finding and the most likely honest answer for two
+      implementations of the same idea, which is why it is not folded into
+      PASS: PASS is the one-sided claim "did not regress", and reporting a
+      bake-off that way would let a slower arm read as a clean result.
+    - anything straddling a band edge -> INCONCLUSIVE, the run could not rank
+      them.
+
+    A CI-inside-band test at 95% is TOST at 2.5% rather than the nominal 5%,
+    so TIED is the conservative call: harder to earn than the equivalence test
+    it stands in for, never easier.
+    """
+    if c.n_rounds < MIN_USABLE_ROUNDS or not math.isfinite(c.ci_low):
+        return Verdict.INCONCLUSIVE, c.note or "no usable interval"
+
+    # Same precondition as the gated rule: without a noise floor establishing
+    # that an effect of this size was resolvable, neither a ranking nor a tie
+    # is a statement about the arms. Invariant 4 covers TIED too -- a tie
+    # nobody had the power to distinguish from a difference is not a tie.
+    if noise.underpowered:
+        return Verdict.INCONCLUSIVE, noise.detail
+
+    if p_adjusted is None or p_adjusted_faster is None:
+        return Verdict.INCONCLUSIVE, "no p-value"
+    if not (math.isfinite(p_adjusted) and math.isfinite(p_adjusted_faster)):
+        return Verdict.INCONCLUSIVE, "no p-value"
+
+    # Direction clauses mirror REGRESSION and IMPROVED exactly. Each direction
+    # uses its own BH-adjusted one-sided p-value.
+    if c.ci_low > threshold and p_adjusted < alpha:
+        return Verdict.SLOWER, ""
+    if c.ci_high < 1 / threshold and p_adjusted_faster < alpha:
+        return Verdict.FASTER, ""
+    if c.ci_low > 1 / threshold and c.ci_high < threshold:
+        return Verdict.TIED, ""
+    return (
+        Verdict.INCONCLUSIVE,
+        f"interval [{c.ci_low:.3f}, {c.ci_high:.3f}] straddles the "
+        f"+/-{(threshold - 1) * 100:.0f}% band; the two arms cannot be ranked",
+    )
 
 
 def _summarize(result: GateResult, noise: NoiseFloor, threshold: float) -> str:
@@ -550,6 +752,14 @@ def _summarize(result: GateResult, noise: NoiseFloor, threshold: float) -> str:
             f"{len(result.regressions)} confirmed regression(s) past the "
             f"{(threshold - 1) * 100:.0f}% threshold: {', '.join(result.regressions)}"
         )
+    # Appended rather than returned on its own: a bake-off still has a gate
+    # running against the reference, and "which candidate won" must not
+    # displace "did either of them regress".
+    head_to_head = (
+        f" {len(result.ranked)} head-to-head contrast(s) decided."
+        if result.ranked
+        else ""
+    )
     inconclusive = [
         k for k, c in result.comparisons.items() if c.verdict is Verdict.INCONCLUSIVE
     ]
@@ -557,9 +767,11 @@ def _summarize(result: GateResult, noise: NoiseFloor, threshold: float) -> str:
         return (
             f"No confirmed regressions. {len(inconclusive)} cell(s) INCONCLUSIVE "
             f"(runner noise floor +/-{(noise.width_ratio - 1) * 100:.1f}%)."
+            f"{head_to_head}"
         )
     return (
         f"No regressions. All cells resolved within the "
         f"{(threshold - 1) * 100:.0f}% threshold "
         f"(runner noise floor +/-{(noise.width_ratio - 1) * 100:.1f}%)."
+        f"{head_to_head}"
     )

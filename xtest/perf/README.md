@@ -1,12 +1,14 @@
 # SDK performance regression benchmarks
 
-A paired A/B benchmark for the OpenTDF SDK CLIs. It answers one question:
-**did this change make the SDK measurably and meaningfully slower?**
+A paired benchmark for the OpenTDF SDK CLIs. It answers one question:
+**did this change make the SDK measurably and meaningfully slower?** — and,
+with more than two arms, the follow-up: **which of these implementations is
+faster?**
 
-Two builds — normally the newest installed release and the branch build —
-are measured on the *same* runner, interleaved round by round, and only their
-*ratio* is reported. Nothing is ever compared against a stored historical
-number.
+Two to four builds — normally the newest installed release and the branch
+build — are measured on the *same* runner, interleaved round by round, and only
+their *ratios* are reported. Nothing is ever compared against a stored
+historical number.
 
 It runs nightly (one runner per SDK) and on `workflow_dispatch` with
 `run-benchmarks` checked. It never runs on pull requests: 30 minutes of serial
@@ -19,6 +21,11 @@ measure.
 > baseline — and every cell skips. The run fails rather than passing empty
 > (see [NOTHING MEASURED](#the-verdicts)), but it will have wasted 45 minutes
 > to tell you that.
+>
+> To compare **refs you name** instead — a branch against `main`, or two
+> competing implementations against their shared parent — use `bench-refs` and
+> skip all of the above; see [Benchmarking named refs against each
+> other](#benchmarking-named-refs-against-each-other).
 
 - **Section 1 — [Reading a result](#1-reading-a-result)** is for developers on
   the SDKs and the platform: your build got flagged, what does that mean.
@@ -33,28 +40,72 @@ measure.
 
 | Artifact | Where | Contents |
 | --- | --- | --- |
-| Job summary | The Actions run page | The table below, plus the verdict |
-| `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
+| SDK job summary | Each matrix job | TL;DR, linked build provenance, attention rows, Unicode effect views, and run facts |
+| Workflow roll-up | `Performance benchmark roll-up` job | One bottom line across Go, Java, and JS, with matrix health and links to each artifact |
+| `bench-result-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, the rendered summary, and an HTML report |
 | Terminal | Job log tail | One-line summary and the JSON path |
 
-The JSON is the useful one. It holds each cell's full per-round vectors for both
-arms, so a surprising verdict can be re-analysed offline instead of by re-running
-a 30-minute job to look at the same numbers again.
+The JSON is the useful one. It holds each cell's full per-round vectors for
+every arm, so a surprising verdict can be re-analysed offline instead of by
+re-running a 30-minute job to look at the same numbers again. It is `"schema":
+2`: each cell carries `arms`, `reference`, and `contrasts` keyed `"<b>_vs_<a>"`.
+`baseline` and `candidate` are still there for readers that predate the K-arm
+schema, but past two arms they name only the reference and the *first*
+candidate — use `arms` and `contrasts`. Resolver metadata beside it records the
+immutable commit and whether each arm came from a PR, branch, or release.
 
-### The table
+### Reading the summary
+
+The summary is ordered for progressive disclosure:
+
+1. **TL;DR** gives the run status and counts of confirmed, unresolved, and
+   improved gated comparisons.
+2. **Compared builds** links each arm to its PR, release/tag, commit, and GitHub
+   diff against the reference where those links exist.
+3. **What changed** shows only regressions, inconclusive rows, and confirmed
+   improvements. Clean and ungated rows do not crowd the decision.
+4. **Effect at a glance** puts those rows on one shared, tail-compressed
+   log-ratio scale. This preserves space around the practical gate while still
+   fitting unusually large effects. `┆` marks the threshold, `│` means no
+   change, the bracket is the 95% interval, `●` is the point estimate, and `◆`
+   is an interval narrower than one character. Stable candidate letters map
+   duplicate measurement names back to the **Compared builds** table.
+5. Expandable blocks hold per-round Braille traces, all measurements and
+   controls, skipped cells, and the statistical rule.
+6. **Run facts** closes the SDK summary with rounds, elapsed time, A/A noise,
+   platform/runner identity, seed, and a direct evidence link.
+7. After every matrix job finishes, the workflow roll-up combines verdicts and
+   run health across SDKs. It deliberately does not compare absolute timings
+   from different runners.
+
+The Unicode plots are plain text, so they remain legible in copied comments,
+logs, dark mode, and restricted GitHub Markdown without external image assets.
+
+### The full measurement table
+
+The complete table is collapsed by default under **All measurements, controls,
+and statistical details**:
 
 ```
-| cell                | metric     | baseline | candidate | ratio (95% CI)        | p (BH) | n  | verdict |
-| go-encrypt-1MiB     | wall clock | 412.3 ms | 498.1 ms  | 1.208x [1.171, 1.245] | <0.001 | 22 | **REGRESSION** |
+| cell            | contrast          | metric     | a        | b        | ratio (95% CI)        | p (BH) | n  | verdict |
+| go-encrypt-1MiB | `cand` vs `main`  | wall clock | 412.3 ms | 498.1 ms | 1.208x [1.171, 1.245] | <0.001 | 22 | **REGRESSION** |
 ```
 
 - **cell** — `<sdk>-<operation>-<payload>`, plus `-control` for the A/A cell.
-  Payload sizes are 1 KiB, 1 MiB, and 32 MiB.
-- **ratio** — candidate ÷ baseline. `1.208x` means the candidate took 20.8%
-  longer. Below 1.0 means faster.
+  Payload sizes default to 1 KiB, 1 MiB, and 32 MiB; `--bench-payloads` selects
+  others. See [Payload sizes and what they can gate](#payload-sizes-and-what-they-can-gate)
+  before reading a throughput result — at the default sizes there is not one.
+- **contrast** — `b` vs `a`, the two arms this row compares. A two-arm run has
+  one row per cell and metric; a K-arm run has one per *pair*, so three arms
+  give three rows. Only the rows whose `a` is the **reference** (the first arm)
+  can fail the build; see [Bake-offs](#bake-offs-more-than-two-arms).
+- **ratio** — `b` ÷ `a`. `1.208x` means `b` took 20.8% longer. Below 1.0 means
+  `b` is faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
   this run could measure; a wide interval means a noisy runner, not a big change.
-- **p (BH)** — one-sided p-value, Benjamini–Hochberg adjusted across the run.
+- **p (BH)** — one-sided p-value in the direction of the observed effect,
+  Benjamini–Hochberg adjusted across the run. Slower and faster tails are
+  calculated and adjusted separately; the JSON records both.
 - **n** — paired rounds actually measured (20–60; the loop stops early once the
   interval is narrow enough).
 
@@ -62,9 +113,10 @@ a 30-minute job to look at the same numbers again.
 
 **REGRESSION** — the CI lower bound exceeds the threshold (default **1.15x**,
 i.e. 15% slower) *and* the adjusted p < 0.05. Both clauses are required, and
-neither is redundant: the threshold alone would fire on a reproducible 0.5%
-slowdown nobody cares about, and significance alone would fire on noise often
-enough to be ignored within a week. This fails the job.
+neither is redundant: the CI establishes that the effect exceeds the practical
+threshold but is not multiplicity-adjusted, while significance alone would
+flag both reproducible 0.5% slowdowns nobody cares about and pure-noise false
+positives. This fails the job.
 
 **PASS** — not a regression, *and* the run had enough precision to have found
 one. "We looked and found nothing" only counts when we could have found
@@ -84,6 +136,26 @@ note beside the verdict:
 change you expect to be performance-sensitive comes back inconclusive on every
 cell, the run told you nothing and re-running it is reasonable.
 
+A head-to-head between two arms that are *not* the reference gets a different
+vocabulary, because the question has no privileged direction — neither arm is
+the incumbent — and it can never fail the build:
+
+**FASTER** / **SLOWER** — the whole CI sits outside the equivalence band
+`[1/1.15, 1.15]` on one side. `b` is meaningfully faster (or slower) than `a`.
+
+**TIED** — the whole CI sits *inside* the band. This is a real answer, not the
+absence of one: the two implementations are indistinguishable at 15%, and the
+choice between them should be made on something other than speed. It is
+reported as TIED rather than PASS because PASS is a one-sided claim.
+
+**inconclusive** — the CI straddles a band edge, so the run cannot say which of
+the three it is.
+
+**SAME COMMIT** — the caller requested two names (typically `main latest`) but
+both resolved to one immutable SHA. There is no code difference that could
+produce a performance difference, so no cell runs and the job remains neutral.
+This is distinct from an empty or broken benchmark.
+
 **NOTHING MEASURED** — no cell produced a comparison at all, usually because
 only one build was installed so there was no baseline to compare against. This
 **fails the job**. An empty run and a clean run have the same empty list of
@@ -93,18 +165,19 @@ lists the reason for each cell.
 
 > One cause looks like a bug and is not. If an SDK's newest release tags the same
 > commit as `main` — java sat at `v0.18.0 == main == dev == 57d070b0` through
-> August 2026 — then `main latest` resolves both arms to one SHA, `otdf-sdk-mgr`
-> installs a single build, and every cell skips with *"no final release to compare
-> against; installed: main"*. The message is true from where the harness stands, but
-> the release it is looking for does exist; the two arms are just the same code.
+> August 2026 — then `main latest` resolves both arms to one SHA and
+> `otdf-sdk-mgr` installs a single build. The report calls this **SAME COMMIT**,
+> not NOTHING MEASURED: the release exists, but the two arms are the same code.
 > Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
 > instead of two means there is nothing to measure until `main` moves.
 
 ### The A/A control
 
-Each SDK gets a control cell that compares the baseline build **against itself**
-through the identical pipeline. Its true ratio is exactly 1.0 by construction, so
-whatever it reports is the harness's own error on this runner. It does two jobs:
+Each SDK gets a control cell that runs the reference build **against itself**,
+as many arms as the real cells have, through the identical pipeline. Every one
+of its C(K,2) contrasts has a true ratio of exactly 1.0 by construction, so
+whatever they report is the harness's own error on this runner. It does two
+jobs:
 
 - If the control *trips* — its own A/A comparison looks like a real effect — then
   something is systematically biased and **the whole run stops being able to fail
@@ -112,6 +185,12 @@ whatever it reports is the harness's own error on this runner. It does two jobs:
 - Its interval width is the run's **noise floor**: the smallest effect this
   runner could have resolved. If the floor is wider than the threshold, cells
   report inconclusive rather than PASS.
+
+The floor is the **worst** of the control's pairwise contrasts, and at K > 2 it
+has to be: in a three-arm round the third invocation happens two commands after
+the first, so that pair carries more drift than an adjacent one does. A cheap
+two-arm control alongside three-arm cells would understate the noise of exactly
+the contrasts being judged.
 
 In a multi-SDK run each SDK is judged against *its own* control — go's harness
 path says nothing about java's. `noise_floor_by_control` in the JSON has each
@@ -129,8 +208,8 @@ Ungated rows are labelled `(ungated)` and reported for context only. They cannot
 fail the build.
 
 Peak RSS additionally gets **censored** when a cell's readings sit at the
-measurement floor (the RSS of the process that forked the command). Both arms
-clip to the same value there, producing a `1.000x` ratio with a tight interval —
+measurement floor (the RSS of the process that forked the command). Every arm
+clips to the same value there, producing a `1.000x` ratio with a tight interval —
 the most convincing-looking PASS the harness can emit, and completely meaningless.
 Censored cells report inconclusive with the floor named in the note.
 
@@ -141,17 +220,18 @@ Censored cells report inconclusive with the floor named in the note.
 2. **Check the control row.** If the A/A cell for your SDK also looks strange,
    suspect the runner before your code.
 3. **Look at which cells fired.** Only the 1 KiB cells means startup cost —
-   process boot, package resolution, TLS handshake, token fetch. Only 32 MiB
-   means throughput — the crypto and IO path. Both means something structural.
+   process boot, package resolution, TLS handshake, token fetch. The largest
+   cell firing on its own points at throughput — the crypto and IO path — but
+   only if that cell is large enough for throughput to be most of it, which at
+   32 MiB it is not. Both means something structural.
 4. **Reproduce locally.** The comparison is self-contained; it does not need CI.
 
 ```bash
 cd xtest && set -a && source test.env && set +a
 
-# whatever two builds you want, side by side under sdk/<name>/dist/
+# whatever builds you want, side by side under sdk/<name>/dist/
 uv run pytest --bench --sdks go \
-  --bench-baseline go@v0.29.0 \
-  --bench-candidate go@main \
+  --bench-refs "go@v0.29.0,go@main" \
   -v test_benchmarks.py
 ```
 
@@ -159,16 +239,176 @@ Useful knobs while investigating:
 
 | Option | Default | Use |
 | --- | --- | --- |
+| `--bench-refs` | newest release, branch head | 2–4 build specs, first is the reference |
 | `--bench-threshold` | `1.15` | Smallest slowdown worth failing on |
+| `--bench-payloads` | `1KiB,1MiB,32MiB` | Sizes to measure, e.g. `1KiB,1GiB` |
 | `--bench-min-rounds` / `--bench-max-rounds` | `20` / `60` | Rounds per cell |
 | `--bench-warmup` | `5` | Discarded rounds paying one-time costs |
-| `--bench-budget-seconds` | `1500` | Wall-clock allowance shared by all cells |
+| `--bench-budget-seconds` | `1500` × K/2 | Wall-clock allowance shared by all cells |
 | `--bench-seed` | `0` | Payloads, round order, bootstrap. Fix it to reproduce |
 | `--bench-out` | `test-results/benchmarks` | JSON destination |
 | `--bench-no-gate` | off | Measure and report, never fail |
 
+`--bench-baseline` / `--bench-candidate` still work as the two-arm spelling of
+`--bench-refs`; giving both forms is a usage error.
+
 A local run is noisier than CI unless the machine is otherwise idle. Close
 things; the noise floor will tell you whether you succeeded.
+
+### Payload sizes and what they can gate
+
+**At the default sizes this harness cannot fail a build on throughput.** Not
+"is unlikely to" — cannot. On a 4-core Linux runner a go encrypt costs about
+450 ms before it touches the payload: runtime start, config load, TLS
+handshake, token fetch, KAS key fetch. Going from 1 KiB to 32 MiB — a 32,000x
+increase in bytes — adds about 72 ms on top of that.
+
+| operation | 1 KiB | 1 MiB | 32 MiB | payload-dependent |
+| --- | --- | --- | --- | --- |
+| encrypt | 455.0 ms | 447.6 ms | 526.7 ms | ~72 ms (13.6%) |
+| decrypt | 533.6 ms | 513.1 ms | 600.7 ms | ~67 ms (11.2%) |
+
+The gate is 1.15x of the *whole cell*, which at 32 MiB encrypt is +79 ms —
+more than the entire payload-dependent portion. A candidate that doubled every
+per-segment cost would come in at 1.136x and report **PASS**. The 1 MiB cells
+are worse: indistinguishable from 1 KiB, so they measure startup twice.
+
+This is not a statistics problem. The intervals are tight and the control is
+clean; the matrix is simply asking the wrong sizes. To gate throughput the
+payload term has to dominate, which means going much larger:
+
+```bash
+uv run pytest --bench --sdks go \
+  --bench-payloads 1KiB,1GiB \
+  --bench-budget-seconds 5400 --bench-max-rounds 200 \
+  -v test_benchmarks.py
+```
+
+At 1 GiB the payload term is ~2.3 s against the same ~450 ms fixed cost, so it
+is ~84% of the cell and a 15% gate lands inside the part being tested.
+
+Three things to know before adding a large size:
+
+- **Budget.** Each size adds an encrypt and a decrypt cell, and the budget is
+  divided evenly as cells start. A 1 GiB round costs ~6 s against ~1 s at 32
+  MiB, so the default 1500 s will not reach `min_rounds` on both new cells.
+- **Disk.** A run holds roughly twice the payload total plus one live output per
+  arm at the largest size — `2 × total + K × largest` plus headroom. Two arms at
+  1 GiB needs ~5 GiB free, three needs ~6. This is checked before the first
+  measurement, because running out mid-run arrives as a non-zero exit from the
+  CLI under test and reads as "this build is broken".
+- **`max_rounds` binds before the budget does.** In the run these numbers come
+  from, 3 of 7 cells stopped on `max_rounds` while only 418 s of 1500 s was
+  spent. Raising the budget alone buys nothing; raise both.
+
+The control stays at 1 MiB whatever you select. Its CI width is the run's noise
+floor and every other cell is judged against it, so it must not move with the
+matrix — otherwise two runs of the same comparison can disagree about which
+cells were trustworthy for a reason unrelated to either build.
+
+### Benchmarking named refs against each other
+
+The nightly comparison is newest-release vs branch head, which is the right
+question to ask every night and the wrong one to ask about a specific change:
+the baseline carries every other commit that landed since the release. To
+point the harness at refs you name, dispatch X-Test with:
+
+| Input | Example | Meaning |
+| --- | --- | --- |
+| `run-benchmarks` | ✅ | Required; the bench job is off otherwise |
+| `focus-sdk` | `go` | Must name one SDK — the matrix runs only this one |
+| `bench-refs` | `main,feat/DSPX-2604-createtdf-chunked` | 2–4 refs; **the first is the reference** |
+| `bench-payloads` | `1KiB,1GiB` | Sizes to measure; default `1KiB,1MiB,32MiB` |
+| `bench-budget-seconds` | `5400` | Shared allowance; default `1500` × K/2 |
+| `bench-max-rounds` | `200` | Cap per cell; default `60` |
+
+The last three are why a dispatch can answer a question the nightly cannot. A
+nightly runs unattended every day and has to stay inside a sensible cost; a
+dispatch is asked for, once, about one thing. If the change is a throughput
+claim, spend the budget — see [Payload sizes and what they can
+gate](#payload-sizes-and-what-they-can-gate), because at the defaults the
+answer will be **PASS** whatever the change did.
+
+Any ref `otdf-sdk-mgr versions resolve` accepts works: a branch, a tag, a full
+or short SHA, or `refs/pull/N/head`. All of them are built from source and
+installed side by side, and arm selection is told which is which explicitly —
+so none has to be a release, which is the whole point.
+
+The `*-ref` inputs are ignored by the bench job in this mode. They still drive
+the functional test matrix, so a dispatch can answer "is it slower?" without
+also changing what the rest of the run tests.
+
+Two things this mode does **not** change, both of which bound what a result
+means:
+
+- **The server stays on `main`.** The bench job pins the platform and runs a
+  single KAS, whatever the refs say. A candidate whose speed depends on a
+  matching server change will not show it here.
+- **The reference is whatever you named.** For a stacked branch, `main` as the
+  reference measures the whole stack. Name the parent branch instead to isolate
+  the top commit.
+
+It fails fast, before spending a runner, when two refs resolve to the same
+commit, when there are fewer than 2 or more than 4 of them, or when `focus-sdk`
+is `all`.
+
+`bench-baseline-ref` / `bench-candidate-ref` remain as the deprecated two-arm
+spelling; setting both forms is an error.
+
+### Bake-offs: more than two arms
+
+Two implementations of the same feature, and the only question that matters is
+which one to merge. This **cannot** be answered with two dispatches: the two
+candidates would land on different runners, their ratios would share no
+denominator, and comparing them would violate the premise the whole harness
+rests on ([Ratios within a run](#ratios-within-a-run-never-comparison-against-history)).
+
+Name them all in one dispatch instead. Every arm is then measured in the *same*
+round on the *same* runner, so every pair is a valid within-run ratio —
+including the two candidates against each other, where neither side is the
+reference:
+
+```
+bench-refs: main,fix/otdfctl-streaming-encrypt-writer,DSPX-4499-streaming-codec
+```
+
+- **The reference is `bench-refs[0]`.** Only contrasts against it are gated;
+  every other pair is judged symmetrically, reported, ranked, and can never
+  fail the build (invariant 9). A bake-off ranks, it does not gate.
+- **Pick the reference deliberately.** If the two candidates are stacked on a
+  shared parent, `main` as the reference measures each candidate's whole stack —
+  the vs-reference numbers then answer "how much did this branch cost overall",
+  not "what did this implementation do". The head-to-head that decides the
+  bake-off is unaffected either way, so `main` is a fine default and the parent
+  is the sharper one.
+- **Four arms is the ceiling.** `xtest/setup-cli-tool` installs at most four
+  builds side by side (slots a/b/c/d). A fifth would be dropped there and then
+  be missing from every round.
+
+The summary gains a **Bake-off** block: the candidates ranked per metric, with
+the head-to-head contrast and its verdict. It names a winner only when that
+head-to-head is FASTER — a TIED top pair reports "no measurable difference
+between A and B", which is an answer, and an unresolved one says it cannot
+separate them rather than pointing at whichever point estimate landed lower.
+
+#### Budget: a K-arm round costs K invocations
+
+At a fixed budget, K arms buy `2/K` as many rounds as two arms would, and CI
+width scales as `1/sqrt(n)` — so **every interval widens by ~`sqrt(K/2)`**.
+Three arms on a two-arm budget is how a run comes back as a wall of
+inconclusive after burning the whole runner.
+
+So the default budget scales with the arm count: `1500 × K/2`, applied both by
+the workflow and by the pytest fixture when `--bench-budget-seconds` is not
+given explicitly. An explicit value is taken as given — someone who names a
+budget has already decided what to spend. If the attained rounds still leave
+the gated contrasts unresolved, the report says so in an "Underpowered" warning
+naming the arm count, rather than leaving the reader to infer that time was the
+missing ingredient.
+
+`max_rounds` binds before the budget does at its default of 60; raise both.
+A 3-arm 1 GiB run wants roughly `--bench-payloads 1KiB,1GiB
+--bench-budget-seconds 8100 --bench-max-rounds 200`.
 
 ### What this benchmark cannot tell you
 
@@ -195,7 +435,8 @@ things; the noise floor will tell you whether you succeeded.
 | `_launcher.py` | The separate process that actually forks the measured command |
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
-| `report.py` | Session recorder, JSON artifact, step-summary markdown |
+| `report.py` | Session recorder, JSON artifact, decision-first SDK summary markdown |
+| `aggregate.py` | Pure-stdlib workflow roll-up over downloaded SDK JSON artifacts |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
@@ -205,7 +446,8 @@ Offline tests, no platform and no subprocesses needed:
 ```bash
 cd xtest
 uv run pytest -q test_bench_stats.py test_bench_measure.py \
-                 test_bench_runner.py test_bench_arms.py
+                 test_bench_runner.py test_bench_arms.py test_bench_report.py \
+                 test_bench_aggregate.py
 ```
 
 These run on every PR via `check.yml`, so the harness is exercised continuously
@@ -217,25 +459,36 @@ even though the benchmark itself runs nightly.
 
 CPU models vary, tenancy is shared, and steal time is unbounded on a hosted
 runner. Storing a baseline and diffing against it produces false alarms until
-people mute the job. Both builds are measured on the same runner and the
+people mute the job. Every build is measured on the same runner and the
 statistic is the within-round ratio, so runner speed is a shared factor that
 divides out.
+
+The same premise is what forces a bake-off into one job: results from two
+dispatches have two different shared factors, and dividing one by the other
+does not cancel anything.
 
 #### Interleaved rounds, randomized within the round
 
 Running all of A then all of B lands every drift effect — a noisy neighbour
 arriving, thermal throttling, the page cache warming — entirely on one arm, where
-it reads as a difference between builds. Both arms run once per round instead.
+it reads as a difference between builds. Every arm runs once per round instead.
 The order *within* a round is shuffled because a fixed order is itself a
 confounder: whichever arm goes second inherits the first one's cache state.
+At K arms the shuffle matters more, not less — there are K positions to be
+last in, and an unshuffled third slot would be a systematic penalty.
 
 The shuffle is seeded per cell (`f"{seed}:{cell_id}"`), so a rerun reproduces the
 interleaving exactly while different cells do not share one order — which would
 correlate their noise.
 
+The stopping rule reads *every* gated contrast, not the first: with K-1
+candidates against the reference, one of them converging says nothing about the
+others, and stopping there would leave the rest reported at whatever width they
+happened to have reached.
+
 #### Log-ratios
 
-`d_i = ln(candidate_i) - ln(baseline_i)`. Logs make ratios symmetric (a 2x
+`d_i = ln(b_i) - ln(a_i)`. Logs make ratios symmetric (a 2x
 slowdown and a 2x speedup are equal and opposite) and additive, which is what
 the median and the bootstrap want. Everything is exponentiated back for reporting.
 
@@ -258,24 +511,63 @@ because a NaN width must read as "keep going" and `NaN > target` is `False`.
 #### Both clauses of the decision rule
 
 A cell is a regression iff the CI lower bound exceeds `threshold` **and** the
-BH-adjusted p is below alpha. Clause 1 alone fires on real-but-trivial effects
-measured precisely; clause 2 alone fires on noise roughly alpha of the time per
-cell, and a run has enough cells that "roughly alpha" becomes "most nights".
+BH-adjusted p is below alpha. Clause 1 establishes practical significance but
+does not adjust the many intervals examined in a run. Clause 2 supplies
+multiplicity control but, alone, fires on real-but-trivial effects and on
+pure-noise false positives. Faster findings use a separately computed and
+BH-adjusted lower-tail p-value; an adjusted upper-tail probability cannot be
+read backwards as evidence for the opposite direction.
 
-#### Separate BH families
+The signed-rank test does not require normal raw latencies and is resistant to
+the magnitude of a stray stalled invocation. Its location-test interpretation
+does assume the paired *log differences* are approximately symmetric. The log
+transform and the harness's multiplicative-jitter model are intended to make
+that reasonable; the raw vectors remain in the artifact for checking it.
 
-Gated keys are corrected as their own family. Ungated metrics get a family of
-their own so they still carry a reportable verdict. Adjusting the gated metrics
-against metrics nobody gates on would only make a real regression harder to
-confirm. Controls and censored keys are excluded from correction entirely — an
-A/A cell is not a hypothesis about the candidate.
+#### The symmetric rule for head-to-heads
 
-#### One A/A control per SDK, running first
+A vs-reference contrast asks a one-sided question: did the candidate get
+slower? A head-to-head between two candidates has no incumbent, so it gets an
+equivalence-band rule against `[1/threshold, threshold]` instead — CI wholly
+above the band is SLOWER, wholly below is FASTER, wholly inside is TIED, and
+anything straddling an edge is inconclusive.
+
+The TIED arm of that is the interesting one. A CI-inside-band test at 95% is
+TOST at 2.5% per side, so declaring TIED is *conservative*: it is harder to
+claim equivalence than the nominal alpha suggests, which is the right direction
+for a claim that will be used to stop looking. Reusing PASS here would be
+wrong — PASS says "not slower", which is not the same as "the same".
+
+Invariant 4 still applies: a symmetric verdict, like a gated one, needs a noise
+floor narrower than the band before it may say anything but inconclusive.
+
+#### Three separate BH families
+
+Gated keys — non-reference arm vs the reference, on a gated metric — are
+corrected as their own family. Head-to-head contrasts get a second family, and
+ungated metrics a third, so both still carry a reportable verdict. Adjusting
+the gated metrics against metrics nobody gates on would only make a real
+regression harder to confirm, and the same argument covers the bake-off: it is
+a question of interest, not a build gate, so it must not dilute the gate
+either. A key that is somehow in both the gated and symmetric sets is treated
+as gated, because the one-sided rule is the one that can turn the build red.
+
+Controls and censored keys are excluded from correction entirely — an A/A cell
+is not a hypothesis about the candidate.
+
+#### One A/A control per SDK, running first, with as many arms as the run
 
 A control measures a particular SDK's harness path. `cells_for()` emits each
 SDK's control first, because a run that overruns its budget loses whatever is at
 the end: losing one comparison leaves the rest trustworthy, losing the control
 leaves nothing trustworthy, since without a noise floor no cell may report PASS.
+
+It runs K copies of the reference build — same binary, distinct output paths —
+so it produces C(K,2) contrasts, and the floor is the worst of them. Keeping a
+cheap two-arm control while the real cells run three would measure the noise of
+a different experiment: the gap between the first and third invocation of a
+round is not the gap between the first and second, and it is the widest pairs
+that decide whether a run had the power to fail.
 
 `GateResult.noise` is the *worst* control in the run, not the average. A single
 tripped control means the harness may be biased on this runner, and averaging
@@ -309,23 +601,42 @@ delta reads zero.
 
 #### Everything except the build is pinned
 
-Both arms get the same plaintext, the same attribute (explicit RSA, so an arm
+Every arm gets the same plaintext, the same attribute (explicit RSA, so an arm
 does not silently switch to EC), the same container, and the same target mode.
-`comparability_problem()` refuses the comparison outright when the two builds
-disagree on `hexless`, `hexaflexible`, or `autoconfigure` — a timing difference
-there is a difference in *work*, not in speed.
+`comparability_problem()` refuses the comparison outright when any arm
+disagrees with the reference on `hexless`, `hexaflexible`, or `autoconfigure` —
+a timing difference there is a difference in *work*, not in speed. Pinned
+target mode likewise requires *all* arms to support the feature, not a
+majority; one arm falling back would be measuring a different format.
 
-For decrypt, both arms read one ciphertext produced by the baseline. If each arm
-decrypted its own output, a difference in how the two builds *write* a TDF would
-show up as a difference in how fast they read one.
+For decrypt, every arm reads one ciphertext produced by the reference. If each
+arm decrypted its own output, a difference in how the builds *write* a TDF
+would show up as a difference in how fast they read one.
 
-#### Baselines must be final releases
+#### The default reference must be a final release
 
+When no refs are named, the reference is the newest installed release.
 `SDK.is_released()` accepts `v0.29.0-rc.1`, and `semver()` parses it to the same
 `(0, 29, 0)` as the final release — so ordering by semver alone leaves them tied
-and the directory listing breaks the tie. That is a baseline nobody chose, and it
-differs run to run. Baseline selection uses `is_final_release()`, which matches
-only a plain `vX.Y.Z`.
+and the directory listing breaks the tie. That is a reference nobody chose, and
+it differs run to run. Default selection uses `is_final_release()`, which
+matches only a plain `vX.Y.Z`. With explicit refs the question does not arise:
+the reference is `bench-refs[0]`, released or not, which is the point of naming
+them.
+
+#### A dist tag is one path component
+
+`otdf-sdk-mgr` flattens `/` to `--` when it resolves a ref, so
+`feat/DSPX-2604-createtdf-chunked` installs as
+`dist/feat--DSPX-2604-createtdf-chunked/`. Everything downstream walks those
+directories exactly one level deep — `tdfs.all_versions_of()` lists `dist/*/`,
+the go `Makefile` finds `src/*/` — so a slash that survives resolution is
+discovered as a build named `feat` with no `cli.sh` in it, which
+`all_versions_of()` raises on before any cell runs. Branch-vs-branch dispatch
+is the first thing to routinely feed it a slashed ref, and `--bench-refs` names
+the flattened tag: `go@feat--DSPX-2604-createtdf-chunked`. The workflow input
+`bench-refs` takes the *unflattened* ref, because it hands it to
+`versions resolve`, which is what does the flattening.
 
 #### Payloads are seeded per payload, not per run
 
@@ -336,6 +647,12 @@ be comparable with. Each payload derives from `f"{seed}:{label}"` instead.
 
 Content is random rather than repetitive because compressible input would let an
 SDK that happens to compress look faster for reasons unrelated to crypto.
+
+Large payloads are written in chunks so a 1 GiB file is not first built as a
+1 GiB `bytes` in RAM. The chunk size must stay a multiple of 4: CPython's
+`randbytes` draws a 32-bit word at a time, so a 4-byte-aligned split produces
+the same stream as one call would, and the seed-to-bytes promise survives both
+the constant changing and a payload growing past it.
 
 #### Cells record; the session gates
 
@@ -369,11 +686,13 @@ CPU under measurement.
 
 ### Adding to it
 
-**A new payload size** — add a `Payload` to `PAYLOADS` in `cells.py`. Note that
-`CONTROL_PAYLOAD = PAYLOADS[1]`, so inserting at the front moves the control.
-Cell count per SDK is `1 + 2 × len(PAYLOADS)`; the 1500s budget is divided
-across all of them, so adding sizes makes every cell poorer unless the budget
-grows too.
+**A new payload size** — no code change: `--bench-payloads 1KiB,1GiB` (or the
+`bench-payloads` dispatch input). Sizes parse as a count and a binary unit —
+`B`, `KiB`, `MiB`, `GiB` — and the list is sorted ascending and deduplicated by
+byte count, so `1KiB,1024B` is one cell rather than two identical ones. Changing
+`DEFAULT_PAYLOAD_SPEC` in `cells.py` changes what the nightly measures; think
+about the budget first. Cell count per SDK is `1 + 2 × len(payloads)`, and the
+budget is divided evenly across all of them.
 
 **A new metric** — add it to `METRICS` and `METRIC_LABELS` in `measure.py`, teach
 `Sample.metric()` and `format_metric()` about it, and decide whether it belongs
@@ -382,8 +701,8 @@ noise floor over several nights.
 
 **A new operation** — extend `operation_type` and `cells_for()` in `cells.py`,
 then handle it in `build_arms()` in `fixtures/bench.py`. If it needs an input
-produced by the baseline, follow `CiphertextFactory`: build it once, from the
-baseline only, and share it between the arms.
+produced by another arm, follow `CiphertextFactory`: build it once, from the
+reference only, and share it across every arm.
 
 **A new SDK** — nothing here needs to change; it comes from `--sdks` and the
 matrix in `xtest.yml`.
@@ -399,10 +718,13 @@ two builds doing different amounts of work) is invisible in the output.
 3. Never let a cell assert; the gate is run-level.
 4. Never report PASS without a noise floor establishing the run had the power to
    fail.
-5. Never let the two arms differ in anything but the build.
+5. Never let the arms differ in anything but the build.
 6. Never run the measured command from a process holding memory.
 7. Never run the benchmark in parallel with anything, including itself.
-8. Never let a run that measured nothing report success.
+8. Never let a run that measured nothing report success, unless every requested
+   arm resolved to the same immutable commit and there is no difference to test.
+9. Never gate a contrast that does not involve the reference. A bake-off ranks;
+   it does not fail the build.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.

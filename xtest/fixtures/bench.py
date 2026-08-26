@@ -4,14 +4,18 @@ The experiment matrix, the payload files, the arm selection, and the shared
 time budget all live here. The measurement loop itself is in ``perf/runner.py``
 and the statistics in ``perf/stats.py``; this module is the glue that turns
 pytest's world (options, fixtures, SDK discovery) into the runner's world
-(two arms and a config).
+(K arms and a config).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import random
+import re
+import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -21,31 +25,62 @@ import pytest
 import abac
 import tdfs
 from perf import report
-from perf.cells import PAYLOADS, BenchCell
+from perf.cells import BenchCell, Payload, parse_payloads, payloads_to_generate
 from perf.runner import Arm, BenchConfig, Budget, Invocation
+
+#: Most builds one run can compare. The ceiling comes from
+#: ``xtest/setup-cli-tool/action.yaml``, which installs into four fixed slots
+#: (a/b/c/d) and refuses a fifth. Raising it here without raising it there
+#: gives a run that resolves five refs and then measures four of them.
+MAX_ARMS = 4
 
 
 class ArmSelectionError(Exception):
-    """The two builds a comparison needs are not both installed."""
+    """The builds a comparison needs are not all installed."""
+
+
+def parse_refs(spec: str) -> tuple[str, ...]:
+    """Split a ``--bench-refs`` value into build specs, first = reference.
+
+    Commas or whitespace, so both the shell-friendly
+    ``go@main,go@my-branch`` and a quoted space-separated list work.
+
+    Raises:
+        ValueError: if the result is not between 2 and :data:`MAX_ARMS`
+            entries, or if a build is named twice.
+    """
+    refs = tuple(p for p in re.split(r"[,\s]+", spec.strip()) if p)
+    if not 2 <= len(refs) <= MAX_ARMS:
+        raise ValueError(
+            f"need 2 to {MAX_ARMS} refs, got {len(refs)}: {spec!r}. The first "
+            "is the reference every gated contrast is taken against."
+        )
+    if len(set(refs)) != len(refs):
+        # Two arms running the same build is what the A/A control cell is for,
+        # and it is added automatically. Asking for it here would spend a slot
+        # measuring a comparison the run already makes.
+        raise ValueError(f"duplicate refs in {spec!r}; each arm needs a distinct build")
+    return refs
 
 
 def select_arms(
     sdk: str,
-    *,
-    baseline_spec: str | None = None,
-    candidate_spec: str | None = None,
-) -> tuple[tdfs.SDK, tdfs.SDK]:
-    """Pick (baseline, candidate) builds for one SDK.
+    specs: Sequence[str] | None = None,
+) -> tuple[tdfs.SDK, ...]:
+    """Pick the builds to compare for one SDK, reference first.
 
-    By default the candidate is the branch build (``main``) and the baseline
-    is the newest installed release, which is exactly what the CI setup action
-    lays down side by side. Explicit specs override either side, for
-    reproducing a comparison or for pinning a specific release.
+    With no specs the run is the nightly two-arm comparison: the reference is
+    the newest installed final release and the candidate is the branch build
+    (``main``), which is exactly what the CI setup action lays down side by
+    side. Explicit specs name the arms instead, for reproducing a comparison,
+    pinning a specific release, or running a bake-off between several
+    candidates.
 
     Raises:
-        ArmSelectionError: if either side is missing or the two resolve to the
-            same build (a comparison of a build against itself is only
-            meaningful as the explicit A/A control).
+        ArmSelectionError: if any named build is missing, if the default pair
+            cannot be found, or if two arms resolve to the same build (a
+            comparison of a build against itself is only meaningful as the
+            explicit A/A control).
     """
     installed = tdfs.all_versions_of(sdk)  # pyright: ignore[reportArgumentType]
     if not installed:
@@ -63,8 +98,11 @@ def select_arms(
             )
         return matches[0]
 
-    if candidate_spec:
-        candidate = resolve(candidate_spec, "candidate")
+    if specs:
+        arms = tuple(
+            resolve(spec, "reference" if i == 0 else f"arm {i + 1}")
+            for i, spec in enumerate(specs)
+        )
     else:
         heads = [s for s in installed if not s.is_released()]
         if not heads:
@@ -74,10 +112,6 @@ def select_arms(
             )
         # Prefer 'main' when several branch builds are present.
         candidate = next((s for s in heads if s.version == "main"), heads[0])
-
-    if baseline_spec:
-        baseline = resolve(baseline_spec, "baseline")
-    else:
         # Final releases only. A release candidate parses to the same semver
         # as its final release, so including them leaves `max` breaking a tie
         # on whatever order the directory listing happened to produce -- and a
@@ -89,42 +123,101 @@ def select_arms(
                 f"not count); installed: "
                 f"{', '.join(sorted(s.version for s in installed))}"
             )
-        baseline = max(releases, key=lambda s: s.semver() or (0, 0, 0))
+        arms = (max(releases, key=lambda s: s.semver() or (0, 0, 0)), candidate)
 
-    if baseline == candidate:
-        raise ArmSelectionError(
-            f"baseline and candidate are both {baseline}; nothing to compare"
-        )
-    return baseline, candidate
+    if len(set(arms)) != len(arms):
+        names = ", ".join(str(a) for a in arms)
+        raise ArmSelectionError(f"arms resolved to the same build: {names}")
+    return arms
 
 
 # --- Session-scoped configuration -------------------------------------------
 
 
+def arm_specs_from_options(config: pytest.Config) -> tuple[str, ...] | None:
+    """The run's build specs, reference first, or None for the default pair.
+
+    ``--bench-refs`` is the K-arm form. ``--bench-baseline`` /
+    ``--bench-candidate`` are the two-arm shorthand it grew out of; they are
+    still accepted because the shape reads better for the common case, but
+    mixing the two forms is an error rather than a merge -- there is no
+    reading of ``--bench-refs a,b --bench-candidate c`` that is not a mistake.
+    """
+    refs = cast(str | None, config.getoption("--bench-refs"))
+    baseline = cast(str | None, config.getoption("--bench-baseline"))
+    candidate = cast(str | None, config.getoption("--bench-candidate"))
+    if refs and (baseline or candidate):
+        raise pytest.UsageError(
+            "--bench-refs cannot be combined with --bench-baseline or "
+            "--bench-candidate; --bench-refs supersedes both"
+        )
+    if refs:
+        try:
+            return parse_refs(refs)
+        except ValueError as e:
+            raise pytest.UsageError(f"invalid --bench-refs: {e}") from e
+    if baseline and candidate:
+        return (baseline, candidate)
+    if baseline or candidate:
+        # Half a pair cannot be resolved: the unnamed side would fall back to
+        # a default chosen for a different question, and nothing in the report
+        # would say the comparison was not the one that was asked for.
+        raise pytest.UsageError(
+            "--bench-baseline and --bench-candidate must be given together"
+        )
+    return None
+
+
+def arm_count(config: pytest.Config) -> int:
+    """How many arms this run will measure per cell."""
+    specs = arm_specs_from_options(config)
+    return len(specs) if specs else 2
+
+
 def config_from_options(config: pytest.Config) -> BenchConfig:
     """Build a :class:`BenchConfig` from the ``--bench-*`` options.
 
-    Every option has a default, so ``getoption`` never returns None here; the
-    casts are for the type checker, which cannot see the parser setup.
+    Every option except the budget has a default, so ``getoption`` never
+    returns None here; the casts are for the type checker, which cannot see
+    the parser setup.
     """
 
     def as_int(name: str) -> int:
         return int(cast(int, config.getoption(name)))
 
-    def as_float(name: str) -> float:
-        return float(cast(float, config.getoption(name)))
-
+    budget = cast(float | None, config.getoption("--bench-budget-seconds"))
     try:
         return BenchConfig(
             min_rounds=as_int("--bench-min-rounds"),
             max_rounds=as_int("--bench-max-rounds"),
             warmup=as_int("--bench-warmup"),
-            budget_seconds=as_float("--bench-budget-seconds"),
+            budget_seconds=(
+                float(budget)
+                if budget is not None
+                else default_budget_seconds(arm_count(config))
+            ),
             seed=as_int("--bench-seed"),
-            threshold=as_float("--bench-threshold"),
+            threshold=float(cast(float, config.getoption("--bench-threshold"))),
         )
     except ValueError as e:
         raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+
+
+def default_budget_seconds(n_arms: int) -> float:
+    """The default time allowance for a K-arm run.
+
+    A round costs one invocation per arm, so at a fixed budget the attained
+    round count falls as ``2/K`` and every interval widens as ``sqrt(K/2)``.
+    Scaling the default by ``K/2`` keeps a three-arm run about as precise as
+    the two-arm run the number was chosen for, instead of quietly trading
+    precision for arms and reporting the difference as INCONCLUSIVE.
+
+    An explicit ``--bench-budget-seconds`` is taken as given; someone who
+    named a number has already decided what they are willing to spend.
+    """
+    # `BenchConfig` has slots, so the class attribute is a slot descriptor
+    # rather than the default; an instance is how you read one back.
+    return BenchConfig().budget_seconds * n_arms / 2
 
 
 @pytest.fixture(scope="session")
@@ -133,9 +226,85 @@ def bench_config(request: pytest.FixtureRequest) -> BenchConfig:
     return config_from_options(request.config)
 
 
+def payloads_from_options(config: pytest.Config) -> tuple[Payload, ...]:
+    """The run's payload set, from ``--bench-payloads``."""
+    spec = cast(str, config.getoption("--bench-payloads"))
+    try:
+        return parse_payloads(spec)
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid --bench-payloads: {e}") from e
+
+
 @pytest.fixture(scope="session")
-def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
-    """Generate one plaintext file per payload size, shared by both arms.
+def bench_payload_set(request: pytest.FixtureRequest) -> tuple[Payload, ...]:
+    """Payload sizes this run measures, from --bench-payloads."""
+    return payloads_from_options(request.config)
+
+
+#: Bytes generated per ``randbytes`` call. Must stay a multiple of 4: CPython
+#: draws a 32-bit word at a time, so chunking on a 4-byte boundary yields the
+#: same stream as one call for the whole payload, and the promise below --
+#: that a given seed and label always produce the same bytes -- survives both
+#: this constant changing and a payload growing past it.
+_CHUNK_BYTES = 8 * 2**20
+
+#: Free space a run keeps in hand beyond its payload arithmetic, for the
+#: platform's own logs and database growth over a long benchmark.
+_DISK_HEADROOM_BYTES = 2**30
+
+
+def write_payload(path: Path, payload: Payload, seed: int) -> None:
+    """Write one payload file, in chunks so a 1 GiB file is not built in RAM."""
+    rng = random.Random(f"{seed}:{payload.label}")
+    remaining = payload.n_bytes
+    with path.open("wb") as f:
+        while remaining > 0:
+            n = min(remaining, _CHUNK_BYTES)
+            f.write(rng.randbytes(n))
+            remaining -= n
+
+
+def disk_shortfall(
+    tmp_dir: Path, payloads: Sequence[Payload], n_arms: int = 2
+) -> str | None:
+    """Return why ``payloads`` will not fit in ``tmp_dir``, or None.
+
+    Checked up front because the alternative is finding out mid-run: ENOSPC
+    reaches the harness as a non-zero exit from the CLI under measurement,
+    which is reported as a failed measurement of that build. A run can lose
+    an hour before anyone notices the disk was the problem, and the report
+    points at the wrong thing while they look.
+
+    The estimate is the plaintexts, plus a cached ciphertext for each (the
+    decrypt cells share one per size), plus one live output per arm in the
+    largest cell. Outputs are deleted as each cell finishes, so only one
+    cell's worth is ever live -- but that cell holds K of them, not two, and
+    at 1 GiB payloads the difference between K and 2 is the whole margin on a
+    GitHub runner.
+    """
+    total = sum(p.n_bytes for p in payloads)
+    largest = max(p.n_bytes for p in payloads)
+    need = 2 * total + n_arms * largest + _DISK_HEADROOM_BYTES
+    free = shutil.disk_usage(tmp_dir).free
+    if free >= need:
+        return None
+    gib = 2**30
+    sizes = ", ".join(p.label for p in payloads)
+    return (
+        f"payloads {sizes} need about {need / gib:.1f} GiB of scratch space "
+        f"in {tmp_dir} but only {free / gib:.1f} GiB is free; drop the largest "
+        "size from --bench-payloads or run somewhere with more disk"
+    )
+
+
+@pytest.fixture(scope="session")
+def bench_payloads(
+    request: pytest.FixtureRequest,
+    tmp_dir: Path,
+    bench_config: BenchConfig,
+    bench_payload_set: tuple[Payload, ...],
+) -> dict[str, Path]:
+    """Generate one plaintext file per payload size, shared by every arm.
 
     Content is pseudo-random but seeded, so a rerun measures byte-identical
     input. Random rather than repetitive because compressible input would let
@@ -147,13 +316,19 @@ def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
     calls and shifts the stream for every payload after it. Deriving each
     payload's bytes from the seed *and* its label keeps the promise above true
     whether the cache is empty, full, or half there.
+
+    The control's payload is generated whether or not it was selected -- see
+    :func:`perf.cells.payloads_to_generate`.
     """
+    wanted = payloads_to_generate(bench_payload_set)
+    shortfall = disk_shortfall(tmp_dir, wanted, arm_count(request.config))
+    if shortfall:
+        raise pytest.UsageError(shortfall)
     out: dict[str, Path] = {}
-    for payload in PAYLOADS:
+    for payload in wanted:
         path = tmp_dir / f"bench-plain-{payload.label}.bin"
         if not path.is_file() or path.stat().st_size != payload.n_bytes:
-            rng = random.Random(f"{bench_config.seed}:{payload.label}")
-            path.write_bytes(rng.randbytes(payload.n_bytes))
+            write_payload(path, payload, bench_config.seed)
         out[payload.label] = path
     return out
 
@@ -186,52 +361,70 @@ def _selected_cells(config: pytest.Config) -> list[BenchCell]:
 
 @dataclass(frozen=True, slots=True)
 class BenchArms:
-    baseline: tdfs.SDK
-    candidate: tdfs.SDK
+    """The builds one SDK's cells compare, reference first."""
+
+    arms: tuple[tdfs.SDK, ...]
+
+    @property
+    def reference(self) -> tdfs.SDK:
+        """The build every gated contrast is taken against."""
+        return self.arms[0]
+
+    @property
+    def candidates(self) -> tuple[tdfs.SDK, ...]:
+        """Everything else -- one arm in a regression run, more in a bake-off."""
+        return self.arms[1:]
 
 
 class ArmResolver:
-    """Resolves and memoizes the two builds to compare, per SDK.
+    """Resolves and memoizes the builds to compare, per SDK.
 
     Resolution is lazy so that a missing build skips one SDK's cells with a
     readable reason instead of erroring out every cell in the module.
     """
 
-    def __init__(self, baseline_spec: str | None, candidate_spec: str | None) -> None:
-        self._baseline_spec = baseline_spec
-        self._candidate_spec = candidate_spec
+    def __init__(self, specs: Sequence[str] | None) -> None:
+        self._specs = tuple(specs) if specs else None
         self._cache: dict[str, BenchArms] = {}
 
     def __call__(self, sdk: str) -> BenchArms:
         cached = self._cache.get(sdk)
         if cached is None:
-            baseline, candidate = select_arms(
-                sdk,
-                baseline_spec=_spec_for(self._baseline_spec, sdk),
-                candidate_spec=_spec_for(self._candidate_spec, sdk),
+            cached = self._cache[sdk] = BenchArms(
+                select_arms(sdk, _specs_for(self._specs, sdk))
             )
-            cached = self._cache[sdk] = BenchArms(baseline, candidate)
         return cached
 
 
 @pytest.fixture(scope="module")
 def bench_arms(request: pytest.FixtureRequest) -> ArmResolver:
-    """Resolver for the (baseline, candidate) pair of any SDK in the run."""
-    return ArmResolver(
-        cast(str | None, request.config.getoption("--bench-baseline")),
-        cast(str | None, request.config.getoption("--bench-candidate")),
-    )
+    """Resolver for the arms of any SDK in the run, reference first."""
+    return ArmResolver(arm_specs_from_options(request.config))
 
 
-def _spec_for(spec: str | None, sdk: str) -> str | None:
-    """Return ``spec`` only if it names this SDK, so one flag can cover a run."""
-    if not spec:
+def _specs_for(specs: Sequence[str] | None, sdk: str) -> tuple[str, ...] | None:
+    """Return ``specs`` only if they name this SDK, so one flag covers a run.
+
+    A run that measures several SDKs but names arms for one of them lets the
+    others fall back to their default pair. Specs that name a *mix* of SDKs
+    are an error: the arms of a cell are all one SDK by construction, so there
+    is nothing a mixed list could mean.
+    """
+    if not specs:
         return None
-    return spec if spec.split("@", 1)[0] == sdk else None
+    named = tuple(s for s in specs if s.split("@", 1)[0] == sdk)
+    if not named:
+        return None
+    if len(named) != len(specs):
+        raise ArmSelectionError(
+            f"benchmark refs name more than one SDK ({', '.join(specs)}); "
+            "the arms of a comparison must all be builds of the same SDK"
+        )
+    return named
 
 
 #: Features whose presence changes what an encrypt or decrypt actually *does*.
-#: If the two arms disagree on one of these they are not performing the same
+#: If two arms disagree on one of these they are not performing the same
 #: operation, and a timing difference between them is a difference in work,
 #: not in speed.
 _COMPARABILITY_FEATURES: tuple[tdfs.feature_type, ...] = (
@@ -242,13 +435,25 @@ _COMPARABILITY_FEATURES: tuple[tdfs.feature_type, ...] = (
 
 
 def comparability_problem(arms: BenchArms) -> str | None:
-    """Return why these two builds cannot be fairly compared, or None."""
+    """Return why these builds cannot be fairly compared, or None.
+
+    Every arm is checked against the reference rather than only pairwise
+    neighbours: the reference is what all the gated contrasts are taken
+    against, so a candidate that disagrees with it invalidates its own gate
+    whatever the other candidates do.
+    """
     for feature in _COMPARABILITY_FEATURES:
-        if arms.baseline.supports(feature) != arms.candidate.supports(feature):
+        ref_has = arms.reference.supports(feature)
+        for arm in arms.candidates:
+            if arm.supports(feature) == ref_has:
+                continue
             supporter, other = (
-                (arms.baseline, arms.candidate)
-                if arms.baseline.supports(feature)
-                else (arms.candidate, arms.baseline)
+                (arm, arms.reference)
+                if not ref_has
+                else (
+                    arms.reference,
+                    arm,
+                )
             )
             return (
                 f"{supporter} supports [{feature}] and {other} does not, so the "
@@ -258,28 +463,25 @@ def comparability_problem(arms: BenchArms) -> str | None:
 
 
 def pinned_target_mode(arms: BenchArms) -> tdfs.container_version | None:
-    """Pick one container version both arms emit, or None for their default.
+    """Pick one container version every arm emits, or None for their default.
 
-    Letting each arm choose its own target would compare two output formats.
-    ``None`` is only returned when neither arm can be told which to use, in
+    Letting each arm choose its own target would compare output formats.
+    ``None`` is only returned when the arms cannot be told which to use, in
     which case :func:`comparability_problem` has already established that they
     agree on the relevant features and will pick the same one.
     """
-    if not (
-        arms.baseline.supports("hexaflexible")
-        and arms.candidate.supports("hexaflexible")
-    ):
+    if not all(a.supports("hexaflexible") for a in arms.arms):
         return None
-    if arms.baseline.supports("hexless") and arms.candidate.supports("hexless"):
+    if all(a.supports("hexless") for a in arms.arms):
         return "4.3.0"
     return "4.2.2"
 
 
 class CiphertextFactory:
-    """Baseline-produced ciphertexts for the decrypt cells, made on demand.
+    """Reference-produced ciphertexts for the decrypt cells, made on demand.
 
-    Both arms of a decrypt comparison must read the *same* file. If each arm
-    decrypted its own output, a difference in how the two builds *write* a TDF
+    Every arm of a decrypt comparison must read the *same* file. If each arm
+    decrypted its own output, a difference in how the builds *write* a TDF
     would show up as a difference in how fast they read one.
     """
 
@@ -295,12 +497,13 @@ class CiphertextFactory:
         self._cache: dict[tuple[str, str], Path] = {}
 
     def __call__(self, arms: BenchArms, payload_label: str) -> Path:
-        key = (str(arms.baseline), payload_label)
+        reference = arms.reference
+        key = (str(reference), payload_label)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
-        ct_file = self._tmp_dir / f"bench-ct-{arms.baseline}-{payload_label}.tdf"
-        arms.baseline.encrypt(
+        ct_file = self._tmp_dir / f"bench-ct-{reference}-{payload_label}.tdf"
+        reference.encrypt(
             self._payloads[payload_label],
             ct_file,
             container="ztdf",
@@ -336,28 +539,30 @@ def build_arms(
     ct_file: Path | None,
     tmp_dir: Path,
     attr_values: list[str],
-) -> tuple[Arm, Arm]:
-    """Turn a cell plus its two builds into two ready-to-run invocations.
+) -> tuple[Arm, ...]:
+    """Turn a cell plus its builds into one ready-to-run invocation each.
 
     Everything that is not the build under test is pinned identically across
-    the arms: same plaintext, same attribute (so both wrap with RSA), same
-    container, same target mode. A functional difference between the builds
-    that changed any of these would otherwise show up as a speed difference.
+    the arms: same plaintext, same attribute (so every arm wraps with RSA),
+    same container, same target mode. A functional difference between the
+    builds that changed any of these would otherwise show up as a speed
+    difference.
 
-    For decrypt, both arms read the *same* ``ct_file``, produced once by the
-    baseline. Letting each arm decrypt its own output would compare the cost
-    of reading two different files.
+    For decrypt, every arm reads the *same* ``ct_file``, produced once by the
+    reference. Letting each arm decrypt its own output would compare the cost
+    of reading different files.
 
-    In a control cell both arms are the baseline build, so the pair differs
-    only in the output path -- exactly the harness overhead the A/A cell
-    exists to measure.
+    In a control cell every arm is the reference build, so they differ only in
+    the output path -- exactly the harness overhead the A/A cell exists to
+    measure. It is built with as many arms as the real cells have rather than
+    a cheap pair, because in a K-arm round the last arm runs K-1 invocations
+    after the first and carries more drift than an adjacent pair does; a
+    two-arm control would understate the noise of the contrasts being judged.
     """
-    baseline_sdk = arms.baseline
-    candidate_sdk = arms.baseline if cell.control else arms.candidate
     target_mode = pinned_target_mode(arms)
 
-    def invocation(sdk: tdfs.SDK, role: str) -> Invocation:
-        out = tmp_dir / f"bench-{cell.id}-{role}"
+    def invocation(sdk: tdfs.SDK, arm_id: str) -> Invocation:
+        out = tmp_dir / f"bench-{cell.id}-{arm_id}"
         if cell.operation == "encrypt":
             out = out.with_suffix(".tdf")
             argv, env = sdk.encrypt_command(
@@ -374,9 +579,17 @@ def build_arms(
             argv, env = sdk.decrypt_command(ct_file, out, container="ztdf")
         return Invocation(argv, env, out)
 
-    return (
-        Arm("baseline", str(baseline_sdk), invocation(baseline_sdk, "baseline")),
-        Arm("candidate", str(candidate_sdk), invocation(candidate_sdk, "candidate")),
+    if cell.control:
+        # Same build K times. The ids have to differ -- they key the sample
+        # vectors -- so they are numbered rather than named after the version.
+        builds = [
+            (f"{arms.reference.version}#{i + 1}", arms.reference)
+            for i in range(len(arms.arms))
+        ]
+    else:
+        builds = [(sdk.version, sdk) for sdk in arms.arms]
+    return tuple(
+        Arm(arm_id, str(sdk), invocation(sdk, arm_id)) for arm_id, sdk in builds
     )
 
 
@@ -387,7 +600,8 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
     here feeds the decision rule. It is recorded so that a human reading an
     old artifact can tell what they are looking at.
     """
-    return {
+    metadata: dict[str, object] = {
+        "sdk": os.environ.get("BENCH_SDK", ""),
         "python": platform.python_version(),
         "platform": platform.platform(),
         "processor": platform.processor() or "unknown",
@@ -395,9 +609,85 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
         "runner_os": os.environ.get("RUNNER_OS", ""),
         "runner_arch": os.environ.get("RUNNER_ARCH", ""),
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "github_run_url": _github_run_url(),
         "platform_version": _platform_version(),
         "seed": config.getoption("--bench-seed"),
     }
+    sources, warning = _arm_sources()
+    metadata["arm_sources"] = sources
+    requested = _requested_refs()
+    metadata["requested_refs"] = requested
+    if len(requested) >= 2 and len(sources) == 1 and sources[0].get("sha"):
+        sha = str(sources[0].get("sha", ""))
+        names = ", ".join(requested)
+        metadata["comparison_status"] = "same_commit"
+        metadata["comparison_note"] = (
+            f"{names} resolve to the same commit"
+            f"{f' {sha[:7]}' if sha else ''}; there is no code difference to benchmark."
+        )
+    if warning:
+        metadata["arm_sources_warning"] = warning
+    return metadata
+
+
+def _github_run_url() -> str:
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if not (server and repository and run_id):
+        return ""
+    return f"{server}/{repository}/actions/runs/{run_id}"
+
+
+def _requested_refs() -> list[str]:
+    """The caller's names, retained even when resolution deduplicates a SHA."""
+    value = os.environ.get("BENCH_REQUESTED_REFS", "")
+    return [part for part in re.split(r"[,\s]+", value.strip()) if part]
+
+
+def _arm_sources() -> tuple[list[dict[str, object]], str]:
+    """Resolver metadata for the builds, enriched with their GitHub repository.
+
+    CI already paid to resolve every ref to an immutable SHA before installing
+    it. Carry that result into the benchmark rather than trying to infer a PR,
+    release, or branch from the flattened dist-directory name afterward.
+    """
+    raw = os.environ.get("BENCH_VERSION_INFO", "").strip()
+    if not raw:
+        return [], ""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return [], f"BENCH_VERSION_INFO was not valid JSON: {e}"
+    if not isinstance(parsed, list) or not all(isinstance(v, dict) for v in parsed):
+        return [], "BENCH_VERSION_INFO must be a JSON array of objects"
+
+    sources: list[dict[str, object]] = []
+    for value in parsed:
+        source = {str(k): v for k, v in value.items()}
+        source["repo_url"] = _repo_url_for(source)
+        sources.append(source)
+    return sources, ""
+
+
+def _repo_url_for(source: dict[str, object]) -> str:
+    sdk = str(source.get("sdk", ""))
+    if sdk == "java":
+        return "https://github.com/opentdf/java-sdk"
+    if sdk == "js":
+        return "https://github.com/opentdf/web-sdk"
+    if sdk != "go":
+        return ""
+
+    # otdfctl moved into the platform monorepo at v0.31.0. Resolver results
+    # from there use the namespaced release tag; old standalone releases do
+    # not. Branch/PR/SHA builds resolve against platform first.
+    release = str(source.get("release", ""))
+    if release and not release.startswith("otdfctl/"):
+        match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", release)
+        if match and tuple(map(int, match.groups())) < (0, 31, 0):
+            return "https://github.com/opentdf/otdfctl"
+    return "https://github.com/opentdf/platform"
 
 
 def _platform_version() -> str:
