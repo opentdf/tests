@@ -263,6 +263,62 @@ class TestStopping:
                 run=runs,
             )
 
+    def test_budget_below_configured_minimum_refuses_a_verdict(self):
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.0)
+        clock = clock_from(runs)
+        with pytest.raises(BudgetExhausted, match="configured minimum of 10"):
+            run_cell(
+                "cell",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(min_rounds=10, warmup=0),
+                # Five complete rounds fit. That clears the statistical hard
+                # floor but not the configured minimum for this experiment.
+                deadline=11.0,
+                clock=clock,
+                run=runs,
+            )
+
+    def test_deadline_caps_invocations_and_discards_a_partial_round(self):
+        elapsed = [0.0]
+        calls: list[str] = []
+        timeouts: list[float] = []
+        candidate_walls = iter((0.5, 2.0, 0.6, 1.8, 1.0, 1.0))
+
+        def scripted_run(
+            argv: list[str],
+            _env: dict[str, str],
+            *,
+            timeout_s: float,
+        ) -> Sample:
+            calls.append(argv[0])
+            timeouts.append(timeout_s)
+            # Five ordinary two-second rounds, then the first arm of round six
+            # overruns what remains. That incomplete round must be discarded.
+            elapsed[0] += 1.0 if len(calls) <= 10 else 3.0
+            wall = 1.0 if argv[0] == "base" else next(candidate_walls)
+            return Sample(
+                wall_ns=int(wall * 1e9),
+                cpu_s=wall,
+                max_rss_bytes=int(BASELINE_RSS * wall),
+                exit_code=0,
+            )
+
+        result = run_cell(
+            "cell",
+            arm("baseline", "base"),
+            arm("candidate", "cand"),
+            config(warmup=0, max_rounds=6),
+            deadline=12.5,
+            clock=lambda: elapsed[0],
+            run=scripted_run,
+        )
+
+        assert result.stopped_because == "budget"
+        assert result.n_rounds == 5
+        assert len(calls) == 11, "round six started but only one arm completed"
+        assert timeouts[-1] == pytest.approx(2.5), "timeout is remaining budget"
+
 
 class TestBenchConfigValidation:
     def test_rejects_min_rounds_below_the_usable_floor(self):
@@ -361,6 +417,22 @@ class TestGateOnPlantedEffects:
         # reaches is the harness's own error, not a regression in anything.
         gate = self.gate(1.25)
         assert not any(k.startswith("aa/") for k in gate.regressions)
+
+    def test_control_only_run_measured_nothing_about_the_candidate(self):
+        cfg = config(max_rounds=40)
+        control, _ = run(1.0, cfg=cfg, cell_id="aa", control=True, sdk="go")
+        gate = analyze([control], cfg)
+
+        assert gate.nothing_measured
+        assert "NOTHING MEASURED" in gate.summary
+
+    def test_control_plus_candidate_counts_as_measured(self):
+        cfg = config(max_rounds=40)
+        control, _ = run(1.0, cfg=cfg, cell_id="aa", control=True, sdk="go")
+        measured, _ = run(1.0, cfg=cfg, cell_id="encrypt", sdk="go")
+        gate = analyze([control, measured], cfg)
+
+        assert not gate.nothing_measured
 
     def test_a_regression_in_an_ungated_metric_does_not_fail(self):
         cfg = config(max_rounds=40, gated_metrics=("wall",))

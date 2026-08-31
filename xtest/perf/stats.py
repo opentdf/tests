@@ -363,6 +363,9 @@ class GateResult:
     #: we still report, but a gate we cannot trust must not turn the build red.
     trustworthy: bool = True
     summary: str = ""
+    #: At least one comparison between distinct baseline and candidate roles
+    #: was measured. A clean A/A control alone says nothing about the candidate.
+    has_candidate_comparisons: bool = False
 
     @property
     def should_fail(self) -> bool:
@@ -370,16 +373,15 @@ class GateResult:
 
     @property
     def nothing_measured(self) -> bool:
-        """True if the run produced no comparisons at all.
+        """True if the run produced no baseline/candidate comparison.
 
-        Not the same thing as "no regressions", though the two are identical
-        from the outside: both have an empty ``regressions`` list. A run where
-        every cell was skipped -- no baseline installed, an SDK that would not
-        build -- reports the cheerful summary of a clean one, which is how a
-        benchmark that quietly stopped measuring anything survives for months.
+        An A/A control measures the harness, not the candidate, so a control-only
+        run still measured nothing that can answer the benchmark's question.
+        This is not the same thing as "no regressions", though the two are
+        identical from the outside: both have an empty ``regressions`` list.
         Callers gate on this separately.
         """
-        return not self.comparisons
+        return not self.has_candidate_comparisons
 
 
 def apply_multiplicity_control(
@@ -457,7 +459,11 @@ def apply_multiplicity_control(
             )
         )
 
-    result = GateResult(noise=noise, noise_by_control=noise_by_control)
+    result = GateResult(
+        noise=noise,
+        noise_by_control=noise_by_control,
+        has_candidate_comparisons=any(k not in control_keys for k in keys),
+    )
     for key in keys:
         c = comparisons[key]
         pa = p_adj.get(key)

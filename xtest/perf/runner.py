@@ -246,20 +246,45 @@ def run_cell(
     started = clock()
 
     def one_round(into: dict[str, dict[str, list[float]]]) -> None:
+        # Build the round off to the side. If the deadline expires after one
+        # arm, none of that partial round may enter the paired sample vectors.
+        completed = _empty_samples()
+        round_rss_floor = 0
         order = list(arms)
         rng.shuffle(order)
         for arm in order:
             inv = arm.invocation
             if inv.output is not None:
                 inv.output.unlink(missing_ok=True)
+            timeout_s = config.timeout_s
+            if deadline is not None:
+                remaining_s = deadline - clock()
+                if remaining_s <= 0:
+                    raise BudgetExhausted(
+                        f"{cell_id}: budget expired before {arm.label} could run"
+                    )
+                timeout_s = min(timeout_s, remaining_s)
             try:
-                sample = run(inv.argv, inv.child_env(), timeout_s=config.timeout_s)
+                sample = run(inv.argv, inv.child_env(), timeout_s=timeout_s)
             except MeasurementError as e:
+                if deadline is not None and clock() >= deadline:
+                    raise BudgetExhausted(
+                        f"{cell_id}: budget expired while running {arm.label}"
+                    ) from e
                 raise MeasurementError(f"{cell_id}: {arm.label} failed: {e}") from e
-            nonlocal rss_floor
-            rss_floor = max(rss_floor, sample.rss_floor_bytes)
+            if deadline is not None and clock() > deadline:
+                raise BudgetExhausted(
+                    f"{cell_id}: budget expired while running {arm.label}"
+                )
+            round_rss_floor = max(round_rss_floor, sample.rss_floor_bytes)
             for metric in METRICS:
-                into[arm.name][metric].append(sample.metric(metric))
+                completed[arm.name][metric].append(sample.metric(metric))
+
+        nonlocal rss_floor
+        rss_floor = max(rss_floor, round_rss_floor)
+        for arm_name in completed:
+            for metric in METRICS:
+                into[arm_name][metric].extend(completed[arm_name][metric])
 
     for i in range(config.warmup):
         # Warm-up rounds pay the one-time costs -- page cache, `go build`
@@ -278,7 +303,13 @@ def run_cell(
                 f"warm-up rounds ({clock() - started:.0f}s), "
                 "before any measurement began"
             )
-        one_round(_empty_samples())
+        try:
+            one_round(_empty_samples())
+        except BudgetExhausted as e:
+            raise BudgetExhausted(
+                f"{cell_id}: budget ran out during warm-up after {i} of "
+                f"{config.warmup} rounds ({clock() - started:.0f}s)"
+            ) from e
 
     stopped_because = "max_rounds"
     for _ in range(config.max_rounds):
@@ -294,7 +325,11 @@ def run_cell(
             if round_start + expected > deadline:
                 stopped_because = "budget"
                 break
-        one_round(samples)
+        try:
+            one_round(samples)
+        except BudgetExhausted:
+            stopped_because = "budget"
+            break
         round_durations.append(clock() - round_start)
 
         n = len(samples["baseline"]["wall"])
@@ -304,10 +339,10 @@ def run_cell(
 
     elapsed = clock() - started
     n = len(samples["baseline"]["wall"])
-    if n < stats.MIN_USABLE_ROUNDS:
+    if n < config.min_rounds:
         raise BudgetExhausted(
             f"{cell_id}: only {n} rounds completed in {elapsed:.0f}s, "
-            f"below the {stats.MIN_USABLE_ROUNDS} needed for any verdict"
+            f"below the configured minimum of {config.min_rounds}"
         )
     return CellResult(
         cell_id=cell_id,
@@ -412,12 +447,15 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
             control_key = control_for_sdk.get(result.sdk)
             if control_key is not None:
                 controls[key] = control_key
+            # Identify every metric of a control before applying metric-specific
+            # censoring. Otherwise a floored control RSS key looks like an A/B
+            # comparison to the run-level "nothing measured" safeguard.
+            if result.control:
+                control_keys.add(key)
             if metric == "rss" and floored is not None:
                 censored[key] = floored
                 continue
-            if result.control:
-                control_keys.add(key)
-            elif metric in config.gated_metrics:
+            if not result.control and metric in config.gated_metrics:
                 gated.add(key)
 
     return stats.apply_multiplicity_control(
