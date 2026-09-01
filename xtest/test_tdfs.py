@@ -465,11 +465,14 @@ def change_payload_end(payload_bytes: bytes) -> bytes:
     return change_last_three(payload_bytes)
 
 
+# URL that must be blocked by the SDK 'allowlist' functionality.
+# Uses an unbound port so it should fail at the network layer.
+MALICIOUS_KAS_URL = "http://localhost:9999/malicious/kas"
+
+
 def malicious_kao(manifest: tdfs.Manifest) -> tdfs.Manifest:
     assert manifest.encryptionInformation.keyAccess
-    manifest.encryptionInformation.keyAccess[
-        0
-    ].url = "http://localhost:8585/malicious/kas"  # nothing running at 8585
+    manifest.encryptionInformation.keyAccess[0].url = MALICIOUS_KAS_URL
     return manifest
 
 
