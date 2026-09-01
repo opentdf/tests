@@ -43,7 +43,7 @@ a 30-minute job to look at the same numbers again.
 
 ### The table
 
-```
+```markdown
 | cell                | metric     | baseline | candidate | ratio (95% CI)        | p (BH) | n  | verdict |
 | go-encrypt-1MiB     | wall clock | 412.3 ms | 498.1 ms  | 1.208x [1.171, 1.245] | <0.001 | 22 | **REGRESSION** |
 ```

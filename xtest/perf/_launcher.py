@@ -76,8 +76,8 @@ def _spawn(command: list[str], err_w: int) -> int:
     # BaseException, not Exception: this is a forked child, and letting a
     # SystemExit or a KeyboardInterrupt unwind past here would run the
     # *parent's* cleanup -- atexit handlers, buffered output -- a second time,
-    # from a process that only exists to exec. NOSONAR
-    except BaseException as e:  # noqa: BLE001 - nothing may escape into a fork
+    # from a process that only exists to exec.
+    except BaseException as e:  # noqa: BLE001  # NOSONAR - nothing escapes a fork
         try:
             os.write(err_w, str(getattr(e, "errno", 0) or 0).encode())
         except OSError:
@@ -121,7 +121,18 @@ def main(argv: list[str]) -> int:
         _, status, ru = os.wait4(pid, 0)
     finally:
         if timeout is not None:
-            signal.setitimer(signal.ITIMER_REAL, 0)
+            # The alarm can fire between wait4 returning and the disarm below.
+            # That is not a timeout -- the child already exited on its own --
+            # but an escaping _Timeout would skip the result file entirely, and
+            # measure() reads a missing file as "the launcher did not report".
+            # A run that finished just under the limit would be reported as a
+            # measurement failure. Swallow the late alarm and silence any
+            # further one before the report is written.
+            try:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+            except _Timeout:
+                pass
+            signal.signal(signal.SIGALRM, signal.SIG_IGN)
     elapsed = time.perf_counter_ns() - started
 
     exec_errno = os.read(err_r, 32) or b"0"
