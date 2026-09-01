@@ -1,6 +1,7 @@
 """Docker compose service management."""
 
 import json
+import os
 import subprocess
 
 from otdf_local.config.ports import Ports
@@ -15,6 +16,13 @@ class DockerService(Service):
     def __init__(self, settings: Settings) -> None:
         super().__init__(settings)
         self._compose_file = settings.docker_compose_file
+
+    def _compose_env(self) -> dict[str, str]:
+        """Env passed to docker-compose so `${KEYS_DIR}` resolves per-instance."""
+        env = os.environ.copy()
+        if self.settings.has_instance():
+            env["KEYS_DIR"] = str(self.settings.keys_dir.resolve())
+        return env
 
     @property
     def name(self) -> str:
@@ -42,6 +50,7 @@ class DockerService(Service):
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
+            env=self._compose_env(),
         )
         return result.returncode == 0
 
@@ -55,6 +64,7 @@ class DockerService(Service):
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
+            env=self._compose_env(),
         )
         return result.returncode == 0
 
@@ -89,6 +99,7 @@ class DockerService(Service):
             capture_output=True,
             text=True,
             cwd=self._compose_file.parent,
+            env=self._compose_env(),
         )
 
         if result.returncode != 0:
