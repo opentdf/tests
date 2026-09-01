@@ -43,7 +43,37 @@ class DockerService(Service):
             text=True,
             cwd=self._compose_file.parent,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            return False
+
+        # Additionally boot the ers-test profile so multi-strategy ERS has
+        # its Postgres backend available. Best-effort: don't fail the core
+        # Docker startup for users who aren't exercising multi-strategy ERS
+        # (a missing image, private-registry auth issue, or older checkout
+        # that lacks the profile should not block Keycloak/Postgres).
+        ers = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(self._compose_file),
+                "--profile",
+                "ers-test",
+                "up",
+                "-d",
+                "ers-postgres",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=self._compose_file.parent,
+        )
+        if ers.returncode != 0:
+            print(
+                "warning: failed to start ers-postgres "
+                "(multi-strategy ERS tests will be skipped): "
+                f"{ers.stderr.strip()}"
+            )
+        return True
 
     def stop(self) -> bool:
         """Stop Docker compose services."""
@@ -59,8 +89,12 @@ class DockerService(Service):
         return result.returncode == 0
 
     def is_running(self) -> bool:
-        """Check if Docker services are running."""
-        # Check if both Keycloak and PostgreSQL ports are open
+        """Check if the core Docker services are running.
+
+        ers-postgres is optional (profile 'ers-test'); its status is
+        reported separately in get_all_info() so tests unrelated to
+        multi-strategy ERS aren't blocked by its absence.
+        """
         keycloak_up = check_port("localhost", Ports.KEYCLOAK)
         postgres_up = check_port("localhost", Ports.POSTGRES)
         return keycloak_up and postgres_up
@@ -114,6 +148,7 @@ class DockerService(Service):
         """Get info for all Docker services."""
         keycloak_running = check_port("localhost", Ports.KEYCLOAK)
         postgres_running = check_port("localhost", Ports.POSTGRES)
+        ers_postgres_running = check_port("localhost", Ports.ERS_POSTGRES)
 
         keycloak_healthy = None
         if keycloak_running:
@@ -136,6 +171,13 @@ class DockerService(Service):
                 service_type=ServiceType.DOCKER,
                 running=postgres_running,
                 healthy=None,  # No HTTP health check for postgres
+            ),
+            ServiceInfo(
+                name="ers-postgres",
+                port=Ports.ERS_POSTGRES,
+                service_type=ServiceType.DOCKER,
+                running=ers_postgres_running,
+                healthy=None,
             ),
         ]
 

@@ -1,0 +1,165 @@
+logger:
+  level: debug
+  type: text
+  output: stderr
+audit:
+services:
+  kas:
+    registered_kas_uri: http://localhost:8090
+    preview:
+      # EC keys are registered below, so EC TDF wrapping must be enabled
+      # for tests that route EC-wrapped TDFs through this KAS.
+      ec_tdf_enabled: true
+      hybrid_tdf_enabled: false
+      key_management: false
+    # NOTE: root_key here is a placeholder. PlatformERSMultiStrategyService
+    # overwrites it at config-generation time with the primary platform's
+    # root_key (read from opentdf-dev.yaml) so both KAS instances can unwrap
+    # each other's wrapped DEKs. Do not treat this literal as a real key.
+    root_key: PLACEHOLDER_OVERWRITTEN_BY_OTDF_LOCAL_AT_STARTUP
+    keyring:
+      - kid: e1
+        alg: ec:secp256r1
+      - kid: e1
+        alg: ec:secp256r1
+        legacy: true
+      - kid: r1
+        alg: rsa:2048
+      - kid: r1
+        alg: rsa:2048
+        legacy: true
+  entityresolution:
+    # The dispatcher in service/entityresolution/v2/entity_resolution.go reads
+    # `mode:` (not `type:`); multi-strategy fields live flat under
+    # entityresolution, not nested under `config:`. The stale example in
+    # platform/opentdf-ers-test.yaml uses the wrong shape — do not copy it.
+    mode: multi-strategy
+    failure_strategy: continue
+    providers:
+      sql_postgres:
+        type: sql
+        connection:
+          driver: postgres
+          host: localhost
+          port: 5433
+          database: ers_test
+          username: ers_test_user
+          password: ers_test_pass
+          ssl_mode: disable
+          max_open_connections: 10
+          max_idle_connections: 5
+          connection_max_lifetime: 1h
+          query_timeout: 30s
+    mapping_strategies:
+      # Call 1 (CreateEntityChainsFromTokens): key on the OIDC-standard
+      # 'azp' claim (authorized party = client_id). Every xtest token
+      # carries azp=opentdf, so no Keycloak mapper changes are needed.
+      # Output includes username so the emitted Entity has UserName set,
+      # which drives call 2.
+      - name: xtest_sql_call1_by_azp
+        provider: sql_postgres
+        entity_type: subject
+        conditions:
+          jwt_claims:
+            - claim: azp
+              operator: exists
+              values: []
+        input_mapping:
+          - jwt_claim: azp
+            provider_field: username
+        output_mapping:
+          - source_claim: username
+            claim_name: username
+          - source_claim: department
+            claim_name: department
+        query: |
+          SELECT username, department FROM ers_attributes
+          WHERE username = $1 AND active = true
+      # Call 2 (ResolveEntities on the chain-Entity produced by call 1):
+      # the platform protojson-marshals Entity_UserName to a claims map
+      # containing the proto-cased key 'userName'. This is the strategy
+      # that triggers the []string metadata bug on unfixed platforms —
+      # its success path writes attempted_strategies into result.Metadata,
+      # which structpb.NewStruct rejects, causing the entity to be
+      # silently dropped and rewrap to return PermissionDenied.
+      - name: xtest_sql_call2_by_username
+        provider: sql_postgres
+        entity_type: subject
+        conditions:
+          jwt_claims:
+            - claim: userName
+              operator: exists
+              values: []
+        input_mapping:
+          - jwt_claim: userName
+            provider_field: username
+        output_mapping:
+          - source_claim: username
+            claim_name: username
+          - source_claim: department
+            claim_name: department
+        query: |
+          SELECT username, department FROM ers_attributes
+          WHERE username = $1 AND active = true
+server:
+  public_hostname: localhost
+  tls:
+    enabled: false
+    cert: ./keys/platform.crt
+    key: ./keys/platform-key.pem
+  auth:
+    enabled: true
+    dpop:
+      enforce: false
+    audience: "http://localhost:8080"
+    issuer: http://localhost:8888/auth/realms/opentdf
+    policy:
+      username_claim:
+      groups_claim:
+      client_id_claim:
+      extension: |
+        g, opentdf-admin, role:admin
+        g, opentdf-standard, role:standard
+      csv:
+      model:
+  cors:
+    enabled: true
+    allowedorigins:
+      - "*"
+    allowedmethods:
+      - GET
+      - POST
+      - PATCH
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowedheaders:
+      - Accept
+      - Accept-Encoding
+      - Authorization
+      - Connect-Protocol-Version
+      - Content-Length
+      - Content-Type
+      - Dpop
+      - X-CSRF-Token
+      - X-Requested-With
+      - X-Rewrap-Additional-Context
+    exposedheaders:
+      - Link
+    allowcredentials: true
+    maxage: 3600
+  grpc:
+    reflectionEnabled: true
+  cryptoProvider:
+    type: standard
+    standard:
+      keys:
+        - kid: r1
+          alg: rsa:2048
+          private: kas-private.pem
+          cert: kas-cert.pem
+        - kid: e1
+          alg: ec:secp256r1
+          private: kas-ec-private.pem
+          cert: kas-ec-cert.pem
+  port: 8090
