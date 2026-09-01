@@ -52,6 +52,7 @@ pytest_plugins = [
     "fixtures.keys",
     "fixtures.audit",
     "fixtures.encryption",
+    "fixtures.tracing",
 ]
 
 
@@ -128,6 +129,12 @@ def pytest_addoption(parser: pytest.Parser):
         "--skip-released-pairs",
         action="store_true",
         help="skip round-trip tests where all SDKs are released artifacts",
+    )
+    parser.addoption(
+        "--tracing",
+        action="store_true",
+        help="wrap each test in an OpenTelemetry span and export it to the OTLP "
+        "collector (also enabled by setting OTEL_EXPORTER_OTLP_ENDPOINT)",
     )
     parser.addoption(
         "--sdks",
