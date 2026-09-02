@@ -56,6 +56,34 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 - `OT_ROOT_KEY` — root key for key-management tests
 - `SCHEMA_FILE` — path to manifest schema file
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
+- `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
+  Point it at a large volume for multi-GiB runs.
+- `XT_FORCE_SUPPORTS` — comma-separated feature names to treat as supported
+  regardless of what each SDK's `cli.sh supports` reports. See below.
+
+### Evaluating an unreleased fix: `XT_FORCE_SUPPORTS`
+
+`SDK.supports(feature)` answers from the `supports` case statements in
+`xtest/sdk/{go,java,js}/cli.sh` — **in this repo, not in the SDK repos**. Most
+cases are version gates, so a build from an unmerged branch reports the last
+*released* version and answers "no" for precisely the fix you are trying to
+evaluate. The cell then skips and the run is green without having tested
+anything.
+
+`XT_FORCE_SUPPORTS` short-circuits that:
+
+```bash
+otdf-sdk-mgr install tip --ref pr:396 java     # pr:N works on install
+XT_FORCE_SUPPORTS=chunky uv run pytest test_tdfs.py --sdks "js java" -v
+```
+
+It applies to every SDK in the run — to force one side only, narrow with
+`--sdks-encrypt` / `--sdks-decrypt`. An unrecognised feature name raises rather
+than being ignored, since a silently-ignored typo is indistinguishable from a
+clean run. In CI, pass `force-supports` to the `X-Test` workflow dispatch.
+
+Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
+accept the `pr:N` shorthand — pass a branch name there instead.
 
 ### Audit Log Assertions
 

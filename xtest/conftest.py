@@ -13,15 +13,19 @@ Domain-specific fixtures are organized in the fixtures/ package:
 - fixtures.keys: Key management fixtures
 """
 
+import argparse
 import json
 import logging
 import os
+import random
 import typing
+import warnings
 from pathlib import Path
 from typing import cast
 
 import pytest
 
+import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
@@ -66,7 +70,7 @@ pytest_plugins = [
 ]
 
 
-def englist(s: tuple[str]) -> str:
+def englist(s: tuple[str, ...]) -> str:
     """Convert tuple of strings to English list format (e.g., 'a, b, or c')."""
     if len(s) > 1:
         return ", ".join(s[:-1]) + ", or " + s[-1]
@@ -103,6 +107,63 @@ def sdk_spec_type(v: str) -> str:
     return v
 
 
+def sizes_opt_type(v: str) -> list[str]:
+    """Validate and de-duplicate a comma-separated list of size names.
+
+    ``ArgumentTypeError`` rather than ``ValueError``: argparse prints the
+    former's message verbatim and replaces the latter's with a generic
+    "invalid value", which would hide the list of names that would have
+    worked.
+    """
+    names = [s.strip() for s in v.split(",") if s.strip()]
+    if not names:
+        raise argparse.ArgumentTypeError("at least one size is required")
+    for name in names:
+        if name not in sizes.SIZES:
+            raise argparse.ArgumentTypeError(
+                f"unknown size {name!r}; expected one or more of "
+                f"{', '.join(sizes.SIZE_ORDER)}"
+            )
+    # Cheapest first, so a fan-out run reports its fast cells before spending
+    # minutes on a multi-GiB one.
+    return [n for n in sizes.SIZE_ORDER if n in set(names)]
+
+
+_SIZES_KEY = pytest.StashKey[list[str]]()
+
+
+def resolve_sizes(config: pytest.Config) -> list[str]:
+    """Size names this session runs, honouring the deprecated --large alias.
+
+    Cached on the config: this is called from both the parametrizer and the
+    collection filter, and the deprecation warning below should be emitted
+    once per session rather than once per caller.
+    """
+    cached = config.stash.get(_SIZES_KEY, None)
+    if cached is not None:
+        return cached
+
+    selected = cast(list[str] | None, config.getoption("--sizes"))
+    if config.getoption("--large"):
+        if selected is not None:
+            raise pytest.UsageError(
+                "--large and --sizes are mutually exclusive; --large is the "
+                "deprecated spelling of --sizes small,large"
+            )
+        warnings.warn(
+            "--large is deprecated; use --sizes small,large (or --sizes medium "
+            "for the 2-4 GiB ZIP64 band, which --large steps straight over)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        resolved = ["small", "large"]
+    else:
+        resolved = selected if selected is not None else ["small"]
+
+    config.stash[_SIZES_KEY] = resolved
+    return resolved
+
+
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
@@ -128,7 +189,16 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--large",
         action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
+        help="deprecated alias for --sizes small,large",
+    )
+    parser.addoption(
+        "--sizes",
+        type=sizes_opt_type,
+        help="comma-separated plaintext sizes to run against, from "
+        f"{englist(tuple(sizes.SIZE_ORDER))} "
+        f"({', '.join(f'{k}={sizes.SIZES[k]}B' for k in sizes.SIZE_ORDER)}); "
+        "default small. Listing more than one fans out every test that takes "
+        "a plaintext file, so CI passes exactly one.",
     )
     parser.addoption(
         "--no-audit-logs",
@@ -245,11 +315,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     - container: which container formats to test (ztdf, ztdf-ecwrap)
     """
     if "size" in metafunc.fixturenames:
-        metafunc.parametrize(
-            "size",
-            ["large" if metafunc.config.getoption("large") else "small"],
-            scope="session",
-        )
+        metafunc.parametrize("size", resolve_sizes(metafunc.config), scope="session")
 
     def list_opt(name: str, t: typing.Any) -> list[str]:
         ttt = typing.get_args(t)
@@ -366,20 +432,31 @@ def pytest_configure(config: pytest.Config):
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Drop the benchmark cells entirely unless --bench asked for them.
+    """Drop cells the session did not ask for.
 
-    Deselected rather than skipped: a 20-minute cell has no business in the
-    regular integration matrix, and a skip would report it as a test that
-    exists and was declined rather than one that was never in scope.
+    Two groups, deselected rather than skipped for the same reason: neither a
+    20-minute benchmark nor a 2.1 GiB roundtrip has any business in the
+    regular integration matrix, and a skip would report them as tests that
+    exist and were declined rather than ones that were never in scope.
+
+    - ``benchmark``: needs --bench.
+    - ``zip64``: needs a payload size that can reach the 2**31 boundary. At
+      the default 128 bytes these tests cannot exercise anything, and the one
+      thing worse than not running them is running them green on a payload
+      that never touches the code path.
     """
-    if config.getoption("--bench", default=False):
-        return
-    keep, drop = [], []
+    drop: list[pytest.Item] = []
+    want_bench = bool(config.getoption("--bench", default=False))
+    want_zip64 = any(sizes.exercises_zip64_window(s) for s in resolve_sizes(config))
     for item in items:
-        (drop if item.get_closest_marker("benchmark") else keep).append(item)
+        if not want_bench and item.get_closest_marker("benchmark"):
+            drop.append(item)
+        elif not want_zip64 and item.get_closest_marker("zip64"):
+            drop.append(item)
     if drop:
+        dropped = set(map(id, drop))
         config.hook.pytest_deselected(items=drop)
-        items[:] = keep
+        items[:] = [i for i in items if id(i) not in dropped]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
@@ -447,23 +524,99 @@ def pytest_runtest_setup(item: pytest.Item):
 
 
 # Core fixtures
+
+#: Chunk written per iteration by :func:`_write_bulk_plaintext`.
+_BULK_BLOCK = 1 << 20
+
+#: Sizes at or above this are generated in bulk rather than line by line.
+#: The line generator formats one string per 16 bytes, which is fine for 128
+#: bytes and is ~140 million iterations at 2.1 GiB.
+_BULK_THRESHOLD = 1 << 24
+
+
+def _write_line_plaintext(path: Path, length: int) -> None:
+    """The original generator: one right-aligned offset per 16 bytes.
+
+    Kept byte-for-byte for the small size. Existing tests compare decrypted
+    output against this content, and there is nothing to gain from churning
+    it.
+    """
+    with path.open("w") as f:
+        for i in range(0, length, 16):
+            f.write(f"{i:15,d}\n")
+
+
+def _write_bulk_plaintext(path: Path, length: int) -> None:
+    """Write ``length`` deterministic, poorly-compressible bytes, quickly.
+
+    One pseudorandom block is built once and written repeatedly, with a
+    block counter patched into its first eight bytes so the content is
+    position-dependent rather than a flat repeat.
+
+    Repetition at a 1 MiB period is not something DEFLATE can exploit -- its
+    window is 32 KiB -- so the payload stays realistically incompressible
+    while costing one ``randbytes`` call instead of one per megabyte.
+
+    Deliberately not ``rng.randbytes(length)`` the way ``fixtures/bench.py``
+    does it: that materialises the whole payload in memory, which is fine at
+    32 MiB and fatal at 2.1 GiB.
+    """
+    block = bytearray(random.Random("dspx-4592").randbytes(_BULK_BLOCK))
+    view = memoryview(block)
+    with path.open("wb") as f:
+        written = 0
+        while written < length:
+            n = min(_BULK_BLOCK, length - written)
+            block[:8] = (written // _BULK_BLOCK).to_bytes(8, "big")
+            f.write(view[:n])
+            written += n
+
+
+def _plaintext_of(tmp_dir: Path, size: str) -> Path:
+    """Return a plaintext file of the named size, generating it if needed."""
+    length = sizes.SIZES[size]
+    pt_file = tmp_dir / f"test-plain-{size}.txt"
+    # tmp_dir persists between runs, so a multi-GiB payload that is already
+    # there and the right length is reused rather than rewritten. Checking
+    # the length matters: a run killed mid-generation leaves a short file,
+    # and silently encrypting that would test the wrong size.
+    if pt_file.is_file() and pt_file.stat().st_size == length:
+        return pt_file
+    if length >= _BULK_THRESHOLD:
+        _write_bulk_plaintext(pt_file, length)
+    else:
+        _write_line_plaintext(pt_file, length)
+    return pt_file
+
+
 @pytest.fixture(scope="session")
 def pt_file(tmp_dir: Path, size: str) -> Path:
-    """Generate a plaintext test file.
+    """Generate a plaintext test file of the named size.
 
     Args:
         tmp_dir: Temporary directory for test files
-        size: 'large' (>4 GiB) or 'small' (128 bytes)
+        size: a key of :data:`sizes.SIZES` -- 'small' (128 bytes),
+            'chunky' (5 MiB, several default-sized segments),
+            'medium' (2.1 GiB, inside the ZIP64 broken window), or
+            'large' (5 GiB, above it)
 
     Returns:
         Path to the generated plaintext file
     """
-    pt_file = tmp_dir / f"test-plain-{size}.txt"
-    length = (5 * 2**30) if size == "large" else 128
-    with pt_file.open("w") as f:
-        for i in range(0, length, 16):
-            f.write(f"{i:15,d}\n")
-    return pt_file
+    return _plaintext_of(tmp_dir, size)
+
+
+@pytest.fixture(scope="session")
+def chunky_pt_file(tmp_dir: Path) -> Path:
+    """A 5 MiB plaintext: several segments, every one of them default-sized.
+
+    Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
+    sizes would fan out every test that takes :func:`pt_file` -- the whole of
+    test_tdfs.py and test_policytypes.py -- to pay for a property one test
+    needs. A separate fixture buys the coverage for one extra encrypt and
+    decrypt of 5 MiB, which is cheap enough for the PR gate.
+    """
+    return _plaintext_of(tmp_dir, "chunky")
 
 
 @pytest.fixture(scope="session")
@@ -472,9 +625,14 @@ def tmp_dir(request: pytest.FixtureRequest) -> Path:
 
     When running with pytest-xdist, each worker gets its own subdirectory
     to prevent file collisions between parallel test processes.
+
+    ``XT_TMP_DIR`` relocates the root. Multi-GiB roundtrips need more space
+    than a CI runner's workspace volume has, and the alternative to an
+    override is hard-coding a runner-specific path here.
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    dname = Path(f"tmp/{worker_id}/")
+    root = Path(os.environ.get("XT_TMP_DIR", "tmp"))
+    dname = root / worker_id
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 

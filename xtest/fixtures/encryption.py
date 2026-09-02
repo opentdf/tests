@@ -95,3 +95,26 @@ def encrypted_tdf(
     """
     label = request.node.originalname or request.node.name
     return EncryptFactory(label, pt_file, tmp_dir, _encryption_cache)
+
+
+@pytest.fixture(scope="session")
+def _chunky_encryption_cache() -> dict[tuple, Path]:
+    """Separate from :func:`_encryption_cache`, and it has to be.
+
+    The cache key is built from the encrypt parameters only -- it does not
+    include the plaintext -- so a factory bound to a different input file
+    sharing this dict would silently hand back the other file's ciphertext.
+    """
+    return {}
+
+
+@pytest.fixture
+def chunky_tdf(
+    request: pytest.FixtureRequest,
+    chunky_pt_file: Path,
+    tmp_dir: Path,
+    _chunky_encryption_cache: dict[tuple, Path],
+) -> EncryptFactory:
+    """An :class:`EncryptFactory` bound to the 5 MiB multi-segment plaintext."""
+    label = request.node.originalname or request.node.name
+    return EncryptFactory(label, chunky_pt_file, tmp_dir, _chunky_encryption_cache)
