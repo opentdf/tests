@@ -24,6 +24,8 @@ import pytest
 
 import tdfs
 from otdfctl import OpentdfCommandLineTool
+from perf import report, stats
+from perf.cells import cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -35,8 +37,16 @@ def pytest_report_header() -> list[str]:
     and pytest does not show captured output for skipped tests. Echoing the
     detected version and feature set into the report header makes it visible in
     CI even when every gated test skips.
+
+    Detection probes the platform over HTTP, which fails when there is no
+    platform -- running only the offline unit tests, for instance. That is a
+    header, not a test result, so report the failure and carry on rather than
+    breaking collection for tests that never needed a platform.
     """
-    pfs = tdfs.get_platform_features()
+    try:
+        pfs = tdfs.get_platform_features()
+    except Exception as e:  # a header must never break collection
+        return [f"platform features unavailable: {e}"]
     return [
         f"platform version: {pfs.version} (semver={pfs.semver})",
         f"detected features: {', '.join(sorted(pfs.features))}",
@@ -52,6 +62,7 @@ pytest_plugins = [
     "fixtures.keys",
     "fixtures.audit",
     "fixtures.encryption",
+    "fixtures.bench",
 ]
 
 
@@ -144,6 +155,83 @@ def pytest_addoption(parser: pytest.Parser):
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
     )
+    _add_benchmark_options(parser)
+
+
+def _add_benchmark_options(parser: pytest.Parser):
+    """Options for the SDK performance regression benchmarks.
+
+    Grouped separately because they configure an experiment rather than
+    selecting tests, and because none of them do anything without --bench.
+    """
+    group = parser.getgroup("benchmarks", "SDK performance regression benchmarks")
+    group.addoption(
+        "--bench",
+        action="store_true",
+        help="run the performance regression benchmarks (they are long, so they "
+        "are opt-in and collect nothing otherwise)",
+    )
+    group.addoption(
+        "--bench-baseline",
+        help="build to compare against, e.g. go@v0.29.0; defaults to the newest "
+        "installed release of each sdk",
+    )
+    group.addoption(
+        "--bench-candidate",
+        help="build under test, e.g. go@main; defaults to the installed "
+        "unreleased build of each sdk",
+    )
+    group.addoption(
+        "--bench-threshold",
+        type=float,
+        default=stats.DEFAULT_THRESHOLD,
+        help="smallest slowdown ratio worth failing on (default: %(default)s, "
+        "i.e. 15%% slower)",
+    )
+    group.addoption(
+        "--bench-min-rounds",
+        type=int,
+        default=20,
+        help="paired rounds to run before the stopping rule may fire "
+        "(default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-max-rounds",
+        type=int,
+        default=60,
+        help="hard cap on paired rounds per cell (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-warmup",
+        type=int,
+        default=5,
+        help="paired rounds discarded before measuring, to pay one-time costs "
+        "like page cache and package resolution (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-budget-seconds",
+        type=float,
+        default=1500.0,
+        help="wall-clock allowance shared by every cell (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-seed",
+        type=int,
+        default=0,
+        help="seed for payload generation, round ordering, and the bootstrap; "
+        "fixing it makes a run reproducible (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-out",
+        type=Path,
+        default=Path("test-results/benchmarks"),
+        help="directory for the JSON result artifact (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-no-gate",
+        action="store_true",
+        help="measure and report, but never fail the run on a regression",
+    )
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -230,6 +318,120 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         else:
             containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
+
+    if "bench_cell" in metafunc.fixturenames:
+        _parametrize_bench_cells(metafunc)
+
+
+def _parametrize_bench_cells(metafunc: pytest.Metafunc):
+    """Fan the benchmark module out over its cells.
+
+    Without --bench there is nothing to fan out over, and the items are
+    dropped wholesale in :func:`pytest_collection_modifyitems` rather than
+    parametrized here. Parametrizing over an empty list would *not* collect
+    zero items: pytest's default ``empty_parameter_set_mark`` turns an empty
+    set into one skipped item per test, so every ordinary run would carry
+    benchmark skips it never asked for.
+    """
+    if not metafunc.config.getoption("--bench"):
+        return
+
+    # --sdks may be version-qualified (go@main); benchmark arms come from
+    # --bench-baseline/--bench-candidate instead, so only the name matters.
+    specs = metafunc.config.getoption("--sdks") or " ".join(
+        typing.get_args(tdfs.sdk_type)
+    )
+    names = list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
+    cells = cells_for(names)
+    metafunc.config.stash[report.CELLS_KEY] = cells
+    metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
+
+
+def pytest_configure(config: pytest.Config):
+    if not config.getoption("--bench", default=False):
+        return
+    # Parallel workers contend for the CPU the benchmark is measuring, which
+    # turns every number into noise. The CI step also omits -n; this guard is
+    # what stops a later edit from silently invalidating the whole job.
+    distributed = getattr(config, "workerinput", None) is not None or bool(
+        config.getoption("numprocesses", default=None)
+    )
+    if distributed:
+        raise pytest.UsageError(
+            "--bench cannot run under pytest-xdist: parallel workers compete "
+            "for the CPU being measured. Drop -n / --dist."
+        )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Drop the benchmark cells entirely unless --bench asked for them.
+
+    Deselected rather than skipped: a 20-minute cell has no business in the
+    regular integration matrix, and a skip would report it as a test that
+    exists and was declined rather than one that was never in scope.
+    """
+    if config.getoption("--bench", default=False):
+        return
+    keep, drop = [], []
+    for item in items:
+        (drop if item.get_closest_marker("benchmark") else keep).append(item)
+    if drop:
+        config.hook.pytest_deselected(items=drop)
+        items[:] = keep
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
+    """Analyse every recorded cell, write the artifacts, and gate the run.
+
+    The gate lives here rather than in the cells because it is a run-level
+    decision: the multiplicity correction spans all cells, and the A/A control
+    can invalidate the lot. Artifacts are written first and unconditionally --
+    a run that is about to fail is exactly the run whose raw numbers someone
+    will want to read.
+    """
+    del exitstatus  # the benchmark's own verdict is independent of test outcomes
+    config = session.config
+    if not config.getoption("--bench", default=False):
+        return
+    recorder = config.stash.get(report.RECORDER_KEY, None)
+    if recorder is None or not (recorder.results or recorder.skipped):
+        return
+
+    # Imported here, not at module scope: importing a pytest plugin from a
+    # conftest before pytest registers it costs the plugin its assertion
+    # rewriting, which the fixture module's own asserts rely on.
+    from fixtures import bench
+
+    bench_config = bench.config_from_options(config)
+    recorder.metadata = bench.runner_metadata(config)
+    gate = recorder.gate(bench_config)
+
+    cells = config.stash.get(report.CELLS_KEY, [])
+    name = "-".join(dict.fromkeys(c.sdk for c in cells)) or "benchmarks"
+    out_dir = cast(Path, config.getoption("--bench-out"))
+    json_path = report.write_json(
+        out_dir / f"{name}.json", recorder, bench_config, gate
+    )
+
+    summary = report.markdown(recorder, bench_config, gate)
+    report.append_step_summary(summary)
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "benchmark results")
+        reporter.write_line(gate.summary)
+        reporter.write_line(f"raw samples and statistics: {json_path}")
+
+    if config.getoption("--bench-no-gate", default=False):
+        return
+    # A run that measured nothing fails too, and not only one that found a
+    # regression. --bench is an explicit request for a measurement; answering
+    # it with a green tick and an empty table is the one outcome nobody
+    # inspects, so a benchmark that has quietly stopped measuring can survive
+    # indefinitely. Every reason a cell skips is already in the report.
+    if gate.should_fail or gate.nothing_measured:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def pytest_runtest_setup(item: pytest.Item):

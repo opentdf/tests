@@ -46,6 +46,8 @@ dependencies = [
     "smmap>=5.0.3",
     "typing_extensions>=4.15.0",
     "urllib3>=2.7.0",
+    "numpy>=2.5.2",
+    "scipy>=1.18.0",
 ]
 
 [project.optional-dependencies]
@@ -79,7 +81,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["abac", "tdfs", "otdfctl", "assertions", "fixtures"]
+known-first-party = ["abac", "tdfs", "otdfctl", "assertions", "fixtures", "perf"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -100,3 +102,7 @@ testpaths = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-ra -v"
+markers = [
+    "benchmark: paired A/B performance cell; only collected under --bench",
+    "no_audit_logs: opt this test out of the default audit-log assertions",
+]

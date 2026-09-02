@@ -509,7 +509,26 @@ class SDK:
             )
         )
 
-    def encrypt(
+    def is_final_release(self) -> bool:
+        """True only for a plain ``vX.Y.Z`` tag -- no prerelease, no build metadata.
+
+        :meth:`is_released` accepts ``v0.29.0-rc.1``, and :meth:`semver`
+        parses it to the same ``(0, 29, 0)`` as the final release, so ordering
+        by semver alone leaves the two tied and directory-listing order breaks
+        the tie. Callers that must not pick a release candidate by accident --
+        choosing a benchmark baseline, for one -- want this instead.
+        """
+        return bool(re.fullmatch(r"(?:sdk/)?v?\d+\.\d+\.\d+", self.version))
+
+    def semver(self) -> tuple[int, int, int] | None:
+        """Parsed (major, minor, patch), or None for branch builds like 'main'.
+
+        Lets callers order the installed versions -- picking the newest
+        release as a benchmark baseline, for instance.
+        """
+        return _parse_semver(self.version.removeprefix("sdk/"))
+
+    def encrypt_command(
         self,
         pt_file: Path,
         ct_file: Path,
@@ -519,7 +538,17 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
-    ):
+    ) -> tuple[list[str], dict[str, str]]:
+        """Build the argv and CLI-specific env vars for an encrypt invocation.
+
+        Split out from :meth:`encrypt` so that callers which need to run the
+        command themselves -- the benchmark harness measures resource usage
+        around it -- share this one definition of the `XT_WITH_*` contract
+        instead of keeping a second copy that drifts.
+
+        The returned env holds only the CLI-specific overrides; merge it over
+        ``os.environ`` before handing it to a subprocess.
+        """
         use_ecwrap = container == "ztdf-ecwrap"
         fmt = simple_container(container)
         c = [
@@ -545,6 +574,29 @@ class SDK:
 
         if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
+        return c, local_env
+
+    def encrypt(
+        self,
+        pt_file: Path,
+        ct_file: Path,
+        mime_type: str = "application/octet-stream",
+        container: container_type = "ztdf",
+        attr_values: list[str] | None = None,
+        assert_value: str = "",
+        policy_mode: str = "encrypted",
+        target_mode: container_version | None = None,
+    ):
+        c, local_env = self.encrypt_command(
+            pt_file,
+            ct_file,
+            mime_type=mime_type,
+            container=container,
+            attr_values=attr_values,
+            assert_value=assert_value,
+            policy_mode=policy_mode,
+            target_mode=target_mode,
+        )
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
@@ -558,7 +610,7 @@ class SDK:
                 result.returncode, c, output=result.stdout, stderr=result.stderr
             )
 
-    def decrypt(
+    def decrypt_command(
         self,
         ct_file: Path,
         rt_file: Path,
@@ -566,10 +618,15 @@ class SDK:
         assert_keys: str = "",
         verify_assertions: bool = True,
         ecwrap: bool = False,
-        expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
-    ):
+    ) -> tuple[list[str], dict[str, str]]:
+        """Build the argv and CLI-specific env vars for a decrypt invocation.
+
+        See :meth:`encrypt_command` for why this is separate. ``expect_error``
+        has no counterpart here: it selects how the caller runs the command,
+        not what the command is.
+        """
         fmt = simple_container(container)
 
         c = [
@@ -591,6 +648,30 @@ class SDK:
             local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
         if ignore_kas_allowlist:
             local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
+        return c, local_env
+
+    def decrypt(
+        self,
+        ct_file: Path,
+        rt_file: Path,
+        container: container_type = "ztdf",
+        assert_keys: str = "",
+        verify_assertions: bool = True,
+        ecwrap: bool = False,
+        expect_error: bool = False,
+        kasallowlist: str = "",
+        ignore_kas_allowlist: bool = False,
+    ):
+        c, local_env = self.decrypt_command(
+            ct_file,
+            rt_file,
+            container=container,
+            assert_keys=assert_keys,
+            verify_assertions=verify_assertions,
+            ecwrap=ecwrap,
+            kasallowlist=kasallowlist,
+            ignore_kas_allowlist=ignore_kas_allowlist,
+        )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
