@@ -38,6 +38,16 @@ on:
         type: boolean
         default: false
         description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
+      run-zip64:
+        required: false
+        type: boolean
+        default: false
+        description: "Run the 2.1 GiB ZIP64 boundary tests (DSPX-4592; adds ~60m per encrypting SDK). Set java-ref to 'main latest' to also exercise the pre-fix java reader, which is the defect this covers."
+      force-supports:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated feature names to treat as supported regardless of what each SDK's `cli.sh supports` reports (e.g. 'chunky'). Use when evaluating a fix that has not been released yet: the version gates live in this repo and answer 'no' for exactly those unreleased builds, so the cells would otherwise skip. An unknown name fails the run rather than being ignored."
   workflow_call:
     inputs:
       platform-ref:
@@ -68,6 +78,14 @@ on:
         required: false
         type: boolean
         default: false
+      run-zip64:
+        required: false
+        type: boolean
+        default: false
+      force-supports:
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -77,6 +95,13 @@ concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
+# Workflow-scoped so every pytest step inherits it, rather than repeating the
+# same env line in each of them and having the next new job silently miss it.
+# Empty on pull_request and schedule (no inputs), which xtest reads as "force
+# nothing" -- so the PR gate and the nightlies are unaffected.
+env:
+  XT_FORCE_SUPPORTS: ${{ inputs.force-supports }}
+
 jobs:
   resolve-versions:
     timeout-minutes: 10
@@ -85,6 +110,7 @@ jobs:
       contents: read
     outputs:
       platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
+      platform-main-sha: ${{ steps.version-info.outputs.platform-main-sha }}
       platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
@@ -184,6 +210,27 @@ jobs:
                 versionData[sdkType] = [{ tag: ref, err: error.message }];
               }
             }
+
+            // Bench and ZIP64 hold the server on platform main independently
+            // of the platform lanes under test. Resolve that moving ref once
+            // here so every matrix job uses the same commit. Reuse the normal
+            // resolution when main was already requested; otherwise look up
+            // the branch without adding it to platform-tag-list.
+            let platformMainSha = versionData.platform
+              ?.find(({ tag, sha, err }) => tag === 'main' && sha && !err)
+              ?.sha;
+            if (!platformMainSha) {
+              const { data: platformMain } = await github.rest.repos.getBranch({
+                owner: 'opentdf',
+                repo: 'platform',
+                branch: 'main'
+              });
+              platformMainSha = platformMain.commit.sha;
+            }
+            if (!platformMainSha) {
+              throw new Error('Unable to resolve opentdf/platform main');
+            }
+            core.setOutput('platform-main-sha', platformMainSha);
 
             core.setOutput('all', JSON.stringify(versionData));
 
@@ -808,7 +855,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
           bootstrap-ref: main
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
@@ -930,7 +977,7 @@ jobs:
           done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the ${{ matrix.sdk }} cli
         if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
@@ -1004,6 +1051,336 @@ jobs:
         if: failure()
         with:
           name: bench-server-logs-${{ matrix.sdk }}
+          path: ${{ steps.run-platform.outputs.platform-log-file }}
+          if-no-files-found: ignore
+
+  # ZIP64 boundary conformance at 2.1 GiB (DSPX-4592).
+  #
+  # ZIP central-directory offsets and sizes are 32-bit *unsigned* on the wire.
+  # A reader that widens one with a signed read sees anything at or above 2**31
+  # as negative; at or above 2**32 the format mandates the ZIP64 sentinel, so
+  # the 32-bit field never holds a real value. That leaves exactly one broken
+  # window, [2**31, 2**32), and nothing in this suite reached it: `--large` is
+  # 5 GiB, which steps straight over.
+  #
+  # So this job runs one size, `medium` (2.1 GiB), and only that size. Anything
+  # smaller does not make it cheaper, it makes it vacuous --
+  # test_zip64.py asserts that an offset actually landed in the window rather
+  # than skipping, precisely so a mis-sized payload fails instead of passing.
+  #
+  # Never on pull requests: an hour of multi-GiB IO per SDK is not a PR gate.
+  zip64:
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    needs: resolve-versions
+    # Nightly cron only, matching bench. The Mon/Wed and weekly crons would
+    # re-run an identical comparison.
+    if: >-
+      github.event.schedule == '30 6 * * *' ||
+      ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+       && inputs.run-zip64)
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      # One runner per *encrypting* SDK; each decrypts with all three. Every
+      # runner therefore installs every SDK, and the split is about disk and
+      # wall clock rather than about what is installed: one encryptor per
+      # runner means one cached 2.1 GiB ciphertext, not three.
+      fail-fast: false
+      matrix:
+        sdk: [go, java, js]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: opentdf/tests
+          path: otdftests
+          persist-credentials: false
+
+      # Plaintext 2.1 GiB + one cached ciphertext 2.1 GiB + one decrypt output
+      # at a time 2.1 GiB is ~6.5 GiB, which the workspace volume cannot be
+      # relied on to hold alongside three SDK toolchains. /mnt is the runner's
+      # large ephemeral disk; XT_TMP_DIR moves the fixtures there.
+      - name: Reclaim disk and stage a scratch volume
+        id: scratch
+        run: |-
+          # Toolchains this job does not use. Removing them buys ~25 GiB on the
+          # workspace volume, which the platform containers and three SDK
+          # builds still have to share.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost || true
+          sudo mkdir -p /mnt/xtest-tmp
+          sudo chown "$(id -u):$(id -g)" /mnt/xtest-tmp
+          df -h / /mnt
+
+      - name: load extra keys from file
+        id: load-extra-keys
+        run: |-
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      ######## SPIN UP PLATFORM BACKEND #############
+      # Pinned to main with the default KAS only. This job is about the ZIP
+      # container the SDKs write and read; the six extra KAS instances the ABAC
+      # tests need would only consume runner memory and disk.
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
+        with:
+          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+          bootstrap-ref: main
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff # v1.4.0
+        with:
+          setup_only: true
+          token: ${{ secrets.BUF_TOKEN }}
+          version: "1.56.0"
+
+      # All three toolchains unconditionally: every runner decrypts with every
+      # SDK, so every runner builds all three.
+      - name: Set up JDK
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22.x"
+
+      - name: Capture platform otdfctl location
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
+              echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
+              exit 1
+            }
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      ######## INSTALL EVERY SDK #############
+      # The go install doubles as otdfctl, which conftest.py loads at import
+      # time to provision attributes and the KAS registry.
+      - name: Configure go sdk
+        id: configure-go
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: "${{ needs.resolve-versions.outputs.go }}"
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Configure java sdk
+        id: configure-java
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: java
+          version-info: "${{ needs.resolve-versions.outputs.java }}"
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Configure js sdk
+        id: configure-js
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: js
+          version-info: "${{ needs.resolve-versions.outputs.js }}"
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Cache Go modules
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Cache npm
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Cache Maven repository
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      - name: point java heads at the platform under test
+        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        run: |-
+          for row in $(echo "$java_version_info" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            if [[ "$HEAD" == "true" ]]; then
+              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
+            fi
+          done
+        env:
+          java_version_info: ${{ needs.resolve-versions.outputs.java }}
+          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+
+      - name: Build the go cli
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      - name: Build the java cli
+        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/java
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      - name: Build the js cli
+        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/js
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      ######## RUN #############
+      - name: Install test dependencies
+        run: uv sync --locked --no-build
+        working-directory: otdftests/xtest
+
+      # Deliberately serial: no -n / --dist. Three concurrent workers each
+      # holding a 2.1 GiB plaintext, ciphertext and decrypt output would
+      # exhaust the scratch volume long before the last cell.
+      #
+      # Note what is *not* here: --skip-released-pairs. The xct job derives
+      # that flag from SKIP_RELEASED_PAIRS to avoid re-testing release-against-
+      # release combinations, but a released java decryptor reading a 2.1 GiB
+      # container is the exact defect under test. Skipping it would leave this
+      # job green and blind.
+      - name: Run ZIP64 boundary tests
+        id: zip64
+        run: |-
+          uv run --frozen --no-build pytest -ra -v \
+            --sizes medium \
+            --sdks-encrypt "$ZIP64_SDK" \
+            --sdks-decrypt "go java js" \
+            --junitxml "test-results/zip64-${ZIP64_SDK}.xml" \
+            --html "test-results/zip64-${ZIP64_SDK}.html" \
+            --self-contained-html \
+            test_zip64.py
+        working-directory: otdftests/xtest
+        env:
+          ZIP64_SDK: ${{ matrix.sdk }}
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          SCHEMA_FILE: "manifest.schema.json"
+          PLATFORM_TAG: main
+          # go's heads: conftest reads this to locate otdfctl under
+          # sdk/go/dist/<head>/, regardless of which SDK is encrypting.
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          # Nothing here requests the audit-log fixture, and a rewrap audit
+          # event says nothing about the container's ZIP encoding.
+          DISABLE_AUDIT_ASSERTIONS: "1"
+          # Multi-GiB fixtures go on the runner's large ephemeral volume, not
+          # the workspace disk.
+          XT_TMP_DIR: /mnt/xtest-tmp
+          # The java shim pipes CLI stdout to a file with no -Xmx, and the js
+          # shim is a bare npx. Both runtimes honour these automatically, so
+          # the headroom is set here rather than by editing the shims. If a
+          # shim turns out to buffer the whole payload rather than stream it,
+          # that is a finding for the SDK, not a reason to shrink the payload.
+          JAVA_TOOL_OPTIONS: -Xmx6g
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      # A green job whose tests were all skipped is the exact failure mode this
+      # ticket exists to close, and it is invisible in the job status. Parse
+      # the junit XML rather than grepping the log: a skipped cell and a cell
+      # that printed the word "skipped" are different things.
+      - name: Confirm the ZIP64 cells actually ran
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        env:
+          ZIP64_SDK: ${{ matrix.sdk }}
+        run: |-
+          python3 - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          sdk = os.environ["ZIP64_SDK"]
+          path = f"test-results/zip64-{sdk}.xml"
+          try:
+              cases = ET.parse(path).getroot().iter("testcase")
+          except (OSError, ET.ParseError) as e:
+              sys.exit(f"::error::cannot read {path}: {e}")
+
+          ran, xfailed, skipped = [], [], []
+          for c in cases:
+              name = f"{c.get('classname')}::{c.get('name')}"
+              s = c.find("skipped")
+              if s is None:
+                  ran.append(name)
+              # pytest files xfail under <skipped>, but an xfailed cell did
+              # encrypt 2.1 GiB and did attempt the decrypt -- it exercised the
+              # defect and predicted the outcome. That is coverage, not a gap.
+              elif s.get("type") == "pytest.xfail":
+                  xfailed.append(name)
+              else:
+                  skipped.append(name)
+
+          print(f"{len(ran)} ran, {len(xfailed)} xfailed, {len(skipped)} skipped")
+          for n in xfailed:
+              print(f"  xfail:   {n}")
+          for n in skipped:
+              print(f"  skipped: {n}")
+
+          if not ran and not xfailed:
+              sys.exit(
+                  "::error::no ZIP64 cell executed. The job is green because "
+                  "nothing ran, not because the 2-4 GiB band is conformant."
+              )
+          PY
+
+      - name: Upload ZIP64 results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: success() || failure()
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} zip64-${{ matrix.sdk }}
+          path: |
+            otdftests/xtest/test-results/*.xml
+            otdftests/xtest/test-results/*.html
+          if-no-files-found: warn
+
+      - name: Upload server logs on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: zip64-server-logs-${{ matrix.sdk }}
           path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
 

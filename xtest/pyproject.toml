@@ -81,7 +81,16 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["abac", "tdfs", "otdfctl", "assertions", "fixtures", "perf"]
+known-first-party = [
+    "abac",
+    "tdfs",
+    "otdfctl",
+    "assertions",
+    "fixtures",
+    "perf",
+    "sizes",
+    "zipinspect",
+]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -105,4 +114,5 @@ addopts = "-ra -v"
 markers = [
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",
+    "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",
 ]

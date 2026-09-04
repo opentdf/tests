@@ -122,6 +122,20 @@ feature_type = Literal[
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
+    # Reader-side: default a segment's absent ``segmentSize`` /
+    # ``encryptedSegmentSize`` from the manifest-level
+    # ``segmentSizeDefault`` / ``encryptedSegmentSizeDefault``.
+    #
+    # Those per-segment fields are optional overrides -- ``segments/items`` in
+    # manifest.schema.json has no ``required`` list, while the two defaults are
+    # required on ``integrityInformation`` -- and web-sdk omits them whenever a
+    # segment is exactly default-sized. go and java deserialize them into
+    # primitive integers, so absent reads as 0, and the reader then hashes an
+    # empty buffer and dies inside the GMAC check. See DSPX-4589 finding 4 and
+    # DSPX-4590 finding 7.
+    #
+    # Only observable above one default segment; hence sizes.CHUNKY_BYTES.
+    "chunky",
     "connectrpc",
     # DPoP (RFC 9449): sender-constrained access tokens. SDK signs a DPoP proof
     # JWT per request; KAS validates the proof and binds the access token to
@@ -156,6 +170,48 @@ feature_type = Literal[
     "ns_grants",
     "obligations",
 ]
+
+
+def _parse_forced_supports(raw: str) -> frozenset[str]:
+    """Parse ``XT_FORCE_SUPPORTS`` into a set of feature names.
+
+    An unrecognised name is a hard error rather than a no-op. The override
+    exists to turn a skip into a real result, so a typo that quietly left the
+    skip in place would be indistinguishable from a clean run -- which is the
+    exact failure mode the override is meant to escape.
+    """
+    names = {n.strip() for n in raw.split(",") if n.strip()}
+    known = set(get_args(feature_type))
+    unknown = names - known
+    if unknown:
+        raise ValueError(
+            f"XT_FORCE_SUPPORTS names unknown feature(s) {sorted(unknown)}; "
+            f"valid features are {sorted(known)}"
+        )
+    return frozenset(names)
+
+
+#: Features to treat as supported no matter what the SDK reports.
+#:
+#: The ``supports`` case statements live in this repo (``sdk/*/cli.sh``) and
+#: answer from a *released* version number, so they say "no" for precisely the
+#: unreleased builds a fix needs to be evaluated against. Setting
+#: ``XT_FORCE_SUPPORTS=chunky`` alongside ``otdf-sdk-mgr install tip --ref ...``
+#: makes those cells run for real and report pass or fail.
+#:
+#: Applies to every SDK in the run. To force a feature for one side only, narrow
+#: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
+#: per-SDK syntax here.
+FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
+
+if FORCED_SUPPORTS:
+    logger.warning(
+        "XT_FORCE_SUPPORTS is set: treating %s as supported by every SDK. "
+        "Results for those features reflect the build under test, not the "
+        "shim's version gate.",
+        ", ".join(sorted(FORCED_SUPPORTS)),
+    )
+
 
 container_version = Literal["4.2.2", "4.3.0"]
 
@@ -693,6 +749,8 @@ class SDK:
                 )
 
     def supports(self, feature: feature_type) -> bool:
+        if feature in FORCED_SUPPORTS:
+            return True
         if feature in self._supports:
             return self._supports[feature]
         self._supports[feature] = self._uncached_supports(feature)
@@ -713,6 +771,22 @@ class SDK:
             case ("multikao", ("go" | "java")):
                 # go/java reconstruct by skipping already-satisfied splits, so a
                 # duplicate KAS on the same split has always decrypted.
+                return True
+            case ("chunky", "js"):
+                # web-sdk is the SDK that omits the sizes, and it defaults them
+                # on the way back in (lib/tdf3/src/tdf.ts destructures
+                # `segmentSize = segmentSizeDefault`). Both halves have been
+                # there since it started omitting them in 2022, so js->js has
+                # always round-tripped at multi-segment sizes.
+                #
+                # go and java answer this from their own `cli.sh supports`
+                # case statement, which is in this repo, not theirs -- see
+                # sdk/{go,java}/cli.sh. Both say no today. Flipping one is a
+                # deliberate edit *here* once the fix releases; it does not
+                # happen by itself when the SDK merges a patch.
+                #
+                # To evaluate a fix before it releases, set
+                # XT_FORCE_SUPPORTS=chunky -- see FORCED_SUPPORTS above.
                 return True
             case ("better-messages-2024", ("js" | "java")):
                 return True
@@ -787,6 +861,88 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
 
 def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
     return False
+
+
+def elides_segment_sizes(ct_file: Path) -> bool:
+    """True if any segment leaves its size to the manifest-level default.
+
+    Asked of the container rather than of the writer that produced it. Only
+    web-sdk omits these today, but "which SDK omits them" is a fact with a
+    version axis and a fix pending on two others, and reading the manifest
+    costs one central-directory seek. If go or java ever start eliding, the
+    gate below picks it up with no edit here.
+    """
+    integrity = manifest(ct_file).encryptionInformation.integrityInformation
+    return any(
+        s.segmentSize is None or s.encryptedSegmentSize is None
+        for s in integrity.segments
+    )
+
+
+def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
+    """Skip if ``ct_file`` needs segment-size defaulting and the reader lacks it.
+
+    A skip and not an xfail: this cell runs on the PR gate, where a
+    permanently-red job trains people to ignore it, and unlike
+    :func:`zip64_reader_xfail` it needs no dated guess about which release
+    carries the fix.
+
+    The cost is that it stays skipped until somebody edits
+    ``sdk/{go,java}/cli.sh`` to answer yes -- the ``supports`` case statement
+    lives in this repo, so a fix merging in java-sdk or platform does not flip
+    it. The acceptance criteria on DSPX-4589 and DSPX-4590 both name this cell
+    for that reason.
+
+    To evaluate an unreleased fix, set ``XT_FORCE_SUPPORTS=chunky`` (or pass
+    ``force-supports: chunky`` to the workflow dispatch) so this returns early
+    and the cell reports a real pass or fail. See :data:`FORCED_SUPPORTS`.
+    """
+    if decrypt_sdk.supports("chunky"):
+        return
+    if not elides_segment_sizes(ct_file):
+        return
+    pytest.skip(
+        f"{decrypt_sdk} sdk doesn't yet support [chunky]: {ct_file.name} omits "
+        "per-segment sizes, which this reader cannot default from the manifest"
+    )
+
+
+#: First java-sdk release containing java-sdk#393.
+#:
+#: Before it, ``ZipReader.readInt()`` sign-extends, so a central-directory
+#: offset in ``[2**31, 2**32)`` comes back negative and the read fails or
+#: seeks to nonsense. A 2.1 GiB payload puts the manifest's offset exactly
+#: there. See DSPX-4592.
+#:
+#: Keep this honest. Set too high, a fixed release keeps reporting XFAIL and
+#: a genuine regression hides behind it; set too low, the strict xfail turns
+#: every pre-fix cell into a hard failure. Update it when the release with
+#: #393 actually ships, not when the PR merges.
+JAVA_ZIP64_READER_FIX = (0, 19, 0)
+
+
+def zip64_reader_xfail(decrypt_sdk: SDK) -> pytest.MarkDecorator | None:
+    """An xfail marker for decryptors known to mishandle the 2-4 GiB band.
+
+    ``strict=True`` deliberately. The point of this test is to flip to green
+    when the sibling fixes land: an XPASS here means a build we believed
+    broken now reads the container correctly, and that should fail the run so
+    somebody comes and deletes this predicate rather than leaving a
+    permanently-XFAIL cell that nobody reads.
+
+    Branch builds (``main``) have no semver and are never marked -- they are
+    the builds expected to carry the fix.
+    """
+    sv = decrypt_sdk.semver()
+    if decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX:
+        return pytest.mark.xfail(
+            strict=True,
+            reason=(
+                f"DSPX-4592: {decrypt_sdk} predates java-sdk#393; readInt() "
+                "sign-extends the manifest's central-directory offset"
+            ),
+        )
+    return None
 
 
 def _parse_semver(version: str) -> tuple[int, int, int] | None:
