@@ -42,13 +42,23 @@ class EncryptFactory:
         mime_type: str = "text/plain",
     ) -> Path:
         attr_key = tuple(attr_values) if attr_values is not None else None
-        key = (str(encrypt_sdk), container, target_mode, attr_key, az, mime_type)
+        plaintext = self._pt_file.resolve()
+        key = (
+            plaintext,
+            str(encrypt_sdk),
+            container,
+            target_mode,
+            attr_key,
+            az,
+            mime_type,
+        )
         cached = self._cache.get(key)
         if cached is not None:
             return cached
         digest = hashlib.sha1(repr(key).encode()).hexdigest()[:8]
         ct_file = (
-            self._tmp_dir / f"ct-{self._label}-{encrypt_sdk}-{container}-{digest}.tdf"
+            self._tmp_dir
+            / f"ct-{self._label}-{self._pt_file.stem}-{encrypt_sdk}-{container}-{digest}.tdf"
         )
         encrypt_sdk.encrypt(
             self._pt_file,
@@ -97,24 +107,13 @@ def encrypted_tdf(
     return EncryptFactory(label, pt_file, tmp_dir, _encryption_cache)
 
 
-@pytest.fixture(scope="session")
-def _chunky_encryption_cache() -> dict[tuple, Path]:
-    """Separate from :func:`_encryption_cache`, and it has to be.
-
-    The cache key is built from the encrypt parameters only -- it does not
-    include the plaintext -- so a factory bound to a different input file
-    sharing this dict would silently hand back the other file's ciphertext.
-    """
-    return {}
-
-
 @pytest.fixture
 def chunky_tdf(
     request: pytest.FixtureRequest,
     chunky_pt_file: Path,
     tmp_dir: Path,
-    _chunky_encryption_cache: dict[tuple, Path],
+    _encryption_cache: dict[tuple, Path],
 ) -> EncryptFactory:
     """An :class:`EncryptFactory` bound to the 5 MiB multi-segment plaintext."""
     label = request.node.originalname or request.node.name
-    return EncryptFactory(label, chunky_pt_file, tmp_dir, _chunky_encryption_cache)
+    return EncryptFactory(label, chunky_pt_file, tmp_dir, _encryption_cache)
