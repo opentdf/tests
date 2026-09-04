@@ -111,11 +111,17 @@ def test_zip64_band_roundtrip(
         [e.name for e in in_window if e.has_zip64_extra] or "none",
     )
 
-    # Applied here, immediately before the read under test. Both encodings a
-    # writer may choose in this band are legal, so the failure being
-    # anticipated is always the reader's.
-    if mark := tdfs.zip64_reader_xfail(decrypt_sdk):
-        request.node.add_marker(mark)
+    # Keep the independent segment-defaulting incompatibility out of the
+    # ZIP64 result. In particular, web-sdk uses ZIP64 sentinels in this band,
+    # so those containers do not exercise Java's signed 32-bit read defect.
+    tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
+
+    # Apply the reader xfail only when a real 32-bit value (not the sentinel)
+    # exercises the signed-risk window. Writer conformance has already been
+    # checked above, so a failure from this point belongs to the reader.
+    if zipinspect.entries_with_raw_values_in_window(entries):
+        if mark := tdfs.zip64_reader_xfail(decrypt_sdk):
+            request.node.add_marker(mark)
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     try:

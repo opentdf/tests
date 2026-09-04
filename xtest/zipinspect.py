@@ -295,3 +295,26 @@ def entries_in_window(
         if in_zip64_window(e.local_header_offset)
         or in_zip64_window(e.uncompressed_size)
     ]
+
+
+def entries_with_raw_values_in_window(
+    entries: list[CentralDirectoryEntry],
+) -> list[CentralDirectoryEntry]:
+    """Entries that exercise unsigned reads of real 32-bit values in the window.
+
+    ``0xffffffff`` is numerically in the window, but it is a sentinel directing
+    the reader to the ZIP64 extra field. It therefore does not exercise the
+    signed 32-bit read defect this predicate identifies.
+    """
+    return [
+        e
+        for e in entries
+        if any(
+            value != ZIP64_SENTINEL_32 and in_zip64_window(value)
+            for value in (
+                e.raw_compressed_size,
+                e.raw_uncompressed_size,
+                e.raw_local_header_offset,
+            )
+        )
+    ]

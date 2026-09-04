@@ -397,6 +397,24 @@ class TestConformanceAssertions:
             "sentinel",
         }
 
+    def test_only_raw_window_values_exercise_signed_read(self, tmp_path: Path):
+        """The sentinel redirects to ZIP64 data and is not a signed read risk."""
+        p = synth_zip(
+            tmp_path / "mixed.zip",
+            [
+                cen_record("raw", raw_offset=MEDIUM_BYTES),
+                cen_record(
+                    "sentinel",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    zip64_offset=MEDIUM_BYTES + 1024,
+                ),
+            ],
+        )
+        entries = zipinspect.central_directory(p)
+        assert {
+            e.name for e in zipinspect.entries_with_raw_values_in_window(entries)
+        } == {"raw"}
+
     def test_describe_includes_the_numbers_needed_to_debug(self, tmp_path: Path):
         p = synth_zip(
             tmp_path / "d.zip", [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)]
