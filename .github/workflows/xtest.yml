@@ -110,6 +110,7 @@ jobs:
       contents: read
     outputs:
       platform-tag-to-sha: ${{ steps.version-info.outputs.platform-tag-to-sha }}
+      platform-main-sha: ${{ steps.version-info.outputs.platform-main-sha }}
       platform-tag-list: ${{ steps.version-info.outputs.platform-tag-list }}
       heads: ${{ steps.version-info.outputs.platform-heads }}
       default-tags: ${{ steps.version-info.outputs.default-tags }}
@@ -209,6 +210,27 @@ jobs:
                 versionData[sdkType] = [{ tag: ref, err: error.message }];
               }
             }
+
+            // Bench and ZIP64 hold the server on platform main independently
+            // of the platform lanes under test. Resolve that moving ref once
+            // here so every matrix job uses the same commit. Reuse the normal
+            // resolution when main was already requested; otherwise look up
+            // the branch without adding it to platform-tag-list.
+            let platformMainSha = versionData.platform
+              ?.find(({ tag, sha, err }) => tag === 'main' && sha && !err)
+              ?.sha;
+            if (!platformMainSha) {
+              const { data: platformMain } = await github.rest.repos.getBranch({
+                owner: 'opentdf',
+                repo: 'platform',
+                branch: 'main'
+              });
+              platformMainSha = platformMain.commit.sha;
+            }
+            if (!platformMainSha) {
+              throw new Error('Unable to resolve opentdf/platform main');
+            }
+            core.setOutput('platform-main-sha', platformMainSha);
 
             core.setOutput('all', JSON.stringify(versionData));
 
@@ -833,7 +855,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
-          platform-ref: main
+          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
           bootstrap-ref: main
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
@@ -955,7 +977,7 @@ jobs:
           done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: main
+          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the ${{ matrix.sdk }} cli
         if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
@@ -1104,7 +1126,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
-          platform-ref: main
+          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
           bootstrap-ref: main
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
@@ -1221,7 +1243,7 @@ jobs:
           done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: main
+          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the go cli
         if: fromJson(steps.configure-go.outputs.heads)[0] != null
