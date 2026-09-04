@@ -833,7 +833,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform-ref: main
           bootstrap-ref: main
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
@@ -955,7 +955,7 @@ jobs:
           done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform_ref: main
 
       - name: Build the ${{ matrix.sdk }} cli
         if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
@@ -1104,7 +1104,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
         with:
-          platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform-ref: main
           bootstrap-ref: main
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
@@ -1221,7 +1221,7 @@ jobs:
           done
         env:
           java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)['main'] }}
+          platform_ref: main
 
       - name: Build the go cli
         if: fromJson(steps.configure-go.outputs.heads)[0] != null
