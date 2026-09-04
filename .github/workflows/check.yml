@@ -36,9 +36,9 @@ jobs:
         working-directory: xtest
       # Offline tests for the harnesses whose own correctness gates a nightly
       # job: the benchmark statistics, measurement and CLI command builders,
-      # and the ZIP64 central-directory parser. No platform and no SDK builds
-      # required, so the part that has to be *correct* is checked on every PR
-      # rather than only when the nightly runs.
+      # the encryption fixture cache, and the ZIP64 central-directory parser.
+      # No platform and no SDK builds required, so the part that has to be
+      # *correct* is checked on every PR rather than only when the nightly runs.
       #
       # test_zip64_units.py matters disproportionately here: the nightly zip64
       # job's verdict is only as good as this parser, and a parser bug would
@@ -52,7 +52,8 @@ jobs:
         run: >-
           uv run --frozen --no-build pytest --no-header -q
           test_bench_stats.py test_bench_measure.py test_bench_runner.py
-          test_bench_arms.py test_sdk_commands.py test_zip64_units.py
+          test_bench_arms.py test_sdk_commands.py test_encryption_units.py
+          test_zip64_units.py
         working-directory: xtest
       - name: Lint and test otdf-local
         run: |
