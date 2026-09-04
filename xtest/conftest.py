@@ -429,6 +429,21 @@ def pytest_configure(config: pytest.Config):
         )
 
 
+def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
+    """Whether this item has a payload large enough for the ZIP64 tests.
+
+    Size-aware items must be judged by their own parametrized value.  Marked
+    items without a ``size`` parameter retain the session-level behaviour so
+    a future ZIP64 test with a purpose-built fixture is not dropped merely
+    because it does not use :func:`pt_file`.
+    """
+    callspec = getattr(item, "callspec", None)
+    item_size = callspec.params.get("size") if callspec is not None else None
+    if isinstance(item_size, str):
+        return sizes.exercises_zip64_window(item_size)
+    return any(sizes.exercises_zip64_window(size) for size in session_sizes)
+
+
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
@@ -447,11 +462,13 @@ def pytest_collection_modifyitems(
     """
     drop: list[pytest.Item] = []
     want_bench = bool(config.getoption("--bench", default=False))
-    want_zip64 = any(sizes.exercises_zip64_window(s) for s in resolve_sizes(config))
+    session_sizes = resolve_sizes(config)
     for item in items:
         if not want_bench and item.get_closest_marker("benchmark"):
             drop.append(item)
-        elif not want_zip64 and item.get_closest_marker("zip64"):
+        elif item.get_closest_marker("zip64") and not _item_exercises_zip64_window(
+            item, session_sizes
+        ):
             drop.append(item)
     if drop:
         dropped = set(map(id, drop))

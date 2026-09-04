@@ -14,9 +14,12 @@ unit test, and ``zipfile`` will not emit a 32-bit field holding a value in
 import struct
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+import conftest
 import zipinspect
 from sizes import (
     CHUNKY_BYTES,
@@ -182,6 +185,30 @@ class TestSizes:
         """It runs on the PR gate, so it must not creep toward the nightly's cost."""
         assert CHUNKY_BYTES < 64 * 2**20
         assert not in_zip64_window(CHUNKY_BYTES)
+
+
+class TestZip64Selection:
+    @pytest.mark.parametrize(
+        ("item_size", "expected"), [("small", False), ("medium", True)]
+    )
+    def test_mixed_session_uses_each_items_size(self, item_size: str, expected: bool):
+        item = cast(
+            pytest.Item,
+            SimpleNamespace(callspec=SimpleNamespace(params={"size": item_size})),
+        )
+
+        assert (
+            conftest._item_exercises_zip64_window(item, ["small", "medium"]) is expected
+        )
+
+    def test_item_without_size_uses_session_selection(self):
+        item = cast(
+            pytest.Item,
+            SimpleNamespace(callspec=SimpleNamespace(params={"container": "ztdf"})),
+        )
+
+        assert conftest._item_exercises_zip64_window(item, ["small", "medium"])
+        assert not conftest._item_exercises_zip64_window(item, ["small"])
 
 
 # --- zipinspect.py -----------------------------------------------------------
