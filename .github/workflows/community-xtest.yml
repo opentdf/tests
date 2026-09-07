@@ -319,8 +319,16 @@ jobs:
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
       - name: Build go CLI
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: make
+        run: |-
+          # Build when a head version was checked out OR when the released
+          # artifact failed to install and setup-cli-tool fell back to source
+          # (it symlinks the checkout into src/<tag>). Only skip when src/ is
+          # empty, i.e. every requested version came from a published artifact.
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       ######## Community Python SDK #############
@@ -361,10 +369,12 @@ jobs:
         run: |-
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           # Field declared at all (true or false) means this platform build
-          # understands the key_management preview flag → start km1 with it.
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
+          # understands the key_management flag → start km1 with it. Check the
+          # stable path (opentdf/platform#3896) and the older preview path.
+          key_management=$(yq e '.services.kas.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          preview_key_management=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$key_management:$preview_key_management" in
+            true:*|false:*|*:true|*:false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "supported=false" >> "$GITHUB_OUTPUT" ;;
           esac
           existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
@@ -553,8 +563,17 @@ jobs:
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
-      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: make
+      - name: Build go CLI
+        run: |-
+          # Build when a head version was checked out OR when the released
+          # artifact failed to install and setup-cli-tool fell back to source
+          # (it symlinks the checkout into src/<tag>). Only skip when src/ is
+          # empty, i.e. every requested version came from a published artifact.
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -591,10 +610,12 @@ jobs:
         run: |-
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           # Field declared at all (true or false) means this platform build
-          # understands the key_management preview flag → start km1 with it.
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
+          # understands the key_management flag → start km1 with it. Check the
+          # stable path (opentdf/platform#3896) and the older preview path.
+          key_management=$(yq e '.services.kas.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          preview_key_management=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$key_management:$preview_key_management" in
+            true:*|false:*|*:true|*:false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "supported=false" >> "$GITHUB_OUTPUT" ;;
           esac
           existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
@@ -765,8 +786,17 @@ jobs:
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
-      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: make
+      - name: Build go CLI
+        run: |-
+          # Build when a head version was checked out OR when the released
+          # artifact failed to install and setup-cli-tool fell back to source
+          # (it symlinks the checkout into src/<tag>). Only skip when src/ is
+          # empty, i.e. every requested version came from a published artifact.
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -938,8 +968,17 @@ jobs:
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
-      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: make
+      - name: Build go CLI
+        run: |-
+          # Build when a head version was checked out OR when the released
+          # artifact failed to install and setup-cli-tool fell back to source
+          # (it symlinks the checkout into src/<tag>). Only skip when src/ is
+          # empty, i.e. every requested version came from a published artifact.
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -1089,8 +1128,17 @@ jobs:
           platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
-      - if: fromJson(steps.configure-go.outputs.heads)[0] != null
-        run: make
+      - name: Build go CLI
+        run: |-
+          # Build when a head version was checked out OR when the released
+          # artifact failed to install and setup-cli-tool fell back to source
+          # (it symlinks the checkout into src/<tag>). Only skip when src/ is
+          # empty, i.e. every requested version came from a published artifact.
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
