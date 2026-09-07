@@ -361,10 +361,12 @@ jobs:
         run: |-
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           # Field declared at all (true or false) means this platform build
-          # understands the key_management preview flag → start km1 with it.
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
+          # understands the key_management flag → start km1 with it. Check the
+          # stable path (opentdf/platform#3896) and the older preview path.
+          key_management=$(yq e '.services.kas.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          preview_key_management=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$key_management:$preview_key_management" in
+            true:*|false:*|*:true|*:false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "supported=false" >> "$GITHUB_OUTPUT" ;;
           esac
           existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
@@ -591,10 +593,12 @@ jobs:
         run: |-
           OT_CONFIG_FILE="$(pwd)/opentdf.yaml"
           # Field declared at all (true or false) means this platform build
-          # understands the key_management preview flag → start km1 with it.
-          km_value=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
-          case "$km_value" in
-            true|false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
+          # understands the key_management flag → start km1 with it. Check the
+          # stable path (opentdf/platform#3896) and the older preview path.
+          key_management=$(yq e '.services.kas.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          preview_key_management=$(yq e '.services.kas.preview.key_management' "$OT_CONFIG_FILE" 2>/dev/null || echo "null")
+          case "$key_management:$preview_key_management" in
+            true:*|false:*|*:true|*:false) echo "supported=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "supported=false" >> "$GITHUB_OUTPUT" ;;
           esac
           existing_root_key=$(yq e '.services.kas.root_key' "$OT_CONFIG_FILE" 2>/dev/null || echo "")
