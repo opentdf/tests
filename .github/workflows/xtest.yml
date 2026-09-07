@@ -417,9 +417,15 @@ jobs:
       # target — works for both the platform-embedded reuse case and the
       # fresh platform-src/{tag} checkout case.
       - name: Prepare go cli
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        # Build when a head version was checked out OR when a released artifact
+        # failed to install and setup-cli-tool fell back to source (it symlinks
+        # the checkout into src/<tag>). Only skip when src/ is empty.
         run: |-
-          make
+          if find src -mindepth 1 -maxdepth 1 \( -type d -o -type l \) 2>/dev/null | grep -q .; then
+            make
+          else
+            echo "No go sources checked out; using installed artifacts only"
+          fi
         working-directory: otdftests/xtest/sdk/go
 
       ####### CHECKOUT JAVA SDK ##############
