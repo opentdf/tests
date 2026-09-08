@@ -38,6 +38,11 @@ on:
         type: boolean
         default: false
         description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
+      force-supports:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated feature names to treat as supported regardless of what each SDK's `cli.sh supports` reports. Use when evaluating a fix that has not been released yet: the version gates live in this repo and answer 'no' for exactly those unreleased builds, so the cells would otherwise skip. An unknown name fails the run rather than being ignored."
   workflow_call:
     inputs:
       platform-ref:
@@ -68,6 +73,10 @@ on:
         required: false
         type: boolean
         default: false
+      force-supports:
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -76,6 +85,13 @@ on:
 concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
+
+# Workflow-scoped so every pytest step inherits it, rather than repeating the
+# same env line in each of them and having the next new job silently miss it.
+# Empty on pull_request and schedule (no inputs), which xtest reads as "force
+# nothing" -- so the PR gate and the nightlies are unaffected.
+env:
+  XT_FORCE_SUPPORTS: ${{ inputs.force-supports }}
 
 jobs:
   resolve-versions:

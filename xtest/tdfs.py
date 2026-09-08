@@ -157,6 +157,48 @@ feature_type = Literal[
     "obligations",
 ]
 
+
+def _parse_forced_supports(raw: str) -> frozenset[str]:
+    """Parse ``XT_FORCE_SUPPORTS`` into a set of feature names.
+
+    An unrecognised name is a hard error rather than a no-op. The override
+    exists to turn a skip into a real result, so a typo that quietly left the
+    skip in place would be indistinguishable from a clean run -- which is the
+    exact failure mode the override is meant to escape.
+    """
+    names = {n.strip() for n in raw.split(",") if n.strip()}
+    known = set(get_args(feature_type))
+    unknown = names - known
+    if unknown:
+        raise ValueError(
+            f"XT_FORCE_SUPPORTS names unknown feature(s) {sorted(unknown)}; "
+            f"valid features are {sorted(known)}"
+        )
+    return frozenset(names)
+
+
+#: Features to treat as supported no matter what the SDK reports.
+#:
+#: The ``supports`` case statements live in this repo (``sdk/*/cli.sh``) and
+#: answer from a *released* version number, so they say "no" for precisely the
+#: unreleased builds a fix needs to be evaluated against. Setting
+#: ``XT_FORCE_SUPPORTS=<feature>`` alongside ``otdf-sdk-mgr install tip --ref
+#: ...`` makes those cells run for real and report pass or fail.
+#:
+#: Applies to every SDK in the run. To force a feature for one side only, narrow
+#: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
+#: per-SDK syntax here.
+FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
+
+if FORCED_SUPPORTS:
+    logger.warning(
+        "XT_FORCE_SUPPORTS is set: treating %s as supported by every SDK. "
+        "Results for those features reflect the build under test, not the "
+        "shim's version gate.",
+        ", ".join(sorted(FORCED_SUPPORTS)),
+    )
+
+
 container_version = Literal["4.2.2", "4.3.0"]
 
 policy_type = Literal["plaintext", "encrypted"]
@@ -693,6 +735,8 @@ class SDK:
                 )
 
     def supports(self, feature: feature_type) -> bool:
+        if feature in FORCED_SUPPORTS:
+            return True
         if feature in self._supports:
             return self._supports[feature]
         self._supports[feature] = self._uncached_supports(feature)
