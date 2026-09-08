@@ -27,6 +27,7 @@ fixture system.
 | `--sdks-encrypt`, `--sdks-decrypt` | Asymmetric encrypt/decrypt SDK selection (use when reproducing cross-SDK interop bugs). |
 | `--containers ztdf ztdf-ecwrap` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
+| `--sizes small,large` | Which payload sizes to parametrize over (`small` 128 B, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
 
 ## Environment Variables
 
@@ -34,6 +35,7 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 
 | Variable | Purpose |
 |----------|---------|
+| `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `large` runs. |
 | `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise. |
 
 ## Authoring a New Test
