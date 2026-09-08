@@ -41,13 +41,56 @@ class ErsConfig(BaseModel):
 
 class PlatformOverlay(BaseModel):
     dpop_enforce: bool = False
-    # Extra casbin policy lines (server.auth.policy.extension) — e.g. grant a
-    # group from the provider's token claims a platform role.
+    # Extra policy lines (server.auth.policy.extension) — e.g. grant a group
+    # from the provider's token claims a platform role. The platform accepts
+    # the legacy `g, <group>, role:<role>` lines and, on builds that replaced
+    # casbin with the grant table, translates them; the field name is kept
+    # for compatibility with existing provider files.
     casbin_extension: str | None = None
-    # Where casbin looks for group/role subjects (server.auth.policy.groups_claim;
-    # platform default realm_access.roles). External IdPs whose M2M tokens
-    # carry no roles need a claim that exists, e.g. Auth0's gty.
+    # Which token claim the platform reads group/role subjects from
+    # (server.auth.policy.groups_claim; platform default realm_access.roles).
+    # IdPs whose tokens carry no Keycloak-style roles need a claim that
+    # exists, e.g. Auth0's gty or authnz-rs's arkavo_roles.
     casbin_groups_claim: str | None = None
+
+
+class PlatformRequirement(BaseModel):
+    """The platform build this IdP can front.
+
+    The upstream platform accepts JWTs from any OIDC issuer, so most providers
+    keep the default. A fork that only verifies another token format (e.g. the
+    CWT-only arkavo-org fork) names itself here so a workflow can check out
+    the right repository before rendering the overlay.
+    """
+
+    repo: str = "opentdf/platform"
+    ref: str | None = None
+
+
+class SubjectCondition(BaseModel):
+    """How the test client shows up in the entity the platform resolves from
+    this IdP's tokens, for the subject mappings the xtest fixtures create.
+
+    Nothing about this is standard: Keycloak service-account tokens carry a
+    `clientId` claim, a CWT identifies the client only through `sub`, another
+    IdP may use `azp` or `client_id`. Declaring it per provider keeps the
+    harness free of any one IdP's conventions. `selector` is the platform's
+    subject-external-selector syntax (`.clientId`, `.sub`); `values` are the
+    identities the shared subject condition set should match.
+    """
+
+    selector: str = ".clientId"
+    values: list[str] = Field(
+        default_factory=lambda: ["opentdf", "opentdf-sdk", "opentdf-dpop"]
+    )
+
+
+class ServiceSource(BaseModel):
+    """Where a self-hosted IdP's source lives, for the workflow that builds it."""
+
+    repo: str
+    # Name of the workflow input that carries the ref to build.
+    ref_input: str
 
 
 class KnownIssue(BaseModel):
@@ -66,7 +109,13 @@ class IdpProvider(BaseModel):
     name: str
     display_name: str = ""
     # local: always available (Keycloak dev realm). external: needs secrets.
-    tier: Literal["local", "external"] = "external"
+    # self-hosted: built from source and run inside the job (see `service`);
+    # only workflows that know how to build it include the provider.
+    tier: Literal["local", "external", "self-hosted"] = "external"
+    # Bearer token format the IdP mints. Consumers (platform builds, SDKs)
+    # that only handle one format use this to decide whether they can
+    # participate; see `platform` and `sdks`.
+    token_format: Literal["jwt", "cwt"] = "jwt"
     # Who re-ups the tenant credentials when they expire.
     owner: str = ""
     # False while the tenant/secrets don't exist yet: the provider never gates
@@ -77,6 +126,10 @@ class IdpProvider(BaseModel):
     audience: str
     client_id: str
     client_secret: str
+    # Token endpoint, for CLIs that take it from the environment instead of
+    # discovering it from the platform well-known (opentdf-rs's xtest_cli).
+    # Leave unset to rely on discovery.
+    token_endpoint: str | None = None
     # Some IdPs bind DPoP per-client (Keycloak); most use the same client.
     dpop_client_id: str | None = None
     dpop_client_secret: str | None = None
@@ -91,6 +144,11 @@ class IdpProvider(BaseModel):
     capabilities: Capabilities = Field(default_factory=Capabilities)
     ers: ErsConfig = Field(default_factory=ErsConfig)
     platform_overlay: PlatformOverlay = Field(default_factory=PlatformOverlay)
+    platform: PlatformRequirement = Field(default_factory=PlatformRequirement)
+    # SDKs able to use this IdP's tokens; empty means no restriction.
+    sdks: list[str] = Field(default_factory=list)
+    subject_condition: SubjectCondition = Field(default_factory=SubjectCondition)
+    service: ServiceSource | None = None
     known_issues: list[KnownIssue] = Field(default_factory=list)
 
     def dpop_credentials(self) -> tuple[str, str]:

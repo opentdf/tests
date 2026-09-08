@@ -54,8 +54,14 @@ uv run pytest test_idp_conformance.py -v
    ```
 
    The overlay patches `server.auth.issuer` / `server.auth.audience`,
-   `server.auth.dpop.enforce`, and `services.entityresolution.mode` from the
-   provider YAML. `uv run python -m idp.platform_config --help` for usage.
+   `server.auth.dpop.enforce`, `server.auth.policy.{groups_claim,extension}`
+   and `services.entityresolution.mode` from the provider YAML.
+   `--fragment out.yaml` writes only those keys (merge with
+   `yq -i '. *= load("out.yaml")' opentdf.yaml`), and `--env` prints the
+   `export` lines the harness and SDK CLIs need for the provider
+   (`CLIENTID`, `CLIENTSECRET`, `TOKENENDPOINT` when declared,
+   `XT_SUBJECT_SELECTOR` / `XT_SUBJECT_VALUES`).
+   `uv run python -m idp.platform_config --help` for usage.
 3. Run the suite against that provider:
 
    ```bash
@@ -80,7 +86,13 @@ which skip the provider (or fail it under `--idp-strict`).
 |-------|---------|
 | `name` | Provider key — must match the file name (`<name>.yaml`). |
 | `display_name` | Human label for reports. |
-| `tier` | `local` (always available, e.g. Keycloak dev realm) or `external` (needs secrets). PRs run local only. |
+| `tier` | `local` (always available, e.g. Keycloak dev realm), `external` (needs secrets), or `self-hosted` (built from source and run inside the job; only workflows that know how to build it include it, see `service`). PRs run local only. |
+| `token_format` | `jwt` (default) or `cwt`. Platform builds and SDKs that handle only one format use it to decide whether they can participate. |
+| `platform.repo` / `platform.ref` | The platform build this IdP can front (default `opentdf/platform`). The CWT-only arkavo-org fork names itself here. |
+| `sdks` | SDKs able to use this IdP's tokens; empty means no restriction. |
+| `service.repo` / `service.ref_input` | For `self-hosted` providers: source repository and the workflow input carrying the ref to build. |
+| `token_endpoint` | Only for CLIs that read `TOKENENDPOINT` from the environment instead of discovering it (opentdf-rs's `xtest_cli`). Leave unset to rely on discovery. |
+| `subject_condition.selector` / `subject_condition.values` | How the test client appears in the entity the platform resolves from this IdP's tokens, for the subject mappings the attribute fixtures create. Keycloak: `.clientId` in `[opentdf, opentdf-sdk, opentdf-dpop]` (the default). A CWT from authnz-rs: `.sub` in `[client:opentdf]`. Exported to the harness as `XT_SUBJECT_SELECTOR` / `XT_SUBJECT_VALUES` by `--env`. |
 | `owner` | Who re-ups the tenant credentials when they expire. |
 | `onboarded` | `false` while the tenant/secrets don't exist yet: the provider never gates a run (skips with a pointer to its runbook, even `--idp-strict`) and the nightly matrix excludes it. Flip to `true` once the tenant is live. |
 | `issuer` | OIDC issuer URL. Compared **exactly** against the discovery document and the platform config — keep trailing slashes as the IdP emits them. |

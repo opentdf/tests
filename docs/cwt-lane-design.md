@@ -60,9 +60,15 @@ the same provider YAML).
   needs the same shape with `arkavo_roles` / `service-account`.
 - The fork's claims-mode entity resolution exposes the token's private claims
   (plus `sub`, `iss`, `jti`, `aud`) as the entity. xtest's shared subject
-  condition set (`fixtures/obligations.py::otdf_client_scs`) selects
-  `.clientId IN [opentdf, opentdf-sdk, opentdf-dpop]`; authnz-rs CWTs carry
-  no `clientId` today.
+  condition set (`fixtures/obligations.py::otdf_client_scs`) selected
+  `.clientId IN [opentdf, opentdf-sdk, opentdf-dpop]`, a Keycloak convention;
+  it now takes selector and values from the provider in use, so a CWT is
+  matched on `.sub IN [client:opentdf]` with no claim added to the token.
+- authnz-rs main (`b584d1c`+) also requires `AGENT_TOKEN_AUDIENCES`
+  (comma-separated) at startup, and its `client_credentials` entitlements are
+  attribute value FQNs (`https://arkavo.ai/attr/tdf/value/decrypt`), not
+  `tdf:decrypt`. The first spike ran a stale prebuilt binary; the re-run on
+  main confirmed both.
 - Policy administration in `test_tdf_roundtrip` fixtures runs through otdfctl
   (go, from the upstream platform), which authenticates with the same
   `opentdf`/`secret` client. The fork's casbin policy needs `role:admin` for
@@ -86,7 +92,7 @@ the same provider YAML).
 | SDKs | rust and swift, both directions | Include python (no CWT), go/java/js (not CWT SDKs) |
 | IdP config | `xtest/idp/providers/authnz-rs.yaml` + `idp.platform_config` overlay | Ad-hoc yq in the workflow |
 | IdP delivery | Build authnz-rs from source in the job (cargo, rust-cache) | Container image published from authnz-rs CI |
-| Entitlement | authnz-rs adds a `clientId` claim to client_credentials CWTs | Attribute-free (ecwrap-only) roundtrip |
+| Entitlement | Provider config declares how the test client is identified (`subject_condition: {selector: .sub, values: [client:opentdf]}`); the shared fixture reads it. No IdP change. | A client claim on the CWT (`clientId`, a Keycloak convention, or `azp`, an OIDC ID-token claim; neither is a registered CWT claim — arkavo-org/authnz-rs#61 closed); attribute-free (ecwrap-only) roundtrip |
 | go/java/js vs fork | Removed from `xtest.yml` (PR #11 reduced to the go build-gate fix) | Non-blocking lane |
 
 ## Architecture
@@ -100,7 +106,8 @@ community-xtest.yml
        └─ cwt-rust-swift  (macos-latest)              "rust × swift @ authnz-rs (CWT)"
             1. checkout tests; setup-xcode; uv + python; go; rust toolchain
             2. checkout arkavo-org/authnz-rs @ authnz-ref; cargo build --release
-            3. start authnz-rs :8899 (keys, site-association file, env)
+            3. start authnz-rs :8899 (keys, site-association file, env incl.
+               OIDC_ISSUER, OIDC_PLATFORM_AUDIENCE, AGENT_TOKEN_AUDIENCES, client)
             4. render provider overlay fragment:  idp.platform_config authnz-rs --fragment
             5. start-up-with-containers-macos
                  platform-repo: arkavo-org/opentdf-platform, platform-ref: fork-platform-ref
@@ -108,31 +115,31 @@ community-xtest.yml
                  config-overlay-file: <fragment>   (merged into opentdf.yaml before start)
                  pqc-enabled: false
             6. otdfctl (go@latest) for policy admin; build rust + swift CLIs
-            7. pytest -m stage1 --containers tdf
+            7. eval "$(python -m idp.platform_config authnz-rs --env)"
+               pytest -m stage1 --containers tdf
                  --sdks-encrypt "rust@main swift@main" --sdks-decrypt "rust@main swift@main"
                  --focus "rust swift" --no-audit-logs
-                 env: TOKENENDPOINT=http://localhost:8899/oauth/token
-                      KCFULLURL=http://localhost:8899  (issuer, for anything reading it)
+                 (env from --env: CLIENTID, CLIENTSECRET, TOKENENDPOINT,
+                  XT_SUBJECT_SELECTOR=.sub, XT_SUBJECT_VALUES=client:opentdf)
             8. upload results + authnz-rs.log + platform log
 ```
 
 Token flow: CLI → `client_credentials` at authnz-rs (`opentdf`/`secret`) →
 CWT → Bearer to platform/KAS → fork `CWTVerifier` validates against
-`/.well-known/cose-keys` → claims-mode ERS exposes `clientId` → subject
-mapping matches → rewrap allowed. otdfctl follows the same path for policy
+`/.well-known/cose-keys` → claims-mode ERS exposes `sub` → subject mapping
+on `.sub` matches → rewrap allowed. otdfctl follows the same path for policy
 writes and is authorised through `arkavo_roles: [service-account]` →
 `role:admin` (test-only mapping).
 
 ## Changes
 
-### 1. authnz-rs (PR in arkavo-org/authnz-rs)
+### 1. authnz-rs
 
-Add `client_id: Option<String>` to `CustomClaims` (`src/cwt.rs`), emitted as
-the text-label claim `clientId`, set in `handle_client_credentials_grant`
-(`src/oidc.rs`) to the authenticated `client_id`; add the same claim to the
-`id_token`. Keycloak service-account tokens carry `clientId`, which is why
-xtest's subject condition set selects it. Unit test: a client_credentials
-mint yields `clientId == client_id`.
+No change. An earlier draft added a client claim to the CWT (`clientId`,
+then `azp`; arkavo-org/authnz-rs#61, closed): both are borrowed
+conventions, neither is a registered CWT claim, and the token already
+identifies the client as `sub = client:<id>`. The harness adapts instead
+(see `subject_condition` below).
 
 ### 2. Provider config: `xtest/idp/providers/authnz-rs.yaml`
 
@@ -150,6 +157,15 @@ existing providers valid):
 - `service: {repo, ref_input}` — where the self-hosted IdP's source lives and
   which workflow input names its ref (documentation for the workflow; the
   build recipe itself lives in the workflow).
+- `subject_condition: {selector, values}` — how the test client appears in
+  the entity the platform resolves from this IdP's tokens. Default is the
+  Keycloak shape (`.clientId`, the three dev-realm clients); authnz-rs uses
+  `.sub` / `client:opentdf`. `fixtures/obligations.py::otdf_client_scs` reads
+  it from `XT_SUBJECT_SELECTOR` / `XT_SUBJECT_VALUES`, which
+  `idp.platform_config <provider> --env` prints along with `CLIENTID`,
+  `CLIENTSECRET` and `TOKENENDPOINT`.
+- `token_endpoint` — declared for CLIs that read `TOKENENDPOINT` from the
+  environment (opentdf-rs `xtest_cli`) rather than discovering it.
 
 Provider values: issuer `http://localhost:8899`, audience
 `http://localhost:8080`, client `opentdf`/`secret`, `ers.mode: claims`,
@@ -159,8 +175,9 @@ false`, `sdks: [rust, swift]`, `known_issues: []`.
 
 `idp.platform_config` gains `--fragment`, writing only the overlay keys as a
 YAML fragment that a config step can merge with
-`yq -i '. *= load("fragment.yaml")' opentdf.yaml`. The existing `--base/--out`
-mode is unchanged.
+`yq -i '. *= load("fragment.yaml")' opentdf.yaml`, and `--env`, printing the
+harness/CLI exports above. The existing `--base/--out` mode renders the same
+output as before for the JWT providers.
 
 ### 3. macOS action inputs (`.github/actions/start-up-with-containers-macos`)
 
@@ -224,8 +241,8 @@ gets a short "CWT lane" section pointing here; project memory updated.
 
 ## Verification
 
-1. authnz-rs PR: unit test for `clientId`; local spike re-run shows the claim
-   in the decoded CWT.
+1. Local spike re-run on authnz-rs main: discovery advertises `cose_keys_uri`,
+   client_credentials mints a CWT with `sub client:opentdf` (done 2026-09-07).
 2. Provider schema: `uv run pytest test_self.py` plus ruff/pyright in `xtest`;
    `uv run python -m idp.platform_config authnz-rs --fragment` renders the
    expected keys; `keycloak`/`auth0` renders are byte-identical to before.
