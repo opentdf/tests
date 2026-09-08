@@ -29,7 +29,8 @@ inputs:
     description: >-
       Optional YAML file deep-merged into opentdf.yaml after the generated
       config and before the platform starts (yq `. *= load(...)`). Relative
-      paths resolve against the workspace. Empty means no overlay.
+      paths resolve against the workspace. Empty means no overlay; required
+      when idp is `external`. Contents are never echoed to the log.
     default: ''
   extra-keys:
     required: false
@@ -96,6 +97,10 @@ runs:
           exit 1
         fi
         case "${IDP}" in keycloak|external) ;; *) echo "bad idp (expected keycloak|external)"; exit 1 ;; esac
+        if [[ "${IDP}" == "external" && -z "${CONFIG_OVERLAY_FILE}" ]]; then
+          echo "Error: idp=external requires config-overlay-file (the platform would otherwise keep the stock Keycloak issuer with no Keycloak running)."
+          exit 1
+        fi
         if [[ -n "${CONFIG_OVERLAY_FILE}" ]]; then
           overlay="${CONFIG_OVERLAY_FILE}"
           [[ "${overlay}" = /* ]] || overlay="${GITHUB_WORKSPACE}/${overlay}"
@@ -340,11 +345,12 @@ runs:
         OVERLAY="${CONFIG_OVERLAY_FILE}"
         [[ "${OVERLAY}" = /* ]] || OVERLAY="${GITHUB_WORKSPACE}/${OVERLAY}"
         export OVERLAY
-        echo "--- overlay ${OVERLAY} ---"
-        cat "${OVERLAY}"
+        # Never dump the overlay: it may carry IdP client secrets. Log shape only.
+        echo "--- overlay ${OVERLAY} (top-level keys) ---"
+        yq e 'keys' "${OVERLAY}"
         yq e '. *= load(strenv(OVERLAY))' -i opentdf.yaml
-        echo "--- opentdf.yaml after overlay (server.auth, services.entityresolution) ---"
-        yq e '.server.auth, .services.entityresolution' opentdf.yaml
+        echo "--- opentdf.yaml after overlay (non-secret auth fields) ---"
+        yq e '{"issuer": .server.auth.issuer, "audience": .server.auth.audience, "dpop": .server.auth.dpop, "ers_mode": .services.entityresolution.mode}' opentdf.yaml
 
     - name: Download and start Keycloak (native JVM)
       if: ${{ inputs.idp == 'keycloak' }}
