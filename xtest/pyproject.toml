@@ -81,7 +81,15 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["abac", "tdfs", "otdfctl", "assertions", "fixtures", "perf"]
+known-first-party = [
+    "abac",
+    "tdfs",
+    "otdfctl",
+    "assertions",
+    "fixtures",
+    "perf",
+    "sizes",
+]
 
 [tool.ruff.format]
 quote-style = "double"

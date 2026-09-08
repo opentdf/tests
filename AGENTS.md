@@ -56,6 +56,8 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 - `OT_ROOT_KEY` — root key for key-management tests
 - `SCHEMA_FILE` — path to manifest schema file
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
+- `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
+  Point it at a large volume for multi-GiB runs.
 - `XT_FORCE_SUPPORTS` — comma-separated feature names to treat as supported
   regardless of what each SDK's `cli.sh supports` reports. See below.
 
