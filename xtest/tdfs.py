@@ -883,8 +883,9 @@ def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
     """Skip if ``ct_file`` needs segment-size defaulting and the reader lacks it.
 
     A skip and not an xfail: this cell runs on the PR gate, where a
-    permanently-red job trains people to ignore it, and it needs no dated
-    guess about which release carries the fix.
+    permanently-red job trains people to ignore it, and unlike
+    :func:`zip64_reader_xfail` it needs no dated guess about which release
+    carries the fix.
 
     The cost is that it stays skipped until somebody edits
     ``sdk/{go,java}/cli.sh`` to answer yes -- the ``supports`` case statement
@@ -904,6 +905,44 @@ def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
         f"{decrypt_sdk} sdk doesn't yet support [chunky]: {ct_file.name} omits "
         "per-segment sizes, which this reader cannot default from the manifest"
     )
+
+
+#: First java-sdk release containing java-sdk#393.
+#:
+#: Before it, ``ZipReader.readInt()`` sign-extends, so a central-directory
+#: offset in ``[2**31, 2**32)`` comes back negative and the read fails or
+#: seeks to nonsense. A 2.1 GiB payload puts the manifest's offset exactly
+#: there. See DSPX-4592.
+#:
+#: Keep this honest. Set too high, a fixed release keeps reporting XFAIL and
+#: a genuine regression hides behind it; set too low, the strict xfail turns
+#: every pre-fix cell into a hard failure. Update it when the release with
+#: #393 actually ships, not when the PR merges.
+JAVA_ZIP64_READER_FIX = (0, 19, 0)
+
+
+def zip64_reader_xfail(decrypt_sdk: SDK) -> pytest.MarkDecorator | None:
+    """An xfail marker for decryptors known to mishandle the 2-4 GiB band.
+
+    ``strict=True`` deliberately. The point of this test is to flip to green
+    when the sibling fixes land: an XPASS here means a build we believed
+    broken now reads the container correctly, and that should fail the run so
+    somebody comes and deletes this predicate rather than leaving a
+    permanently-XFAIL cell that nobody reads.
+
+    Branch builds (``main``) have no semver and are never marked -- they are
+    the builds expected to carry the fix.
+    """
+    sv = decrypt_sdk.semver()
+    if decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX:
+        return pytest.mark.xfail(
+            strict=True,
+            reason=(
+                f"DSPX-4592: {decrypt_sdk} predates java-sdk#393; readInt() "
+                "sign-extends the manifest's central-directory offset"
+            ),
+        )
+    return None
 
 
 def _parse_semver(version: str) -> tuple[int, int, int] | None:
