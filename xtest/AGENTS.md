@@ -28,6 +28,14 @@ fixture system.
 | `--containers ztdf ztdf-ecwrap` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
 
+## Environment Variables
+
+Beyond the repo-wide ones in `../AGENTS.md`:
+
+| Variable | Purpose |
+|----------|---------|
+| `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise. |
+
 ## Authoring a New Test
 
 1. Pick the right module — group by concern, not by SDK.
