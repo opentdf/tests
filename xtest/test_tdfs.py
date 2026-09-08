@@ -113,6 +113,7 @@ def test_chunky_roundtrip(
     decrypt_sdk: tdfs.SDK,
     chunky_pt_file: Path,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
     attribute_default_rsa: Attribute,
     chunky_tdf: EncryptFactory,
 ):
@@ -154,8 +155,10 @@ def test_chunky_roundtrip(
     tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
 
     rt_file = chunky_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(chunky_pt_file, rt_file, shallow=False)
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
 
 def test_tdf_spec_target_422(

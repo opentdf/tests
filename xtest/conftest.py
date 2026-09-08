@@ -595,7 +595,7 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
 
 @pytest.fixture(scope="session")
 def chunky_pt_file(tmp_dir: Path) -> Path:
-    """A 5 MiB plaintext: several segments, every one of them default-sized.
+    """A 5 MiB plaintext: several segments, including default-sized ones.
 
     Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
     sizes would fan out every test that takes :func:`pt_file` -- the whole of
