@@ -209,6 +209,9 @@ Existing callers pass none of these and behave exactly as today.
   `authnz/authnz-rs.log`.
 - The capstone `community-xtest` job adds the new job to its required set
   with the same skipped-when-stage-filtered rule.
+- Upload `test-results/**` (junit, html, log, `lane.json`) as
+  `community-stage2-cwt-rust-swift`, and `authnz/authnz-rs.log` with the
+  platform log in the failure-only server-logs artifact.
 - Because the fork validates discovery at boot, authnz-rs must be healthy
   before the macOS action runs.
 
@@ -224,10 +227,40 @@ PR #11 is reduced to the go build-gate fix (build when a released otdfctl
 falls back to source). The vendored Ubuntu action, `arkavo-main` lane and
 fork plumbing are removed.
 
-### 7. Docs
+### 7. Pages report (`community-pages.yml` + `xtest/reporting`)
+
+The GitHub Pages site is built from the artifacts of the latest Community
+X-Test run on `main` (`community-pages.yml` downloads `*community-*stage*`
+and runs `reporting.generate_site`). The CWT lane must show up there as its
+own matrix, not merge into the Keycloak cells:
+
+- **Artifact name** `community-stage2-cwt-rust-swift` (matches the existing
+  download pattern; the comment in `community-pages.yml` listing artifact
+  names is updated, and the `workflow_run` trigger needs no change).
+- **Lane label.** The generator keys interop pairs by (encrypt, decrypt)
+  only, so rust×swift results from the CWT lane would fold into the same
+  cells as the Keycloak stage-2 lane. The CWT job writes a
+  `test-results/lane.json` (`{lane, idp, token_format, platform_repo,
+  platform_ref}`; a new `reporting.export_lane` helper fed from the provider
+  YAML), and `generate_site.collect` attributes every junit under that
+  artifact directory to the lane. Rendering: the existing "Interop matrix"
+  keeps the default (Keycloak / JWT / `opentdf/platform`) lanes; each
+  additional lane gets its own "Interop matrix — authnz-rs (CWT) on
+  arkavo-org/opentdf-platform" table, plus a lane row in the provenance box.
+  This is the IdP / token-format dimension on the page, ready for the
+  superset matrix.
+- **Capability snapshots.** `supports.json` is keyed by SDK and would
+  collide across lanes, so the CWT lane exports none: SDK capabilities do
+  not depend on the IdP. The go peer snapshot is likewise only exported by
+  the python stage-1 job today.
+- **IdP conformance section** is unchanged (fed by `idp-conformance-*`
+  artifacts); authnz-rs joins it when CWT black-box checks exist.
+
+### 8. Docs
 
 README community table gains the CWT lane row; `docs/community-conformance.md`
-gets a short "CWT lane" section pointing here; project memory updated.
+gets a short "CWT lane" section pointing here (CI, badge ownership, and the
+Pages report); project memory updated.
 
 ## Failure semantics
 
@@ -246,11 +279,15 @@ gets a short "CWT lane" section pointing here; project memory updated.
 2. Provider schema: `uv run pytest test_self.py` plus ruff/pyright in `xtest`;
    `uv run python -m idp.platform_config authnz-rs --fragment` renders the
    expected keys; `keycloak`/`auth0` renders are byte-identical to before.
-3. Workflow dry run: `workflow_dispatch` with `stage: 2` on the branch. Early
+3. Pages: a `reporting.generate_site` unit test with a fixture artifact tree
+   containing a Keycloak stage-2 lane and a CWT lane renders two interop
+   matrices; a manual `community-pages.yml` dispatch after the first green
+   lane run shows the CWT matrix on the site.
+4. Workflow dry run: `workflow_dispatch` with `stage: 2` on the branch. Early
    signals: authnz-rs discovery reachable; platform boots without the
    `cose_keys_uri` error; `Platform version` step prints 0.15.0; otdfctl
    policy fixtures succeed (admin mapping works); pytest collects 4 pairs.
-4. Existing stage-1/stage-2 jobs and the IdP conformance workflow stay green.
+5. Existing stage-1/stage-2 jobs and the IdP conformance workflow stay green.
 
 ## Risks
 
