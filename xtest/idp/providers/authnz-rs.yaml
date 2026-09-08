@@ -1,0 +1,49 @@
+# authnz-rs (https://github.com/arkavo-org/authnz-rs): WebAuthn IdP that mints
+# CWT (COSE_Sign1, ES256) bearer tokens and publishes its keys at
+# /.well-known/cose-keys. Built from source and run inside the job; see
+# docs/cwt-lane-design.md. Only the CWT-only platform fork verifies these
+# tokens, and only the SDKs listed under `sdks` pass them through.
+name: authnz-rs
+display_name: "authnz-rs (CWT, self-hosted)"
+tier: self-hosted
+owner: "arkavo-org"
+token_format: cwt
+service:
+  repo: arkavo-org/authnz-rs
+  ref_input: authnz-ref
+platform:
+  repo: arkavo-org/opentdf-platform
+  ref: main
+sdks: [rust, swift]
+# The workflow starts authnz-rs on :8899 with OIDC_ISSUER set to this value and
+# OIDC_PLATFORM_AUDIENCE set to `audience`, so minted tokens carry
+# aud = [<client_id>, <audience>].
+issuer: "http://localhost:8899"
+audience: "http://localhost:8080"
+client_id: "opentdf"
+client_secret: "secret"
+token_endpoint: "http://localhost:8899/oauth/token"
+token_endpoint_params: {}
+capabilities:
+  # authnz-rs ignores the DPoP proof on the token request today: tokens carry
+  # no cnf, which is fine while the platform runs with enforceDPoP: false.
+  dpop: false
+  custom_audience: false
+  configurable_token_lifetime: false
+ers:
+  mode: claims
+  required_claims: [sub]
+platform_overlay:
+  dpop_enforce: false
+  # client_credentials tokens carry arkavo_roles: [service-account]; the
+  # single test client also administers policy, so bind that role to admin.
+  # Test-only mapping.
+  casbin_groups_claim: arkavo_roles
+  casbin_extension: |
+    g, service-account, role:admin
+# A CWT identifies the client only through `sub` (client:<client_id>); the
+# claims-mode ERS exposes it as `.sub`.
+subject_condition:
+  selector: .sub
+  values: ["client:opentdf"]
+known_issues: []

@@ -6,23 +6,50 @@ This module contains fixtures for testing TDF obligations:
 - Obligation triggers (scoped and unscoped)
 """
 
+import os
+
 import pytest
 
 import abac
 import tdfs
 from otdfctl import OpentdfCommandLineTool
 
+# How the test client appears in the entity the platform resolves from the
+# IdP's tokens. The defaults describe the local Keycloak dev realm, whose
+# service-account tokens carry a `clientId` claim. Other IdPs identify the
+# client differently (a CWT only through `sub`), so the provider config
+# supplies these via `python -m idp.platform_config <provider> --env`.
+DEFAULT_SUBJECT_SELECTOR = ".clientId"
+DEFAULT_SUBJECT_VALUES = ["opentdf", "opentdf-sdk", "opentdf-dpop"]
+
+
+def subject_condition_from_env() -> tuple[str, list[str]]:
+    """Selector and values for the shared client subject condition set.
+
+    ``XT_SUBJECT_SELECTOR`` overrides the selector; ``XT_SUBJECT_VALUES`` is a
+    comma-separated list of identities to match. Empty or unset means the
+    Keycloak defaults.
+    """
+    selector = os.getenv("XT_SUBJECT_SELECTOR", "").strip() or DEFAULT_SUBJECT_SELECTOR
+    raw_values = os.getenv("XT_SUBJECT_VALUES", "")
+    values = [v.strip() for v in raw_values.split(",") if v.strip()]
+    return selector, values or list(DEFAULT_SUBJECT_VALUES)
+
 
 @pytest.fixture(scope="module")
 def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet:
     """
-    Creates a standard subject condition set for OpenTDF clients.
-    This condition set matches client IDs 'opentdf', 'opentdf-sdk', or
-    'opentdf-dpop' (the DPoP-bound client used by the DPoP tests).
+    Creates the standard subject condition set for the test client(s).
+
+    By default it matches Keycloak client IDs 'opentdf', 'opentdf-sdk', or
+    'opentdf-dpop' (the DPoP-bound client used by the DPoP tests) via the
+    `.clientId` claim. The selector and values come from the IdP provider in
+    use (see subject_condition_from_env).
 
     Returns:
         abac.SubjectConditionSet: The created subject condition set
     """
+    selector, values = subject_condition_from_env()
     sc: abac.SubjectConditionSet = otdfctl.scs_create(
         [
             abac.SubjectSet(
@@ -31,13 +58,9 @@ def otdf_client_scs(otdfctl: OpentdfCommandLineTool) -> abac.SubjectConditionSet
                         boolean_operator=abac.ConditionBooleanTypeEnum.OR,
                         conditions=[
                             abac.Condition(
-                                subject_external_selector_value=".clientId",
+                                subject_external_selector_value=selector,
                                 operator=abac.SubjectMappingOperatorEnum.IN,
-                                subject_external_values=[
-                                    "opentdf",
-                                    "opentdf-sdk",
-                                    "opentdf-dpop",
-                                ],
+                                subject_external_values=values,
                             )
                         ],
                     )

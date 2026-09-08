@@ -4,6 +4,7 @@ name: keycloak
 display_name: "Keycloak (local dev realm)"
 tier: local
 owner: "opentdf (provisioned locally)"
+token_format: jwt
 issuer: "${KCFULLURL:-http://localhost:8888/auth/realms/opentdf}"
 audience: "http://localhost:8080"
 client_id: "${CLIENTID:-opentdf}"
@@ -27,3 +28,8 @@ ers:
   required_claims: [sub]
 platform_overlay:
   dpop_enforce: false
+# Keycloak puts a `clientId` claim on service-account tokens; the dev realm
+# provisions these three clients.
+subject_condition:
+  selector: .clientId
+  values: ["opentdf", "opentdf-sdk", "opentdf-dpop"]
