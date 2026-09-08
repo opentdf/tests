@@ -8,6 +8,22 @@ from typing import cast
 import pytest
 
 import conftest
+import sizes
+
+
+class TestSizes:
+    def test_chunky_clears_every_sdk_default_segment(self):
+        """5 MiB has to buy more than one *default-sized* segment, everywhere.
+
+        Segment defaults observed in the live 2.1 GiB run: web-sdk 1 MiB, go
+        and java ~2 MiB. Two full default segments from the largest of those
+        is 4 MiB, so anything at or below that tests nothing for go and java.
+        The runtime counterpart is the ``len(segments) > 1`` assertion in
+        test_tdfs.py::test_chunky_roundtrip, which catches a default this
+        constant has not been told about.
+        """
+        largest_known_default = 2 * 2**20
+        assert sizes.CHUNKY_BYTES > 2 * largest_known_default
 
 
 class TestSizesOptionParsing:

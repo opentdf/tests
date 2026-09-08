@@ -74,7 +74,7 @@ anything.
 
 ```bash
 otdf-sdk-mgr install tip --ref pr:396 java     # pr:N works on install
-XT_FORCE_SUPPORTS=hexless uv run pytest test_tdfs.py --sdks "js java" -v
+XT_FORCE_SUPPORTS=chunky uv run pytest test_tdfs.py --sdks "js java" -v
 ```
 
 It applies to every SDK in the run — to force one side only, narrow with
