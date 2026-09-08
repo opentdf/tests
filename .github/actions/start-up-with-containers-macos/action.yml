@@ -2,14 +2,35 @@ name: 'start-up-platform-macos-native'
 
 description: >-
   Start OpenTDF platform dependencies natively on macOS (no Docker/Colima):
-  Homebrew PostgreSQL, Keycloak JVM distribution, then platform binary.
-  Outputs match opentdf/platform test/start-up-with-containers for xtest.
+  Homebrew PostgreSQL, Keycloak JVM distribution (unless `idp: external`),
+  then platform binary from `platform-repo`, optionally patched with
+  `config-overlay-file`. Outputs match opentdf/platform
+  test/start-up-with-containers for xtest.
 
 inputs:
+  platform-repo:
+    required: false
+    description: 'GitHub repository (owner/name) to check out the platform from'
+    default: 'opentdf/platform'
   platform-ref:
     required: false
     description: 'The ref to check out for the platform'
     default: 'main'
+  idp:
+    required: false
+    description: >-
+      Identity provider for the platform: `keycloak` installs, starts and
+      provisions a native Keycloak; `external` skips every Keycloak step and
+      expects the caller to run its own IdP and point the platform at it via
+      config-overlay-file.
+    default: 'keycloak'
+  config-overlay-file:
+    required: false
+    description: >-
+      Optional YAML file deep-merged into opentdf.yaml after the generated
+      config and before the platform starts (yq `. *= load(...)`). Relative
+      paths resolve against the workspace. Empty means no overlay.
+    default: ''
   extra-keys:
     required: false
     description: >-
@@ -54,7 +75,10 @@ runs:
     - name: Validate inputs
       shell: bash
       env:
+        PLATFORM_REPO: ${{ inputs.platform-repo }}
         PLATFORM_REF: ${{ inputs.platform-ref }}
+        IDP: ${{ inputs.idp }}
+        CONFIG_OVERLAY_FILE: ${{ inputs.config-overlay-file }}
         EXTRA_KEYS: ${{ inputs.extra-keys }}
         EC_TDF_ENABLED: ${{ inputs.ec-tdf-enabled }}
         PQC_ENABLED: ${{ inputs.pqc-enabled }}
@@ -63,9 +87,22 @@ runs:
         PROVISION_POLICY_FIXTURES: ${{ inputs.provision-policy-fixtures }}
       run: |
         set -euo pipefail
+        if [[ ! "${PLATFORM_REPO}" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+          echo "Error: platform-repo must be owner/name."
+          exit 1
+        fi
         if [[ ! "${PLATFORM_REF}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
           echo "Error: platform-ref has invalid characters."
           exit 1
+        fi
+        case "${IDP}" in keycloak|external) ;; *) echo "bad idp (expected keycloak|external)"; exit 1 ;; esac
+        if [[ -n "${CONFIG_OVERLAY_FILE}" ]]; then
+          overlay="${CONFIG_OVERLAY_FILE}"
+          [[ "${overlay}" = /* ]] || overlay="${GITHUB_WORKSPACE}/${overlay}"
+          if [[ ! -f "${overlay}" ]]; then
+            echo "Error: config-overlay-file not found: ${overlay}"
+            exit 1
+          fi
         fi
         if ! jq -e 'type == "array"' <<< "${EXTRA_KEYS}" >/dev/null 2>&1; then
           echo "Error: extra-keys must be a JSON array."
@@ -80,7 +117,7 @@ runs:
     - name: Check out platform
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
-        repository: opentdf/platform
+        repository: ${{ inputs.platform-repo }}
         path: otdf-test-platform
         ref: ${{ inputs.platform-ref }}
         persist-credentials: false
@@ -96,6 +133,7 @@ runs:
         yq --version
 
     - name: Install OpenJDK (keytool + Keycloak)
+      if: ${{ inputs.idp == 'keycloak' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -166,6 +204,8 @@ runs:
     - name: Generate KAS / TLS keys (no Docker)
       shell: bash
       working-directory: otdf-test-platform
+      env:
+        IDP: ${{ inputs.idp }}
       run: |
         set -euo pipefail
         # Same crypto as init-temp-keys.sh, but keytool runs on the host JDK
@@ -179,20 +219,23 @@ runs:
         go run ./service/cmd/keygen -output "$opt_output"
 
         mkdir -p keys
-        openssl req -x509 -nodes -newkey RSA:2048 -subj "/CN=ca" \
-          -keyout keys/keycloak-ca-private.pem -out keys/keycloak-ca.pem -days 365
-        printf "subjectAltName=DNS:localhost,IP:127.0.0.1" >keys/sanX509.conf
-        printf "[req]\ndistinguished_name=req_distinguished_name\n[req_distinguished_name]\n[alt_names]\nDNS.1=localhost\nIP.1=127.0.0.1" >keys/req.conf
-        openssl req -new -nodes -newkey rsa:2048 -keyout keys/localhost.key -out keys/localhost.req \
-          -batch -subj "/CN=localhost" -config keys/req.conf
-        openssl x509 -req -in keys/localhost.req -CA keys/keycloak-ca.pem -CAkey keys/keycloak-ca-private.pem \
-          -CAcreateserial -out keys/localhost.crt -days 3650 -sha256 -extfile keys/sanX509.conf
-        openssl pkcs12 -export -in keys/keycloak-ca.pem -inkey keys/keycloak-ca-private.pem \
-          -out keys/ca.p12 -nodes -passout pass:password
-        keytool -importkeystore \
-          -srckeystore keys/ca.p12 -srcstoretype PKCS12 \
-          -destkeystore keys/ca.jks -deststoretype JKS \
-          -srcstorepass password -deststorepass password -noprompt
+        if [[ "${IDP}" == "keycloak" ]]; then
+          # Keycloak-only TLS material (CA + JKS truststore via keytool).
+          openssl req -x509 -nodes -newkey RSA:2048 -subj "/CN=ca" \
+            -keyout keys/keycloak-ca-private.pem -out keys/keycloak-ca.pem -days 365
+          printf "subjectAltName=DNS:localhost,IP:127.0.0.1" >keys/sanX509.conf
+          printf "[req]\ndistinguished_name=req_distinguished_name\n[req_distinguished_name]\n[alt_names]\nDNS.1=localhost\nIP.1=127.0.0.1" >keys/req.conf
+          openssl req -new -nodes -newkey rsa:2048 -keyout keys/localhost.key -out keys/localhost.req \
+            -batch -subj "/CN=localhost" -config keys/req.conf
+          openssl x509 -req -in keys/localhost.req -CA keys/keycloak-ca.pem -CAkey keys/keycloak-ca-private.pem \
+            -CAcreateserial -out keys/localhost.crt -days 3650 -sha256 -extfile keys/sanX509.conf
+          openssl pkcs12 -export -in keys/keycloak-ca.pem -inkey keys/keycloak-ca-private.pem \
+            -out keys/ca.p12 -nodes -passout pass:password
+          keytool -importkeystore \
+            -srckeystore keys/ca.p12 -srcstoretype PKCS12 \
+            -destkeystore keys/ca.jks -deststoretype JKS \
+            -srcstorepass password -deststorepass password -noprompt
+        fi
         # Place default RSA/EC key material next to config for cryptoProvider paths
         cp -f kas-private.pem kas-cert.pem kas-ec-private.pem kas-ec-cert.pem keys/ 2>/dev/null || true
         chmod -R a+rX keys
@@ -208,6 +251,7 @@ runs:
         PQC_ENABLED: ${{ inputs.pqc-enabled }}
         LOG_LEVEL: ${{ inputs.log-level }}
         LOG_TYPE: ${{ inputs.log-type }}
+        IDP: ${{ inputs.idp }}
       run: |
         set -euo pipefail
         allowed_algorithms=(ec:secp256r1 rsa:2048)
@@ -273,15 +317,37 @@ runs:
           ' -i opentdf.yaml || true
         fi
         yq e '(.logger.level = env(LOG_LEVEL)) | (.logger.type = env(LOG_TYPE))' -i opentdf.yaml
-        # Prefer 127.0.0.1 over localhost so Go clients don't hit [::1] while KC is IPv4-only.
-        yq e '
-          (.server.auth.issuer = "http://127.0.0.1:8888/auth/realms/opentdf")
-          | (.services.entityresolution.url = "http://127.0.0.1:8888/auth")
-        ' -i opentdf.yaml
+        if [[ "${IDP}" == "keycloak" ]]; then
+          # Prefer 127.0.0.1 over localhost so Go clients don't hit [::1] while KC is IPv4-only.
+          yq e '
+            (.server.auth.issuer = "http://127.0.0.1:8888/auth/realms/opentdf")
+            | (.services.entityresolution.url = "http://127.0.0.1:8888/auth")
+          ' -i opentdf.yaml
+        fi
         echo "--- opentdf.yaml kas/auth snippet ---"
         yq e '.services.kas.keyring, .server.auth.issuer, .db' opentdf.yaml || true
 
+    # Caller-supplied keys win over everything generated above (issuer, audience,
+    # auth policy, ERS mode, ...). Maps merge deeply; scalars and lists replace.
+    - name: Merge config overlay
+      if: ${{ inputs.config-overlay-file != '' }}
+      shell: bash
+      working-directory: otdf-test-platform
+      env:
+        CONFIG_OVERLAY_FILE: ${{ inputs.config-overlay-file }}
+      run: |
+        set -euo pipefail
+        OVERLAY="${CONFIG_OVERLAY_FILE}"
+        [[ "${OVERLAY}" = /* ]] || OVERLAY="${GITHUB_WORKSPACE}/${OVERLAY}"
+        export OVERLAY
+        echo "--- overlay ${OVERLAY} ---"
+        cat "${OVERLAY}"
+        yq e '. *= load(strenv(OVERLAY))' -i opentdf.yaml
+        echo "--- opentdf.yaml after overlay (server.auth, services.entityresolution) ---"
+        yq e '.server.auth, .services.entityresolution' opentdf.yaml
+
     - name: Download and start Keycloak (native JVM)
+      if: ${{ inputs.idp == 'keycloak' }}
       shell: bash
       env:
         KEYCLOAK_VERSION: ${{ inputs.keycloak-version }}
@@ -351,6 +417,7 @@ runs:
         fi
 
     - name: Provision Keycloak realm / clients
+      if: ${{ inputs.idp == 'keycloak' }}
       shell: bash
       working-directory: otdf-test-platform
       run: |
@@ -406,6 +473,7 @@ runs:
     # Only rewrite the Keycloak/IdP host (port 8888). Leave PLATFORMURL/KASURL
     # on localhost so manifest key-access hosts still match go@latest encrypt.
     - name: Align test.env IdP host with platform issuer (IPv4)
+      if: ${{ inputs.idp == 'keycloak' }}
       shell: bash
       run: |
         set -euo pipefail
