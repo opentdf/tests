@@ -583,13 +583,27 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
 
     Args:
         tmp_dir: Temporary directory for test files
-        size: a key of :data:`sizes.SIZES` -- 'small' (128 bytes) or
+        size: a key of :data:`sizes.SIZES` -- 'small' (128 bytes),
+            'chunky' (5 MiB, several default-sized segments), or
             'large' (5 GiB)
 
     Returns:
         Path to the generated plaintext file
     """
     return _plaintext_of(tmp_dir, size)
+
+
+@pytest.fixture(scope="session")
+def chunky_pt_file(tmp_dir: Path) -> Path:
+    """A 5 MiB plaintext: several segments, including default-sized ones.
+
+    Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
+    sizes would fan out every test that takes :func:`pt_file` -- the whole of
+    test_tdfs.py and test_policytypes.py -- to pay for a property one test
+    needs. A separate fixture buys the coverage for one extra encrypt and
+    decrypt of 5 MiB, which is cheap enough for the PR gate.
+    """
+    return _plaintext_of(tmp_dir, "chunky")
 
 
 @pytest.fixture(scope="session")

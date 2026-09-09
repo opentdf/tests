@@ -27,7 +27,7 @@ fixture system.
 | `--sdks-encrypt`, `--sdks-decrypt` | Asymmetric encrypt/decrypt SDK selection (use when reproducing cross-SDK interop bugs). |
 | `--containers ztdf ztdf-ecwrap` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
-| `--sizes small,large` | Which payload sizes to parametrize over (`small` 128 B, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
+| `--sizes small,chunky` | Which payload sizes to parametrize over (`small` 128 B, `chunky` 5 MiB, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
 
 ## Environment Variables
 

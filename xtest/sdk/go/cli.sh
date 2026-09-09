@@ -121,6 +121,17 @@ if [ "$1" == "supports" ]; then
  index($f)'
       exit $?
       ;;
+    chunky)
+      # Default an absent per-segment segmentSize/encryptedSegmentSize from
+      # the manifest-level defaults. Broken in every go build to date: a
+      # web-sdk TDF over 1 MiB fails in the GMAC check. Fix tracked as
+      # DSPX-4590; turn this into a version gate when it releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "chunky unsupported: see DSPX-4590"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

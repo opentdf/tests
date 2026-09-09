@@ -108,6 +108,59 @@ def test_tdf_roundtrip(
         audit_logs.assert_rewrap_success(min_count=1, since_mark=ec_mark)
 
 
+def test_chunky_roundtrip(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    chunky_pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
+    attribute_default_rsa: Attribute,
+    chunky_tdf: EncryptFactory,
+):
+    """Round-trip a payload spanning several default-sized segments.
+
+    Distinct from :func:`test_tdf_roundtrip` in exactly one respect: 5 MiB
+    instead of 128 bytes, which is enough for a writer to emit a segment whose
+    size equals the manifest default. web-sdk omits ``segmentSize`` and
+    ``encryptedSegmentSize`` for such a segment -- legally, they are optional
+    overrides -- and go and java cannot currently default them back, so
+    :func:`tdfs.skip_chunky_skew` (below) skips js->go and js->java rather
+    than letting them fail; every other pair round-trips.
+
+    Four years of a 128-byte suite never produced a full-sized segment, which
+    is why the bug survived. See DSPX-4589 finding 4 and DSPX-4590 finding 7.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    ct_file = chunky_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+
+    integrity = tdfs.manifest(ct_file).encryptionInformation.integrityInformation
+    # The load-bearing precondition. If the writer emitted one segment the
+    # payload was not chunky, and the rest of this passes without exercising
+    # anything -- the same vacuous green that hid the defect in the first
+    # place, so it is an assertion rather than a skip.
+    assert len(integrity.segments) > 1, (
+        f"{encrypt_sdk} wrote {len(integrity.segments)} segment(s) from a "
+        f"{chunky_pt_file.stat().st_size}-byte payload "
+        f"(segmentSizeDefault={integrity.segmentSizeDefault}); sizes.CHUNKY_BYTES "
+        "is no longer larger than this SDK's default segment"
+    )
+
+    tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
+
+    rt_file = chunky_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(chunky_pt_file, rt_file, shallow=False)
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
+
+
 def test_tdf_spec_target_422(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,

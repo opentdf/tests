@@ -120,6 +120,12 @@ if [[ "$1" == "supports" ]]; then
       npx $CTL help | grep -iE -- '--dpop-key|--dpopKey'
       exit $?
       ;;
+    chunky)
+      # web-sdk omits a segment's sizes when they equal the manifest defaults
+      # and defaults them back on read. Both halves predate any version we
+      # test. See DSPX-4591.
+      exit 0
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
