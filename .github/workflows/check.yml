@@ -40,11 +40,6 @@ jobs:
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
       #
-      # test_zip64_units.py matters disproportionately here: the nightly zip64
-      # job's verdict is only as good as this parser, and a parser bug would
-      # report a conformant container as broken (or the reverse) after an hour
-      # of multi-GiB IO that nobody wants to repeat to debug it.
-      #
       # --frozen --no-build: resolve nothing and build nothing, so a
       # dependency cannot slip in an unlocked version or a setup script on a
       # runner that already has everything installed from the step above.

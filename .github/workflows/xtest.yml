@@ -42,12 +42,12 @@ on:
         required: false
         type: boolean
         default: false
-        description: "Run the 2.1 GiB ZIP64 boundary tests (DSPX-4592; adds ~60m per encrypting SDK). Set java-ref to 'main latest' to also exercise the pre-fix java reader, which is the defect this covers."
+        description: "Run 2.1 GiB ZIP64 boundary tests."
       force-supports:
         required: false
         type: string
         default: ""
-        description: "Comma-separated feature names to treat as supported regardless of what each SDK's `cli.sh supports` reports (e.g. 'chunky'). Use when evaluating a fix that has not been released yet: the version gates live in this repo and answer 'no' for exactly those unreleased builds, so the cells would otherwise skip. An unknown name fails the run rather than being ignored."
+        description: "Comma-separated feature names to treat as supported regardless of what each SDK's `cli.sh supports` reports. Use when evaluating a fix that has not been released yet: the version gates live in this repo and answer 'no' for exactly those unreleased builds, so the cells would otherwise skip. An unknown name fails the run rather than being ignored."
   workflow_call:
     inputs:
       platform-ref:
@@ -211,11 +211,8 @@ jobs:
               }
             }
 
-            // Bench and ZIP64 hold the server on platform main independently
-            // of the platform lanes under test. Resolve that moving ref once
-            // here so every matrix job uses the same commit. Reuse the normal
-            // resolution when main was already requested; otherwise look up
-            // the branch without adding it to platform-tag-list.
+            // SDK focused jobs (`bench` and `zip64`) use platform main, not
+            // the platform lanes under test for `otdfctl` and `sdk`.
             let platformMainSha = versionData.platform
               ?.find(({ tag, sha, err }) => tag === 'main' && sha && !err)
               ?.sha;
@@ -1068,7 +1065,7 @@ jobs:
   # test_zip64.py asserts that an offset actually landed in the window rather
   # than skipping, precisely so a mis-sized payload fails instead of passing.
   #
-  # Never on pull requests: an hour of multi-GiB IO per SDK is not a PR gate.
+  # Never on pull requests: an hour of multi-GiB IO per SDK is too slow for a PR gate.
   zip64:
     timeout-minutes: 90
     runs-on: ubuntu-latest
@@ -1279,11 +1276,8 @@ jobs:
       # holding a 2.1 GiB plaintext, ciphertext and decrypt output would
       # exhaust the scratch volume long before the last cell.
       #
-      # Note what is *not* here: --skip-released-pairs. The xct job derives
-      # that flag from SKIP_RELEASED_PAIRS to avoid re-testing release-against-
-      # release combinations, but a released java decryptor reading a 2.1 GiB
-      # container is the exact defect under test. Skipping it would leave this
-      # job green and blind.
+      # Note: `--skip-released-pairs` is not present, since these overnight jobs explicitly
+      # exist to find bugs in releases.
       - name: Run ZIP64 boundary tests
         id: zip64
         run: |-
