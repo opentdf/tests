@@ -160,6 +160,20 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4589"
       exit 1
       ;;
+    zip64-at-2gib)
+      # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
+      # 4 GiB. java-sdk adopted MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE in
+      # java-sdk#393, merged 2026-09-03 and not in any release through v0.18.0
+      # -- and a branch build reports the last released version here, so this
+      # answers no for java@main too. Evaluate such a build with
+      # XT_FORCE_SUPPORTS=zip64-at-2gib; turn this into a version gate when the
+      # fix releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip64-at-2gib unsupported: needs the release carrying java-sdk#393"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

@@ -18,6 +18,7 @@ rest of the suite up to multi-GiB payloads.
 
 import filecmp
 import logging
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -62,7 +63,6 @@ def _assert_reaches_the_window(
 
 
 def test_zip64_band_roundtrip(
-    request: pytest.FixtureRequest,
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     pt_file: Path,
@@ -87,7 +87,8 @@ def test_zip64_band_roundtrip(
         attr_values=attribute_default_rsa.value_fqns,
     )
 
-    entries = zipinspect.central_directory(ct_file)
+    cd = zipinspect.central_directory(ct_file)
+    entries = cd.entries
     logger.info(
         "%s wrote %s at size=%s (%d bytes):\n%s",
         encrypt_sdk,
@@ -97,35 +98,77 @@ def test_zip64_band_roundtrip(
         zipinspect.describe(entries),
     )
 
-    # Writer conformance first, and outside the reader's xfail below. A
-    # writer regression must not hide behind a known reader bug: if these
-    # fail under an xfail marker the cell reports XFAIL and nobody looks.
+    # Writer conformance first, and outside the reader branch below. A writer
+    # regression must not be reported as the known reader bug.
     _assert_reaches_the_window(entries, pt_file, encrypt_sdk)
-    zipinspect.assert_zip64_above_4gib(entries)
+    zipinspect.assert_offsets_are_consistent(cd)
+    zipinspect.assert_zip64_above_4gib(cd)
 
     in_window = zipinspect.entries_in_window(entries)
     logger.info(
-        "%s: %d entr%s in [2**31, 2**32); zip64 extra field used for %s",
+        "%s: %d entr%s in [2**31, 2**32); ZIP64 sentinel used for the offset of %s",
         encrypt_sdk,
         len(in_window),
         "y" if len(in_window) == 1 else "ies",
-        [e.name for e in in_window if e.has_zip64_extra] or "none",
+        [e.name for e in in_window if e.uses_zip64_for_offset] or "none",
     )
+
+    # A real 32-bit value in the window is legal -- these fields are unsigned
+    # -- so this is gated rather than asserted outright. It is the cross-SDK
+    # convention java-sdk#393 adopted and web-sdk has always followed: sentinel
+    # from 2 GiB up, so a reader that widens the field with a signed read still
+    # gets a usable number. Held only against a writer that claims to do it,
+    # which is what makes this cell a red-to-green witness for the fix rather
+    # than a standing failure against a writer that has not landed it yet.
+    raw_in_window = zipinspect.entries_with_raw_values_in_window(entries)
+    if encrypt_sdk.supports("zip64-at-2gib"):
+        assert not raw_in_window, (
+            f"{encrypt_sdk} reports the 2 GiB ZIP64 switch but wrote "
+            f"{len(raw_in_window)} entr"
+            f"{'y' if len(raw_in_window) == 1 else 'ies'} carrying a real "
+            f"32-bit value in [2**31, 2**32): "
+            f"{[e.name for e in raw_in_window]}. Every deployed reader that "
+            f"widens these fields signed reads those as negative.\n"
+            + zipinspect.describe(entries)
+        )
 
     # Keep the independent segment-defaulting incompatibility out of the
     # ZIP64 result. In particular, web-sdk uses ZIP64 sentinels in this band,
     # so those containers do not exercise Java's signed 32-bit read defect.
     tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
 
-    # Apply the reader xfail only when a real 32-bit value (not the sentinel)
-    # exercises the signed-risk window. Writer conformance has already been
-    # checked above, so a failure from this point belongs to the reader.
-    if zipinspect.entries_with_raw_values_in_window(entries):
-        if mark := tdfs.zip64_reader_xfail(decrypt_sdk):
-            request.node.add_marker(mark)
+    # Expect the reader defect only when a real 32-bit value (not the
+    # sentinel) exercises the signed-risk window. Writer conformance has
+    # already been checked above, so a failure from this point is the
+    # reader's.
+    #
+    # Asserted rather than xfailed on purpose. A dynamic
+    # ``xfail(strict=True)`` marker does work here, but it is a *node* marker:
+    # it would absorb every remaining failure in the cell -- a KAS error, a
+    # timeout, a full scratch volume -- and report the lot as a confirmed
+    # prediction about ZIP64.
+    expect_reader_defect = bool(raw_in_window) and tdfs.zip64_reader_is_broken(
+        decrypt_sdk
+    )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     try:
+        if expect_reader_defect:
+            # No assertion on the message. There is no pre-fix java build in
+            # this repo to check the wording against, and a guessed pattern
+            # would fail the first real run for the wrong reason. Once the
+            # nightly has produced one, tighten this to match it.
+            with pytest.raises(subprocess.CalledProcessError) as failure:
+                decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
+            logger.info(
+                "%s failed to read %s as expected -- it holds a real 32-bit "
+                "value in [2**31, 2**32) and this build predates the fix:\n%s",
+                decrypt_sdk,
+                ct_file.name,
+                (failure.value.output or b"").decode(errors="replace"),
+            )
+            return
+
         decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
         # shallow=False explicitly: the default compares a stat signature
         # first and only falls through to a byte compare because the mtimes

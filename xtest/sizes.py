@@ -60,6 +60,7 @@ MEDIUM_BYTES = 2_254_857_830
 #: largest of them with room to spare. 2 MiB would only do it for web-sdk.
 CHUNKY_BYTES = 5 * 2**20
 
+#: Declared cheapest first, because :data:`SIZE_ORDER` is derived from it.
 SIZES: dict[str, int] = {
     "small": 128,
     "chunky": CHUNKY_BYTES,
@@ -68,7 +69,13 @@ SIZES: dict[str, int] = {
 }
 
 #: Order to emit parametrized sizes in, cheapest first.
-SIZE_ORDER: tuple[str, ...] = ("small", "chunky", "medium", "large")
+#:
+#: Derived, not restated. ``resolve_sizes`` filters the requested sizes
+#: through this while ``--sizes`` validates them against :data:`SIZES`, so a
+#: name in one and not the other is accepted on the command line and then
+#: silently dropped -- which empties the parameter set and reports
+#: ``got empty parameter set`` as a *skip*, exit 0.
+SIZE_ORDER: tuple[str, ...] = tuple(SIZES)
 
 
 def in_zip64_window(n: int) -> bool:

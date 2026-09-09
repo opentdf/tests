@@ -169,6 +169,21 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
+    # rather than at 4 GiB.
+    #
+    # A real 32-bit value in [2**31, 2**32) is *legal* -- the central-directory
+    # size and offset fields are unsigned -- so this is a cross-SDK interop
+    # convention rather than a spec rule, which is why it is a feature gate and
+    # not an unconditional assertion on every writer. A reader that widens
+    # those fields with a signed read sees a negative number, and that
+    # describes every java-sdk released to date. web-sdk always writes ZIP64;
+    # java-sdk adopted the 2 GiB switch in java-sdk#393; go-sdk still switches
+    # at 4 GiB. See DSPX-4590 finding 1.
+    #
+    # Only observable from a payload that reaches the window; hence
+    # sizes.MEDIUM_BYTES.
+    "zip64-at-2gib",
 ]
 
 
@@ -882,9 +897,9 @@ def elides_segment_sizes(ct_file: Path) -> bool:
 def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
     """Skip if ``ct_file`` needs segment-size defaulting and the reader lacks it.
 
-    A skip and not an xfail: this cell runs on the PR gate, where a
+    A skip and not an asserted failure: this cell runs on the PR gate, where a
     permanently-red job trains people to ignore it, and unlike
-    :func:`zip64_reader_xfail` it needs no dated guess about which release
+    :func:`zip64_reader_is_broken` it needs no dated guess about which release
     carries the fix.
 
     The cost is that it stays skipped until somebody edits
@@ -914,35 +929,29 @@ def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
 #: seeks to nonsense. A 2.1 GiB payload puts the manifest's offset exactly
 #: there. See DSPX-4592.
 #:
-#: Keep this honest. Set too high, a fixed release keeps reporting XFAIL and
-#: a genuine regression hides behind it; set too low, the strict xfail turns
-#: every pre-fix cell into a hard failure. Update it when the release with
-#: #393 actually ships, not when the PR merges.
+#: Keep this honest, and note that both directions of getting it wrong fail
+#: the run rather than hiding: set too high, a release that does carry the fix
+#: reads the container correctly and the "must fail" assertion fires; set too
+#: low, a pre-fix release is expected to succeed and its real failure is
+#: reported as a defect. Update it when the release with #393 actually ships,
+#: not when the PR merges.
 JAVA_ZIP64_READER_FIX = (0, 19, 0)
 
 
-def zip64_reader_xfail(decrypt_sdk: SDK) -> pytest.MarkDecorator | None:
-    """An xfail marker for decryptors known to mishandle the 2-4 GiB band.
+def zip64_reader_is_broken(decrypt_sdk: SDK) -> bool:
+    """True for decryptors known to mishandle a real 32-bit value in the band.
 
-    ``strict=True`` deliberately. The point of this test is to flip to green
-    when the sibling fixes land: an XPASS here means a build we believed
-    broken now reads the container correctly, and that should fail the run so
-    somebody comes and deletes this predicate rather than leaving a
-    permanently-XFAIL cell that nobody reads.
+    The caller asserts the decrypt *fails* for these, rather than marking the
+    cell xfail. That is deliberate on both counts: a node-level xfail would
+    swallow every unrelated failure in the rest of the cell, and asserting the
+    failure means a build that has quietly been fixed turns the cell red so
+    somebody comes and deletes this predicate.
 
-    Branch builds (``main``) have no semver and are never marked -- they are
-    the builds expected to carry the fix.
+    Branch builds (``main``) have no semver and are never assumed broken --
+    they are the builds expected to carry the fix.
     """
     sv = decrypt_sdk.semver()
-    if decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX:
-        return pytest.mark.xfail(
-            strict=True,
-            reason=(
-                f"DSPX-4592: {decrypt_sdk} predates java-sdk#393; readInt() "
-                "sign-extends the manifest's central-directory offset"
-            ),
-        )
-    return None
+    return decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX
 
 
 def _parse_semver(version: str) -> tuple[int, int, int] | None:

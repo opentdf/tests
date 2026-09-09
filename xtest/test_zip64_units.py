@@ -36,6 +36,9 @@ def cen_record(
     zip64_offset: int | None = None,
     zip64_usize: int | None = None,
     zip64_csize: int | None = None,
+    zip64_disk_start: int | None = None,
+    extra_prefix: bytes = b"",
+    zip64_extra_len_override: int | None = None,
 ) -> bytes:
     """One central-directory header, with an optional ZIP64 extra field.
 
@@ -43,6 +46,11 @@ def cen_record(
     fixed order (uncompressed, compressed, offset); pass them only for the
     fields whose 32-bit slot holds the sentinel, which is the same contract
     the parser relies on.
+
+    ``extra_prefix`` puts another extra-field record ahead of the ZIP64 one,
+    and ``zip64_extra_len_override`` lies about the ZIP64 record's length.
+    Both exist to build inputs a conformant writer would not: the first is
+    what real writers actually emit, the second is the misparse under test.
     """
     extra = b""
     body = b""
@@ -52,8 +60,14 @@ def cen_record(
         body += struct.pack("<Q", zip64_csize)
     if zip64_offset is not None:
         body += struct.pack("<Q", zip64_offset)
-    if body:
-        extra = struct.pack("<HH", zipinspect.ZIP64_EXTRA_ID, len(body)) + body
+    if zip64_disk_start is not None:
+        body += struct.pack("<I", zip64_disk_start)
+    if body or zip64_extra_len_override is not None:
+        declared = (
+            len(body) if zip64_extra_len_override is None else zip64_extra_len_override
+        )
+        extra = struct.pack("<HH", zipinspect.ZIP64_EXTRA_ID, declared) + body
+    extra = extra_prefix + extra
 
     encoded = name.encode()
     return (
@@ -69,28 +83,53 @@ def cen_record(
     )
 
 
-def synth_zip(path: Path, records: list[bytes]) -> Path:
+def _write_at(path: Path, cd_offset: int, trailer: bytes) -> Path:
+    """Write ``trailer`` at ``cd_offset``, leaving the gap before it sparse.
+
+    The gap stands in for entry data the parser never reads. Making it a hole
+    rather than real bytes is what lets these tests build a container whose
+    central directory genuinely sits past 4 GiB -- ``file_size`` and
+    ``cd_offset`` are then real ground truth for the consistency assertions,
+    at a cost of one filesystem block. Sparse files are supported on both APFS
+    and ext4, which is macOS dev boxes and the CI runners.
+    """
+    with path.open("wb") as f:
+        if cd_offset:
+            f.truncate(cd_offset)
+            f.seek(cd_offset)
+        f.write(trailer)
+    return path
+
+
+def synth_zip(path: Path, records: list[bytes], *, cd_offset: int = 0) -> Path:
     """Write a container that is nothing but a central directory and an EOCD.
 
     The parser never reads entry data, so leaving it out keeps these tests
-    instant while exercising every field it does read.
+    instant while exercising every field it does read. Pass ``cd_offset`` when
+    the test needs the directory to sit at a plausible place after the entry
+    data, which the consistency assertions check against.
     """
+    if cd_offset >= zipinspect.ZIP64_SENTINEL_32:
+        raise ValueError(
+            f"cd_offset {cd_offset} does not fit the 32-bit EOCD; a directory "
+            "this far into the file has to be located through the ZIP64 EOCD, "
+            "so use synth_zip64_eocd"
+        )
     cd = b"".join(records)
-    cd_offset = 0
     eocd = (
         b"PK\x05\x06"
         + struct.pack("<HHHH", 0, 0, len(records), len(records))
         + struct.pack("<II", len(cd), cd_offset)
         + struct.pack("<H", 0)
     )
-    path.write_bytes(cd + eocd)
-    return path
+    return _write_at(path, cd_offset, cd + eocd)
 
 
 def synth_zip64_eocd(
     path: Path,
     records: list[bytes],
     *,
+    cd_offset: int = 0,
     eocd64_offset_override: int | None = None,
 ) -> Path:
     """Same, but located through a ZIP64 EOCD record and its locator.
@@ -100,18 +139,20 @@ def synth_zip64_eocd(
     central directory sits past 4 GiB has to be read.
     """
     cd = b"".join(records)
-    cd_offset = 0
     eocd64 = (
         b"PK\x06\x06"
         + struct.pack("<Q", 44)  # size of this record, less the first 12 bytes
         + struct.pack("<HHII", 45, 45, 0, 0)
         + struct.pack("<QQQQ", len(records), len(records), len(cd), cd_offset)
     )
-    eocd64_at = len(cd)
+    eocd64_at = cd_offset + len(cd)
     locator = (
         b"PK\x06\x07"
         + struct.pack("<I", 0)
-        + struct.pack("<Q", eocd64_offset_override or eocd64_at)
+        + struct.pack(
+            "<Q",
+            eocd64_at if eocd64_offset_override is None else eocd64_offset_override,
+        )
         + struct.pack("<I", 1)
     )
     eocd = (
@@ -120,8 +161,7 @@ def synth_zip64_eocd(
         + struct.pack("<II", 0xFFFFFFFF, 0xFFFFFFFF)
         + struct.pack("<H", 0)
     )
-    path.write_bytes(cd + eocd64 + locator + eocd)
-    return path
+    return _write_at(path, cd_offset, cd + eocd64 + locator + eocd)
 
 
 class TestZip64Selection:
@@ -148,6 +188,92 @@ class TestZip64Selection:
         assert not conftest._item_exercises_zip64_window(item, ["small"])
 
 
+class _FakeConfig:
+    """The three things ``pytest_collection_modifyitems`` asks of a config.
+
+    A real ``pytest.Config`` would need a real session; the hook only reads
+    two options, caches the resolved sizes in the stash, and calls one hook.
+    """
+
+    def __init__(self, *, sizes: list[str] | None = None, bench: bool = False):
+        self.stash = pytest.Stash()
+        self.deselected: list[pytest.Item] = []
+        self._options: dict[str, object] = {
+            "--bench": bench,
+            "--sizes": sizes,
+            "--large": False,
+        }
+        self.hook = SimpleNamespace(
+            pytest_deselected=lambda items: self.deselected.extend(items)
+        )
+
+    def getoption(self, name: str, default: object = None) -> object:
+        return self._options.get(name, default)
+
+
+def _fake_item(name: str, *, marker: str | None = None, size: str | None = None):
+    params = {} if size is None else {"size": size}
+    return cast(
+        pytest.Item,
+        SimpleNamespace(
+            name=name,
+            callspec=SimpleNamespace(params=params),
+            get_closest_marker=lambda want, m=marker: want if want == m else None,
+        ),
+    )
+
+
+def _run_filter(config: _FakeConfig, items: list[pytest.Item]) -> list[str]:
+    conftest.pytest_collection_modifyitems(cast(pytest.Config, config), items)
+    return [i.name for i in items]
+
+
+class TestZip64Deselection:
+    """The collection filter itself, not just the predicate it delegates to."""
+
+    def test_a_default_run_drops_the_zip64_cells(self):
+        items = [_fake_item("zip64[small]", marker="zip64", size="small")]
+        config = _FakeConfig()
+
+        assert _run_filter(config, items) == []
+        assert [i.name for i in config.deselected] == ["zip64[small]"]
+
+    def test_a_medium_run_keeps_them(self):
+        items = [_fake_item("zip64[medium]", marker="zip64", size="medium")]
+        config = _FakeConfig(sizes=["medium"])
+
+        assert _run_filter(config, items) == ["zip64[medium]"]
+        assert config.deselected == []
+
+    def test_a_mixed_run_keeps_only_the_cells_that_reach_the_window(self):
+        """The reason the filter is per-item rather than per-session.
+
+        ``--sizes small,medium`` collects both arms of every size-parametrized
+        zip64 test. Judging by the session would keep the 128-byte arm, which
+        passes green without touching the code path under test.
+        """
+        items = [
+            _fake_item("zip64[small]", marker="zip64", size="small"),
+            _fake_item("zip64[medium]", marker="zip64", size="medium"),
+            _fake_item("roundtrip[small]", size="small"),
+        ]
+        config = _FakeConfig(sizes=["small", "medium"])
+
+        assert _run_filter(config, items) == ["zip64[medium]", "roundtrip[small]"]
+        assert [i.name for i in config.deselected] == ["zip64[small]"]
+
+    def test_benchmarks_need_their_own_opt_in(self):
+        """A medium run is not a benchmark run; the two markers are independent."""
+        items = [
+            _fake_item("bench", marker="benchmark", size="medium"),
+            _fake_item("zip64", marker="zip64", size="medium"),
+        ]
+        config = _FakeConfig(sizes=["medium"])
+
+        assert _run_filter(config, items) == ["zip64"]
+        assert [i.name for i in config.deselected] == ["bench"]
+
+
 # --- zipinspect.py -----------------------------------------------------------
 
 
@@ -159,11 +285,16 @@ class TestCentralDirectory:
             z.writestr("0.payload", b"a" * 4096)
             z.writestr("0.manifest.json", b"{}")
 
-        entries = zipinspect.central_directory(p)
-        assert [e.name for e in entries] == ["0.payload", "0.manifest.json"]
+        cd = zipinspect.central_directory(p)
+        assert [e.name for e in cd.entries] == ["0.payload", "0.manifest.json"]
         with zipfile.ZipFile(p) as z:
             expected = {i.filename: i.header_offset for i in z.infolist()}
-        assert {e.name: e.local_header_offset for e in entries} == expected
+        assert {e.name: e.local_header_offset for e in cd.entries} == expected
+        # The ground truth the consistency assertions need, against a
+        # container built by something other than this file's helpers.
+        assert cd.file_size == p.stat().st_size
+        assert cd.cd_offset + cd.cd_size < cd.file_size
+        zipinspect.assert_offsets_are_consistent(cd)
 
     def test_local_header_zip64_is_not_mistaken_for_central_directory_zip64(
         self, tmp_path: Path
@@ -181,7 +312,7 @@ class TestCentralDirectory:
             with z.open("0.payload", "w", force_zip64=True) as f:
                 f.write(b"b" * 8192)
 
-        (entry,) = zipinspect.central_directory(p)
+        (entry,) = zipinspect.central_directory(p).entries
         assert entry.uncompressed_size == 8192
         assert not entry.has_zip64_extra
         assert not entry.uses_zip64_for_sizes
@@ -198,9 +329,9 @@ class TestCentralDirectory:
             cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES),
         ]
         p = synth_zip64_eocd(tmp_path / "z64-eocd.zip", records)
-        entries = zipinspect.central_directory(p)
-        assert [e.name for e in entries] == ["0.payload", "0.manifest.json"]
-        assert entries[1].raw_local_header_offset == MEDIUM_BYTES
+        cd = zipinspect.central_directory(p)
+        assert [e.name for e in cd.entries] == ["0.payload", "0.manifest.json"]
+        assert cd.entries[1].raw_local_header_offset == MEDIUM_BYTES
 
     def test_rejects_a_locator_pointing_at_nothing(self, tmp_path: Path):
         p = synth_zip64_eocd(
@@ -226,8 +357,7 @@ class TestCentralDirectory:
                 cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES + 64),
             ],
         )
-        entries = zipinspect.central_directory(p)
-        manifest = entries[1]
+        manifest = zipinspect.central_directory(p).entries[1]
         assert manifest.raw_local_header_offset == MEDIUM_BYTES + 64
         assert manifest.local_header_offset == MEDIUM_BYTES + 64
         assert not manifest.has_zip64_extra
@@ -244,7 +374,7 @@ class TestCentralDirectory:
             tmp_path / "signed.zip",
             [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)],
         )
-        (entry,) = zipinspect.central_directory(p)
+        (entry,) = zipinspect.central_directory(p).entries
         assert entry.signed_read_of_offset() < 0
         assert entry.signed_read_of_offset() == MEDIUM_BYTES - ZIP64_WINDOW_HIGH
 
@@ -254,7 +384,7 @@ class TestCentralDirectory:
         p = synth_zip(
             tmp_path / "safe.zip", [cen_record("0.manifest.json", raw_offset=offset)]
         )
-        (entry,) = zipinspect.central_directory(p)
+        (entry,) = zipinspect.central_directory(p).entries
         assert entry.signed_read_of_offset() == offset
 
     def test_sentinel_resolves_through_the_extra_field(self, tmp_path: Path):
@@ -270,9 +400,60 @@ class TestCentralDirectory:
                 )
             ],
         )
-        (entry,) = zipinspect.central_directory(p)
+        (entry,) = zipinspect.central_directory(p).entries
         assert entry.local_header_offset == true_offset
         assert entry.uses_zip64_for_offset
+        assert entry.has_zip64_extra
+
+    def test_each_zip64_value_lands_in_its_own_field(self, tmp_path: Path):
+        """The extra field is positional, so a transposed decode must be caught.
+
+        Every value here is distinct and none is a round number: if the
+        uncompressed and compressed slots were swapped, or the offset read
+        from the wrong one, the numbers below would not match. An earlier
+        version of this suite asserted only that parsing *succeeded*, and a
+        deliberate transposition of the two size fields kept every test green.
+        """
+        p = synth_zip(
+            tmp_path / "all-three.zip",
+            [
+                cen_record(
+                    "0.payload",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    raw_usize=ZIP64_SENTINEL_32,
+                    raw_csize=ZIP64_SENTINEL_32,
+                    zip64_usize=5 * 2**30 + 11,
+                    zip64_csize=5 * 2**30 + 22,
+                    zip64_offset=5 * 2**30 + 33,
+                )
+            ],
+        )
+        (entry,) = zipinspect.central_directory(p).entries
+        assert entry.uncompressed_size == 5 * 2**30 + 11
+        assert entry.compressed_size == 5 * 2**30 + 22
+        assert entry.local_header_offset == 5 * 2**30 + 33
+
+    def test_skips_a_foreign_extra_field_record(self, tmp_path: Path):
+        """A ZIP64 record after an unrelated one must still be found.
+
+        Real writers put an extended-timestamp record (0x5455) in the extra
+        field, so the skip-and-continue path is the common case in the wild
+        rather than an edge case.
+        """
+        timestamp = struct.pack("<HH", 0x5455, 5) + b"\x01\x00\x00\x00\x00"
+        p = synth_zip(
+            tmp_path / "foreign-extra.zip",
+            [
+                cen_record(
+                    "0.manifest.json",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    zip64_offset=7 * 2**30,
+                    extra_prefix=timestamp,
+                )
+            ],
+        )
+        (entry,) = zipinspect.central_directory(p).entries
+        assert entry.local_header_offset == 7 * 2**30
         assert entry.has_zip64_extra
 
     def test_rejects_a_file_with_no_eocd(self, tmp_path: Path):
@@ -296,96 +477,280 @@ class TestCentralDirectory:
             zipinspect.central_directory(p)
 
 
-class TestConformanceAssertions:
-    def test_above_4gib_without_the_sentinel_fails(self, tmp_path: Path):
-        """A 32-bit field cannot hold this value, so omitting the sentinel is a defect."""
+class TestMalformedExtraField:
+    """The ZIP64 extra field is positional, so its length is load-bearing."""
+
+    def test_rejects_more_values_than_the_sentinels_call_for(self, tmp_path: Path):
+        """Sentinel on the offset alone, but all three values written.
+
+        This is the misparse that motivated the length check. Decoding
+        positionally regardless would take the *uncompressed size* out of the
+        first slot and report it as the local header offset -- a plausible
+        number, off by the size of the payload, with nothing to flag it.
+        """
         p = synth_zip(
-            tmp_path / "bad.zip",
+            tmp_path / "over-long-extra.zip",
+            [
+                cen_record(
+                    "0.manifest.json",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    zip64_usize=MEDIUM_BYTES,
+                    zip64_csize=MEDIUM_BYTES,
+                    zip64_offset=MEDIUM_BYTES + 128,
+                )
+            ],
+        )
+        with pytest.raises(MalformedZipError, match="ZIP64 extra field is 24 bytes"):
+            zipinspect.central_directory(p)
+
+    def test_rejects_fewer_values_than_the_sentinels_call_for(self, tmp_path: Path):
+        """Two sentinels, one value. The second read would run off the end."""
+        p = synth_zip(
+            tmp_path / "short-extra.zip",
+            [
+                cen_record(
+                    "0.payload",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    raw_usize=ZIP64_SENTINEL_32,
+                    zip64_usize=5 * 2**30,
+                )
+            ],
+        )
+        with pytest.raises(MalformedZipError, match="ZIP64 extra field is 8 bytes"):
+            zipinspect.central_directory(p)
+
+    def test_rejects_an_empty_zip64_record(self, tmp_path: Path):
+        """A 0x0001 record with no body carries no information.
+
+        Accepting it would set ``has_zip64_extra`` on an entry that resolves
+        nothing, so the reports would claim the writer opted into ZIP64 while
+        every value still came from the 32-bit fields.
+        """
+        p = synth_zip(
+            tmp_path / "empty-extra.zip",
+            [cen_record("0.payload", raw_offset=0, zip64_extra_len_override=0)],
+        )
+        with pytest.raises(MalformedZipError, match="ZIP64 extra field is 0 bytes"):
+            zipinspect.central_directory(p)
+
+    def test_rejects_a_record_claiming_more_than_remains(self, tmp_path: Path):
+        """A length past the end of the extra field is truncation, not absence."""
+        p = synth_zip(
+            tmp_path / "overrun-extra.zip",
             [
                 cen_record(
                     "0.manifest.json",
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_offset=5 * 2**30,
+                    zip64_extra_len_override=64,
                 )
             ],
         )
-        entries = zipinspect.central_directory(p)
-        # Rewrite the entry to claim a >4 GiB offset with no ZIP64 encoding,
-        # which is the state a non-conformant writer would leave behind.
-        broken = [
-            zipinspect.CentralDirectoryEntry(
-                name="0.manifest.json",
-                raw_compressed_size=0,
-                raw_uncompressed_size=0,
-                raw_local_header_offset=12345,
-                compressed_size=0,
-                uncompressed_size=0,
-                local_header_offset=5 * 2**30,
-                has_zip64_extra=False,
-            )
-        ]
-        zipinspect.assert_zip64_above_4gib(entries)  # the conformant one passes
-        with pytest.raises(AssertionError, match="ZIP64 sentinel"):
-            zipinspect.assert_zip64_above_4gib(broken)
+        with pytest.raises(MalformedZipError, match="claims 64 bytes"):
+            zipinspect.central_directory(p)
 
-    def test_above_4gib_uncompressed_size_without_the_sentinel_fails(self):
-        """The size branches had no test of their own; the offset test above doesn't touch them."""
-        broken = [
-            zipinspect.CentralDirectoryEntry(
-                name="0.payload",
-                raw_compressed_size=0,
-                raw_uncompressed_size=12345,
-                raw_local_header_offset=0,
-                compressed_size=0,
-                uncompressed_size=5 * 2**30,
-                local_header_offset=0,
-                has_zip64_extra=False,
-            )
-        ]
-        with pytest.raises(AssertionError, match="ZIP64 sentinel"):
-            zipinspect.assert_zip64_above_4gib(broken)
+    def test_tolerates_the_trailing_disk_start_field(self, tmp_path: Path):
+        """APPNOTE 4.5.3 allows a 4-byte disk-start value after the 64-bit ones.
 
-    def test_above_4gib_compressed_size_without_the_sentinel_fails(self):
-        """Compressed size must be checked against its own raw field, not the uncompressed one.
-
-        A TDF is STORED, not DEFLATEd, so the compressed field is at least as
-        likely to cross 2**32 as the uncompressed one -- but a check that only
-        looks at ``uses_zip64_for_sizes`` (an OR over both raw fields) would
-        let a correctly-sentineled uncompressed field paper over a broken
-        compressed one. This entry has exactly that shape.
+        It is the one length the check has to be lax about, so it gets a test
+        rather than being left to the reviewer to notice in the ``+ 4``.
         """
-        broken = [
-            zipinspect.CentralDirectoryEntry(
-                name="0.payload",
-                raw_compressed_size=12345,
-                raw_uncompressed_size=ZIP64_SENTINEL_32,
-                raw_local_header_offset=0,
-                compressed_size=5 * 2**30,
-                uncompressed_size=5 * 2**30,
-                local_header_offset=0,
-                has_zip64_extra=True,
-            )
-        ]
-        with pytest.raises(AssertionError, match="compressed-size field"):
-            zipinspect.assert_zip64_above_4gib(broken)
-
-    def test_above_4gib_sizes_with_the_sentinel_pass(self, tmp_path: Path):
-        """The positive counterpart: both size fields correctly ZIP64-encoded."""
         p = synth_zip(
-            tmp_path / "big-sizes.zip",
+            tmp_path / "disk-start.zip",
+            [
+                cen_record(
+                    "0.manifest.json",
+                    raw_offset=ZIP64_SENTINEL_32,
+                    zip64_offset=5 * 2**30,
+                    zip64_disk_start=0,
+                )
+            ],
+        )
+        (entry,) = zipinspect.central_directory(p).entries
+        assert entry.local_header_offset == 5 * 2**30
+        assert entry.has_zip64_extra
+
+
+class TestTruncatedContainers:
+    """A malformed container must arrive as MalformedZipError, not struct.error.
+
+    These inputs are SDK output and hand-built fixtures, so hitting one is an
+    expected case. A bare ``struct.error`` from the middle of the parse names
+    neither the file nor the field and reads like a bug in the test harness.
+    """
+
+    def test_truncated_eocd(self, tmp_path: Path):
+        p = synth_zip(tmp_path / "t.zip", [cen_record("a", raw_offset=0)])
+        p.write_bytes(p.read_bytes()[:-6])
+        with pytest.raises(MalformedZipError):
+            zipinspect.central_directory(p)
+
+    def test_truncated_central_directory_record(self, tmp_path: Path):
+        record = cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)
+        p = tmp_path / "short-cen.zip"
+        cd = record[:20]
+        eocd = (
+            b"PK\x05\x06"
+            + struct.pack("<HHHH", 0, 0, 1, 1)
+            + struct.pack("<II", len(cd), 0)
+            + struct.pack("<H", 0)
+        )
+        p.write_bytes(cd + eocd)
+        with pytest.raises(MalformedZipError, match="truncated"):
+            zipinspect.central_directory(p)
+
+    def test_central_directory_record_with_a_name_past_the_end(self, tmp_path: Path):
+        """A plausible header whose variable-length fields overrun the buffer."""
+        record = cen_record("0.manifest.json", raw_offset=0)
+        # Claim a 4096-byte name where 15 bytes were written.
+        record = record[:28] + struct.pack("<H", 4096) + record[30:]
+        p = tmp_path / "long-name.zip"
+        eocd = (
+            b"PK\x05\x06"
+            + struct.pack("<HHHH", 0, 0, 1, 1)
+            + struct.pack("<II", len(record), 0)
+            + struct.pack("<H", 0)
+        )
+        p.write_bytes(record + eocd)
+        with pytest.raises(MalformedZipError, match="only .* remain"):
+            zipinspect.central_directory(p)
+
+    def test_zip64_locator_pointing_past_the_end_of_the_file(self, tmp_path: Path):
+        """The dangerous one: an unchecked read here drives an unbounded one.
+
+        A short read leaves garbage in ``cd_size``, and the parser would then
+        ask for that many bytes of central directory.
+        """
+        p = synth_zip64_eocd(
+            tmp_path / "eocd64-past-end.zip",
+            [cen_record("0.payload", raw_offset=0)],
+            eocd64_offset_override=2**40,
+        )
+        with pytest.raises(MalformedZipError, match="past the end"):
+            zipinspect.central_directory(p)
+
+    def test_central_directory_extending_past_the_end_of_the_file(self, tmp_path: Path):
+        """A cd_size larger than the file must be refused before the read."""
+        p = tmp_path / "cd-past-end.zip"
+        eocd = (
+            b"PK\x05\x06"
+            + struct.pack("<HHHH", 0, 0, 1, 1)
+            + struct.pack("<II", 2**31, 0)
+            + struct.pack("<H", 0)
+        )
+        p.write_bytes(eocd)
+        with pytest.raises(MalformedZipError, match="past the end"):
+            zipinspect.central_directory(p)
+
+
+class TestConformanceAssertions:
+    def test_a_container_past_4gib_must_use_zip64(self, tmp_path: Path):
+        """The check that can actually fail on writer output.
+
+        A container this size has either a local header past 4 GiB or an entry
+        whose data crosses it; both require the sentinel. This one claims
+        neither, which is the shape of a writer that never learned ZIP64.
+
+        The container is still located through a ZIP64 EOCD, because a central
+        directory this far in cannot be addressed any other way -- the point is
+        that no *entry* uses ZIP64, which is what the assertion checks.
+        """
+        cd_offset = 5 * 2**30
+        p = synth_zip64_eocd(
+            tmp_path / "big-no-zip64.zip",
+            [cen_record("0.payload", raw_offset=0, raw_usize=1024, raw_csize=1024)],
+            cd_offset=cd_offset,
+        )
+        cd = zipinspect.central_directory(p)
+        assert cd.file_size > ZIP64_WINDOW_HIGH
+        with pytest.raises(AssertionError, match="not one of its 1 entries"):
+            zipinspect.assert_zip64_above_4gib(cd)
+
+    def test_a_container_past_4gib_with_zip64_passes(self, tmp_path: Path):
+        cd_offset = 5 * 2**30
+        p = synth_zip64_eocd(
+            tmp_path / "big-with-zip64.zip",
             [
                 cen_record(
                     "0.payload",
-                    raw_offset=0,
-                    raw_usize=ZIP64_SENTINEL_32,
-                    raw_csize=ZIP64_SENTINEL_32,
-                    zip64_usize=5 * 2**30,
-                    zip64_csize=5 * 2**30 + 1,
+                    raw_offset=ZIP64_SENTINEL_32,
+                    zip64_offset=cd_offset - 1024,
                 )
             ],
+            cd_offset=cd_offset,
         )
-        entries = zipinspect.central_directory(p)
-        zipinspect.assert_zip64_above_4gib(entries)
+        zipinspect.assert_zip64_above_4gib(zipinspect.central_directory(p))
+
+    def test_a_container_below_4gib_is_not_required_to_use_zip64(self, tmp_path: Path):
+        """The 2-4 GiB band has latitude; only above 2**32 is ZIP64 mandatory."""
+        p = synth_zip(
+            tmp_path / "medium.zip",
+            [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)],
+            cd_offset=MEDIUM_BYTES + 128,
+        )
+        zipinspect.assert_zip64_above_4gib(zipinspect.central_directory(p))
+
+    def test_an_offset_truncated_mod_2_32_is_caught(self, tmp_path: Path):
+        """The defect ``assert_zip64_above_4gib`` structurally cannot see.
+
+        A writer that drops the high bits of a 5 GiB offset emits a value that
+        parses perfectly and looks like an ordinary small offset. What gives
+        it away is that the entry's data would then have to end well after the
+        central directory starts.
+        """
+        true_offset = 5 * 2**30
+        cd_offset = true_offset + 4096
+        p = synth_zip64_eocd(
+            tmp_path / "truncated-offset.zip",
+            [
+                cen_record(
+                    "0.payload",
+                    raw_offset=true_offset % ZIP64_WINDOW_HIGH,
+                    raw_usize=ZIP64_SENTINEL_32,
+                    raw_csize=ZIP64_SENTINEL_32,
+                    zip64_usize=true_offset,
+                    zip64_csize=true_offset,
+                )
+            ],
+            cd_offset=cd_offset,
+        )
+        cd = zipinspect.central_directory(p)
+        with pytest.raises(AssertionError, match="truncated mod 2\\*\\*32"):
+            zipinspect.assert_offsets_are_consistent(cd)
+
+    def test_an_entry_at_or_after_the_central_directory_is_caught(self, tmp_path: Path):
+        p = synth_zip(
+            tmp_path / "entry-after-cd.zip",
+            [cen_record("0.payload", raw_offset=9000)],
+            cd_offset=4096,
+        )
+        cd = zipinspect.central_directory(p)
+        with pytest.raises(AssertionError, match="at or after the central directory"):
+            zipinspect.assert_offsets_are_consistent(cd)
+
+    def test_two_entries_claiming_one_offset_are_caught(self, tmp_path: Path):
+        p = synth_zip(
+            tmp_path / "dup-offset.zip",
+            [
+                cen_record("0.payload", raw_offset=512),
+                cen_record("0.manifest.json", raw_offset=512),
+            ],
+            cd_offset=4096,
+        )
+        cd = zipinspect.central_directory(p)
+        with pytest.raises(AssertionError, match="both claim a local header"):
+            zipinspect.assert_offsets_are_consistent(cd)
+
+    def test_a_well_formed_container_is_consistent(self, tmp_path: Path):
+        p = synth_zip(
+            tmp_path / "fine.zip",
+            [
+                cen_record("0.payload", raw_offset=0, raw_csize=2048),
+                cen_record("0.manifest.json", raw_offset=2100, raw_csize=64),
+            ],
+            cd_offset=4096,
+        )
+        zipinspect.assert_offsets_are_consistent(zipinspect.central_directory(p))
 
     def test_window_entries_are_reported_for_either_encoding(self, tmp_path: Path):
         """Both a raw value and a sentinel in the band are legal and both are listed."""
@@ -401,11 +766,20 @@ class TestConformanceAssertions:
                 cen_record("small", raw_offset=1024),
             ],
         )
-        entries = zipinspect.central_directory(p)
+        entries = zipinspect.central_directory(p).entries
         assert {e.name for e in zipinspect.entries_in_window(entries)} == {
             "raw",
             "sentinel",
         }
+
+    def test_a_compressed_size_in_the_window_is_reported(self, tmp_path: Path):
+        """The compressed size is a 32-bit field too, and was being skipped."""
+        p = synth_zip(
+            tmp_path / "csize-window.zip",
+            [cen_record("0.payload", raw_offset=0, raw_csize=MEDIUM_BYTES)],
+        )
+        entries = zipinspect.central_directory(p).entries
+        assert [e.name for e in zipinspect.entries_in_window(entries)] == ["0.payload"]
 
     def test_only_raw_window_values_exercise_signed_read(self, tmp_path: Path):
         """The sentinel redirects to ZIP64 data and is not a signed read risk."""
@@ -420,7 +794,7 @@ class TestConformanceAssertions:
                 ),
             ],
         )
-        entries = zipinspect.central_directory(p)
+        entries = zipinspect.central_directory(p).entries
         assert {
             e.name for e in zipinspect.entries_with_raw_values_in_window(entries)
         } == {"raw"}
@@ -429,6 +803,6 @@ class TestConformanceAssertions:
         p = synth_zip(
             tmp_path / "d.zip", [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)]
         )
-        text = zipinspect.describe(zipinspect.central_directory(p))
+        text = zipinspect.describe(zipinspect.central_directory(p).entries)
         assert "0.manifest.json" in text
         assert str(MEDIUM_BYTES) in text

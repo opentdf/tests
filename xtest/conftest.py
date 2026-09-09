@@ -126,7 +126,19 @@ def sizes_opt_type(v: str) -> list[str]:
             )
     # Cheapest first, so a fan-out run reports its fast cells before spending
     # minutes on a multi-GiB one.
-    return [n for n in sizes.SIZE_ORDER if n in set(names)]
+    ordered = [n for n in sizes.SIZE_ORDER if n in set(names)]
+    # SIZE_ORDER is derived from SIZES, so this cannot fire today. It is here
+    # because the failure it guards is invisible: a name validated against
+    # SIZES but absent from SIZE_ORDER is dropped here, which empties the
+    # parameter set, which pytest reports as "got empty parameter set" -- a
+    # *skip*, exit 0. A whole matrix disappears and the run stays green.
+    dropped = sorted(set(names) - set(ordered))
+    if dropped:
+        raise argparse.ArgumentTypeError(
+            f"size(s) {', '.join(dropped)} are in SIZES but missing from "
+            "SIZE_ORDER; they would be silently dropped from the run"
+        )
+    return ordered
 
 
 _SIZES_KEY = pytest.StashKey[list[str]]()

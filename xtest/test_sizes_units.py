@@ -66,6 +66,38 @@ class TestSizes:
         assert not sizes.in_zip64_window(sizes.CHUNKY_BYTES)
 
 
+class TestSizeOrder:
+    """The two tables that must not drift apart.
+
+    ``--sizes`` validates names against ``SIZES``; ``sizes_opt_type`` then
+    orders them through ``SIZE_ORDER``. A name in the first and not the second
+    is accepted on the command line and dropped immediately after, which
+    empties the parameter set -- and pytest reports an empty parameter set as
+    a *skip*, exit 0. An entire matrix disappears and the run stays green.
+    """
+
+    def test_every_size_is_ordered(self):
+        assert set(sizes.SIZE_ORDER) == set(sizes.SIZES)
+
+    def test_ordering_is_cheapest_first(self):
+        """The order is the run order; an expensive size must not go first."""
+        by_bytes = [sizes.SIZES[n] for n in sizes.SIZE_ORDER]
+        assert by_bytes == sorted(by_bytes)
+
+    def test_a_size_missing_from_the_order_is_rejected_not_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The drift above, made to happen, so the failure mode is a message.
+
+        Patching ``SIZE_ORDER`` short is the only way to reach this branch --
+        it is derived from ``SIZES`` precisely so the drift cannot occur -- but
+        the guard is what makes a future hand-written ``SIZE_ORDER`` loud.
+        """
+        monkeypatch.setattr(sizes, "SIZE_ORDER", ("small", "chunky", "large"))
+        with pytest.raises(argparse.ArgumentTypeError, match="missing from"):
+            conftest.sizes_opt_type("small,medium")
+
+
 class TestSizesOptionParsing:
     def test_dedups_and_orders_cheapest_first(self):
         assert conftest.sizes_opt_type("large,small,small") == ["small", "large"]

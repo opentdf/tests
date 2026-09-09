@@ -42,7 +42,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: "Run 2.1 GiB ZIP64 boundary tests."
+        description: "Run 2.1 GiB ZIP64 boundary tests (one runner per encrypting SDK, up to the job's 90m timeout each)."
       force-supports:
         required: false
         type: string
@@ -167,6 +167,14 @@ jobs:
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - id: version-info
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+        # github-script authenticates its own `github` client, but the token
+        # never reaches the `otdf-sdk-mgr versions resolve` child process
+        # spawned below -- it reads GITHUB_TOKEN from the environment. Without
+        # this the four resolutions share the unauthenticated 60 requests/hour
+        # allowed per runner IP, and `java`, resolved last and paginating
+        # /releases, is the one that runs out.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           script: |
             function htmlEscape(str) {
@@ -1084,7 +1092,9 @@ jobs:
       # runner therefore installs every SDK, and the split is about disk and
       # wall clock rather than about what is installed: one encryptor per
       # runner means at most two cached 2.1 GiB ciphertexts (one per
-      # negotiated target_mode), not three.
+      # negotiated target_mode), not three. Those sit alongside the shared
+      # plaintext fixture and one decrypt output -- see the scratch-volume
+      # step below for the resulting budget.
       fail-fast: false
       matrix:
         sdk: [go, java, js]
@@ -1095,12 +1105,19 @@ jobs:
           path: otdftests
           persist-credentials: false
 
-      # Plaintext 2.1 GiB + one cached ciphertext 2.1 GiB + one decrypt output
-      # at a time 2.1 GiB is ~6.5 GiB, which the workspace volume cannot be
-      # relied on to hold alongside three SDK toolchains. /mnt is the runner's
-      # large ephemeral disk; XT_TMP_DIR moves the fixtures there.
+      # Three 2.1 GiB files are live at once -- the plaintext fixture, the
+      # cached ciphertext, and the decrypt output -- so ~6.5 GiB, which the
+      # workspace volume cannot be relied on to hold alongside three SDK
+      # toolchains. /mnt is the runner's large ephemeral disk; XT_TMP_DIR moves
+      # the fixtures there. Keep this figure in step with the strategy comment
+      # above and with spec/DSPX-4592.md, which cites this step as the source.
       - name: Reclaim disk and stage a scratch volume
         id: scratch
+        env:
+          # ~6.5 GiB of fixtures plus headroom for the second cached ciphertext
+          # a target_mode renegotiation produces. Below this the job fails 40
+          # minutes in, on a write, with no indication that disk was the cause.
+          ZIP64_MIN_SCRATCH_GIB: "10"
         run: |-
           # Toolchains this job does not use. Removing them buys ~25 GiB on the
           # workspace volume, which the platform containers and three SDK
@@ -1110,6 +1127,14 @@ jobs:
           sudo mkdir -p /mnt/xtest-tmp
           sudo chown "$(id -u):$(id -g)" /mnt/xtest-tmp
           df -h / /mnt
+          avail=$(df -B1 --output=avail /mnt | tail -1)
+          need=$((ZIP64_MIN_SCRATCH_GIB * 1024 * 1024 * 1024))
+          if [ "$avail" -lt "$need" ]; then
+            echo "::error::/mnt has $((avail / 1024 / 1024 / 1024)) GiB free," \
+                 "below the ${ZIP64_MIN_SCRATCH_GIB} GiB this job needs for" \
+                 "2.1 GiB fixtures. Failing now rather than mid-encrypt."
+            exit 1
+          fi
 
       - name: load extra keys from file
         id: load-extra-keys
@@ -1173,6 +1198,13 @@ jobs:
       ######## INSTALL EVERY SDK #############
       # The go install doubles as otdfctl, which conftest.py loads at import
       # time to provision attributes and the KAS registry.
+      #
+      # Each of the three runners builds all three SDKs, so this job alone
+      # triples the nightly's BSR request rate. buf.build has already answered
+      # `resource_exhausted: too many requests` during a java prepare on the
+      # regular matrix; that flake is pre-existing, but it gets likelier here.
+      # If it becomes routine, retry inside setup-cli-tool rather than adding a
+      # wrapper per step -- the rate limit is per-org, not per-step.
       - name: Configure go sdk
         id: configure-go
         uses: ./otdftests/xtest/setup-cli-tool
@@ -1316,11 +1348,18 @@ jobs:
       # ticket exists to close, and it is invisible in the job status. Parse
       # the junit XML rather than grepping the log: a skipped cell and a cell
       # that printed the word "skipped" are different things.
+      #
+      # The bar is a count, not "at least one". This runner encrypts once and
+      # decrypts with all three SDKs, so a healthy run is three cells; a floor
+      # of one passes when two of the three decryptors quietly stopped being
+      # exercised, which is the same erosion in slower motion.
       - name: Confirm the ZIP64 cells actually ran
         if: success() || failure()
         working-directory: otdftests/xtest
         env:
           ZIP64_SDK: ${{ matrix.sdk }}
+          # One cell per decrypting SDK. Raise this alongside --sdks-decrypt.
+          ZIP64_MIN_CELLS: "3"
         run: |-
           python3 - <<'PY'
           import os
@@ -1328,6 +1367,7 @@ jobs:
           import xml.etree.ElementTree as ET
 
           sdk = os.environ["ZIP64_SDK"]
+          minimum = int(os.environ["ZIP64_MIN_CELLS"])
           path = f"test-results/zip64-{sdk}.xml"
           try:
               cases = ET.parse(path).getroot().iter("testcase")
@@ -1340,9 +1380,6 @@ jobs:
               s = c.find("skipped")
               if s is None:
                   ran.append(name)
-              # pytest files xfail under <skipped>, but an xfailed cell did
-              # encrypt 2.1 GiB and did attempt the decrypt -- it exercised the
-              # defect and predicted the outcome. That is coverage, not a gap.
               elif s.get("type") == "pytest.xfail":
                   xfailed.append(name)
               else:
@@ -1354,10 +1391,17 @@ jobs:
           for n in skipped:
               print(f"  skipped: {n}")
 
-          if not ran and not xfailed:
+          # Only `ran` counts. test_zip64.py now asserts the reader failure
+          # inline instead of marking the node xfail, so an xfail here is no
+          # longer the expected shape of a pre-fix decryptor -- it is some
+          # other cell opting out, and opting out is what this step exists to
+          # catch. skip_chunky_skew can still produce genuine skips.
+          if len(ran) < minimum:
               sys.exit(
-                  "::error::no ZIP64 cell executed. The job is green because "
-                  "nothing ran, not because the 2-4 GiB band is conformant."
+                  f"::error::only {len(ran)} of {minimum} expected ZIP64 cells "
+                  f"executed ({len(xfailed)} xfailed, {len(skipped)} skipped, "
+                  "listed above). A job this green because cells declined to "
+                  "run says nothing about the 2-4 GiB band."
               )
           PY
 
