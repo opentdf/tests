@@ -17,6 +17,8 @@
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#  XT_WITH_ROOT_INTEGRITY_ALG [hs256|gmac] - Root integrity algorithm on encrypt
+#  XT_WITH_SEGMENT_INTEGRITY_ALG [hs256|gmac] - Segment integrity algorithm on encrypt
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -85,6 +87,22 @@ if [ "$1" == "supports" ]; then
       ;;
     hexaflexible)
       "${cmd[@]}" help encrypt | grep target-mode
+      exit $?
+      ;;
+    integrity_algs)
+      # DSPX-4736: --segment-integrity-algorithm selects GMAC or HS256 for the
+      # per-segment hashes.
+      set -o pipefail
+      "${cmd[@]}" help encrypt | grep segment-integrity-algorithm
+      exit $?
+      ;;
+    gmac_root_rejected)
+      # DSPX-4703: the root flag exists so `gmac` can be attempted and
+      # refused; a CLI that offers it is one that also rejects a GMAC root on
+      # read. Gated apart from integrity_algs so the security repro can be
+      # forced on by itself via XT_FORCE_SUPPORTS.
+      set -o pipefail
+      "${cmd[@]}" help encrypt | grep root-integrity-algorithm
       exit $?
       ;;
     connectrpc)
@@ -208,6 +226,12 @@ if [ "$1" == "encrypt" ]; then
   fi
   if [ -n "$XT_WITH_TARGET_MODE" ]; then
     args+=(--target-mode "$XT_WITH_TARGET_MODE")
+  fi
+  if [ -n "$XT_WITH_ROOT_INTEGRITY_ALG" ]; then
+    args+=(--root-integrity-algorithm "$XT_WITH_ROOT_INTEGRITY_ALG")
+  fi
+  if [ -n "$XT_WITH_SEGMENT_INTEGRITY_ALG" ]; then
+    args+=(--segment-integrity-algorithm "$XT_WITH_SEGMENT_INTEGRITY_ALG")
   fi
   echo "${cmd[@]}" encrypt "${args[@]}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then

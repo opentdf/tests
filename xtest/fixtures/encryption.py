@@ -40,6 +40,8 @@ class EncryptFactory:
         target_mode: tdfs.container_version | None = None,
         az: str = "",
         mime_type: str = "text/plain",
+        root_integrity_alg: tdfs.integrity_algorithm | None = None,
+        segment_integrity_alg: tdfs.integrity_algorithm | None = None,
     ) -> Path:
         attr_key = tuple(attr_values) if attr_values is not None else None
         plaintext = self._pt_file.resolve()
@@ -51,6 +53,11 @@ class EncryptFactory:
             attr_key,
             az,
             mime_type,
+            # Part of the key, not decoration: two callers differing only in
+            # the integrity algorithm want two different ciphertexts, and
+            # without these they would silently share the first one.
+            root_integrity_alg,
+            segment_integrity_alg,
         )
         cached = self._cache.get(key)
         if cached is not None:
@@ -68,6 +75,8 @@ class EncryptFactory:
             attr_values=attr_values,
             assert_value=az,
             target_mode=target_mode,
+            root_integrity_alg=root_integrity_alg,
+            segment_integrity_alg=segment_integrity_alg,
         )
         assert ct_file.is_file()
         self._cache[key] = ct_file

@@ -18,6 +18,8 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_ROOT_INTEGRITY_ALG [hs256|gmac] - Root integrity algorithm on encrypt
+#  XT_WITH_SEGMENT_INTEGRITY_ALG [hs256|gmac] - Segment integrity algorithm on encrypt
 #  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
@@ -98,6 +100,23 @@ if [[ "$1" == "supports" ]]; then
     mechanism-mlkem)
       set -o pipefail
       npx $CTL encrypt --help | grep -i 'mlkem:768'
+      exit $?
+      ;;
+    integrity_algs)
+      # DSPX-4736: --segment-integrity-algorithm selects GMAC or HS256 for the
+      # per-segment hashes. `encrypt --help` rather than the top-level `help`,
+      # matching mechanism-mlkem above: these are encrypt-only options.
+      set -o pipefail
+      npx $CTL encrypt --help | grep segment-integrity-algorithm
+      exit $?
+      ;;
+    gmac_root_rejected)
+      # DSPX-4703: the root flag exists so `gmac` can be attempted and
+      # refused; a CLI that offers it is one that also rejects a GMAC root on
+      # read. Gated apart from integrity_algs so the security repro can be
+      # forced on by itself via XT_FORCE_SUPPORTS.
+      set -o pipefail
+      npx $CTL encrypt --help | grep root-integrity-algorithm
       exit $?
       ;;
     multikao)
@@ -263,6 +282,17 @@ if [[ "$1" == "encrypt" ]]; then
   fi
   if [[ -n "$XT_WITH_TARGET_MODE" ]]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
+  fi
+  # Dashed spelling, not the camelCase used by the older options above: the
+  # cross-SDK contract fixes the flag name as --segment-integrity-algorithm /
+  # --root-integrity-algorithm, and `supports` greps the help text for exactly
+  # those strings. yargs' camel-case expansion accepts either spelling once
+  # the option is declared in dashed form.
+  if [[ -n "$XT_WITH_ROOT_INTEGRITY_ALG" ]]; then
+    args+=(--root-integrity-algorithm "$XT_WITH_ROOT_INTEGRITY_ALG")
+  fi
+  if [[ -n "$XT_WITH_SEGMENT_INTEGRITY_ALG" ]]; then
+    args+=(--segment-integrity-algorithm "$XT_WITH_SEGMENT_INTEGRITY_ALG")
   fi
 
   echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"

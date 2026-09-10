@@ -146,8 +146,25 @@ feature_type = Literal[
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
     "ecwrap",
+    # DSPX-4703. The encrypt CLI accepts ``--root-integrity-algorithm`` (so
+    # ``gmac`` can be *attempted* and refused), and the reader rejects a
+    # manifest declaring ``rootSignature.alg: GMAC`` in any casing.
+    #
+    # A GMAC root is not a MAC. The GMAC branch returns the trailing 16 bytes
+    # of its input; over a segment's ciphertext that is the tag AES-GCM just
+    # produced under the DEK, but over the aggregate hash -- which AES-GCM
+    # never processed -- it is a copy of the last segment hash, i.e. manifest
+    # data the attacker already controls. Since ``alg`` is read from the
+    # unauthenticated manifest, any HS256-rooted TDF can be downgraded onto
+    # that branch with no key at all. Gated separately from ``integrity_algs``
+    # so the security repro can be forced on by itself.
+    "gmac_root_rejected",
     "hexless",
     "hexaflexible",
+    # DSPX-4736. ``--segment-integrity-algorithm`` selects the per-segment
+    # integrity algorithm on encrypt (``gmac`` or ``hs256``), reflected in the
+    # manifest's ``segmentHashAlg``. Unlike the root, GMAC is sound here.
+    "integrity_algs",
     "kasallowlist",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
@@ -232,6 +249,15 @@ container_version = Literal["4.2.2", "4.3.0"]
 
 policy_type = Literal["plaintext", "encrypted"]
 """How policy (data attributes) should be bound within the output container on encrypt."""
+
+integrity_algorithm = Literal["hs256", "gmac"]
+"""Value domain of ``--root-integrity-algorithm`` / ``--segment-integrity-algorithm``.
+
+Lowercase because that is what the CLIs are specified to accept (case
+insensitively); the manifest spells the same values ``HS256`` / ``GMAC``.
+Only ``hs256`` is a legitimate *root* algorithm -- ``gmac`` exists in this
+domain so a test can attempt it and assert the refusal (DSPX-4703).
+"""
 
 
 class PlatformFeatureSet(BaseModel):
@@ -514,6 +540,91 @@ def update_payload(
     return outfile
 
 
+#: Length in bytes of an AES-GCM tag, and so of whatever the GMAC branch of
+#: ``calculateSignature`` returns.
+GMAC_TAG_BYTES = 16
+
+#: Length in bytes of an HMAC-SHA256 digest.
+HS256_DIGEST_BYTES = 32
+
+
+def is_legacy_manifest(manifest: Manifest) -> bool:
+    """True for a 4.2.2-shaped container, which hex-encodes before base64.
+
+    Mirrors the readers' own test: go uses ``manifest.TDFVersion == ""`` and
+    web-sdk ``isTargetSpecLegacyTDF``, both of which come down to an absent
+    ``schemaVersion``.
+    """
+    return not manifest.schemaVersion
+
+
+def decode_integrity_value(value: bytes, legacy: bool) -> bytes:
+    """Decode a ``rootSignature.sig`` / ``segment.hash`` field to raw bytes.
+
+    ``value`` is the base64 *text* as it appears in the manifest -- pydantic
+    stores these ``bytes`` fields verbatim rather than decoding them, so this
+    takes exactly one base64 step, plus a hex step for legacy containers.
+    """
+    decoded = base64.b64decode(value, validate=True)
+    if legacy:
+        return bytes.fromhex(decoded.decode("ascii"))
+    return decoded
+
+
+def aggregate_hash(manifest: Manifest) -> bytes:
+    """The bytes a reader signs at the root: every segment hash, concatenated.
+
+    Base64-decoded but *not* hex-decoded, even for a legacy container: every
+    SDK builds this buffer by base64-decoding ``segment.hash`` and appending
+    the result, so for a 4.2.2 file the aggregate is a run of ASCII hex.
+    """
+    segments = manifest.encryptionInformation.integrityInformation.segments
+    return b"".join(base64.b64decode(s.hash, validate=True) for s in segments)
+
+
+def forge_gmac_root_signature(manifest: Manifest, alg: str = "GMAC") -> Manifest:
+    """Rewrite the root signature the way a keyless attacker can (DSPX-4703).
+
+    Declares ``alg`` (any casing of GMAC; the readers compare case
+    insensitively) and emits the trailing 16 bytes of the aggregate hash as
+    the signature. Both inputs are manifest data the attacker already holds,
+    which is the whole finding: the GMAC branch never touches the DEK, so
+    "sign the root" degenerates into "copy the last segment hash".
+
+    Mirrors ``forgeGMACRootSignature`` in
+    ``platform/sdk/tdf_root_signature_test.go``, plus the legacy hex wrapper
+    that ``calculateSignature(..., isLegacyTDF=true)`` applies.
+
+    Mutates and returns ``manifest`` so it composes with
+    :func:`update_manifest`.
+    """
+    aggregate = aggregate_hash(manifest)
+    if len(aggregate) < GMAC_TAG_BYTES:
+        raise ValueError(
+            f"aggregate hash is {len(aggregate)} bytes; need at least "
+            f"{GMAC_TAG_BYTES} to forge a GMAC root signature"
+        )
+    forged = aggregate[-GMAC_TAG_BYTES:]
+    if is_legacy_manifest(manifest):
+        forged = forged.hex().encode()
+    root = manifest.encryptionInformation.integrityInformation.rootSignature
+    root.alg = alg
+    root.sig = base64.b64encode(forged)
+    return manifest
+
+
+def encrypted_segment_sizes(manifest: Manifest) -> list[int]:
+    """Each segment's ciphertext length, defaulting an absent per-segment size.
+
+    web-sdk omits ``encryptedSegmentSize`` whenever it equals the
+    manifest-level default, so a caller slicing ``0.payload`` into segments
+    cannot read the field directly.
+    """
+    ii = manifest.encryptionInformation.integrityInformation
+    default = ii.encryptedSegmentSizeDefault or 0
+    return [s.encryptedSegmentSize or default for s in ii.segments]
+
+
 def validate_manifest_schema(tdf_file: Path):
     ## Get the schema file
     schema_file_path = os.getenv("SCHEMA_FILE")
@@ -609,6 +720,8 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
+        root_integrity_alg: integrity_algorithm | None = None,
+        segment_integrity_alg: integrity_algorithm | None = None,
     ) -> tuple[list[str], dict[str, str]]:
         """Build the argv and CLI-specific env vars for an encrypt invocation.
 
@@ -643,6 +756,12 @@ class SDK:
         if fmt == "ztdf" and target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
+        if root_integrity_alg:
+            local_env |= {"XT_WITH_ROOT_INTEGRITY_ALG": root_integrity_alg}
+
+        if segment_integrity_alg:
+            local_env |= {"XT_WITH_SEGMENT_INTEGRITY_ALG": segment_integrity_alg}
+
         if use_ecwrap:
             local_env |= {"XT_WITH_ECWRAP": "true"}
         return c, local_env
@@ -657,6 +776,8 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
+        root_integrity_alg: integrity_algorithm | None = None,
+        segment_integrity_alg: integrity_algorithm | None = None,
     ):
         c, local_env = self.encrypt_command(
             pt_file,
@@ -667,6 +788,8 @@ class SDK:
             assert_value=assert_value,
             policy_mode=policy_mode,
             target_mode=target_mode,
+            root_integrity_alg=root_integrity_alg,
+            segment_integrity_alg=segment_integrity_alg,
         )
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)

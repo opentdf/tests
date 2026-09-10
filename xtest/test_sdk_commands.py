@@ -70,6 +70,23 @@ class TestEncryptCommand:
         )
         assert env["XT_WITH_TARGET_MODE"] == "4.3.0"
 
+    def test_integrity_algorithms(self, sdk: tdfs.SDK):
+        _, env = sdk.encrypt_command(
+            Path("in.txt"),
+            Path("out.tdf"),
+            root_integrity_alg="hs256",
+            segment_integrity_alg="gmac",
+        )
+        assert env["XT_WITH_ROOT_INTEGRITY_ALG"] == "hs256"
+        assert env["XT_WITH_SEGMENT_INTEGRITY_ALG"] == "gmac"
+
+    def test_integrity_algorithms_omitted_by_default(self, sdk: tdfs.SDK):
+        # Absent, not "hs256"/"gmac": an SDK build without the flags must keep
+        # working, so the shim only passes them when a test asked for one.
+        _, env = sdk.encrypt_command(Path("in.txt"), Path("out.tdf"))
+        assert "XT_WITH_ROOT_INTEGRITY_ALG" not in env
+        assert "XT_WITH_SEGMENT_INTEGRITY_ALG" not in env
+
     def test_ecwrap_container_maps_to_ztdf_plus_a_flag(self, sdk: tdfs.SDK):
         argv, env = sdk.encrypt_command(
             Path("in.txt"), Path("out.tdf"), container="ztdf-ecwrap"
