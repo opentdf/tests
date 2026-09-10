@@ -126,6 +126,12 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
+    zip64-at-2gib)
+      # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
+      # on the right side of the 2 GiB switch point. Predates any version we
+      # test. See DSPX-4591.
+      exit 0
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

@@ -1,19 +1,23 @@
-"""Offline tests for tdfs.py's XT_FORCE_SUPPORTS override and chunky gating (DSPX-4638, DSPX-4589).
+"""Offline tests for tdfs.py's anti-vacuous-green machinery (DSPX-4592, DSPX-4638).
 
-No platform, no SDK, no subprocess. ``_parse_forced_supports`` and
-``skip_chunky_skew`` are both safeguards built specifically to stop a real
-regression from hiding behind a skip -- so they are worth testing on their
-own.
+No platform, no SDK, no subprocess. ``_parse_forced_supports``,
+``zip64_reader_is_broken``, and ``skip_chunky_skew`` are all safeguards built
+specifically to stop a real regression from hiding behind a skip or a stale
+xfail -- so they are worth testing on their own, the same way the ZIP64
+parser they sit next to is tested in ``test_zip64_units.py``.
 """
 
 import json
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
 import tdfs
+
+# --- tdfs._parse_forced_supports ---------------------------------------------
 
 
 class TestParseForcedSupports:
@@ -30,6 +34,52 @@ class TestParseForcedSupports:
         """The whole point of this function: a typo must not be a silent no-op."""
         with pytest.raises(ValueError, match="unknown feature"):
             tdfs._parse_forced_supports("hexles")
+
+
+# --- tdfs.zip64_reader_is_broken ----------------------------------------------
+
+
+def _stub_sdk(sdk: str, semver: tuple[int, int, int] | None) -> tdfs.SDK:
+    """A duck-typed stand-in exposing only what zip64_reader_is_broken reads."""
+    return cast(tdfs.SDK, SimpleNamespace(sdk=sdk, semver=lambda: semver))
+
+
+class TestZip64ReaderIsBroken:
+    """Which decryptors ``test_zip64.py`` requires a decrypt failure from.
+
+    Only java before #393, and only when it reports a release version. Each
+    "False" here is a build the test holds to a successful roundtrip, so a
+    predicate that were too generous would turn a real regression into an
+    expected failure.
+    """
+
+    def test_pre_fix_java_is_broken(self):
+        assert tdfs.zip64_reader_is_broken(_stub_sdk("java", (0, 18, 0)))
+
+    def test_the_fix_release_itself_is_not(self):
+        """Boundary: the constant names the first release *with* the fix."""
+        assert not tdfs.zip64_reader_is_broken(
+            _stub_sdk("java", tdfs.JAVA_ZIP64_READER_FIX)
+        )
+
+    def test_a_later_java_is_not(self):
+        major, minor, patch = tdfs.JAVA_ZIP64_READER_FIX
+        assert not tdfs.zip64_reader_is_broken(
+            _stub_sdk("java", (major, minor, patch + 1))
+        )
+
+    def test_another_sdk_is_never_broken(self):
+        """The defect is java's ZipReader; an old go is not a stand-in for it."""
+        assert not tdfs.zip64_reader_is_broken(_stub_sdk("go", (0, 1, 0)))
+
+    def test_a_branch_build_is_not(self):
+        """A branch build (e.g. 'main') has no semver and is expected to carry the fix.
+
+        If it does not, the cell fails loudly -- which is the correct report
+        for a branch that has regressed, and is exactly what happened on the
+        first live run against java@main.
+        """
+        assert not tdfs.zip64_reader_is_broken(_stub_sdk("java", None))
 
 
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------

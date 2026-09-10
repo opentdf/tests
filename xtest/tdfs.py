@@ -169,6 +169,21 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
+    # rather than at 4 GiB.
+    #
+    # A real 32-bit value in [2**31, 2**32) is *legal* -- the central-directory
+    # size and offset fields are unsigned -- so this is a cross-SDK interop
+    # convention rather than a spec rule, which is why it is a feature gate and
+    # not an unconditional assertion on every writer. A reader that widens
+    # those fields with a signed read sees a negative number, and that
+    # describes every java-sdk released to date. web-sdk always writes ZIP64;
+    # java-sdk adopted the 2 GiB switch in java-sdk#393; go-sdk still switches
+    # at 4 GiB. See DSPX-4590 finding 1.
+    #
+    # Only observable from a payload that reaches the window; hence
+    # sizes.MEDIUM_BYTES.
+    "zip64-at-2gib",
 ]
 
 
@@ -882,9 +897,10 @@ def elides_segment_sizes(ct_file: Path) -> bool:
 def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
     """Skip if ``ct_file`` needs segment-size defaulting and the reader lacks it.
 
-    A skip and not an xfail: this cell runs on the PR gate, where a
-    permanently-red job trains people to ignore it, and it needs no dated
-    guess about which release carries the fix.
+    A skip and not an asserted failure: this cell runs on the PR gate, where a
+    permanently-red job trains people to ignore it, and unlike
+    :func:`zip64_reader_is_broken` it needs no dated guess about which release
+    carries the fix.
 
     The cost is that it stays skipped until somebody edits
     ``sdk/{go,java}/cli.sh`` to answer yes -- the ``supports`` case statement
@@ -904,6 +920,38 @@ def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
         f"{decrypt_sdk} sdk doesn't yet support [chunky]: {ct_file.name} omits "
         "per-segment sizes, which this reader cannot default from the manifest"
     )
+
+
+#: First java-sdk release containing java-sdk#393.
+#:
+#: Before it, ``ZipReader.readInt()`` sign-extends, so a central-directory
+#: offset in ``[2**31, 2**32)`` comes back negative and the read fails or
+#: seeks to nonsense. A 2.1 GiB payload puts the manifest's offset exactly
+#: there. See DSPX-4592.
+#:
+#: Keep this honest, and note that both directions of getting it wrong fail
+#: the run rather than hiding: set too high, a release that does carry the fix
+#: reads the container correctly and the "must fail" assertion fires; set too
+#: low, a pre-fix release is expected to succeed and its real failure is
+#: reported as a defect. Update it when the release with #393 actually ships,
+#: not when the PR merges.
+JAVA_ZIP64_READER_FIX = (0, 19, 0)
+
+
+def zip64_reader_is_broken(decrypt_sdk: SDK) -> bool:
+    """True for decryptors known to mishandle a real 32-bit value in the band.
+
+    The caller asserts the decrypt *fails* for these, rather than marking the
+    cell xfail. That is deliberate on both counts: a node-level xfail would
+    swallow every unrelated failure in the rest of the cell, and asserting the
+    failure means a build that has quietly been fixed turns the cell red so
+    somebody comes and deletes this predicate.
+
+    Branch builds (``main``) have no semver and are never assumed broken --
+    they are the builds expected to carry the fix.
+    """
+    sv = decrypt_sdk.semver()
+    return decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX
 
 
 def _parse_semver(version: str) -> tuple[int, int, int] | None:

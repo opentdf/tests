@@ -126,7 +126,19 @@ def sizes_opt_type(v: str) -> list[str]:
             )
     # Cheapest first, so a fan-out run reports its fast cells before spending
     # minutes on a multi-GiB one.
-    return [n for n in sizes.SIZE_ORDER if n in set(names)]
+    ordered = [n for n in sizes.SIZE_ORDER if n in set(names)]
+    # SIZE_ORDER is derived from SIZES, so this cannot fire today. It is here
+    # because the failure it guards is invisible: a name validated against
+    # SIZES but absent from SIZE_ORDER is dropped here, which empties the
+    # parameter set, which pytest reports as "got empty parameter set" -- a
+    # *skip*, exit 0. A whole matrix disappears and the run stays green.
+    dropped = sorted(set(names) - set(ordered))
+    if dropped:
+        raise argparse.ArgumentTypeError(
+            f"size(s) {', '.join(dropped)} are in SIZES but missing from "
+            "SIZE_ORDER; they would be silently dropped from the run"
+        )
+    return ordered
 
 
 _SIZES_KEY = pytest.StashKey[list[str]]()
@@ -151,7 +163,8 @@ def resolve_sizes(config: pytest.Config) -> list[str]:
                 "deprecated spelling of --sizes small,large"
             )
         warnings.warn(
-            "--large is deprecated; use --sizes small,large",
+            "--large is deprecated; use --sizes small,large (or --sizes medium "
+            "for the 2-4 GiB ZIP64 band, which --large steps straight over)",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -428,23 +441,51 @@ def pytest_configure(config: pytest.Config):
         )
 
 
+def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
+    """Whether this item has a payload large enough for the ZIP64 tests.
+
+    Size-aware items must be judged by their own parametrized value.  Marked
+    items without a ``size`` parameter retain the session-level behaviour so
+    a future ZIP64 test with a purpose-built fixture is not dropped merely
+    because it does not use :func:`pt_file`.
+    """
+    callspec = getattr(item, "callspec", None)
+    item_size = callspec.params.get("size") if callspec is not None else None
+    if isinstance(item_size, str):
+        return sizes.exercises_zip64_window(item_size)
+    return any(sizes.exercises_zip64_window(size) for size in session_sizes)
+
+
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Drop the benchmark cells entirely unless --bench asked for them.
+    """Drop cells the session did not ask for.
 
-    Deselected rather than skipped: a 20-minute cell has no business in the
-    regular integration matrix, and a skip would report it as a test that
-    exists and was declined rather than one that was never in scope.
+    Two groups, deselected rather than skipped for the same reason: neither a
+    20-minute benchmark nor a 2.1 GiB roundtrip has any business in the
+    regular integration matrix, and a skip would report them as tests that
+    exist and were declined rather than ones that were never in scope.
+
+    - ``benchmark``: needs --bench.
+    - ``zip64``: needs a payload size that can reach the 2**31 boundary. At
+      the default 128 bytes these tests cannot exercise anything, and the one
+      thing worse than not running them is running them green on a payload
+      that never touches the code path.
     """
-    if config.getoption("--bench", default=False):
-        return
-    keep, drop = [], []
+    drop: list[pytest.Item] = []
+    want_bench = bool(config.getoption("--bench", default=False))
+    session_sizes = resolve_sizes(config)
     for item in items:
-        (drop if item.get_closest_marker("benchmark") else keep).append(item)
+        if not want_bench and item.get_closest_marker("benchmark"):
+            drop.append(item)
+        elif item.get_closest_marker("zip64") and not _item_exercises_zip64_window(
+            item, session_sizes
+        ):
+            drop.append(item)
     if drop:
+        dropped = set(map(id, drop))
         config.hook.pytest_deselected(items=drop)
-        items[:] = keep
+        items[:] = [i for i in items if id(i) not in dropped]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
@@ -584,8 +625,9 @@ def pt_file(tmp_dir: Path, size: str) -> Path:
     Args:
         tmp_dir: Temporary directory for test files
         size: a key of :data:`sizes.SIZES` -- 'small' (128 bytes),
-            'chunky' (5 MiB, several default-sized segments), or
-            'large' (5 GiB)
+            'chunky' (5 MiB, several default-sized segments),
+            'medium' (2.1 GiB, inside the ZIP64 broken window), or
+            'large' (5 GiB, above it)
 
     Returns:
         Path to the generated plaintext file

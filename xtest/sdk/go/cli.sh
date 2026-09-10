@@ -132,6 +132,19 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4590"
       exit 1
       ;;
+    zip64-at-2gib)
+      # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
+      # 4 GiB, so a reader that widens the central-directory fields with a
+      # signed read can still open the container. Every go build to date gates
+      # on ^uint32(0) and so writes a real 32-bit value across the whole
+      # 2-4 GiB band. Fix tracked as DSPX-4590 finding 1 (platform#3981, open);
+      # turn this into a version gate when it releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip64-at-2gib unsupported: see DSPX-4590"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

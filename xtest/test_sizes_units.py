@@ -12,6 +12,41 @@ import sizes
 
 
 class TestSizes:
+    def test_medium_is_inside_the_broken_window(self):
+        """The whole ticket rests on this one number being in the band."""
+        assert sizes.in_zip64_window(sizes.MEDIUM_BYTES)
+
+    def test_medium_has_margin_below_the_low_edge(self):
+        """Manifest size and segment padding must not push the offset back under 2**31.
+
+        The manifest is written after the payload, so its local-header offset
+        is the payload size plus header overhead -- but the assertion that
+        matters is the reverse: the payload alone must already clear the
+        boundary by more than any plausible overhead.
+        """
+        margin = sizes.MEDIUM_BYTES - sizes.ZIP64_WINDOW_LOW
+        assert margin > 100 * 2**20, (
+            f"only {margin} bytes of margin above 2**31; segment padding and "
+            "manifest size could push the interesting offset back below it"
+        )
+
+    def test_small_and_large_sit_outside_the_window(self):
+        """The two pre-existing sizes are exactly why this ticket exists."""
+        assert sizes.SIZES["small"] < sizes.ZIP64_WINDOW_LOW
+        assert sizes.SIZES["large"] >= sizes.ZIP64_WINDOW_HIGH
+        assert not sizes.in_zip64_window(sizes.SIZES["small"])
+        assert not sizes.in_zip64_window(sizes.SIZES["large"])
+
+    # Named size_name, not size: `size` is parametrized session-wide by
+    # conftest's pytest_generate_tests, and reusing it here is a collection
+    # error rather than a shadow.
+    @pytest.mark.parametrize(
+        ("size_name", "expected"),
+        [("small", False), ("chunky", False), ("medium", True), ("large", True)],
+    )
+    def test_which_sizes_select_the_zip64_tests(self, size_name: str, expected: bool):
+        assert sizes.exercises_zip64_window(size_name) is expected
+
     def test_chunky_clears_every_sdk_default_segment(self):
         """5 MiB has to buy more than one *default-sized* segment, everywhere.
 
@@ -24,6 +59,43 @@ class TestSizes:
         """
         largest_known_default = 2 * 2**20
         assert sizes.CHUNKY_BYTES > 2 * largest_known_default
+
+    def test_chunky_stays_cheap(self):
+        """It runs on the PR gate, so it must not creep toward the nightly's cost."""
+        assert sizes.CHUNKY_BYTES < 64 * 2**20
+        assert not sizes.in_zip64_window(sizes.CHUNKY_BYTES)
+
+
+class TestSizeOrder:
+    """The two tables that must not drift apart.
+
+    ``--sizes`` validates names against ``SIZES``; ``sizes_opt_type`` then
+    orders them through ``SIZE_ORDER``. A name in the first and not the second
+    is accepted on the command line and dropped immediately after, which
+    empties the parameter set -- and pytest reports an empty parameter set as
+    a *skip*, exit 0. An entire matrix disappears and the run stays green.
+    """
+
+    def test_every_size_is_ordered(self):
+        assert set(sizes.SIZE_ORDER) == set(sizes.SIZES)
+
+    def test_ordering_is_cheapest_first(self):
+        """The order is the run order; an expensive size must not go first."""
+        by_bytes = [sizes.SIZES[n] for n in sizes.SIZE_ORDER]
+        assert by_bytes == sorted(by_bytes)
+
+    def test_a_size_missing_from_the_order_is_rejected_not_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The drift above, made to happen, so the failure mode is a message.
+
+        Patching ``SIZE_ORDER`` short is the only way to reach this branch --
+        it is derived from ``SIZES`` precisely so the drift cannot occur -- but
+        the guard is what makes a future hand-written ``SIZE_ORDER`` loud.
+        """
+        monkeypatch.setattr(sizes, "SIZE_ORDER", ("small", "chunky", "large"))
+        with pytest.raises(argparse.ArgumentTypeError, match="missing from"):
+            conftest.sizes_opt_type("small,medium")
 
 
 class TestSizesOptionParsing:
