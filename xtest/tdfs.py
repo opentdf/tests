@@ -146,9 +146,9 @@ feature_type = Literal[
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
     "ecwrap",
-    # DSPX-4703. The encrypt CLI accepts ``--root-integrity-algorithm`` (so
-    # ``gmac`` can be *attempted* and refused), and the reader rejects a
-    # manifest declaring ``rootSignature.alg: GMAC`` in any casing.
+    # DSPX-4703, *writer* half only: the encrypt CLI accepts
+    # ``--root-integrity-algorithm``, so ``gmac`` can be attempted and refused
+    # at config validation.
     #
     # A GMAC root is not a MAC. The GMAC branch returns the trailing 16 bytes
     # of its input; over a segment's ciphertext that is the tag AES-GCM just
@@ -156,8 +156,25 @@ feature_type = Literal[
     # never processed -- it is a copy of the last segment hash, i.e. manifest
     # data the attacker already controls. Since ``alg`` is read from the
     # unauthenticated manifest, any HS256-rooted TDF can be downgraded onto
-    # that branch with no key at all. Gated separately from ``integrity_algs``
-    # so the security repro can be forced on by itself.
+    # that branch with no key at all.
+    #
+    # Deliberately says nothing about the reader. Rejecting a downgraded
+    # manifest on read is a separate change that ships one commit later in
+    # every SDK and adds no CLI surface to probe, so the exploit cases test the
+    # reader by observation instead -- see
+    # ``test_integrity_algs.skip_unless_gmac_root_rejected``.
+    "gmac_root_option",
+    # DSPX-4703, *reader* half: does this build refuse a manifest whose
+    # ``rootSignature.alg`` has been downgraded to GMAC? Force-only -- every
+    # shim answers no, because there is nothing to ask. The check lives in
+    # root-signature validation, which needs the unwrapped payload key and so
+    # runs after the KAS rewrap; it adds no flag, subcommand or version field.
+    #
+    # ``skip_unless_gmac_root_rejected`` therefore forges a root and watches
+    # what the reader does, and consults this only as the escape hatch: set
+    # ``XT_FORCE_SUPPORTS=gmac_root_rejected`` to run the exploit cases
+    # unconditionally, which is how you get a red repro out of a build that is
+    # still vulnerable rather than a skip.
     "gmac_root_rejected",
     "hexless",
     "hexaflexible",

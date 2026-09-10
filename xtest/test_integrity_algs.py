@@ -13,8 +13,10 @@ aggregate hash" -- the concatenation of the segment hashes, which AES-GCM has
 never touched. There is no tag to extract, so the result is a copy of the last
 segment hash: manifest data the attacker already controls, computed without
 the key. Since ``alg`` is read from the unauthenticated manifest, any ordinary
-HS256-rooted TDF can be downgraded onto that branch. That is DSPX-4703, and
-those tests gate on ``gmac_root_rejected``.
+HS256-rooted TDF can be downgraded onto that branch. That is DSPX-4703. The
+two writer tests gate on ``gmac_root_option``; the reader exploit cases have
+no flag to ask about and gate on an observed rejection instead -- see
+:func:`skip_unless_gmac_root_rejected`.
 
 Per-segment AEAD tags do not close the gap: nothing binds a segment to its
 index or to the total segment count, so the ordered segment list is precisely
@@ -231,16 +233,16 @@ INFRA_FAILURE_MARKERS: tuple[bytes, ...] = (
 )
 
 
-def assert_decrypt_fails(
-    decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path, why: str
-) -> subprocess.CalledProcessError:
-    """Require decrypt to reject the file *on the merits*, returning the error.
+def decrypt_failure(
+    decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path
+) -> subprocess.CalledProcessError | None:
+    """Attempt a decrypt: the error if the file was refused, None if accepted.
 
     A non-zero exit on its own does not distinguish "the forgery was caught"
     from "KAS was down", and both arrive here as the same exception. Every
     tamper case in this module depends on that distinction, so screen the
-    output for :data:`INFRA_FAILURE_MARKERS` and fail loudly rather than
-    bank an environment outage as a passing security test.
+    output for :data:`INFRA_FAILURE_MARKERS` and raise rather than report an
+    environment outage as a rejection.
     """
     try:
         decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
@@ -261,7 +263,17 @@ def assert_decrypt_fails(
             "saying anything; a silent non-zero exit could be any failure"
         )
         return exc
-    raise AssertionError(f"{decrypt_sdk} accepted {ct_file.name}: {why}")
+    return None
+
+
+def assert_decrypt_fails(
+    decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path, why: str
+) -> subprocess.CalledProcessError:
+    """Require decrypt to reject the file on the merits, returning the error."""
+    exc = decrypt_failure(decrypt_sdk, ct_file, rt_file)
+    if exc is None:
+        raise AssertionError(f"{decrypt_sdk} accepted {ct_file.name}: {why}")
+    return exc
 
 
 def assert_root_is_hs256(manifest: tdfs.Manifest, encrypt_sdk: tdfs.SDK) -> None:
@@ -433,7 +445,7 @@ def test_encrypt_accepts_hs256_root(
 ) -> None:
     """``--root-integrity-algorithm hs256`` is accepted and is a no-op change."""
     skip_unless_in_play(encrypt_sdk, decrypt_sdk, in_focus)
-    encrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    encrypt_sdk.skip_if_unsupported("gmac_root_option")
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -463,7 +475,7 @@ def test_encrypt_rejects_gmac_root(
     """
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
-    encrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    encrypt_sdk.skip_if_unsupported("gmac_root_option")
 
     ct_file = tmp_dir / f"gmac-root-refused-{encrypt_sdk}.tdf"
     try:
@@ -570,6 +582,65 @@ def apply_duplicate(
     )
 
 
+#: Whether a reader refuses a forged GMAC root, probed once and cached for the
+#: session. Keyed on the decrypting SDK alone: this is a property of the
+#: reader, and who wrote the file does not change the answer.
+_reader_rejects_gmac_root: dict[tdfs.SDK, bool] = {}
+
+
+def skip_unless_gmac_root_rejected(
+    decrypt_sdk: tdfs.SDK, chunky_tdf: EncryptFactory, multi_segment_ct: Path
+) -> None:
+    """Skip unless this reader is observed to refuse a forged GMAC root.
+
+    Observed, because there is nothing to ask. The DSPX-4703 fix is entirely
+    reader-side: it lives in the root-signature validation, which needs the
+    unwrapped payload key and therefore runs after the KAS rewrap, and it adds
+    no flag, subcommand or version field a ``cli.sh supports`` probe could
+    reach.
+
+    ``gmac_root_option`` is not a stand-in for it. Both writer behaviours --
+    the ``--root-integrity-algorithm`` flag and its config-time refusal of
+    ``gmac`` -- arrive with DSPX-4736, one commit *below* the reader fix in
+    every SDK, so 4736 must land first. A release carrying 4736 without 4703
+    would advertise a reader fix it does not have and turn every exploit case
+    below red against a build nobody claimed was fixed. The mirror image is a
+    reader fixed without the writer flag, which would skip silently.
+
+    So forge one root and see what happens. One extra encrypt/decrypt per
+    reader per session, no version numbers to keep up to date, and the answer
+    stays right through every release ordering.
+
+    The cost is that :func:`test_gmac_root_forged_signature_rejected` now
+    restates the probe and can only pass or skip. The other five exploit cases
+    keep their teeth: a reader can reject the bare downgrade and still be
+    fooled by a truncation, a reorder, a replay, or a casing variant.
+
+    The second cost is that a vulnerable build skips instead of going red,
+    which is the wrong answer when the vulnerability is what you are trying to
+    demonstrate. ``XT_FORCE_SUPPORTS=gmac_root_rejected`` is the escape hatch:
+    every shim answers no to that feature, so it is only ever true when
+    forced, and forcing it runs all six cases unconditionally.
+    """
+    if decrypt_sdk.supports("gmac_root_rejected"):
+        return
+
+    known = _reader_rejects_gmac_root.get(decrypt_sdk)
+    if known is None:
+        b_file = tdfs.update_manifest("gmac_root_probe", multi_segment_ct, forge_root())
+        rt_file = chunky_tdf.rt_file(b_file, decrypt_sdk, variant="probe")
+        # Deliberately uncached on an environment failure: decrypt_failure
+        # raises there, so a flaky KAS cannot pin this reader as vulnerable
+        # for the rest of the session.
+        known = decrypt_failure(decrypt_sdk, b_file, rt_file) is not None
+        _reader_rejects_gmac_root[decrypt_sdk] = known
+    if not known:
+        pytest.skip(
+            f"{decrypt_sdk} accepts a keyless forged GMAC root signature, so "
+            "it does not carry the DSPX-4703 reader fix"
+        )
+
+
 ## CONTROLS -- ungated; these must pass today and after the fix
 
 
@@ -660,7 +731,7 @@ def test_root_signature_control_tamper_without_forgery(
     )
 
 
-## EXPLOITS -- gated on gmac_root_rejected
+## EXPLOITS -- gated on the reader actually rejecting a forged GMAC root
 
 
 def test_gmac_root_forged_signature_rejected(
@@ -675,7 +746,7 @@ def test_gmac_root_forged_signature_rejected(
     the root signature is a self-consistency check rather than an integrity
     check, whether or not anything else is tampered with.
     """
-    decrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    skip_unless_gmac_root_rejected(decrypt_sdk, chunky_tdf, multi_segment_ct)
     b_file = tdfs.update_manifest("gmac_root", multi_segment_ct, forge_root())
     rt_file = chunky_tdf.rt_file(b_file, decrypt_sdk, variant="gmac_root")
     assert_decrypt_fails(
@@ -696,7 +767,7 @@ def test_gmac_root_forged_truncation_rejected(
     The consequence the finding is about: the recipient decrypts successfully
     and receives an attacker-chosen prefix of the plaintext.
     """
-    decrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    skip_unless_gmac_root_rejected(decrypt_sdk, chunky_tdf, multi_segment_ct)
     manifest = tdfs.manifest(multi_segment_ct)
     n = len(manifest.encryptionInformation.integrityInformation.segments)
 
@@ -726,7 +797,7 @@ def test_gmac_root_forged_reorder_rejected(
     with. Per-segment authentication cannot see a permutation; only the root
     signature can.
     """
-    decrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    skip_unless_gmac_root_rejected(decrypt_sdk, chunky_tdf, multi_segment_ct)
     b_file = apply_reorder("gmac_reorder", multi_segment_ct, forge_root())
     rt_file = chunky_tdf.rt_file(b_file, decrypt_sdk, variant="gmac_reorder")
     assert_decrypt_fails(
@@ -750,7 +821,7 @@ def test_gmac_root_forged_duplicate_rejected(
     per-segment check has nothing to object to; only the root signature
     covers how many times a segment may appear.
     """
-    decrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    skip_unless_gmac_root_rejected(decrypt_sdk, chunky_tdf, multi_segment_ct)
     b_file = apply_duplicate("gmac_duplicate", multi_segment_ct, 0, forge_root())
     rt_file = chunky_tdf.rt_file(b_file, decrypt_sdk, variant="gmac_duplicate")
     assert_decrypt_fails(
@@ -774,7 +845,7 @@ def test_gmac_root_casing_variants_rejected(
     ``compareToIgnoreCase``, so a case-sensitive rejection would leave
     ``"gmac"`` on the vulnerable branch while looking fixed.
     """
-    decrypt_sdk.skip_if_unsupported("gmac_root_rejected")
+    skip_unless_gmac_root_rejected(decrypt_sdk, chunky_tdf, multi_segment_ct)
     b_file = tdfs.update_manifest(f"gmac_root_{alg}", multi_segment_ct, forge_root(alg))
     rt_file = chunky_tdf.rt_file(b_file, decrypt_sdk, variant=f"gmac_{alg}")
     assert_decrypt_fails(

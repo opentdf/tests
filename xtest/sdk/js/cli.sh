@@ -110,14 +110,32 @@ if [[ "$1" == "supports" ]]; then
       npx $CTL encrypt --help | grep segment-integrity-algorithm
       exit $?
       ;;
-    gmac_root_rejected)
-      # DSPX-4703: the root flag exists so `gmac` can be attempted and
-      # refused; a CLI that offers it is one that also rejects a GMAC root on
-      # read. Gated apart from integrity_algs so the security repro can be
-      # forced on by itself via XT_FORCE_SUPPORTS.
+    gmac_root_option)
+      # DSPX-4703, writer half: --root-integrity-algorithm exists, so `gmac`
+      # can be attempted and refused at config validation. Says nothing about
+      # whether this build rejects a downgraded manifest on *read* -- that
+      # ships a commit later and adds no CLI surface, so the exploit cases
+      # probe the reader directly rather than trusting this flag.
       set -o pipefail
       npx $CTL encrypt --help | grep root-integrity-algorithm
       exit $?
+      ;;
+    gmac_root_rejected)
+      # DSPX-4703, reader half: does decrypt refuse a manifest downgraded to
+      # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
+      # runs inside root-signature validation, which needs the unwrapped
+      # payload key and so happens after the KAS rewrap -- there is no flag,
+      # subcommand or version field to grep for.
+      #
+      # test_integrity_algs forges a root and watches the reader instead, and
+      # only consults this as an escape hatch: XT_FORCE_SUPPORTS=gmac_root_rejected
+      # runs the exploit cases unconditionally, turning a vulnerable build's
+      # skip into a red repro.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
+      exit 1
       ;;
     multikao)
       # Tolerate a KAO array where the same KAS wraps the same split more than
