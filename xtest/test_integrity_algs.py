@@ -205,13 +205,61 @@ def change_payload_end(payload: bytes) -> bytes:
 # --- assertions ---------------------------------------------------------------
 
 
+#: Substrings that mean decrypt died before it ever reached the integrity
+#: check: an unreachable platform, a rejected token, DNS. Scoring one of those
+#: as "the tamper was detected" is the vacuous green this module exists to rule
+#: out, so they fail the test instead of passing it.
+#:
+#: Observed, not guessed -- go prints "Failed to connect to the platform." and
+#: "Failed to authenticate with flag-provided client credentials.", node
+#: surfaces ECONNREFUSED behind "fetch failed", and the JVM raises
+#: ConnectException. A denylist cannot be exhaustive; an allowlist of accepted
+#: rejection phrases could be, but it would break every time an SDK reworded an
+#: error. This catches what a broken environment actually produces.
+INFRA_FAILURE_MARKERS: tuple[bytes, ...] = (
+    b"failed to connect to the platform",
+    b"failed to authenticate",
+    b"connection refused",
+    b"econnrefused",
+    b"fetch failed",
+    b"getaddrinfo",
+    b"no such host",
+    b"unauthorized_client",
+    b"invalid_client",
+    b"connectexception",
+    b"unknownhostexception",
+)
+
+
 def assert_decrypt_fails(
     decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path, why: str
 ) -> subprocess.CalledProcessError:
-    """Require a non-zero exit from decrypt, returning the error for inspection."""
+    """Require decrypt to reject the file *on the merits*, returning the error.
+
+    A non-zero exit on its own does not distinguish "the forgery was caught"
+    from "KAS was down", and both arrive here as the same exception. Every
+    tamper case in this module depends on that distinction, so screen the
+    output for :data:`INFRA_FAILURE_MARKERS` and fail loudly rather than
+    bank an environment outage as a passing security test.
+    """
     try:
         decrypt_sdk.decrypt(ct_file, rt_file, "ztdf", expect_error=True)
     except subprocess.CalledProcessError as exc:
+        # expect_error folds stderr into stdout; read both so this survives
+        # that changing.
+        combined = ((exc.output or b"") + (exc.stderr or b"")).lower()
+        for marker in INFRA_FAILURE_MARKERS:
+            if marker in combined:
+                raise AssertionError(
+                    f"{decrypt_sdk} failed on {ct_file.name}, but with "
+                    f"{marker.decode()!r} -- a broken environment, not a "
+                    f"rejection. Nothing here is verified until that is fixed: "
+                    f"[{combined!r}]"
+                ) from exc
+        assert combined.strip(), (
+            f"{decrypt_sdk} exited {exc.returncode} on {ct_file.name} without "
+            "saying anything; a silent non-zero exit could be any failure"
+        )
         return exc
     raise AssertionError(f"{decrypt_sdk} accepted {ct_file.name}: {why}")
 
@@ -281,7 +329,7 @@ def test_segment_integrity_roundtrip(
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 @pytest.mark.parametrize("segment_alg", SEGMENT_ALGS)
@@ -397,7 +445,7 @@ def test_encrypt_accepts_hs256_root(
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 def test_encrypt_rejects_gmac_root(
@@ -537,6 +585,35 @@ def test_root_signature_control_untouched_roundtrips(
     """
     rt_file = chunky_tdf.rt_file(multi_segment_ct, decrypt_sdk, variant="untouched")
     decrypt_sdk.decrypt(multi_segment_ct, rt_file, "ztdf")
+    assert filecmp.cmp(chunky_pt_file, rt_file, shallow=False)
+
+
+def test_root_signature_control_rewrite_roundtrips(
+    decrypt_sdk: tdfs.SDK,
+    chunky_pt_file: Path,
+    chunky_tdf: EncryptFactory,
+    multi_segment_ct: Path,
+) -> None:
+    """The second positive control: an unzip/rezip with no edit still decrypts.
+
+    Every tamper case reaches the reader through :func:`tdfs.update_payload`
+    and :func:`tdfs.update_manifest`, which extract, re-serialize and re-zip.
+    That round-trip is lossy-prone -- :class:`tdfs.Manifest` silently drops
+    fields it does not model and re-emits defaults the original may have
+    omitted -- so a rewrite that mangled the container would satisfy every
+    "must fail" assertion below for entirely the wrong reason.
+
+    Today the exploit cases happen to disprove that on their own: an unfixed
+    reader accepts the rewritten files and returns the plaintext. That
+    evidence disappears the moment every SDK rejects them, which is the whole
+    point of the fix, and then this control is the only thing left pinning
+    that the rewrite is faithful. Hence both passes, in the same order
+    :func:`apply_reorder` and :func:`apply_duplicate` use.
+    """
+    moved = tdfs.update_payload("identity_payload", multi_segment_ct, lambda p: p)
+    rewritten = tdfs.update_manifest("identity_manifest", moved, lambda m: m)
+    rt_file = chunky_tdf.rt_file(rewritten, decrypt_sdk, variant="identity")
+    decrypt_sdk.decrypt(rewritten, rt_file, "ztdf")
     assert filecmp.cmp(chunky_pt_file, rt_file, shallow=False)
 
 

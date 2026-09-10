@@ -502,7 +502,17 @@ def update_manifest(
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
     with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
-        manifest_file.write(new_manifest_data.model_dump_json(by_alias=True))
+        # exclude_unset so the rewrite carries only what the original manifest
+        # said plus whatever manifest_change touched. Without it every optional
+        # field is re-emitted as an explicit null, and a reader that distinguishes
+        # absent from null changes its mind: web-sdk omits per-segment
+        # encryptedSegmentSize and falls back to encryptedSegmentSizeDefault, but
+        # "encryptedSegmentSize": null makes it fail with "Failed to fetch entire
+        # segment". A tamper test whose subject is mangled before the reader sees
+        # it fails for the wrong reason, and reports it as tamper detected.
+        manifest_file.write(
+            new_manifest_data.model_dump_json(by_alias=True, exclude_unset=True)
+        )
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):

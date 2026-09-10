@@ -230,11 +230,11 @@ if [ "$1" == "encrypt" ]; then
     args+=(--policy-type="plaintext")
   fi
 
-  if [ -n "$XT_WITH_ROOT_INTEGRITY_ALG" ]; then
+  if [[ -n "$XT_WITH_ROOT_INTEGRITY_ALG" ]]; then
     args+=(--root-integrity-algorithm="$XT_WITH_ROOT_INTEGRITY_ALG")
   fi
 
-  if [ -n "$XT_WITH_SEGMENT_INTEGRITY_ALG" ]; then
+  if [[ -n "$XT_WITH_SEGMENT_INTEGRITY_ALG" ]]; then
     args+=(--segment-integrity-algorithm="$XT_WITH_SEGMENT_INTEGRITY_ALG")
   fi
 else
