@@ -221,6 +221,21 @@ def test_tdf_spec_target_430(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+#: A GMAC "root signature" is the trailing 16 bytes of the aggregate hash --
+#: data AES-GCM never processed, so there is no tag to extract and the DEK is
+#: never used. It is a copy of the last segment hash, which the manifest
+#: already carries in plain sight. Any reader that honours it can be
+#: downgraded onto that branch by a keyless attacker (DSPX-4703), so a GMAC
+#: root is a malformed container, not a variant to be accommodated.
+#:
+#: ``segmentHashAlg: GMAC`` is a different matter and stays accepted below:
+#: there the 16 bytes are the AES-GCM tag the cipher just produced under the
+#: DEK over exactly those bytes, which is a genuine MAC.
+_ROOT_ALG_MESSAGE = (
+    "root signature must be HS256; GMAC at the root is unauthenticated (DSPX-4703)"
+)
+
+
 def looks_like_422(manifest: tdfs.Manifest):
     assert manifest.schemaVersion is None
 
@@ -228,17 +243,15 @@ def looks_like_422(manifest: tdfs.Manifest):
     # in 4.2.2, the root sig is hex encoded before base 64 encoding, and is twice the length
     binary_array = b64hexTobytes(ii.rootSignature.sig)
     match ii.rootSignature.alg:
-        case "GMAC":
-            assert len(binary_array) == 16
         case "HS256" | "" | None:
             assert len(binary_array) == 32
         case _:
-            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+            assert False, f"{_ROOT_ALG_MESSAGE}; got {ii.rootSignature.alg!r}"
 
     for segment in ii.segments:
         hash = b64hexTobytes(segment.hash)
         match ii.segmentHashAlg:
-            case "GMAC" | "":
+            case "GMAC":
                 assert len(hash) == 16
             case "HS256" | "":
                 assert len(hash) == 32
@@ -271,12 +284,10 @@ def looks_like_430(manifest: tdfs.Manifest):
     ii = manifest.encryptionInformation.integrityInformation
     binary_array = b64Tobytes(ii.rootSignature.sig)
     match ii.rootSignature.alg:
-        case "GMAC":
-            assert len(binary_array) == 16
-        case "HS256" | "":
+        case "HS256" | "" | None:
             assert len(binary_array) == 32
         case _:
-            assert False, f"Unknown alg: {ii.rootSignature.alg}"
+            assert False, f"{_ROOT_ALG_MESSAGE}; got {ii.rootSignature.alg!r}"
 
     for segment in ii.segments:
         hash = b64Tobytes(segment.hash)

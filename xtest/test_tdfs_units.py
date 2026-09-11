@@ -5,8 +5,13 @@ No platform, no SDK, no subprocess. ``_parse_forced_supports``,
 specifically to stop a real regression from hiding behind a skip or a stale
 xfail -- so they are worth testing on their own, the same way the ZIP64
 parser they sit next to is tested in ``test_zip64_units.py``.
+
+The GMAC root forgery (DSPX-4703) is here for a related reason: an exploit
+helper that quietly forges the wrong bytes would make the security tests in
+``test_root_signature.py`` pass for the wrong reason.
 """
 
+import base64
 import json
 import zipfile
 from pathlib import Path
@@ -169,3 +174,109 @@ class TestSkipChunkySkew:
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         decrypt_sdk = cast(tdfs.SDK, _StubDecryptSDK(supports_chunky=False))
         tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
+
+
+# --- tdfs.forge_gmac_root_signature (DSPX-4703) -------------------------------
+
+
+def _integrity_manifest(
+    hashes: list[bytes], *, schema_version: str | None = "4.3.0"
+) -> tdfs.Manifest:
+    """A manifest carrying the given raw segment hashes, encoded as the wire does.
+
+    ``segment.hash`` and ``rootSignature.sig`` hold the base64 *text*, so the
+    fixture encodes once here and the helper under test must decode exactly
+    once. Legacy (4.2.2) containers hex-encode before base64.
+    """
+    legacy = schema_version is None
+
+    def encode(raw: bytes) -> str:
+        return base64.b64encode(raw.hex().encode() if legacy else raw).decode()
+
+    return tdfs.Manifest.model_validate(
+        {
+            "encryptionInformation": {
+                "type": "split",
+                "policy": "",
+                "keyAccess": [],
+                "method": {"algorithm": "AES-256-GCM"},
+                "integrityInformation": {
+                    "rootSignature": {"alg": "HS256", "sig": "aG9uZXN0"},
+                    "segmentHashAlg": "GMAC",
+                    "segments": [{"hash": encode(h)} for h in hashes],
+                },
+            },
+            "payload": {
+                "type": "reference",
+                "url": "0.payload",
+                "protocol": "zip",
+                "isEncrypted": True,
+            },
+            "schemaVersion": schema_version,
+        }
+    )
+
+
+class TestForgeGMACRootSignature:
+    def test_sig_is_the_trailing_16_bytes_of_the_aggregate(self):
+        """No key involved: the forged root is a slice of the segment hashes."""
+        hashes = [bytes([i]) * 16 for i in range(1, 4)]
+        m = tdfs.forge_gmac_root_signature(_integrity_manifest(hashes))
+
+        root = m.encryptionInformation.integrityInformation.rootSignature
+        assert root.alg == "GMAC"
+        # Segment hashes are 16 bytes each, so the trailing 16 bytes of the
+        # aggregate are exactly the last segment hash -- the finding in one line.
+        assert base64.b64decode(root.sig) == hashes[-1]
+
+    def test_decodes_segment_hashes_exactly_once(self):
+        """Guards the double-decode trap in the pydantic models.
+
+        ``segment.hash`` is the base64 text as ``bytes``. Decoding it twice
+        would still produce *some* 16 bytes for many inputs, so the check has
+        to be against the known aggregate rather than against a length.
+        """
+        hashes = [b"\x00\x11\x22\x33" * 4, b"\xaa\xbb\xcc\xdd" * 4]
+        m = tdfs.forge_gmac_root_signature(_integrity_manifest(hashes))
+
+        assert tdfs.aggregate_hash(m) == b"".join(hashes)
+        root = m.encryptionInformation.integrityInformation.rootSignature
+        assert base64.b64decode(root.sig) == b"".join(hashes)[-16:]
+
+    def test_legacy_container_hex_encodes_before_base64(self):
+        """4.2.2 runs the signature through hex first; the aggregate does not.
+
+        Readers build the aggregate by base64-decoding each hash and appending,
+        which for a legacy file yields a run of ASCII hex. Only the resulting
+        signature gets the extra hex step.
+        """
+        hashes = [bytes([i]) * 16 for i in range(1, 4)]
+        m = tdfs.forge_gmac_root_signature(
+            _integrity_manifest(hashes, schema_version=None)
+        )
+
+        aggregate = b"".join(h.hex().encode() for h in hashes)
+        assert tdfs.aggregate_hash(m) == aggregate
+        root = m.encryptionInformation.integrityInformation.rootSignature
+        assert base64.b64decode(root.sig) == aggregate[-16:].hex().encode()
+
+    def test_casing_is_preserved(self):
+        m = tdfs.forge_gmac_root_signature(_integrity_manifest([b"\x01" * 16]), "GMac")
+        assert m.encryptionInformation.integrityInformation.rootSignature.alg == "GMac"
+
+    def test_too_short_an_aggregate_raises(self):
+        """Better a loud error than a silently unforgeable signature."""
+        with pytest.raises(ValueError, match="aggregate hash"):
+            tdfs.forge_gmac_root_signature(_integrity_manifest([b"\x01" * 4]))
+
+
+class TestEncryptedSegmentSizes:
+    def test_falls_back_to_the_manifest_default(self, tmp_path: Path):
+        ct_file = _manifest_zip(tmp_path, "elides.tdf", elides=True)
+        m = tdfs.manifest(ct_file)
+        m.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = 1028
+        assert tdfs.encrypted_segment_sizes(m) == [1028, 1028]
+
+    def test_uses_the_per_segment_override(self, tmp_path: Path):
+        ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
+        assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
