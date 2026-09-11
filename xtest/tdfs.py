@@ -146,6 +146,26 @@ feature_type = Literal[
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
     "ecwrap",
+    # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
+    # has been downgraded to GMAC? Force-only -- every shim answers no, because
+    # there is nothing to ask. The check lives in root-signature validation,
+    # which needs the unwrapped payload key and so runs after the KAS rewrap;
+    # it adds no flag, subcommand or version field.
+    #
+    # A GMAC root is not a MAC. The GMAC branch returns the trailing 16 bytes
+    # of its input; over a segment's ciphertext that is the tag AES-GCM just
+    # produced under the DEK, but over the aggregate hash -- which AES-GCM
+    # never processed -- it is a copy of the last segment hash, i.e. manifest
+    # data the attacker already controls. Since ``alg`` is read from the
+    # unauthenticated manifest, any HS256-rooted TDF can be downgraded onto
+    # that branch with no key at all.
+    #
+    # ``skip_unless_gmac_root_rejected`` therefore forges a root and watches
+    # what the reader does, and consults this only as the escape hatch: set
+    # ``XT_FORCE_SUPPORTS=gmac_root_rejected`` to run the exploit cases
+    # unconditionally, which is how you get a red repro out of a build that is
+    # still vulnerable rather than a skip.
+    "gmac_root_rejected",
     "hexless",
     "hexaflexible",
     "kasallowlist",
@@ -476,7 +496,17 @@ def update_manifest(
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
     with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
-        manifest_file.write(new_manifest_data.model_dump_json(by_alias=True))
+        # exclude_unset so the rewrite carries only what the original manifest
+        # said plus whatever manifest_change touched. Without it every optional
+        # field is re-emitted as an explicit null, and a reader that distinguishes
+        # absent from null changes its mind: web-sdk omits per-segment
+        # encryptedSegmentSize and falls back to encryptedSegmentSizeDefault, but
+        # "encryptedSegmentSize": null makes it fail with "Failed to fetch entire
+        # segment". A tamper test whose subject is mangled before the reader sees
+        # it fails for the wrong reason, and reports it as tamper detected.
+        manifest_file.write(
+            new_manifest_data.model_dump_json(by_alias=True, exclude_unset=True)
+        )
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
@@ -512,6 +542,91 @@ def update_payload(
     # Cleanup the unzipped directory; its contents are now stored as outfile
     shutil.rmtree(unzipped_dir, ignore_errors=True)
     return outfile
+
+
+#: Length in bytes of an AES-GCM tag, and so of whatever the GMAC branch of
+#: ``calculateSignature`` returns.
+GMAC_TAG_BYTES = 16
+
+#: Length in bytes of an HMAC-SHA256 digest.
+HS256_DIGEST_BYTES = 32
+
+
+def is_legacy_manifest(manifest: Manifest) -> bool:
+    """True for a 4.2.2-shaped container, which hex-encodes before base64.
+
+    Mirrors the readers' own test: go uses ``manifest.TDFVersion == ""`` and
+    web-sdk ``isTargetSpecLegacyTDF``, both of which come down to an absent
+    ``schemaVersion``.
+    """
+    return not manifest.schemaVersion
+
+
+def decode_integrity_value(value: bytes, legacy: bool) -> bytes:
+    """Decode a ``rootSignature.sig`` / ``segment.hash`` field to raw bytes.
+
+    ``value`` is the base64 *text* as it appears in the manifest -- pydantic
+    stores these ``bytes`` fields verbatim rather than decoding them, so this
+    takes exactly one base64 step, plus a hex step for legacy containers.
+    """
+    decoded = base64.b64decode(value, validate=True)
+    if legacy:
+        return bytes.fromhex(decoded.decode("ascii"))
+    return decoded
+
+
+def aggregate_hash(manifest: Manifest) -> bytes:
+    """The bytes a reader signs at the root: every segment hash, concatenated.
+
+    Base64-decoded but *not* hex-decoded, even for a legacy container: every
+    SDK builds this buffer by base64-decoding ``segment.hash`` and appending
+    the result, so for a 4.2.2 file the aggregate is a run of ASCII hex.
+    """
+    segments = manifest.encryptionInformation.integrityInformation.segments
+    return b"".join(base64.b64decode(s.hash, validate=True) for s in segments)
+
+
+def forge_gmac_root_signature(manifest: Manifest, alg: str = "GMAC") -> Manifest:
+    """Rewrite the root signature the way a keyless attacker can (DSPX-4703).
+
+    Declares ``alg`` (any casing of GMAC; the readers compare case
+    insensitively) and emits the trailing 16 bytes of the aggregate hash as
+    the signature. Both inputs are manifest data the attacker already holds,
+    which is the whole finding: the GMAC branch never touches the DEK, so
+    "sign the root" degenerates into "copy the last segment hash".
+
+    Mirrors ``forgeGMACRootSignature`` in
+    ``platform/sdk/tdf_root_signature_test.go``, plus the legacy hex wrapper
+    that ``calculateSignature(..., isLegacyTDF=true)`` applies.
+
+    Mutates and returns ``manifest`` so it composes with
+    :func:`update_manifest`.
+    """
+    aggregate = aggregate_hash(manifest)
+    if len(aggregate) < GMAC_TAG_BYTES:
+        raise ValueError(
+            f"aggregate hash is {len(aggregate)} bytes; need at least "
+            f"{GMAC_TAG_BYTES} to forge a GMAC root signature"
+        )
+    forged = aggregate[-GMAC_TAG_BYTES:]
+    if is_legacy_manifest(manifest):
+        forged = forged.hex().encode()
+    root = manifest.encryptionInformation.integrityInformation.rootSignature
+    root.alg = alg
+    root.sig = base64.b64encode(forged)
+    return manifest
+
+
+def encrypted_segment_sizes(manifest: Manifest) -> list[int]:
+    """Each segment's ciphertext length, defaulting an absent per-segment size.
+
+    web-sdk omits ``encryptedSegmentSize`` whenever it equals the
+    manifest-level default, so a caller slicing ``0.payload`` into segments
+    cannot read the field directly.
+    """
+    ii = manifest.encryptionInformation.integrityInformation
+    default = ii.encryptedSegmentSizeDefault or 0
+    return [s.encryptedSegmentSize or default for s in ii.segments]
 
 
 def validate_manifest_schema(tdf_file: Path):

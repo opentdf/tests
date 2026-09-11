@@ -87,6 +87,23 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
+    gmac_root_rejected)
+      # DSPX-4703: does decrypt refuse a manifest downgraded to
+      # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
+      # runs inside root-signature validation, which needs the unwrapped
+      # payload key and so happens after the KAS rewrap -- there is no flag,
+      # subcommand or version field to grep for.
+      #
+      # test_root_signature forges a root and watches the reader instead, and
+      # only consults this as an escape hatch: XT_FORCE_SUPPORTS=gmac_root_rejected
+      # runs the exploit cases unconditionally, turning a vulnerable build's
+      # skip into a red repro.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
+      exit 1
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
