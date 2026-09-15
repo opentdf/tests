@@ -52,7 +52,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 logger = logging.getLogger("xtest")
 
@@ -272,6 +272,7 @@ class Registry[T]:
 
     group: str
     builtins: tuple[str, ...]
+    entry_type: type[T]
     _entries: dict[str, T | None] = field(default_factory=dict, init=False)
     _loaded: bool = field(default=False, init=False)
 
@@ -287,6 +288,10 @@ class Registry[T]:
         self._loaded = False
 
     def register(self, name: str, obj: T | None) -> None:
+        self._ensure_available(name)
+        self._entries[name] = obj
+
+    def _ensure_available(self, name: str) -> None:
         if name in self._entries:
             raise DuplicateName(
                 f"{self.group}: {name!r} is already registered. A plugin may "
@@ -294,7 +299,6 @@ class Registry[T]:
                 f"--containers/--sdks would mean different things depending on "
                 "what happens to be installed, which is unauditable from a CI log."
             )
-        self._entries[name] = obj
 
     def load(self) -> None:
         """Discover and register everything declared under :attr:`group`.
@@ -310,10 +314,30 @@ class Registry[T]:
         """
         if self._loaded:
             return
+        original_entries = self._entries.copy()
         self._loaded = True
-        for ep in entry_points(group=self.group):
-            self.register(ep.name, _load_entry_point(ep))
-            logger.info("registered %s %r from %s", self.group, ep.name, ep.value)
+        try:
+            for ep in entry_points(group=self.group):
+                self._ensure_available(ep.name)
+                obj = _load_entry_point(ep)
+                if not isinstance(obj, self.entry_type):
+                    raise PluginLoadError(
+                        f"entry point {ep.name!r} in group {ep.group!r} "
+                        f"({ep.value}) loaded an object that does not implement "
+                        f"{self.entry_type.__name__}"
+                    )
+                obj_name = cast(Extension | Installer, obj).name
+                if obj_name != ep.name:
+                    raise PluginLoadError(
+                        f"entry point {ep.name!r} in group {ep.group!r} "
+                        f"({ep.value}) loaded an object whose name is {obj_name!r}"
+                    )
+                self.register(ep.name, obj)
+                logger.info("registered %s %r from %s", self.group, ep.name, ep.value)
+        except Exception:
+            self._entries = original_entries
+            self._loaded = False
+            raise
 
     def names(self) -> tuple[str, ...]:
         """Registered names: built-ins in declaration order, then plugins."""
@@ -355,9 +379,11 @@ def _load_entry_point(ep: EntryPoint) -> Any:
         ) from e
 
 
-SDKS: Registry[SdkProvider] = Registry(GROUP_ADAPTERS, BUILTIN_SDKS)
-CONTAINERS: Registry[ContainerAdapter] = Registry(GROUP_CONTAINERS, BUILTIN_CONTAINERS)
-INSTALLERS: Registry[Installer] = Registry(GROUP_INSTALLERS, ())
+SDKS: Registry[SdkProvider] = Registry(GROUP_ADAPTERS, BUILTIN_SDKS, SdkProvider)
+CONTAINERS: Registry[ContainerAdapter] = Registry(
+    GROUP_CONTAINERS, BUILTIN_CONTAINERS, ContainerAdapter
+)
+INSTALLERS: Registry[Installer] = Registry(GROUP_INSTALLERS, (), Installer)
 
 
 def load_all() -> None:

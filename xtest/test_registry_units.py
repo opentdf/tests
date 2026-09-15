@@ -34,10 +34,25 @@ import tdfs
 
 @pytest.fixture(autouse=True)
 def _clean_registries() -> Iterator[None]:
-    """Every test starts from the built-ins and only the built-ins."""
+    """Isolate registry and forced-feature mutations from the rest of the run."""
+    saved_sdks = (registry.SDKS._entries.copy(), registry.SDKS._loaded)
+    saved_containers = (
+        registry.CONTAINERS._entries.copy(),
+        registry.CONTAINERS._loaded,
+    )
+    saved_installers = (
+        registry.INSTALLERS._entries.copy(),
+        registry.INSTALLERS._loaded,
+    )
+    saved_forced_supports = tdfs._forced_supports
     registry.reset_all()
-    yield
-    registry.reset_all()
+    try:
+        yield
+    finally:
+        registry.SDKS._entries, registry.SDKS._loaded = saved_sdks
+        registry.CONTAINERS._entries, registry.CONTAINERS._loaded = saved_containers
+        registry.INSTALLERS._entries, registry.INSTALLERS._loaded = saved_installers
+        tdfs._forced_supports = saved_forced_supports
 
 
 # --- the pin -------------------------------------------------------------------
@@ -175,6 +190,7 @@ _PLUGIN_SOURCE = textwrap.dedent(
 
     CONTAINER = Container()
     SDK = Sdk()
+    MISNAMED_CONTAINER = Container(name="not-acme")
     BROKEN = None
     '''
 )
@@ -299,6 +315,42 @@ class TestPluginFailuresAreLoud:
             "[otdf.containers]\nztdf = acme_xtest:CONTAINER\n",
         )
         with pytest.raises(registry.DuplicateName):
+            registry.load_all()
+
+    @pytest.mark.parametrize(
+        ("group", "target", "contract"),
+        [
+            ("otdf.containers", "BROKEN", "ContainerAdapter"),
+            ("otdf.containers", "SDK", "ContainerAdapter"),
+            ("otdf.adapters", "CONTAINER", "SdkProvider"),
+            ("otdf.installers", "SDK", "Installer"),
+        ],
+    )
+    def test_a_plugin_object_must_match_its_groups_contract(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        group: str,
+        target: str,
+        contract: str,
+    ):
+        _install_plugin(
+            tmp_path,
+            monkeypatch,
+            f"[{group}]\nacme = acme_xtest:{target}\n",
+        )
+        with pytest.raises(registry.PluginLoadError, match=contract):
+            registry.load_all()
+
+    def test_a_plugin_object_name_must_match_the_entry_point(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        _install_plugin(
+            tmp_path,
+            monkeypatch,
+            "[otdf.containers]\nacme = acme_xtest:MISNAMED_CONTAINER\n",
+        )
+        with pytest.raises(registry.PluginLoadError, match="name is 'not-acme'"):
             registry.load_all()
 
 
