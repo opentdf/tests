@@ -1,0 +1,41 @@
+[project]
+name = "otdf-adapter"
+version = "0.1.0"
+description = "Typed adapter protocol for driving OpenTDF SDK command-line clients"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "packaging>=24.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.410",
+    "pytest>=9.0.3",
+    "ruff>=0.15.16",
+]
+
+# Built-in adapters. A consumer outside this repo registers its own SDK by
+# publishing an entry point in the same group; nothing here has to change.
+# Every name resolves to the same class today -- A1 lands the seam, not the
+# per-SDK argv builders.
+[project.entry-points."otdf.adapters"]
+go = "otdf_adapter.subprocess_cli:SubprocessCliAdapter"
+java = "otdf_adapter.subprocess_cli:SubprocessCliAdapter"
+js = "otdf_adapter.subprocess_cli:SubprocessCliAdapter"
+
+[build-system]
+requires = ["uv_build>=0.11.19"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+include = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
