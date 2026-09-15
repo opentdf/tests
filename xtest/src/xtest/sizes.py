@@ -1,6 +1,6 @@
 """Plaintext payload sizes, and the ZIP64 window they are chosen around.
 
-Kept free of pytest and of ``tdfs`` so that both ``conftest.py`` and the test
+Kept free of pytest and of ``tdfs`` so that both ``xtest/plugin.py`` and the test
 modules can name a size without importing each other.
 
 The ZIP central directory stores local-header offsets and entry sizes in 32-bit

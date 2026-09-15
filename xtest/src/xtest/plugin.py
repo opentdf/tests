@@ -1,19 +1,29 @@
-"""Pytest configuration and core fixtures for OpenTDF integration tests.
+"""The xtest pytest plugin: CLI options, parametrization and core fixtures.
 
 This module contains:
 - Pytest CLI options and test parametrization logic
 - Core fixtures (test files, temp directories, otdfctl)
 - Helper functions for test configuration
 
-Domain-specific fixtures are organized in the fixtures/ package:
-- fixtures.kas: KAS registry and KAS entry fixtures
-- fixtures.attributes: Attribute and ABAC fixtures
-- fixtures.assertions: TDF assertion fixtures
-- fixtures.obligations: Obligation and trigger fixtures
-- fixtures.keys: Key management fixtures
+Domain-specific fixtures are organized in the ``xtest.fixtures`` package:
+- xtest.fixtures.kas: KAS registry and KAS entry fixtures
+- xtest.fixtures.attributes: Attribute and ABAC fixtures
+- xtest.fixtures.assertions: TDF assertion fixtures
+- xtest.fixtures.obligations: Obligation and trigger fixtures
+- xtest.fixtures.keys: Key management fixtures
+
+Registered through the ``pytest11`` entry point rather than being a top-level
+``conftest.py``. Two reasons, and both are load-bearing once the suite is
+installed rather than run in place: an installed bare ``conftest`` sits at the
+site-packages root and collides with a consumer's own under
+``importmode=prepend``, and ``pytest_addoption`` is only honoured by plugins
+that exist before the command line is parsed -- which a conftest discovered
+under ``site-packages`` during collection does not. ``-p no:xtest`` turns it
+off.
 """
 
 import argparse
+import functools
 import json
 import logging
 import os
@@ -25,11 +35,11 @@ from typing import cast
 
 import pytest
 
-import sizes
-import tdfs
-from otdfctl import OpentdfCommandLineTool
-from perf import report, stats
-from perf.cells import cells_for
+from xtest import sizes, tdfs
+from xtest.otdfctl import OpentdfCommandLineTool
+from xtest.paths import SDK_DIR_ENV, sdk_dir
+from xtest.perf import report, stats
+from xtest.perf.cells import cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -59,14 +69,14 @@ def pytest_report_header() -> list[str]:
 
 # Load all fixture modules
 pytest_plugins = [
-    "fixtures.kas",
-    "fixtures.attributes",
-    "fixtures.assertions",
-    "fixtures.obligations",
-    "fixtures.keys",
-    "fixtures.audit",
-    "fixtures.encryption",
-    "fixtures.bench",
+    "xtest.fixtures.kas",
+    "xtest.fixtures.attributes",
+    "xtest.fixtures.assertions",
+    "xtest.fixtures.obligations",
+    "xtest.fixtures.keys",
+    "xtest.fixtures.audit",
+    "xtest.fixtures.encryption",
+    "xtest.fixtures.bench",
 ]
 
 
@@ -197,6 +207,14 @@ def pytest_addoption(parser: pytest.Parser):
         "--focus",
         help="skips tests which don't use the requested sdk",
         type=is_type_or_list_of_types(tdfs.focus_type),
+    )
+    parser.addoption(
+        "--sdk-dir",
+        help=(
+            "directory holding the built SDK shims, <sdk>/dist/<version>/cli.sh "
+            f"(default: ${SDK_DIR_ENV}, else ./sdk)"
+        ),
+        type=Path,
     )
     parser.addoption(
         "--large",
@@ -425,7 +443,48 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
 
 
+def _configure_sdk_dir(config: pytest.Config) -> None:
+    """Settle where the SDK shims live, once, before anything looks for them.
+
+    ``--sdk-dir`` wins over ``XT_SDK_DIR`` wins over ``./sdk``. The chosen
+    value is written back into the environment rather than kept on ``config``
+    because the readers are plain functions on ``tdfs`` and ``otdfctl`` that
+    have no ``config`` to consult -- and because xdist workers are separate
+    processes that inherit the environment but re-run ``pytest_configure``
+    from their own ``workerinput``.
+
+    ``pytest_configure`` runs before ``pytest_generate_tests``, so the first
+    ``SDK`` is constructed after this has been settled. Absence is not an
+    error: a run that only collects, or only exercises the offline unit tests,
+    needs no shims at all.
+    """
+    override = config.getoption("--sdk-dir", default=None)
+    if override is not None:
+        os.environ[SDK_DIR_ENV] = str(override)
+    resolved = sdk_dir()
+    if not resolved.is_dir():
+        logging.getLogger("xtest").debug(
+            "no SDK distributions under %s; only tests that need no SDK will run",
+            resolved,
+        )
+
+
+#: Registered from the plugin rather than only from ``[tool.pytest.ini_options]``.
+#: The ini table is read from the *session's* rootdir, which for a consumer is
+#: their repo, not ours -- so an installed xtest would raise
+#: ``PytestUnknownMarkWarning`` (and fail under ``-W error``) for its own marks.
+MARKERS = [
+    "benchmark: paired A/B performance cell; only collected under --bench",
+    "no_audit_logs: opt this test out of the default audit-log assertions",
+    "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",
+    "slow: long-running cell, excluded from the quick offline sweep",
+]
+
+
 def pytest_configure(config: pytest.Config):
+    for marker in MARKERS:
+        config.addinivalue_line("markers", marker)
+    _configure_sdk_dir(config)
     if not config.getoption("--bench", default=False):
         return
     # Parallel workers contend for the CPU the benchmark is measuring, which
@@ -508,7 +567,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     # Imported here, not at module scope: importing a pytest plugin from a
     # conftest before pytest registers it costs the plugin its assertion
     # rewriting, which the fixture module's own asserts rely on.
-    from fixtures import bench
+    from xtest.fixtures import bench
 
     bench_config = bench.config_from_options(config)
     recorder.metadata = bench.runner_metadata(config)
@@ -671,28 +730,44 @@ def load_otdfctl() -> OpentdfCommandLineTool:
 
     Attempts to load otdfctl in this order:
     1. First head version from OTDFCTL_HEADS environment variable
-    2. Main branch version (sdk/go/dist/main/otdfctl.sh)
+    2. Main branch version ($XT_SDK_DIR/go/dist/main/otdfctl.sh)
     3. System-installed otdfctl
 
     Returns:
         OpentdfCommandLineTool instance configured for the available otdfctl
     """
+    go_dist = sdk_dir() / "go" / "dist"
     oh = os.environ.get("OTDFCTL_HEADS", "[]")
     try:
         heads = json.loads(oh)
         if heads:
-            return OpentdfCommandLineTool(f"sdk/go/dist/{heads[0]}/otdfctl.sh")
+            return OpentdfCommandLineTool(str(go_dist / str(heads[0]) / "otdfctl.sh"))
     except json.JSONDecodeError:
         print(f"Invalid OTDFCTL_HEADS environment variable: [{oh}]")
-    if os.path.isfile("sdk/go/dist/main/otdfctl.sh"):
-        return OpentdfCommandLineTool("sdk/go/dist/main/otdfctl.sh")
+    main_shim = go_dist / "main" / "otdfctl.sh"
+    if main_shim.is_file():
+        return OpentdfCommandLineTool(str(main_shim))
     return OpentdfCommandLineTool()
 
 
-_otdfctl = load_otdfctl()
+@functools.cache
+def _otdfctl_tool() -> OpentdfCommandLineTool:
+    """Resolve otdfctl once per session, on first use rather than on import.
+
+    This used to be a module-level ``_otdfctl = load_otdfctl()``, which probed
+    the filesystem while the plugin was still being imported -- before
+    ``pytest_configure``, before any option had been read, and before
+    ``XT_SDK_DIR`` could have been set. Worse, ``OpentdfCommandLineTool()``
+    raises ``FileNotFoundError`` when no shim and no system otdfctl exist, so
+    merely *importing* the suite in an environment with no SDKs installed --
+    a fresh consumer running ``--collect-only``, for instance -- aborted the
+    session with a collection error rather than skipping the tests that
+    actually needed a policy client.
+    """
+    return load_otdfctl()
 
 
 @pytest.fixture(scope="module")
 def otdfctl():
     """Provide access to the otdfctl CLI tool."""
-    return _otdfctl
+    return _otdfctl_tool()

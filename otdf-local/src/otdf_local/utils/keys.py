@@ -167,13 +167,15 @@ def setup_golden_keys(
     to the platform directory for use by the platform service.
 
     Args:
-        xtest_root: Root directory of xtest (contains xtest/extra-keys.json)
+        xtest_root: Repository root (contains xtest/src/xtest/data/extra-keys.json)
         platform_dir: Platform source directory
 
     Returns:
         List of key configurations to add to cryptoProvider.standard.keys
     """
-    extra_keys_file = xtest_root / "xtest" / "extra-keys.json"
+    extra_keys_file = (
+        xtest_root / "xtest" / "src" / "xtest" / "data" / "extra-keys.json"
+    )
     if not extra_keys_file.exists():
         return []
 

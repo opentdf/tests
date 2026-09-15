@@ -82,7 +82,7 @@ tail -f tmp/logs/kas-km1.log
 ## Golden Key Auto-Configuration
 
 When using `otdf-local up` or `otdf-local restart platform`, golden keys are automatically configured:
-1. `otdf-local` reads `xtest/extra-keys.json` containing the `golden-r1` key
+1. `otdf-local` reads `xtest/src/xtest/data/extra-keys.json` containing the `golden-r1` key
 2. Key files are extracted to `platform/golden-r1-private.pem` and `platform/golden-r1-cert.pem`
 3. The key is added to `cryptoProvider.standard.keys` in the platform config
 4. A legacy keyring entry is added to `services.kas.keyring`
@@ -109,8 +109,8 @@ server:
 
 Extract key files:
 ```bash
-jq -r '.[0].privateKey' xtest/extra-keys.json > platform/golden-r1-private.pem
-jq -r '.[0].cert' xtest/extra-keys.json > platform/golden-r1-cert.pem
+jq -r '.[0].privateKey' xtest/src/xtest/data/extra-keys.json > platform/golden-r1-private.pem
+jq -r '.[0].cert' xtest/src/xtest/data/extra-keys.json > platform/golden-r1-cert.pem
 ```
 
 ## Troubleshooting

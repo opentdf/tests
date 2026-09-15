@@ -16,8 +16,8 @@ import math
 import numpy as np
 import pytest
 
-from perf import stats
-from perf.stats import Verdict
+from xtest.perf import stats
+from xtest.perf.stats import Verdict
 
 # Typical CI-runner dispersion for a CLI invocation: roughly +/-8% round to
 # round. Large enough to be realistic, small enough that 30 rounds can resolve

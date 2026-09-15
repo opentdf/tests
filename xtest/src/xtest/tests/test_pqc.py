@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
-from abac import Attribute, KasKey
-from fixtures.encryption import EncryptFactory
-from tdfs import KeyAccessObject
+from xtest import tdfs
+from xtest.abac import Attribute, KasKey
+from xtest.fixtures.encryption import EncryptFactory
+from xtest.tdfs import KeyAccessObject
 
 # X-Wing KEM sizes per draft-connolly-cfrg-xwing-kem-10
 XWING_ENCAPSULATION_KEY_SIZE = 1216  # public key, bytes

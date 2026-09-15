@@ -7,8 +7,8 @@ from typing import cast
 
 import pytest
 
-import conftest
-import sizes
+from xtest import plugin as conftest
+from xtest import sizes
 
 
 class TestSizes:

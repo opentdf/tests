@@ -26,10 +26,10 @@ from pathlib import Path
 
 import pytest
 
-from perf import stats
-from perf.cells import BenchCell
-from perf.measure import METRIC_LABELS, METRICS, format_metric
-from perf.runner import BenchConfig, CellResult, analyze
+from xtest.perf import stats
+from xtest.perf.cells import BenchCell
+from xtest.perf.measure import METRIC_LABELS, METRICS, format_metric
+from xtest.perf.runner import BenchConfig, CellResult, analyze
 
 #: Cells the session intends to run. Set by the conftest parametrizer, read by
 #: the budget and arm-resolution fixtures.

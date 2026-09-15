@@ -18,11 +18,10 @@ from typing import cast
 
 import pytest
 
-import abac
-import tdfs
-from perf import report
-from perf.cells import PAYLOADS, BenchCell
-from perf.runner import Arm, BenchConfig, Budget, Invocation
+from xtest import abac, tdfs
+from xtest.perf import report
+from xtest.perf.cells import PAYLOADS, BenchCell
+from xtest.perf.runner import Arm, BenchConfig, Budget, Invocation
 
 
 class ArmSelectionError(Exception):

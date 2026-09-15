@@ -16,7 +16,9 @@ import jsonschema
 import pytest
 from pydantic import BaseModel
 
-import assertions as tdfassertions
+from xtest import assertions as tdfassertions
+from xtest import data
+from xtest.paths import sdk_dir
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -631,10 +633,12 @@ def encrypted_segment_sizes(manifest: Manifest) -> list[int]:
 
 def validate_manifest_schema(tdf_file: Path):
     ## Get the schema file
-    schema_file_path = os.getenv("SCHEMA_FILE")
-    if not schema_file_path:
-        raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
-    elif not os.path.isfile(schema_file_path):
+    ## Defaults to the packaged copy; ``SCHEMA_FILE`` overrides it so a run can
+    ## be pointed at a candidate schema without reinstalling the distribution.
+    ## It used to be mandatory and relative to the working directory, which is
+    ## why every CI step had to set it to a bare filename.
+    schema_file_path = os.getenv("SCHEMA_FILE") or str(data.manifest_schema_file())
+    if not os.path.isfile(schema_file_path):
         raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
     with open(schema_file_path) as schema_file:
         schema = json.load(schema_file)
@@ -668,7 +672,7 @@ class SDK:
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        self.path = str(sdk_dir() / sdk / "dist" / version / "cli.sh")
         self._supports = {}
         self.version = version
         if not os.path.isfile(self.path):
@@ -945,21 +949,17 @@ class SDK:
 
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
-    sdk_path = os.path.join("sdk", sdk, "dist")
-    if not os.path.isdir(sdk_path):
+    sdk_path = sdk_dir() / sdk / "dist"
+    if not sdk_path.is_dir():
         return []
-    return [
-        SDK(sdk, version)
-        for version in os.listdir(sdk_path)
-        if os.path.isdir(os.path.join(sdk_path, version))
-    ]
+    return [SDK(sdk, p.name) for p in sdk_path.iterdir() if p.is_dir()]
 
 
 def parse_sdk_spec(spec: str) -> list[SDK]:
     """Parse an SDK specifier into SDK objects.
 
     Supports:
-    - "go" or "go@*" → all versions in sdk/go/dist/
+    - "go" or "go@*" → all versions in ``$XT_SDK_DIR/go/dist/``
     - "go@main" or "go@v0.18.0" → only that specific version
     """
     if "@" in spec:

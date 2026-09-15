@@ -12,13 +12,11 @@ import hashlib
 import json
 import os
 import typing
-from pathlib import Path
 
 import pytest
 
-import abac
-import tdfs
-from otdfctl import InvalidAlgorithm, OpentdfCommandLineTool
+from xtest import abac, data, tdfs
+from xtest.otdfctl import InvalidAlgorithm, OpentdfCommandLineTool
 
 
 @pytest.fixture(scope="session")
@@ -122,8 +120,8 @@ class ExtraKey(typing.TypedDict):
 
 @pytest.fixture(scope="module")
 def extra_keys() -> dict[str, ExtraKey]:
-    """Extra key data from extra-keys.json"""
-    extra_keys_file = Path("extra-keys.json")
+    """Extra key data from the packaged ``data/extra-keys.json``."""
+    extra_keys_file = data.extra_keys_file()
     if not extra_keys_file.exists():
         raise FileNotFoundError(f"Extra keys file not found: {extra_keys_file}")
     with extra_keys_file.open("r") as f:

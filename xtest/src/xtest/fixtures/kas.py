@@ -10,8 +10,8 @@ import os
 
 import pytest
 
-import abac
-from otdfctl import OpentdfCommandLineTool
+from xtest import abac
+from xtest.otdfctl import OpentdfCommandLineTool
 
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 

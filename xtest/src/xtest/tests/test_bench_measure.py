@@ -16,8 +16,8 @@ import textwrap
 
 import pytest
 
-from perf import measure
-from perf.measure import MeasurementError, Sample
+from xtest.perf import measure
+from xtest.perf.measure import MeasurementError, Sample
 
 pytestmark = pytest.mark.skipif(
     not hasattr(os, "wait4"),

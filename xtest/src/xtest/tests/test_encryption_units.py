@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any, cast
 
-import tdfs
-from fixtures.encryption import EncryptFactory
+from xtest import tdfs
+from xtest.fixtures.encryption import EncryptFactory
 
 
 class RecordingSDK:

@@ -23,11 +23,10 @@ from pathlib import Path
 
 import pytest
 
-import abac
-import tdfs
-from abac import Attribute
-from audit_logs import AuditLogAsserter
-from otdfctl import OpentdfCommandLineTool
+from xtest import abac, tdfs
+from xtest.abac import Attribute
+from xtest.audit_logs import AuditLogAsserter
+from xtest.otdfctl import OpentdfCommandLineTool
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
 Every test here is marked ``zip64`` and is deselected unless the session asks
 for a payload size that can reach ``2**31`` -- see the size table in
 ``sizes.py`` for why 2.1 GiB and not something rounder, and
-``pytest_collection_modifyitems`` in ``conftest.py`` for the deselection.
+``pytest_collection_modifyitems`` in ``xtest/plugin.py`` for the deselection.
 
 Run it with::
 
@@ -23,11 +23,10 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
-import zipinspect
-from abac import Attribute
-from fixtures.encryption import EncryptFactory
-from sizes import SIZES, ZIP64_WINDOW_LOW
+from xtest import tdfs, zipinspect
+from xtest.abac import Attribute
+from xtest.fixtures.encryption import EncryptFactory
+from xtest.sizes import SIZES, ZIP64_WINDOW_LOW
 
 logger = logging.getLogger(__name__)
 

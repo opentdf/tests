@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from audit_logs import AuditLogAsserter, AuditLogCollector
+from xtest.audit_logs import AuditLogAsserter, AuditLogCollector
 
 logger = logging.getLogger("xtest")
 
@@ -67,7 +67,7 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
         KAS_ALPHA_LOG_FILE, KAS_BETA_LOG_FILE, etc: Paths to additional KAS log files
     """
     # Import here to avoid circular dependency
-    from tdfs import get_platform_features
+    from xtest.tdfs import get_platform_features
 
     # Check if platform version supports audit logging
     pfs = get_platform_features()

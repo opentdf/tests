@@ -8,9 +8,8 @@ This module contains fixtures for testing TDF obligations:
 
 import pytest
 
-import abac
-import tdfs
-from otdfctl import OpentdfCommandLineTool
+from xtest import abac, tdfs
+from xtest.otdfctl import OpentdfCommandLineTool
 
 
 @pytest.fixture(scope="module")

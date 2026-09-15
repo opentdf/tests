@@ -13,9 +13,8 @@ import string
 
 import pytest
 
-import abac
-import tdfs
-from otdfctl import OpentdfCommandLineTool
+from xtest import abac, tdfs
+from xtest.otdfctl import OpentdfCommandLineTool
 
 
 def create_temp_namesapce(otdfctl: OpentdfCommandLineTool):

@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
-from fixtures import bench
-from perf.cells import PAYLOADS
-from perf.runner import BenchConfig
+from xtest import tdfs
+from xtest.fixtures import bench
+from xtest.perf.cells import PAYLOADS
+from xtest.perf.runner import BenchConfig
 
 
 def install(root: Path, sdk: str, *versions: str) -> None:

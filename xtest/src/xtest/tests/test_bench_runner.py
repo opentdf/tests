@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from perf import stats
-from perf.measure import Sample
-from perf.runner import (
+from xtest.perf import stats
+from xtest.perf.measure import Sample
+from xtest.perf.runner import (
     Arm,
     BenchConfig,
     Budget,

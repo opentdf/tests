@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_core import to_jsonable_python
 
-import assertions
+from xtest import assertions
 
 
 @pytest.fixture(scope="session")

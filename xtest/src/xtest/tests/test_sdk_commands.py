@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
+from xtest import tdfs
 
 
 @pytest.fixture

@@ -42,8 +42,8 @@ from pathlib import Path
 
 import numpy as np
 
-from perf import stats
-from perf.measure import METRICS, MeasurementError, Sample, measure
+from xtest.perf import stats
+from xtest.perf.measure import METRICS, MeasurementError, Sample, measure
 
 #: Target CI half-width on the log scale, as a fraction of the log threshold.
 #: At 1/3, an interval centred on "no change" is comfortably clear of the

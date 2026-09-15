@@ -3,12 +3,11 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
+from xtest import data, tdfs
 
 
 def get_golden_file(golden_file_name: str) -> Path:
-    xtest_dir = Path(__file__).parent
-    filename = xtest_dir / "golden" / golden_file_name
+    filename = data.golden_file(golden_file_name)
     if filename.is_file():
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")

@@ -152,7 +152,7 @@ cd xtest && set -a && source test.env && set +a
 uv run pytest --bench --sdks go \
   --bench-baseline go@v0.29.0 \
   --bench-candidate go@main \
-  -v test_benchmarks.py
+  -v ../tests/test_benchmarks.py
 ```
 
 Useful knobs while investigating:
@@ -197,15 +197,15 @@ things; the noise floor will tell you whether you succeeded.
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact, step-summary markdown |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
-| `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
-| `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
+| `../tests/test_benchmarks.py` | One test per cell. **Records; never asserts** |
+| `../plugin.py` | `--bench*` options, cell parametrization, the session-finish gate |
 
 Offline tests, no platform and no subprocesses needed:
 
 ```bash
 cd xtest
-uv run pytest -q test_bench_stats.py test_bench_measure.py \
-                 test_bench_runner.py test_bench_arms.py
+uv run pytest -q src/xtest/tests/test_bench_stats.py src/xtest/tests/test_bench_measure.py \
+                 src/xtest/tests/test_bench_runner.py src/xtest/tests/test_bench_arms.py
 ```
 
 These run on every PR via `check.yml`, so the harness is exercised continuously
@@ -354,7 +354,7 @@ empty table is the one outcome nobody inspects.
 
 The bench job installs `go` on every runner even when it is not the SDK under
 measurement, because `otdfctl` provisions the attributes and KAS registry that
-every cell needs and `conftest.py` loads it at import time. `OTDFCTL_HEADS` must
+every cell needs and `plugin.py` resolves it on first use. `OTDFCTL_HEADS` must
 name *go's* head, not the matrix SDK's.
 
 #### Collection and isolation

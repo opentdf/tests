@@ -8,10 +8,10 @@ round, in a randomized order.
 The verdict cannot be reached cell by cell: the multiplicity correction is
 computed across every gated cell in the run, and the A/A control can
 invalidate all of them at once. The gate therefore runs once in
-``pytest_sessionfinish`` (see ``conftest.py``), which fails the session on a
+``pytest_sessionfinish`` (see ``xtest/plugin.py``), which fails the session on a
 confirmed regression.
 
-Nothing is collected here without ``--bench``; see ``conftest.py``.
+Nothing is collected here without ``--bench``; see ``xtest/plugin.py``.
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ from typing import NoReturn
 
 import pytest
 
-import abac
-from fixtures import bench
-from perf import report, runner
-from perf.cells import BenchCell
+from xtest import abac
+from xtest.fixtures import bench
+from xtest.perf import report, runner
+from xtest.perf.cells import BenchCell
 
 pytestmark = pytest.mark.benchmark
 

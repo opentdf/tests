@@ -31,10 +31,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
-import tdfs
-from abac import Attribute
-from audit_logs import AuditLogAsserter
-from fixtures.encryption import EncryptFactory
+from xtest import tdfs
+from xtest.abac import Attribute
+from xtest.audit_logs import AuditLogAsserter
+from xtest.fixtures.encryption import EncryptFactory
 
 
 def _token_endpoint() -> str:

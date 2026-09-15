@@ -1,19 +1,24 @@
 import random
 import string
 
-import abac
-from audit_logs import AuditLogAsserter
-from otdfctl import OpentdfCommandLineTool
+from xtest import abac
+from xtest.audit_logs import AuditLogAsserter
+from xtest.otdfctl import OpentdfCommandLineTool
 
-otdfctl = OpentdfCommandLineTool()
+# ``otdfctl`` arrives as the module-scoped fixture from ``xtest.plugin``. It
+# used to be a module-level ``OpentdfCommandLineTool()``, which meant importing
+# this file probed the filesystem for a shim -- so collecting the suite failed
+# outright wherever no SDK had been installed.
 
 
-def test_namespaces_list() -> None:
+def test_namespaces_list(otdfctl: OpentdfCommandLineTool) -> None:
     ns = otdfctl.namespace_list()
     assert len(ns) >= 4
 
 
-def test_namespace_create(audit_logs: AuditLogAsserter) -> None:
+def test_namespace_create(
+    otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
+) -> None:
     """Test namespace creation and verify audit log."""
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
 
@@ -31,7 +36,9 @@ def test_namespace_create(audit_logs: AuditLogAsserter) -> None:
     )
 
 
-def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
+def test_attribute_create(
+    otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
+) -> None:
     """Test attribute creation and verify audit logs for namespace and attributes."""
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
 
@@ -70,7 +77,9 @@ def test_attribute_create(audit_logs: AuditLogAsserter) -> None:
     )
 
 
-def test_scs_create(audit_logs: AuditLogAsserter) -> None:
+def test_scs_create(
+    otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
+) -> None:
     """Test subject condition set creation and verify audit log."""
     c = abac.Condition(
         subject_external_selector_value=".clientId",

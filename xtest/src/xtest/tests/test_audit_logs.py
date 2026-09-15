@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from audit_logs import (
+from xtest.audit_logs import (
     AuditLogAsserter,
     AuditLogCollector,
     LogEntry,
@@ -581,7 +581,7 @@ class TestClockSkewEstimation:
 
     def test_parse_rfc3339_basic(self) -> None:
         """Test RFC3339 timestamp parsing."""
-        from audit_logs import parse_rfc3339
+        from xtest.audit_logs import parse_rfc3339
 
         # Test Z suffix (UTC)
         dt = parse_rfc3339("2024-01-15T10:30:00Z")
@@ -610,7 +610,7 @@ class TestClockSkewEstimation:
 
     def test_clock_skew_estimate_properties(self) -> None:
         """Test ClockSkewEstimate calculations."""
-        from audit_logs import ClockSkewEstimate
+        from xtest.audit_logs import ClockSkewEstimate
 
         # Empty estimate
         est = ClockSkewEstimate("test-service")
@@ -634,7 +634,7 @@ class TestClockSkewEstimation:
 
     def test_clock_skew_estimate_negative_skew(self) -> None:
         """Test ClockSkewEstimate with negative skew (service ahead)."""
-        from audit_logs import ClockSkewEstimate
+        from xtest.audit_logs import ClockSkewEstimate
 
         est = ClockSkewEstimate("test-service")
         # Negative skew means service clock is ahead
@@ -648,7 +648,7 @@ class TestClockSkewEstimation:
     def test_clock_skew_estimator_record_and_retrieve(self) -> None:
         """Test ClockSkewEstimator recording and retrieval."""
 
-        from audit_logs import ClockSkewEstimator
+        from xtest.audit_logs import ClockSkewEstimator
 
         estimator = ClockSkewEstimator()
 
@@ -682,7 +682,7 @@ class TestClockSkewEstimation:
 
     def test_parsed_audit_event_skew_properties(self) -> None:
         """Test ParsedAuditEvent skew-related properties."""
-        from audit_logs import AuditLogAsserter, LogEntry
+        from xtest.audit_logs import AuditLogAsserter, LogEntry
 
         # Create a log entry with known timestamps
         now = datetime.now()
@@ -713,7 +713,7 @@ class TestClockSkewEstimation:
 
     def test_asserter_skew_methods(self, tmp_path: Path) -> None:
         """Test AuditLogAsserter skew accessor methods."""
-        from audit_logs import AuditLogAsserter, AuditLogCollector
+        from xtest.audit_logs import AuditLogAsserter, AuditLogCollector
 
         collector = AuditLogCollector(platform_dir=tmp_path)
         collector.start_time = datetime.now()
@@ -732,7 +732,7 @@ class TestClockSkewEstimation:
 
     def test_asserter_skew_methods_disabled(self) -> None:
         """Test AuditLogAsserter skew methods with disabled collector."""
-        from audit_logs import AuditLogAsserter
+        from xtest.audit_logs import AuditLogAsserter
 
         asserter = AuditLogAsserter(None)
 
@@ -742,7 +742,7 @@ class TestClockSkewEstimation:
 
     def test_skew_recorded_on_parse(self, tmp_path: Path) -> None:
         """Test that parsing audit logs records skew samples."""
-        from audit_logs import AuditLogAsserter, AuditLogCollector, LogEntry
+        from xtest.audit_logs import AuditLogAsserter, AuditLogCollector, LogEntry
 
         collector = AuditLogCollector(platform_dir=tmp_path)
         collector.start_time = datetime.now()
@@ -778,7 +778,7 @@ class TestClockSkewEstimation:
     def test_resolve_since_applies_skew_adjustment(self, tmp_path: Path) -> None:
         """Test that _resolve_since applies clock skew adjustment."""
 
-        from audit_logs import AuditLogAsserter, AuditLogCollector
+        from xtest.audit_logs import AuditLogAsserter, AuditLogCollector
 
         collector = AuditLogCollector(platform_dir=tmp_path)
         collector.start_time = datetime.now()

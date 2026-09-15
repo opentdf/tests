@@ -20,7 +20,7 @@ from typing import cast
 
 import pytest
 
-import tdfs
+from xtest import tdfs
 
 # --- tdfs._parse_forced_supports ---------------------------------------------
 

@@ -41,10 +41,13 @@ uv run pytest --sdks go -v
 uv run pytest --sdks "go java js" -v
 
 # Run specific test file
-uv run pytest test_tdfs.py --sdks go -v
+uv run pytest src/xtest/tests/test_tdfs.py --sdks go -v
 
 # Run specific test
-uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
+uv run pytest src/xtest/tests/test_tdfs.py::test_tdf_roundtrip --sdks go -v
+
+# Or, from anywhere, against an installed xtest
+XT_SDK_DIR=/path/to/xtest/sdk uv run pytest --pyargs xtest.tests -v
 ```
 
 ### Custom pytest Options and Env Vars
@@ -54,7 +57,8 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 
 - `PLATFORMURL` — platform endpoint (default `http://localhost:8080`)
 - `OT_ROOT_KEY` — root key for key-management tests
-- `SCHEMA_FILE` — path to manifest schema file
+- `SCHEMA_FILE` — overrides the packaged `manifest.schema.json`; normally unset
+- `XT_SDK_DIR` — where the built SDK shims live (default `./sdk`)
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
 - `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
   Point it at a large volume for multi-GiB runs.
@@ -74,7 +78,7 @@ anything.
 
 ```bash
 otdf-sdk-mgr install tip --ref pr:396 java     # pr:N works on install
-XT_FORCE_SUPPORTS=chunky uv run pytest test_tdfs.py --sdks "js java" -v
+XT_FORCE_SUPPORTS=chunky uv run pytest src/xtest/tests/test_tdfs.py --sdks "js java" -v
 ```
 
 It applies to every SDK in the run — to force one side only, narrow with
@@ -167,7 +171,7 @@ curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_s
 
 ```bash
 cd xtest
-uv run pytest test_legacy.py --sdks go -v --no-audit-logs
+uv run pytest src/xtest/tests/test_legacy.py --sdks go -v --no-audit-logs
 ```
 
 ### Missing Environment Variables
@@ -177,7 +181,6 @@ uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 **Fix**:
 ```bash
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
-export SCHEMA_FILE=manifest.schema.json
 ```
 
 ## Debugging Workflow
@@ -245,11 +248,13 @@ layer, see `xtest/AGENTS.md`. The short version:
 
 - Tests are grouped by concern, not by SDK (`test_tdfs.py`, `test_abac.py`,
   `test_legacy.py`, `test_audit_logs.py`, `test_pqc.py`, etc.).
-- `xtest/tdfs.py` is the SDK abstraction layer — when a test passes for one
+- `xtest/src/xtest/tdfs.py` is the SDK abstraction layer — when a test passes for one
   SDK and fails for another, suspect the CLI shim or manifest emission, not
   the test.
-- `xtest/conftest.py` defines the `--sdks` / `--containers` parametrization.
-  Session-scoped fixtures live in `xtest/fixtures/`.
+- `xtest/src/xtest/plugin.py` defines the `--sdks` / `--containers`
+  parametrization. It is a `pytest11` entry-point plugin rather than a
+  `conftest.py`, so it works from an installed wheel as well as in the tree.
+  Session-scoped fixtures live in `xtest/src/xtest/fixtures/`.
 
 ## Quick Reference
 

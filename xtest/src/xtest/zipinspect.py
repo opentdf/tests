@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
-from sizes import ZIP64_WINDOW_HIGH, in_zip64_window
+from xtest.sizes import ZIP64_WINDOW_HIGH, in_zip64_window
 
 # Signatures, little-endian.
 _CEN_SIG = b"PK\x01\x02"

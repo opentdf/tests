@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
-from abac import Attribute, ObligationValue
-from audit_logs import AuditLogAsserter
-from fixtures.encryption import EncryptFactory
-from test_policytypes import skip_rts_as_needed
+from xtest import tdfs
+from xtest.abac import Attribute, ObligationValue
+from xtest.audit_logs import AuditLogAsserter
+from xtest.fixtures.encryption import EncryptFactory
+from xtest.tests.test_policytypes import skip_rts_as_needed
 
 rewrap_403_pattern = (
     "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
@@ -995,7 +995,7 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
 
-    from test_legacy import get_golden_file
+    from xtest.tests.test_legacy import get_golden_file
 
     golden_file_name = "key-management-no-split-golden"
     ct_file = get_golden_file(f"{golden_file_name}.tdf")

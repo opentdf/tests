@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 
-from abac import (
+from xtest.abac import (
     Action,
     Attribute,
     AttributeKey,
@@ -36,6 +36,7 @@ from abac import (
     ValueKey,
     kas_public_key_alg_to_str,
 )
+from xtest.paths import sdk_dir
 
 logger = logging.getLogger("xtest")
 
@@ -52,7 +53,7 @@ class OpentdfCommandLineTool:
     flag_scs_map_action_standard: bool = False
 
     def __init__(self, otdfctl_path: str | None = None):
-        path = otdfctl_path if otdfctl_path else "sdk/go/otdfctl.sh"
+        path = otdfctl_path or str(sdk_dir() / "go" / "otdfctl.sh")
         if not os.path.isfile(path):
             raise FileNotFoundError(f"otdfctl.sh not found at path: {path}")
         self.otdfctl = [path]

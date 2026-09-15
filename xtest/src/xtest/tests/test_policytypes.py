@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-import tdfs
-from abac import Attribute
-from fixtures.encryption import EncryptFactory
+from xtest import tdfs
+from xtest.abac import Attribute
+from xtest.fixtures.encryption import EncryptFactory
 
 
 def skip_rts_as_needed(

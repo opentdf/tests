@@ -19,10 +19,10 @@ from typing import cast
 
 import pytest
 
-import conftest
-import zipinspect
-from sizes import MEDIUM_BYTES, ZIP64_WINDOW_HIGH, ZIP64_WINDOW_LOW
-from zipinspect import ZIP64_SENTINEL_32, MalformedZipError
+from xtest import plugin as conftest
+from xtest import zipinspect
+from xtest.sizes import MEDIUM_BYTES, ZIP64_WINDOW_HIGH, ZIP64_WINDOW_LOW
+from xtest.zipinspect import ZIP64_SENTINEL_32, MalformedZipError
 
 # --- Synthetic container construction ---------------------------------------
 
