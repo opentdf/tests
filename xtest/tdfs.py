@@ -986,14 +986,33 @@ class SDK:
 
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
+    """Every installed build of one SDK, in a stable order.
+
+    Sorted by version name because ``os.listdir`` is not ordered: the result
+    becomes pytest parameter ids, and ``fixtures/bench.py`` breaks a tie
+    between branch builds with ``heads[0]``. Neither should depend on the
+    order a filesystem happened to hand back.
+    """
     sdk_path = os.path.join("sdk", sdk, "dist")
     if not os.path.isdir(sdk_path):
         return []
     return [
         SDK(sdk, version)
-        for version in os.listdir(sdk_path)
+        for version in sorted(os.listdir(sdk_path))
         if os.path.isdir(os.path.join(sdk_path, version))
     ]
+
+
+def installed_sdks() -> list[SDK]:
+    """Every SDK build present under ``sdk/<name>/dist/<version>/``.
+
+    The default subject set for a run, and the answer to "what is actually on
+    this machine" rather than "what names does the suite know about". Those
+    two questions had the same answer while :data:`sdk_type` was the only
+    source of SDK names; they stop having the same answer as soon as anything
+    can contribute one.
+    """
+    return [sdk for name in get_args(sdk_type) for sdk in all_versions_of(name)]
 
 
 def parse_sdk_spec(spec: str) -> list[SDK]:
