@@ -17,6 +17,7 @@ import pytest
 from pydantic import BaseModel
 
 import assertions as tdfassertions
+import registry
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -216,7 +217,12 @@ def _parse_forced_supports(raw: str) -> frozenset[str]:
     exact failure mode the override is meant to escape.
     """
     names = {n.strip() for n in raw.split(",") if n.strip()}
-    known = set(get_args(feature_type))
+    # The registry, not ``get_args(feature_type)``: a feature contributed by a
+    # plugin is as real as a built-in one, and the whole reason this parse
+    # moved out of module scope was so it could see them. ``feature_names()``
+    # is seeded from the ``Literal`` above, so with nothing installed the two
+    # are the same set.
+    known = set(registry.feature_names())
     unknown = names - known
     if unknown:
         raise ValueError(

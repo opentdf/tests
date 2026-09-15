@@ -25,6 +25,7 @@ from typing import cast
 
 import pytest
 
+import registry
 import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
@@ -454,6 +455,12 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
 
 
 def pytest_configure(config: pytest.Config):
+    # Entry-point discovery first: everything below validates names against
+    # the registries, and pytest_configure is the only hook late enough for
+    # plugins to be importable and early enough to precede
+    # pytest_generate_tests, where the names become parameters.
+    registry.load_all()
+
     # Resolve XT_FORCE_SUPPORTS here rather than at tdfs import. The parse
     # rejects unknown names, so wherever it runs is the moment the set of legal
     # feature names freezes; at import that is before any plugin could have
