@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "OpenTDF cross-SDK integration test suite"
 readme = "README.md"
 requires-python = ">=3.14"
-license = { text = "BSD-3-Clause" }
+# SPDX expression, and it is the "Clear" variant: the repo LICENSE withholds
+# patent rights, which plain BSD-3-Clause does not. The metadata said
+# BSD-3-Clause until DSPX-4793 -- harmless while nothing was published, wrong
+# the moment a wheel exists.
+license = "BSD-3-Clause-Clear"
 authors = [{ name = "OpenTDF Team" }]
 keywords = ["opentdf", "tdf", "testing", "integration"]
 classifiers = [
@@ -56,8 +60,15 @@ dev = [
     "ruff>=0.15.16",
 ]
 
-# Note: This is a test suite, not a distributable package.
-# Use `uv pip install -r pyproject.toml` or `uv sync` for dependencies.
+# Loaded before the command line is parsed, which is what pytest_addoption
+# needs and what an installed conftest.py cannot offer. Disable with
+# `-p no:xtest`.
+[project.entry-points.pytest11]
+xtest = "xtest.plugin"
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.13"]
+build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 88
@@ -81,16 +92,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = [
-    "abac",
-    "tdfs",
-    "otdfctl",
-    "assertions",
-    "fixtures",
-    "perf",
-    "sizes",
-    "zipinspect",
-]
+known-first-party = ["xtest"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -101,18 +103,17 @@ pythonVersion = "3.14"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
-include = ["."]
-exclude = ["**/__pycache__", ".venv", ".ruff_cache", ".pytest_cache", "sdk", "tmp", "golden"]
+include = ["src"]
+extraPaths = ["src"]
+exclude = ["**/__pycache__", ".venv", ".ruff_cache", ".pytest_cache", "sdk", "tmp"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
-testpaths = ["."]
+testpaths = ["src/xtest/tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-ra -v"
-markers = [
-    "benchmark: paired A/B performance cell; only collected under --bench",
-    "no_audit_logs: opt this test out of the default audit-log assertions",
-    "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",
-]
+# Markers are registered by xtest.plugin.pytest_configure, not here: this table
+# is only read when the rootdir is this directory, which stops being true the
+# moment a consumer installs the wheel and runs from their own repo.

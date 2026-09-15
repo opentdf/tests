@@ -120,5 +120,5 @@ pytest
 
 ```shell
 rm -rf tmp
-pytest test_tdfs.py
+pytest src/xtest/tests/test_tdfs.py
 ```

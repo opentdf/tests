@@ -10,6 +10,7 @@ vulnerability/playwright-report/
 vulnerability/.helm/
 vulnerability/tilt_modules/
 
+/xtest/dist/
 /xtest/node_modules/
 /xtest/tilt_modules/
 /xtest/tmp/

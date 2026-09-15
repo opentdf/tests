@@ -343,7 +343,7 @@ jobs:
       - name: load extra keys from file
         id: load-extra-keys
         run: |-
-          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/src/xtest/data/extra-keys.json)" >> "${GITHUB_OUTPUT}"
 
       - name: Check PQC support based on platform tag
         id: pqc-check
@@ -600,7 +600,7 @@ jobs:
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
-          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py test_audit_logs.py
+          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" src/xtest/tests/test_self.py src/xtest/tests/test_audit_logs.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
@@ -619,7 +619,7 @@ jobs:
       - name: Run legacy decryption tests
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-decrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_legacy.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-decrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag src/xtest/tests/test_legacy.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -630,11 +630,10 @@ jobs:
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag src/xtest/tests/test_tdfs.py src/xtest/tests/test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -642,11 +641,10 @@ jobs:
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag src/xtest/tests/test_tdfs.py src/xtest/tests/test_policytypes.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -759,7 +757,7 @@ jobs:
             --sdks-encrypt "${ENCRYPT_SDK}" \
             --focus "$FOCUS_SDK" \
             $skip_flag \
-            test_abac.py test_pqc.py test_dpop.py
+            src/xtest/tests/test_abac.py src/xtest/tests/test_pqc.py src/xtest/tests/test_dpop.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -849,7 +847,7 @@ jobs:
       - name: load extra keys from file
         id: load-extra-keys
         run: |-
-          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/src/xtest/data/extra-keys.json)" >> "${GITHUB_OUTPUT}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       # Pinned to main, and to the default KAS only. We are measuring SDK
@@ -925,10 +923,9 @@ jobs:
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
       # otdfctl provisions the attributes and KAS registry every cell needs,
-      # whichever SDK is under measurement, and conftest.py loads it at import
-      # time. The go runner already has it from the step above; without this
-      # the java and js runners fail during collection, before a single
-      # measurement is taken.
+      # whichever SDK is under measurement. The go runner already has it from
+      # the step above; without this the java and js runners fail on the first
+      # cell that needs a policy client, before a measurement is taken.
       - name: Configure otdfctl
         id: configure-otdfctl
         if: matrix.sdk != 'go'
@@ -1010,7 +1007,7 @@ jobs:
 
       # Deliberately serial: no -n / --dist. Parallel pytest workers contend
       # for the CPU under measurement and would invalidate every number here.
-      # conftest.py refuses to run --bench under xdist for the same reason.
+      # xtest.plugin refuses to run --bench under xdist for the same reason.
       - name: Run performance benchmarks
         id: bench
         run: |-
@@ -1021,15 +1018,14 @@ jobs:
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
-            test_benchmarks.py
+            src/xtest/tests/test_benchmarks.py
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          # go's heads, not the matrix SDK's: conftest reads this to locate
-          # otdfctl under sdk/go/dist/<head>/, so pointing it at java's or
+          # go's heads, not the matrix SDK's: xtest.plugin reads this to locate
+          # otdfctl under $XT_SDK_DIR/go/dist/<head>/, so pointing it at java's or
           # js's head names a directory that does not exist.
           OTDFCTL_HEADS: >-
             ${{ matrix.sdk == 'go' && steps.configure-sdk.outputs.heads
@@ -1139,7 +1135,7 @@ jobs:
       - name: load extra keys from file
         id: load-extra-keys
         run: |-
-          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/src/xtest/data/extra-keys.json)" >> "${GITHUB_OUTPUT}"
 
       ######## SPIN UP PLATFORM BACKEND #############
       # Pinned to main with the default KAS only. This job is about the ZIP
@@ -1196,8 +1192,8 @@ jobs:
           PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
 
       ######## INSTALL EVERY SDK #############
-      # The go install doubles as otdfctl, which conftest.py loads at import
-      # time to provision attributes and the KAS registry.
+      # The go install doubles as otdfctl, which xtest.plugin resolves on
+      # first use to provision attributes and the KAS registry.
       #
       # Each of the three runners builds all three SDKs, so this job alone
       # triples the nightly's BSR request rate. buf.build has already answered
@@ -1320,15 +1316,14 @@ jobs:
             --junitxml "test-results/zip64-${ZIP64_SDK}.xml" \
             --html "test-results/zip64-${ZIP64_SDK}.html" \
             --self-contained-html \
-            test_zip64.py
+            src/xtest/tests/test_zip64.py
         working-directory: otdftests/xtest
         env:
           ZIP64_SDK: ${{ matrix.sdk }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          # go's heads: conftest reads this to locate otdfctl under
-          # sdk/go/dist/<head>/, regardless of which SDK is encrypting.
+          # go's heads: xtest.plugin reads this to locate otdfctl under
+          # $XT_SDK_DIR/go/dist/<head>/, regardless of which SDK is encrypting.
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
           # Nothing here requests the audit-log fixture, and a rewrap audit
           # event says nothing about the container's ZIP encoding.
