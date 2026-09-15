@@ -10,11 +10,10 @@ The GMAC root forgery (DSPX-4703) is here for a related reason: an exploit
 helper that quietly forges the wrong bytes would make the security tests in
 ``test_root_signature.py`` pass for the wrong reason.
 
-``manifest_entry_name`` (platform#3513) is here because it decides which
-archive member the whole suite reads as the manifest, and the suite holds that
-to the spec's ``manifest.json`` alone. The tests below pin the rejection of the
-legacy ``0.manifest.json`` as much as the acceptance of the spec name: a
-tolerant reader is what let the two diverge unreported for four years.
+``manifest_entry_name`` is here because it decides which archive member the
+whole suite reads as the manifest, and holds that to the spec's
+``manifest.json`` alone. Its tests pin the rejection of other spellings as
+much as the acceptance of that one.
 """
 
 import base64
@@ -188,17 +187,16 @@ class TestSkipChunkySkew:
         tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
 
 
-# --- tdfs.manifest_entry_name (platform#3513) ---------------------------------
+# --- tdfs.manifest_entry_name -------------------------------------------------
 
 
 class TestManifestEntryName:
-    """Which archive member holds the manifest.
+    """Which archive member holds the manifest: ``manifest.json``, and no other.
 
-    One answer only: the spec's ``manifest.json``. The ``0.manifest.json``
-    every SDK wrote until platform#4049 is not a second spelling to tolerate,
-    and these tests exist to keep a fallback from creeping back in -- a reader
-    that quietly accepts both is what let the divergence go unreported for
-    four years.
+    The rejection cases carry as much weight as the acceptance one. A reader
+    that also takes ``0.manifest.json`` reports a conformant archive and a
+    non-conformant one identically, which is the one thing this lookup must
+    not do.
     """
 
     def test_finds_the_spec_name(self):
@@ -207,22 +205,19 @@ class TestManifestEntryName:
             == "manifest.json"
         )
 
-    def test_rejects_the_legacy_name(self):
-        """The whole point: ``0.manifest.json`` is a non-conformant container
-        and reading it anyway would hide exactly the defect under test."""
+    def test_rejects_the_zero_prefixed_name(self):
         with pytest.raises(KeyError, match="manifest.json"):
             tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "0.manifest.json"])
 
     def test_rejects_a_suffix_match(self):
-        """``0.manifest.json`` ends with the spec name, so the lookup must be
-        equality; an ``endswith`` test would readmit the legacy container."""
+        """``0.manifest.json`` ends with the spec name, so the lookup has to be
+        equality; an ``endswith`` test would readmit it."""
         with pytest.raises(KeyError):
             tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "not-a-manifest.json"])
 
     def test_the_error_reports_what_the_archive_held(self):
-        """``zipfile``'s own KeyError names only the entry it wanted, so the 46
-        cells that hit this read as an empty archive. Naming the members turns
-        "there is no manifest.json" into "this writer used the legacy name"."""
+        """Without the member list, a misnamed manifest and a missing one give
+        the same message."""
         with pytest.raises(KeyError) as exc:
             tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "0.manifest.json"])
         assert "0.manifest.json" in str(exc.value)
@@ -234,9 +229,9 @@ class TestManifestRequiresTheSpecEntry:
         ct_file = _manifest_zip(tmp_path, "m.tdf", elides=False)
         assert tdfs.manifest(ct_file).payload.url == tdfs.PAYLOAD_ENTRY
 
-    def test_manifest_rejects_a_legacy_named_container(self, tmp_path: Path):
+    def test_manifest_rejects_an_off_spec_named_container(self, tmp_path: Path):
         ct_file = _manifest_zip(
-            tmp_path, "legacy.tdf", elides=False, manifest_entry="0.manifest.json"
+            tmp_path, "off-spec.tdf", elides=False, manifest_entry="0.manifest.json"
         )
         with pytest.raises(KeyError, match="manifest.json"):
             tdfs.manifest(ct_file)
@@ -257,9 +252,9 @@ class TestManifestRequiresTheSpecEntry:
         root = tdfs.manifest(out).encryptionInformation.integrityInformation
         assert root.rootSignature.sig == b"dGFtcGVy"
 
-    def test_update_manifest_rejects_a_legacy_named_container(self, tmp_path: Path):
+    def test_update_manifest_rejects_an_off_spec_named_container(self, tmp_path: Path):
         ct_file = _manifest_zip(
-            tmp_path, "legacy.tdf", elides=False, manifest_entry="0.manifest.json"
+            tmp_path, "off-spec.tdf", elides=False, manifest_entry="0.manifest.json"
         )
         with pytest.raises(KeyError, match="manifest.json"):
             tdfs.update_manifest("tampered", ct_file, lambda m: m)

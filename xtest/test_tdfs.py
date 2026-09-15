@@ -348,17 +348,14 @@ def test_manifest_entry_name_is_spec_compliant(
 ):
     """The manifest member is named ``manifest.json``, as the spec requires.
 
-    Schema validity is not enough on its own: a manifest that satisfies
-    manifest.schema.json byte for byte is still unreadable by a spec-conformant
-    implementation if the archive files it under a name the spec never
-    mentions. That is the gap platform#3513 reports, and nothing in this suite
-    noticed it for four years, because every SDK agreed on the same wrong name
-    and xtest hardcoded it too.
+    Distinct from ``test_manifest_validity``, which checks the manifest's
+    *contents* against manifest.schema.json: a manifest that satisfies the
+    schema byte for byte is still unreadable by a spec-conformant
+    implementation if the archive files it under some other name.
 
-    Deliberately ungated. A writer that still emits ``0.manifest.json`` fails
+    Deliberately ungated. A writer that names the entry anything else fails
     here, and that red cell is the finding, not a configuration problem to
-    route around -- java-sdk and web-sdk are expected to fail this until they
-    land their side of platform#4049.
+    route around.
     """
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")

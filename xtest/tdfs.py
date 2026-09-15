@@ -476,22 +476,19 @@ _partial_version_re = re.compile(
 )
 
 
-#: The manifest entry name given by the OpenTDF spec, which puts
-#: ``manifest.json`` at the root of the archive. See ``spec/schema/OpenTDF``:
-#: "The ``manifest.json`` file MUST be in JSON format and reside within the
-#: root of the OpenTDF Zip archive."
+#: The manifest entry name required by the OpenTDF spec. From
+#: ``spec/schema/OpenTDF/manifest.md``: "The ``manifest.json`` file MUST be in
+#: JSON format and reside within the root of the OpenTDF Zip archive."
 #:
-#: This suite reads and asserts this name and no other. The ``0.manifest.json``
-#: every SDK wrote until platform#4049 is not a second spelling to tolerate --
-#: it is a container the spec does not describe, and a reader that accepts it
-#: is the reason the divergence survived four years unreported. An SDK still
-#: writing the legacy name fails here, loudly, which is the intended report.
+#: This suite reads and asserts this name and no other. Any other spelling is
+#: a container the spec does not describe, and a reader that accepts one
+#: cannot report that the writer produced it.
 MANIFEST_ENTRY = "manifest.json"
 
 #: The payload entry name. Unlike the manifest's, this one is not fixed by the
 #: spec -- it is whatever the manifest's ``payload.url`` says, and ``0.payload``
-#: is only the conventional value every SDK uses. Kept as a constant for the
-#: fixtures and tamper helpers that have to name it.
+#: is only the conventional value. Kept as a constant for the fixtures and
+#: tamper helpers that have to name it.
 PAYLOAD_ENTRY = "0.payload"
 
 
@@ -499,10 +496,9 @@ def manifest_entry_name(names: Iterable[str]) -> str:
     """Check that an archive carries the spec's manifest entry, and name it.
 
     Returns :data:`MANIFEST_ENTRY` or raises. The indirection buys the error
-    message: ``zipfile`` reports only the name it wanted, so a container filed
-    under the legacy name reads as an empty archive -- every cell that hit it
-    said "There is no item named ..." without once saying what was in there.
-    Listing the actual members turns that into a one-line diagnosis.
+    message: ``zipfile``'s own ``KeyError`` reports only the name it wanted, so
+    an archive that files the manifest elsewhere is indistinguishable from one
+    with no manifest at all. Listing the actual members says which it was.
     """
     present = set(names)
     if MANIFEST_ENTRY in present:
