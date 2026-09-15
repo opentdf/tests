@@ -325,13 +325,6 @@ def resolve_sdks(
     The first option in ``option_names`` that was given wins; otherwise the
     default is every build actually installed under ``sdk/*/dist/``.
 
-    That default used to be ``get_args(tdfs.sdk_type)`` -- the set of names the
-    suite knows about rather than the set of builds present.
-    :func:`tdfs.parse_sdk_spec` routes a bare name through
-    :func:`tdfs.all_versions_of` anyway, so the two agreed; they stop agreeing
-    the moment anything other than the ``Literal`` can contribute a name, and
-    "what is installed" was always the question being asked.
-
     The empty case is an error rather than an empty parametrization, and only
     on the default path. ``metafunc.parametrize`` over ``[]`` does not collect
     zero items: pytest's ``empty_parameter_set_mark`` turns it into one *skip*
@@ -461,10 +454,9 @@ def pytest_configure(config: pytest.Config):
     # pytest_generate_tests, where the names become parameters.
     registry.load_all()
 
-    # Resolve XT_FORCE_SUPPORTS here rather than at tdfs import. The parse
-    # rejects unknown names, so wherever it runs is the moment the set of legal
-    # feature names freezes; at import that is before any plugin could have
-    # contributed one. See tdfs.configure_forced_supports.
+    # Then XT_FORCE_SUPPORTS, whose parse validates names against the feature
+    # registry and so has to run after discovery. See
+    # tdfs.configure_forced_supports.
     #
     # UsageError, not the bare ValueError: a typo in XT_FORCE_SUPPORTS is a
     # mistake in the invocation, and pytest reports a UsageError as such

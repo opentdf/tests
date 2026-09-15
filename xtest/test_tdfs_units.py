@@ -65,7 +65,7 @@ class TestForcedSupportsIsNotResolvedAtImport:
 
     The parse rejects unknown names, so wherever it runs is the moment the set
     of legal feature names freezes. At import that is before any plugin could
-    contribute one, which is the ordering problem DSPX-4794 removes.
+    have contributed one.
     """
 
     def test_importing_tdfs_with_an_unknown_name_does_not_raise(
@@ -111,8 +111,8 @@ class TestForcedSupportsIsNotResolvedAtImport:
     ):
         """``tdfs`` is imported by scripts that never run ``pytest_configure``.
 
-        Without the fallback, moving the parse would turn ``XT_FORCE_SUPPORTS``
-        into a silent no-op for them.
+        Without the fallback, ``XT_FORCE_SUPPORTS`` would be a silent no-op
+        for them.
         """
         monkeypatch.setattr(tdfs, "_forced_supports", None)
         monkeypatch.setenv("XT_FORCE_SUPPORTS", "ecwrap")

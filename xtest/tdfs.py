@@ -217,11 +217,9 @@ def _parse_forced_supports(raw: str) -> frozenset[str]:
     exact failure mode the override is meant to escape.
     """
     names = {n.strip() for n in raw.split(",") if n.strip()}
-    # The registry, not ``get_args(feature_type)``: a feature contributed by a
-    # plugin is as real as a built-in one, and the whole reason this parse
-    # moved out of module scope was so it could see them. ``feature_names()``
-    # is seeded from the ``Literal`` above, so with nothing installed the two
-    # are the same set.
+    # The registry rather than ``get_args(feature_type)``: a plugin-contributed
+    # feature is as forceable as a built-in one. ``feature_names()`` is seeded
+    # from the ``Literal`` above, so with nothing installed the two agree.
     known = set(registry.feature_names())
     unknown = names - known
     if unknown:
@@ -253,15 +251,11 @@ def configure_forced_supports(raw: str | None = None) -> frozenset[str]:
     narrow the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than
     adding per-SDK syntax here.
 
-    Called from ``conftest.pytest_configure`` rather than evaluated at module
-    import. The parse validates every name against the known feature set and
-    raises on an unknown one -- correctly, see :func:`_parse_forced_supports` --
-    which means the set of legal names is frozen at whatever moment the parse
-    runs. At import that is before ``pytest_addoption``, before
-    ``pytest_configure`` and before any plugin has had a chance to contribute a
-    feature, so the strictness and the extensibility were in direct conflict.
-    Running it from ``pytest_configure`` puts the validation after plugin
-    discovery and keeps both.
+    Call this from ``conftest.pytest_configure``, not at module import: the
+    parse rejects unknown names (correctly, see :func:`_parse_forced_supports`)
+    so whenever it runs is the moment the set of legal feature names freezes,
+    and only ``pytest_configure`` is late enough for a plugin to have
+    contributed one.
 
     Idempotent, so a second call (an xdist worker configuring itself, a test
     exercising the parse) simply re-resolves.
@@ -286,9 +280,9 @@ def forced_supports() -> frozenset[str]:
 
     The lazy fallback matters: ``tdfs`` is importable outside a pytest session
     -- ``otdf-sdk-mgr`` and ad-hoc scripts both do it -- and those callers never
-    run ``pytest_configure``. Without it, moving the parse would silently turn
-    ``XT_FORCE_SUPPORTS`` into a no-op for them, which is the exact class of
-    quiet failure the variable exists to escape.
+    run ``pytest_configure``. Without it, ``XT_FORCE_SUPPORTS`` would be a
+    silent no-op for them, which is the exact class of quiet failure the
+    variable exists to escape.
     """
     if _forced_supports is None:
         return configure_forced_supports()
@@ -1012,11 +1006,8 @@ def all_versions_of(sdk: sdk_type) -> list[SDK]:
 def installed_sdks() -> list[SDK]:
     """Every SDK build present under ``sdk/<name>/dist/<version>/``.
 
-    The default subject set for a run, and the answer to "what is actually on
-    this machine" rather than "what names does the suite know about". Those
-    two questions had the same answer while :data:`sdk_type` was the only
-    source of SDK names; they stop having the same answer as soon as anything
-    can contribute one.
+    The default subject set for a run: "what is actually on this machine",
+    not "what names does the suite know about".
     """
     return [sdk for name in get_args(sdk_type) for sdk in all_versions_of(name)]
 

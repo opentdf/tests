@@ -45,10 +45,10 @@ def dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 class TestDefaultsToInstalled:
     def test_empty_default_is_an_error_not_an_empty_matrix(self):
-        """The bug this change exists to close.
+        """Nothing installed must fail the run, not skip it.
 
-        Before: 20 skipped, "got empty parameter set for (encrypt_sdk)",
-        exit 0 -- a green run that tested nothing.
+        An empty parametrization collects as "got empty parameter set for
+        (encrypt_sdk)" and exits 0 -- a green run that tested nothing.
         """
         with pytest.raises(pytest.UsageError, match="otdf-sdk-mgr install"):
             resolve_sdks(_config(), ["--sdks-encrypt", "--sdks"], "encrypt")

@@ -258,11 +258,8 @@ class TestOutOfTreePlugin:
         assert {"acme-sealed", "acme-dialect"} <= registry.feature_names()
 
     def test_force_supports_accepts_a_feature_the_plugin_contributed(self):
-        """The ordering fix and the registry, end to end.
-
-        Before DSPX-4794 this name was rejected, and there was no moment at
-        which it could have been accepted: the parse ran at ``tdfs`` import,
-        before any plugin existed.
+        """The ordering and the registry, end to end: discovery has to happen
+        before the parse for a plugin's feature name to be forceable at all.
         """
         registry.load_all()
         assert tdfs.configure_forced_supports("acme-sealed") == frozenset(

@@ -6,13 +6,9 @@ What the suite is allowed to test is decided by three closed ``Literal``\\ s in
 ``tdfs.py``: ``sdk_type``, ``container_type`` and ``feature_type``. Adding an
 SDK, a container format or a capability gate means editing this repo.
 
-Upstream has already paid for that once. NanoTDF was removed in ``150e3135``
-("fix: remove NanoTDF tests and support (#366)") -- 11 files, +22/-2003 -- and
-``otdf-sdk-mgr/tests/test_schema.py::test_removed_nano_container_is_rejected``
-now exists to keep a *second* hand-maintained copy of the container enum
-(``otdf_sdk_mgr.schema.ContainerKind``) in step with the first. A format that
-was never more than an enum value cost two thousand lines to remove, because
-the value was load-bearing everywhere instead of confined to one object.
+Spreading a format's name through the suite is expensive: removing NanoTDF
+(``150e3135``) touched 11 files for +22/-2003, and the container enum still
+has a second hand-maintained copy in ``otdf_sdk_mgr.schema.ContainerKind``.
 
 This module is the seam. Today's ``Literal`` values stay exactly where they
 are, as the built-in defaults; anything installed alongside xtest can add to
@@ -23,7 +19,7 @@ Keeping static typing useful once the set is open
 
 The ``Literal``\\ s are not widened to ``str`` and not widened to
 ``Literal[...] | str`` (pyright collapses that union to ``str`` and silently
-stops diagnosing). Four mechanisms replace the one:
+stops diagnosing). Four mechanisms carry the checking instead:
 
 1. The ``Literal``\\ s stay authoritative for in-tree code, so a literal typo
    is still a type error and deleting a built-in still breaks every mention of
@@ -40,8 +36,8 @@ stops diagnosing). Four mechanisms replace the one:
 That last one is load-bearing. This module deliberately does **not** import
 ``tdfs`` -- that is what lets ``tdfs`` import *it* without a cycle -- so the
 built-in names are written out twice. Without the pin test, that duplication
-is a second ``ContainerKind``, i.e. exactly the defect being removed here. If
-the pin test is ever deleted, collapse the duplication in the same change.
+is a second ``ContainerKind``. If the pin test is ever deleted, collapse the
+duplication in the same change.
 """
 
 from __future__ import annotations
