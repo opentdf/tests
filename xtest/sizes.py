@@ -32,13 +32,14 @@ ZIP64_WINDOW_HIGH = 2**32
 
 #: 2.1 GiB. Sits ~102 MiB inside the low edge of the broken window.
 #:
-#: The margin is the point. A TDF writes ``0.payload`` first and
-#: ``0.manifest.json`` after it, so the manifest's local-header offset is
-#: roughly the payload size -- and that offset is the value under test. The
-#: gap to 2**31 has to be wider than anything that could shift it: segment
-#: padding, manifest length, per-entry header overhead. 102 MiB is not a
-#: round number because it does not need to be; it needs to be unarguably
-#: larger than those.
+#: The margin is the point. A TDF writes ``0.payload`` first and the manifest
+#: after it, so the manifest's local-header offset is roughly the payload size
+#: -- and that offset is the value under test. The gap to 2**31 has to be wider
+#: than anything that could shift it: segment padding, manifest length,
+#: per-entry header overhead, and the two bytes by which the entry name itself
+#: differs between ``manifest.json`` and the legacy ``0.manifest.json``.
+#: 102 MiB is not a round number because it does not need to be; it needs to be
+#: unarguably larger than those.
 #:
 #: Shrinking this below 2**31 does not make the test cheaper, it makes it
 #: vacuous -- every SDK takes the safe path and the test passes without

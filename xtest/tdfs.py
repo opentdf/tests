@@ -8,7 +8,7 @@ import subprocess
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Literal, TypeIs, get_args
 
@@ -476,9 +476,47 @@ _partial_version_re = re.compile(
 )
 
 
+#: The manifest entry name given by the OpenTDF spec, which puts
+#: ``manifest.json`` at the root of the archive. See ``spec/schema/OpenTDF``:
+#: "The ``manifest.json`` file MUST be in JSON format and reside within the
+#: root of the OpenTDF Zip archive."
+#:
+#: This suite reads and asserts this name and no other. The ``0.manifest.json``
+#: every SDK wrote until platform#4049 is not a second spelling to tolerate --
+#: it is a container the spec does not describe, and a reader that accepts it
+#: is the reason the divergence survived four years unreported. An SDK still
+#: writing the legacy name fails here, loudly, which is the intended report.
+MANIFEST_ENTRY = "manifest.json"
+
+#: The payload entry name. Unlike the manifest's, this one is not fixed by the
+#: spec -- it is whatever the manifest's ``payload.url`` says, and ``0.payload``
+#: is only the conventional value every SDK uses. Kept as a constant for the
+#: fixtures and tamper helpers that have to name it.
+PAYLOAD_ENTRY = "0.payload"
+
+
+def manifest_entry_name(names: Iterable[str]) -> str:
+    """Check that an archive carries the spec's manifest entry, and name it.
+
+    Returns :data:`MANIFEST_ENTRY` or raises. The indirection buys the error
+    message: ``zipfile`` reports only the name it wanted, so a container filed
+    under the legacy name reads as an empty archive -- every cell that hit it
+    said "There is no item named ..." without once saying what was in there.
+    Listing the actual members turns that into a one-line diagnosis.
+    """
+    present = set(names)
+    if MANIFEST_ENTRY in present:
+        return MANIFEST_ENTRY
+    raise KeyError(
+        f"archive has no {MANIFEST_ENTRY!r} entry, which the OpenTDF spec "
+        f"requires at the archive root; it holds {sorted(present)}"
+    )
+
+
 def manifest(tdf_file: Path) -> Manifest:
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
-        with tdfz.open("0.manifest.json") as manifestEntry:
+        entry = manifest_entry_name(tdfz.namelist())
+        with tdfz.open(entry) as manifestEntry:
             return Manifest.model_validate_json(manifestEntry.read())
 
 
@@ -491,11 +529,12 @@ def update_manifest(
     fname = tdf_file.stem
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
+        entry = manifest_entry_name(zipped.namelist())
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.manifest.json").open("r") as manifest_file:
+    with (unzipped_dir / entry).open("r") as manifest_file:
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
-    with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
+    with (unzipped_dir / entry).open("w") as manifest_file:
         # exclude_unset so the rewrite carries only what the original manifest
         # said plus whatever manifest_change touched. Without it every optional
         # field is re-emitted as an explicit null, and a reader that distinguishes
@@ -528,10 +567,10 @@ def update_payload(
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.payload").open("rb") as payload_file:
+    with (unzipped_dir / PAYLOAD_ENTRY).open("rb") as payload_file:
         payload_data = payload_file.read()
     new_payload_data = payload_change(payload_data)
-    with (unzipped_dir / "0.payload").open("wb") as payload_file:
+    with (unzipped_dir / PAYLOAD_ENTRY).open("wb") as payload_file:
         payload_file.write(new_payload_data)
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
@@ -641,7 +680,7 @@ def validate_manifest_schema(tdf_file: Path):
 
     ## Load the manifest file directly from the zipfile
     with zipfile.ZipFile(tdf_file, "r") as zipped:
-        with zipped.open("0.manifest.json") as manifest_file:
+        with zipped.open(manifest_entry_name(zipped.namelist())) as manifest_file:
             manifest = json.load(manifest_file)
 
     ## Validate
