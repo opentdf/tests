@@ -13,6 +13,9 @@ helper that quietly forges the wrong bytes would make the security tests in
 
 import base64
 import json
+import os
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +42,87 @@ class TestParseForcedSupports:
         """The whole point of this function: a typo must not be a silent no-op."""
         with pytest.raises(ValueError, match="unknown feature"):
             tdfs._parse_forced_supports("hexles")
+
+
+# --- tdfs.configure_forced_supports / forced_supports -------------------------
+
+
+@pytest.fixture(autouse=True)
+def _restore_forced_supports():
+    """Put the module global back after any test that resolves it.
+
+    ``forced_supports()`` caches, and a test that leaves ``chunky`` forced on
+    would make ``SDK.supports`` lie for every test collected after it in the
+    same process.
+    """
+    saved = tdfs._forced_supports
+    yield
+    tdfs._forced_supports = saved
+
+
+class TestForcedSupportsIsNotResolvedAtImport:
+    """``XT_FORCE_SUPPORTS`` must be parsed from ``pytest_configure``, not import.
+
+    The parse rejects unknown names, so wherever it runs is the moment the set
+    of legal feature names freezes. At import that is before any plugin could
+    contribute one, which is the ordering problem DSPX-4794 removes.
+    """
+
+    def test_importing_tdfs_with_an_unknown_name_does_not_raise(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Checked in a subprocess, on purpose.
+
+        The behaviour under test is what happens during module execution, and
+        ``tdfs`` is already in ``sys.modules`` here. Reimporting would not
+        re-run module scope, and ``importlib.reload`` would re-run it in an
+        interpreter whose state the rest of this file depends on. A fresh
+        interpreter is the only honest observation.
+        """
+        env = dict(os.environ, XT_FORCE_SUPPORTS="not-a-real-feature")
+        r = subprocess.run(
+            [sys.executable, "-c", "import tdfs"],
+            cwd=Path(__file__).parent,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert r.returncode == 0, r.stderr
+        assert "not-a-real-feature" not in r.stderr
+
+        # ... and the same interpreter still rejects it once something asks.
+        monkeypatch.setenv("XT_FORCE_SUPPORTS", "not-a-real-feature")
+        with pytest.raises(ValueError, match="unknown feature"):
+            tdfs.configure_forced_supports()
+
+    def test_configure_reads_the_environment(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("XT_FORCE_SUPPORTS", "chunky,hexless")
+        assert tdfs.configure_forced_supports() == frozenset({"chunky", "hexless"})
+        assert tdfs.forced_supports() == frozenset({"chunky", "hexless"})
+
+    def test_explicit_argument_beats_the_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("XT_FORCE_SUPPORTS", "chunky")
+        assert tdfs.configure_forced_supports("dpop") == frozenset({"dpop"})
+
+    def test_lazy_fallback_for_callers_outside_a_pytest_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """``tdfs`` is imported by scripts that never run ``pytest_configure``.
+
+        Without the fallback, moving the parse would turn ``XT_FORCE_SUPPORTS``
+        into a silent no-op for them.
+        """
+        monkeypatch.setattr(tdfs, "_forced_supports", None)
+        monkeypatch.setenv("XT_FORCE_SUPPORTS", "ecwrap")
+        assert tdfs.forced_supports() == frozenset({"ecwrap"})
+
+    def test_supports_consults_the_resolved_set(self, monkeypatch: pytest.MonkeyPatch):
+        """The forced set has to reach ``SDK.supports`` without a subprocess."""
+        monkeypatch.setattr(tdfs, "_forced_supports", frozenset({"chunky"}))
+        sdk = cast(tdfs.SDK, SimpleNamespace(_supports={}, sdk="go", version="main"))
+        assert tdfs.SDK.supports(sdk, "chunky") is True
 
 
 # --- tdfs.zip64_reader_is_broken ----------------------------------------------

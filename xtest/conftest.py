@@ -426,6 +426,19 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
 
 
 def pytest_configure(config: pytest.Config):
+    # Resolve XT_FORCE_SUPPORTS here rather than at tdfs import. The parse
+    # rejects unknown names, so wherever it runs is the moment the set of legal
+    # feature names freezes; at import that is before any plugin could have
+    # contributed one. See tdfs.configure_forced_supports.
+    #
+    # UsageError, not the bare ValueError: a typo in XT_FORCE_SUPPORTS is a
+    # mistake in the invocation, and pytest reports a UsageError as such
+    # instead of as an INTERNALERROR traceback through the plugin manager.
+    try:
+        tdfs.configure_forced_supports()
+    except ValueError as e:
+        raise pytest.UsageError(str(e)) from e
+
     if not config.getoption("--bench", default=False):
         return
     # Parallel workers contend for the CPU the benchmark is measuring, which

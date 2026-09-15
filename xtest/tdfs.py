@@ -226,26 +226,67 @@ def _parse_forced_supports(raw: str) -> frozenset[str]:
     return frozenset(names)
 
 
-#: Features to treat as supported no matter what the SDK reports.
+#: Resolved ``XT_FORCE_SUPPORTS``, or None until something asks for it.
 #:
-#: The ``supports`` case statements live in this repo (``sdk/*/cli.sh``) and
-#: answer from a *released* version number, so they say "no" for precisely the
-#: unreleased builds a fix needs to be evaluated against. Setting
-#: ``XT_FORCE_SUPPORTS=chunky`` alongside ``otdf-sdk-mgr install tip --ref ...``
-#: makes those cells run for real and report pass or fail.
-#:
-#: Applies to every SDK in the run. To force a feature for one side only, narrow
-#: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
-#: per-SDK syntax here.
-FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
+#: Deliberately not populated at import. See :func:`configure_forced_supports`.
+_forced_supports: frozenset[str] | None = None
 
-if FORCED_SUPPORTS:
-    logger.warning(
-        "XT_FORCE_SUPPORTS is set: treating %s as supported by every SDK. "
-        "Results for those features reflect the build under test, not the "
-        "shim's version gate.",
-        ", ".join(sorted(FORCED_SUPPORTS)),
-    )
+
+def configure_forced_supports(raw: str | None = None) -> frozenset[str]:
+    """Resolve ``XT_FORCE_SUPPORTS`` into the set :func:`forced_supports` returns.
+
+    Features to treat as supported no matter what the SDK reports.
+
+    The ``supports`` case statements live in this repo (``sdk/*/cli.sh``) and
+    answer from a *released* version number, so they say "no" for precisely the
+    unreleased builds a fix needs to be evaluated against. Setting
+    ``XT_FORCE_SUPPORTS=chunky`` alongside ``otdf-sdk-mgr install tip --ref ...``
+    makes those cells run for real and report pass or fail.
+
+    Applies to every SDK in the run. To force a feature for one side only,
+    narrow the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than
+    adding per-SDK syntax here.
+
+    Called from ``conftest.pytest_configure`` rather than evaluated at module
+    import. The parse validates every name against the known feature set and
+    raises on an unknown one -- correctly, see :func:`_parse_forced_supports` --
+    which means the set of legal names is frozen at whatever moment the parse
+    runs. At import that is before ``pytest_addoption``, before
+    ``pytest_configure`` and before any plugin has had a chance to contribute a
+    feature, so the strictness and the extensibility were in direct conflict.
+    Running it from ``pytest_configure`` puts the validation after plugin
+    discovery and keeps both.
+
+    Idempotent, so a second call (an xdist worker configuring itself, a test
+    exercising the parse) simply re-resolves.
+    """
+    global _forced_supports
+    if raw is None:
+        raw = os.environ.get("XT_FORCE_SUPPORTS", "")
+    forced = _parse_forced_supports(raw)
+    _forced_supports = forced
+    if forced:
+        logger.warning(
+            "XT_FORCE_SUPPORTS is set: treating %s as supported by every SDK. "
+            "Results for those features reflect the build under test, not the "
+            "shim's version gate.",
+            ", ".join(sorted(forced)),
+        )
+    return forced
+
+
+def forced_supports() -> frozenset[str]:
+    """The features this session forces on, resolving from the environment once.
+
+    The lazy fallback matters: ``tdfs`` is importable outside a pytest session
+    -- ``otdf-sdk-mgr`` and ad-hoc scripts both do it -- and those callers never
+    run ``pytest_configure``. Without it, moving the parse would silently turn
+    ``XT_FORCE_SUPPORTS`` into a no-op for them, which is the exact class of
+    quiet failure the variable exists to escape.
+    """
+    if _forced_supports is None:
+        return configure_forced_supports()
+    return _forced_supports
 
 
 container_version = Literal["4.2.2", "4.3.0"]
@@ -879,7 +920,7 @@ class SDK:
                 )
 
     def supports(self, feature: feature_type) -> bool:
-        if feature in FORCED_SUPPORTS:
+        if feature in forced_supports():
             return True
         if feature in self._supports:
             return self._supports[feature]
@@ -916,7 +957,7 @@ class SDK:
                 # happen by itself when the SDK merges a patch.
                 #
                 # To evaluate a fix before it releases, set
-                # XT_FORCE_SUPPORTS=chunky -- see FORCED_SUPPORTS above.
+                # XT_FORCE_SUPPORTS=chunky -- see configure_forced_supports above.
                 return True
             case ("better-messages-2024", ("js" | "java")):
                 return True
@@ -1025,7 +1066,8 @@ def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
 
     To evaluate an unreleased fix, set ``XT_FORCE_SUPPORTS=chunky`` (or pass
     ``force-supports: chunky`` to the workflow dispatch) so this returns early
-    and the cell reports a real pass or fail. See :data:`FORCED_SUPPORTS`.
+    and the cell reports a real pass or fail. See
+    :func:`configure_forced_supports`.
     """
     if decrypt_sdk.supports("chunky"):
         return
