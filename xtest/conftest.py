@@ -25,6 +25,7 @@ from typing import cast
 
 import pytest
 
+import registry
 import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
@@ -316,6 +317,49 @@ def _add_benchmark_options(parser: pytest.Parser):
     )
 
 
+def resolve_sdks(
+    config: pytest.Config, option_names: list[str], role: str
+) -> list[tdfs.SDK]:
+    """SDK builds for one side of the matrix.
+
+    The first option in ``option_names`` that was given wins; otherwise the
+    default is every build actually installed under ``sdk/*/dist/``.
+
+    The empty case is an error rather than an empty parametrization, and only
+    on the default path. ``metafunc.parametrize`` over ``[]`` does not collect
+    zero items: pytest's ``empty_parameter_set_mark`` turns it into one *skip*
+    per test, so a checkout with nothing installed reports "20 skipped ... got
+    empty parameter set" and exits 0. A whole matrix disappears and the run
+    stays green -- the same failure mode :func:`sizes_opt_type` guards against
+    a few functions up.
+
+    An explicit ``--sdks`` that resolves to nothing is left alone: that is the
+    caller narrowing the run on purpose, possibly from a script, and is not
+    this function's to second-guess.
+    """
+    for name in option_names:
+        v = config.getoption(name)
+        if v:
+            try:
+                return [
+                    sdk for spec in str(v).split() for sdk in tdfs.parse_sdk_spec(spec)
+                ]
+            except (FileNotFoundError, ValueError) as e:
+                raise pytest.UsageError(str(e)) from e
+    try:
+        installed = tdfs.installed_sdks()
+    except FileNotFoundError as e:
+        raise pytest.UsageError(str(e)) from e
+    if not installed:
+        raise pytest.UsageError(
+            f"no SDK builds are installed under sdk/*/dist/, so the {role} side "
+            "of the matrix is empty; every cell would report as a skip and the "
+            "run would exit 0. Install some (otdf-sdk-mgr install stable) or "
+            f"name them explicitly with {' / '.join(option_names)}."
+        )
+    return installed
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     """Dynamically parametrize test functions based on CLI options.
 
@@ -342,36 +386,14 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
                 raise ValueError(f"Invalid value for {name}: {i}, must be one of {ttt}")
         return a
 
-    def sdk_specs_opt(names: list[str]) -> list[str]:
-        """Return SDK specifier tokens from the first matching option, or all sdk types."""
-        for name in names:
-            v = metafunc.config.getoption(name)
-            if v:
-                return v.split()
-        return list(typing.get_args(tdfs.sdk_type))
-
     subject_sdks: set[tdfs.SDK] = set()
 
     if "encrypt_sdk" in metafunc.fixturenames:
-        try:
-            e_sdks = [
-                sdk
-                for spec in sdk_specs_opt(["--sdks-encrypt", "--sdks"])
-                for sdk in tdfs.parse_sdk_spec(spec)
-            ]
-        except (FileNotFoundError, ValueError) as e:
-            raise pytest.UsageError(str(e)) from e
+        e_sdks = resolve_sdks(metafunc.config, ["--sdks-encrypt", "--sdks"], "encrypt")
         metafunc.parametrize("encrypt_sdk", e_sdks, ids=[str(x) for x in e_sdks])
         subject_sdks |= set(e_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
-        try:
-            d_sdks = [
-                sdk
-                for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
-                for sdk in tdfs.parse_sdk_spec(spec)
-            ]
-        except (FileNotFoundError, ValueError) as e:
-            raise pytest.UsageError(str(e)) from e
+        d_sdks = resolve_sdks(metafunc.config, ["--sdks-decrypt", "--sdks"], "decrypt")
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
 
@@ -426,6 +448,24 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
 
 
 def pytest_configure(config: pytest.Config):
+    # Entry-point discovery first: everything below validates names against
+    # the registries, and pytest_configure is the only hook late enough for
+    # plugins to be importable and early enough to precede
+    # pytest_generate_tests, where the names become parameters.
+    registry.load_all()
+
+    # Then XT_FORCE_SUPPORTS, whose parse validates names against the feature
+    # registry and so has to run after discovery. See
+    # tdfs.configure_forced_supports.
+    #
+    # UsageError, not the bare ValueError: a typo in XT_FORCE_SUPPORTS is a
+    # mistake in the invocation, and pytest reports a UsageError as such
+    # instead of as an INTERNALERROR traceback through the plugin manager.
+    try:
+        tdfs.configure_forced_supports()
+    except ValueError as e:
+        raise pytest.UsageError(str(e)) from e
+
     if not config.getoption("--bench", default=False):
         return
     # Parallel workers contend for the CPU the benchmark is measuring, which
