@@ -485,12 +485,6 @@ _partial_version_re = re.compile(
 #: cannot report that the writer produced it.
 MANIFEST_ENTRY = "manifest.json"
 
-#: The payload entry name. Unlike the manifest's, this one is not fixed by the
-#: spec -- it is whatever the manifest's ``payload.url`` says, and ``0.payload``
-#: is only the conventional value. Kept as a constant for the fixtures and
-#: tamper helpers that have to name it.
-PAYLOAD_ENTRY = "0.payload"
-
 
 def manifest_entry_name(names: Iterable[str]) -> str:
     """Check that an archive carries the spec's manifest entry, and name it.
@@ -563,10 +557,10 @@ def update_payload(
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / PAYLOAD_ENTRY).open("rb") as payload_file:
+    with (unzipped_dir / "0.payload").open("rb") as payload_file:
         payload_data = payload_file.read()
     new_payload_data = payload_change(payload_data)
-    with (unzipped_dir / PAYLOAD_ENTRY).open("wb") as payload_file:
+    with (unzipped_dir / "0.payload").open("wb") as payload_file:
         payload_file.write(new_payload_data)
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:

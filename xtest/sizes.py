@@ -36,9 +36,9 @@ ZIP64_WINDOW_HIGH = 2**32
 #: ``manifest.json`` after it, so the manifest's local-header offset is
 #: roughly the payload size -- and that offset is the value under test. The
 #: gap to 2**31 has to be wider than anything that could shift it: segment
-#: padding, manifest length, per-entry header and name overhead. 102 MiB is
-#: not a round number because it does not need to be; it needs to be
-#: unarguably larger than those.
+#: padding, manifest length, per-entry header overhead. 102 MiB is not a
+#: round number because it does not need to be; it needs to be unarguably
+#: larger than those.
 #:
 #: Shrinking this below 2**31 does not make the test cheaper, it makes it
 #: vacuous -- every SDK takes the safe path and the test passes without

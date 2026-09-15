@@ -133,15 +133,15 @@ def _manifest_zip(
         },
         "payload": {
             "type": "reference",
-            "url": tdfs.PAYLOAD_ENTRY,
+            "url": "0.payload",
             "protocol": "zip",
             "isEncrypted": True,
         },
     }
     p = tmp_path / name
     with zipfile.ZipFile(p, "w") as z:
-        z.writestr(tdfs.PAYLOAD_ENTRY, b"")
         z.writestr(manifest_entry, json.dumps(manifest))
+        z.writestr("0.payload", b"")
     return p
 
 
@@ -201,33 +201,32 @@ class TestManifestEntryName:
 
     def test_finds_the_spec_name(self):
         assert (
-            tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "manifest.json"])
-            == "manifest.json"
+            tdfs.manifest_entry_name(["0.payload", "manifest.json"]) == "manifest.json"
         )
 
     def test_rejects_the_zero_prefixed_name(self):
         with pytest.raises(KeyError, match="manifest.json"):
-            tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "0.manifest.json"])
+            tdfs.manifest_entry_name(["0.payload", "0.manifest.json"])
 
     def test_rejects_a_suffix_match(self):
         """``0.manifest.json`` ends with the spec name, so the lookup has to be
         equality; an ``endswith`` test would readmit it."""
         with pytest.raises(KeyError):
-            tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "not-a-manifest.json"])
+            tdfs.manifest_entry_name(["0.payload", "not-a-manifest.json"])
 
     def test_the_error_reports_what_the_archive_held(self):
         """Without the member list, a misnamed manifest and a missing one give
         the same message."""
         with pytest.raises(KeyError) as exc:
-            tdfs.manifest_entry_name([tdfs.PAYLOAD_ENTRY, "0.manifest.json"])
+            tdfs.manifest_entry_name(["0.payload", "0.manifest.json"])
         assert "0.manifest.json" in str(exc.value)
-        assert tdfs.PAYLOAD_ENTRY in str(exc.value)
+        assert "0.payload" in str(exc.value)
 
 
 class TestManifestRequiresTheSpecEntry:
     def test_manifest_parses_a_spec_named_container(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "m.tdf", elides=False)
-        assert tdfs.manifest(ct_file).payload.url == tdfs.PAYLOAD_ENTRY
+        assert tdfs.manifest(ct_file).payload.url == "0.payload"
 
     def test_manifest_rejects_an_off_spec_named_container(self, tmp_path: Path):
         ct_file = _manifest_zip(
