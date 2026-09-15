@@ -365,6 +365,24 @@ wheels = [
 ]
 
 [[package]]
+name = "otdf-adapter"
+version = "0.1.0"
+source = { editable = "../otdf-adapter" }
+dependencies = [
+    { name = "packaging" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "packaging", specifier = ">=24.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.410" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "ruff", specifier = ">=0.15.16" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -735,6 +753,7 @@ dependencies = [
     { name = "jsonschema-specifications" },
     { name = "markupsafe" },
     { name = "numpy" },
+    { name = "otdf-adapter" },
     { name = "packaging" },
     { name = "pluggy" },
     { name = "pycparser" },
@@ -779,6 +798,7 @@ requires-dist = [
     { name = "jsonschema-specifications", specifier = ">=2025.9.1" },
     { name = "markupsafe", specifier = ">=3.0.3" },
     { name = "numpy", specifier = ">=2.5.2" },
+    { name = "otdf-adapter", editable = "../otdf-adapter" },
     { name = "packaging", specifier = ">=26.2" },
     { name = "pluggy", specifier = ">=1.6.0" },
     { name = "pycparser", specifier = ">=3.0" },

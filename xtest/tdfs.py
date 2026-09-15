@@ -14,6 +14,7 @@ from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
+from otdf_adapter import DecryptRequest, EncryptRequest, SubprocessCliAdapter
 from pydantic import BaseModel
 
 import assertions as tdfassertions
@@ -661,18 +662,42 @@ def simple_container(container: container_type) -> container_type:
     return container
 
 
+def ecwrap_requested(container: container_type) -> bool:
+    """True for the pseudo-container that means "ztdf, with an EC wrapping key".
+
+    ``ztdf-ecwrap`` is not a container format; it is a container format plus a
+    key-wrapping choice, fused into one token because the shim's fourth
+    positional slot was the only place to put either. Splitting them back
+    apart is what lets :class:`otdf_adapter.EncryptRequest` carry ``ecwrap``
+    as the boolean it always was.
+    """
+    return container == "ztdf-ecwrap"
+
+
 class SDK:
+    """One installed build of one SDK, as the tests see it.
+
+    The subprocess mechanics live in
+    :class:`otdf_adapter.SubprocessCliAdapter`. What stays here is everything
+    with an opinion about *this suite* -- the ``feature_type`` vocabulary, the
+    ``XT_FORCE_SUPPORTS`` override, the version parsing the skip predicates
+    use, and the ``container_type`` spellings the adapter deliberately does
+    not know about.
+    """
+
     sdk: sdk_type
     version: str
     _supports: dict[feature_type, bool]
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
-        self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
+        # Raises FileNotFoundError with the same message this constructor used
+        # to raise; conftest catches it to report an SDK that was named but
+        # never installed.
+        self.adapter = SubprocessCliAdapter(sdk, version)
+        self.path = self.adapter.path
         self._supports = {}
         self.version = version
-        if not os.path.isfile(self.path):
-            raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
 
     def __str__(self) -> str:
         return f"{self.sdk}@{self.version}"
@@ -714,6 +739,35 @@ class SDK:
         """
         return _parse_semver(self.version.removeprefix("sdk/"))
 
+    def encrypt_request(
+        self,
+        pt_file: Path,
+        ct_file: Path,
+        mime_type: str = "application/octet-stream",
+        container: container_type = "ztdf",
+        attr_values: list[str] | None = None,
+        assert_value: str = "",
+        policy_mode: str = "encrypted",
+        target_mode: container_version | None = None,
+    ) -> EncryptRequest:
+        """Translate this suite's vocabulary into a typed adapter request.
+
+        The only translation that happens is the one the shim's four
+        positional slots forced: ``ztdf-ecwrap`` splits back into a container
+        and a wrapping-key boolean. Everything else is a rename.
+        """
+        return EncryptRequest(
+            src=pt_file,
+            dst=ct_file,
+            container=simple_container(container),
+            mime_type=mime_type,
+            attributes=tuple(attr_values or ()),
+            assertions=assert_value or None,
+            target_mode=target_mode,
+            policy_mode=policy_mode,
+            ecwrap=ecwrap_requested(container),
+        )
+
     def encrypt_command(
         self,
         pt_file: Path,
@@ -729,38 +783,26 @@ class SDK:
 
         Split out from :meth:`encrypt` so that callers which need to run the
         command themselves -- the benchmark harness measures resource usage
-        around it -- share this one definition of the `XT_WITH_*` contract
-        instead of keeping a second copy that drifts.
+        around it -- share this one definition of the contract instead of
+        keeping a second copy that drifts. The definition now lives in
+        :meth:`otdf_adapter.SubprocessCliAdapter.encrypt_command`; this
+        remains as the keyword-argument shape the suite already calls.
 
         The returned env holds only the CLI-specific overrides; merge it over
         ``os.environ`` before handing it to a subprocess.
         """
-        use_ecwrap = container == "ztdf-ecwrap"
-        fmt = simple_container(container)
-        c = [
-            self.path,
-            "encrypt",
-            str(pt_file),
-            str(ct_file),
-            fmt,
-        ]
-
-        local_env: dict[str, str] = {}
-        if mime_type:
-            local_env |= {"XT_WITH_MIME_TYPE": mime_type}
-
-        if attr_values:
-            local_env |= {"XT_WITH_ATTRIBUTES": ",".join(attr_values)}
-
-        if assert_value:
-            local_env |= {"XT_WITH_ASSERTIONS": assert_value}
-
-        if fmt == "ztdf" and target_mode:
-            local_env |= {"XT_WITH_TARGET_MODE": target_mode}
-
-        if use_ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
-        return c, local_env
+        return self.adapter.encrypt_command(
+            self.encrypt_request(
+                pt_file,
+                ct_file,
+                mime_type=mime_type,
+                container=container,
+                attr_values=attr_values,
+                assert_value=assert_value,
+                policy_mode=policy_mode,
+                target_mode=target_mode,
+            )
+        )
 
     def encrypt(
         self,
@@ -773,28 +815,41 @@ class SDK:
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
     ):
-        c, local_env = self.encrypt_command(
-            pt_file,
-            ct_file,
-            mime_type=mime_type,
-            container=container,
-            attr_values=attr_values,
-            assert_value=assert_value,
-            policy_mode=policy_mode,
-            target_mode=target_mode,
-        )
-        logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
-        env = dict(os.environ)
-        env |= local_env
-        result = subprocess.run(c, env=env, capture_output=True)
-        if result.returncode != 0:
-            if result.stdout:
-                logger.error("enc stdout: %s", result.stdout.decode(errors="replace"))
-            if result.stderr:
-                logger.error("enc stderr: %s", result.stderr.decode(errors="replace"))
-            raise subprocess.CalledProcessError(
-                result.returncode, c, output=result.stdout, stderr=result.stderr
+        self.adapter.encrypt(
+            self.encrypt_request(
+                pt_file,
+                ct_file,
+                mime_type=mime_type,
+                container=container,
+                attr_values=attr_values,
+                assert_value=assert_value,
+                policy_mode=policy_mode,
+                target_mode=target_mode,
             )
+        )
+
+    def decrypt_request(
+        self,
+        ct_file: Path,
+        rt_file: Path,
+        container: container_type = "ztdf",
+        assert_keys: str = "",
+        verify_assertions: bool = True,
+        ecwrap: bool = False,
+        kasallowlist: str = "",
+        ignore_kas_allowlist: bool = False,
+    ) -> DecryptRequest:
+        """Translate this suite's vocabulary into a typed adapter request."""
+        return DecryptRequest(
+            src=ct_file,
+            dst=rt_file,
+            container=simple_container(container),
+            assertion_verification_keys=assert_keys or None,
+            verify_assertions=verify_assertions,
+            ecwrap=ecwrap or ecwrap_requested(container),
+            kas_allowlist=kasallowlist or None,
+            ignore_kas_allowlist=ignore_kas_allowlist,
+        )
 
     def decrypt_command(
         self,
@@ -811,30 +866,21 @@ class SDK:
 
         See :meth:`encrypt_command` for why this is separate. ``expect_error``
         has no counterpart here: it selects how the caller runs the command,
-        not what the command is.
+        not what the command is -- which is also why :meth:`decrypt` runs the
+        expect-error case itself rather than through the adapter.
         """
-        fmt = simple_container(container)
-
-        c = [
-            self.path,
-            "decrypt",
-            str(ct_file),
-            str(rt_file),
-            fmt,
-        ]
-
-        local_env: dict[str, str] = {}
-        if assert_keys:
-            local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
-        if ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
-        if not verify_assertions:
-            local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
-        if kasallowlist:
-            local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
-        if ignore_kas_allowlist:
-            local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
-        return c, local_env
+        return self.adapter.decrypt_command(
+            self.decrypt_request(
+                ct_file,
+                rt_file,
+                container=container,
+                assert_keys=assert_keys,
+                verify_assertions=verify_assertions,
+                ecwrap=ecwrap,
+                kasallowlist=kasallowlist,
+                ignore_kas_allowlist=ignore_kas_allowlist,
+            )
+        )
 
     def decrypt(
         self,
@@ -848,7 +894,7 @@ class SDK:
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
     ):
-        c, local_env = self.decrypt_command(
+        request = self.decrypt_request(
             ct_file,
             rt_file,
             container=container,
@@ -858,25 +904,16 @@ class SDK:
             kasallowlist=kasallowlist,
             ignore_kas_allowlist=ignore_kas_allowlist,
         )
+        if not expect_error:
+            self.adapter.decrypt(request)
+            return
+        # The caller wants the combined output of a run it expects to fail, so
+        # it runs the command itself. Same command, different invocation.
+        c, local_env = self.adapter.decrypt_command(request)
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
-        if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
-        else:
-            result = subprocess.run(c, env=env, capture_output=True)
-            if result.returncode != 0:
-                if result.stdout:
-                    logger.error(
-                        "dec stdout: %s", result.stdout.decode(errors="replace")
-                    )
-                if result.stderr:
-                    logger.error(
-                        "dec stderr: %s", result.stderr.decode(errors="replace")
-                    )
-                raise subprocess.CalledProcessError(
-                    result.returncode, c, output=result.stdout, stderr=result.stderr
-                )
+        subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
 
     def supports(self, feature: feature_type) -> bool:
         if feature in FORCED_SUPPORTS:
@@ -931,17 +968,13 @@ class SDK:
             case _:
                 pass
 
-        c = [
-            self.path,
-            "supports",
-            feature,
-        ]
-        logger.info(f"sup [{' '.join(c)}]")
-        try:
-            subprocess.check_call(c)
-        except subprocess.CalledProcessError:
-            return False
-        return True
+        # Everything the match above does not answer goes to the adapter,
+        # which consults its gate table and falls back to the shim's
+        # ``supports`` verb. The table is empty today, so this is the shim --
+        # and the match above is the half of the capability layer that has
+        # already migrated to Python. Folding the two together is the last
+        # step of the migration, not this one.
+        return self.adapter.supports(feature)
 
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:
