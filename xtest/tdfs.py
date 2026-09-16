@@ -10,7 +10,7 @@ import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeIs, get_args
+from typing import Any, Literal, TypeIs, cast, get_args
 
 import jsonschema
 import pytest
@@ -169,6 +169,9 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
+    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
+    # until the first supported release is known; KAS also needs the setting on.
+    "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
@@ -207,8 +210,10 @@ feature_type = Literal[
 ]
 
 
-def _parse_forced_supports(raw: str) -> frozenset[str]:
-    """Parse ``XT_FORCE_SUPPORTS`` into a set of feature names.
+def _parse_forced_supports(
+    raw: str, *, source: str = "XT_FORCE_SUPPORTS"
+) -> frozenset[feature_type]:
+    """Parse an SDK or platform override into validated feature names.
 
     An unrecognised name is a hard error rather than a no-op. The override
     exists to turn a skip into a real result, so a typo that quietly left the
@@ -220,10 +225,10 @@ def _parse_forced_supports(raw: str) -> frozenset[str]:
     unknown = names - known
     if unknown:
         raise ValueError(
-            f"XT_FORCE_SUPPORTS names unknown feature(s) {sorted(unknown)}; "
+            f"{source} names unknown feature(s) {sorted(unknown)}; "
             f"valid features are {sorted(known)}"
         )
-    return frozenset(names)
+    return cast(frozenset[feature_type], frozenset(names))
 
 
 #: Features to treat as supported no matter what the SDK reports.
@@ -248,6 +253,20 @@ if FORCED_SUPPORTS:
     )
 
 
+# Platform overrides are independent of SDK overrides and service configuration.
+FORCED_PLATFORM_SUPPORTS = _parse_forced_supports(
+    os.environ.get("XT_FORCE_PLATFORM_SUPPORTS", ""),
+    source="XT_FORCE_PLATFORM_SUPPORTS",
+)
+
+if FORCED_PLATFORM_SUPPORTS:
+    logger.warning(
+        "XT_FORCE_PLATFORM_SUPPORTS is set: treating %s as supported by the "
+        "platform. SDK gates and service configuration are unchanged.",
+        ", ".join(sorted(FORCED_PLATFORM_SUPPORTS)),
+    )
+
+
 container_version = Literal["4.2.2", "4.3.0"]
 
 policy_type = Literal["plaintext", "encrypted"]
@@ -266,6 +285,7 @@ class PlatformFeatureSet(BaseModel):
 
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
+        self.features.update(FORCED_PLATFORM_SUPPORTS)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
             print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")

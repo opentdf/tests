@@ -61,6 +61,10 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 - `XT_FORCE_SUPPORTS` — comma-separated feature names to treat as supported
   regardless of what each SDK's `cli.sh supports` reports. See below.
 
+- `XT_FORCE_PLATFORM_SUPPORTS` — comma-separated platform features to treat as
+  supported, independent of SDK overrides. It does not enable service settings.
+  In CI, use `force-platform-supports`, for example `kas_uri_from_kao`.
+
 ### Evaluating an unreleased fix: `XT_FORCE_SUPPORTS`
 
 `SDK.supports(feature)` answers from the `supports` case statements in

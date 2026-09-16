@@ -48,6 +48,11 @@ on:
         type: string
         default: ""
         description: "Comma-separated feature names to treat as supported regardless of what each SDK's `cli.sh supports` reports. Use when evaluating a fix that has not been released yet: the version gates live in this repo and answer 'no' for exactly those unreleased builds, so the cells would otherwise skip. An unknown name fails the run rather than being ignored."
+      force-platform-supports:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated platform features to treat as supported. Does not override SDK gates or enable service configuration. Unknown names fail the run."
   workflow_call:
     inputs:
       platform-ref:
@@ -86,6 +91,11 @@ on:
         required: false
         type: string
         default: ""
+      force-platform-supports:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated platform features to treat as supported. Does not override SDK gates or enable service configuration. Unknown names fail the run."
   schedule:
     - cron: "30 6 * * *" # 0630 UTC
     - cron: "0 5 * * 1,3" # 500 UTC (Monday, Wednesday)
@@ -101,6 +111,7 @@ concurrency:
 # nothing" -- so the PR gate and the nightlies are unaffected.
 env:
   XT_FORCE_SUPPORTS: ${{ inputs.force-supports }}
+  XT_FORCE_PLATFORM_SUPPORTS: ${{ inputs.force-platform-supports }}
 
 jobs:
   resolve-versions:
