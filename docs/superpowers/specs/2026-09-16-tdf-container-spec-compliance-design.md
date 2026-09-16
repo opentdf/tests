@@ -57,12 +57,13 @@ Per-SDK issues found but deferred to the backlog are listed at the end.
   is written in either placement. Go uses the absence of `schemaVersion` as its
   legacy hash-encoding switch at four sites in `sdk/tdf.go`, and every peer SDK
   and the harness key off it today.
-- **Readers resolve the spec version with this priority:** top-level
-  `tdf_spec_version`, then `payload.tdf_spec_version`, then `schemaVersion`.
-  The first non-empty value wins. The spec has placed the field top-level (prose,
-  2025 overhaul) and under `payload` (JSON schema, 2024), so both are accepted.
-  The `schemaVersion` fallback is last because it is what we and upstream write.
-  A manifest with none of the three is treated as legacy, as Go does today.
+- **Readers resolve the spec version with this priority:** `schemaVersion`,
+  then top-level `tdf_spec_version`, then `payload.tdf_spec_version`. The first
+  non-empty value wins. `schemaVersion` is first because it is what we and
+  upstream write. The spec has placed `tdf_spec_version` top-level (prose, 2025
+  overhaul) and under `payload` (JSON schema, 2024), so both are accepted as
+  fallbacks. A manifest with none of the three is treated as legacy, as Go
+  does today.
 - **Spec self-contradictions are not resolved in code.** `sid`/`kid` required in
   the JSON schema but optional in prose; `method.iv` required in prose but
   absent from the JSON schema. Upstream spec PRs are backlog.
@@ -145,10 +146,10 @@ Each SDK:
 - Writer unit tests: written archive has entries `manifest.json` and `0.payload`;
   manifest `payload.url` equals the payload entry name; `schemaVersion == "4.3.0"`;
   no `tdf_spec_version` key is present at either placement.
-- Version-resolution unit tests: a manifest with all three keys resolves to the
-  top-level `tdf_spec_version`; with only `payload.tdf_spec_version` and
-  `schemaVersion`, resolves to the payload one; with only `schemaVersion`,
-  resolves to it; with none, resolves to empty (legacy).
+- Version-resolution unit tests: a manifest with all three keys resolves to
+  `schemaVersion`; with only the two `tdf_spec_version` placements, resolves to
+  the top-level one; with only `payload.tdf_spec_version`, resolves to it; with
+  none, resolves to empty (legacy).
 - Update existing tests that assert `0.manifest.json` (listed per SDK in the
   audit: Python `tests/test_tdf_writer.py`, `test_tdf.py`, `test_tdf_reader.py`,
   `test_tdf_key_management.py`, `test_manifest*.py`, integration tests; Rust
