@@ -41,6 +41,62 @@ class TestParseForcedSupports:
             tdfs._parse_forced_supports("hexles")
 
 
+# --- Platform forced support ------------------------------------------------
+
+
+@pytest.mark.parametrize("platform_version", ["0.12.0", "main", ""])
+@pytest.mark.parametrize("forced", [False, True])
+def test_platform_forced_supports(
+    monkeypatch: pytest.MonkeyPatch, platform_version: str, forced: bool
+):
+    monkeypatch.setenv("PLATFORM_VERSION", platform_version)
+    # A source tag alone must not imply feature support.
+    monkeypatch.setenv("PLATFORM_TAG", "main")
+    monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", tdfs._parse_forced_supports("dpop"))
+    monkeypatch.setattr(
+        tdfs,
+        "FORCED_PLATFORM_SUPPORTS",
+        tdfs._parse_forced_supports("dpop_nonce_challenge" if forced else ""),
+    )
+    monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
+
+    features = tdfs.PlatformFeatureSet()
+    assert ("dpop_nonce_challenge" in features.features) is forced
+    # An SDK override must not force the corresponding platform feature.
+    assert "dpop" not in features.features
+
+
+def test_platform_forced_supports_do_not_leak(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("PLATFORM_VERSION", "main")
+    monkeypatch.setattr(
+        tdfs,
+        "FORCED_PLATFORM_SUPPORTS",
+        tdfs._parse_forced_supports("dpop_nonce_challenge"),
+    )
+    forced = tdfs.PlatformFeatureSet()
+    monkeypatch.setattr(tdfs, "FORCED_PLATFORM_SUPPORTS", frozenset())
+    unforced = tdfs.PlatformFeatureSet()
+    assert "dpop_nonce_challenge" in forced.features
+    assert "dpop_nonce_challenge" not in unforced.features
+
+
+def test_platform_override_does_not_override_sdk(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset())
+    monkeypatch.setattr(
+        tdfs,
+        "FORCED_PLATFORM_SUPPORTS",
+        tdfs._parse_forced_supports("dpop_nonce_challenge"),
+    )
+    sdk = object.__new__(tdfs.SDK)
+    sdk._supports = {"dpop_nonce_challenge": False}
+    assert not sdk.supports("dpop_nonce_challenge")
+
+
+def test_unknown_platform_override_names_source():
+    with pytest.raises(ValueError, match="XT_FORCE_PLATFORM_SUPPORTS names unknown"):
+        tdfs._parse_forced_supports("dpop_typo", source="XT_FORCE_PLATFORM_SUPPORTS")
+
+
 # --- tdfs.zip64_reader_is_broken ----------------------------------------------
 
 

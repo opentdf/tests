@@ -116,6 +116,13 @@ uv sync --extra dev
 pytest
 ```
 
+#### Testing unreleased platform features
+
+Set `XT_FORCE_PLATFORM_SUPPORTS` to a comma-separated list of platform features
+to bypass their test gates. In CI, use the `force-platform-supports` input.
+SDK overrides use `XT_FORCE_SUPPORTS` separately. These overrides do not enable
+service configuration.
+
 #### Run TDF Tests
 
 ```shell
