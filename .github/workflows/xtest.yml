@@ -770,6 +770,13 @@ jobs:
               print(f"enabled={'true' if 'kas_uri_from_kao' in features else 'false'}", file=output)
           PYTHON
 
+      - name: Enable private-key caching for KM3
+        if: ${{ steps.kao-check.outputs.enabled == 'true' }}
+        working-directory: ${{ steps.run-platform.outputs.platform-working-dir }}
+        run: |
+          # The additional-KAS action copies this config. Other KASs are already running.
+          yq e -i '.services.kas.key_cache_expiration = "5m"' opentdf-dev.yaml
+
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.kao-check.outputs.enabled == 'true' }}
@@ -780,6 +787,7 @@ jobs:
           kas-uri-from-kao: true
           kas-name: km3
           kas-port: 8787
+          log-level: debug  # The cache test verifies a hit for each registry key.
           log-type: json
           root-key: ${{ steps.km-check.outputs.root_key }}
           dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
