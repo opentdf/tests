@@ -13,7 +13,9 @@ rules in `opentdf/spec` (`schema/OpenTDF/README.md`, `manifest.md`,
 1. The manifest zip entry MUST be named exactly `manifest.json` at the archive root.
 2. The payload zip entry name MUST be taken from `manifest.payload.url`. The
    spec calls `0.payload` the common value; we keep it.
-3. The manifest MUST carry a top-level `tdf_spec_version`.
+3. Readers MUST understand the spec's `tdf_spec_version` field in either
+   placement the spec has used (top-level per the prose, `payload.tdf_spec_version`
+   per the JSON schema). Writers keep emitting `schemaVersion` only.
 
 Secondary goal: make the conformance harness actually check the container
 layout, which it does not today.
@@ -29,7 +31,7 @@ All four SDKs share the same three defects:
 | Reader ignores `payload.url`, hard-codes `0.payload` | yes | yes | yes | yes |
 | `payload.url` derived from the same constant as the zip entry | no (two literals) | no (caller-supplied) | no (two literals) | yes |
 | Top-level version key | `schemaVersion` | `schemaVersion` = "3.0.0" | `schemaVersion` | `schemaVersion` |
-| `tdf_spec_version` emitted | no | no | no | no |
+| Reads `tdf_spec_version` (either placement) | no | `payload.` only | no | `payload.` only (schema) |
 
 The harness (`xtest/tdfs.py`) hard-codes `0.manifest.json` and `0.payload` in
 four helpers and has no test that inspects entry names. Its golden Java 4.3.0
@@ -51,15 +53,19 @@ Per-SDK issues found but deferred to the backlog are listed at the end.
   use one constant for both the zip entry and `payload.url`.
 - **Payload entry stays `0.payload`.** The spec allows any name; the user asked
   for derivation, not renaming.
-- **Emit `tdf_spec_version` at the top level with value `4.3.0`** (the value in
-  `spec/VERSION`). Keep emitting `schemaVersion` alongside it for now: Go uses
-  the absence of `schemaVersion` as its legacy hash-encoding switch at four
-  sites in `sdk/tdf.go`, and Python/Swift/Rust mirror that key for interop.
-  Readers accept either key.
-- **Spec self-contradictions are not resolved in code.** The JSON schema nests
-  `tdf_spec_version` inside `payload` while the prose puts it top-level; marks
-  `sid`/`kid` required while the prose says optional; omits `method.iv` which
-  the prose requires. We follow the prose. Upstream spec PRs are backlog.
+- **Writers emit only `schemaVersion`, value `4.3.0`.** No `tdf_spec_version`
+  is written in either placement. Go uses the absence of `schemaVersion` as its
+  legacy hash-encoding switch at four sites in `sdk/tdf.go`, and every peer SDK
+  and the harness key off it today.
+- **Readers resolve the spec version with this priority:** top-level
+  `tdf_spec_version`, then `payload.tdf_spec_version`, then `schemaVersion`.
+  The first non-empty value wins. The spec has placed the field top-level (prose,
+  2025 overhaul) and under `payload` (JSON schema, 2024), so both are accepted.
+  The `schemaVersion` fallback is last because it is what we and upstream write.
+  A manifest with none of the three is treated as legacy, as Go does today.
+- **Spec self-contradictions are not resolved in code.** `sid`/`kid` required in
+  the JSON schema but optional in prose; `method.iv` required in prose but
+  absent from the JSON schema. Upstream spec PRs are backlog.
 - **Out of scope:** Rust `N.manifest.json` multi-entry indexing beyond index 0,
   the Rust gguf profile, TDF-JSON / TDF-CBOR formats, NanoTDF.
 
@@ -98,9 +104,12 @@ Files:
 - One constant per SDK, `TDF_MANIFEST_FILE_NAME = "manifest.json"`, and one
   `TDF_PAYLOAD_FILE_NAME = "0.payload"` that feeds both the zip entry and
   `payload.url`.
-- Add `tdf_spec_version: "4.3.0"` at the manifest top level. Keep `schemaVersion`.
-- Rust: `TdfManifest.tdf_spec_version` becomes populated by `TdfManifest::new`;
-  `schemaVersion` value corrected from `"3.0.0"` to `"4.3.0"`.
+- `schemaVersion` stays the only version key written. Rust corrects its value
+  from `"3.0.0"` to `"4.3.0"`.
+- Each SDK gains a `spec_version()` accessor on the parsed manifest that applies
+  the read priority above. Rust adds the top-level `tdf_spec_version` field
+  (it already has the `payload` one); Python and Swift add both as optional,
+  read-only fields that are never serialized when empty.
 
 Files:
 - Python: `tdf_writer.py:11-12`, `tdf.py:402,408`, `manifest.py:115,152-153,231`.
@@ -108,23 +117,23 @@ Files:
   `crates/protocol/src/manifest.rs:19-24,244-254,275-276`, `src/tdf.rs:229`,
   `crates/wasm/src/lib.rs:118`, `examples/xtest_cli.rs:342-343`.
 - Swift: `TDFArchive.swift:4-5`, `TDFProcessor.swift:167,279,367`,
-  `TDFManifestBuilder.swift:48,88`, `TDFManifest.swift:5` (add `tdf_spec_version`
-  CodingKey, keep `schemaVersion`), `CLAUDE.md:228`, `MIGRATION_GUIDE.md`.
-- Go: `sdk/internal/zipstream/zip_headers.go:19`, `sdk/manifest.go:67` (add
-  `TDFSpecVersion string \`json:"tdf_spec_version,omitempty"\``), `sdk/tdf.go:529`,
-  `sdk/schema/manifest.schema.json` and `manifest-lax.schema.json` (declare
-  top-level `tdf_spec_version`).
+  `TDFManifestBuilder.swift:48,88`, `TDFManifest.swift:5,23-63` (optional
+  `tdf_spec_version` at top level and on the payload descriptor, decode-only),
+  `CLAUDE.md:228`, `MIGRATION_GUIDE.md`.
+- Go: `sdk/internal/zipstream/zip_headers.go:19`, `sdk/manifest.go:46-53,67`
+  (optional `tdf_spec_version` fields with `omitempty`, never set on write),
+  and the four `isLegacyTDF` sites in `sdk/tdf.go` (`:925,1020,1387,1489`) use
+  the prioritized accessor instead of `TDFVersion == ""`.
 
 ### Phase 3: harness conformance
 
 - New helper `tdfs.entry_names(path) -> list[str]`.
 - New test `test_container_layout` in `xtest/test_tdfs.py`, marked `stage1`,
   parametrized on `encrypt_sdk`: asserts `manifest.json` is present at the
-  root, `payload.url` names an existing entry, and top-level `tdf_spec_version`
-  is present. Skipped for SDKs that do not claim a new `spec-container`
-  feature in their `cli.sh supports`, so upstream Go/Java/JS skip rather than fail.
-- `xtest/manifest.schema.json`: add top-level `tdf_spec_version` (string) and
-  leave `additionalProperties` open.
+  root and `payload.url` names an existing entry. Skipped for SDKs that do not
+  claim a new `spec-container` feature in their `cli.sh supports`, so upstream
+  Go/Java/JS skip rather than fail.
+- `xtest/manifest.schema.json` is unchanged.
 
 ### Testing
 
@@ -134,7 +143,12 @@ Each SDK:
   `payload.url` is `"data.bin"` and the entry is named `data.bin`; reject a
   fixture whose `payload.url` is `../x`.
 - Writer unit tests: written archive has entries `manifest.json` and `0.payload`;
-  manifest `payload.url` equals the payload entry name; `tdf_spec_version == "4.3.0"`.
+  manifest `payload.url` equals the payload entry name; `schemaVersion == "4.3.0"`;
+  no `tdf_spec_version` key is present at either placement.
+- Version-resolution unit tests: a manifest with all three keys resolves to the
+  top-level `tdf_spec_version`; with only `payload.tdf_spec_version` and
+  `schemaVersion`, resolves to the payload one; with only `schemaVersion`,
+  resolves to it; with none, resolves to empty (legacy).
 - Update existing tests that assert `0.manifest.json` (listed per SDK in the
   audit: Python `tests/test_tdf_writer.py`, `test_tdf.py`, `test_tdf_reader.py`,
   `test_tdf_key_management.py`, `test_manifest*.py`, integration tests; Rust
@@ -166,7 +180,7 @@ community-encrypt / upstream-Go-decrypt cells.
 - `method.iv` is `""` in every SDK; needs a spec decision, not an SDK change.
 - `policyBinding.hash` is `base64(hex(HMAC))` in every SDK; spec prose says `base64(HMAC)`. Spec doc fix.
 - `ec-wrapped`, `keyAccess.schemaVersion`, `keyAccess.ephemeralPublicKey` are unregistered in the spec.
-- Upstream spec PRs: `tdf_spec_version` placement, `sid`/`kid` optionality, `method.iv` in JSON schema.
+- Upstream spec PRs: reconcile `tdf_spec_version` placement between prose and JSON schema, `sid`/`kid` optionality, `method.iv` in JSON schema.
 - Upstream platform PR: reader fallback to `manifest.json` and `payload.url` resolution.
 - Fork drift in opentdf-platform: `SupportedFeatures()` removed (harness silently skips dpop/connectrpc tests).
 - Untracked `platform` symlink at the harness repo root should be gitignored.
