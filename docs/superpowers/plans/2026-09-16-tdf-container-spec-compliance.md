@@ -390,7 +390,7 @@ def test_is_tdf_rejects_missing_payload_entry():
 - [ ] **Step 2: Run to confirm failure**
 
 Run: `cd /Users/arkavo/Projects/opentdf/opentdf-python-sdk && uv run pytest tests/test_tdf.py tests/test_sdk.py -v -k "legacy or manifest_url or unsafe or is_tdf"`
-Expected: FAIL. `load_tdf` raises `KeyError: "There is no item named '0.manifest.json' in the archive"` on the renamed zips; `is_tdf` returns False for the spec layout.
+Expected: `test_load_tdf_locates_payload_by_manifest_url` and `test_load_tdf_rejects_unsafe_payload_url` FAIL (`KeyError: "There is no item named '0.payload' in the archive"` and no `ValueError`), and the three `is_tdf` spec-layout tests FAIL (return False). `test_load_tdf_reads_legacy_manifest_name` already PASSES because the writer still emits `0.manifest.json` until Task 3; its rename is a no-op today and it becomes a real regression test after Task 3.
 
 - [ ] **Step 3: Rewire `tdf.py`**
 
@@ -1016,7 +1016,8 @@ mod tests {
     fn reader_rejects_unsafe_payload_url() -> Result<(), TdfError> {
         for bad in ["../x", "/abs", "a\\b", "x/../y"] {
             let m = manifest_with_url(bad).to_json()?;
-            let bytes = raw_zip(&[("manifest.json", m.as_bytes()), (bad, b"x")]);
+            // The safety check fires before any lookup, so no payload member is needed.
+            let bytes = raw_zip(&[("manifest.json", m.as_bytes())]);
             let mut archive = TdfArchive::new(Cursor::new(bytes))?;
             let err = archive.by_index().unwrap_err();
             assert!(err.to_string().contains("unsafe"), "{bad}: {err}");
@@ -1475,7 +1476,13 @@ In `SW/OpenTDFKitCLI/Commands.swift` lines 94 and 145 change `manifest.schemaVer
 
 - [ ] **Step 5: Fix compile fallout**
 
-Run `swift build 2>&1 | grep error:`. Any site that compared `manifest.schemaVersion` to a `String` now compares `String?`; `XCTAssertEqual(manifest.schemaVersion, "1.0.0")` still compiles. Any non-test site that needs a `String` should use `effectiveSpecVersion ?? ""`. Do not change writer sites; they still pass a `String` to `init(schemaVersion:)`.
+Run:
+
+```bash
+cd /Users/arkavo/Projects/opentdf/OpenTDFKit && swift build 2>&1 | grep error: ; grep -rn "\.schemaVersion" OpenTDFKit OpenTDFKitCLI OpenTDFKitTests | grep -v "keyAccess\|kao\|ka\.\|KeyAccess"
+```
+
+Known manifest-level uses today: `TDFProcessor.swift:14` (assignment inside an init, unaffected), `Commands.swift:94,145` (changed in Step 4), and the TDF-JSON / TDF-CBOR containers, which only call `TDFManifest(schemaVersion: "1.0")` through the init (a `String` parameter, unaffected). If the CBOR encoder in `TDFCBORFormat.swift` reads `manifest.schemaVersion` to emit its key 9, encode `manifest.effectiveSpecVersion ?? ""` there. Test assertions like `XCTAssertEqual(manifest.schemaVersion, "1.0.0")` compile unchanged against `String?`. Do not touch writer sites; they still pass a `String` to `init(schemaVersion:)`.
 
 - [ ] **Step 6: Run and commit**
 
@@ -1960,7 +1967,8 @@ func rawZip(t *testing.T, members [][2]string) *bytes.Reader {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
 	for _, m := range members {
-		f, err := w.Create(m[0])
+		// TDF members are Stored; zipstream.Reader returns raw bytes at an offset.
+		f, err := w.CreateHeader(&zip.FileHeader{Name: m[0], Method: zip.Store})
 		require.NoError(t, err)
 		_, err = f.Write([]byte(m[1]))
 		require.NoError(t, err)
@@ -2030,7 +2038,8 @@ func TestTDFReader_URLNamesMissingEntry(t *testing.T) {
 
 func TestTDFReader_UnsafeURL(t *testing.T) {
 	for _, bad := range []string{"../x", "/abs", `a\b`, "x/../y"} {
-		_, err := NewTDFReader(rawZip(t, [][2]string{{"manifest.json", manifestJSON(bad)}, {bad, "x"}}))
+		// The safety check fires before any lookup, so no payload member is needed.
+		_, err := NewTDFReader(rawZip(t, [][2]string{{"manifest.json", manifestJSON(bad)}}))
 		require.Error(t, err, bad)
 		assert.Contains(t, err.Error(), "unsafe", bad)
 	}
@@ -2376,6 +2385,8 @@ def test_container_layout(
     """opentdf/spec container rules: manifest.json at the root; payload named by payload.url."""
     if not in_focus & {encrypt_sdk}:
         pytest.skip("Not in focus")
+    # go/java/js shims (`xtest/sdk/*/cli.sh`) exit 2 on an unknown feature, so
+    # upstream SDKs skip here rather than fail.
     if not encrypt_sdk.supports("spec-container"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet write the spec container layout")
     ct_file = encrypted_tdf(
