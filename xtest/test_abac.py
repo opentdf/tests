@@ -6,9 +6,18 @@ from pathlib import Path
 import pytest
 
 import tdfs
-from abac import Attribute, ObligationValue
+from abac import (
+    Attribute,
+    KasEntry,
+    KasKey,
+    Namespace,
+    ObligationValue,
+    SubjectConditionSet,
+)
 from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
+from fixtures.keys import _create_keyed_attribute, _get_or_create_key
+from otdfctl import OpentdfCommandLineTool
 from test_policytypes import skip_rts_as_needed
 
 rewrap_403_pattern = (
@@ -897,6 +906,76 @@ Note:
 These tests should be last, because one sets a default key on the platform
 that cannot currently be unset.
 """
+
+
+@pytest.fixture(scope="module")
+def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> KasEntry:
+    """KAS registry entry for the dedicated KAO-enabled key management KAS km3."""
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
+    return otdfctl.kas_registry_create_if_not_present(kas_url_km3)
+
+
+@pytest.fixture(scope="module")
+def attribute_with_alternate_kas_registration(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km3: KasEntry,
+    root_key: str,
+    temporary_namespace: Namespace,
+    otdf_client_scs: SubjectConditionSet,
+) -> tuple[Attribute, KasKey]:
+    alternate_kas = otdfctl.kas_registry_create_if_not_present(
+        f"{kas_entry_km3.uri.rstrip('/')}/kas"
+    )
+    key = _get_or_create_key(
+        otdfctl, alternate_kas, "km3-alternate-uri", "rsa:2048", root_key
+    )
+    # Decryption must use the KAO registration, not km3's configured registration.
+    assert key.kas_uri == alternate_kas.uri != kas_entry_km3.uri
+    assert key.key.key_id not in {
+        k.key.key_id for k in otdfctl.kas_registry_keys_list(kas_entry_km3)
+    }
+    attr, _ = _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "alternate-kas-registration",
+        [("example", key)],
+        otdf_client_scs,
+    )
+    return attr, key
+
+
+def test_decrypt_uses_kao_kas_registration(
+    attribute_with_alternate_kas_registration: tuple[Attribute, KasKey],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+):
+    """Decrypt a key registered only at km3/kas, not km3's default URI."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    decrypt_sdk.skip_if_unsupported("key_management")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key = attribute_with_alternate_kas_registration
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+    (kao,) = tdfs.manifest(ct_file).encryptionInformation.keyAccess
+    assert kao.url == key.kas_uri
+    assert kao.kid == key.key.key_id
+
+    # The /kas path also supports web-sdk HTTP requests.
+    # The dedicated km3 KAS explicitly enables services.kas.kas_uri_from_kao (default false).
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 def test_autoconfigure_key_management_two_kas_two_keys(
