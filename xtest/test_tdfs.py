@@ -276,6 +276,34 @@ def test_manifest_validity_with_assertions(
     tdfs.validate_manifest_schema(ct_file)
 
 
+@pytest.mark.stage1
+def test_container_layout(
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+):
+    """opentdf/spec container rules: manifest.json at the root; payload named by payload.url."""
+    if not in_focus & {encrypt_sdk}:
+        pytest.skip("Not in focus")
+    # go/java/js shims (`xtest/sdk/*/cli.sh`) exit 2 on an unknown feature, so
+    # upstream SDKs skip here rather than fail.
+    if not encrypt_sdk.supports("spec-container"):
+        pytest.skip(f"{encrypt_sdk} sdk doesn't yet write the spec container layout")
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    names = tdfs.entry_names(ct_file)
+    assert "manifest.json" in names, names
+    assert "0.manifest.json" not in names, names
+    m = tdfs.manifest(ct_file)
+    assert m.payload.url, "payload.url must be set"
+    assert m.payload.url in names, (m.payload.url, names)
+    assert m.schemaVersion, "schemaVersion must be written"
+    assert m.payload.tdf_spec_version is None
+
+
 #### ASSERTION TESTS
 
 

@@ -208,6 +208,9 @@ feature_type = Literal[
     "mechanism-mlkem",
     "ns_grants",
     "obligations",
+    # Container layout per opentdf/spec: manifest.json at the zip root and the
+    # payload member named by manifest.payload.url.
+    "spec-container",
 ]
 
 container_version = Literal["4.2.2", "4.3.0"]
@@ -438,9 +441,42 @@ _partial_version_re = re.compile(
 )
 
 
+# opentdf/spec container rules: the manifest member MUST be `manifest.json` at
+# the archive root; `0.manifest.json` is the pre-spec name every SDK wrote and
+# every golden file in this repo uses, so readers accept it forever.
+MANIFEST_ENTRY_NAMES = ("manifest.json", "0.manifest.json")
+DEFAULT_PAYLOAD_ENTRY = "0.payload"
+
+
+def entry_names(tdf_file: Path) -> list[str]:
+    with zipfile.ZipFile(tdf_file, "r") as tdfz:
+        return tdfz.namelist()
+
+
+def manifest_entry_name(names: list[str]) -> str:
+    present = set(names)
+    for candidate in MANIFEST_ENTRY_NAMES:
+        if candidate in present:
+            return candidate
+    raise KeyError(
+        f"no manifest entry ({' or '.join(MANIFEST_ENTRY_NAMES)}) in {names}"
+    )
+
+
+def payload_entry_name(payload_url: str | None, names: list[str]) -> str:
+    present = set(names)
+    if payload_url:
+        if payload_url in present:
+            return payload_url
+        raise KeyError(f"payload.url {payload_url!r} not in archive entries {names}")
+    if DEFAULT_PAYLOAD_ENTRY in present:
+        return DEFAULT_PAYLOAD_ENTRY
+    raise KeyError(f"no payload entry in {names}")
+
+
 def manifest(tdf_file: Path) -> Manifest:
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
-        with tdfz.open("0.manifest.json") as manifestEntry:
+        with tdfz.open(manifest_entry_name(tdfz.namelist())) as manifestEntry:
             return Manifest.model_validate_json(manifestEntry.read())
 
 
@@ -453,11 +489,12 @@ def update_manifest(
     fname = tdf_file.stem
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
+        mname = manifest_entry_name(zipped.namelist())
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.manifest.json").open("r") as manifest_file:
+    with (unzipped_dir / mname).open("r") as manifest_file:
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
-    with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
+    with (unzipped_dir / mname).open("w") as manifest_file:
         manifest_file.write(new_manifest_data.model_dump_json(by_alias=True))
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
@@ -479,11 +516,16 @@ def update_payload(
     fname = tdf_file.stem
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
+        names = zipped.namelist()
+        mname = manifest_entry_name(names)
+        with zipped.open(mname) as mf:
+            url = Manifest.model_validate_json(mf.read()).payload.url
+        pname = payload_entry_name(url, names)
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.payload").open("rb") as payload_file:
+    with (unzipped_dir / pname).open("rb") as payload_file:
         payload_data = payload_file.read()
     new_payload_data = payload_change(payload_data)
-    with (unzipped_dir / "0.payload").open("wb") as payload_file:
+    with (unzipped_dir / pname).open("wb") as payload_file:
         payload_file.write(new_payload_data)
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
@@ -508,7 +550,7 @@ def validate_manifest_schema(tdf_file: Path):
 
     ## Load the manifest file directly from the zipfile
     with zipfile.ZipFile(tdf_file, "r") as zipped:
-        with zipped.open("0.manifest.json") as manifest_file:
+        with zipped.open(manifest_entry_name(zipped.namelist())) as manifest_file:
             manifest = json.load(manifest_file)
 
     ## Validate

@@ -37,3 +37,6 @@ xtest/sdk/java/cmdline.jar
 /xtest/test-results/
 
 /tmp/
+
+# local symlink to xtest/platform/src/main created by developers
+/platform
