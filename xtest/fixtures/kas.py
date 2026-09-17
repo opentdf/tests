@@ -199,3 +199,9 @@ def kas_entry_km2(
 def kas_url_km3():
     """URL for the dedicated KAO-enabled key management KAS instance (km3)."""
     return os.getenv("KASURL7", "http://localhost:8787")
+
+
+@pytest.fixture(scope="module")
+def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> abac.KasEntry:
+    """KAS registry entry for the dedicated KAO-enabled key management KAS km3."""
+    return otdfctl.kas_registry_create_if_not_present(kas_url_km3)
