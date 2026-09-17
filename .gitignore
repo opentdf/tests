@@ -13,6 +13,10 @@ vulnerability/tilt_modules/
 /xtest/node_modules/
 /xtest/tilt_modules/
 /xtest/tmp/
+# The offline recipe in AGENTS.md curls the manifest schema to here. Committing
+# it is how xtest ended up validating against a snapshot that drifted from the
+# normative copy in opentdf/platform; ignored so that cannot happen twice.
+/xtest/manifest.schema.json
 /xtest/test-results/
 /xtest/sdk/js/web/dist/
 /xtest/.helm
