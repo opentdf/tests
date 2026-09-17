@@ -9,9 +9,13 @@ parser they sit next to is tested in ``test_zip64_units.py``.
 The GMAC root forgery (DSPX-4703) is here for a related reason: an exploit
 helper that quietly forges the wrong bytes would make the security tests in
 ``test_root_signature.py`` pass for the wrong reason.
+
+``manifest_schema`` joins them on the same grounds: validating against a
+schema nobody asked for is a green run that proves nothing.
 """
 
 import base64
+import io
 import json
 import zipfile
 from pathlib import Path
@@ -336,3 +340,90 @@ class TestEncryptedSegmentSizes:
     def test_uses_the_per_segment_override(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
+
+
+# --- tdfs.manifest_schema -----------------------------------------------------
+
+
+@pytest.fixture
+def unredirected_schema(monkeypatch: pytest.MonkeyPatch):
+    """A clean slate, and no cached schema left behind for the next test.
+
+    ``manifest_schema`` is cached for the life of the process, so a test that
+    let it succeed would otherwise hand its choice to every later caller. The
+    env vars are cleared because the developer running this may well have one
+    of them set for an unrelated reason.
+    """
+    monkeypatch.delenv("SCHEMA_FILE", raising=False)
+    monkeypatch.delenv("PLATFORM_SCHEMA_REF", raising=False)
+    tdfs.manifest_schema.cache_clear()
+    yield
+    tdfs.manifest_schema.cache_clear()
+
+
+def _record_fetches(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Stand in for the network, returning the URLs that were asked for."""
+    urls: list[str] = []
+
+    def fake_urlopen(url: str, timeout: float | None = None) -> io.StringIO:
+        urls.append(url)
+        return io.StringIO('{"title": "stub"}')
+
+    monkeypatch.setattr(tdfs.urllib.request, "urlopen", fake_urlopen)
+    return urls
+
+
+@pytest.mark.usefixtures("unredirected_schema")
+class TestManifestSchema:
+    """Which schema a run validates against must never be a silent choice."""
+
+    def test_fetches_platform_main_by_default(self, monkeypatch: pytest.MonkeyPatch):
+        """The schema is normative, so the default is the one copy of it."""
+        urls = _record_fetches(monkeypatch)
+        assert tdfs.manifest_schema() == {"title": "stub"}
+        assert urls == [
+            "https://raw.githubusercontent.com/opentdf/platform/main"
+            "/sdk/schema/manifest.schema.json"
+        ]
+
+    def test_platform_schema_ref_selects_a_branch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        urls = _record_fetches(monkeypatch)
+        monkeypatch.setenv("PLATFORM_SCHEMA_REF", "feat/new-kao-type")
+        tdfs.manifest_schema()
+        assert urls == [
+            "https://raw.githubusercontent.com/opentdf/platform/feat/new-kao-type"
+            "/sdk/schema/manifest.schema.json"
+        ]
+
+    def test_schema_file_is_read_instead_of_fetching(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        urls = _record_fetches(monkeypatch)
+        schema = tmp_path / "cached.schema.json"
+        schema.write_text('{"title": "local"}')
+        monkeypatch.setenv("SCHEMA_FILE", str(schema))
+        assert tdfs.manifest_schema() == {"title": "local"}
+        assert urls == []
+
+    def test_both_overrides_set_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        """SCHEMA_FILE silently wins, so the ref the caller asked for is dropped."""
+        schema = tmp_path / "cached.schema.json"
+        schema.write_text("{}")
+        monkeypatch.setenv("SCHEMA_FILE", str(schema))
+        monkeypatch.setenv("PLATFORM_SCHEMA_REF", "feat/new-kao-type")
+        with pytest.raises(ValueError, match="feat/new-kao-type"):
+            tdfs.manifest_schema()
+
+    def test_missing_schema_file_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        """A typo'd path must not quietly fall back to fetching."""
+        urls = _record_fetches(monkeypatch)
+        monkeypatch.setenv("SCHEMA_FILE", str(tmp_path / "absent.json"))
+        with pytest.raises(FileNotFoundError):
+            tdfs.manifest_schema()
+        assert urls == []
