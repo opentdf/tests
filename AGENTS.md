@@ -54,7 +54,12 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 
 - `PLATFORMURL` — platform endpoint (default `http://localhost:8080`)
 - `OT_ROOT_KEY` — root key for key-management tests
-- `SCHEMA_FILE` — path to manifest schema file
+- `SCHEMA_FILE` — path to a local manifest schema file. Optional. By default the
+  schema is fetched from `opentdf/platform` on `main`, so there is no copy in
+  this repo to fall out of date. Set this only for a schema that is on no branch.
+- `PLATFORM_SCHEMA_REF` — ref to fetch the manifest schema from (default `main`).
+  Set it when the branch under test legitimately changes the schema; otherwise
+  validating against `main` is the point, since the schema is normative.
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
 - `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
   Point it at a large volume for multi-GiB runs.
@@ -181,7 +186,13 @@ uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 **Fix**:
 ```bash
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
-export SCHEMA_FILE=manifest.schema.json
+```
+
+**Symptom**: `URLError` or a timeout from `raw.githubusercontent.com` during schema validation
+
+**Fix**: the manifest schema is fetched from `opentdf/platform` on `main`. Offline, point at a local copy:
+```bash
+export SCHEMA_FILE=../../platform/sdk/schema/manifest.schema.json
 ```
 
 ## Debugging Workflow
