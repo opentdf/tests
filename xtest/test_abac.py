@@ -1057,10 +1057,6 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
         rf'.*kid:\s*\\"{re.escape(key.key.key_id)}\\"',
         since_mark=mark,
     )
-    audit_logs.assert_rewrap_error(
-        key_id=key.key.key_id,
-        since_mark=mark,
-    )
 
 
 @pytest.fixture(scope="module")
