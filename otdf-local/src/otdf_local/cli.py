@@ -560,10 +560,11 @@ def env(
     env_vars["PLATFORMURL"] = settings.platform_url
     env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
 
-    # Schema file for manifest validation
-    schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
-    if schema_file.exists():
-        env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
+    # No SCHEMA_FILE here. It used to point at the platform checkout, so local runs
+    # validated against the branch under test while CI validated against the normative
+    # schema on main -- the divergence that deleting xtest's own copy was meant to end.
+    # It also silently outranked PLATFORM_SCHEMA_REF for anyone running
+    # `eval $(otdf-local env)`. Offline, set SCHEMA_FILE yourself; see AGENTS.md.
 
     # Log file paths
     platform_log = settings.logs_dir / "platform.log"
