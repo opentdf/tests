@@ -9,6 +9,11 @@ parser they sit next to is tested in ``test_zip64_units.py``.
 The GMAC root forgery (DSPX-4703) is here for a related reason: an exploit
 helper that quietly forges the wrong bytes would make the security tests in
 ``test_root_signature.py`` pass for the wrong reason.
+
+``manifest_entry_name`` is here because it decides which archive member the
+whole suite reads as the manifest, and holds that to the spec's
+``manifest.json`` alone. Its tests pin the rejection of other spellings as
+much as the acceptance of that one.
 """
 
 import base64
@@ -146,7 +151,13 @@ class TestZip64ReaderIsBroken:
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------
 
 
-def _manifest_zip(tmp_path: Path, name: str, *, elides: bool) -> Path:
+def _manifest_zip(
+    tmp_path: Path,
+    name: str,
+    *,
+    elides: bool,
+    manifest_entry: str = tdfs.MANIFEST_ENTRY,
+) -> Path:
     """A minimal container with just enough manifest to exercise elides_segment_sizes."""
     segments = [
         {
@@ -185,7 +196,7 @@ def _manifest_zip(tmp_path: Path, name: str, *, elides: bool) -> Path:
     }
     p = tmp_path / name
     with zipfile.ZipFile(p, "w") as z:
-        z.writestr("0.manifest.json", json.dumps(manifest))
+        z.writestr(manifest_entry, json.dumps(manifest))
         z.writestr("0.payload", b"")
     return p
 
@@ -230,6 +241,78 @@ class TestSkipChunkySkew:
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         decrypt_sdk = cast(tdfs.SDK, _StubDecryptSDK(supports_chunky=False))
         tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
+
+
+# --- tdfs.manifest_entry_name -------------------------------------------------
+
+
+class TestManifestEntryName:
+    """Which archive member holds the manifest: ``manifest.json``, and no other.
+
+    The rejection cases carry as much weight as the acceptance one. A reader
+    that also takes ``0.manifest.json`` reports a conformant archive and a
+    non-conformant one identically, which is the one thing this lookup must
+    not do.
+    """
+
+    def test_finds_the_spec_name(self):
+        assert (
+            tdfs.manifest_entry_name(["0.payload", "manifest.json"]) == "manifest.json"
+        )
+
+    def test_rejects_the_zero_prefixed_name(self):
+        with pytest.raises(KeyError, match="manifest.json"):
+            tdfs.manifest_entry_name(["0.payload", "0.manifest.json"])
+
+    def test_rejects_a_suffix_match(self):
+        """``0.manifest.json`` ends with the spec name, so the lookup has to be
+        equality; an ``endswith`` test would readmit it."""
+        with pytest.raises(KeyError):
+            tdfs.manifest_entry_name(["0.payload", "not-a-manifest.json"])
+
+    def test_the_error_reports_what_the_archive_held(self):
+        """Without the member list, a misnamed manifest and a missing one give
+        the same message."""
+        with pytest.raises(KeyError) as exc:
+            tdfs.manifest_entry_name(["0.payload", "0.manifest.json"])
+        assert "0.manifest.json" in str(exc.value)
+        assert "0.payload" in str(exc.value)
+
+
+class TestManifestRequiresTheSpecEntry:
+    def test_manifest_parses_a_spec_named_container(self, tmp_path: Path):
+        ct_file = _manifest_zip(tmp_path, "m.tdf", elides=False)
+        assert tdfs.manifest(ct_file).payload.url == "0.payload"
+
+    def test_manifest_rejects_an_off_spec_named_container(self, tmp_path: Path):
+        ct_file = _manifest_zip(
+            tmp_path, "off-spec.tdf", elides=False, manifest_entry="0.manifest.json"
+        )
+        with pytest.raises(KeyError, match="manifest.json"):
+            tdfs.manifest(ct_file)
+
+    def test_update_manifest_round_trips_under_the_spec_name(self, tmp_path: Path):
+        """A tamper fixture must differ from its source only in the bytes the
+        change touched, entry name included."""
+        ct_file = _manifest_zip(tmp_path, "u.tdf", elides=False)
+
+        def bump(m: tdfs.Manifest) -> tdfs.Manifest:
+            m.encryptionInformation.integrityInformation.rootSignature.sig = b"dGFtcGVy"
+            return m
+
+        out = tdfs.update_manifest("tampered", ct_file, bump)
+
+        with zipfile.ZipFile(out) as z:
+            assert tdfs.MANIFEST_ENTRY in z.namelist()
+        root = tdfs.manifest(out).encryptionInformation.integrityInformation
+        assert root.rootSignature.sig == b"dGFtcGVy"
+
+    def test_update_manifest_rejects_an_off_spec_named_container(self, tmp_path: Path):
+        ct_file = _manifest_zip(
+            tmp_path, "off-spec.tdf", elides=False, manifest_entry="0.manifest.json"
+        )
+        with pytest.raises(KeyError, match="manifest.json"):
+            tdfs.update_manifest("tampered", ct_file, lambda m: m)
 
 
 # --- tdfs.forge_gmac_root_signature (DSPX-4703) -------------------------------
