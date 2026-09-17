@@ -14,6 +14,9 @@ from otdf_local.process.manager import (
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
 from otdf_local.utils.yaml import copy_yaml_with_updates, get_nested, load_yaml
 
+# 5 minutes, in nanoseconds -- the unit services.kas.key_cache_expiration takes.
+KM3_KEY_CACHE_EXPIRATION_NS = 300_000_000_000
+
 
 class KASService(Service):
     """Manages a single KAS instance."""
@@ -50,6 +53,11 @@ class KASService(Service):
         """Check if this is a key management KAS instance."""
         return Ports.is_km_kas(self._kas_name)
 
+    @property
+    def is_kao_uri(self) -> bool:
+        """Check if this instance resolves managed keys by the KAO's KAS URI."""
+        return Ports.is_kao_uri_kas(self._kas_name)
+
     def _generate_config(self) -> Path:
         """Generate the KAS config file from template."""
         config_path = self.settings.get_kas_config_path(self._kas_name)
@@ -81,6 +89,17 @@ class KASService(Service):
             # registered_kas_uri should NOT have /kas suffix
             updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
 
+        # Off by default, and left off for km1/km2 so they stay usable as the negative
+        # control: with this unset, a KAO naming a URI other than registered_kas_uri
+        # above should fail to resolve.
+        if self.is_kao_uri:
+            updates["services.kas.kas_uri_from_kao"] = True
+            # Matches the km3 step in .github/workflows/xtest.yml. The cache test asserts
+            # a "found private key in cache" line per registry key, which is only emitted
+            # at debug and only if the entry is still live -- hence the 5-minute window.
+            updates["services.kas.key_cache_expiration"] = KM3_KEY_CACHE_EXPIRATION_NS
+            updates["logger.level"] = "debug"
+
         copy_yaml_with_updates(template_path, config_path, updates)
         return config_path
 
@@ -111,7 +130,7 @@ class KASService(Service):
         self.start_error = None
         # See PlatformService.start: OPENTDF_LOG_LEVEL resolved to the config key
         # "log.level", not "logger.level", so it was never read. Level belongs in
-        # the generated config.
+        # the generated config -- km3's debug level is set in _generate_config.
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,

@@ -183,6 +183,15 @@ otdf-local clean --keep-logs
 | kas-delta | 8484 | Subprocess | Standard KAS |
 | kas-km1 | 8585 | Subprocess | Key management KAS |
 | kas-km2 | 8686 | Subprocess | Key management KAS |
+| kas-km3 | 8787 | Subprocess | Key management KAS, `kas_uri_from_kao` enabled |
+
+`kas-km3` is the only instance started with `services.kas.kas_uri_from_kao: true`,
+so it resolves managed keys by the KAS URI in the KAO rather than by its own
+`registered_kas_uri`. km1 and km2 leave the setting off, which lets xtest use
+them as the negative control. km3 also mirrors the CI step's
+`key_cache_expiration` (5 minutes) and runs at `debug`, because
+`test_decrypt_same_kid_in_different_registries_with_cache` asserts on a
+debug-level cache-hit line.
 
 ## Configuration
 
