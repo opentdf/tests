@@ -773,12 +773,12 @@ jobs:
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.kao-check.outputs.enabled == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@d68e587599214d015d2e7763915d23e9c00c682b  # opentdf/platform#4064: key-cache-expiration input
+        uses: opentdf/platform/test/start-additional-kas@6c3729516538107435f4e452b07204eb608824b6  # opentdf/platform#4067: cache expiration in nanoseconds
         with:
           ec-tdf-enabled: true
           key-management: true
           kas-uri-from-kao: true
-          key-cache-expiration: 5m
+          key-cache-expiration: '300000000000'  # 5 minutes in nanoseconds
           kas-name: km3
           kas-port: 8787
           log-level: debug  # The cache test verifies a hit for each registry key.
