@@ -466,6 +466,12 @@ def manifest_entry_name(names: list[str]) -> str:
 def payload_entry_name(payload_url: str | None, names: list[str]) -> str:
     present = set(names)
     if payload_url:
+        if (
+            payload_url.startswith("/")
+            or "\\" in payload_url
+            or ".." in payload_url.split("/")
+        ):
+            raise ValueError(f"unsafe payload.url {payload_url!r}")
         if payload_url in present:
             return payload_url
         raise KeyError(f"payload.url {payload_url!r} not in archive entries {names}")
