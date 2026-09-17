@@ -190,9 +190,10 @@ export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
 
 **Symptom**: `URLError` or a timeout from `raw.githubusercontent.com` during schema validation
 
-**Fix**: the manifest schema is fetched from `opentdf/platform` on `main`. Offline, point at a local copy:
+**Fix**: the manifest schema is fetched from `opentdf/platform` on `main`. Offline, cache it once and point at that:
 ```bash
-export SCHEMA_FILE=../../platform/sdk/schema/manifest.schema.json
+curl -o manifest.schema.json https://raw.githubusercontent.com/opentdf/platform/main/sdk/schema/manifest.schema.json
+export SCHEMA_FILE=manifest.schema.json
 ```
 
 ## Debugging Workflow
