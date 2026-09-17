@@ -170,6 +170,9 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
+    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
+    # until the first supported release is known; KAS also needs the setting on.
+    "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).

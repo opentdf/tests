@@ -757,6 +757,20 @@ jobs:
           root-key: ${{ steps.km-check.outputs.root_key }}
           dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
+      - name: Start dedicated KAO-enabled KM kas (km3)
+        id: kas-km3
+        if: ${{ steps.multikas.outputs.supported == 'true' }}
+        uses: opentdf/platform/test/start-additional-kas@d16f6d02546be60d895e54c986d2c237531ebdf2  # opentdf/platform#4057: kas-uri-from-kao input
+        with:
+          ec-tdf-enabled: true
+          key-management: ${{ steps.km-check.outputs.supported }}
+          kas-uri-from-kao: true
+          kas-name: km3
+          kas-port: 8787
+          log-type: json
+          root-key: ${{ steps.km-check.outputs.root_key }}
+          dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
+
       - name: Run attribute based configuration tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
@@ -781,6 +795,7 @@ jobs:
           KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
           KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
+          KAS_KM3_LOG_FILE: "../../${{ steps.kas-km3.outputs.log-file }}"
 
       - name: Sanitize sdk-version for artifact name
         id: artifact-name
@@ -816,6 +831,7 @@ jobs:
             ${{ steps.kas-delta.outputs.log-file }}
             ${{ steps.kas-km1.outputs.log-file }}
             ${{ steps.kas-km2.outputs.log-file }}
+            ${{ steps.kas-km3.outputs.log-file }}
           if-no-files-found: ignore
 
   # Paired A/B performance regression benchmark.
