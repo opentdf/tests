@@ -664,16 +664,29 @@ def manifest_schema() -> dict[str, Any]:
     ``SCHEMA_FILE`` overrides with a local path for a schema that is on no
     branch at all.
 
+    The two are mutually exclusive rather than ordered. ``SCHEMA_FILE`` would
+    win, so accepting both silently validates against a schema the caller did
+    not ask for -- the exact failure this function exists to prevent.
+
     Cached, so the fetch happens once per pytest process.
     """
+    ref = os.getenv("PLATFORM_SCHEMA_REF")
+
     if override := os.getenv("SCHEMA_FILE"):
+        if ref:
+            raise ValueError(
+                f"SCHEMA_FILE ('{override}') and PLATFORM_SCHEMA_REF ('{ref}') are both "
+                f"set. SCHEMA_FILE would win and '{ref}' would be silently ignored. "
+                "Unset one: SCHEMA_FILE for a schema on no branch, PLATFORM_SCHEMA_REF "
+                "to fetch a branch's schema."
+            )
         path = Path(override)
         if not path.is_file():
             raise FileNotFoundError(f"SCHEMA_FILE '{path}' not found.")
         logger.debug("manifest schema from %s", path)
         return cast(dict[str, Any], json.loads(path.read_text()))
 
-    url = MANIFEST_SCHEMA_URL.format(ref=os.getenv("PLATFORM_SCHEMA_REF", "main"))
+    url = MANIFEST_SCHEMA_URL.format(ref=ref or "main")
     logger.debug("manifest schema from %s", url)
     with urllib.request.urlopen(url, timeout=30) as response:
         return cast(dict[str, Any], json.load(response))
