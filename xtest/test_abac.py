@@ -909,15 +909,6 @@ that cannot currently be unset.
 
 
 @pytest.fixture(scope="module")
-def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> KasEntry:
-    """KAS registry entry for the dedicated KAO-enabled key management KAS km3."""
-    tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao"
-    )
-    return otdfctl.kas_registry_create_if_not_present(kas_url_km3)
-
-
-@pytest.fixture(scope="module")
 def attribute_with_alternate_kas_registration(
     otdfctl: OpentdfCommandLineTool,
     kas_entry_km3: KasEntry,
@@ -933,9 +924,7 @@ def attribute_with_alternate_kas_registration(
     )
     # Decryption must use the KAO registration, not km3's configured registration.
     assert key.kas_uri == alternate_kas.uri != kas_entry_km3.uri
-    assert key.key.key_id not in {
-        k.key.key_id for k in otdfctl.kas_registry_keys_list(kas_entry_km3)
-    }
+    assert otdfctl.kas_registry_key_get(kas_entry_km3, key.key.key_id) is None
     attr, _ = _create_keyed_attribute(
         otdfctl,
         temporary_namespace,
@@ -953,8 +942,12 @@ def test_decrypt_uses_kao_kas_registration(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
 ):
     """Decrypt a key registered only at km3/kas, not km3's default URI."""
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
@@ -974,8 +967,16 @@ def test_decrypt_uses_kao_kas_registration(
     # The /kas path also supports web-sdk HTTP requests.
     # The dedicated km3 KAS explicitly enables services.kas.kas_uri_from_kao (default false).
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file, shallow=False)
+
+    audit_logs.assert_rewrap_success(
+        key_id=key.key.key_id,
+        attr_fqns=attr.value_fqns,
+        min_count=1,
+        since_mark=mark,
+    )
 
 
 def test_autoconfigure_key_management_two_kas_two_keys(
