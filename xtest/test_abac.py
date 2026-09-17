@@ -977,6 +977,11 @@ def test_decrypt_uses_kao_kas_registration(
         min_count=1,
         since_mark=mark,
     )
+    audit_logs.assert_contains(
+        rf'getting keyAccessServer by Key.*"key_id"\s*:\s*"{re.escape(key.key.key_id)}"'
+        rf'.*"kas_uri"\s*:\s*"{re.escape(key.kas_uri)}"',
+        since_mark=mark,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -1011,11 +1016,15 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
     attribute_with_alternate_kas_registration_disabled: tuple[Attribute, KasKey],
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
+    kas_url_km1: str,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
 ):
     """The alternate-registration round trip must fail on KAO-disabled KM1."""
-    tdfs.get_platform_features().skip_if_unsupported("key_management")
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
@@ -1033,12 +1042,24 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
     assert kao.kid == key.key.key_id
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
     assert_decrypt_fails_with_patterns(
         decrypt_sdk,
         ct_file,
         rt_file,
         "ztdf",
         expected_patterns=[r"bad request|400"],
+    )
+
+    # Verify the failed lookup used KM1's configured URI and the KAO's KID.
+    audit_logs.assert_contains(
+        rf'"key_access_server_keys".*uri:\s*\\"{re.escape(kas_url_km1)}\\"'
+        rf'.*kid:\s*\\"{re.escape(key.key.key_id)}\\"',
+        since_mark=mark,
+    )
+    audit_logs.assert_rewrap_error(
+        key_id=key.key.key_id,
+        since_mark=mark,
     )
 
 
