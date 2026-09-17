@@ -657,14 +657,6 @@ MANIFEST_SCHEMA_URL = "https://raw.githubusercontent.com/opentdf/platform/{ref}/
 def manifest_schema() -> dict[str, Any]:
     """Load the manifest schema to validate against.
 
-    Fetched from opentdf/platform, not read out of a checkout. xtest used to
-    carry its own copy, taken from platform in Nov 2024 and never resynced, so
-    the two drifted: the local copy had no ``hybrid-wrapped`` key access type
-    and no ``HS256`` constraint on the root signature, meaning CI would reject
-    a manifest the platform accepts and accept one it rejects. Fetching the
-    one authoritative copy is the only arrangement where no snapshot exists to
-    fall behind.
-
     Deliberately the tip of ``main``, not the platform under test: the schema
     is normative, so a branch that writes manifests main's schema rejects is
     the thing this is meant to catch. ``PLATFORM_SCHEMA_REF`` overrides the
