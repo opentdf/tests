@@ -1,4 +1,5 @@
 import base64
+import functools
 import json
 import logging
 import os
@@ -649,15 +650,50 @@ def encrypted_segment_sizes(manifest: Manifest) -> list[int]:
     return [s.encryptedSegmentSize or default for s in ii.segments]
 
 
+MANIFEST_SCHEMA_URL = "https://raw.githubusercontent.com/opentdf/platform/{ref}/sdk/schema/manifest.schema.json"
+
+
+@functools.cache
+def manifest_schema() -> dict[str, Any]:
+    """Load the manifest schema to validate against.
+
+    Deliberately the tip of ``main``, not the platform under test: the schema
+    is normative, so a branch that writes manifests main's schema rejects is
+    the thing this is meant to catch. ``PLATFORM_SCHEMA_REF`` overrides the
+    ref for the case where a branch legitimately changes the schema, and
+    ``SCHEMA_FILE`` overrides with a local path for a schema that is on no
+    branch at all.
+
+    The two are mutually exclusive rather than ordered. ``SCHEMA_FILE`` would
+    win, so accepting both silently validates against a schema the caller did
+    not ask for -- the exact failure this function exists to prevent.
+
+    Cached, so the fetch happens once per pytest process.
+    """
+    ref = os.getenv("PLATFORM_SCHEMA_REF")
+
+    if override := os.getenv("SCHEMA_FILE"):
+        if ref:
+            raise ValueError(
+                f"SCHEMA_FILE ('{override}') and PLATFORM_SCHEMA_REF ('{ref}') are both "
+                f"set. SCHEMA_FILE would win and '{ref}' would be silently ignored. "
+                "Unset one: SCHEMA_FILE for a schema on no branch, PLATFORM_SCHEMA_REF "
+                "to fetch a branch's schema."
+            )
+        path = Path(override)
+        if not path.is_file():
+            raise FileNotFoundError(f"SCHEMA_FILE '{path}' not found.")
+        logger.debug("manifest schema from %s", path)
+        return cast(dict[str, Any], json.loads(path.read_text()))
+
+    url = MANIFEST_SCHEMA_URL.format(ref=ref or "main")
+    logger.debug("manifest schema from %s", url)
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return cast(dict[str, Any], json.load(response))
+
+
 def validate_manifest_schema(tdf_file: Path):
-    ## Get the schema file
-    schema_file_path = os.getenv("SCHEMA_FILE")
-    if not schema_file_path:
-        raise ValueError("SCHEMA_FILE environment variable is not set or is empty.")
-    elif not os.path.isfile(schema_file_path):
-        raise FileNotFoundError(f"Schema file '{schema_file_path}' not found.")
-    with open(schema_file_path) as schema_file:
-        schema = json.load(schema_file)
+    schema = manifest_schema()
 
     ## Load the manifest file directly from the zipfile
     with zipfile.ZipFile(tdf_file, "r") as zipped:

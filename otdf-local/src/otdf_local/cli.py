@@ -560,10 +560,10 @@ def env(
     env_vars["PLATFORMURL"] = settings.platform_url
     env_vars["PLATFORM_DIR"] = str(settings.platform_dir.resolve())
 
-    # Schema file for manifest validation
-    schema_file = settings.platform_dir / "sdk" / "schema" / "manifest.schema.json"
-    if schema_file.exists():
-        env_vars["SCHEMA_FILE"] = str(schema_file.resolve())
+    # Deliberately no SCHEMA_FILE. xtest validates against the normative schema in
+    # opentdf/platform; pointing it at this checkout would validate local runs against
+    # the branch under test instead, and would outrank a PLATFORM_SCHEMA_REF the caller
+    # set on purpose. Offline, set SCHEMA_FILE yourself -- see AGENTS.md.
 
     # Log file paths
     platform_log = settings.logs_dir / "platform.log"
