@@ -22,6 +22,7 @@ class Ports:
     KAS_DELTA: int = 8484
     KAS_KM1: int = 8585
     KAS_KM2: int = 8686
+    KAS_KM3: int = 8787
 
     # Mapping from KAS name to class attribute name
     _KAS_NAMES: ClassVar[dict[str, str]] = {
@@ -31,6 +32,7 @@ class Ports:
         "delta": "KAS_DELTA",
         "km1": "KAS_KM1",
         "km2": "KAS_KM2",
+        "km3": "KAS_KM3",
     }
 
     @classmethod
@@ -54,9 +56,18 @@ class Ports:
     @classmethod
     def km_kas_names(cls) -> list[str]:
         """Return key management KAS instance names."""
-        return ["km1", "km2"]
+        return ["km1", "km2", "km3"]
 
     @classmethod
     def is_km_kas(cls, name: str) -> bool:
         """Check if a KAS instance is a key management instance."""
         return name in cls.km_kas_names()
+
+    @classmethod
+    def is_kao_uri_kas(cls, name: str) -> bool:
+        """Whether this instance resolves managed keys by the KAO's KAS URI.
+
+        Only km3. km1 and km2 deliberately leave the setting off so xtest can use them as
+        the negative control for the kas_uri_from_kao feature.
+        """
+        return name == "km3"

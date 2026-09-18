@@ -6,14 +6,38 @@ This module contains fixtures for setting up KAS instances used in testing:
 - Key management KAS instances (km1, km2, and dedicated KAO-enabled km3)
 """
 
+import logging
 import os
+import urllib.parse
+import urllib.request
 
 import pytest
 
 import abac
 from otdfctl import OpentdfCommandLineTool
 
+logger = logging.getLogger("xtest")
+
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
+
+
+def kas_reachable(kas_url: str) -> bool:
+    """Whether a KAS is actually listening at ``kas_url``.
+
+    The registry fixtures never touch the KAS itself -- ``kas_registry_create_if_not_present``
+    and ``_get_or_create_key`` talk only to the policy service on PLATFORMURL. So a KAS that
+    was never started stays invisible right up until a rewrap, where it surfaces as a
+    connection refused buried in an SDK CLI's stderr. Callers use this to turn that into a
+    skip that names the port.
+    """
+    parsed = urllib.parse.urlparse(kas_url)
+    url = f"{parsed.scheme}://{parsed.netloc}/healthz"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return resp.status == 200
+    except Exception as e:
+        logger.debug("KAS health probe at %s failed: %s", url, e)
+        return False
 
 
 def load_cached_kas_keys() -> abac.PublicKey:

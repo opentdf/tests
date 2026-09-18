@@ -18,7 +18,11 @@ uv run pytest --sdks go -v
 
 Auto-configured by otdf-local:
 - Keycloak: 8888, Postgres: 5432, Platform: 8080
-- KAS: alpha=8181, beta=8282, gamma=8383, delta=8484, km1=8585, km2=8686
+- KAS: alpha=8181, beta=8282, gamma=8383, delta=8484, km1=8585, km2=8686, km3=8787
+- km3 alone sets `services.kas.kas_uri_from_kao: true`; km1/km2 leave it off so
+  they serve as the negative control for that feature. km3 also runs at `debug`
+  with a 5-minute `key_cache_expiration`, matching its CI step — the cache test
+  asserts on a debug-only log line.
 
 ## Restart Procedures
 

@@ -169,8 +169,27 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
-    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
-    # until the first supported release is known; KAS also needs the setting on.
+    # Platform: resolve managed keys by the KAS URI recorded in the KAO rather than by
+    # the KAS's own ``services.kas.registered_kas_uri``.
+    #
+    # Force-only via ``XT_FORCE_PLATFORM_SUPPORTS``, *not* ``XT_FORCE_SUPPORTS`` -- both
+    # parse against this same Literal, so naming the wrong one is accepted and then does
+    # nothing, which is the silent no-op ``_parse_forced_supports`` otherwise exists to
+    # prevent. No release detects this yet, so nothing below adds it to ``features``.
+    #
+    # Forcing the gate is necessary but not sufficient: the KAS must also be started with
+    # ``services.kas.kas_uri_from_kao: true`` (off by default). Only km3 has it -- see the
+    # ``kas-uri-from-kao: true`` input on the km3 step in ``.github/workflows/xtest.yml``,
+    # and ``KASService._generate_config`` in ``otdf-local`` for the local equivalent. km1
+    # and km2 deliberately leave it off, which is what makes them usable as the negative
+    # control in ``test_decrypt_rejects_kao_kas_registration_when_disabled``.
+    #
+    # Consequence worth knowing before you trust a green run: the CI inputs that carry
+    # ``XT_FORCE_PLATFORM_SUPPORTS`` exist only on ``workflow_dispatch``/``workflow_call``,
+    # so on the PR gate and the nightlies km3 still *starts* (its step is gated on
+    # ``multikas``, not on the feature) but every test that needs this gate skips. To
+    # un-force: once the platform release ships, drop this comment and add a semver gate
+    # beside the others in ``PlatformFeatureSet.__init__``.
     "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),

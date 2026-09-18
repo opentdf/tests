@@ -764,6 +764,10 @@ jobs:
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.multikas.outputs.supported == 'true' }}
+        # Temporary: pinned ahead of the sibling KAS steps, which are still on
+        # 6dd5f64. This SHA is a descendant of theirs, so it also carries the
+        # require_nonce startup-yaml fix. Re-pin to the shared SHA once the
+        # siblings advance past it.
         uses: opentdf/platform/test/start-additional-kas@6c3729516538107435f4e452b07204eb608824b6  # opentdf/platform#4067: cache expiration in nanoseconds
         with:
           ec-tdf-enabled: true
