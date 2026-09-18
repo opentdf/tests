@@ -330,11 +330,13 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
+    # Keep read-only: this job builds third-party dependency trees, and on a
+    # workflow_call the token is the *caller's*, so write scope here is write
+    # scope for every repo calling xtest. publish-results below holds
+    # pull-requests: write for PR comments.
     permissions:
       contents: read
       packages: read
-      checks: write # Needed to publish junit tests
-      pull-requests: write # Add comments to PRs
     env:
       FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
       ENCRYPT_SDK: ${{ matrix.sdk-version }}
