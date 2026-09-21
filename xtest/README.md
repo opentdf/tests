@@ -147,8 +147,10 @@ XT_FORCE_PLATFORM_SUPPORTS=kas_uri_from_kao pytest test_abac.py \
 ```
 
 The override only opens the test gate; the KAS must separately be started with
-`services.kas.kas_uri_from_kao: true`. If no km3 is listening the tests skip
-rather than failing against a dead port.
+`services.kas.kas_uri_from_kao: true`. Once the gate is open, a km3 that isn't
+listening is a **failure**, not a skip — you asked for these tests, so a missing
+km3 is a broken environment rather than an unsupported build, and skipping there
+would read identically to the feature gate being shut.
 
 #### Run TDF Tests
 

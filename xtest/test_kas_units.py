@@ -10,10 +10,12 @@ send you to debug a KAS that is running fine.
 import http.server
 import socket
 import threading
+from types import SimpleNamespace
 
 import pytest
 
-from fixtures.kas import kas_health_error
+import tdfs
+from fixtures.kas import kas_health_error, require_km3
 
 
 def _closed_port() -> int:
@@ -100,6 +102,60 @@ def test_a_url_that_is_not_an_absolute_http_url_raises(bad: str):
     """A bad KASURL7 is a bug in the environment, not evidence about the KAS."""
     with pytest.raises(ValueError, match="not a usable KAS URL"):
         kas_health_error(bad)
+
+
+def _stub_platform_features(
+    monkeypatch: pytest.MonkeyPatch, *, supported: bool
+) -> None:
+    def skip_if_unsupported(*features: str) -> None:
+        if not supported:
+            pytest.skip(f"platform does not support {features}")
+
+    monkeypatch.setattr(
+        tdfs,
+        "get_platform_features",
+        lambda: SimpleNamespace(skip_if_unsupported=skip_if_unsupported),
+    )
+
+
+def test_require_km3_skips_when_the_platform_gate_is_shut(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A build that can't do KAO-URI lookup is not a failure."""
+    _stub_platform_features(monkeypatch, supported=False)
+
+    with pytest.raises(pytest.skip.Exception):
+        require_km3(f"http://127.0.0.1:{_closed_port()}")
+
+
+def test_require_km3_fails_when_the_gate_is_open_but_km3_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Past the gate the caller asked for these tests, so a missing km3 is an error.
+
+    This is the case the old skip hid: pytest prints captured logs for errors but
+    not for skips, so a mistyped KASURL7 read exactly like an unsupported build.
+    """
+    _stub_platform_features(monkeypatch, supported=True)
+
+    with pytest.raises(pytest.fail.Exception) as excinfo:
+        require_km3(f"http://127.0.0.1:{_closed_port()}")
+
+    message = str(excinfo.value)
+    assert "km3 KAS is not answering" in message
+    # The three ways out, so the reader does not have to go find them.
+    assert "otdf-local up" in message
+    assert "KASURL7" in message
+    assert "XT_FORCE_PLATFORM_SUPPORTS" in message
+
+
+def test_require_km3_passes_when_the_gate_is_open_and_km3_answers(
+    kas_stub, monkeypatch: pytest.MonkeyPatch
+):
+    _stub_platform_features(monkeypatch, supported=True)
+    url, _ = kas_stub()
+
+    require_km3(url)
 
 
 def test_proxy_environment_is_ignored(kas_stub, monkeypatch: pytest.MonkeyPatch):

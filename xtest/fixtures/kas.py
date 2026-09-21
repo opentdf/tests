@@ -15,6 +15,7 @@ import urllib.request
 import pytest
 
 import abac
+import tdfs
 from otdfctl import OpentdfCommandLineTool
 
 logger = logging.getLogger("xtest")
@@ -251,7 +252,31 @@ def kas_url_km3():
     return os.getenv("KASURL7", "http://localhost:8787")
 
 
+def require_km3(kas_url: str) -> None:
+    """Skip if the platform can't do KAO-URI lookup; fail if it can but km3 is absent.
+
+    Two gates, deliberately with different outcomes. The feature gate answers "was
+    the override set?" -- a build that doesn't do this is not a failure, so it
+    skips. Past that the caller has said to run these tests, so a km3 that isn't
+    listening is a broken environment, and reporting it as a second skip would make
+    a mistyped KASURL7 read exactly like a correct "this build can't do it". pytest
+    prints captured logs for errors but not for skips, so the skip is also the
+    harder of the two to diagnose after the fact.
+    """
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
+    if reason := kas_health_error(kas_url):
+        pytest.fail(
+            f"km3 KAS is not answering ({reason}). Start one with `otdf-local up`, "
+            "point KASURL7 at it, or drop kas_uri_from_kao from "
+            "XT_FORCE_PLATFORM_SUPPORTS to skip these tests instead.",
+            pytrace=False,
+        )
+
+
 @pytest.fixture(scope="module")
 def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> abac.KasEntry:
     """KAS registry entry for the dedicated KAO-enabled key management KAS km3."""
+    require_km3(kas_url_km3)
     return otdfctl.kas_registry_create_if_not_present(kas_url_km3)
