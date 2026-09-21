@@ -8,6 +8,7 @@ This module contains fixtures for setting up KAS instances used in testing:
 
 import logging
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -20,24 +21,49 @@ logger = logging.getLogger("xtest")
 
 PLATFORM_DIR = os.getenv("PLATFORM_DIR", "../../platform")
 
+HEALTH_TIMEOUT_S = 5
 
-def kas_reachable(kas_url: str) -> bool:
-    """Whether a KAS is actually listening at ``kas_url``.
+
+def kas_health_error(kas_url: str) -> str | None:
+    """Describe why no KAS is answering at ``kas_url``, or None if one is.
 
     The registry fixtures never touch the KAS itself -- ``kas_registry_create_if_not_present``
     and ``_get_or_create_key`` talk only to the policy service on PLATFORMURL. So a KAS that
     was never started stays invisible right up until a rewrap, where it surfaces as a
-    connection refused buried in an SDK CLI's stderr. Callers use this to turn that into a
-    skip that names the port.
+    connection refused buried in an SDK CLI's stderr. Probing ``/healthz`` first turns that
+    into a message naming the port and the reason, which is why this returns the reason
+    rather than a bool.
+
+    ``/healthz`` is served from the root, so any path on ``kas_url`` -- ``/kas`` for most of
+    these -- is deliberately dropped.
+
+    Raises:
+        ValueError: if ``kas_url`` is not an absolute http(s) URL.
     """
     parsed = urllib.parse.urlparse(kas_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        # Left alone, a typo'd KASURL7 becomes "://healthz", fails to connect, and
+        # reports itself as an unreachable KAS -- sending you to debug a service that
+        # is running fine. The URL is the bug, so say so.
+        raise ValueError(
+            f"not a usable KAS URL: {kas_url!r} "
+            "(expected an absolute URL, e.g. http://localhost:8787)"
+        )
+
     url = f"{parsed.scheme}://{parsed.netloc}/healthz"
+    # No proxy: these are loopback services, and an http_proxy inherited from the
+    # environment would have the probe report on the proxy's health instead.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            return resp.status == 200
-    except Exception as e:
+        with opener.open(url, timeout=HEALTH_TIMEOUT_S) as resp:
+            if resp.status != 200:
+                return f"{url} returned HTTP {resp.status}"
+            return None
+    except (urllib.error.URLError, TimeoutError) as e:
+        # Only connection-shaped failures mean "no KAS here". Anything else is a bug
+        # in this probe and should reach the caller as one.
         logger.debug("KAS health probe at %s failed: %s", url, e)
-        return False
+        return f"{url}: {e}"
 
 
 def load_cached_kas_keys() -> abac.PublicKey:

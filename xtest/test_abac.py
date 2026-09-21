@@ -17,7 +17,7 @@ from abac import (
 )
 from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
-from fixtures.kas import kas_reachable
+from fixtures.kas import kas_health_error
 from fixtures.keys import _create_keyed_attribute, _get_or_create_key
 from otdfctl import OpentdfCommandLineTool
 from test_policytypes import skip_rts_as_needed
@@ -916,14 +916,14 @@ def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> KasEntry
 
     Skips unless the platform reports key_management and kas_uri_from_kao, and unless a
     km3 is actually listening. The feature gate answers "is the override set?", not "does
-    a km3 exist?" -- see kas_reachable.
+    a km3 exist?" -- see kas_health_error.
     """
     tdfs.get_platform_features().skip_if_unsupported(
         "key_management", "kas_uri_from_kao"
     )
-    if not kas_reachable(kas_url_km3):
+    if reason := kas_health_error(kas_url_km3):
         pytest.skip(
-            f"no km3 KAS at {kas_url_km3}; start one (otdf-local up) "
+            f"no km3 KAS at {kas_url_km3} ({reason}); start one (otdf-local up) "
             "or unset XT_FORCE_PLATFORM_SUPPORTS=kas_uri_from_kao"
         )
     return otdfctl.kas_registry_create_if_not_present(kas_url_km3)
