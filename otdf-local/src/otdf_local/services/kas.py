@@ -108,15 +108,19 @@ class KASService(Service):
         # Start the process
         log_file = self.settings.get_kas_log_path(self._kas_name)
 
+        self.start_error = None
+        # See PlatformService.start: OPENTDF_LOG_LEVEL resolved to the config key
+        # "log.level", not "logger.level", so it was never read. Level belongs in
+        # the generated config.
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,
             cwd=self.settings.platform_dir,
             log_file=log_file,
-            env={"OPENTDF_LOG_LEVEL": "info"},
         )
 
-        return self._process is not None
+        self.start_error = self._process.startup_error()
+        return self.start_error is None
 
     def stop(self) -> bool:
         """Stop the KAS instance."""

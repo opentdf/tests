@@ -125,15 +125,21 @@ class PlatformService(Service):
         # Start the process
         log_file = self.settings.logs_dir / "platform.log"
 
+        self.start_error = None
+        # No OPENTDF_LOG_LEVEL here: the platform's EnvironmentValueLoader turns
+        # OPENTDF_<A>_<B> into the config key "a.b", so that name resolved to
+        # "log.level" and the real key is "logger.level" -- it never had any
+        # effect. Set logger.level in the generated config instead, which is
+        # also how the CI start-additional-kas action does it.
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,
             cwd=self.settings.platform_dir,
             log_file=log_file,
-            env={"OPENTDF_LOG_LEVEL": "info"},
         )
 
-        return self._process is not None
+        self.start_error = self._process.startup_error()
+        return self.start_error is None
 
     def stop(self) -> bool:
         """Stop the platform service."""

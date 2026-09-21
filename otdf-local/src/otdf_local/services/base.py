@@ -43,6 +43,10 @@ class Service(ABC):
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        # Why the last start() returned False. start() stays a bool so call
+        # sites remain simple, but "it didn't come up" is not actionable on its
+        # own -- the reason lives here for the CLI to print.
+        self.start_error: str | None = None
 
     @property
     @abstractmethod
@@ -73,7 +77,7 @@ class Service(ABC):
         """Start the service.
 
         Returns:
-            True if started successfully
+            True if started successfully. On False, ``start_error`` says why.
         """
         ...
 
@@ -126,5 +130,8 @@ class Service(ABC):
         """
         self.stop()
         if self.is_running():
+            self.start_error = (
+                f"{self.name} is still running after stop(); refusing to restart"
+            )
             return False
         return self.start()
