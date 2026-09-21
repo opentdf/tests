@@ -194,8 +194,16 @@ def up(
         failed = [name for name, ok in results.items() if not ok]
         if failed:
             print_error(f"Failed to start KAS instances: {', '.join(failed)}")
+            for kas_name in failed:
+                instance = kas_manager.get(kas_name)
+                if instance and instance.start_error:
+                    print_error(f"  kas-{kas_name}: {instance.start_error}")
             raise typer.Exit(1)
 
+        # Collect every unhealthy instance before reporting, so one run names
+        # them all instead of stopping at the first. Nothing is printed inside
+        # the spinner -- output from within it scrolls past unread.
+        unhealthy: list[str] = []
         with status_spinner("Waiting for KAS instances..."):
             for kas_name in Ports.all_kas_names():
                 port = Ports.get_kas_port(kas_name)
@@ -206,7 +214,15 @@ def up(
                         service_name=f"KAS {kas_name}",
                     )
                 except WaitTimeoutError as e:
-                    print_warning(str(e))
+                    unhealthy.append(f"  kas-{kas_name}: {e}")
+
+        if unhealthy:
+            # A KAS that never answers /healthz is not serving, so anything
+            # depending on it will fail later and further from the cause.
+            print_error("KAS instances did not become healthy:")
+            for detail in unhealthy:
+                print_error(detail)
+            raise typer.Exit(1)
         print_success("KAS instances are ready")
 
     print_success("Environment is up!")
@@ -489,7 +505,9 @@ def restart(
     if service == "platform":
         print_info("Restarting Platform...")
         platform = get_platform_service(settings)
-        platform.restart()
+        if not platform.restart():
+            print_error(platform.start_error or "Failed to restart Platform")
+            raise typer.Exit(1)
         print_success("Platform restarted")
         return
 
@@ -503,12 +521,13 @@ def restart(
         print_info(f"Restarting KAS {kas_name}...")
         kas_manager = get_kas_manager(settings)
         kas = kas_manager.get(kas_name)
-        if kas:
-            kas.restart()
-            print_success(f"KAS {kas_name} restarted")
-        else:
+        if not kas:
             print_error(f"KAS {kas_name} not found")
             raise typer.Exit(1)
+        if not kas.restart():
+            print_error(kas.start_error or f"Failed to restart KAS {kas_name}")
+            raise typer.Exit(1)
+        print_success(f"KAS {kas_name} restarted")
         return
 
     # Check for KAS name without prefix
@@ -516,9 +535,13 @@ def restart(
         print_info(f"Restarting KAS {service}...")
         kas_manager = get_kas_manager(settings)
         kas = kas_manager.get(service)
-        if kas:
-            kas.restart()
-            print_success(f"KAS {service} restarted")
+        if not kas:
+            print_error(f"KAS {service} not found")
+            raise typer.Exit(1)
+        if not kas.restart():
+            print_error(kas.start_error or f"Failed to restart KAS {service}")
+            raise typer.Exit(1)
+        print_success(f"KAS {service} restarted")
         return
 
     print_error(f"Unknown service: {service}")

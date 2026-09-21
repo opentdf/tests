@@ -33,6 +33,29 @@ class ManagedProcess:
         """Return code if process has exited."""
         return self.process.poll()
 
+    def startup_error(self, settle: float = 1.5) -> str | None:
+        """Describe how the process died on startup, or None if it is still up.
+
+        ``Popen`` returns successfully as soon as the binary is executable, so a
+        service that rejects a config key, fails to compile under ``go run``, or
+        cannot bind its port is indistinguishable from a healthy one until it
+        exits a moment later. Waiting out a short settle window is what turns
+        that into something a caller can report.
+
+        A process still running after ``settle`` may of course still fail later;
+        this only catches the immediate exits. The health check is what confirms
+        the service actually came up.
+        """
+        try:
+            code = self.process.wait(timeout=settle)
+        except subprocess.TimeoutExpired:
+            return None
+
+        detail = f"exited with code {code} within {settle:g}s"
+        if self.log_file:
+            detail += f"; see {self.log_file}"
+        return detail
+
     def stop(self, timeout: float = 10.0) -> int | None:
         """Stop the process gracefully, then forcefully if needed.
 
