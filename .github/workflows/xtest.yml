@@ -764,7 +764,7 @@ jobs:
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@4efe04d03886565a97cb999de8a4d34de1c3ed0f  # Support stable and preview KAO configuration
+        uses: opentdf/platform/test/start-additional-kas@9aafdc6e5a2dca515eca6ad72952d876cc1365b8  # Preview KAO configuration
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
