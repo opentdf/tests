@@ -187,8 +187,10 @@ otdf-local clean --keep-logs
 
 `kas-km3` is the only instance started with `services.kas.kas_uri_from_kao: true`,
 so it resolves managed keys by the KAS URI in the KAO rather than by its own
-`registered_kas_uri`. km1 and km2 leave the setting off, which lets xtest use
-them as the negative control. km3 also mirrors the CI step's
+`registered_kas_uri`. km1 leaves the setting off and is the negative control:
+`test_decrypt_rejects_kao_kas_registration_when_disabled` registers a key under
+km1's `/kas` URI and requires the rewrap to fail. km2 is off as well, but only
+because that is the default — no test depends on it. km3 also mirrors the CI step's
 `key_cache_expiration` (5 minutes) and runs at `debug`, because
 `test_decrypt_same_kid_in_different_registries_with_cache` asserts on a
 debug-level cache-hit line.

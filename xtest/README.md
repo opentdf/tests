@@ -141,7 +141,9 @@ gate in `tdfs.py`. To run them:
 
 ```shell
 # CI: dispatch X-Test with force-platform-supports: kas_uri_from_kao
-# Local: otdf-local starts km3 (port 8787) with the setting enabled
+# Local: `otdf-local up` starts km3 (port 8787) with the setting enabled and km1
+# (port 8585) with it off. Both are needed -- the "when_disabled" test is the
+# negative control and runs against km1.
 XT_FORCE_PLATFORM_SUPPORTS=kas_uri_from_kao pytest test_abac.py \
   -k "kao_kas_registration or same_kid_in_different_registries"
 ```
