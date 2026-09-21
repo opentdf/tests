@@ -186,11 +186,13 @@ def test_km3_root_key_comes_from_the_platform_config(settings: Settings) -> None
 def test_the_negative_control_kas_leave_kao_lookup_off(
     settings: Settings, kas_name: str
 ) -> None:
-    """km1/km2 must not pick up km3's settings, or the negative test proves nothing.
+    """km1 must not pick up km3's settings, or the negative test proves nothing.
 
-    `test_decrypt_rejects_kao_kas_registration_when_disabled` asserts a KAO naming a
-    URI other than the KAS's own `registered_kas_uri` fails to resolve. Enable
-    kas_uri_from_kao on these and it passes for the wrong reason.
+    `test_decrypt_rejects_kao_kas_registration_when_disabled` asserts that a KAO naming
+    a URI other than km1's own `registered_kas_uri` fails to resolve. Enable
+    kas_uri_from_kao there and it passes for the wrong reason. km2 is covered here as
+    well: nothing asserts on it today, but it is configured from the same branch, so a
+    change that leaked the setting to one would leak it to both.
     """
     config = _generated(settings, kas_name)
     assert not get_nested(config, "services.kas.kas_uri_from_kao", False)

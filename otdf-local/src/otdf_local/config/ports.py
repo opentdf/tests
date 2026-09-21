@@ -67,7 +67,10 @@ class Ports:
     def is_kao_uri_kas(cls, name: str) -> bool:
         """Whether this instance resolves managed keys by the KAO's KAS URI.
 
-        Only km3. km1 and km2 deliberately leave the setting off so xtest can use them as
-        the negative control for the kas_uri_from_kao feature.
+        Only km3. km1 is the negative control: xtest's
+        test_decrypt_rejects_kao_kas_registration_when_disabled registers a key under
+        km1's /kas URI and requires the rewrap to fail, which it only does while the
+        setting stays off there. km2 leaves it off as well, but that is just the default
+        -- no test asserts on it.
         """
         return name == "km3"

@@ -89,9 +89,9 @@ class KASService(Service):
             # registered_kas_uri should NOT have /kas suffix
             updates["services.kas.registered_kas_uri"] = f"http://localhost:{self.port}"
 
-        # Off by default, and left off for km1/km2 so they stay usable as the negative
+        # Off by default, and left off for km1 so it stays usable as the negative
         # control: with this unset, a KAO naming a URI other than registered_kas_uri
-        # above should fail to resolve.
+        # above should fail to resolve. km2 is off too, but only by default.
         if self.is_kao_uri:
             updates["services.kas.kas_uri_from_kao"] = True
             # Matches the km3 step in .github/workflows/xtest.yml. The cache test asserts
