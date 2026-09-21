@@ -14,12 +14,29 @@ from types import SimpleNamespace
 
 import pytest
 
+import fixtures.kas
 import tdfs
 from fixtures.kas import kas_health_error, require_km3
 
+#: For the two tests that never reach the network. Keeping them off `_closed_port`
+#: leaves it with the single caller that genuinely needs a live socket.
+UNCONNECTED_URL = "http://127.0.0.1:1"
+
 
 def _closed_port() -> int:
-    """A port that was bound and then released, so nothing is listening on it."""
+    """A port that was bound and then released, so nothing is listening on it.
+
+    Racy in principle -- another process can bind the port between the release and
+    the connect -- and deliberately kept anyway, for the one test that has to see a
+    real connection refused reach the ``except`` clause in ``kas_health_error``.
+    Stubbing the transport there would reduce it to asserting that an f-string
+    interpolates. The race costs a flaky failure, never a false pass: anything that
+    did answer on that port would fail every assertion in the test.
+
+    Holding the socket bound-but-unlistening would reserve the port, but on macOS
+    that drops the SYN instead of refusing it, so the probe times out after
+    HEALTH_TIMEOUT_S and reports the wrong reason.
+    """
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -121,11 +138,20 @@ def _stub_platform_features(
 def test_require_km3_skips_when_the_platform_gate_is_shut(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """A build that can't do KAO-URI lookup is not a failure."""
+    """A build that can't do KAO-URI lookup is not a failure.
+
+    The URL is never probed -- the gate raises first -- which is the point: reaching
+    the network here at all would mean the gate ran in the wrong order.
+    """
     _stub_platform_features(monkeypatch, supported=False)
 
+    def unreachable_probe(kas_url: str) -> str | None:
+        pytest.fail(f"probed {kas_url} despite the platform gate being shut")
+
+    monkeypatch.setattr(fixtures.kas, "kas_health_error", unreachable_probe)
+
     with pytest.raises(pytest.skip.Exception):
-        require_km3(f"http://127.0.0.1:{_closed_port()}")
+        require_km3(UNCONNECTED_URL)
 
 
 def test_require_km3_fails_when_the_gate_is_open_but_km3_is_absent(
@@ -135,14 +161,24 @@ def test_require_km3_fails_when_the_gate_is_open_but_km3_is_absent(
 
     This is the case the old skip hid: pytest prints captured logs for errors but
     not for skips, so a mistyped KASURL7 read exactly like an unsupported build.
+
+    What the probe failed *on* is covered by the kas_health_error tests above; here
+    it is stubbed, so the branch under test cannot flake on host port activity and
+    the reason can be asserted against a known string.
     """
     _stub_platform_features(monkeypatch, supported=True)
+    monkeypatch.setattr(
+        fixtures.kas, "kas_health_error", lambda _url: "nothing listening on 8787"
+    )
 
     with pytest.raises(pytest.fail.Exception) as excinfo:
-        require_km3(f"http://127.0.0.1:{_closed_port()}")
+        require_km3(UNCONNECTED_URL)
 
     message = str(excinfo.value)
     assert "km3 KAS is not answering" in message
+    # The probe's reason has to survive into the failure, or the message says only
+    # that something is wrong and not what.
+    assert "nothing listening on 8787" in message
     # The three ways out, so the reader does not have to go find them.
     assert "otdf-local up" in message
     assert "KASURL7" in message
@@ -161,8 +197,8 @@ def test_require_km3_passes_when_the_gate_is_open_and_km3_answers(
 def test_proxy_environment_is_ignored(kas_stub, monkeypatch: pytest.MonkeyPatch):
     """These are loopback services; a proxy would have the probe report on itself."""
     url, _ = kas_stub()
-    # Points at a port nothing is on, so if the proxy were honoured this fails.
-    monkeypatch.setenv("http_proxy", f"http://127.0.0.1:{_closed_port()}")
-    monkeypatch.setenv("HTTP_PROXY", f"http://127.0.0.1:{_closed_port()}")
+    # Points somewhere nothing can answer, so if the proxy were honoured this fails.
+    monkeypatch.setenv("http_proxy", UNCONNECTED_URL)
+    monkeypatch.setenv("HTTP_PROXY", UNCONNECTED_URL)
 
     assert kas_health_error(url) is None
