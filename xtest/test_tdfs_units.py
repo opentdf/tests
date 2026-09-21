@@ -40,6 +40,45 @@ class TestParseForcedSupports:
         with pytest.raises(ValueError, match="unknown feature"):
             tdfs._parse_forced_supports("hexles")
 
+    def test_platform_only_name_is_rejected_by_the_sdk_override(self):
+        """Naming the wrong variable is the same no-op as a typo, so it fails the same.
+
+        XT_FORCE_SUPPORTS=kas_uri_from_kao would otherwise parse, force the
+        feature on for every SDK, and leave the platform gate the tests actually
+        consult untouched -- a green run that tested nothing.
+        """
+        with pytest.raises(ValueError, match="XT_FORCE_PLATFORM_SUPPORTS instead"):
+            tdfs._parse_forced_supports("kas_uri_from_kao")
+
+    def test_platform_only_name_is_accepted_by_the_platform_override(self):
+        assert tdfs._parse_forced_supports(
+            "kas_uri_from_kao",
+            source="XT_FORCE_PLATFORM_SUPPORTS",
+            allowed=tdfs.ALL_FEATURES,
+        ) == frozenset({"kas_uri_from_kao"})
+
+    def test_both_sided_features_stay_forceable_from_either_side(self):
+        """The exclusion is narrow on purpose; ecwrap needs both sides to cooperate."""
+        assert "ecwrap" in tdfs.SDK_FORCEABLE_FEATURES
+        assert tdfs._parse_forced_supports("ecwrap") == frozenset({"ecwrap"})
+        assert tdfs._parse_forced_supports(
+            "ecwrap",
+            source="XT_FORCE_PLATFORM_SUPPORTS",
+            allowed=tdfs.ALL_FEATURES,
+        ) == frozenset({"ecwrap"})
+
+    def test_a_typo_is_reported_as_unknown_not_as_misdirected(self):
+        """The two failures have different fixes, so they must not share a message."""
+        with pytest.raises(ValueError, match="unknown feature") as excinfo:
+            tdfs._parse_forced_supports("kas_uri_from_ka0")
+        assert "XT_FORCE_PLATFORM_SUPPORTS instead" not in str(excinfo.value)
+
+    def test_the_sdk_valid_list_does_not_advertise_platform_only_names(self):
+        """A rejection that then lists the rejected name as valid is a dead end."""
+        with pytest.raises(ValueError, match="unknown feature") as excinfo:
+            tdfs._parse_forced_supports("hexles")
+        assert "kas_uri_from_kao" not in str(excinfo.value)
+
 
 # --- Platform forced support ------------------------------------------------
 

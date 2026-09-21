@@ -170,7 +170,9 @@ feature_type = Literal[
     "hexaflexible",
     "kasallowlist",
     # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
-    # until the first supported release is known; KAS also needs the setting on.
+    # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,
+    # since it is listed in PLATFORM_ONLY_FEATURES below. KAS also needs the
+    # setting on.
     "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
@@ -210,8 +212,31 @@ feature_type = Literal[
 ]
 
 
+ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
+
+#: Features only the platform can report, so only ``XT_FORCE_PLATFORM_SUPPORTS``
+#: can force them.
+#:
+#: Both overrides validate against the same ``feature_type`` Literal, so without
+#: this set ``XT_FORCE_SUPPORTS=kas_uri_from_kao`` parses cleanly, forces the
+#: feature on for every *SDK*, and leaves the platform gate the test actually
+#: consults untouched. That is the silent no-op the validation exists to prevent,
+#: just reached by naming the wrong variable instead of misspelling the feature.
+#:
+#: Deliberately narrow. Most features are legitimately both-sided --
+#: ``autoconfigure`` and ``ecwrap`` need the SDK to emit them *and* the platform
+#: to honour them, so forcing either side alone is a reasonable thing to ask for.
+#: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
+PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset({"kas_uri_from_kao"})
+
+SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
+
+
 def _parse_forced_supports(
-    raw: str, *, source: str = "XT_FORCE_SUPPORTS"
+    raw: str,
+    *,
+    source: str = "XT_FORCE_SUPPORTS",
+    allowed: frozenset[feature_type] = SDK_FORCEABLE_FEATURES,
 ) -> frozenset[feature_type]:
     """Parse an SDK or platform override into validated feature names.
 
@@ -219,14 +244,26 @@ def _parse_forced_supports(
     exists to turn a skip into a real result, so a typo that quietly left the
     skip in place would be indistinguishable from a clean run -- which is the
     exact failure mode the override is meant to escape.
+
+    ``allowed`` narrows that to the features this particular override can act
+    on; a real feature aimed at the wrong variable is the same silent no-op as a
+    typo, so it is rejected the same way. The default is the SDK-side set,
+    because failing closed is what keeps a new platform-only feature from
+    quietly becoming forceable from both.
     """
     names = {n.strip() for n in raw.split(",") if n.strip()}
-    known = set(get_args(feature_type))
-    unknown = names - known
+    unknown = names - ALL_FEATURES
     if unknown:
         raise ValueError(
             f"{source} names unknown feature(s) {sorted(unknown)}; "
-            f"valid features are {sorted(known)}"
+            f"valid features are {sorted(allowed)}"
+        )
+    misdirected = names - allowed
+    if misdirected:
+        raise ValueError(
+            f"{source} cannot force {sorted(misdirected)}: platform-only "
+            "feature(s) that no SDK shim reports on. Use "
+            "XT_FORCE_PLATFORM_SUPPORTS instead."
         )
     return cast(frozenset[feature_type], frozenset(names))
 
@@ -241,7 +278,8 @@ def _parse_forced_supports(
 #:
 #: Applies to every SDK in the run. To force a feature for one side only, narrow
 #: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
-#: per-SDK syntax here.
+#: per-SDK syntax here. Names in :data:`PLATFORM_ONLY_FEATURES` are rejected --
+#: see :data:`FORCED_PLATFORM_SUPPORTS`.
 FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
 
 if FORCED_SUPPORTS:
@@ -257,6 +295,9 @@ if FORCED_SUPPORTS:
 FORCED_PLATFORM_SUPPORTS = _parse_forced_supports(
     os.environ.get("XT_FORCE_PLATFORM_SUPPORTS", ""),
     source="XT_FORCE_PLATFORM_SUPPORTS",
+    # The platform side can force anything: a both-sided feature such as
+    # ``ecwrap`` is as legitimate here as ``kas_uri_from_kao``.
+    allowed=ALL_FEATURES,
 )
 
 if FORCED_PLATFORM_SUPPORTS:
