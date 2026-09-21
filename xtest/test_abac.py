@@ -1,4 +1,5 @@
 import filecmp
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -1143,9 +1144,11 @@ def test_decrypt_same_kid_in_different_registries_with_cache(
             )
 
     # A passing round trip with caching disabled would miss the regression.
+    # Match the complete URI + KID so the /kas entry cannot match both keys.
     for _, key, _ in ciphertexts:
+        cache_key_json = json.dumps(f'"{key.kas_uri}":"{key.key.key_id}"')
         audit_logs.assert_contains(
-            rf"found private key in cache.*{re.escape(key.kas_id)}.*{re.escape(key.key.key_id)}",
+            rf'found private key in cache.*"cache_key":\s*{re.escape(cache_key_json)}',
             since_mark=mark,
         )
 
