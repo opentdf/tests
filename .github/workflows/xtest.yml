@@ -684,7 +684,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -697,7 +697,7 @@ jobs:
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -710,7 +710,7 @@ jobs:
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -723,7 +723,7 @@ jobs:
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -736,7 +736,7 @@ jobs:
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -750,7 +750,7 @@ jobs:
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@6dd5f649347fb2314c6090ea6d090a5c673d58a6  # ci-startup-yaml-fix: require_nonce on additional KAS
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           kas-name: km2
@@ -764,7 +764,7 @@ jobs:
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42  # Preview KAO configuration
+        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
