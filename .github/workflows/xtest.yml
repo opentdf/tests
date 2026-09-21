@@ -765,6 +765,8 @@ jobs:
         id: kas-km3
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         uses: opentdf/platform/test/start-additional-kas@6c3729516538107435f4e452b07204eb608824b6  # opentdf/platform#4067: cache expiration in nanoseconds
+        env:
+          OPENTDF_SERVICES_KAS_PREVIEW_KAS_URI_FROM_KAO: "true"
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
