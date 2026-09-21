@@ -88,11 +88,7 @@ clean run. In CI, pass `force-supports` to the `X-Test` workflow dispatch.
 
 A platform-only feature — one in `PLATFORM_ONLY_FEATURES` in `xtest/tdfs.py`,
 such as `kas_uri_from_kao` — raises here too, and directs you to
-`XT_FORCE_PLATFORM_SUPPORTS`. Both variables validate against the same feature
-list, so forcing a platform feature from the SDK side would parse fine, apply to
-every SDK, and leave the platform gate the tests read untouched: the same
-vacuous green the typo check exists to prevent, reached by naming the wrong
-variable.
+`XT_FORCE_PLATFORM_SUPPORTS`.
 
 Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
 accept the `pr:N` shorthand — pass a branch name there instead.
