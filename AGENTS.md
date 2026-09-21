@@ -86,6 +86,10 @@ It applies to every SDK in the run — to force one side only, narrow with
 than being ignored, since a silently-ignored typo is indistinguishable from a
 clean run. In CI, pass `force-supports` to the `X-Test` workflow dispatch.
 
+A platform-only feature — one in `PLATFORM_ONLY_FEATURES` in `xtest/tdfs.py`,
+such as `kas_uri_from_kao` — raises here too, and directs you to
+`XT_FORCE_PLATFORM_SUPPORTS`.
+
 Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
 accept the `pr:N` shorthand — pass a branch name there instead.
 
