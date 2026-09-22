@@ -949,6 +949,7 @@ def test_decrypt_uses_kao_kas_registration(
     platform = tdfs.get_platform_features()
     if platform.semver is None or platform.semver < (0, 27, 0):
         pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.features.add("kas_uri_from_kao")
     platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -1027,6 +1028,7 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
     platform = tdfs.get_platform_features()
     if platform.semver is None or platform.semver < (0, 27, 0):
         pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.features.add("kas_uri_from_kao")
     platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -1110,6 +1112,7 @@ def test_decrypt_same_kid_in_different_registries_with_cache(
     platform = tdfs.get_platform_features()
     if platform.semver is None or platform.semver < (0, 27, 0):
         pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.features.add("kas_uri_from_kao")
     platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
