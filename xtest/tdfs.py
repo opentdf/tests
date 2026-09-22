@@ -14,7 +14,8 @@ from typing import Any, Literal, TypeIs, cast, get_args
 
 import jsonschema
 import pytest
-from pydantic import BaseModel
+import yaml
+from pydantic import BaseModel, ConfigDict, Field
 
 import assertions as tdfassertions
 
@@ -169,10 +170,9 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
-    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
-    # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,
-    # since it is listed in PLATFORM_ONLY_FEATURES below. KAS also needs the
-    # setting on.
+    # Platform: resolve managed keys using the KAS URI from the KAO. Declared by
+    # implementing platform checkouts until the first supported release is known,
+    # or forced via XT_FORCE_PLATFORM_SUPPORTS. KAS also needs the setting on.
     "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
@@ -314,6 +314,38 @@ policy_type = Literal["plaintext", "encrypted"]
 """How policy (data attributes) should be bound within the output container on encrypt."""
 
 
+class _UnreleasedPlatformFeatures(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    features: list[feature_type] = Field(alias="supported-unreleased-platform-features")
+
+
+def _unreleased_platform_features() -> set[feature_type]:
+    """Read capabilities from the platform under test, never the caller's checkout."""
+    platform_dir = os.getenv("PLATFORM_DIR")
+    if not platform_dir:
+        return set()
+    manifest = Path(platform_dir) / "test" / "xtest-features.yaml"
+    try:
+        content = manifest.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # Older checkouts predate the declaration; keep version/probe detection.
+        return set()
+
+    try:
+        declaration = _UnreleasedPlatformFeatures.model_validate(
+            yaml.safe_load(content)
+        )
+    except (yaml.YAMLError, ValueError) as exc:
+        raise ValueError(
+            f"Invalid platform feature declaration in {manifest}: {exc}"
+        ) from exc
+
+    features = set(declaration.features)
+    logger.info("Platform features declared by %s: %s", manifest, sorted(features))
+    return features
+
+
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
     semver: tuple[int, int, int] | None = None
@@ -327,6 +359,7 @@ class PlatformFeatureSet(BaseModel):
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
         self.features.update(FORCED_PLATFORM_SUPPORTS)
+        self.features.update(_unreleased_platform_features())
         v = os.getenv("PLATFORM_VERSION")
         if not v:
             print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")

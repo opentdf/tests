@@ -118,6 +118,32 @@ pytest
 
 #### Testing unreleased platform features
 
+To enable tests for a capability before its first release, add
+`test/xtest-features.yaml` **in the platform repository**, alongside the
+implementation:
+
+```yaml
+supported-unreleased-platform-features:
+  - kas_uri_from_kao
+```
+
+xtest reads this file from `PLATFORM_DIR`, the platform checkout under test.
+CI already sets that directory separately for each platform matrix entry. The
+implementing PR, subsequent main builds, and backports carrying the declaration
+run the tests; other checkouts keep their existing version/probe-based gates.
+There is no global override to apply accidentally to older releases.
+
+For local runs, set `PLATFORM_DIR` to the checkout matching the running service.
+An unset variable or missing file adds no features. The field must be a list of
+known feature names; malformed declarations fail with the file path in the error.
+Declarations affect platform test gates only, not SDK support or service settings.
+
+The declaration continues to apply when the checkout is released. Once the first
+supported release is known, add the corresponding version gate in `tdfs.py`
+before removing the entry from the platform file, so coverage stays enabled.
+
+For an explicit, run-wide override instead of a checkout declaration:
+
 Set `XT_FORCE_PLATFORM_SUPPORTS` to a comma-separated list of platform features
 to bypass their test gates. In CI, use the `force-platform-supports` input.
 SDK overrides use `XT_FORCE_SUPPORTS` separately. These overrides do not enable
