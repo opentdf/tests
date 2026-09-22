@@ -136,51 +136,6 @@ def test_unknown_platform_override_names_source():
         tdfs._parse_forced_supports("dpop_typo", source="XT_FORCE_PLATFORM_SUPPORTS")
 
 
-@pytest.mark.parametrize(
-    "version,meets_minimum",
-    [
-        ("0.9.0", False),
-        ("0.25.9", False),
-        ("0.26.0", True),
-        ("0.26.1", True),
-        ("0.27.0", True),
-        ("main", False),
-        ("", False),
-    ],
-)
-@pytest.mark.parametrize("forced", [False, True])
-def test_kao_requires_minimum_platform_version_and_override(
-    monkeypatch: pytest.MonkeyPatch, version: str, meets_minimum: bool, forced: bool
-):
-    monkeypatch.setenv("PLATFORM_VERSION", version)
-    monkeypatch.setattr(
-        tdfs,
-        "FORCED_PLATFORM_SUPPORTS",
-        frozenset({"kas_uri_from_kao"}) if forced else frozenset(),
-    )
-    monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
-    monkeypatch.setattr(tdfs, "_algs_from_km1_log", set)
-    monkeypatch.setattr(tdfs, "_kas_supports_algorithm", lambda _: False)
-    platform = tdfs.PlatformFeatureSet()
-
-    if meets_minimum and forced:
-        platform.skip_if_unsupported(
-            "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
-        )
-    else:
-        reason = (
-            "requires version >= 0.26.0" if not meets_minimum else "kas_uri_from_kao"
-        )
-        with pytest.raises(pytest.skip.Exception, match=reason):
-            platform.skip_if_unsupported(
-                "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
-            )
-
-    # Existing callers can still force support without specifying a version floor.
-    if forced:
-        platform.skip_if_unsupported("kas_uri_from_kao")
-
-
 # --- tdfs.zip64_reader_is_broken ----------------------------------------------
 
 

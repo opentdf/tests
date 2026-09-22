@@ -413,20 +413,8 @@ class PlatformFeatureSet(BaseModel):
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
 
-    def skip_if_unsupported(
-        self,
-        *features: feature_type,
-        min_version: tuple[int, int, int] | None = None,
-    ):
-        """Require features and, optionally, a minimum version even when forced."""
-        if min_version is not None and (
-            self.semver is None or self.semver < min_version
-        ):
-            minimum = ".".join(map(str, min_version))
-            pytest.skip(
-                f"platform service {self.version} requires version >= {minimum} "
-                "for this test (feature overrides do not bypass this minimum)"
-            )
+    def skip_if_unsupported(self, *features: feature_type):
+        """Skip the current test if any of the given features are unsupported."""
         missing = [f for f in features if f not in self.features]
         if missing:
             pytest.skip(

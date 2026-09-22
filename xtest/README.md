@@ -128,13 +128,6 @@ Both reject unknown feature names. A few features are platform-only
 rejected too, because it would force the feature on for every SDK while leaving
 the platform gate the tests read untouched — a green run that tested nothing.
 
-The KAO registration and cache-isolation tests additionally require platform
-version **0.26.0 or newer**. Both this minimum and the `kas_uri_from_kao` override
-must be satisfied: forcing the feature does not make these tests run on LTS
-v0.9.0, and a newer version alone does not enable them. A missing or unparseable
-platform version does not satisfy the minimum. This is only a test prerequisite;
-a forced main/branch build reporting 0.26.0 still needs the implementation to pass.
-
 #### Run TDF Tests
 
 ```shell

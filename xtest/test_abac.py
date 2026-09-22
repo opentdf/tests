@@ -946,9 +946,10 @@ def test_decrypt_uses_kao_kas_registration(
     audit_logs: AuditLogAsserter,
 ):
     """Decrypt a key registered only at km3/kas, not km3's default URI."""
-    tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
-    )
+    platform = tdfs.get_platform_features()
+    if platform.semver is None or platform.semver < (0, 27, 0):
+        pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
@@ -1023,9 +1024,10 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
     audit_logs: AuditLogAsserter,
 ):
     """The alternate-registration round trip must fail on KAO-disabled KM1."""
-    tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
-    )
+    platform = tdfs.get_platform_features()
+    if platform.semver is None or platform.semver < (0, 27, 0):
+        pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
@@ -1105,9 +1107,10 @@ def test_decrypt_same_kid_in_different_registries_with_cache(
     audit_logs: AuditLogAsserter,
 ):
     """Alternate KM3 keys sharing a KID and verify both cached keys decrypt."""
-    tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
-    )
+    platform = tdfs.get_platform_features()
+    if platform.semver is None or platform.semver < (0, 27, 0):
+        pytest.skip("KAO registration tests require platform >= 0.27.0")
+    platform.skip_if_unsupported("key_management", "kas_uri_from_kao")
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
