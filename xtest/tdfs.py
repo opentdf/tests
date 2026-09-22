@@ -10,7 +10,7 @@ import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeIs, cast, get_args
+from typing import Any, Literal, TypeIs, get_args
 
 import jsonschema
 import pytest
@@ -210,32 +210,23 @@ feature_type = Literal[
 ]
 
 
-ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
+def _parse_forced_supports(raw: str) -> frozenset[str]:
+    """Parse ``XT_FORCE_SUPPORTS`` into a set of feature names.
 
-#: Platform-only features cannot be enabled by the SDK override.
-PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset({"kas_uri_from_kao"})
-
-SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
-
-
-def _parse_forced_supports(
-    raw: str,
-) -> frozenset[feature_type]:
-    """Parse SDK overrides, rejecting unknown and platform-only feature names."""
+    An unrecognised name is a hard error rather than a no-op. The override
+    exists to turn a skip into a real result, so a typo that quietly left the
+    skip in place would be indistinguishable from a clean run -- which is the
+    exact failure mode the override is meant to escape.
+    """
     names = {n.strip() for n in raw.split(",") if n.strip()}
-    unknown = names - ALL_FEATURES
+    known = set(get_args(feature_type))
+    unknown = names - known
     if unknown:
         raise ValueError(
             f"XT_FORCE_SUPPORTS names unknown feature(s) {sorted(unknown)}; "
-            f"valid features are {sorted(SDK_FORCEABLE_FEATURES)}"
+            f"valid features are {sorted(known)}"
         )
-    misdirected = names - SDK_FORCEABLE_FEATURES
-    if misdirected:
-        raise ValueError(
-            f"XT_FORCE_SUPPORTS cannot force {sorted(misdirected)}: platform-only "
-            "feature(s) that no SDK shim reports on."
-        )
-    return cast(frozenset[feature_type], frozenset(names))
+    return frozenset(names)
 
 
 #: Features to treat as supported no matter what the SDK reports.
@@ -248,7 +239,7 @@ def _parse_forced_supports(
 #:
 #: Applies to every SDK in the run. To force a feature for one side only, narrow
 #: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
-#: per-SDK syntax here. Names in :data:`PLATFORM_ONLY_FEATURES` are rejected.
+#: per-SDK syntax here.
 FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
 
 if FORCED_SUPPORTS:

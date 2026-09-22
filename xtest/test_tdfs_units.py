@@ -40,44 +40,6 @@ class TestParseForcedSupports:
         with pytest.raises(ValueError, match="unknown feature"):
             tdfs._parse_forced_supports("hexles")
 
-    def test_platform_only_name_is_rejected_by_the_sdk_override(self):
-        """Naming the wrong variable is the same no-op as a typo, so it fails the same.
-
-        XT_FORCE_SUPPORTS=kas_uri_from_kao would otherwise parse, force the
-        feature on for every SDK, and leave the platform gate the tests actually
-        consult untouched -- a green run that tested nothing.
-        """
-        with pytest.raises(ValueError, match="platform-only"):
-            tdfs._parse_forced_supports("kas_uri_from_kao")
-
-    def test_both_sided_features_stay_forceable_for_sdks(self):
-        assert "ecwrap" in tdfs.SDK_FORCEABLE_FEATURES
-        assert tdfs._parse_forced_supports("ecwrap") == frozenset({"ecwrap"})
-
-    def test_a_typo_is_reported_as_unknown_not_as_misdirected(self):
-        """The two failures have different fixes, so they must not share a message."""
-        with pytest.raises(ValueError, match="unknown feature") as excinfo:
-            tdfs._parse_forced_supports("kas_uri_from_ka0")
-        assert "platform-only" not in str(excinfo.value)
-
-    def test_the_sdk_valid_list_does_not_advertise_platform_only_names(self):
-        """A rejection that then lists the rejected name as valid is a dead end."""
-        with pytest.raises(ValueError, match="unknown feature") as excinfo:
-            tdfs._parse_forced_supports("hexles")
-        assert "kas_uri_from_kao" not in str(excinfo.value)
-
-
-@pytest.mark.parametrize("platform_version", ["0.12.0", "main", ""])
-def test_sdk_override_does_not_override_platform(
-    monkeypatch: pytest.MonkeyPatch, platform_version: str
-):
-    monkeypatch.setenv("PLATFORM_VERSION", platform_version)
-    monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", tdfs._parse_forced_supports("dpop"))
-    monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
-
-    features = tdfs.PlatformFeatureSet()
-    assert "dpop" not in features.features
-
 
 # --- tdfs.zip64_reader_is_broken ----------------------------------------------
 

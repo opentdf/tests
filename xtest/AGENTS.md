@@ -36,7 +36,7 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 | Variable | Purpose |
 |----------|---------|
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
-| `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
+| `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise. |
 
 ## Authoring a New Test
 
