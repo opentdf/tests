@@ -136,118 +136,49 @@ def test_unknown_platform_override_names_source():
         tdfs._parse_forced_supports("dpop_typo", source="XT_FORCE_PLATFORM_SUPPORTS")
 
 
-# --- Checkout-scoped unreleased platform features ----------------------------
-
-
-class TestUnreleasedPlatformFeatures:
-    @pytest.fixture(autouse=True)
-    def isolate_platform(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("PLATFORM_DIR", raising=False)
-        monkeypatch.setenv("PLATFORM_VERSION", "0.26.0")
-        monkeypatch.setattr(tdfs, "FORCED_PLATFORM_SUPPORTS", frozenset())
-        monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset())
-        monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
-        monkeypatch.setattr(tdfs, "_algs_from_km1_log", set)
-        monkeypatch.setattr(tdfs, "_kas_supports_algorithm", lambda _: False)
-
-    @pytest.fixture
-    def manifest(self, tmp_path: Path) -> Path:
-        manifest = tmp_path / "implementing-platform" / "test" / "xtest-features.yaml"
-        manifest.parent.mkdir(parents=True)
-        manifest.write_text(
-            "supported-unreleased-platform-features:\n  - kas_uri_from_kao\n"
-        )
-        return manifest
-
-    @pytest.mark.parametrize("platform_tag", ["pull-4056", "main", "v0.27.0"])
-    def test_support_follows_checkout_not_version_or_tag(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        manifest: Path,
-        tmp_path: Path,
-        platform_tag: str,
-    ):
-        # A PR, its merged main build, and a release all retain the declaration.
-        # Another checkout with the same reported version must not inherit it.
-        monkeypatch.setenv("PLATFORM_TAG", platform_tag)
-        monkeypatch.setenv("PLATFORM_DIR", str(manifest.parent.parent))
-        assert "kas_uri_from_kao" in tdfs.PlatformFeatureSet().features
-
-        old_platform = tmp_path / "old-platform"
-        old_platform.mkdir()
-        monkeypatch.setenv("PLATFORM_DIR", str(old_platform))
-        features = tdfs.PlatformFeatureSet().features
-        assert "kas_uri_from_kao" not in features
-        assert "key_management" in features
-
-    def test_unset_platform_dir_does_not_read_caller_manifest(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        manifest: Path,
-    ):
-        monkeypatch.chdir(manifest.parent.parent)
-        assert "kas_uri_from_kao" not in tdfs.PlatformFeatureSet().features
-
-    def test_relative_platform_dir_and_manual_override_are_combined(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        manifest: Path,
-        tmp_path: Path,
-    ):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("PLATFORM_DIR", "implementing-platform")
-        monkeypatch.setenv("PLATFORM_VERSION", "main")
-        monkeypatch.setattr(
-            tdfs, "FORCED_PLATFORM_SUPPORTS", frozenset({"dpop_nonce_challenge"})
-        )
-        features = tdfs.PlatformFeatureSet().features
-        assert {"kas_uri_from_kao", "dpop_nonce_challenge"} <= features
-
-        sdk = object.__new__(tdfs.SDK)
-        sdk._supports = {"kas_uri_from_kao": False, "dpop_nonce_challenge": False}
-        assert not sdk.supports("kas_uri_from_kao")
-        assert not sdk.supports("dpop_nonce_challenge")
-
-    def test_empty_list_preserves_version_detection(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        manifest: Path,
-    ):
-        manifest.write_text("supported-unreleased-platform-features: []\n")
-        monkeypatch.setenv("PLATFORM_DIR", str(manifest.parent.parent))
-        monkeypatch.setenv("PLATFORM_VERSION", "0.9.0")
-        features = tdfs.PlatformFeatureSet().features
-        assert "kas_uri_from_kao" not in features
-        assert "key_management" in features
-
-    @pytest.mark.parametrize(
-        "content",
-        [
-            "",
-            "{}",
-            "[]",
-            "supported-unreleased-platform-features: [",
-            "supported-unreleased-platform-features: kas_uri_from_kao",
-            "supported-unreleased-platform-features: null",
-            "supported-unreleased-platform-features: [false]",
-            "supported-unreleased-platform-features: [kas_uri_from_ka0]",
-            "supported-platform-features: [kas_uri_from_kao]",
-            "supported-unreleased-platform-features: []\nunexpected: true",
-        ],
+@pytest.mark.parametrize(
+    "version,meets_minimum",
+    [
+        ("0.9.0", False),
+        ("0.25.9", False),
+        ("0.26.0", True),
+        ("0.26.1", True),
+        ("0.27.0", True),
+        ("main", False),
+        ("", False),
+    ],
+)
+@pytest.mark.parametrize("forced", [False, True])
+def test_kao_requires_minimum_platform_version_and_override(
+    monkeypatch: pytest.MonkeyPatch, version: str, meets_minimum: bool, forced: bool
+):
+    monkeypatch.setenv("PLATFORM_VERSION", version)
+    monkeypatch.setattr(
+        tdfs,
+        "FORCED_PLATFORM_SUPPORTS",
+        frozenset({"kas_uri_from_kao"}) if forced else frozenset(),
     )
-    def test_invalid_declaration_fails_with_source_path(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        manifest: Path,
-        content: str,
-    ):
-        manifest.write_text(content)
-        monkeypatch.setenv("PLATFORM_DIR", str(manifest.parent.parent))
-        with pytest.raises(
-            ValueError, match="Invalid platform feature declaration"
-        ) as exc:
-            tdfs.PlatformFeatureSet()
-        assert str(manifest) in str(exc.value)
+    monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
+    monkeypatch.setattr(tdfs, "_algs_from_km1_log", set)
+    monkeypatch.setattr(tdfs, "_kas_supports_algorithm", lambda _: False)
+    platform = tdfs.PlatformFeatureSet()
+
+    if meets_minimum and forced:
+        platform.skip_if_unsupported(
+            "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
+        )
+    else:
+        reason = (
+            "requires version >= 0.26.0" if not meets_minimum else "kas_uri_from_kao"
+        )
+        with pytest.raises(pytest.skip.Exception, match=reason):
+            platform.skip_if_unsupported(
+                "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
+            )
+
+    # Existing callers can still force support without specifying a version floor.
+    if forced:
+        platform.skip_if_unsupported("kas_uri_from_kao")
 
 
 # --- tdfs.zip64_reader_is_broken ----------------------------------------------

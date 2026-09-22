@@ -947,7 +947,7 @@ def test_decrypt_uses_kao_kas_registration(
 ):
     """Decrypt a key registered only at km3/kas, not km3's default URI."""
     tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao"
+        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
     )
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -1024,7 +1024,7 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
 ):
     """The alternate-registration round trip must fail on KAO-disabled KM1."""
     tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao"
+        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
     )
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -1106,7 +1106,7 @@ def test_decrypt_same_kid_in_different_registries_with_cache(
 ):
     """Alternate KM3 keys sharing a KID and verify both cached keys decrypt."""
     tdfs.get_platform_features().skip_if_unsupported(
-        "key_management", "kas_uri_from_kao"
+        "key_management", "kas_uri_from_kao", min_version=(0, 26, 0)
     )
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
