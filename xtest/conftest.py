@@ -27,10 +27,10 @@ import pytest
 
 import sizes
 import tdfs
-from fixtures.bench import MAX_ARMS
+from fixtures.bench import MAX_ARMS, payloads_from_options
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
-from perf.cells import cells_for
+from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -274,6 +274,16 @@ def _add_benchmark_options(parser: pytest.Parser):
         "go@main; must be given with --bench-baseline",
     )
     group.addoption(
+        "--bench-payloads",
+        default=DEFAULT_PAYLOAD_SPEC,
+        help="comma-separated payload sizes to measure, e.g. "
+        "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
+        "default are opt-in because they are what a throughput gate actually "
+        "needs and what a nightly cannot afford: each one adds two cells, and "
+        "a run holds roughly twice the total plus one live output per arm of "
+        "the largest on disk",
+    )
+    group.addoption(
         "--bench-threshold",
         type=float,
         default=stats.DEFAULT_THRESHOLD,
@@ -433,7 +443,7 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
         typing.get_args(tdfs.sdk_type)
     )
     names = list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
-    cells = cells_for(names)
+    cells = cells_for(names, payloads_from_options(metafunc.config))
     metafunc.config.stash[report.CELLS_KEY] = cells
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
 
