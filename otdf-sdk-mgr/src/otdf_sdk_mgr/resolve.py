@@ -300,7 +300,14 @@ def _resolve_against(
                 "alias": version,
                 "head": True,
                 "sha": sha,
-                "tag": version,
+                # Flattened the same way _classify_sha_match flattens a branch
+                # it reached by SHA: the tag becomes a single dist/<tag>/ and
+                # src/<tag>/ path component. A slash here nests those
+                # directories, and every consumer walks them one level deep --
+                # xtest's all_versions_of() lists dist/*/ and the go Makefile
+                # finds src/*/, so "feat/x" is discovered as a "feat" build
+                # with no cli.sh in it.
+                "tag": version.replace("/", "--"),
             }
 
         if infix and version.startswith(f"{infix}/"):

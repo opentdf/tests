@@ -76,7 +76,24 @@ class TestResolveMain:
             result = resolve("js", "refs/heads/release/sdk-v0.17", None)
         assert is_resolve_success(result)
         assert "head" in result and result["head"] is True
-        assert result["tag"] == "release/sdk-v0.17"
+        assert result["tag"] == "release--sdk-v0.17"
+        assert result["sha"] == SHA40
+
+    def test_branch_by_name_flattens_slashes(self):
+        # Same flattening the SHA path applies, and for the same reason: the
+        # tag is one path component under dist/ and src/. Reached by name
+        # rather than by SHA, which is the shape a workflow_dispatch input
+        # arrives in.
+        ls = make_ls_remote(
+            (SHA40, "refs/heads/feat/DSPX-2604-createtdf-chunked"),
+            ("d" * 40, "refs/heads/main"),
+        )
+        with patch_git(ls):
+            result = resolve("go", "feat/DSPX-2604-createtdf-chunked", None)
+        assert is_resolve_success(result)
+        assert result.get("head") is True
+        assert result["tag"] == "feat--DSPX-2604-createtdf-chunked"
+        assert result["alias"] == "feat/DSPX-2604-createtdf-chunked"
         assert result["sha"] == SHA40
 
 
