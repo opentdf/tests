@@ -12,6 +12,7 @@ import pytest
 
 import conftest
 from perf import stats
+from perf.cells import DEFAULT_PAYLOAD_SPEC
 from perf.config import (
     DEFAULT_BOOTSTRAP_RESAMPLES,
     DEFAULT_CONFIDENCE,
@@ -233,6 +234,7 @@ class _FakeConfig:
             "--bench-warmup": 5,
             "--bench-budget-seconds": 1500.0,
             "--bench-seed": 0,
+            "--bench-payloads": DEFAULT_PAYLOAD_SPEC,
             "numprocesses": None,
         } | opts
 
@@ -304,6 +306,12 @@ class TestPytestConfigure:
         # with everything else that would otherwise be silently ignored.
         with pytest.raises(pytest.UsageError, match="unknown SDK ''"):
             _configure(**{"--bench-baseline": ""})
+
+    def test_bad_payload_size_rejected(self):
+        # Before the session builds payloads and installs CLIs, as for every
+        # other benchmark option.
+        with pytest.raises(pytest.UsageError, match="invalid --bench-payloads"):
+            _configure(**{"--bench-payloads": "1GB"})
 
     def test_noop_without_bench(self):
         _configure(**{"--bench": False, "--bench-baseline": "gp@main"})
