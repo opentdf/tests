@@ -8,7 +8,7 @@ import subprocess
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Literal, TypeIs, cast, get_args
 
@@ -537,9 +537,37 @@ _partial_version_re = re.compile(
 )
 
 
+#: The manifest entry name required by the OpenTDF spec. From
+#: ``spec/schema/OpenTDF/manifest.md``: "The ``manifest.json`` file MUST be in
+#: JSON format and reside within the root of the OpenTDF Zip archive."
+#:
+#: This suite reads and asserts this name and no other. Any other spelling is
+#: a container the spec does not describe, and a reader that accepts one
+#: cannot report that the writer produced it.
+MANIFEST_ENTRY = "manifest.json"
+
+
+def manifest_entry_name(names: Iterable[str]) -> str:
+    """Check that an archive carries the spec's manifest entry, and name it.
+
+    Returns :data:`MANIFEST_ENTRY` or raises. The indirection buys the error
+    message: ``zipfile``'s own ``KeyError`` reports only the name it wanted, so
+    an archive that files the manifest elsewhere is indistinguishable from one
+    with no manifest at all. Listing the actual members says which it was.
+    """
+    present = set(names)
+    if MANIFEST_ENTRY in present:
+        return MANIFEST_ENTRY
+    raise KeyError(
+        f"archive has no {MANIFEST_ENTRY!r} entry, which the OpenTDF spec "
+        f"requires at the archive root; it holds {sorted(present)}"
+    )
+
+
 def manifest(tdf_file: Path) -> Manifest:
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
-        with tdfz.open("0.manifest.json") as manifestEntry:
+        entry = manifest_entry_name(tdfz.namelist())
+        with tdfz.open(entry) as manifestEntry:
             return Manifest.model_validate_json(manifestEntry.read())
 
 
@@ -552,11 +580,12 @@ def update_manifest(
     fname = tdf_file.stem
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
+        entry = manifest_entry_name(zipped.namelist())
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.manifest.json").open("r") as manifest_file:
+    with (unzipped_dir / entry).open("r") as manifest_file:
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
-    with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
+    with (unzipped_dir / entry).open("w") as manifest_file:
         # exclude_unset so the rewrite carries only what the original manifest
         # said plus whatever manifest_change touched. Without it every optional
         # field is re-emitted as an explicit null, and a reader that distinguishes
@@ -702,7 +731,7 @@ def validate_manifest_schema(tdf_file: Path):
 
     ## Load the manifest file directly from the zipfile
     with zipfile.ZipFile(tdf_file, "r") as zipped:
-        with zipped.open("0.manifest.json") as manifest_file:
+        with zipped.open(manifest_entry_name(zipped.namelist())) as manifest_file:
             manifest = json.load(manifest_file)
 
     ## Validate
