@@ -112,7 +112,10 @@ class TestLoadTrailerAndRewrite:
         assert payload.name == "0.payload"
         true_csize, true_usize = payload.compressed_size, payload.uncompressed_size
         trailer.entries[0] = dataclasses.replace(
-            payload, force_zip64_sizes=True, version_needed_to_extract=45
+            payload,
+            force_zip64_compressed_size=True,
+            force_zip64_uncompressed_size=True,
+            version_needed_to_extract=45,
         )
 
         dest = tmp_path / "dest.zip"
@@ -303,3 +306,70 @@ def test_fake_record_conformance_requires_a_faithful_roundtrip(
     else:
         run_case()
     sdk.decrypt.assert_called_once()
+
+
+@pytest.mark.parametrize("fields", conformance._ENTRY_ZIP64_FIELDS)
+@pytest.mark.parametrize("zip64_eocd", [False, True])
+def test_independent_entry_sentinels_preserve_contents(
+    tmp_path: Path, fields: str, zip64_eocd: bool
+):
+    src = _ordinary_zip(tmp_path / "src.zip")
+    trailer, cd_offset = zipmutate.load_trailer(src)
+    original = trailer.entries[1]
+    trailer.entries[1] = conformance._with_zip64_fields(original, fields)
+    trailer = dataclasses.replace(trailer, force_zip64_eocd=zip64_eocd)
+    dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
+    assert src.read_bytes()[:cd_offset] == dest.read_bytes()[:cd_offset]
+    entry = zipinspect.central_directory(dest).entries[1]
+    assert (entry.raw_compressed_size == 0xFFFFFFFF) == ("c" in fields)
+    assert (entry.raw_uncompressed_size == 0xFFFFFFFF) == ("u" in fields)
+    assert (entry.raw_local_header_offset == 0xFFFFFFFF) == ("o" in fields)
+    assert entry.compressed_size == original.compressed_size
+    assert entry.uncompressed_size == original.uncompressed_size
+    assert entry.local_header_offset == original.local_header_offset
+    with zipfile.ZipFile(src) as before, zipfile.ZipFile(dest) as after:
+        for name in before.namelist():
+            assert before.read(name) == after.read(name)
+        assert after.getinfo("0.manifest.json").extract_version == 45
+        assert after.getinfo("0.payload").extract_version == 20
+
+
+@pytest.mark.parametrize("field", ["count", "size", "offset"])
+def test_independent_eocd_sentinels(tmp_path: Path, field: str):
+    src = _ordinary_zip(tmp_path / "src.zip")
+    trailer, cd_offset = zipmutate.load_trailer(src)
+    trailer = dataclasses.replace(
+        trailer, force_zip64_eocd=True, zip64_eocd_fields=frozenset({field})
+    )
+    dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
+    tail = dest.read_bytes()[-zipinspect.EOCD_SIZE :]
+    disk, cd_disk, count_disk, count, size, offset = struct.unpack_from(
+        "<HHHHII", tail, 4
+    )
+    assert disk == cd_disk == 0
+    assert count_disk == count == (0xFFFF if field == "count" else 2)
+    assert size == (
+        0xFFFFFFFF
+        if field == "size"
+        else sum(len(e.to_bytes()) for e in trailer.entries)
+    )
+    assert offset == (0xFFFFFFFF if field == "offset" else cd_offset)
+    with zipfile.ZipFile(src) as before, zipfile.ZipFile(dest) as after:
+        for name in before.namelist():
+            assert before.read(name) == after.read(name)
+
+
+def test_directory_entry_comment_preserves_following_entry(tmp_path: Path):
+    src = _ordinary_zip(tmp_path / "src.zip")
+    trailer, _ = zipmutate.load_trailer(src)
+    trailer.entries[0] = dataclasses.replace(
+        trailer.entries[0], comment=b"entry comment"
+    )
+    dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
+    assert len(zipinspect.central_directory(dest).entries) == 2
+    with zipfile.ZipFile(src) as before, zipfile.ZipFile(dest) as after:
+        assert after.getinfo("0.payload").comment == b"entry comment"
+        assert after.comment == b""
+        assert all(e.extract_version == 20 for e in after.infolist())
+        for name in before.namelist():
+            assert before.read(name) == after.read(name)
