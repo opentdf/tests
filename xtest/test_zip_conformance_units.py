@@ -9,11 +9,19 @@ bug here would otherwise surface only as a mysterious failure in
 build something with ``zipmutate`` and then check what comes back out through
 the (separately tested) reader, rather than asserting on ``zipmutate``'s own
 internals.
+
+The second half pins ``test_zip_conformance.py``'s *outcome contract* rather
+than the builder: which decrypt results pass, which fail, and that a
+tolerated result never leaks the client credentials the go and java shims
+echo. That contract is what every cross-SDK cell rests on, and it is cheap to
+get subtly wrong -- so it is checked here, offline, on every PR. Everything
+added for it must stay offline: fake the process result, never spawn a CLI.
 """
 
 import dataclasses
 import struct
 import subprocess
+import warnings
 import zipfile
 from pathlib import Path
 from unittest.mock import create_autospec
@@ -253,12 +261,54 @@ class TestCorruptEntryBytes:
             )
 
 
-@pytest.mark.parametrize("outcome", ["roundtrip", "parser_error", "wrong_plaintext"])
-def test_fake_record_conformance_requires_a_faithful_roundtrip(
+#: A real go parser diagnostic, matched by conformance._ZIP_REJECTIONS["go"].
+_GO_REJECTION = b"zipstream.NewTDFReader failed: zip: not a valid zip file"
+#: What the go shim actually prints on stdout before every run. The secret is
+#: the point: nothing a tolerated outcome reports may contain it.
+_GO_STDOUT = (
+    b"otdfctl decrypt --with-client-creds "
+    b'{"clientId":"opentdf","clientSecret":"hunter2"} in.tdf\n'
+)
+_SECRET = "hunter2"
+
+
+def _fake_sdk(name: str = "go") -> tdfs.SDK:
+    """An SDK stand-in that is never invoked -- only named and dispatched on."""
+    sdk = create_autospec(tdfs.SDK, instance=True)
+    sdk.sdk = name
+    sdk.version = "fake"
+    sdk.__str__.return_value = f"{name}@fake"
+    return sdk
+
+
+#: outcome -> (exit status, stderr). Exit 0 rows write plaintext instead.
+_DECRYPT_OUTCOMES: dict[str, tuple[int, bytes]] = {
+    "roundtrip": (0, b""),
+    "wrong_plaintext": (0, b""),
+    "clean_rejection": (1, _GO_REJECTION),
+    "unrelated_failure": (1, b"connection refused"),
+    "runtime_crash": (2, b"panic: runtime error: makeslice: len out of range"),
+    "signal_death": (-9, _GO_REJECTION),
+}
+
+
+@pytest.mark.parametrize("outcome", list(_DECRYPT_OUTCOMES))
+def test_fake_record_conformance_accepts_only_safe_outcomes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: str
 ):
-    """Run the actual conformance case offline: metadata remains readable,
-    payload bytes stay intact, and neither failure nor wrong output passes.
+    """Run a real conformance cell offline against every outcome shape.
+
+    The mutation is the same either way -- metadata stays readable and
+    payload bytes stay intact, asserted inside the fake before it answers --
+    so what this pins is the *verdict*. A faithful read and a clean rejection
+    both pass; wrong bytes, an unrelated error, a panic and a signal death
+    all fail. The cell is spec-legal, so its tolerated rejection must also
+    warn.
+
+    ``_bounded_decrypt`` is what gets faked, not ``SDK.decrypt``: the real
+    path is ``decrypt_command`` -> ``Popen``, and faking one layer lower
+    would mean spawning a process. ``_bounded_decrypt`` keeps its own
+    coverage in ``test_bounded_decrypt_kills_descendants_on_timeout``.
     """
     src = _ordinary_zip(tmp_path / "src.zip")
     cd = zipinspect.central_directory(src)
@@ -266,10 +316,13 @@ def test_fake_record_conformance_requires_a_faithful_roundtrip(
     with zipfile.ZipFile(src) as z:
         pt.write_bytes(z.read("0.payload"))
     monkeypatch.setattr(conformance, "_base_container", lambda *args: src)
-    sdk = create_autospec(tdfs.SDK, instance=True)
+    sdk = _fake_sdk()
+    calls: list[Path] = []
 
-    def decrypt(ct_file: Path, rt_file: Path, container: str) -> None:
-        assert container == "ztdf"
+    def fake_decrypt(
+        _sdk: tdfs.SDK, ct_file: Path, rt_file: Path, **_kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        calls.append(ct_file)
         assert ct_file.read_bytes()[: cd.cd_offset] == src.read_bytes()[: cd.cd_offset]
         with zipfile.ZipFile(ct_file) as z:
             assert z.comment.startswith(zipinspect.CEN_SIG)
@@ -278,13 +331,13 @@ def test_fake_record_conformance_requires_a_faithful_roundtrip(
             assert z.namelist() == ["0.payload", "0.manifest.json"]
             payload = z.read("0.payload")  # also validates the CRC-32
             assert payload == pt.read_bytes()
-        if outcome == "parser_error":
-            raise subprocess.CalledProcessError(
-                1, "decrypt", stderr=b"ZIP parse failed"
-            )
-        rt_file.write_bytes(b"wrong" if outcome == "wrong_plaintext" else payload)
+        status, stderr = _DECRYPT_OUTCOMES[outcome]
+        if status == 0:
+            rt_file.write_bytes(b"wrong" if outcome == "wrong_plaintext" else payload)
+        return subprocess.CompletedProcess(["fake-cli"], status, _GO_STDOUT, stderr)
 
-    sdk.decrypt.side_effect = decrypt
+    monkeypatch.setattr(conformance, "_bounded_decrypt", fake_decrypt)
+    recorded: list[tuple[str, object]] = []
 
     def run_case() -> None:
         conformance.test_comment_containing_a_fake_central_directory_record(
@@ -292,20 +345,42 @@ def test_fake_record_conformance_requires_a_faithful_roundtrip(
             decrypt_sdk=sdk,
             in_focus={sdk},
             zip_conformance_tdf=create_autospec(EncryptFactory, instance=True),
-            zip_conformance_pt_file=pt,
             attribute_default_rsa=create_autospec(Attribute, instance=True),
             tmp_path=tmp_path,
+            zip_outcome=conformance.ZipOutcome(
+                sdk, pt, "fake::node", lambda k, v: recorded.append((k, v))
+            ),
         )
 
-    if outcome == "parser_error":
-        with pytest.raises(subprocess.CalledProcessError):
+    failures = {
+        "wrong_plaintext": "does not match",
+        "unrelated_failure": "without a recognized ZIP rejection",
+        "runtime_crash": "runtime failure",
+        "signal_death": "did not reject normally",
+    }
+    if outcome in failures:
+        with pytest.raises(AssertionError, match=failures[outcome]):
             run_case()
-    elif outcome == "wrong_plaintext":
-        with pytest.raises(AssertionError, match="does not match"):
+        assert not recorded, "a failed cell must not report an outcome"
+    elif outcome == "clean_rejection":
+        with pytest.warns(conformance.NonConformantZipReader):
             run_case()
+        assert ("zip_conformance_outcome", "rejected") in recorded
+        # The allowlist-matched slice, not the whole line: the line may be
+        # anywhere in the combined output, including the credential-bearing
+        # stdout the go shim echoes.
+        diagnostics = [v for k, v in recorded if k == "zip_conformance_diagnostic"]
+        assert diagnostics and str(diagnostics[0]) in _GO_REJECTION.decode()
     else:
-        run_case()
-    sdk.decrypt.assert_called_once()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run_case()
+        assert not [w for w in caught if issubclass(w.category, UserWarning)], (
+            "a faithful roundtrip of a spec-legal structure is unremarkable "
+            "and must not warn"
+        )
+        assert ("zip_conformance_outcome", "accepted") in recorded
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("fields", conformance._ENTRY_ZIP64_FIELDS)
@@ -433,31 +508,196 @@ def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
     ],
 )
 def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
-    conformance._assert_zip_rejection(
+    matched = conformance._assert_zip_rejection(
         sdk, subprocess.CompletedProcess(["fake-cli"], 1, b"", diagnostic)
+    )
+    assert matched, "a recognized rejection must name what it matched"
+    assert matched in diagnostic.decode(), (
+        "the returned diagnostic is what gets warned and recorded, so it must "
+        "be a literal slice of the output, not a regex or a reconstruction"
     )
 
 
 @pytest.mark.parametrize(
-    "status,diagnostic",
+    "sdk,status,diagnostic",
     [
-        (0, b""),
-        (-9, b"zip: not a valid zip file"),
-        (137, b"zip: not a valid zip file"),
-        (2, b"panic: runtime error: makeslice: len out of range"),
-        (1, b"zip: not a valid zip file\njava.lang.OutOfMemoryError"),
-        (1, b"zip: not a valid zip file\njava.lang.NegativeArraySizeException"),
-        (1, b"zip: not a valid zip file\nRangeError: Invalid array length"),
-        (1, b"authentication failed"),
-        (1, b"connection refused"),
-        (1, b"usage: decrypt input output"),
-        (1, b"cipher: message authentication failed"),
+        ("go", 0, b""),
+        ("go", -9, b"zip: not a valid zip file"),
+        ("go", 137, b"zip: not a valid zip file"),
+        ("go", 2, b"panic: runtime error: makeslice: len out of range"),
+        ("go", 1, b"zip: not a valid zip file\njava.lang.OutOfMemoryError"),
+        ("go", 1, b"zip: not a valid zip file\njava.lang.NegativeArraySizeException"),
+        ("go", 1, b"zip: not a valid zip file\nRangeError: Invalid array length"),
+        ("go", 1, b"authentication failed"),
+        ("go", 1, b"connection refused"),
+        ("go", 1, b"usage: decrypt input output"),
+        ("go", 1, b"cipher: message authentication failed"),
+        # Real diagnostics, deliberately not allowlisted: each is the SDK
+        # noticing by accident downstream of its ZIP layer rather than
+        # diagnosing the container, so none is evidence of a bounds check.
+        # All three are filed upstream; see the comment above _ZIP_REJECTIONS.
+        (
+            "go",
+            1,
+            b"Failed to decrypt file: json.Unmarshal failed:"
+            b"invalid character 'P' after top-level value",
+        ),
+        (
+            "java",
+            1,
+            b"java.lang.IllegalArgumentException\n"
+            b"\tat java.base/sun.nio.ch.FileChannelImpl.position"
+            b"(FileChannelImpl.java:383)\n"
+            b"\tat io.opentdf.platform.sdk.ZipReader."
+            b"extractZIP64CentralDirectoryInfo(ZipReader.java:159)",
+        ),
+        (
+            "js",
+            1,
+            b"SyntaxError: Unexpected end of JSON input\n"
+            b"    at JSON.parse (<anonymous>)\n"
+            b"    at ZipReader.getManifest (tdf3/src/utils/zip-reader.js:54:21)",
+        ),
     ],
 )
-def test_abnormal_or_unrelated_failures_do_not_pass(status: int, diagnostic: bytes):
+def test_abnormal_or_unrelated_failures_do_not_pass(
+    sdk: str, status: int, diagnostic: bytes
+):
     with pytest.raises(AssertionError):
         conformance._assert_zip_rejection(
-            "go", subprocess.CompletedProcess(["fake-cli"], status, b"", diagnostic)
+            sdk, subprocess.CompletedProcess(["fake-cli"], status, b"", diagnostic)
+        )
+
+
+def _outcome_harness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    reject: bool,
+    faithful: bool = True,
+) -> tuple[conformance.ZipOutcome, Path, Path, list[tuple[str, object]]]:
+    """A ZipOutcome wired to a fake decrypt with a fixed verdict.
+
+    The fake always answers with ``_GO_STDOUT`` so every path through
+    ``_report`` is exercised against output that contains a credential.
+    """
+    pt = tmp_path / "plaintext.bin"
+    pt.write_bytes(b"the original plaintext")
+    ct = tmp_path / "mutated.tdf"
+    ct.write_bytes(b"not actually read")
+    rt = tmp_path / "roundtrip.bin"
+    recorded: list[tuple[str, object]] = []
+
+    def fake_decrypt(
+        _sdk: tdfs.SDK, _ct: Path, rt_file: Path, **_kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        if not reject:
+            rt_file.write_bytes(pt.read_bytes() if faithful else b"wrong bytes")
+        return subprocess.CompletedProcess(
+            ["fake-cli"],
+            1 if reject else 0,
+            _GO_STDOUT,
+            _GO_REJECTION if reject else b"",
+        )
+
+    monkeypatch.setattr(conformance, "_bounded_decrypt", fake_decrypt)
+    outcome = conformance.ZipOutcome(
+        _fake_sdk(), pt, "fake::node", lambda k, v: recorded.append((k, v))
+    )
+    return outcome, ct, rt, recorded
+
+
+@pytest.mark.parametrize("legality", ["spec-legal", "adversarial"])
+@pytest.mark.parametrize("reject", [False, True], ids=["accepted", "rejected"])
+def test_only_the_unexpected_quadrants_warn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legality: str, reject: bool
+):
+    """Both outcomes pass everywhere; exactly two of the four are remarkable.
+
+    Refusing a structure APPNOTE permits, and reading a malformed one
+    correctly, are the two ways to pass without being conformant. The other
+    two quadrants are the expected result and must stay quiet, or the signal
+    drowns in a nightly run's worth of noise.
+    """
+    outcome, ct, rt, recorded = _outcome_harness(tmp_path, monkeypatch, reject=reject)
+    expected = {
+        ("spec-legal", True): conformance.NonConformantZipReader,
+        ("adversarial", False): conformance.LenientZipReader,
+    }.get((legality, reject))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        outcome(ct, rt, legality=legality)  # type: ignore[arg-type]
+
+    raised = [
+        w for w in caught if issubclass(w.category, conformance.ZipConformanceWarning)
+    ]
+    if expected is None:
+        assert not raised, (
+            f"{legality}/{'rejected' if reject else 'accepted'} is the expected result"
+        )
+    else:
+        assert [w.category for w in raised] == [expected]
+    assert ("zip_conformance_outcome", "rejected" if reject else "accepted") in recorded
+    assert ("zip_conformance_legality", legality) in recorded
+    assert ("zip_conformance_sdk", "go") in recorded
+
+
+@pytest.mark.parametrize("legality", ["spec-legal", "adversarial"])
+@pytest.mark.parametrize("reject", [False, True], ids=["accepted", "rejected"])
+def test_a_tolerated_outcome_never_echoes_the_command_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legality: str, reject: bool
+):
+    """The go and java shims print client credentials on stdout every run.
+
+    Only the allowlist-matched slice of the output may reach a warning or a
+    recorded property -- those end up in CI logs and junit artifacts. A
+    well-meaning change to report "more context" is exactly how a secret
+    would get published, so pin it on every quadrant.
+    """
+    outcome, ct, rt, recorded = _outcome_harness(tmp_path, monkeypatch, reject=reject)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        outcome(ct, rt, legality=legality)  # type: ignore[arg-type]
+
+    assert _SECRET in _GO_STDOUT.decode(), "the fixture must actually carry a secret"
+    for w in caught:
+        assert _SECRET not in str(w.message)
+    for key, value in recorded:
+        assert _SECRET not in f"{key}{value}"
+
+
+def test_silent_corruption_fails_whatever_the_legality(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Exit 0 with the wrong bytes is the one outcome nothing tolerates."""
+    outcome, ct, rt, recorded = _outcome_harness(
+        tmp_path, monkeypatch, reject=False, faithful=False
+    )
+    with pytest.raises(AssertionError, match="silent corruption"):
+        outcome(ct, rt, legality="adversarial")
+    assert not recorded
+
+
+def test_exit_zero_without_output_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A reader that claims success and writes nothing has not round-tripped.
+
+    filecmp.cmp would raise FileNotFoundError here rather than fail the
+    assertion, which reads as a harness bug instead of an SDK one.
+    """
+    pt = tmp_path / "plaintext.bin"
+    pt.write_bytes(b"the original plaintext")
+    monkeypatch.setattr(
+        conformance,
+        "_bounded_decrypt",
+        lambda *_a, **_k: subprocess.CompletedProcess(["fake-cli"], 0, b"", b""),
+    )
+    outcome = conformance.ZipOutcome(_fake_sdk(), pt, "fake::node", lambda _k, _v: None)
+    with pytest.raises(AssertionError, match="without writing"):
+        outcome(
+            tmp_path / "mutated.tdf", tmp_path / "missing.bin", legality="spec-legal"
         )
 
 

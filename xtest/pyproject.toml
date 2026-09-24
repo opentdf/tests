@@ -111,6 +111,12 @@ testpaths = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-ra -v"
+# test_zip_conformance.py reports which SDKs are lenient vs. conformant via
+# record_property, which emits <properties> only under xunit1 (pytest's
+# default xunit2 drops them and warns). Nothing here reads xunit2-only
+# output: the ZIP64 cell-count gate parses <testcase>/<skipped>, which both
+# families emit.
+junit_family = "xunit1"
 markers = [
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",
