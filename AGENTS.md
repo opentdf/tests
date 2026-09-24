@@ -54,7 +54,14 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 
 - `PLATFORMURL` — platform endpoint (default `http://localhost:8080`)
 - `OT_ROOT_KEY` — root key for key-management tests
-- `SCHEMA_FILE` — path to manifest schema file
+- `SCHEMA_FILE` — path to a local manifest schema file. Optional. By default the
+  schema is fetched from `opentdf/platform` on `main`, so there is no copy in
+  this repo to fall out of date. Set this only for a schema that is on no branch.
+- `PLATFORM_SCHEMA_REF` — ref to fetch the manifest schema from (default `main`).
+  Set it when the branch under test legitimately changes the schema; otherwise
+  validating against `main` is the point, since the schema is normative.
+  Mutually exclusive with `SCHEMA_FILE`: setting both raises, because
+  `SCHEMA_FILE` would win and the ref you asked for would be dropped in silence.
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
 - `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
   Point it at a large volume for multi-GiB runs.
@@ -185,6 +192,15 @@ uv run pytest test_legacy.py --sdks go -v --no-audit-logs
 **Fix**:
 ```bash
 export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
+```
+
+**Symptom**: `URLError` or a timeout from `raw.githubusercontent.com` during schema validation
+
+**Fix**: the manifest schema is fetched from `opentdf/platform` on `main`. Offline, cache it once and point at that — fetching the ref you actually want, since `SCHEMA_FILE` replaces `PLATFORM_SCHEMA_REF` rather than combining with it:
+```bash
+curl -o manifest.schema.json \
+  "https://raw.githubusercontent.com/opentdf/platform/${PLATFORM_SCHEMA_REF:-main}/sdk/schema/manifest.schema.json"
+unset PLATFORM_SCHEMA_REF   # the file is the schema now; setting both is an error
 export SCHEMA_FILE=manifest.schema.json
 ```
 
