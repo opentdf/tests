@@ -13,13 +13,19 @@ internals.
 
 import dataclasses
 import struct
+import subprocess
 import zipfile
 from pathlib import Path
+from unittest.mock import create_autospec
 
 import pytest
 
+import tdfs
+import test_zip_conformance as conformance
 import zipinspect
 import zipmutate
+from abac import Attribute
+from fixtures.encryption import EncryptFactory
 from zipinspect import MalformedZipError
 
 #: The same extended-timestamp shape real writers emit, reused from
@@ -55,6 +61,8 @@ class TestLoadTrailerAndRewrite:
         ]
         assert after.cd_offset == cd_offset
         zipinspect.assert_offsets_are_consistent(after)
+        with zipfile.ZipFile(dest) as z:
+            assert all(e.extract_version == 20 for e in z.infolist())
 
     def test_rejects_identical_src_and_dest(self, tmp_path: Path):
         src = _ordinary_zip(tmp_path / "src.zip")
@@ -62,11 +70,12 @@ class TestLoadTrailerAndRewrite:
         with pytest.raises(ValueError, match="distinct src and dest"):
             zipmutate.rewrite(src, src, trailer)
 
+    @pytest.mark.parametrize("version_needed", [20, 45], ids=["compatibility", "zip64"])
     def test_zip64_offset_forced_with_a_foreign_extra_record_ahead_of_it(
-        self, tmp_path: Path
+        self, tmp_path: Path, version_needed: int
     ):
-        """DSPX-4591 finding 2's shape: a foreign TLV first, ZIP64 sentinel
-        gated on nothing but the sentinel itself.
+        """The inspector tolerates version 2.0 on a ZIP64 entry, although
+        cross-SDK conformance requires a valid version 4.5 declaration.
         """
         src = _ordinary_zip(tmp_path / "src.zip")
         trailer, _ = zipmutate.load_trailer(src)
@@ -80,7 +89,7 @@ class TestLoadTrailerAndRewrite:
                     entry,
                     force_zip64_offset=True,
                     extra_prefix=_FOREIGN_EXTRA_TLV,
-                    version_needed_to_extract=20,
+                    version_needed_to_extract=version_needed,
                 )
         assert true_offset is not None
 
@@ -92,6 +101,9 @@ class TestLoadTrailerAndRewrite:
         assert manifest.has_zip64_extra
         assert manifest.uses_zip64_for_offset
         assert manifest.local_header_offset == true_offset
+        with zipfile.ZipFile(dest) as z:
+            assert z.getinfo("0.manifest.json").extract_version == version_needed
+            assert z.getinfo("0.payload").extract_version == 20
 
     def test_zip64_sizes_forced_resolve_both_fields(self, tmp_path: Path):
         src = _ordinary_zip(tmp_path / "src.zip")
@@ -99,7 +111,9 @@ class TestLoadTrailerAndRewrite:
         payload = trailer.entries[0]
         assert payload.name == "0.payload"
         true_csize, true_usize = payload.compressed_size, payload.uncompressed_size
-        trailer.entries[0] = dataclasses.replace(payload, force_zip64_sizes=True)
+        trailer.entries[0] = dataclasses.replace(
+            payload, force_zip64_sizes=True, version_needed_to_extract=45
+        )
 
         dest = tmp_path / "dest.zip"
         zipmutate.rewrite(src, dest, trailer)
@@ -109,16 +123,29 @@ class TestLoadTrailerAndRewrite:
         assert entry.compressed_size == true_csize
         assert entry.uncompressed_size == true_usize
 
-    def test_max_length_comment_round_trips(self, tmp_path: Path):
+    @pytest.mark.parametrize("force_zip64", [False, True], ids=["zip", "zip64"])
+    @pytest.mark.parametrize("comment_length", [0xFFEB, 0xFFEC, 0xFFFF])
+    def test_long_comment_round_trips(
+        self, tmp_path: Path, force_zip64: bool, comment_length: int
+    ):
+        """Exercise the locator at, partly before, and wholly before the
+        old EOCD-only search window, with ordinary ZIP controls as well.
+        """
         src = _ordinary_zip(tmp_path / "src.zip")
         trailer, _ = zipmutate.load_trailer(src)
 
-        trailer = dataclasses.replace(trailer, comment=b"c" * 0xFFFF)
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=force_zip64, comment=b"c" * comment_length
+        )
 
         dest = tmp_path / "dest.zip"
         zipmutate.rewrite(src, dest, trailer)
         cd = zipinspect.central_directory(dest)
         assert {e.name for e in cd.entries} == {"0.payload", "0.manifest.json"}
+        with zipfile.ZipFile(src) as original, zipfile.ZipFile(dest) as rewritten:
+            assert rewritten.comment == b"c" * comment_length
+            for name in original.namelist():
+                assert rewritten.read(name) == original.read(name)
 
     def test_comment_over_0xffff_is_rejected(self, tmp_path: Path):
         src = _ordinary_zip(tmp_path / "src.zip")
@@ -221,3 +248,58 @@ class TestCorruptEntryBytes:
                 at=entry.compressed_size - 1,
                 patch=b"too-long-for-the-remaining-space",
             )
+
+
+@pytest.mark.parametrize("outcome", ["roundtrip", "parser_error", "wrong_plaintext"])
+def test_fake_record_conformance_requires_a_faithful_roundtrip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: str
+):
+    """Run the actual conformance case offline: metadata remains readable,
+    payload bytes stay intact, and neither failure nor wrong output passes.
+    """
+    src = _ordinary_zip(tmp_path / "src.zip")
+    cd = zipinspect.central_directory(src)
+    pt = tmp_path / "plaintext.bin"
+    with zipfile.ZipFile(src) as z:
+        pt.write_bytes(z.read("0.payload"))
+    monkeypatch.setattr(conformance, "_base_container", lambda *args: src)
+    sdk = create_autospec(tdfs.SDK, instance=True)
+
+    def decrypt(ct_file: Path, rt_file: Path, container: str) -> None:
+        assert container == "ztdf"
+        assert ct_file.read_bytes()[: cd.cd_offset] == src.read_bytes()[: cd.cd_offset]
+        with zipfile.ZipFile(ct_file) as z:
+            assert z.comment.startswith(zipinspect.CEN_SIG)
+            (fake_offset,) = struct.unpack_from("<I", z.comment, 42)
+            assert fake_offset > ct_file.stat().st_size
+            assert z.namelist() == ["0.payload", "0.manifest.json"]
+            payload = z.read("0.payload")  # also validates the CRC-32
+            assert payload == pt.read_bytes()
+        if outcome == "parser_error":
+            raise subprocess.CalledProcessError(
+                1, "decrypt", stderr=b"ZIP parse failed"
+            )
+        rt_file.write_bytes(b"wrong" if outcome == "wrong_plaintext" else payload)
+
+    sdk.decrypt.side_effect = decrypt
+
+    def run_case() -> None:
+        conformance.test_comment_containing_a_fake_central_directory_record(
+            encrypt_sdk=sdk,
+            decrypt_sdk=sdk,
+            in_focus={sdk},
+            zip_conformance_tdf=create_autospec(EncryptFactory, instance=True),
+            zip_conformance_pt_file=pt,
+            attribute_default_rsa=create_autospec(Attribute, instance=True),
+            tmp_path=tmp_path,
+        )
+
+    if outcome == "parser_error":
+        with pytest.raises(subprocess.CalledProcessError):
+            run_case()
+    elif outcome == "wrong_plaintext":
+        with pytest.raises(AssertionError, match="does not match"):
+            run_case()
+    else:
+        run_case()
+    sdk.decrypt.assert_called_once()
