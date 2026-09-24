@@ -49,8 +49,10 @@ class MutableEntry:
     #: A foreign extra-field TLV (e.g. an extended-timestamp record) placed
     #: *before* any ZIP64 record this builds, to test order independence.
     extra_prefix: bytes = b""
+    comment: bytes = b""
     force_zip64_offset: bool = False
-    force_zip64_sizes: bool = False
+    force_zip64_compressed_size: bool = False
+    force_zip64_uncompressed_size: bool = False
 
     @staticmethod
     def from_entry(e: zipinspect.CentralDirectoryEntry) -> MutableEntry:
@@ -66,8 +68,9 @@ class MutableEntry:
     def to_bytes(self) -> bytes:
         """Encode as one central-directory record (APPNOTE 4.3.12)."""
         zip64_body = b""
-        if self.force_zip64_sizes:
+        if self.force_zip64_uncompressed_size:
             zip64_body += struct.pack("<Q", self.uncompressed_size)
+        if self.force_zip64_compressed_size:
             zip64_body += struct.pack("<Q", self.compressed_size)
         if self.force_zip64_offset:
             zip64_body += struct.pack("<Q", self.local_header_offset)
@@ -80,12 +83,12 @@ class MutableEntry:
 
         raw_usize = (
             zipinspect.ZIP64_SENTINEL_32
-            if self.force_zip64_sizes
+            if self.force_zip64_uncompressed_size
             else self.uncompressed_size
         )
         raw_csize = (
             zipinspect.ZIP64_SENTINEL_32
-            if self.force_zip64_sizes
+            if self.force_zip64_compressed_size
             else self.compressed_size
         )
         raw_offset = (
@@ -100,11 +103,12 @@ class MutableEntry:
             + struct.pack("<HHHHHH", 45, self.version_needed_to_extract, 0, 0, 0, 0)
             + struct.pack("<I", self.crc32)
             + struct.pack("<II", raw_csize, raw_usize)
-            + struct.pack("<HHH", len(encoded), len(extra), 0)
+            + struct.pack("<HHH", len(encoded), len(extra), len(self.comment))
             + struct.pack("<HHI", 0, 0, 0)
             + struct.pack("<I", raw_offset)
             + encoded
             + extra
+            + self.comment
         )
 
 
@@ -118,6 +122,9 @@ class MutableTrailer:
     #: spec-legal (APPNOTE does not forbid it), and how a real container's
     #: ZIP64 locator gets pushed behind an oversized comment for testing.
     force_zip64_eocd: bool = False
+    #: Which ordinary EOCD fields defer to ZIP64; the others remain truthful.
+    #: Used only when force_zip64_eocd is true. Disk numbers always remain zero.
+    zip64_eocd_fields: frozenset[str] = frozenset({"count", "size", "offset"})
     #: Lie about the entry count in the EOCD (or ZIP64 EOCD). None: truthful.
     #: The central directory's own bytes are never padded to match, so a
     #: reader that walks this many records runs off the real data.
@@ -137,6 +144,8 @@ class MutableTrailer:
             )
 
         if self.force_zip64_eocd:
+            if not self.zip64_eocd_fields <= {"count", "size", "offset"}:
+                raise ValueError(f"unknown ZIP64 EOCD fields: {self.zip64_eocd_fields}")
             eocd64_offset = cd_offset + len(cd)
             eocd64 = (
                 zipinspect.EOCD64_SIG
@@ -154,8 +163,18 @@ class MutableTrailer:
             )
             eocd = (
                 zipinspect.EOCD_SIG
-                + struct.pack("<HHHH", 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF)
-                + struct.pack("<II", 0xFFFFFFFF, 0xFFFFFFFF)
+                + struct.pack(
+                    "<HHHH",
+                    0,
+                    0,
+                    0xFFFF if "count" in self.zip64_eocd_fields else declared_count,
+                    0xFFFF if "count" in self.zip64_eocd_fields else declared_count,
+                )
+                + struct.pack(
+                    "<II",
+                    0xFFFFFFFF if "size" in self.zip64_eocd_fields else len(cd),
+                    0xFFFFFFFF if "offset" in self.zip64_eocd_fields else cd_offset,
+                )
                 + struct.pack("<H", len(self.comment))
                 + self.comment
             )
