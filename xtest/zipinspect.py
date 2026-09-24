@@ -23,11 +23,13 @@ from typing import NamedTuple
 
 from sizes import ZIP64_WINDOW_HIGH, in_zip64_window
 
-# Signatures, little-endian.
-_CEN_SIG = b"PK\x01\x02"
-_EOCD_SIG = b"PK\x05\x06"
-_EOCD64_SIG = b"PK\x06\x06"
-_EOCD64_LOCATOR_SIG = b"PK\x06\x07"
+# Signatures, little-endian. Public: zipmutate.py builds records against
+# these same literals rather than duplicating them.
+CEN_SIG = b"PK\x01\x02"
+EOCD_SIG = b"PK\x05\x06"
+EOCD64_SIG = b"PK\x06\x06"
+EOCD64_LOCATOR_SIG = b"PK\x06\x07"
+LOCAL_FILE_HEADER_SIG = b"PK\x03\x04"
 
 #: Written into a 32-bit field to mean "the real value is in the ZIP64 extra
 #: field". APPNOTE 4.4.1.4.
@@ -36,14 +38,16 @@ ZIP64_SENTINEL_32 = 0xFFFFFFFF
 #: Header ID of the ZIP64 extended information extra field. APPNOTE 4.5.3.
 ZIP64_EXTRA_ID = 0x0001
 
-_EOCD_SIZE = 22
-_EOCD64_SIZE = 56
-_EOCD64_LOCATOR_SIZE = 20
+EOCD_SIZE = 22
+EOCD64_SIZE = 56
+EOCD64_LOCATOR_SIZE = 20
 #: Bytes of a central-directory record before the variable-length name.
-_CEN_FIXED_SIZE = 46
+CEN_FIXED_SIZE = 46
+#: Bytes of a local file header before the variable-length name. APPNOTE 4.3.7.
+LOCAL_FILE_HEADER_FIXED_SIZE = 30
 #: A ZIP comment is a 16-bit length, so the EOCD cannot start further back
 #: than this from the end of the file.
-_MAX_EOCD_SEARCH = _EOCD_SIZE + 0xFFFF
+_MAX_EOCD_SEARCH = EOCD_SIZE + 0xFFFF
 
 
 class MalformedZipError(Exception):
@@ -62,6 +66,7 @@ class CentralDirectoryEntry:
     """
 
     name: str
+    raw_crc32: int
     raw_compressed_size: int
     raw_uncompressed_size: int
     raw_local_header_offset: int
@@ -107,7 +112,7 @@ def _find_eocd(data: bytes) -> int:
     signature planted inside the trailing file comment would defeat this, but
     it would defeat every ZIP reader; the format is genuinely ambiguous there.)
     """
-    idx = data.rfind(_EOCD_SIG)
+    idx = data.rfind(EOCD_SIG)
     if idx < 0:
         raise MalformedZipError("no end-of-central-directory record found")
     return idx
@@ -228,10 +233,10 @@ def central_directory(path: Path) -> CentralDirectory:
         tail = f.read(tail_len)
 
         eocd_at = _find_eocd(tail)
-        if eocd_at + _EOCD_SIZE > len(tail):
+        if eocd_at + EOCD_SIZE > len(tail):
             raise MalformedZipError(
                 f"end-of-central-directory record at {eocd_at} is truncated: "
-                f"{len(tail) - eocd_at} of {_EOCD_SIZE} bytes"
+                f"{len(tail) - eocd_at} of {EOCD_SIZE} bytes"
             )
         (
             cd_entries_this_disk,
@@ -244,17 +249,17 @@ def central_directory(path: Path) -> CentralDirectory:
         entry_count = cd_entries_total
         # ZIP64: the 32-bit EOCD holds sentinels and the real values live in
         # the ZIP64 EOCD record, found via the locator that precedes the EOCD.
-        locator_at = eocd_at - _EOCD64_LOCATOR_SIZE
-        if locator_at >= 0 and tail[locator_at : locator_at + 4] == _EOCD64_LOCATOR_SIG:
+        locator_at = eocd_at - EOCD64_LOCATOR_SIZE
+        if locator_at >= 0 and tail[locator_at : locator_at + 4] == EOCD64_LOCATOR_SIG:
             (eocd64_offset,) = struct.unpack_from("<Q", tail, locator_at + 8)
-            if eocd64_offset + _EOCD64_SIZE > file_size:
+            if eocd64_offset + EOCD64_SIZE > file_size:
                 raise MalformedZipError(
                     f"zip64 locator points at {eocd64_offset}, past the end of "
                     f"a {file_size}-byte file"
                 )
             f.seek(eocd64_offset)
-            eocd64 = f.read(_EOCD64_SIZE)
-            if eocd64[:4] != _EOCD64_SIG:
+            eocd64 = f.read(EOCD64_SIZE)
+            if eocd64[:4] != EOCD64_SIG:
                 raise MalformedZipError(
                     f"zip64 locator points at {eocd64_offset}, which is not a "
                     "zip64 end-of-central-directory record"
@@ -274,15 +279,16 @@ def central_directory(path: Path) -> CentralDirectory:
     entries: list[CentralDirectoryEntry] = []
     pos = 0
     for _ in range(entry_count):
-        if cd[pos : pos + 4] != _CEN_SIG:
+        if cd[pos : pos + 4] != CEN_SIG:
             raise MalformedZipError(
                 f"expected a central-directory header at {cd_offset + pos}"
             )
-        if pos + _CEN_FIXED_SIZE > len(cd):
+        if pos + CEN_FIXED_SIZE > len(cd):
             raise MalformedZipError(
                 f"central-directory header at {cd_offset + pos} is truncated: "
-                f"{len(cd) - pos} of {_CEN_FIXED_SIZE} bytes"
+                f"{len(cd) - pos} of {CEN_FIXED_SIZE} bytes"
             )
+        (raw_crc32,) = struct.unpack_from("<I", cd, pos + 16)
         (
             raw_compressed,
             raw_uncompressed,
@@ -292,7 +298,7 @@ def central_directory(path: Path) -> CentralDirectory:
         ) = struct.unpack_from("<IIHHH", cd, pos + 20)
         (raw_offset,) = struct.unpack_from("<I", cd, pos + 42)
 
-        name_at = pos + _CEN_FIXED_SIZE
+        name_at = pos + CEN_FIXED_SIZE
         extra_at = name_at + name_len
         end = extra_at + extra_len + comment_len
         if end > len(cd):
@@ -340,6 +346,7 @@ def central_directory(path: Path) -> CentralDirectory:
         entries.append(
             CentralDirectoryEntry(
                 name=name,
+                raw_crc32=raw_crc32,
                 raw_compressed_size=raw_compressed,
                 raw_uncompressed_size=raw_uncompressed,
                 raw_local_header_offset=raw_offset,
@@ -368,6 +375,31 @@ def central_directory(path: Path) -> CentralDirectory:
         cd_offset=cd_offset,
         cd_size=cd_size,
         file_size=file_size,
+    )
+
+
+def local_file_header_data_offset(path: Path, entry: CentralDirectoryEntry) -> int:
+    """Where ``entry``'s actual data begins, per its own local file header.
+
+    A local file header's name/extra lengths are not guaranteed to match the
+    central directory's -- APPNOTE allows them to differ -- so this reads the
+    30-byte fixed header at ``entry.local_header_offset`` (already resolved by
+    :func:`central_directory`) rather than assuming the CD's lengths apply.
+    The one place besides the CD tail this module ever touches the file body.
+    """
+    with path.open("rb") as f:
+        f.seek(entry.local_header_offset)
+        header = f.read(LOCAL_FILE_HEADER_FIXED_SIZE)
+    if (
+        len(header) < LOCAL_FILE_HEADER_FIXED_SIZE
+        or header[:4] != LOCAL_FILE_HEADER_SIG
+    ):
+        raise MalformedZipError(
+            f"entry {entry.name!r}: no local file header at {entry.local_header_offset}"
+        )
+    name_len, extra_len = struct.unpack_from("<HH", header, 26)
+    return (
+        entry.local_header_offset + LOCAL_FILE_HEADER_FIXED_SIZE + name_len + extra_len
     )
 
 

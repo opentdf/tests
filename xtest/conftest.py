@@ -649,6 +649,17 @@ def chunky_pt_file(tmp_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def zip_conformance_pt_file(tmp_dir: Path) -> Path:
+    """A 128-byte plaintext, independent of ``--sizes`` on purpose.
+
+    ``test_zip_conformance.py`` mutates the container's trailer after
+    encryption, so payload size is irrelevant to what it tests -- fanning it
+    out over ``--sizes`` would pay multi-GiB cost for zero extra coverage.
+    """
+    return _plaintext_of(tmp_dir, "small")
+
+
+@pytest.fixture(scope="session")
 def tmp_dir(request: pytest.FixtureRequest) -> Path:
     """Create worker-specific temporary directory for test files.
 
