@@ -19,8 +19,11 @@ verified only by that one SDK's own unit tests, never cross-SDK:
    slots,
 4. a signed 32-bit shift corrupting an error message for sizes >= 2 GiB.
 
-The tests below exercise (1) and (2) cross-SDK, at a 128-byte payload rather
-than a multi-GiB one: they mutate the container's *trailer* after encryption
+The tests below exercise (1) and ZIP64 extra-field ordering cross-SDK, at a
+128-byte payload rather than a multi-GiB one. ZIP64 records declare version
+4.5 as APPNOTE 4.4.3 requires; tolerance of a 2.0 declaration is tested only
+for the Python inspector in ``test_zip_conformance_units.py``. These tests
+mutate the container's *trailer* after encryption
 (see ``zipmutate.py``), so payload size has no bearing on what they test.
 Only web-sdk (``js``) is used as ``encrypt_sdk`` -- it always writes ZIP64
 regardless of size, per the ``zip64-at-2gib`` feature in ``tdfs.py`` -- so no
@@ -128,13 +131,11 @@ def test_zip64_extra_field_not_first_is_still_resolved(
     attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
-    """DSPX-4591 finding 2, made cross-SDK.
+    """Resolve a ZIP64 offset after a foreign extra-field TLV.
 
-    A real writer (web-sdk pre-fix) gated ZIP64 resolution on
-    ``versionNeededToExtract >= 45``; APPNOTE 4.5.3 keys it purely on the
-    ``0xFFFFFFFF`` sentinel. A foreign extra-field TLV -- an extended
-    timestamp, which real writers emit -- is placed ahead of the ZIP64 one to
-    prove the parse does not assume it comes first either.
+    An extended timestamp precedes the ZIP64 record to prove the reader does
+    not assume ZIP64 comes first. This entry requires extraction version 4.5
+    because it uses ZIP64; the other entries retain version 2.0.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -151,7 +152,7 @@ def test_zip64_extra_field_not_first_is_still_resolved(
                 entry,
                 force_zip64_offset=True,
                 extra_prefix=_FOREIGN_EXTRA_TLV,
-                version_needed_to_extract=20,
+                version_needed_to_extract=45,
             )
             break
     assert true_offset is not None, f"{ct_file} has no 0.manifest.json entry"
@@ -163,7 +164,7 @@ def test_zip64_extra_field_not_first_is_still_resolved(
     manifest_entry = next(e for e in cd.entries if e.name == "0.manifest.json")
     assert manifest_entry.has_zip64_extra, (
         "ZIP64 extra field was not resolved when preceded by a foreign extra "
-        f"record with version_needed_to_extract=20\n{zipinspect.describe(cd.entries)}"
+        f"record with version_needed_to_extract=45\n{zipinspect.describe(cd.entries)}"
     )
     assert manifest_entry.uses_zip64_for_offset
     assert manifest_entry.local_header_offset == true_offset
@@ -277,7 +278,7 @@ def test_central_directory_entry_count_is_overstated(
     _assert_no_silent_corruption(decrypt_sdk, mutated, rt_file, zip_conformance_pt_file)
 
 
-def test_payload_bytes_containing_a_fake_central_directory_signature(
+def test_comment_containing_a_fake_central_directory_record(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
@@ -288,11 +289,12 @@ def test_payload_bytes_containing_a_fake_central_directory_signature(
 ):
     """DSPX-4591 finding 1, the case that motivated it.
 
-    Payload bytes that happen to contain the central-directory signature
-    (``PK\\x01\\x02``) must not be mistaken for a directory entry. A reader
-    that finds entries by scanning for that signature rather than walking the
-    EOCD-declared count from ``cd_offset`` is fooled by this; one anchored on
-    the real trailer is not.
+    A ZIP comment can contain a complete central-directory record without
+    making it an entry. The bogus record points past EOF, so interpreting it
+    as structure causes a read failure. Unlike patching encrypted payload
+    bytes, changing the comment preserves authentication: decryption must
+    succeed, and a ZIP parsing failure cannot masquerade as an expected
+    integrity failure.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -301,19 +303,23 @@ def test_payload_bytes_containing_a_fake_central_directory_signature(
     )
 
     cd_before = zipinspect.central_directory(ct_file)
+    trailer, _ = zipmutate.load_trailer(ct_file)
+    manifest = next(e for e in trailer.entries if e.name == "0.manifest.json")
+    fake_record = dataclasses.replace(
+        manifest, local_header_offset=ct_file.stat().st_size + 0x10000
+    ).to_bytes()
+    trailer = dataclasses.replace(trailer, comment=fake_record)
     mutated = tmp_path / "mutated.tdf"
-    zipmutate.corrupt_entry_bytes(
-        ct_file, mutated, "0.payload", at=0, patch=zipinspect.CEN_SIG
-    )
+    zipmutate.rewrite(ct_file, mutated, trailer)
 
     cd_after = zipinspect.central_directory(mutated)
     before = [(e.name, e.local_header_offset) for e in cd_before.entries]
     after = [(e.name, e.local_header_offset) for e in cd_after.entries]
     assert after == before, (
-        "planting the central-directory signature inside the payload changed "
+        "planting a central-directory record inside the ZIP comment changed "
         "what the trailer-anchored parser reports -- it should not\n"
         + zipinspect.describe(cd_after.entries)
     )
 
     rt_file = tmp_path / "roundtrip.bin"
-    _assert_no_silent_corruption(decrypt_sdk, mutated, rt_file, zip_conformance_pt_file)
+    _assert_faithful_roundtrip(decrypt_sdk, mutated, rt_file, zip_conformance_pt_file)

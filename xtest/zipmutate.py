@@ -43,7 +43,9 @@ class MutableEntry:
     compressed_size: int
     uncompressed_size: int
     crc32: int = 0
-    version_needed_to_extract: int = 45
+    #: Ordinary entries use 2.0; tests enabling ZIP64 fields set 4.5 explicitly.
+    #: A lower declaration can still be used for malformed-input compatibility.
+    version_needed_to_extract: int = 20
     #: A foreign extra-field TLV (e.g. an extended-timestamp record) placed
     #: *before* any ZIP64 record this builds, to test order independence.
     extra_prefix: bytes = b""
@@ -216,8 +218,8 @@ def corrupt_entry_bytes(
     via :func:`zipinspect.local_file_header_data_offset`), not the file.
     Every structural field -- local headers, central directory, EOCD -- stays
     byte-identical and truthful; only the named window of that one entry's
-    data changes. Used for the payload-content-is-not-structure case, where
-    :func:`rewrite`'s trailer-only approach has nothing to mutate.
+    data changes. This invalidates the entry's CRC-32 and any payload
+    authentication, so callers must account for those failures as well.
     """
     if src.resolve() == dest.resolve():
         raise ValueError(

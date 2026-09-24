@@ -45,9 +45,9 @@ EOCD64_LOCATOR_SIZE = 20
 CEN_FIXED_SIZE = 46
 #: Bytes of a local file header before the variable-length name. APPNOTE 4.3.7.
 LOCAL_FILE_HEADER_FIXED_SIZE = 30
-#: A ZIP comment is a 16-bit length, so the EOCD cannot start further back
-#: than this from the end of the file.
-_MAX_EOCD_SEARCH = EOCD_SIZE + 0xFFFF
+#: Include the locator immediately before the EOCD even when a maximum-length
+#: (16-bit) comment pushes the EOCD to the beginning of the search window.
+_MAX_EOCD_SEARCH = EOCD64_LOCATOR_SIZE + EOCD_SIZE + 0xFFFF
 
 
 class MalformedZipError(Exception):
