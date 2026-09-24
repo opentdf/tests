@@ -1,7 +1,7 @@
 """Offline tests for ``zipmutate.py`` (DSPX-4591 follow-up).
 
-No platform, no SDK, no subprocess -- mirrors ``test_zip64_units.py``'s
-framing, and runs in ``check.yml`` on every PR for the same reason: a builder
+No platform or SDK; one isolated Python subprocess checks timeout cleanup.
+Runs in ``check.yml`` on every PR for the same reason as ``test_zip64_units.py``: a builder
 bug here would otherwise surface only as a mysterious failure in
 ``test_zip_conformance.py``'s cross-SDK cells.
 
@@ -373,3 +373,120 @@ def test_directory_entry_comment_preserves_following_entry(tmp_path: Path):
         assert all(e.extract_version == 20 for e in after.infolist())
         for name in before.namelist():
             assert before.read(name) == after.read(name)
+
+
+@pytest.mark.parametrize("case", conformance._MALFORMED_CASES)
+def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
+    src = _ordinary_zip(tmp_path / "src.zip")
+    before = zipinspect.central_directory(src)
+    trailer = conformance._malformed_trailer(src, case)
+    dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
+    raw = dest.read_bytes()
+    assert raw[: before.cd_offset] == src.read_bytes()[: before.cd_offset]
+    assert raw[-zipinspect.EOCD_SIZE : -zipinspect.EOCD_SIZE + 4] == zipinspect.EOCD_SIG
+    assert raw[-2:] == b"\x00\x00"  # no archive comment masking the intended error
+    if case in {
+        "truncated_zip64_value",
+        "extra_length_overrun",
+        "impossible_entry_count",
+    } or case.startswith(("locator_offset_", "directory_offset_")):
+        with pytest.raises(MalformedZipError):
+            zipinspect.central_directory(dest)
+    else:
+        cd = zipinspect.central_directory(dest)
+        manifest = next(e for e in cd.entries if e.name == "0.manifest.json")
+        if case.startswith("manifest_size_"):
+            assert manifest.compressed_size > len(raw)
+            assert manifest.uses_zip64_for_sizes
+            assert manifest.compressed_size == (
+                1 << 63 if case.endswith("_int64") else src.stat().st_size + 4096
+            )
+        elif case.startswith("header_offset_"):
+            assert manifest.local_header_offset > len(raw)
+            assert manifest.uses_zip64_for_offset
+        else:
+            payload = next(e for e in cd.entries if e.name == "0.payload")
+            start = zipinspect.local_file_header_data_offset(dest, payload)
+            assert start + payload.compressed_size == cd.cd_offset + 1
+            assert payload.compressed_size == payload.uncompressed_size
+            assert not payload.has_zip64_extra
+
+
+@pytest.mark.parametrize(
+    "sdk,diagnostic",
+    [
+        ("go", b"zipstream.NewTDFReader failed: zip: not a valid zip file"),
+        ("go", b"zipstream.NewTDFReader failed: binary.Read failed: EOF"),
+        (
+            "go",
+            b"tdfReader.Manifest failed: 0.manifest.json size too large: 4194303 KiB",
+        ),
+        ("go", b"tdfReader.Manifest failed: zip: file not found"),
+        ("java", b"io.opentdf.platform.sdk.InvalidZipException: Invalid"),
+        ("java", b"java.lang.IllegalArgumentException: tdf doesn't contain a manifest"),
+        ("js", b"InvalidFileError: extra field length exceeds extra field buffer size"),
+        (
+            "js",
+            b"InvalidFileError [TdfError]: zip64 extended information extra field does not include relative header offset",
+        ),
+        ("js", b"Error: Value exceeds MAX_SAFE_INTEGER: 9223372036854775808"),
+    ],
+)
+def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
+    conformance._assert_zip_rejection(
+        sdk, subprocess.CompletedProcess(["fake-cli"], 1, b"", diagnostic)
+    )
+
+
+@pytest.mark.parametrize(
+    "status,diagnostic",
+    [
+        (0, b""),
+        (-9, b"zip: not a valid zip file"),
+        (137, b"zip: not a valid zip file"),
+        (2, b"panic: runtime error: makeslice: len out of range"),
+        (1, b"zip: not a valid zip file\njava.lang.OutOfMemoryError"),
+        (1, b"zip: not a valid zip file\njava.lang.NegativeArraySizeException"),
+        (1, b"zip: not a valid zip file\nRangeError: Invalid array length"),
+        (1, b"authentication failed"),
+        (1, b"connection refused"),
+        (1, b"usage: decrypt input output"),
+        (1, b"cipher: message authentication failed"),
+    ],
+)
+def test_abnormal_or_unrelated_failures_do_not_pass(status: int, diagnostic: bytes):
+    with pytest.raises(AssertionError):
+        conformance._assert_zip_rejection(
+            "go", subprocess.CompletedProcess(["fake-cli"], status, b"", diagnostic)
+        )
+
+
+def test_bounded_decrypt_kills_descendants_on_timeout(tmp_path: Path):
+    """Use a real fake CLI: its child would keep writing if only the shell died."""
+    import sys
+    import time
+
+    heartbeat = tmp_path / "heartbeat"
+    child_code = (
+        "import pathlib, sys, time\n"
+        "p = pathlib.Path(sys.argv[1])\n"
+        "while True:\n"
+        "    with p.open('ab') as f: f.write(b'x')\n"
+        "    time.sleep(0.01)\n"
+    )
+    parent_code = (
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2]])\n"
+        "time.sleep(30)\n"
+    )
+    sdk = create_autospec(tdfs.SDK, instance=True)
+    sdk.decrypt_command.return_value = (
+        [sys.executable, "-c", parent_code, child_code, str(heartbeat)],
+        {},
+    )
+    with pytest.raises(pytest.fail.Exception, match="timed out"):
+        conformance._bounded_decrypt(sdk, tmp_path / "in", tmp_path / "out", timeout=1)
+    assert heartbeat.exists(), "fake CLI child never started"
+    after_kill = heartbeat.read_bytes()
+    time.sleep(0.1)
+    assert heartbeat.read_bytes() == after_kill
