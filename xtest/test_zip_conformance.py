@@ -31,6 +31,10 @@ multi-GiB payload is ever needed to manufacture ZIP64 structure here. Every
 ``decrypt_sdk`` in the run matrix is exercised against each mutated
 container.
 
+Platform PR #3981 adds independent ZIP64 EOCD triggers, conditional per-entry
+ZIP64 fields, and correct traversal past directory-entry comments. The small
+fixtures here cover those behaviors without exercising writer size thresholds.
+
 (3) and (4) are latent/cosmetic single-implementation issues with no
 cross-SDK wire disagreement; see the module docstring discussion in the
 project plan for why they are out of scope here.
@@ -61,6 +65,23 @@ pytestmark = [pytest.mark.zip_conformance, pytest.mark.no_audit_logs]
 #: An extended-timestamp extra-field record (header id 0x5455), the shape
 #: real writers actually put ahead of a ZIP64 record in the wild.
 _FOREIGN_EXTRA_TLV = struct.pack("<HH", 0x5455, 5) + b"\x01\x00\x00\x00\x00"
+
+# Each field can independently defer to the ZIP64 extra field. STORED sizes
+# are equal, so these cases test conditional presence, not swapped size values.
+_ENTRY_ZIP64_FIELDS = ["c", "u", "o", "cu", "co", "uo", "cuo"]
+
+
+def _with_zip64_fields(
+    entry: zipmutate.MutableEntry, fields: str
+) -> zipmutate.MutableEntry:
+    return dataclasses.replace(
+        entry,
+        force_zip64_compressed_size="c" in fields,
+        force_zip64_uncompressed_size="u" in fields,
+        force_zip64_offset="o" in fields,
+        version_needed_to_extract=45,
+        extra_prefix=_FOREIGN_EXTRA_TLV,
+    )
 
 
 def _assert_faithful_roundtrip(
@@ -323,3 +344,92 @@ def test_comment_containing_a_fake_central_directory_record(
 
     rt_file = tmp_path / "roundtrip.bin"
     _assert_faithful_roundtrip(decrypt_sdk, mutated, rt_file, zip_conformance_pt_file)
+
+
+@pytest.mark.parametrize("eocd_field", ["count", "size", "offset"])
+def test_zip64_eocd_independent_sentinel(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    zip_conformance_tdf: EncryptFactory,
+    zip_conformance_pt_file: Path,
+    attribute_default_rsa: Attribute,
+    tmp_path: Path,
+    eocd_field: str,
+):
+    """Any one sentinel can require ZIP64; other EOCD values stay truthful.
+
+    Size-only is compatibility coverage: a reader ignoring directory size
+    could pass it without ever consulting ZIP64. Count-only catches #3981's
+    former dependence on the offset sentinel.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    ct_file = _base_container(
+        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
+    )
+    trailer, _ = zipmutate.load_trailer(ct_file)
+    trailer = dataclasses.replace(
+        trailer, force_zip64_eocd=True, zip64_eocd_fields=frozenset({eocd_field})
+    )
+    mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
+    _assert_faithful_roundtrip(
+        decrypt_sdk, mutated, tmp_path / "roundtrip.bin", zip_conformance_pt_file
+    )
+
+
+@pytest.mark.parametrize("fields", _ENTRY_ZIP64_FIELDS)
+@pytest.mark.parametrize("zip64_eocd", [False, True], ids=["zip32_eocd", "zip64_eocd"])
+def test_zip64_entry_independent_sentinels(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    zip_conformance_tdf: EncryptFactory,
+    zip_conformance_pt_file: Path,
+    attribute_default_rsa: Attribute,
+    tmp_path: Path,
+    fields: str,
+    zip64_eocd: bool,
+):
+    """Resolve only the sentinel-selected values, after a foreign extra TLV."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    ct_file = _base_container(
+        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
+    )
+    trailer, _ = zipmutate.load_trailer(ct_file)
+    trailer = dataclasses.replace(trailer, force_zip64_eocd=zip64_eocd)
+    trailer.entries[:] = [
+        _with_zip64_fields(e, fields) if e.name == "0.manifest.json" else e
+        for e in trailer.entries
+    ]
+    mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
+    _assert_faithful_roundtrip(
+        decrypt_sdk, mutated, tmp_path / "roundtrip.bin", zip_conformance_pt_file
+    )
+
+
+def test_central_directory_entry_comment(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    zip_conformance_tdf: EncryptFactory,
+    zip_conformance_pt_file: Path,
+    attribute_default_rsa: Attribute,
+    tmp_path: Path,
+):
+    """An entry comment must not desynchronize traversal to the manifest."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    ct_file = _base_container(
+        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
+    )
+    trailer, _ = zipmutate.load_trailer(ct_file)
+    assert [e.name for e in trailer.entries] == ["0.payload", "0.manifest.json"]
+    trailer.entries[0] = dataclasses.replace(
+        trailer.entries[0], comment=b"comment on the payload directory entry"
+    )
+    mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
+    _assert_faithful_roundtrip(
+        decrypt_sdk, mutated, tmp_path / "roundtrip.bin", zip_conformance_pt_file
+    )
