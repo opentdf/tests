@@ -34,6 +34,10 @@ container.
 Platform PR #3981 adds independent ZIP64 EOCD triggers, conditional per-entry
 ZIP64 fields, and correct traversal past directory-entry comments. The small
 fixtures here cover those behaviors without exercising writer size thresholds.
+Platform PR #4043 adds bounds on untrusted ZIP64 sizes/offsets; malformed
+fixtures below require explicit rejection and distinguish runtime failures
+from parser errors. Go unit tests retain coverage of caller-supplied subread
+indexes and injected writer thresholds, which CLI decryption cannot isolate.
 
 (3) and (4) are latent/cosmetic single-implementation issues with no
 cross-SDK wire disagreement; see the module docstring discussion in the
@@ -46,6 +50,9 @@ Run it with::
 
 import dataclasses
 import filecmp
+import os
+import re
+import signal
 import struct
 import subprocess
 from pathlib import Path
@@ -106,14 +113,86 @@ def _assert_no_silent_corruption(
 
     What must never happen is exiting 0 having decrypted the wrong bytes.
     """
-    try:
-        decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    except subprocess.CalledProcessError:
+    result = _bounded_decrypt(decrypt_sdk, ct_file, rt_file)
+    if result.returncode:
+        _assert_zip_rejection(decrypt_sdk.sdk, result)
         return
     assert filecmp.cmp(pt_file, rt_file, shallow=False), (
         f"{decrypt_sdk} exited 0 decrypting a deliberately malformed "
         f"{ct_file.name}, but the output does not match the original "
         f"plaintext -- this is silent corruption, not a clean failure"
+    )
+
+
+def _bounded_decrypt(
+    sdk: tdfs.SDK, ct_file: Path, rt_file: Path, *, timeout: float = 30
+) -> subprocess.CompletedProcess[bytes]:
+    """Bound malformed-input runs, including descendants of the CLI shim.
+
+    PIPE output is drained by communicate; on timeout kill the whole process
+    group so a shell's child cannot keep running or hold the pipes open.
+    """
+    command, local_env = sdk.decrypt_command(ct_file, rt_file, "ztdf")
+    with subprocess.Popen(
+        command,
+        env=os.environ | local_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # The group exited between the timeout and the kill.
+            process.communicate()
+            pytest.fail(f"{sdk} ZIP decrypt timed out after {timeout}s")
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
+_RUNTIME_FAILURE = re.compile(
+    r"panic:|fatal error:|runtime error:|out of memory|outofmemoryerror|"
+    r"negativearraysizeexception|indexoutofboundsexception|bufferunderflowexception|"
+    r"rangeerror:|segmentation fault|core dumped|killed:",
+    re.IGNORECASE,
+)
+# Match parser diagnostics, not arbitrary nonzero exits (auth/network/usage
+# failures must not pass). Keep these tied to observed CLI errors, with
+# offline tests for both expected rejection and unrelated/runtime failures.
+_ZIP_REJECTIONS = {
+    "go": re.compile(
+        r"zip: (?:not a valid|unable to read|file not found)|"
+        r"zipstream\.NewTDFReader failed: (?:binary\.Read|readSeeker\.Seek|io\.ReadFull) failed:|"
+        r"tdfReader\.Manifest failed:.*(?:EOF|0\.manifest\.json size too large)",
+        re.IGNORECASE,
+    ),
+    "java": re.compile(
+        r"InvalidZipException|EOFException|IllegalArgumentException: tdf doesn't contain a manifest",
+        re.IGNORECASE,
+    ),
+    "js": re.compile(
+        r"InvalidFileError(?: \[TdfError\])?: [^\n]*"
+        r"(?:central directory|zip64|extra field|retrieve CD|manifest file too large)|"
+        r"Value exceeds MAX_SAFE_INTEGER",
+        re.IGNORECASE,
+    ),
+}
+
+
+def _assert_zip_rejection(sdk: str, result: subprocess.CompletedProcess[bytes]) -> None:
+    output = (result.stdout + b"\n" + result.stderr).decode(errors="replace")
+    # Do not let pytest's assertion expansion print CompletedProcess.stdout:
+    # some CLI shims echo commands containing local client credentials.
+    status = result.returncode
+    assert 0 < status < 128, f"{sdk} did not reject normally: exit {status}"
+    crash = _RUNTIME_FAILURE.search(output)
+    assert crash is None, f"{sdk} runtime failure: {crash.group() if crash else ''}"
+    rejected = bool(_ZIP_REJECTIONS[sdk].search(output))
+    assert rejected, (
+        f"{sdk} failed without a recognized ZIP rejection (exit {status}):\n"
+        + result.stderr.decode(errors="replace")[-2000:]
     )
 
 
@@ -433,3 +512,167 @@ def test_central_directory_entry_comment(
     _assert_faithful_roundtrip(
         decrypt_sdk, mutated, tmp_path / "roundtrip.bin", zip_conformance_pt_file
     )
+
+
+@pytest.fixture
+def readable_zip_base(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    zip_conformance_tdf: EncryptFactory,
+    zip_conformance_pt_file: Path,
+    attribute_default_rsa: Attribute,
+    tmp_path: Path,
+) -> Path:
+    """Prove this SDK/environment reads the control before testing rejection."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    ct_file = _base_container(
+        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
+    )
+    _assert_faithful_roundtrip(
+        decrypt_sdk, ct_file, tmp_path / "control.bin", zip_conformance_pt_file
+    )
+    return ct_file
+
+
+_MALFORMED_CASES = [
+    "truncated_zip64_value",
+    "extra_length_overrun",
+    "manifest_size_int64",
+    "manifest_size_eof",
+    "payload_overlaps_directory",
+    "header_offset_int64",
+    "header_offset_eof",
+    "locator_offset_int64",
+    "locator_offset_eof",
+    "directory_offset_int64",
+    "directory_offset_eof",
+    "impossible_entry_count",
+]
+
+
+def _malformed_trailer(src: Path, case: str) -> zipmutate.MutableTrailer:
+    """One malformed declaration per fixture; ciphertext/local headers survive.
+
+    No archive comment: the independent Go/JS comment bugs must not short
+    circuit the reader before it reaches the declaration under test. Positive
+    oversized values stay small enough that an old reader cannot allocate GiB.
+    """
+    trailer, cd_offset = zipmutate.load_trailer(src)
+    manifest_index = next(
+        i for i, e in enumerate(trailer.entries) if e.name == "0.manifest.json"
+    )
+    manifest = trailer.entries[manifest_index]
+    # About 4 KiB past EOF, allowing for these small ZIP64 records.
+    beyond = 1 << 63 if case.endswith("_int64") else src.stat().st_size + 4096
+    if case in {"truncated_zip64_value", "extra_length_overrun"}:
+        extra = (
+            struct.pack("<HHI", 1, 4, 0)
+            if case == "truncated_zip64_value"
+            else struct.pack("<HHQ", 1, 0xFFFF, manifest.local_header_offset)
+        )
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            force_zip64_offset=True,
+            version_needed_to_extract=45,
+            extra_override=extra,
+        )
+    elif case.startswith("manifest_size_"):
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            compressed_size=beyond,
+            force_zip64_compressed_size=True,
+            version_needed_to_extract=45,
+        )
+    elif case == "payload_overlaps_directory":
+        cd = zipinspect.central_directory(src)
+        payload = next(e for e in cd.entries if e.name == "0.payload")
+        data_start = zipinspect.local_file_header_data_offset(src, payload)
+        for i, entry in enumerate(trailer.entries):
+            if entry.name == "0.payload":
+                trailer.entries[i] = dataclasses.replace(
+                    entry,
+                    compressed_size=cd_offset - data_start + 1,
+                    uncompressed_size=cd_offset - data_start + 1,
+                )
+    elif case.startswith("header_offset_"):
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            local_header_offset=beyond,
+            force_zip64_offset=True,
+            version_needed_to_extract=45,
+        )
+    elif case.startswith("locator_offset_"):
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, zip64_locator_offset_override=beyond
+        )
+    elif case.startswith("directory_offset_"):
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, cd_offset_override=beyond
+        )
+    elif case == "impossible_entry_count":
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, entry_count_override=(1 << 64) - 1
+        )
+    else:
+        raise ValueError(f"unknown malformed ZIP case: {case}")
+    return trailer
+
+
+@pytest.mark.parametrize("case", _MALFORMED_CASES)
+def test_malformed_zip_is_rejected(
+    readable_zip_base: Path,
+    decrypt_sdk: tdfs.SDK,
+    tmp_path: Path,
+    case: str,
+):
+    """Malformed metadata must fail as a format error, never panic or succeed.
+
+    The manifest's 2**63 size targets #4043's negative allocation panic. The
+    payload overlapping the CD targets its tighter data boundary, even when
+    the manifest would otherwise allow decryption of just the real bytes.
+    Other cases also catch robustness regressions in readers already rejecting
+    these inputs; a passing cell alone is not evidence of a particular guard.
+    """
+    trailer = _malformed_trailer(readable_zip_base, case)
+    mutated = zipmutate.rewrite(readable_zip_base, tmp_path / "mutated.tdf", trailer)
+    result = _bounded_decrypt(decrypt_sdk, mutated, tmp_path / "roundtrip.bin")
+    _assert_zip_rejection(decrypt_sdk.sdk, result)
+
+
+@pytest.mark.parametrize(
+    "record_length", [0xFFFF, 0x10000], ids=["at_limit", "over_limit"]
+)
+def test_directory_record_length_boundary(
+    readable_zip_base: Path,
+    decrypt_sdk: tdfs.SDK,
+    zip_conformance_pt_file: Path,
+    tmp_path: Path,
+    record_length: int,
+):
+    """Keep names intact; a large foreign TLV exercises uint16 cursor addition.
+
+    APPNOTE 4.4.10-12 recommends a combined record size <= 65535. Above it,
+    require safe behavior (faithful output or format rejection), not universal
+    acceptance. Go's unit test separately requires correct cursor arithmetic.
+    """
+    trailer, _ = zipmutate.load_trailer(readable_zip_base)
+    first = trailer.entries[0]
+    extra_length = record_length - zipinspect.CEN_FIXED_SIZE - len(first.name.encode())
+    trailer.entries[0] = dataclasses.replace(
+        first,
+        extra_prefix=struct.pack("<HH", 0xBEEF, extra_length - 4)
+        + b"x" * (extra_length - 4),
+    )
+    assert len(trailer.entries[0].to_bytes()) == record_length
+    mutated = zipmutate.rewrite(readable_zip_base, tmp_path / "mutated.tdf", trailer)
+    rt_file = tmp_path / "roundtrip.bin"
+    if record_length <= 0xFFFF:
+        _assert_faithful_roundtrip(
+            decrypt_sdk, mutated, rt_file, zip_conformance_pt_file
+        )
+    else:
+        _assert_no_silent_corruption(
+            decrypt_sdk, mutated, rt_file, zip_conformance_pt_file
+        )
