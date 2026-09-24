@@ -32,10 +32,9 @@ import zipinspect
 class MutableEntry:
     """One central-directory record, rebuildable with deliberate variations.
 
-    ``local_header_offset``/``compressed_size``/``uncompressed_size`` are the
-    entry's true, physical values and are never altered by the knobs below --
-    only how they are *encoded* changes, so the rebuilt record always still
-    points at real data.
+    Values loaded from an archive describe its physical bytes. Sentinel
+    switches only change their encoding; adversarial tests may replace the
+    values or the extra area explicitly to describe bytes that do not exist.
     """
 
     name: str
@@ -49,6 +48,8 @@ class MutableEntry:
     #: A foreign extra-field TLV (e.g. an extended-timestamp record) placed
     #: *before* any ZIP64 record this builds, to test order independence.
     extra_prefix: bytes = b""
+    #: Replace the entire extra area, including ZIP64, for malformed fixtures.
+    extra_override: bytes | None = None
     comment: bytes = b""
     force_zip64_offset: bool = False
     force_zip64_compressed_size: bool = False
@@ -80,6 +81,8 @@ class MutableEntry:
             else b""
         )
         extra = self.extra_prefix + zip64_tlv
+        if self.extra_override is not None:
+            extra = self.extra_override
 
         raw_usize = (
             zipinspect.ZIP64_SENTINEL_32
@@ -129,9 +132,15 @@ class MutableTrailer:
     #: The central directory's own bytes are never padded to match, so a
     #: reader that walks this many records runs off the real data.
     entry_count_override: int | None = None
+    #: Malformed declarations; physical placement of the records is unchanged.
+    cd_offset_override: int | None = None
+    zip64_locator_offset_override: int | None = None
 
     def to_bytes(self, cd_offset: int) -> bytes:
         cd = b"".join(e.to_bytes() for e in self.entries)
+        declared_offset = (
+            cd_offset if self.cd_offset_override is None else self.cd_offset_override
+        )
         declared_count = (
             len(self.entries)
             if self.entry_count_override is None
@@ -152,13 +161,18 @@ class MutableTrailer:
                 + struct.pack("<Q", 44)  # size of this record, less the first 12 bytes
                 + struct.pack("<HHII", 45, 45, 0, 0)
                 + struct.pack(
-                    "<QQQQ", declared_count, declared_count, len(cd), cd_offset
+                    "<QQQQ", declared_count, declared_count, len(cd), declared_offset
                 )
             )
             locator = (
                 zipinspect.EOCD64_LOCATOR_SIG
                 + struct.pack("<I", 0)
-                + struct.pack("<Q", eocd64_offset)
+                + struct.pack(
+                    "<Q",
+                    eocd64_offset
+                    if self.zip64_locator_offset_override is None
+                    else self.zip64_locator_offset_override,
+                )
                 + struct.pack("<I", 1)
             )
             eocd = (
@@ -173,7 +187,9 @@ class MutableTrailer:
                 + struct.pack(
                     "<II",
                     0xFFFFFFFF if "size" in self.zip64_eocd_fields else len(cd),
-                    0xFFFFFFFF if "offset" in self.zip64_eocd_fields else cd_offset,
+                    0xFFFFFFFF
+                    if "offset" in self.zip64_eocd_fields
+                    else declared_offset,
                 )
                 + struct.pack("<H", len(self.comment))
                 + self.comment
@@ -183,7 +199,7 @@ class MutableTrailer:
         eocd = (
             zipinspect.EOCD_SIG
             + struct.pack("<HHHH", 0, 0, declared_count, declared_count)
-            + struct.pack("<II", len(cd), cd_offset)
+            + struct.pack("<II", len(cd), declared_offset)
             + struct.pack("<H", len(self.comment))
             + self.comment
         )
