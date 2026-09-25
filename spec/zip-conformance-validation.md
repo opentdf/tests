@@ -160,6 +160,11 @@ uv run pytest test_zip_conformance.py --sdks-encrypt js@main \
   --junitxml=test-results/zip-final.xml
 ```
 
+Every cell passes whether the reader accepted the mutated container or
+rejected it cleanly, so read the `zip conformance outcomes` table printed at
+the end of the run (also written to `test-results/zip-conformance.json`) for
+which refs were conformant and which were merely safe.
+
 To isolate the 32 added cases, append
 `-k 'independent_sentinel or entry_comment or malformed_zip or record_length_boundary'`.
 The complete module also runs six pre-existing cases, including the known
