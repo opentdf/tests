@@ -19,6 +19,7 @@ added for it must stay offline: fake the process result, never spawn a CLI.
 """
 
 import dataclasses
+import json
 import struct
 import subprocess
 import warnings
@@ -32,6 +33,7 @@ import tdfs
 import test_zip_conformance as conformance
 import zipinspect
 import zipmutate
+import zipreport
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
 from zipinspect import MalformedZipError
@@ -47,6 +49,16 @@ def _ordinary_zip(path: Path) -> Path:
         z.writestr("0.payload", b"payload-bytes-000")
         z.writestr("0.manifest.json", b'{"hello":"world"}')
     return path
+
+
+def _recorded_cells(recorded: list[tuple[str, object]]) -> list[zipreport.Cell]:
+    """Decode what a cell recorded, the way conftest.py's hook will.
+
+    Asserting through the real decoder rather than on the raw property keeps
+    the two ends pinned together: a change to either that the other does not
+    follow fails here instead of silently reporting nothing in CI.
+    """
+    return zipreport.collect("fake::node", recorded)
 
 
 class TestLoadTrailerAndRewrite:
@@ -365,12 +377,12 @@ def test_fake_record_conformance_accepts_only_safe_outcomes(
     elif outcome == "clean_rejection":
         with pytest.warns(conformance.NonConformantZipReader):
             run_case()
-        assert ("zip_conformance_outcome", "rejected") in recorded
+        (cell,) = _recorded_cells(recorded)
+        assert cell.outcome == "rejected"
         # The allowlist-matched slice, not the whole line: the line may be
         # anywhere in the combined output, including the credential-bearing
         # stdout the go shim echoes.
-        diagnostics = [v for k, v in recorded if k == "zip_conformance_diagnostic"]
-        assert diagnostics and str(diagnostics[0]) in _GO_REJECTION.decode()
+        assert cell.diagnostic and cell.diagnostic in _GO_REJECTION.decode()
     else:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -379,7 +391,7 @@ def test_fake_record_conformance_accepts_only_safe_outcomes(
             "a faithful roundtrip of a spec-legal structure is unremarkable "
             "and must not warn"
         )
-        assert ("zip_conformance_outcome", "accepted") in recorded
+        assert [cell.outcome for cell in _recorded_cells(recorded)] == ["accepted"]
     assert len(calls) == 1
 
 
@@ -638,9 +650,10 @@ def test_only_the_unexpected_quadrants_warn(
         )
     else:
         assert [w.category for w in raised] == [expected]
-    assert ("zip_conformance_outcome", "rejected" if reject else "accepted") in recorded
-    assert ("zip_conformance_legality", legality) in recorded
-    assert ("zip_conformance_sdk", "go") in recorded
+    (cell,) = _recorded_cells(recorded)
+    assert cell.outcome == ("rejected" if reject else "accepted")
+    assert cell.legality == legality
+    assert cell.sdk == "go"
 
 
 @pytest.mark.parametrize("legality", ["spec-legal", "adversarial"])
@@ -730,3 +743,158 @@ def test_bounded_decrypt_kills_descendants_on_timeout(tmp_path: Path):
     after_kill = heartbeat.read_bytes()
     time.sleep(0.1)
     assert heartbeat.read_bytes() == after_kill
+
+
+def test_the_fixture_records_onto_the_cell_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The recorder has to write where conftest.py's hook reads.
+
+    ``zip_outcome`` appends to the item's ``user_properties`` directly rather
+    than calling ``record_property``, and every other cell here constructs
+    ZipOutcome with a recorder of its own -- so nothing else exercises that
+    wiring. Broken, it reports nothing and every cross-SDK run still passes.
+
+    A stub item, not this test's own: recording onto the real node would put
+    a fictional cell in the run's conformance table.
+    """
+    pt = tmp_path / "plaintext.bin"
+    pt.write_bytes(b"the original plaintext")
+    item = create_autospec(pytest.Item, instance=True)
+    item.user_properties = []
+    item.nodeid = "test_zip_conformance.py::fake[go]"
+    request = create_autospec(pytest.FixtureRequest, instance=True)
+    request.node = item
+
+    monkeypatch.setattr(
+        conformance,
+        "_bounded_decrypt",
+        lambda *_a, **_k: subprocess.CompletedProcess(
+            ["fake-cli"], 1, _GO_STDOUT, _GO_REJECTION
+        ),
+    )
+    outcome = conformance.zip_outcome.__wrapped__(request, _fake_sdk(), pt)  # type: ignore[attr-defined]
+    with pytest.warns(conformance.NonConformantZipReader):
+        outcome(tmp_path / "mutated.tdf", tmp_path / "rt.bin", legality="spec-legal")
+
+    (cell,) = zipreport.collect(item.nodeid, item.user_properties)
+    assert (cell.sdk, cell.outcome, cell.node_id) == ("go", "rejected", item.nodeid)
+
+
+# ---------------------------------------------------------------------------
+# zipreport.py: the reporting end of the same contract.
+#
+# These cells never touch a ZIP. What they pin is that the outcomes a
+# cross-SDK run recorded survive the trip to the artifact someone reads -- the
+# failure mode being a green nightly whose summary quietly says nothing.
+# ---------------------------------------------------------------------------
+
+
+def _cell(sdk: str, legality: str, outcome: str, node_id: str = "n") -> zipreport.Cell:
+    return zipreport.Cell(node_id=node_id, sdk=sdk, legality=legality, outcome=outcome)
+
+
+@pytest.mark.parametrize(
+    ("legality", "outcome", "conformant"),
+    [
+        ("spec-legal", "accepted", True),
+        ("spec-legal", "rejected", False),
+        ("adversarial", "rejected", True),
+        ("adversarial", "accepted", False),
+    ],
+)
+def test_conformant_is_the_liberal_answer(
+    legality: str, outcome: str, conformant: bool
+):
+    """Accept what APPNOTE permits, reject what contradicts itself.
+
+    The same quadrant table as the warnings, asserted independently: a reader
+    that inverts one half of it here would report every run backwards.
+    """
+    assert _cell("go", legality, outcome).conformant is conformant
+
+
+def test_a_cell_that_judges_two_containers_reports_both():
+    """One property per container, not per field.
+
+    The motivating case for the JSON encoding: four separately named
+    properties would collide on the second container and the reader would
+    keep the last, losing a result without anything failing.
+    """
+    recorded = [
+        (zipreport.PROPERTY, zipreport.encode("go", "spec-legal", "rejected", "eocd")),
+        (zipreport.PROPERTY, zipreport.encode("go", "adversarial", "accepted", "")),
+    ]
+    cells = zipreport.collect("test_x[go]", recorded)
+    assert [(c.legality, c.outcome, c.diagnostic) for c in cells] == [
+        ("spec-legal", "rejected", "eocd"),
+        ("adversarial", "accepted", ""),
+    ]
+    assert {c.node_id for c in cells} == {"test_x[go]"}
+
+
+def test_other_suites_properties_are_left_alone():
+    """Every test in the run passes through this hook, not just these cells."""
+    assert zipreport.collect("n", [("some_other_suite", "value")]) == []
+
+
+def test_the_summary_names_every_non_conformant_cell():
+    """The one thing the table exists to say.
+
+    A count alone cannot be acted on: fixing a lenient reader needs the cell
+    that caught it, so the node id has to survive into the rendered output.
+    """
+    cells = [
+        _cell("go", "spec-legal", "accepted", "test_a[go]"),
+        _cell("go", "spec-legal", "rejected", "test_b[go]"),
+        _cell("js", "adversarial", "accepted", "test_c[js]"),
+        _cell("js", "adversarial", "rejected", "test_d[js]"),
+    ]
+    summary = zipreport.summarize(cells)
+    assert summary.counts[("go", "spec-legal", "accepted")] == 1
+    assert {sdk: [c.node_id for c in v] for sdk, v in summary.notable.items()} == {
+        "go": ["test_b[go]"],
+        "js": ["test_c[js]"],
+    }
+    for rendered in (
+        "\n".join(zipreport.terminal_lines(summary)),
+        zipreport.markdown(summary),
+    ):
+        assert "test_b[go]" in rendered
+        assert "test_c[js]" in rendered
+        assert "test_a[go]" not in rendered, "a conformant cell is unremarkable"
+
+
+def test_a_fully_conformant_run_still_reports_its_counts():
+    """Green is a result too -- the table has to show what was exercised.
+
+    An empty summary is indistinguishable from a run whose cells all skipped,
+    which is the erosion this reporting exists to catch.
+    """
+    summary = zipreport.summarize([_cell("java", "spec-legal", "accepted")])
+    assert not summary.notable
+    assert zipreport.terminal_lines(summary) == ["java  spec-legal   accepted  x1"]
+    assert "without being conformant" not in zipreport.markdown(summary)
+
+
+def test_the_artifact_does_not_depend_on_worker_scheduling(tmp_path: Path):
+    """Under xdist the cells arrive in whatever order the workers finish.
+
+    An artifact that reorders itself between two identical runs cannot be
+    diffed across nightlies, which is most of what it is for.
+    """
+    cells = [
+        _cell("js", "adversarial", "accepted", "test_c[js]"),
+        _cell("go", "spec-legal", "rejected", "test_b[go]"),
+        _cell("go", "spec-legal", "accepted", "test_a[go]"),
+    ]
+    first = zipreport.write_json(tmp_path / "a.json", cells).read_text()
+    second = zipreport.write_json(tmp_path / "b.json", reversed(cells)).read_text()
+    assert first == second
+    payload = json.loads(first)
+    assert [c["node_id"] for c in payload["cells"]] == [
+        "test_a[go]",
+        "test_b[go]",
+        "test_c[js]",
+    ]
+    assert [c["conformant"] for c in payload["cells"]] == [True, False, False]

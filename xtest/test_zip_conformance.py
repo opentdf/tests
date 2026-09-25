@@ -48,9 +48,10 @@ container all fail the cell.
 The point of a cross-SDK suite is to find wire disagreements and data loss,
 not to fail nightly because one reader declines a 0xFFFF comment -- so
 refusing a spec-legal structure, and accepting a malformed one, both pass.
-Both also emit a :class:`ZipConformanceWarning` and a ``record_property``
-naming the SDK, the cell and the matched diagnostic, so a green matrix still
-says which readers are conformant and which are merely safe.
+Both also emit a :class:`ZipConformanceWarning` and record the SDK, the cell
+and the matched diagnostic, so a green matrix still says which readers are
+conformant and which are merely safe. ``zipreport.py`` collects those records
+into the table printed at the end of the run.
 
 A cell is ``adversarial`` when the container contradicts itself -- two fields
 disagree, or one points outside the file -- so a wrong answer exists to be
@@ -99,6 +100,7 @@ import pytest
 import tdfs
 import zipinspect
 import zipmutate
+import zipreport
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
 
@@ -321,11 +323,10 @@ class ZipOutcome:
         # ``diagnostic`` is the allowlist-matched substring only, never
         # result.stdout: the go and java shims echo command lines carrying
         # local client credentials.
-        self._record_property("zip_conformance_sdk", self._sdk.sdk)
-        self._record_property("zip_conformance_legality", legality)
-        self._record_property("zip_conformance_outcome", outcome)
-        if diagnostic:
-            self._record_property("zip_conformance_diagnostic", diagnostic)
+        self._record_property(
+            zipreport.PROPERTY,
+            zipreport.encode(self._sdk.sdk, legality, outcome, diagnostic),
+        )
         if outcome == "rejected" and legality == "spec-legal":
             warnings.warn(
                 f"{self._sdk} rejected a spec-legal structure "
@@ -348,21 +349,32 @@ def zip_outcome(
     request: pytest.FixtureRequest,
     decrypt_sdk: tdfs.SDK,
     zip_conformance_pt_file: Path,
-    record_property: Callable[[str, object], None],
 ) -> ZipOutcome:
     """A decrypt-and-judge callable bound to this cell.
 
-    ``record_property`` is function-scoped, so a module-level helper cannot
-    reach it. Binding it here along with the decrypting SDK and the plaintext
-    is what keeps every call site a one-liner instead of threading a
-    recorder, an SDK and a plaintext through ten test signatures for values
-    no test body ever reads.
+    The cell's outcomes are per-test state, so a module-level helper cannot
+    reach them. Binding the recorder here along with the decrypting SDK and
+    the plaintext is what keeps every call site a one-liner instead of
+    threading three values through ten test signatures no test body reads.
+
+    ``item.user_properties`` is appended to directly rather than through the
+    ``record_property`` fixture. They are the same list -- the fixture is that
+    append plus a warning that ``junit_family``'s default xunit2 schema has
+    nowhere to put the result. ``conftest.py`` collects these in-process (see
+    ``zipreport.py``), so the junit XML is not the channel and the warning's
+    advice to set ``junit_family = xunit1`` would buy nothing.
     """
+    item = request.node
+    assert isinstance(item, pytest.Item)
+
+    def record(name: str, value: object) -> None:
+        item.user_properties.append((name, value))
+
     return ZipOutcome(
         decrypt_sdk,
         zip_conformance_pt_file,
-        request.node.nodeid,
-        record_property,
+        item.nodeid,
+        record,
     )
 
 
