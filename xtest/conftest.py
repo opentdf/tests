@@ -27,6 +27,7 @@ import pytest
 
 import sizes
 import tdfs
+import zipreport
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
 from perf.cells import cells_for
@@ -488,7 +489,65 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
+#: Conformance records for the whole run, in arrival order. A plain list
+#: rather than the config stash because :func:`pytest_runtest_logreport` is
+#: handed a report and nothing else.
+_zip_conformance_cells: list[zipreport.Cell] = []
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Accumulate ZIP conformance records as each cell finishes.
+
+    Under xdist this fires both on the worker that ran the cell and on the
+    controller that receives its report. Only the controller writes anything
+    (see :func:`_finish_zip_conformance`), so a worker's partial list dies
+    with the worker.
+
+    The parameter name is fixed by the hookspec and shadows the ``perf.report``
+    import above; nothing in here needs that module.
+    """
+    if report.when != "call":
+        return
+    _zip_conformance_cells.extend(
+        zipreport.collect(report.nodeid, report.user_properties)
+    )
+
+
+def _finish_zip_conformance(session: pytest.Session) -> None:
+    """Write and print which readers were conformant and which merely safe.
+
+    Every conformance cell passes whether the SDK read the mutated container
+    or rejected it cleanly, so this table is the only place the difference
+    shows up. It is rendered here rather than by a CI step parsing the junit
+    XML so that a local run gets it too -- and so the records do not have to
+    survive a round trip that is only schema-valid under
+    ``junit_family = xunit1``.
+    """
+    config = session.config
+    if getattr(config, "workerinput", None) is not None:
+        return  # an xdist worker sees only the cells it ran
+    if not _zip_conformance_cells:
+        return
+    path = zipreport.write_json(zipreport.DEFAULT_OUT, _zip_conformance_cells)
+    summary = zipreport.summarize(_zip_conformance_cells)
+    # A generic Actions helper that happens to live in the benchmark's report
+    # module; writing a second copy of it here would be the worse trade.
+    report.append_step_summary(zipreport.markdown(summary))
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "zip conformance outcomes")
+        for line in zipreport.terminal_lines(summary):
+            reporter.write_line(line)
+        reporter.write_line(f"per-cell outcomes: {path}")
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
+    """Write the end-of-run artifacts for the suites that produce them."""
+    _finish_zip_conformance(session)
+    _finish_bench(session, exitstatus)
+
+
+def _finish_bench(session: pytest.Session, exitstatus: int) -> None:
     """Analyse every recorded cell, write the artifacts, and gate the run.
 
     The gate lives here rather than in the cells because it is a run-level
@@ -646,6 +705,17 @@ def chunky_pt_file(tmp_dir: Path) -> Path:
     decrypt of 5 MiB, which is cheap enough for the PR gate.
     """
     return _plaintext_of(tmp_dir, "chunky")
+
+
+@pytest.fixture(scope="session")
+def zip_conformance_pt_file(tmp_dir: Path) -> Path:
+    """A 128-byte plaintext, independent of ``--sizes`` on purpose.
+
+    ``test_zip_conformance.py`` mutates the container's trailer after
+    encryption, so payload size is irrelevant to what it tests -- fanning it
+    out over ``--sizes`` would pay multi-GiB cost for zero extra coverage.
+    """
+    return _plaintext_of(tmp_dir, "small")
 
 
 @pytest.fixture(scope="session")
