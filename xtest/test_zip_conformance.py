@@ -52,6 +52,15 @@ Both also emit a :class:`ZipConformanceWarning` and a ``record_property``
 naming the SDK, the cell and the matched diagnostic, so a green matrix still
 says which readers are conformant and which are merely safe.
 
+A cell is ``adversarial`` when the container contradicts itself -- two fields
+disagree, or one points outside the file -- so a wrong answer exists to be
+returned and accepting it means declining to notice. A cell that is merely
+unusual, or that crosses a recommendation while staying internally consistent
+and unambiguous to parse, is ``spec-legal``: accepting is the conformant
+answer and only a rejection is worth reporting. Readers should be liberal in
+what they accept, and warning about correct behavior trains people to ignore
+the warnings.
+
 (3) and (4) are latent/cosmetic single-implementation issues with no
 cross-SDK wire disagreement; see the module docstring discussion in the
 project plan for why they are out of scope here.
@@ -809,11 +818,27 @@ def test_directory_record_length_boundary(
 ):
     """Keep names intact; a large foreign TLV exercises uint16 cursor addition.
 
-    APPNOTE 4.4.10-12 recommends a combined record size <= 65535, so the two
-    cells differ only in which outcome the warning calls out: at the limit a
-    rejection is non-conformant, above it an acceptance is merely lucky.
-    Either way the requirement is safe behavior, not universal acceptance.
-    Go's unit test separately requires correct cursor arithmetic.
+    Both cells are spec-legal. APPNOTE 4.4.10-12 sizes each of the three
+    length fields as its own uint16, so every field here is representable and
+    only their *sum* crosses the 65535 the note recommends -- a SHOULD with no
+    field behind it. Nothing in either record contradicts anything else: the
+    declared lengths are truthful and the next record begins exactly where
+    they say, so there is one possible parse and it is the right one. That is
+    what separates this from the cells in
+    ``test_malformed_zip_never_yields_wrong_plaintext``, where two parts of
+    the container disagree and a wrong answer is available to be returned.
+
+    So accepting is conformant at both lengths and only a rejection is worth
+    reporting. Refusing ``over_limit`` costs real interop -- timestamp, Unix
+    UID/GID, ACL and signing TLVs push third-party records past 65535, and a
+    reader has to *add* code to compute the combined size and refuse it, since
+    that check does not fall out of parsing. Marking it adversarial would warn
+    about correct behavior.
+
+    A reader that adds these in uint16 still cannot pass quietly: the cursor
+    wraps, so it mis-parses into wrong bytes (a hard failure), a rejection
+    (warned here) or a hang (the decrypt timeout). Go's unit test separately
+    requires correct cursor arithmetic.
     """
     trailer, _ = zipmutate.load_trailer(readable_zip_base)
     first = trailer.entries[0]
@@ -825,8 +850,4 @@ def test_directory_record_length_boundary(
     )
     assert len(trailer.entries[0].to_bytes()) == record_length
     mutated = zipmutate.rewrite(readable_zip_base, tmp_path / "mutated.tdf", trailer)
-    zip_outcome(
-        mutated,
-        tmp_path / "roundtrip.bin",
-        legality="spec-legal" if record_length <= 0xFFFF else "adversarial",
-    )
+    zip_outcome(mutated, tmp_path / "roundtrip.bin", legality="spec-legal")
