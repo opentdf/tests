@@ -144,6 +144,11 @@ def _comparison_dict(c: stats.PairedComparison) -> dict[str, object]:
         "ci_high": _jsonable(c.ci_high),
         "p_value": _jsonable(c.p_value),
         "p_adjusted": _jsonable(c.p_adjusted),
+        # Both directions are carried explicitly. The schema stays at 1: these
+        # are additive fields, and a consumer that only knows the slower tail
+        # reads exactly what it read before.
+        "p_value_faster": _jsonable(c.p_value_faster),
+        "p_adjusted_faster": _jsonable(c.p_adjusted_faster),
         "verdict": str(c.verdict),
         "note": c.note,
     }

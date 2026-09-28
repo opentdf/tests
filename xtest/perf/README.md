@@ -41,6 +41,14 @@ The JSON is the useful one. It holds each cell's full per-round vectors for both
 arms, so a surprising verdict can be re-analysed offline instead of by re-running
 a 30-minute job to look at the same numbers again.
 
+Each `metrics` entry carries both directions of the test: `p_value` /
+`p_adjusted` are the one-sided "candidate is slower" pair that the regression
+gate reads, and `p_value_faster` / `p_adjusted_faster` are the matching
+"candidate is faster" pair behind IMPROVED. The `_adjusted` forms are the
+Benjamini–Hochberg values within that key's correction family and are `null`
+for controls and censored keys, which enter no family. These are additive
+fields; the artifact is still `"schema": 1`.
+
 ### The table
 
 ```markdown
@@ -54,7 +62,9 @@ a 30-minute job to look at the same numbers again.
   longer. Below 1.0 means faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
   this run could measure; a wide interval means a noisy runner, not a big change.
-- **p (BH)** — one-sided p-value, Benjamini–Hochberg adjusted across the run.
+- **p (BH)** — the one-sided "candidate is slower" p-value, Benjamini–Hochberg
+  adjusted across the run. The opposite direction has its own adjusted p-value;
+  it is in the JSON rather than the table.
 - **n** — paired rounds actually measured (20–60; the loop stops early once the
   interval is narrow enough).
 
@@ -70,7 +80,11 @@ enough to be ignored within a week. This fails the job.
 one. "We looked and found nothing" only counts when we could have found
 something.
 
-**IMPROVED** — the same test in the other direction. Never fails anything.
+**IMPROVED** — the same test mirrored: the CI *upper* bound below `1/threshold`
+(0.87x by default) *and* the adjusted "candidate is faster" p < 0.05. That
+second clause is its own lower-tail test with its own BH adjustment, not a
+reversal of the slowdown one — see [the two tails](#the-two-tails). Never fails
+anything.
 
 **inconclusive** — the run could not decide. Common reasons, all shown in the
 note beside the verdict:
@@ -262,13 +276,33 @@ BH-adjusted p is below alpha. Clause 1 alone fires on real-but-trivial effects
 measured precisely; clause 2 alone fires on noise roughly alpha of the time per
 cell, and a run has enough cells that "roughly alpha" becomes "most nights".
 
+#### The two tails
+
+Every comparison carries two one-sided p-values: `p_value` for "candidate is
+slower", which REGRESSION reads, and `p_value_faster` for "candidate is
+faster", which IMPROVED reads. Both come from `wilcoxon(...)` directly, and
+both get their own BH adjustment inside the same family.
+
+The obvious shortcut — derive one direction from the other, `p > 1 - alpha`
+instead of a lower-tail test — is wrong twice over. The tails are not exact
+complements under the discrete signed-rank null, and, far worse, **BH never
+lowers a p-value**. Adjusting the upper tail and then asking whether the result
+is *large* makes that clause easier to satisfy the more cells a run has, which
+is a multiplicity correction running backwards: adding cells would manufacture
+improvements rather than suppress false ones.
+`test_adjusted_slower_tail_is_not_read_as_evidence_of_improvement` pins this.
+
 #### Separate BH families
 
 Gated keys are corrected as their own family. Ungated metrics get a family of
 their own so they still carry a reportable verdict. Adjusting the gated metrics
 against metrics nobody gates on would only make a real regression harder to
 confirm. Controls and censored keys are excluded from correction entirely — an
-A/A cell is not a hypothesis about the candidate.
+A/A cell is not a hypothesis about the candidate. Both tails are adjusted
+within the same families, so a key's two adjusted p-values always describe the
+same set of hypotheses. A key outside every family has `p_adjusted` and
+`p_adjusted_faster` both unset; a control falls back to its own raw tails,
+since a floor that cannot resolve itself is no floor at all.
 
 #### One A/A control per SDK, running first
 
@@ -351,6 +385,12 @@ report is visibly quiet rather than indistinguishable from a clean one. If
 *every* cell skips, `GateResult.nothing_measured` fails the run: `--bench` is an
 explicit request for a measurement, and answering it with a green tick and an
 empty table is the one outcome nobody inspects.
+
+A control-only run counts as nothing measured too, and `analyze()` has to
+register each control key *before* it censors that cell's floored RSS — the
+`continue` must come after `control_keys.add(key)`. Reversed, the censored RSS
+key stops looking like part of a control, `has_candidate_comparisons` goes
+true, and a run holding only A/A cells reports a PASS headline.
 
 The bench job installs `go` on every runner even when it is not the SDK under
 measurement, because `otdfctl` provisions the attributes and KAS registry that

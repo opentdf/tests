@@ -318,6 +318,14 @@ class TestStopping:
         assert result.n_rounds == 5
         assert len(calls) == 11, "round six started but only one arm completed"
         assert timeouts[-1] == pytest.approx(2.5), "timeout is remaining budget"
+        # `n_rounds` reads one arm only, so it cannot see the failure mode
+        # this test exists for: the orphaned sixth-round reading landing in
+        # one arm's vector and silently un-pairing every round after it.
+        assert all(
+            len(vector) == 5
+            for arm_samples in result.samples.values()
+            for vector in arm_samples.values()
+        ), "the discarded round left one arm ahead of the other"
 
 
 class TestBenchConfigValidation:
@@ -433,6 +441,31 @@ class TestGateOnPlantedEffects:
         gate = analyze([control, measured], cfg)
 
         assert not gate.nothing_measured
+
+    def test_censored_control_only_run_still_measured_nothing(self):
+        # `analyze` records every metric of a control cell as a control key
+        # *before* it censors the floored RSS one. Reverse those two steps --
+        # let the `continue` skip the `control_keys.add` -- and the censored
+        # RSS key stops looking like part of a control to the run-level
+        # safeguard. A control-only run then claims to have measured a
+        # candidate and reports a PASS headline having measured nothing.
+        #
+        # The other RSS-floor tests cannot catch this: they pair the control
+        # with a real cell, so `has_candidate_comparisons` is true either way.
+        cfg = config(max_rounds=40)
+        floor = 4 * BASELINE_RSS
+        control, _ = run(
+            1.0, cfg=cfg, cell_id="aa", control=True, sdk="go", rss_floor=floor
+        )
+        gate = analyze([control], cfg)
+
+        rss = gate.comparisons["aa/rss"]
+        assert rss.verdict is stats.Verdict.INCONCLUSIVE
+        assert "floor" in rss.note, "precondition: the control's RSS is censored"
+        assert gate.nothing_measured
+        assert "NOTHING MEASURED" in gate.summary
+        assert not gate.regressions
+        assert not gate.improvements
 
     def test_a_regression_in_an_ungated_metric_does_not_fail(self):
         cfg = config(max_rounds=40, gated_metrics=("wall",))
