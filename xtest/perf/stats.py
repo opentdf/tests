@@ -38,6 +38,14 @@ Requiring both is deliberate, and neither clause is redundant:
 
 Together they answer the only question worth gating on: is the slowdown both
 real and large enough to care about?
+
+The other direction
+-------------------
+IMPROVED mirrors the rule with the inequalities flipped: the CI *upper* bound
+below ``1/threshold`` and the lower-tail p-value below ``alpha``. That lower
+tail is computed and adjusted in its own right rather than inferred by reading
+a large upper-tail p-value as evidence of a speedup -- see
+:func:`_one_sided_ps` and :func:`apply_multiplicity_control`.
 """
 
 from __future__ import annotations
@@ -89,9 +97,15 @@ class PairedComparison:
     ratio: float
     ci_low: float
     ci_high: float
+    #: One-sided p-value for "candidate is slower". Retains the original field
+    #: name for artifact/API compatibility; the opposite direction is explicit.
     p_value: float
+    #: One-sided p-value for "candidate is faster".
+    p_value_faster: float
     #: Set by :func:`apply_multiplicity_control` once every cell is known.
     p_adjusted: float | None = None
+    #: BH-adjusted form of :attr:`p_value_faster`.
+    p_adjusted_faster: float | None = None
     verdict: Verdict = Verdict.INCONCLUSIVE
     note: str = ""
 
@@ -174,18 +188,27 @@ def _bootstrap_ci(
     return float(res.confidence_interval.low), float(res.confidence_interval.high)
 
 
-def _one_sided_p(d: np.ndarray) -> float:
-    """One-sided Wilcoxon signed-rank p-value for "candidate is slower".
+def _one_sided_ps(d: np.ndarray) -> tuple[float, float]:
+    """Wilcoxon signed-rank p-values for slower and faster, respectively.
 
     Signed-rank rather than a t-test because latency distributions are
     skewed and occasionally have a stray outlier round; we do not want a
     single stalled invocation to drive the verdict.
+
+    Both tails are computed here rather than one being derived from the
+    other. They are not complements of each other under the discrete
+    signed-rank null, and the adjusted forms are even less so: BH pushes
+    large p-values toward 1, so reading an adjusted upper-tail value as
+    evidence for the lower tail makes the improvement test *easier* the more
+    cells a run has.
     """
     if np.all(d == 0):
         # No difference whatsoever. Wilcoxon rejects an all-zero input.
-        return 1.0
+        return 1.0, 1.0
     # scipy's stubs type the result as an opaque tuple-like; index and cast.
-    return cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    slower = cast(float, _scipy_stats.wilcoxon(d, alternative="greater")[1])
+    faster = cast(float, _scipy_stats.wilcoxon(d, alternative="less")[1])
+    return slower, faster
 
 
 def compare(
@@ -216,12 +239,14 @@ def compare(
             ci_low=math.nan,
             ci_high=math.nan,
             p_value=math.nan,
+            p_value_faster=math.nan,
             note=f"only {n} usable rounds; need at least {MIN_USABLE_ROUNDS}",
         )
 
     lo_log, hi_log = _bootstrap_ci(
         d, confidence=confidence, seed=seed, n_resamples=n_resamples
     )
+    p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
         baseline_median=b_med,
@@ -229,7 +254,8 @@ def compare(
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),
-        p_value=_one_sided_p(d),
+        p_value=p_slower,
+        p_value_faster=p_faster,
     )
 
 
@@ -450,11 +476,23 @@ def apply_multiplicity_control(
     gated_family = [k for k in adjustable if gated is None or k in gated]
     rest = [k for k in adjustable if k not in set(gated_family)]
     p_adj: dict[str, float] = {}
+    p_adj_faster: dict[str, float] = {}
     for family in (gated_family, rest):
         p_adj.update(
             zip(
                 family,
                 benjamini_hochberg([comparisons[k].p_value for k in family]),
+                strict=True,
+            )
+        )
+        # The opposite direction needs its own lower-tail p-value and its own
+        # adjustment. Reading an adjusted upper-tail value as `p > 1-alpha`
+        # is invalid: BH controls small p-values and generally pushes large
+        # ones toward 1, making that backwards test easier rather than safer.
+        p_adj_faster.update(
+            zip(
+                family,
+                benjamini_hochberg([comparisons[k].p_value_faster for k in family]),
                 strict=True,
             )
         )
@@ -467,12 +505,14 @@ def apply_multiplicity_control(
     for key in keys:
         c = comparisons[key]
         pa = p_adj.get(key)
+        pa_faster = p_adj_faster.get(key)
         if key in censored:
             verdict, note = Verdict.INCONCLUSIVE, censored[key]
         else:
             verdict, note = _verdict_for(
                 c,
                 pa,
+                pa_faster,
                 threshold=threshold,
                 alpha=alpha,
                 noise=noise_by_control.get(controls.get(key, ""), uncontrolled),
@@ -486,7 +526,9 @@ def apply_multiplicity_control(
             ci_low=c.ci_low,
             ci_high=c.ci_high,
             p_value=c.p_value,
+            p_value_faster=c.p_value_faster,
             p_adjusted=pa,
+            p_adjusted_faster=pa_faster,
             verdict=verdict,
             note=note or c.note,
         )
@@ -505,6 +547,7 @@ def apply_multiplicity_control(
 def _verdict_for(
     c: PairedComparison,
     p_adjusted: float | None,
+    p_adjusted_faster: float | None,
     *,
     threshold: float,
     alpha: float,
@@ -514,13 +557,23 @@ def _verdict_for(
     if c.n_rounds < MIN_USABLE_ROUNDS or not math.isfinite(c.ci_low):
         return Verdict.INCONCLUSIVE, c.note or "no usable interval"
 
-    p = c.p_value if is_control else p_adjusted
-    if p is None or not math.isfinite(p):
+    # A control is not part of any correction family -- it is not a hypothesis
+    # about the candidate -- so it reads its own unadjusted tails.
+    p_slower = c.p_value if is_control else p_adjusted
+    p_faster = c.p_value_faster if is_control else p_adjusted_faster
+    if p_slower is None or p_faster is None:
+        return Verdict.INCONCLUSIVE, "no p-value"
+    if not (math.isfinite(p_slower) and math.isfinite(p_faster)):
         return Verdict.INCONCLUSIVE, "no p-value"
 
-    if c.ci_low > threshold and p < alpha:
+    if c.ci_low > threshold and p_slower < alpha:
         return Verdict.REGRESSION, ""
-    if c.ci_high < 1 / threshold and p > 1 - alpha:
+    # The mirror image of the clause above, not a reversal of it. Testing
+    # `p_slower > 1 - alpha` on an *adjusted* upper-tail p-value would be
+    # invalid: BH controls small p-values and generally pushes large ones
+    # toward 1, so that backwards test gets easier as a run grows rather than
+    # safer. The lower tail is measured and adjusted in its own right.
+    if c.ci_high < 1 / threshold and p_faster < alpha:
         return Verdict.IMPROVED, ""
 
     # Not a regression. But "we looked and found nothing" only counts as PASS
