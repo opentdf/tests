@@ -1036,11 +1036,17 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       ######## MEASURE #############
-      # --locked --no-build: install exactly what uv.lock pins, and run no
-      # setup scripts doing it. A benchmark that measured a differently
-      # resolved dependency set would be measuring the wrong thing anyway.
+      # --locked: install exactly what uv.lock pins, failing if the lockfile
+      # is out of date. A benchmark that measured a differently resolved
+      # dependency set would be measuring the wrong thing anyway.
+      #
+      # No longer --no-build: xtest depends on ../otdf-adapter as an editable
+      # path dependency, and --no-build refuses any distribution without a
+      # wheel. The run step below says --no-sync --no-build instead: it pins
+      # the environment to exactly what this step installed, and with nothing
+      # left to install there is nothing left to build.
       - name: Install test dependencies
-        run: uv sync --locked --no-build
+        run: uv sync --locked
         working-directory: otdftests/xtest
 
       # Deliberately serial: no -n / --dist. Parallel pytest workers contend
@@ -1049,7 +1055,7 @@ jobs:
       - name: Run performance benchmarks
         id: bench
         run: |-
-          uv run --frozen --no-build pytest -ra -v \
+          uv run --frozen --no-sync --no-build pytest -ra -v \
             --bench \
             --sdks "$BENCH_SDK" \
             --bench-budget-seconds 1500 \
@@ -1335,8 +1341,12 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       ######## RUN #############
+      # --locked, but not --no-build: xtest depends on ../otdf-adapter as an
+      # editable path dependency, which has no wheel by design. The run step
+      # below says --no-sync --no-build: it pins the environment to what this
+      # installed, and with nothing left to install there is nothing to build.
       - name: Install test dependencies
-        run: uv sync --locked --no-build
+        run: uv sync --locked
         working-directory: otdftests/xtest
 
       # Deliberately serial: no -n / --dist. Three concurrent workers each
@@ -1348,7 +1358,7 @@ jobs:
       - name: Run ZIP64 boundary tests
         id: zip64
         run: |-
-          uv run --frozen --no-build pytest -ra -v \
+          uv run --frozen --no-sync --no-build pytest -ra -v \
             --sizes medium \
             --sdks-encrypt "$ZIP64_SDK" \
             --sdks-decrypt "go java js" \

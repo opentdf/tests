@@ -25,14 +25,25 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: false
+      # This is the one step in the xtest lane that builds anything, so it is
+      # also the one that cannot say --no-build: xtest depends on
+      # ../otdf-adapter as an editable path dependency, and --no-build refuses
+      # any distribution without a wheel, which an editable install has none of
+      # by design. What it would guard against is a setup script in a package
+      # from this repo, built from this repo's lockfile. The otdf-adapter lane
+      # below has no path dependencies and does hold the strong form.
+      #
+      # --frozen: install exactly what uv.lock says, failing if pyproject.toml
+      # was edited without a re-lock. The steps below cannot carry that
+      # guarantee themselves -- they install nothing -- so it lives here.
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
         working-directory: xtest
       - name: Lint xtest python
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run pyright
+          uv run --frozen --no-sync --no-build ruff check .
+          uv run --frozen --no-sync --no-build ruff format --check .
+          uv run --frozen --no-sync --no-build pyright
         working-directory: xtest
       # Offline tests for the harnesses whose own correctness gates a nightly
       # job: the benchmark statistics, measurement and CLI command builders,
@@ -40,16 +51,28 @@ jobs:
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
       #
-      # --frozen --no-build: resolve nothing and build nothing, so a
-      # dependency cannot slip in an unlocked version or a setup script on a
-      # runner that already has everything installed from the step above.
+      # --frozen --no-sync --no-build: resolve nothing, install nothing, build
+      # nothing. This step runs exactly the environment the install step above
+      # produced, and --no-build is free here precisely because --no-sync means
+      # there is nothing left to build.
       - name: Test xtest offline harnesses
         run: >-
-          uv run --frozen --no-build pytest --no-header -q
+          uv run --frozen --no-sync --no-build pytest --no-header -q
           test_bench_stats.py test_bench_measure.py test_bench_runner.py
           test_bench_arms.py test_sdk_commands.py test_tdfs_units.py
           test_encryption_units.py test_sizes_units.py test_zip64_units.py
         working-directory: xtest
+      # --frozen --no-build throughout: this package has no path dependencies,
+      # so unlike the xtest lane above it can hold the strong form -- install
+      # exactly what uv.lock pins, from wheels only, running no setup script.
+      - name: Lint and test otdf-adapter
+        run: |
+          uv sync --frozen --no-build
+          uv run --frozen --no-build ruff check .
+          uv run --frozen --no-build ruff format --check .
+          uv run --frozen --no-build pyright
+          uv run --frozen --no-build pytest --maxfail=1 --disable-warnings -q
+        working-directory: otdf-adapter
       - name: Lint and test otdf-local
         run: |
           uv sync
