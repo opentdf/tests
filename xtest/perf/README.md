@@ -538,3 +538,138 @@ two builds doing different amounts of work) is invisible in the output.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.
+
+---
+
+## 3. Local preparation and execution
+
+A benchmark run locally is the same run CI performs — same resolution, same
+installs, same manifest, same environment variables. That is the point of this
+section: a local sequence that diverges from the workflow measures something
+else, and the difference shows up as an unreproducible result rather than as
+an error.
+
+### Prerequisites
+
+- `otdf-sdk-mgr` installed: `cd otdf-sdk-mgr && uv tool install --editable .`
+- Nothing else listening on port 8080. A benchmark starts the platform and its
+  default KAS only — no alpha/beta/gamma/delta, no km instances. That is
+  deliberate: every extra Go service is a process competing for the CPU being
+  measured.
+
+### Sequence
+
+```bash
+# 1. Resolve and install every arm in one step, recording what was installed.
+#    The first ref is the reference; the rest are candidates.
+cd otdf-sdk-mgr
+uv run otdf-sdk-mgr install benchmark go v0.29.0 main --otdfctl v0.30.0
+
+# 2. Start the platform and its default KAS.
+cd ../otdf-local
+uv run otdf-local up --services docker,platform
+
+# 3. Export the environment: log paths for the audit assertions, XT_TMP_DIR,
+#    and the pins recorded in step 1.
+eval $(uv run otdf-local env)
+
+# 4. Measure.
+cd ../xtest
+uv run pytest --bench --sdks go \
+  --bench-baseline go@v0.29.0 \
+  --bench-candidate go@main \
+  -v test_benchmarks.py
+
+# 5. Read the result. The JSON holds every sample and every interval; the
+#    terminal summary is a view of it, not a separate source.
+cat test-results/benchmarks/go.json
+
+# 6. Stop the services, whether or not the measurement passed. Logs stay
+#    under otdf-local's log directory afterwards.
+cd ../otdf-local
+uv run otdf-local down
+```
+
+`install benchmark` is what writes the manifest. `install stable` and
+`install tip` still work for ordinary test runs, but they install without
+recording provenance, so step 3 has no pins to export and the run falls back
+to whatever happens to be in `dist/`.
+
+### Environment variables
+
+`otdf-local env` exports, in addition to the platform settings:
+
+- `XT_TMP_DIR` — root for generated fixtures and ciphertexts
+- `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1
+- `OTDFCTL_HEADS` — a **JSON array** naming the `dist/` directory of the
+  provisioning CLI, e.g. `["v0.30.0"]`. `conftest.load_otdfctl` parses it with
+  `json.loads`; any other shape is discarded silently and the run falls back
+  to `sdk/go/dist/main/otdfctl.sh` or a system binary. It names the
+  provisioning CLI only — never a measured arm, which would make a build under
+  measurement responsible for provisioning its own fixtures.
+
+Only set when the corresponding file exists: `PLATFORM_LOG_FILE`,
+`KAS_*_LOG_FILE` (the audit assertions need these), `SCHEMA_FILE`,
+`OT_ROOT_KEY`, `PLATFORM_VERSION`.
+
+### Installation manifest
+
+`install benchmark` writes `xtest/sdk/benchmark.installed.json`, a versioned
+record of what was installed. Per artifact: requested alias, repository,
+immutable commit SHA, installed tag and path, installation method (release
+artifact or source build), and build settings. Request order is preserved, so
+the first `sdk_arms` entry is the reference.
+
+The platform pin and the provisioning `otdfctl` pin are recorded in their own
+fields, separate from the measured arms.
+
+The manifest is written on **every** exit path, including the failing ones, so
+a partial or failed preparation still says what it managed to install. Its
+`status` is one of `success`, `neutral`, `partial`, or `failed`, and
+`status_message` explains whichever it is — `neutral` is not an error, so the
+field is not named for one.
+
+A source build records its commit in `dist/<slug>/.version` alongside the
+build. A later run reuses that directory only if the recorded commit matches;
+an unrecorded or mismatched one is discarded and rebuilt. Adopting a stale
+build costs nothing at install time and mislabels every measurement that
+follows.
+
+### Neutral preparation
+
+When two distinct requested aliases resolve to one commit — `main` and
+`latest` both at `abc123` — preparation stops before any build and reports
+**neutral**. There is nothing to compare, which is not the same as something
+having gone wrong; the manifest still records the commit everything collapsed
+onto. Local and CI share this path, so the outcome reads the same in both.
+
+### Troubleshooting
+
+**Services won't start**:
+```bash
+cd otdf-local
+uv run otdf-local status
+uv run otdf-local logs -f
+```
+
+**Missing SDK build**:
+```bash
+ls -la xtest/sdk/go/dist/            # what is installed
+cat xtest/sdk/benchmark.installed.json  # and what preparation believes it installed
+```
+A build with no `.version` beside it was not installed by
+`install benchmark`, so its provenance is unknown and the next preparation
+will rebuild it.
+
+**Audit log assertions fail** — the log paths are only exported if the files
+already exist, so re-export after the services have started:
+```bash
+echo $PLATFORM_LOG_FILE
+eval $(cd otdf-local && uv run otdf-local env)
+```
+
+**Platform not reachable**:
+```bash
+curl http://localhost:8080/healthz
+cd otdf-local && uv run otdf-local restart platform
+```

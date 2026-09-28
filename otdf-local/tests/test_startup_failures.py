@@ -134,3 +134,69 @@ def test_kas_start_clears_a_stale_error_from_a_previous_attempt(
 
     assert kas.start() is True
     assert kas.start_error is None
+
+
+# A real failure, copied from a run where the compose file bind-mounted a file
+# Docker could not chown. Compose reports progress on stderr too, so the line
+# that matters is buried in noise -- which is how it came to be discarded.
+COMPOSE_FAILURE_STDERR = """\
+time="..." level=warning msg="The \\"JAVA_OPTS_APPEND\\" variable is not set."
+ Container main-keycloak-1 Starting
+ Container main-opentdfdb-1 Starting
+ Container main-opentdfdb-1 Started
+Error response from daemon: error while creating mount source path \
+'/w/platform/keys/ca.jks': chown /w/platform/keys/ca.jks: permission denied
+"""
+
+
+def _docker_service(tmp_path: Path, monkeypatch, returncode: int, stderr: str):
+    from otdf_local.services.docker import DockerService
+
+    settings = Settings(xtest_root=tmp_path, platform_dir=tmp_path)
+    (tmp_path / "docker-compose.yaml").write_text("services: {}\n")
+
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=[], returncode=returncode, stdout="", stderr=stderr
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return DockerService(settings)
+
+
+def test_docker_start_reports_why_compose_failed(tmp_path, monkeypatch):
+    docker = _docker_service(tmp_path, monkeypatch, 1, COMPOSE_FAILURE_STDERR)
+
+    assert docker.start() is False
+    assert docker.start_error is not None
+    # The daemon's reason, not just "it failed" -- this is the whole point.
+    assert "permission denied" in docker.start_error
+    # And not the progress chatter that surrounds it.
+    assert "Starting" not in docker.start_error
+
+
+def test_docker_start_reports_a_silent_nonzero_exit(tmp_path, monkeypatch):
+    # No output at all still has to say something: an empty start_error reads
+    # as success to `or`-style callers.
+    docker = _docker_service(tmp_path, monkeypatch, 17, "")
+
+    assert docker.start() is False
+    assert docker.start_error is not None
+    assert "17" in docker.start_error
+
+
+def test_docker_start_names_a_missing_compose_file(tmp_path, monkeypatch):
+    docker = _docker_service(tmp_path, monkeypatch, 0, "")
+    docker._compose_file.unlink()
+
+    assert docker.start() is False
+    assert docker.start_error is not None
+    assert "docker-compose.yaml" in docker.start_error
+
+
+def test_docker_start_clears_a_stale_error(tmp_path, monkeypatch):
+    docker = _docker_service(tmp_path, monkeypatch, 0, "")
+    docker.start_error = "left over from an earlier failure"
+
+    assert docker.start() is True
+    assert docker.start_error is None

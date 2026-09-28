@@ -51,32 +51,78 @@ def _find_xtest_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent.parent / "xtest"
 
 
-def _find_platform_dir(xtest_root: Path) -> Path:
-    """Find the platform directory by searching for a sibling of an ancestor.
+def _has_platform_shape(candidate: Path) -> bool:
+    """True if `candidate` is a platform source tree we can start from.
 
-    Searches up the directory tree from xtest_root looking for a 'platform' directory
-    that has the expected shape (contains docker-compose.yaml and opentdf-dev.yaml).
+    Both files are required: `otdf-local` runs `go run ./service` out of this
+    directory and generates its config from `opentdf-dev.yaml`, so a checkout
+    missing either is not startable.
+    """
+    return (
+        candidate.is_dir()
+        and (candidate / "docker-compose.yaml").is_file()
+        and (candidate / "opentdf-dev.yaml").is_file()
+    )
+
+
+def _installed_platform_worktrees(xtest_root: Path) -> list[Path]:
+    """Platform source trees under `xtest/platform/src/`, sorted by name.
+
+    This is where `otdf-sdk-mgr` puts them: one worktree per installed ref,
+    beside a bare `platform.git` that has no platform shape and so is skipped
+    by the filter rather than by name.
+    """
+    src_root = xtest_root / "platform" / "src"
+    if not src_root.is_dir():
+        return []
+    return sorted(
+        (c for c in src_root.iterdir() if _has_platform_shape(c)), key=lambda p: p.name
+    )
+
+
+def _find_platform_dir(xtest_root: Path) -> Path:
+    """Find a startable platform source tree.
+
+    Two layouts are in use and neither is going away on its own:
+
+    - `tests/platform/`, a checkout sitting beside `xtest/`. Historically how
+      the platform got here, and still what a hand-cloned setup looks like.
+    - `xtest/platform/src/<ref>/`, one worktree per ref, which is what
+      `otdf-sdk-mgr install platform` and `install benchmark --platform`
+      actually create (`platform_installer.get_platform_dir`).
+
+    The sibling layout wins when both exist, so an explicit checkout is never
+    silently shadowed by an installed one. `OTDF_LOCAL_PLATFORM_DIR` overrides
+    either, and is the answer when several refs are installed: picking one
+    would be picking which platform version the benchmark measures against.
 
     Raises:
-        FileNotFoundError: If platform directory is not found with expected shape.
+        FileNotFoundError: if nothing startable is found, or if the choice
+            among installed refs is ambiguous.
     """
-    # Start from xtest_root and walk up
     current = xtest_root
     while current != current.parent:
-        # Check siblings at this level
-        platform_candidate = current.parent / "platform"
-        if platform_candidate.exists() and platform_candidate.is_dir():
-            # Verify it has the expected shape
-            has_compose = (platform_candidate / "docker-compose.yaml").exists()
-            has_config = (platform_candidate / "opentdf-dev.yaml").exists()
-            if has_compose and has_config:
-                return platform_candidate
+        candidate = current.parent / "platform"
+        if _has_platform_shape(candidate):
+            return candidate
         current = current.parent
 
-    # If we get here, we didn't find it
+    installed = _installed_platform_worktrees(xtest_root)
+    if len(installed) == 1:
+        return installed[0]
+    if installed:
+        names = ", ".join(p.name for p in installed)
+        raise FileNotFoundError(
+            f"Multiple platform refs installed under {xtest_root / 'platform' / 'src'}: "
+            f"{names}. Set OTDF_LOCAL_PLATFORM_DIR to the one to run; choosing for you "
+            "would silently decide which platform version everything is measured against."
+        )
+
     raise FileNotFoundError(
         f"Could not find platform directory with expected shape "
-        f"(docker-compose.yaml and opentdf-dev.yaml) searching from {xtest_root}"
+        f"(docker-compose.yaml and opentdf-dev.yaml) searching from {xtest_root}. "
+        f"Install one with `otdf-sdk-mgr install tip platform`, or set "
+        f"OTDF_LOCAL_PLATFORM_DIR."
     )
 
 
