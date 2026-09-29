@@ -70,6 +70,11 @@ fields; the artifact is still `"schema": 1`.
 
 ### The verdicts
 
+![Three verdicts, two tests of the same point null: a log-scaled ratio axis
+banded into IMPROVED below 0.87, no verdict, and REGRESSION above 1.15, with a
+rule at 1.00 marking where both Wilcoxon tests actually
+test.](docs/fig1-three-regions.svg)
+
 **REGRESSION** — the CI lower bound exceeds the threshold (default **1.15x**,
 i.e. 15% slower) *and* the adjusted p < 0.05. Both clauses are required, and
 neither is redundant: the threshold alone would fire on a reproducible 0.5%
@@ -210,6 +215,7 @@ things; the noise floor will tell you whether you succeeded.
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact, step-summary markdown |
+| `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
@@ -253,6 +259,39 @@ correlate their noise.
 slowdown and a 2x speedup are equal and opposite) and additive, which is what
 the median and the bootstrap want. Everything is exponentiated back for reporting.
 
+![Two panels. On the left, the spread of the raw paired difference grows with
+the effect while the log-ratio's stays flat. On the right, stalling the
+candidate arm only drives the slower tail's rejection rate to 0.815 and the
+faster tail's to zero while the median ratio barely moves; stalling both arms
+leaves the slower tail at nominal.](docs/fig3-positivity.svg)
+
+The log fixes a *scale* problem. Timings are strictly positive, so the raw
+paired difference inherits the size of whatever effect is present — its spread
+grows from 0.142 to 0.412 as the true ratio goes 1x to 4x, while the log-ratio's
+stays flat at 0.141. Thresholds and interval widths are therefore comparable
+across payload sizes and SDKs only because of the log.
+
+It does not fix a *skew* problem. Signed-rank needs `d` symmetric under the
+null, and a positive right-tailed variable produces one-sided contamination —
+a stalled round makes an arm slower, never faster. Stalls landing on one arm
+break the symmetry directionally: at a 15% stall rate the slower tail rejects
+36.2% of the time and the faster tail collapses to 0.001, while the median
+ratio moves only 2.6%.
+
+Read what that is and is not. Stalling one arm changes that arm's
+distribution, so the true median ratio leaves 1 and the point null the
+p-values test is genuinely false — 36.2% is *power against a 2.6% effect*,
+not a size failure. Running the control confirms it: stall both arms at the
+same rate and the true ratio stays 1 under contamination just as heavy, and
+the slower tail holds between 0.039 and 0.057 across every rate simulated.
+Signed-rank is not being invalidated here; it is answering the question it was
+asked, and that question is the wrong one for a gate.
+
+Which is the second reason [both clauses](#both-clauses-of-the-decision-rule)
+are required. A 2.6% shift is real and nowhere near the 15% margin, and only
+the CI clause knows the difference — it is what keeps a stall-contaminated
+cell from being read as a regression.
+
 #### Stopping on precision, never on significance
 
 > This is the single easiest thing here to "optimize" into invalidity.
@@ -276,6 +315,25 @@ BH-adjusted p is below alpha. Clause 1 alone fires on real-but-trivial effects
 measured precisely; clause 2 alone fires on noise roughly alpha of the time per
 cell, and a run has enough cells that "roughly alpha" becomes "most nights".
 
+Note which clause carries which claim. The p-values test the *point* null
+(`ratio = 1`); the margin is carried by the interval alone. Across 1200 cells
+simulated from the harness's log-normal noise model the CI clause passed while
+the raw p-clause failed zero times, so *on measurements shaped like these*
+clause 2 contributes exactly one thing clause 1 does not: the multiplicity
+adjustment.
+
+That is an observation about those distributions, not an implication —
+`verify.ci_without_significance()` constructs a cell where the CI clause
+passes and the raw p-clause does not. Signed-rank ranks differences by
+magnitude, so 22 rounds clustered just above the margin against 8 swinging far
+below it give a bootstrap CI of [1.211, 1.223] at a slower-tail p of 0.343.
+Nothing in the harness produces that shape, but the gate should not be
+documented as if it could not.
+
+The conjunction is load-bearing in a second way regardless — it is also what
+shields the gate from the signed-rank point null being the wrong null on
+[skewed positive data](#log-ratios).
+
 #### The two tails
 
 Every comparison carries two one-sided p-values: `p_value` for "candidate is
@@ -291,6 +349,35 @@ is *large* makes that clause easier to satisfy the more cells a run has, which
 is a multiplicity correction running backwards: adding cells would manufacture
 improvements rather than suppress false ones.
 `test_adjusted_slower_tail_is_not_read_as_evidence_of_improvement` pins this.
+
+![Grouped columns over runs of 4, 12 and 24 cells, counting acceptances of the
+improvement p-clause under a pure null. The old rule's count rises from 0.43 to
+6.28 per run; the new rule's stays flat near
+0.06.](docs/fig2-fdr-backwards.svg)
+
+The scale of it, under a pure null where every acceptance is false by
+construction: the old rule accepted on 0.43 cells per 4-cell run and 6.28 per
+24-cell run — about a quarter of everything measured — while the new rule holds
+near 0.06 whatever the run size. At one cell the two rules agree to within
+0.002, which is what identifies this as a multiplicity artifact rather than a
+discreteness one.
+
+Those are counts for the *p-clause on its own*, not for completed IMPROVED
+verdicts. On this null the accompanying CI clause (`ci_high < 1/1.15`) passed
+0 of 2000 cells, so neither rule would have published a false IMPROVED — the
+conjunction is what kept the broken clause off the output. Isolating the
+clause is deliberate: it is the half whose behaviour under multiplicity is at
+issue, and scoring whole verdicts would report zero for both rules and
+distinguish nothing. A clause that gets *more* permissive as the run grows is
+worth fixing while the other clause is still masking it.
+
+Discreteness is the smaller of the two problems and is easy to over-credit.
+scipy uses the exact signed-rank null only when `n <= 50` *and* there are no
+ties, so the two tails sum to 1 + the point mass there, and to exactly 1
+otherwise: the excess is about +0.010 at n = 20, +0.004 at n = 30, and zero at
+n >= 51. Ties from a floored RSS push a cell onto the normal approximation and
+*remove* the discrepancy rather than worsening it, so this lives only in the
+clean wall/cpu cells.
 
 #### Separate BH families
 
@@ -443,6 +530,11 @@ two builds doing different amounts of work) is invisible in the output.
 6. Never run the measured command from a process holding memory.
 7. Never run the benchmark in parallel with anything, including itself.
 8. Never let a run that measured nothing report success.
+9. Never infer one tail of a test from the other, and never read an *adjusted*
+   p-value in the direction it was not adjusted for.
+10. Never hand-edit the figures. Change `docs/make_figures.py` and regenerate;
+    if a number moves, `--verify` is what tells you whether the figure or the
+    world changed.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.
