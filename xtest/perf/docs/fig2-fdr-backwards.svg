@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660.00" height="428.00" viewBox="0 0 660.00 428.00" role="img" aria-labelledby="t d">
+<title id="t">A multiplicity correction running backwards</title>
+<desc id="d">Grouped columns over runs of 4, 12 and 24 cells, counting cells that accept the improvement p-clause under a pure null. The old rule's count rises from 0.43 to 6.28 per run; the new rule's stays flat near 0.06. The CI clause of the same verdict passed zero of 2000 null cells, so these are clause acceptances rather than completed IMPROVED verdicts.</desc>
+<style>svg{--surface:#fcfcfb;--ink:#0b0b0b;--muted:#52514e;--grid:#dedcd4;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a}@media (prefers-color-scheme:dark){svg{--surface:#1a1a19;--ink:#ffffff;--muted:#c3c2b7;--grid:#3b3a37;--s1:#3987e5;--s2:#d95926;--s3:#199e70}}text{font-family:ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;}.ink{fill:var(--ink);}.muted{fill:var(--muted);}.grid{stroke:var(--grid);stroke-width:1;}.axis{stroke:var(--muted);stroke-width:1;}.ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 3;}.rule{stroke:var(--muted);stroke-width:1;}</style>
+<rect width="660.00" height="428.00" rx="8" fill="var(--surface)"/>
+<text x="64.00" y="30.00" class="ink" font-size="15.00" text-anchor="start" font-weight="600">A multiplicity correction running backwards</text>
+<text x="64.00" y="52.00" class="muted" font-size="12.00" text-anchor="start">Cells per run accepting the improvement p-clause, everything drawn from a pure null.</text>
+<rect x="64.00" y="68.00" width="10.00" height="10.00" rx="2.00" fill="var(--s1)"/>
+<text x="80.00" y="76.00" class="muted" font-size="11.00" text-anchor="start">old: p_adj_slower &gt; 0.95</text>
+<rect x="243.60" y="68.00" width="10.00" height="10.00" rx="2.00" fill="var(--s2)"/>
+<text x="259.60" y="76.00" class="muted" font-size="11.00" text-anchor="start">new: p_adj_faster &lt; 0.05</text>
+<line x1="74.00" y1="300.00" x2="610.00" y2="300.00" class="grid"/>
+<text x="64.00" y="304.00" class="muted" font-size="11.00" text-anchor="end">0</text>
+<line x1="74.00" y1="241.71" x2="610.00" y2="241.71" class="grid"/>
+<text x="64.00" y="245.71" class="muted" font-size="11.00" text-anchor="end">2</text>
+<line x1="74.00" y1="183.43" x2="610.00" y2="183.43" class="grid"/>
+<text x="64.00" y="187.43" class="muted" font-size="11.00" text-anchor="end">4</text>
+<line x1="74.00" y1="125.14" x2="610.00" y2="125.14" class="grid"/>
+<text x="64.00" y="129.14" class="muted" font-size="11.00" text-anchor="end">6</text>
+<line x1="74.00" y1="300.00" x2="610.00" y2="300.00" class="axis"/>
+<path d="M121.03,300.00 L121.03,291.47 Q121.03,287.47 125.03,287.47 L147.03,287.47 Q151.03,287.47 151.03,291.47 L151.03,300.00 Z" fill="var(--s1)"/>
+<text x="136.03" y="279.47" class="ink" font-size="11.00" text-anchor="middle">0.43</text>
+<path d="M175.63,300.00 L175.63,300.00 Q175.63,298.50 177.13,298.50 L204.13,298.50 Q205.63,298.50 205.63,300.00 L205.63,300.00 Z" fill="var(--s2)"/>
+<text x="190.63" y="290.54" class="ink" font-size="11.00" text-anchor="middle">0.05</text>
+<path d="M299.70,300.00 L299.70,225.02 Q299.70,221.02 303.70,221.02 L325.70,221.02 Q329.70,221.02 329.70,225.02 L329.70,300.00 Z" fill="var(--s1)"/>
+<text x="314.70" y="213.02" class="ink" font-size="11.00" text-anchor="middle">2.71</text>
+<path d="M354.30,300.00 L354.30,300.00 Q354.30,297.96 356.34,297.96 L382.26,297.96 Q384.30,297.96 384.30,300.00 L384.30,300.00 Z" fill="var(--s2)"/>
+<text x="369.30" y="289.96" class="ink" font-size="11.00" text-anchor="middle">0.07</text>
+<path d="M478.37,300.00 L478.37,120.98 Q478.37,116.98 482.37,116.98 L504.37,116.98 Q508.37,116.98 508.37,120.98 L508.37,300.00 Z" fill="var(--s1)"/>
+<text x="493.37" y="108.98" class="ink" font-size="11.00" text-anchor="middle">6.28</text>
+<path d="M532.97,300.00 L532.97,300.00 Q532.97,298.25 534.72,298.25 L561.22,298.25 Q562.97,298.25 562.97,300.00 L562.97,300.00 Z" fill="var(--s2)"/>
+<text x="547.97" y="290.25" class="ink" font-size="11.00" text-anchor="middle">0.06</text>
+<text x="163.33" y="320.00" class="muted" font-size="11.00" text-anchor="middle">4 cells</text>
+<text x="342.00" y="320.00" class="muted" font-size="11.00" text-anchor="middle">12 cells</text>
+<text x="520.67" y="320.00" class="muted" font-size="11.00" text-anchor="middle">24 cells</text>
+<text x="342.00" y="344.00" class="muted" font-size="11.00" text-anchor="middle">cells in the run</text>
+<text x="64.00" y="372.00" class="muted" font-size="11.00" text-anchor="start">BH never lowers a p-value, so a test that asks for a large adjusted p gets easier as a run grows.</text>
+<text x="64.00" y="390.00" class="muted" font-size="11.00" text-anchor="start">These count clause 2 alone. The CI clause passed 0 of 2000 null cells, so neither</text>
+<text x="64.00" y="408.00" class="muted" font-size="11.00" text-anchor="start">rule completed a verdict here -- the conjunction is what hid the broken clause.</text>
+</svg>
