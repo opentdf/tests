@@ -18,9 +18,10 @@ import numpy as np
 from scipy import stats as _scipy_stats
 
 from perf import stats
+from perf.stats import DEFAULT_THRESHOLD
 
 #: Fixed so the reported numbers are reproducible, not so they are flattering.
-SEED_FALSE_IMPROVED = 31
+SEED_P_CLAUSE = 31
 SEED_NULL_CI = 23
 SEED_SCALE = 11
 SEED_STALLS = 11
@@ -28,7 +29,6 @@ SEED_BINDING = 5
 SEED_CELLS = 17
 
 ALPHA = 0.05
-THRESHOLD = 1.15
 TRIALS = 300
 
 
@@ -45,10 +45,25 @@ def _bh(p: list[float]) -> np.ndarray:
     )
 
 
+def _pair(
+    rng: np.random.Generator,
+    ratio: float = 1.0,
+    *,
+    n: int = 30,
+    sigma: float = 0.06,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Two log-normal arms of one synthetic cell, the candidate scaled by ``ratio``.
+
+    ``ratio = 1`` is the A/A case: both arms from the same distribution.
+    """
+    b = np.exp(rng.normal(0, sigma, n))
+    c = ratio * np.exp(rng.normal(0, sigma, n))
+    return b, c
+
+
 def _null_cell(rng: np.random.Generator, n: int = 30) -> tuple[float, float]:
-    """One A/A cell: two arms drawn from the same distribution."""
-    b = np.exp(rng.normal(0, 0.06, n))
-    c = np.exp(rng.normal(0, 0.06, n))
+    """Both tails of one A/A cell."""
+    b, c = _pair(rng, n=n)
     return _wilcoxon_tails(np.log(c) - np.log(b))
 
 
@@ -70,7 +85,7 @@ def simulate_improvement_p_clause(
 
     Everything is a pure null, so every acceptance is false by construction.
     """
-    rng = np.random.default_rng(SEED_FALSE_IMPROVED)
+    rng = np.random.default_rng(SEED_P_CLAUSE)
     old: list[float] = []
     new: list[float] = []
     for m in cells:
@@ -88,7 +103,7 @@ def simulate_improvement_p_clause(
 
 
 def simulate_null_improvement_ci(
-    *, trials: int = 2000, threshold: float = THRESHOLD
+    *, trials: int = 2000, threshold: float = DEFAULT_THRESHOLD
 ) -> int:
     """Null cells whose CI clause for IMPROVED passes: ``ci_high < 1/threshold``.
 
@@ -101,8 +116,7 @@ def simulate_null_improvement_ci(
     rng = np.random.default_rng(SEED_NULL_CI)
     passes = 0
     for _ in range(trials):
-        b = np.exp(rng.normal(0, 0.06, 30))
-        c = np.exp(rng.normal(0, 0.06, 30))
+        b, c = _pair(rng)
         if stats.compare(b, c, seed=2, n_resamples=999).ci_high < 1 / threshold:
             passes += 1
     return passes
@@ -142,13 +156,13 @@ def _stalled(
 
 def _stall_rejection(
     rng: np.random.Generator,
-    stall_p: float,
+    baseline_p: float,
+    candidate_p: float,
     *,
-    both_arms: bool,
     n: int,
     trials: int,
 ) -> tuple[float, float, float]:
-    """Rejection rate of each tail, and the median ratio, at one stall rate.
+    """Rejection rate of each tail, and the median ratio, at one pair of stall rates.
 
     Returns ``(slower_rate, faster_rate, median_ratio)``.
     """
@@ -156,8 +170,8 @@ def _stall_rejection(
     pl: list[float] = []
     meds: list[float] = []
     for _ in range(trials):
-        b = _stalled(rng, n, 1.0, 0.08, stall_p if both_arms else 0.0)
-        c = _stalled(rng, n, 1.0, 0.08, stall_p)
+        b = _stalled(rng, n, 1.0, 0.08, baseline_p)
+        c = _stalled(rng, n, 1.0, 0.08, candidate_p)
         d = np.log(c) - np.log(b)
         g, f = _wilcoxon_tails(d)
         pg.append(g)
@@ -172,42 +186,48 @@ def _stall_rejection(
 
 def simulate_stall_tails(
     stall_ps: tuple[float, ...], *, n: int = 30, trials: int = 1500
-) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
-    """Tail rejection rates and median ratio, under one-sided and two-sided stalls.
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
+    """Tail rejection rates and median ratio with only the candidate arm stalling.
 
-    Stalling *one* arm is not a null experiment: it shifts the candidate's
-    distribution, so the true median ratio leaves 1 and the rejections it
-    produces are power against a small real effect, not test size. Stalling
-    *both* arms at the same rate keeps the true ratio at 1 while contaminating
-    just as heavily, and that is the run that measures size.
+    This is *not* a null experiment, and the numbers are not test size: stalls
+    on one arm shift that arm's distribution, so the true median ratio leaves 1
+    and the rejections are power against a small real effect. It is the
+    asymmetry that the figure is about -- the two tails stop matching each
+    other while the median barely moves.
 
-    Reading them together is what separates the two explanations. Returns
-    ``(slower_one_arm, faster_one_arm, slower_both_arms, median_ratio)``, the
-    median ratio being the one from the one-arm run.
-
-    Each run gets its own generator, seeded off :data:`SEED_STALLS`, so adding
-    or dropping a comparison here cannot shift the others' numbers.
+    :func:`simulate_stall_size` is the companion null, and reading the two
+    together is what separates the two explanations. Returns
+    ``(slower_rate, faster_rate, median_ratio)``.
     """
-    one_arm = np.random.default_rng(SEED_STALLS)
-    both = np.random.default_rng(SEED_STALLS + 1)
-    slower: list[float] = []
-    faster: list[float] = []
-    slower_both: list[float] = []
-    medians: list[float] = []
-    for sp in stall_ps:
-        g, f, med = _stall_rejection(one_arm, sp, both_arms=False, n=n, trials=trials)
-        gb, _, _ = _stall_rejection(both, sp, both_arms=True, n=n, trials=trials)
-        slower.append(g)
-        faster.append(f)
-        slower_both.append(gb)
-        medians.append(med)
-    return tuple(slower), tuple(faster), tuple(slower_both), tuple(medians)
+    rng = np.random.default_rng(SEED_STALLS)
+    runs = [_stall_rejection(rng, 0.0, sp, n=n, trials=trials) for sp in stall_ps]
+    slower, faster, medians = zip(*runs, strict=True)
+    return slower, faster, medians
+
+
+def simulate_stall_size(
+    stall_ps: tuple[float, ...], *, n: int = 30, trials: int = 1500
+) -> tuple[float, ...]:
+    """Slower-tail size with *both* arms stalling at the same rate.
+
+    Contamination just as heavy as in :func:`simulate_stall_tails`, but
+    symmetric, so the true ratio stays 1 and this genuinely is the null. The
+    rate holds near alpha throughout, which is what says the inflation next
+    door is asymmetry rather than signed-rank failing.
+
+    Its own generator, seeded off :data:`SEED_STALLS`, so adding or dropping
+    this control cannot shift the numbers in the other run.
+    """
+    rng = np.random.default_rng(SEED_STALLS + 1)
+    return tuple(
+        _stall_rejection(rng, sp, sp, n=n, trials=trials)[0] for sp in stall_ps
+    )
 
 
 def simulate_binding_clause(
     ratios: tuple[float, ...] = (1.0, 1.10, 1.18, 1.30),
     *,
-    threshold: float = THRESHOLD,
+    threshold: float = DEFAULT_THRESHOLD,
     trials: int = TRIALS,
 ) -> int:
     """Count cells where the CI clause passes but the raw p-clause does not.
@@ -223,9 +243,7 @@ def simulate_binding_clause(
     disagreements = 0
     for r in ratios:
         for _ in range(trials):
-            b = np.exp(rng.normal(0, 0.06, 30))
-            c = r * np.exp(rng.normal(0, 0.06, 30))
-            cmp_ = stats.compare(b, c, seed=2, n_resamples=999)
+            cmp_ = stats.compare(*_pair(rng, r), seed=2, n_resamples=999)
             if cmp_.ci_low > threshold and not cmp_.p_value < ALPHA:
                 disagreements += 1
     return disagreements
@@ -269,8 +287,7 @@ def simulate_example_cells() -> tuple[tuple[float, float, float], ...]:
     rng = np.random.default_rng(SEED_CELLS)
     out: list[tuple[float, float, float]] = []
     for true_ratio in (1.31, 1.08, 1.00, 0.81):
-        b = np.exp(rng.normal(0, 0.05, 40))
-        c = true_ratio * np.exp(rng.normal(0, 0.05, 40))
+        b, c = _pair(rng, true_ratio, n=40, sigma=0.05)
         cmp_ = stats.compare(b, c, seed=4, n_resamples=4999)
         out.append(
             (round(cmp_.ratio, 3), round(cmp_.ci_low, 3), round(cmp_.ci_high, 3))
