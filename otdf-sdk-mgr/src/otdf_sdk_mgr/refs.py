@@ -47,3 +47,26 @@ def ref_slug(ref: str) -> str:
     `checkout_sdk_branch`: replace `/` with `--`. Idempotent.
     """
     return ref.replace("/", "--")
+
+
+def dist_slug(ref: str) -> str:
+    """Normalize a ref to a dist/ directory name.
+
+    Flattens slashes and strips namespace prefixes, matching what `cmd_tip`
+    passes as `VERSIONS=` and therefore what the Makefile actually creates.
+
+    This is the one slug function for dist paths. `ref_slug` above flattens
+    only and `normalize_version` only adds a leading `v`, so reaching for
+    either here reintroduces the collision between `otdfctl/v0.24.0` and
+    `v0.24.0` that `check_collision` exists to catch.
+
+    Examples:
+        "main" → "main"
+        "otdfctl/v0.24.0" → "v0.24.0"
+        "sdk/v1.2.3" → "v1.2.3"
+        "refs/pull/123/head" → "refs--pull--123--head"
+    """
+    slug = ref.replace("/", "--")
+    slug = slug.removeprefix("sdk--")
+    slug = slug.removeprefix("otdfctl--")
+    return slug

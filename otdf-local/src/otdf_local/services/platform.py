@@ -1,6 +1,8 @@
 """Platform service management."""
 
+import shutil
 from pathlib import Path
+from typing import Any
 
 from otdf_local.config.features import PlatformFeatures
 from otdf_local.config.ports import Ports
@@ -12,10 +14,15 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
-from otdf_local.utils.keys import get_golden_keyring_entries, setup_golden_keys
+from otdf_local.utils.keys import (
+    generate_root_key,
+    get_golden_keyring_entries,
+    setup_golden_keys,
+)
 from otdf_local.utils.yaml import (
     append_to_list,
     copy_yaml_with_updates,
+    get_nested,
     load_yaml,
     save_yaml,
 )
@@ -49,10 +56,39 @@ class PlatformService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
+    def _ensure_template(self) -> Path:
+        """The pristine config to generate from, seeded if it is not there yet.
+
+        `opentdf.yaml` is gitignored in the platform repo -- it is a working
+        copy the manual setup makes by hand (`cp opentdf-dev.yaml
+        opentdf.yaml`, `xtest/README.md`). Nothing in `otdf-sdk-mgr install
+        platform` makes it, so a freshly installed worktree has only the
+        committed `opentdf-dev.yaml`.
+
+        A separate pristine copy is what keeps generation repeatable:
+        `opentdf-dev.yaml` is also where the generated config is *written*, so
+        without one, each run's output would become the next run's input and
+        golden keyring entries would accumulate. Seeding happens before the
+        first generation overwrites anything, so what it captures is the
+        committed config.
+        """
+        template_path = self.settings.platform_template_config
+        if template_path.is_file():
+            return template_path
+
+        pristine = self.settings.platform_config
+        if not pristine.is_file():
+            raise FileNotFoundError(
+                f"No platform config to generate from in {self.settings.platform_dir}: "
+                f"neither {template_path.name} nor {pristine.name} is present."
+            )
+        shutil.copyfile(pristine, template_path)
+        return template_path
+
     def _generate_config(self) -> Path:
         """Generate the platform config file from template."""
         config_path = self.settings.platform_config
-        template_path = self.settings.platform_template_config
+        template_path = self._ensure_template()
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
@@ -61,11 +97,27 @@ class PlatformService(Service):
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
         # Updates for platform config
-        updates = {
+        updates: dict[str, Any] = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
         }
+
+        # EC and hybrid wrapping were enabled on the km1/km2 instances only
+        # (`services/kas.py`). A benchmark run deliberately starts the default
+        # KAS alone -- no km instances, no background CPU competing with the
+        # measurement -- so without these the ec-wrapped and pqc cells skip and
+        # the run comes back green having measured a subset of the work.
+        updates["services.kas.preview.ec_tdf_enabled"] = True
+        updates["services.kas.preview.hybrid_tdf_enabled"] = True
+
+        # Every KAS reads its root key out of *this* generated config
+        # (`KASService._generate_config`), so supplying a missing one here
+        # fixes it for the whole fleet at once. A template that already pins a
+        # key keeps it: golden-TDF fixtures are encrypted against it.
+        template_data = load_yaml(template_path)
+        if not get_nested(template_data, "services.kas.root_key", ""):
+            updates["services.kas.root_key"] = generate_root_key()
 
         copy_yaml_with_updates(template_path, config_path, updates)
 

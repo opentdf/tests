@@ -440,6 +440,27 @@ def pytest_configure(config: pytest.Config):
             "for the CPU being measured. Drop -n / --dist."
         )
 
+    # Validate every benchmark option here, before setup begins. A bad
+    # --bench-threshold used to surface from the bench_config fixture, which
+    # runs after the session has already built payloads and installed CLIs --
+    # minutes of work discarded to report a typo.
+    from fixtures.bench import config_from_options
+    from perf.config import BenchmarkRequest, normalize_baseline_candidate
+
+    bench_config = config_from_options(config)
+    try:
+        arms = normalize_baseline_candidate(
+            config.getoption("--bench-baseline", default=None),
+            config.getoption("--bench-candidate", default=None),
+        )
+        if arms:
+            # Arms are optional -- without them, selection falls back to its
+            # own defaults. When given, they meet the same rules the local and
+            # CI entry points apply.
+            BenchmarkRequest(arms=arms, config=bench_config)
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+
 
 def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
     """Whether this item has a payload large enough for the ZIP64 tests.
