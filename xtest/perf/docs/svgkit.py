@@ -40,7 +40,7 @@ def n(v: float) -> str:
     Float formatting is the whole reason the committed SVGs do not churn.
     """
     s = f"{v:.2f}"
-    if s.startswith("-") and float(s) == 0.0:
+    if s == "-0.00":
         return s[1:]
     return s
 
@@ -182,7 +182,7 @@ class Canvas:
         opacity: float = 1.0,
     ) -> None:
         radius = f' rx="{n(rx)}"' if rx else ""
-        alpha = f' opacity="{n(opacity)}"' if opacity != 1.0 else ""
+        alpha = f' opacity="{n(opacity)}"' if n(opacity) != "1.00" else ""
         self.parts.append(
             f'<rect x="{n(x)}" y="{n(y)}" width="{n(w)}" height="{n(h)}"'
             f'{radius} fill="{fill}"{alpha}/>'

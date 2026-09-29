@@ -63,8 +63,8 @@ FIG2_NULL_CI_TRIALS = 2000
 
 # --- Figure 3 ---------------------------------------------------------------
 
-#: From ``verify.simulate_scale(...)`` and ``verify.simulate_stall_tails(...)``,
-#: rounded to 3dp.
+#: From ``verify.simulate_scale(...)``, ``verify.simulate_stall_tails(...)`` and
+#: ``verify.simulate_stall_size(...)``, rounded to 3dp.
 FIG3_RATIOS = (1.0, 1.3, 2.0, 4.0)
 FIG3_SD_RAW = (0.142, 0.164, 0.224, 0.412)
 FIG3_SD_LOG = (0.142, 0.141, 0.141, 0.141)
@@ -446,9 +446,9 @@ def fig3_positivity() -> str:
     # The control row is what stops the plotted curves reading as test size:
     # stalling one arm moves the median off 1, so the null it would be the
     # size of is not the null being simulated.
-    for row, label, values, fmt in (
-        (42, "median ratio", FIG3_MEDIAN_RATIO, "{:.3f}"),
-        (60, "both arms stalled", FIG3_SLOWER_BOTH_ARMS, "{:.3f}"),
+    for row, label, values in (
+        (42, "median ratio", FIG3_MEDIAN_RATIO),
+        (60, "both arms stalled", FIG3_SLOWER_BOTH_ARMS),
     ):
         c.text(
             right.x - 12,
@@ -462,7 +462,7 @@ def fig3_positivity() -> str:
             c.text(
                 band_right.center(i),
                 right.bottom + row,
-                fmt.format(value),
+                f"{value:.3f}",
                 cls="muted",
                 size=11,
                 anchor="middle",
@@ -551,15 +551,15 @@ def _verify() -> int:
     check("fig3 sd raw", tuple(round(v, 3) for v in raw), FIG3_SD_RAW)
     check("fig3 sd log", tuple(round(v, 3) for v in log), FIG3_SD_LOG)
 
-    slower, faster, both, medians = verify.simulate_stall_tails(FIG3_STALL_P)
+    slower, faster, medians = verify.simulate_stall_tails(FIG3_STALL_P)
     check("fig3 slower tail", tuple(round(v, 3) for v in slower), FIG3_SLOWER_TAIL)
     check("fig3 faster tail", tuple(round(v, 3) for v in faster), FIG3_FASTER_TAIL)
+    check("fig3 median ratio", tuple(round(v, 3) for v in medians), FIG3_MEDIAN_RATIO)
     check(
         "fig3 both arms stalled",
-        tuple(round(v, 3) for v in both),
+        tuple(round(v, 3) for v in verify.simulate_stall_size(FIG3_STALL_P)),
         FIG3_SLOWER_BOTH_ARMS,
     )
-    check("fig3 median ratio", tuple(round(v, 3) for v in medians), FIG3_MEDIAN_RATIO)
 
     check(
         "fig1 binding clause",
