@@ -70,7 +70,7 @@ def _run(cmd: list[str], cwd: Path | None = None) -> None:
     seen the diagnostics in their terminal.
     """
     try:
-        result = subprocess.run(cmd, cwd=cwd)
+        result = subprocess.run(cmd, cwd=cwd, check=False)
     except FileNotFoundError as e:
         raise PlatformInstallError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
@@ -137,6 +137,7 @@ def _expand_short_sha(short: str) -> str:
         ["git", f"--git-dir={bare}", "rev-parse", "--verify", f"{short}^{{commit}}"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode == 0:
         return result.stdout.strip()
@@ -215,7 +216,7 @@ def _record_version(dist_dir: Path, ref: str, worktree: Path) -> None:
 
 def _git_rev_parse(worktree: Path, rev: str) -> str:
     result = subprocess.run(
-        ["git", "-C", str(worktree), "rev-parse", rev], capture_output=True, text=True
+        ["git", "-C", str(worktree), "rev-parse", rev], capture_output=True, text=True, check=False
     )
     if result.returncode != 0:
         raise PlatformInstallError(

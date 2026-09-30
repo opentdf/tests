@@ -1,5 +1,6 @@
 """Tests for resolve.py — mocks git.Git to avoid network calls."""
 
+import urllib.error
 from typing import cast
 from unittest.mock import MagicMock, patch
 
@@ -416,7 +417,9 @@ class TestTryResolveJsNpm:
         assert result["sha"] == SHA40
 
     def test_npm_raises_returns_none(self):
-        with patch("otdf_sdk_mgr.registry.fetch_json", side_effect=Exception("network error")):
+        with patch(
+            "otdf_sdk_mgr.registry.fetch_json", side_effect=urllib.error.URLError("network error")
+        ):
             result = _try_resolve_js_npm("js", "1.2.3", "1.2.3", [], None)
         assert result is None
 

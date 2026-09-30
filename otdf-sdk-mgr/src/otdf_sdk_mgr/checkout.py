@@ -14,7 +14,7 @@ from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 def _run(cmd: list[str], **kwargs: Any) -> None:
     """Run a command, raising on failure with cwd and stderr in the message."""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, **kwargs)
     except FileNotFoundError as e:
         raise RuntimeError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
