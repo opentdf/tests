@@ -59,7 +59,7 @@ def test_list_java_github_releases_raises_on_network_error(monkeypatch: pytest.M
 
 def test_list_platform_versions_parses_ls_remote(monkeypatch: pytest.MonkeyPatch):
     """Verify tag parsing: skip peeled `^{}`, filter to `service/` infix, drop non-semver."""
-    raw = "\n".join(
+    raw = "\n".join(  # noqa: FLY002 - list form keeps the per-line comments
         [
             "deadbeef\trefs/tags/service/v0.9.0",
             "deadbef0\trefs/tags/service/v0.9.0^{}",

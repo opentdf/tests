@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -26,7 +26,7 @@ app.add_typer(versions_app, name="versions")
 @app.command()
 def checkout(
     sdk: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="SDK to checkout (go, js, java)"),
     ] = None,
     branch: Annotated[str, typer.Argument(help="Branch to checkout")] = "main",
@@ -85,7 +85,7 @@ def clean(
 @app.command("java-fixup")
 def java_fixup(
     base_dir: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Argument(help="Base directory for Java source trees"),
     ] = None,
 ) -> None:

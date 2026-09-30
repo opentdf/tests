@@ -159,7 +159,7 @@ def _try_resolve_js_npm(
     npm_version = version.lstrip("v")
     try:
         data = fetch_json(f"https://registry.npmjs.org/{package}/{npm_version}")
-    except Exception:
+    except (OSError, ValueError):  # network/HTTP errors, or a non-JSON body
         return None
 
     # npm may resolve a dist-tag (e.g. "next") to a concrete version
@@ -188,8 +188,7 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
     """Look up additional build options for a given SDK version."""
     if sdk != "java":
         return None
-    if version.startswith("v"):
-        version = version[1:]
+    version = version.removeprefix("v")
     branch = JAVA_PLATFORM_BRANCH_MAP.get(version)
     if branch:
         return f"PLATFORM_BRANCH={branch}"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -39,7 +39,7 @@ def _install_platform_or_exit(
 @install_app.command()
 def stable(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to install (default: all)"),
     ] = None,
 ) -> None:
@@ -60,7 +60,7 @@ def stable(
 @install_app.command()
 def lts(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to install (default: all)"),
     ] = None,
 ) -> None:
@@ -87,7 +87,7 @@ def lts(
 @install_app.command()
 def tip(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to build from source (default: all)"),
     ] = None,
     ref: Annotated[
@@ -183,7 +183,7 @@ def artifact(
     sdk: Annotated[str, typer.Option(help="SDK to install")],
     version: Annotated[str, typer.Option(help="Version to install")],
     dist_name: Annotated[
-        Optional[str], typer.Option("--dist-name", help="Override dist directory name")
+        str | None, typer.Option("--dist-name", help="Override dist directory name")
     ] = None,
 ) -> None:
     """Install a single SDK version (used by CI)."""

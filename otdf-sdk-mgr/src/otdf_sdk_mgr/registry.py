@@ -12,8 +12,8 @@ import urllib.request
 from typing import Any
 
 from otdf_sdk_mgr.config import (
-    SDK_GITHUB_REPOS,
     SDK_GIT_URLS,
+    SDK_GITHUB_REPOS,
     SDK_MAVEN_COORDS,
     SDK_NPM_PACKAGES,
     SDK_TAG_INFIXES,

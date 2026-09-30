@@ -35,9 +35,7 @@ def is_mutable_ref(ref: str) -> bool:
     # `otdfctl/v0.31.0`. Anything ending in a clean semver after the last
     # `/` is treated as an immutable tag.
     tail = ref.rsplit("/", 1)[-1]
-    if SEMVER_RE.match(tail):
-        return False
-    return True
+    return not SEMVER_RE.match(tail)
 
 
 def ref_slug(ref: str) -> str:

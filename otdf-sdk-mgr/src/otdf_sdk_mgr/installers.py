@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.config import (
     GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
@@ -17,7 +18,6 @@ from otdf_sdk_mgr.config import (
     get_sdk_dirs,
     go_module_for_tag,
 )
-from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
 from otdf_sdk_mgr.semver import normalize_version
 
@@ -50,6 +50,7 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         ["go", "install", f"{module}@{tag}"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
@@ -115,9 +116,8 @@ def install_java_release(version: str, dist_dir: Path) -> None:
             tmp_path = Path(tmp.name)
         print(f"  Downloading cmdline.jar from {url}...")
         try:
-            with urllib.request.urlopen(url, timeout=60) as response:
-                with open(tmp_path, "wb") as f:
-                    shutil.copyfileobj(response, f)
+            with urllib.request.urlopen(url, timeout=60) as response, open(tmp_path, "wb") as f:
+                shutil.copyfileobj(response, f)
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise InstallError(
