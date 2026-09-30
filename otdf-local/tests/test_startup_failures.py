@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
+
 from otdf_local.config.settings import Settings
 from otdf_local.process.manager import ManagedProcess, ProcessManager
 from otdf_local.services.kas import KASService

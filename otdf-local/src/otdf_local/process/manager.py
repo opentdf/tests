@@ -3,9 +3,9 @@
 import os
 import signal
 import subprocess
-from dataclasses import dataclass, field
+from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
 
 
 @dataclass
@@ -16,7 +16,6 @@ class ManagedProcess:
     process: subprocess.Popen
     log_file: Path | None = None
     pid_file: Path | None = None
-    _log_handle: IO | None = field(default=None, repr=False)
 
     @property
     def pid(self) -> int:
@@ -81,10 +80,6 @@ class ManagedProcess:
         if self.pid_file and self.pid_file.exists():
             self.pid_file.unlink()
 
-        # Close log handle
-        if self._log_handle:
-            self._log_handle.close()
-
         return self.return_code
 
     def kill(self) -> None:
@@ -95,9 +90,6 @@ class ManagedProcess:
 
         if self.pid_file and self.pid_file.exists():
             self.pid_file.unlink()
-
-        if self._log_handle:
-            self._log_handle.close()
 
 
 class ProcessManager:
@@ -137,14 +129,12 @@ class ProcessManager:
         if env:
             process_env.update(env)
 
-        # Open log file if specified
-        log_handle = None
         if log_file:
             log_file.parent.mkdir(parents=True, exist_ok=True)
-            log_handle = open(log_file, "a")
 
-        # Start process
-        try:
+        # The child inherits its own copy of the log fd, so ours can close
+        # as soon as Popen returns.
+        with open(log_file, "a") if log_file else nullcontext() as log_handle:
             process = subprocess.Popen(
                 cmd,
                 cwd=cwd,
@@ -153,10 +143,6 @@ class ProcessManager:
                 stderr=subprocess.STDOUT if log_handle else subprocess.DEVNULL,
                 start_new_session=True,  # Detach from parent
             )
-        except Exception:
-            if log_handle:
-                log_handle.close()
-            raise
 
         # Write PID file
         if pid_file:
@@ -168,7 +154,6 @@ class ProcessManager:
             process=process,
             log_file=log_file,
             pid_file=pid_file,
-            _log_handle=log_handle,
         )
         self._processes[name] = managed
         return managed
@@ -217,6 +202,7 @@ def kill_process_on_port(port: int) -> bool:
             ["lsof", "-ti", f":{port}"],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0 or not result.stdout.strip():
             return False
@@ -225,7 +211,7 @@ def kill_process_on_port(port: int) -> bool:
         for pid in pids:
             try:
                 os.kill(int(pid), signal.SIGKILL)
-            except (ProcessLookupError, ValueError):
+            except ProcessLookupError, ValueError:
                 pass
         return True
     except FileNotFoundError:
@@ -247,9 +233,10 @@ def find_pid_by_name(pattern: str) -> list[int]:
             ["pgrep", "-f", pattern],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0 or not result.stdout.strip():
             return []
         return [int(pid) for pid in result.stdout.strip().split("\n")]
-    except (FileNotFoundError, ValueError):
+    except FileNotFoundError, ValueError:
         return []

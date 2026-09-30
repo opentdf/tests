@@ -20,7 +20,7 @@ def check_port(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (OSError, TimeoutError):
+    except OSError:
         return False
 
 
@@ -45,7 +45,7 @@ def check_http_health(
     try:
         response = httpx.get(url, timeout=timeout)
         return response.status_code in expected_status
-    except (httpx.RequestError, httpx.TimeoutException):
+    except httpx.RequestError:
         return False
 
 
