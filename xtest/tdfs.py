@@ -381,6 +381,9 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 13, 0):
             self.features.add("mechanism-ec-curves-384-521")
 
+        if self.semver >= (0, 27, 0):
+            self.features.add("kas_uri_from_kao")
+
         # PQ/T KEM support (xwing, secp+ML-KEM hybrids, pure ML-KEM): read km1's
         # startup log rather than guessing by version, since release targets shift
         # and a platform may have keys configured without a finalized version bump.
