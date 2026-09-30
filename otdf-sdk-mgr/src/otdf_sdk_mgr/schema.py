@@ -230,7 +230,10 @@ def load_yaml_mapping(path: str | Path) -> dict[str, object]:
     p = Path(path)
     raw = _yaml().load(p.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError(f"{p}: top-level YAML must be a mapping, got {type(raw).__name__}")
+        # ValueError, not TypeError: this is malformed input, and callers catch ValueError.
+        raise ValueError(  # noqa: TRY004
+            f"{p}: top-level YAML must be a mapping, got {type(raw).__name__}"
+        )
     return raw
 
 
@@ -300,7 +303,7 @@ def scenario_to_pytest_sdks(
     def token(role: str, entry: ScenarioSdk) -> str:
         role_map = sdk_map.get(role)
         if not isinstance(role_map, list):
-            raise ValueError(
+            raise ValueError(  # noqa: TRY004 - documented contract; see docstring
                 f"{p}: missing install records for role '{role}'. "
                 "Re-run `otdf-sdk-mgr install scenario`."
             )

@@ -12,7 +12,6 @@ import typer
 from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
 from otdf_sdk_mgr.schema import load_scenario, scenario_to_pytest_sdks
 
-
 SCENARIO_YAML = """
 apiVersion: opentdf.io/v1alpha1
 kind: Scenario
