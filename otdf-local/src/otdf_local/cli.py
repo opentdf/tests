@@ -26,6 +26,7 @@ from otdf_local.services import (
 from otdf_local.utils.console import (
     console,
     create_service_table,
+    err_console,
     format_health,
     format_status,
     print_error,
@@ -77,7 +78,6 @@ def main(
     ] = False,
 ) -> None:
     """OpenTDF test environment management CLI."""
-    pass
 
 
 @app.command()
@@ -411,7 +411,7 @@ def _print_log_entry(entry: LogEntry) -> None:
     """Format and print a log entry."""
     timestamp = ""
     if entry.timestamp:
-        timestamp = entry.timestamp.strftime("%H:%M:%S")
+        timestamp = entry.timestamp.astimezone().strftime("%H:%M:%S")
     console.print(
         f"[dim]{timestamp}[/dim] [cyan]{entry.service}[/cyan] {entry.message}"
     )
@@ -614,8 +614,8 @@ def env(
         root_key = get_nested(platform_config, "services.kas.root_key")
         if root_key:
             env_vars["OT_ROOT_KEY"] = root_key
-    except Exception as e:
-        print_warning(f"Could not read root key from platform config: {e}")
+    except Exception as e:  # noqa: BLE001 - best-effort; stdout is eval'd, so never crash
+        print_warning(f"Could not read root key from platform config: {e}", err_console)
 
     # Try to get platform version from API
     try:
@@ -629,8 +629,8 @@ def env(
                 config = resp.json()
                 if "version" in config:
                     env_vars["PLATFORM_VERSION"] = config["version"]
-    except Exception as e:
-        print_warning(f"Could not get platform version: {e}")
+    except Exception as e:  # noqa: BLE001 - best-effort, as above
+        print_warning(f"Could not get platform version: {e}", err_console)
 
     # Output in requested format
     if format == "json":

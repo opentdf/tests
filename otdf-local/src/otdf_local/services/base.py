@@ -70,7 +70,6 @@ class Service(ABC):
     @abstractmethod
     def health_url(self) -> str:
         """Health check URL, if applicable."""
-        pass
 
     @abstractmethod
     def start(self) -> bool:

@@ -41,6 +41,7 @@ class DockerService(Service):
             ["docker", "compose", "-f", str(self._compose_file), "up", "-d"],
             capture_output=True,
             text=True,
+            check=False,
             cwd=self._compose_file.parent,
         )
         return result.returncode == 0
@@ -54,6 +55,7 @@ class DockerService(Service):
             ["docker", "compose", "-f", str(self._compose_file), "down"],
             capture_output=True,
             text=True,
+            check=False,
             cwd=self._compose_file.parent,
         )
         return result.returncode == 0
@@ -88,6 +90,7 @@ class DockerService(Service):
             ],
             capture_output=True,
             text=True,
+            check=False,
             cwd=self._compose_file.parent,
         )
 

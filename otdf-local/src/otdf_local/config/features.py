@@ -38,7 +38,7 @@ class PlatformFeatures(BaseModel):
     features: set[FeatureType]
 
     @classmethod
-    def detect(cls, platform_dir: Path) -> "PlatformFeatures":
+    def detect(cls, platform_dir: Path) -> PlatformFeatures:
         """Detect platform features by querying the version."""
         version = _get_platform_version(platform_dir)
         semver = _parse_semver(version)
@@ -58,11 +58,12 @@ def _get_platform_version(platform_dir: Path) -> str:
             cwd=platform_dir,
             capture_output=True,
             text=True,
+            check=False,
             timeout=60,
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+    except subprocess.SubprocessError, FileNotFoundError:
         pass
 
     # Default version if detection fails

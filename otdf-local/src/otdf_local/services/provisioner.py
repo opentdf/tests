@@ -84,6 +84,7 @@ class Provisioner:
             cmd,
             capture_output=True,
             text=True,
+            check=False,
             cwd=self.settings.platform_dir,
         )
 

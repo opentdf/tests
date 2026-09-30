@@ -11,17 +11,17 @@ from otdf_local.services.provisioner import (
 )
 
 __all__ = [
+    "DockerService",
+    "KASManager",
+    "KASService",
+    "PlatformService",
+    "ProvisionResult",
+    "Provisioner",
     "Service",
     "ServiceInfo",
     "ServiceType",
-    "DockerService",
     "get_docker_service",
-    "KASManager",
-    "KASService",
     "get_kas_manager",
-    "PlatformService",
     "get_platform_service",
-    "Provisioner",
-    "ProvisionResult",
     "get_provisioner",
 ]
