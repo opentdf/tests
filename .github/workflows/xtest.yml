@@ -774,6 +774,7 @@ jobs:
           kas-port: 8787
           log-level: debug  # The cache test verifies a hit for each registry key.
           log-type: json
+          pqc-enabled: ${{ steps.pqc-check.outputs.supported == 'true' }}
           root-key: ${{ steps.km-check.outputs.root_key }}
           dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
