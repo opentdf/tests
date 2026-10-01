@@ -234,6 +234,146 @@ class TestDecisionRule:
         )
 
 
+class TestFasterTail:
+    """IMPROVED is its own one-sided test, not a reversed slower-tail one.
+
+    The rule these replaced read ``p_adjusted > 1 - alpha`` off the *upper*
+    tail. BH never lowers a p-value, so adjusting the upper tail made that
+    clause easier to satisfy the more cells a run had -- a multiplicity
+    correction working backwards. Improvements now carry their own lower-tail
+    p-value and their own adjustment.
+    """
+
+    def test_compare_reports_both_tails(self):
+        rng = np.random.default_rng(40)
+        b, c = synth(rng, 0.70, n=60)
+        r = stats.compare(b, c, seed=40, n_resamples=RESAMPLES)
+        assert r.p_value_faster < 0.05, "a 30% speedup is evidence of a speedup"
+        assert r.p_value > 0.95, "and no evidence at all of a slowdown"
+
+    def test_identical_inputs_have_no_evidence_in_either_direction(self):
+        v = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        r = stats.compare(v, v, seed=0, n_resamples=RESAMPLES)
+        assert r.p_value == 1.0
+        assert r.p_value_faster == 1.0
+
+    def test_too_few_rounds_leaves_both_tails_unset(self):
+        rng = np.random.default_rng(43)
+        b, c = synth(rng, 0.5, n=3)
+        r = stats.compare(b, c, seed=43, n_resamples=RESAMPLES)
+        assert math.isnan(r.p_value)
+        assert math.isnan(r.p_value_faster)
+
+    def test_improvement_is_decided_by_the_adjusted_faster_tail(self):
+        rng = np.random.default_rng(41)
+        b, c = synth(rng, 0.70, n=60)
+        g = gate_one(
+            stats.compare(b, c, seed=41, n_resamples=RESAMPLES), control=quiet_control()
+        )
+        cell = g.comparisons["cell"]
+        assert cell.verdict is Verdict.IMPROVED
+        assert cell.p_adjusted_faster is not None and cell.p_adjusted_faster < 0.05
+        assert g.improvements == ["cell"]
+        assert not g.should_fail, "an improvement must never fail the job"
+        assert g.regressions == []
+
+    def test_faster_tail_is_bh_adjusted_within_its_family(self):
+        cells: dict[str, stats.PairedComparison] = {}
+        for i in range(6):
+            rng = np.random.default_rng(4000 + i)
+            b, c = synth(rng, 0.90, n=30)
+            cells[f"cell{i}"] = stats.compare(b, c, seed=i, n_resamples=RESAMPLES)
+        cells["control"] = quiet_control()
+        g = stats.apply_multiplicity_control(
+            cells, controls=all_under_one_control(cells)
+        )
+
+        family = [k for k in cells if k != "control"]
+        raw = [cells[k].p_value_faster for k in family]
+        adjusted = [g.comparisons[k].p_adjusted_faster for k in family]
+        assert all(a is not None for a in adjusted)
+        assert adjusted == pytest.approx(stats.benjamini_hochberg(raw))
+        assert any(
+            a > p for a, p in zip(adjusted, raw, strict=True) if a is not None
+        ), "precondition: the adjustment actually moved something"
+
+    def test_adjusted_slower_tail_is_not_read_as_evidence_of_improvement(self):
+        # Hand-built so the two rules disagree on purpose. The raw evidence
+        # for a speedup here is weak (p_faster = 0.30); the slower tail sits
+        # at 0.94, just under 1 - alpha, and BH lifts it to 0.99 against the
+        # second cell. The rule this replaced would have called that IMPROVED
+        # *because of* the correction.
+        weak = stats.PairedComparison(
+            n_rounds=30,
+            baseline_median=1.0,
+            candidate_median=0.8,
+            ratio=0.80,
+            # Comfortably below 1/1.15, so the interval clause is satisfied
+            # and only the p-value clause decides the verdict.
+            ci_low=0.70,
+            ci_high=0.84,
+            p_value=0.94,
+            p_value_faster=0.30,
+        )
+        other = stats.PairedComparison(
+            n_rounds=30,
+            baseline_median=1.0,
+            candidate_median=1.0,
+            ratio=1.00,
+            ci_low=0.95,
+            ci_high=1.05,
+            p_value=0.99,
+            p_value_faster=0.02,
+        )
+        cells = {"weak": weak, "other": other, "control": quiet_control()}
+        g = stats.apply_multiplicity_control(
+            cells, controls=all_under_one_control(cells)
+        )
+
+        adjusted = g.comparisons["weak"].p_adjusted
+        assert adjusted is not None and adjusted > 0.95, (
+            "precondition: BH lifted the slower tail past 1 - alpha"
+        )
+        assert g.comparisons["weak"].p_adjusted_faster == pytest.approx(0.30)
+        assert g.comparisons["weak"].verdict is Verdict.PASS
+        assert g.improvements == []
+
+    def test_controls_and_censored_keys_enter_neither_family(self):
+        rng = np.random.default_rng(42)
+        b, c = synth(rng, 0.70, n=60)
+        improving = stats.compare(b, c, seed=42, n_resamples=RESAMPLES)
+        cells = {"wall": improving, "rss": improving, "control": quiet_control()}
+        g = stats.apply_multiplicity_control(
+            cells,
+            gated={"wall", "rss"},
+            controls=all_under_one_control(cells),
+            control_keys={"control"},
+            censored={"rss": "peak rss reaches the measurement floor"},
+        )
+
+        for key in ("control", "rss"):
+            assert g.comparisons[key].p_adjusted is None
+            assert g.comparisons[key].p_adjusted_faster is None
+        # `wall` is now the whole gated family, so its adjustment is a no-op:
+        # neither the control nor the censored twin diluted it.
+        assert g.comparisons["wall"].p_adjusted_faster == pytest.approx(
+            improving.p_value_faster
+        )
+        assert g.improvements == ["wall"]
+        assert g.comparisons["rss"].verdict is Verdict.INCONCLUSIVE
+
+    def test_a_control_reads_its_own_unadjusted_tails(self):
+        # A control is in no correction family at all, so both of its tails
+        # have to come straight off the comparison or it can never resolve.
+        control = quiet_control()
+        g = stats.apply_multiplicity_control(
+            {"control": control}, controls={"control": "control"}
+        )
+        assert g.comparisons["control"].p_adjusted is None
+        assert g.comparisons["control"].p_adjusted_faster is None
+        assert g.comparisons["control"].verdict is Verdict.PASS
+
+
 class TestNoiseFloor:
     def test_clean_control_is_trusted(self):
         n = stats.assess_noise_floor(quiet_control(), threshold=1.15)

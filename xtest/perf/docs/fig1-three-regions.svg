@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900.00" height="378.00" viewBox="0 0 900.00 378.00" role="img" aria-labelledby="t d">
+<title id="t">Three verdicts, two tests of the same point null</title>
+<desc id="d">A log-scaled ratio axis banded into IMPROVED below 0.87, no verdict, and REGRESSION above 1.15. A vertical rule at 1.00 marks where both Wilcoxon tests actually test. Four example cells are drawn as confidence intervals, one per region.</desc>
+<style>svg{--surface:#fcfcfb;--ink:#0b0b0b;--muted:#52514e;--grid:#dedcd4;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a}@media (prefers-color-scheme:dark){svg{--surface:#1a1a19;--ink:#ffffff;--muted:#c3c2b7;--grid:#3b3a37;--s1:#3987e5;--s2:#d95926;--s3:#199e70}}text{font-family:ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;}.ink{fill:var(--ink);}.muted{fill:var(--muted);}.grid{stroke:var(--grid);stroke-width:1;}.axis{stroke:var(--muted);stroke-width:1;}.ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 3;}.rule{stroke:var(--muted);stroke-width:1;}</style>
+<rect width="900.00" height="378.00" rx="8" fill="var(--surface)"/>
+<text x="64.00" y="30.00" class="ink" font-size="15.00" text-anchor="start" font-weight="600">Three verdicts, two tests of the same point null</text>
+<text x="64.00" y="52.00" class="muted" font-size="12.00" text-anchor="start">Where the gate's clauses actually sit on the ratio axis.</text>
+<rect x="64.00" y="92.00" width="186.46" height="160.00" fill="var(--s3)" opacity="0.12"/>
+<rect x="250.46" y="92.00" width="240.28" height="160.00" fill="var(--grid)" opacity="0.38"/>
+<rect x="490.74" y="92.00" width="199.26" height="160.00" fill="var(--s2)" opacity="0.12"/>
+<text x="157.23" y="108.00" class="muted" font-size="11.00" text-anchor="middle" font-weight="600">IMPROVED</text>
+<text x="310.53" y="108.00" class="muted" font-size="11.00" text-anchor="middle">no verdict</text>
+<text x="590.37" y="108.00" class="muted" font-size="11.00" text-anchor="middle" font-weight="600">REGRESSION</text>
+<line x1="250.46" y1="92.00" x2="250.46" y2="252.00" class="rule"/>
+<line x1="490.74" y1="92.00" x2="490.74" y2="252.00" class="rule"/>
+<line x1="370.60" y1="92.00" x2="370.60" y2="252.00" stroke="var(--s1)" stroke-width="2.00" stroke-linecap="round"/>
+<text x="370.60" y="76.00" class="ink" font-size="11.00" text-anchor="middle">both p-values test H0: ratio = 1</text>
+<line x1="370.60" y1="80.00" x2="370.60" y2="92.00" stroke="var(--s1)" stroke-width="1.00" stroke-linecap="round"/>
+<line x1="580.11" y1="136.00" x2="626.02" y2="136.00" stroke="var(--s2)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="580.11" y1="131.00" x2="580.11" y2="141.00" stroke="var(--s2)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="626.02" y1="131.00" x2="626.02" y2="141.00" stroke="var(--s2)" stroke-width="2.00" stroke-linecap="round"/>
+<circle cx="598.77" cy="136.00" r="4.50" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="704.00" y="140.00" class="ink" font-size="11.00" text-anchor="start">1.30 [1.28, 1.35]</text>
+<line x1="415.81" y1="166.00" x2="460.31" y2="166.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="415.81" y1="161.00" x2="415.81" y2="171.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="460.31" y1="161.00" x2="460.31" y2="171.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<circle cx="442.31" cy="166.00" r="4.50" fill="var(--muted)" stroke="var(--surface)" stroke-width="2"/>
+<text x="704.00" y="170.00" class="ink" font-size="11.00" text-anchor="start">1.09 [1.05, 1.11]</text>
+<line x1="331.92" y1="196.00" x2="374.89" y2="196.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="331.92" y1="191.00" x2="331.92" y2="201.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="374.89" y1="191.00" x2="374.89" y2="201.00" stroke="var(--muted)" stroke-width="2.00" stroke-linecap="round"/>
+<circle cx="355.86" cy="196.00" r="4.50" fill="var(--muted)" stroke="var(--surface)" stroke-width="2"/>
+<text x="704.00" y="200.00" class="ink" font-size="11.00" text-anchor="start">0.98 [0.96, 1.01]</text>
+<line x1="171.23" y1="226.00" x2="205.24" y2="226.00" stroke="var(--s3)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="171.23" y1="221.00" x2="171.23" y2="231.00" stroke="var(--s3)" stroke-width="2.00" stroke-linecap="round"/>
+<line x1="205.24" y1="221.00" x2="205.24" y2="231.00" stroke="var(--s3)" stroke-width="2.00" stroke-linecap="round"/>
+<circle cx="187.34" cy="226.00" r="4.50" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/>
+<text x="704.00" y="230.00" class="ink" font-size="11.00" text-anchor="start">0.81 [0.79, 0.83]</text>
+<line x1="64.00" y1="252.00" x2="690.00" y2="252.00" class="axis"/>
+<text x="64.00" y="272.00" class="muted" font-size="11.00" text-anchor="middle">0.70</text>
+<text x="250.46" y="272.00" class="muted" font-size="11.00" text-anchor="middle">0.87 = 1/1.15</text>
+<text x="370.60" y="272.00" class="muted" font-size="11.00" text-anchor="middle">1.00</text>
+<text x="490.74" y="272.00" class="muted" font-size="11.00" text-anchor="middle">1.15</text>
+<text x="596.13" y="272.00" class="muted" font-size="11.00" text-anchor="middle">1.30</text>
+<text x="690.00" y="272.00" class="muted" font-size="11.00" text-anchor="middle">1.45</text>
+<text x="377.00" y="294.00" class="muted" font-size="11.00" text-anchor="middle">ratio of medians, candidate / baseline (log scale)</text>
+<text x="64.00" y="322.00" class="muted" font-size="11.00" text-anchor="start">The margins at 0.87 and 1.15 are carried by the confidence interval alone.</text>
+<text x="64.00" y="340.00" class="muted" font-size="11.00" text-anchor="start">On 1200 cells simulated from the harness's noise model the CI clause passed while the raw p-clause failed 0 times.</text>
+<text x="64.00" y="358.00" class="muted" font-size="11.00" text-anchor="start">It is not implied, though: a constructed cell reaches [1.21, 1.22] at p = 0.34.</text>
+</svg>
