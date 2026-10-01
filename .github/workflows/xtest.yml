@@ -643,7 +643,7 @@ jobs:
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --junitxml=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.xml --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py test_zip_conformance.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -655,7 +655,7 @@ jobs:
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --junitxml=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.xml --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py test_zip_conformance.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -818,7 +818,13 @@ jobs:
         if: success() || failure()
         with:
           name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ steps.artifact-name.outputs.sdk_version }}-${{ steps.artifact-name.outputs.platform_tag }}
-          path: otdftests/xtest/test-results/**/*.html
+          # zip-conformance.json carries which SDKs were lenient vs.
+          # conformant, per cell; the run log has the same table, but only the
+          # JSON survives log rotation and can be diffed between nightlies.
+          path: |
+            otdftests/xtest/test-results/**/*.html
+            otdftests/xtest/test-results/**/*.xml
+            otdftests/xtest/test-results/**/*.json
 
       - name: Upload audit logs on failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
