@@ -55,6 +55,11 @@ on:
         description: "Comma-separated platform features to treat as supported. Does not override SDK gates or enable service configuration. Unknown names fail the run."
   workflow_call:
     inputs:
+      consolidated-pr-report:
+        description: Export a versioned PR report section instead of creating an independent comment (caller must provide the trusted publisher).
+        required: false
+        type: boolean
+        default: false
       platform-ref:
         required: false
         type: string
@@ -1458,10 +1463,55 @@ jobs:
           path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
 
+  export-pr-report:
+    runs-on: ubuntu-latest
+    needs: xct
+    if: always() && inputs.consolidated-pr-report
+    permissions:
+      actions: read
+    steps:
+      - name: Serialize structured X-Test section
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          XCT_RESULT: ${{ needs.xct.result }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner, repo, run_id: context.runId, per_page: 100
+            });
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            const { data: run } = await github.rest.actions.getWorkflowRunAttempt({ owner, repo, run_id: context.runId, attempt_number: attempt });
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              owner, repo, run_id: context.runId, attempt_number: attempt, per_page: 100
+            });
+            const cells = jobs.filter(j => /(^| \/ )xct \(/.test(j.name));
+            const currentCells = cells.length > 0 && cells.every(j => j.status === 'completed');
+            const status = currentCells ? ({ success: 'passed', failure: 'failed', cancelled: 'cancelled', skipped: 'unavailable' }[process.env.XCT_RESULT] || 'unavailable') : 'unavailable';
+            const pr = context.payload.pull_request;
+            const section = {
+              version: 1, section: 'xtest', title: 'X-Test', status,
+              summary: currentCells ? `X-Test matrix: ${process.env.XCT_RESULT}. This reports the existing xct aggregate, not optional benchmark/ZIP64 jobs.` : 'No completed X-Test matrix in this attempt; prior-attempt results are not reused.',
+              details: artifacts.filter(a => !a.expired && a.created_at >= run.run_started_at && !a.name.startsWith('pr-report-')).map(a => `${a.name}: https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${a.id}`).join('\n').slice(0, 12000),
+              repository: `${owner}/${repo}`, pr: pr?.number || 0,
+              sha: pr?.head.sha || context.sha,
+              run: context.runId, attempt: Number(process.env.GITHUB_RUN_ATTEMPT)
+            };
+            fs.mkdirSync(`${process.env.RUNNER_TEMP}/xtest-pr-report`, { recursive: true });
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/xtest-pr-report/section.json`, JSON.stringify(section));
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-report-xtest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/xtest-pr-report/section.json
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
+
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
-    if: always() # Always try to publish results, even if tests fail
+    if: always() && !inputs.consolidated-pr-report # Preserve independent comments for existing callers
     permissions:
       pull-requests: write # Add comments to PRs
     steps:
