@@ -55,6 +55,11 @@ on:
         description: "Comma-separated platform features to treat as supported. Does not override SDK gates or enable service configuration. Unknown names fail the run."
   workflow_call:
     inputs:
+      consolidated-pr-report:
+        description: Export a versioned PR report section instead of creating an independent comment (caller must provide the trusted publisher).
+        required: false
+        type: boolean
+        default: false
       platform-ref:
         required: false
         type: string
@@ -1458,10 +1463,84 @@ jobs:
           path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
 
+  export-pr-report:
+    runs-on: ubuntu-latest
+    needs: [resolve-versions, xct]
+    if: always() && inputs.consolidated-pr-report
+    permissions:
+      actions: read
+    steps:
+      - name: Serialize structured X-Test section
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RESOLVE_RESULT: ${{ needs.resolve-versions.result }}
+          PLATFORM_TAGS: ${{ needs.resolve-versions.outputs.platform-tag-list }}
+          SDK_VERSIONS: ${{ needs.resolve-versions.outputs.sdk-version-list }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner, repo, run_id: context.runId, per_page: 100
+            });
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            const { data: run } = await github.rest.actions.getWorkflowRunAttempt({ owner, repo, run_id: context.runId, attempt_number: attempt });
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              owner, repo, run_id: context.runId, attempt_number: attempt, per_page: 100
+            });
+            // Use the same resolved Cartesian product as xct, not the aggregate
+            // needs result, which may retain successful prior-attempt cells.
+            function resolvedAxis(value) {
+              try {
+                const axis = JSON.parse(value);
+                return Array.isArray(axis) && axis.length > 0 &&
+                  axis.every(v => typeof v === 'string' && v.length > 0) &&
+                  new Set(axis).size === axis.length ? axis : [];
+              } catch { return []; }
+            }
+            const platforms = resolvedAxis(process.env.PLATFORM_TAGS);
+            const sdks = resolvedAxis(process.env.SDK_VERSIONS);
+            const expected = new Set(platforms.flatMap(platform => sdks.map(sdk => `xct (${platform}, ${sdk})`)));
+            const cells = new Map();
+            let ambiguous = false;
+            for (const job of jobs) {
+              const match = /(?:^| \/ )(xct \(.*\))$/.exec(job.name);
+              if (!match) continue;
+              const identity = match[1];
+              if (!expected.has(identity) || cells.has(identity)) ambiguous = true;
+              cells.set(identity, job);
+            }
+            const complete = process.env.RESOLVE_RESULT === 'success' && !ambiguous &&
+              expected.size > 0 && expected.size === platforms.length * sdks.length &&
+              cells.size === expected.size && [...expected].every(id => cells.get(id)?.status === 'completed');
+            const conclusions = [...cells.values()].map(j => j.conclusion);
+            const status = !complete ? 'unavailable' :
+              conclusions.every(c => c === 'success') ? 'passed' :
+              conclusions.some(c => c === 'failure' || c === 'timed_out') ? 'failed' :
+              conclusions.some(c => c === 'cancelled') ? 'cancelled' : 'unavailable';
+            const pr = context.payload.pull_request;
+            const section = {
+              version: 1, section: 'xtest', title: 'X-Test', status,
+              summary: complete ? `Current-attempt X-Test matrix: ${status} (${cells.size}/${expected.size} resolved cells). Optional benchmark/ZIP64 jobs are not included.` : `Incomplete or ambiguous current-attempt X-Test matrix (${cells.size}/${expected.size} resolved cells); prior-attempt results are not reused.`,
+              details: artifacts.filter(a => !a.expired && a.created_at >= run.run_started_at && !a.name.startsWith('pr-report-')).map(a => `${a.name}: https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${a.id}`).join('\n').slice(0, 12000),
+              repository: `${owner}/${repo}`, pr: pr?.number || 0,
+              sha: pr?.head.sha || context.sha,
+              run: context.runId, attempt: Number(process.env.GITHUB_RUN_ATTEMPT)
+            };
+            fs.mkdirSync(`${process.env.RUNNER_TEMP}/xtest-pr-report`, { recursive: true });
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/xtest-pr-report/section.json`, JSON.stringify(section));
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-report-xtest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/xtest-pr-report/section.json
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
+
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
-    if: always() # Always try to publish results, even if tests fail
+    if: always() && !inputs.consolidated-pr-report # Preserve independent comments for existing callers
     permissions:
       pull-requests: write # Add comments to PRs
     steps:
