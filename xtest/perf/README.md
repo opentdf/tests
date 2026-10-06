@@ -19,6 +19,11 @@ measure.
 > baseline — and every cell skips. The run fails rather than passing empty
 > (see [NOTHING MEASURED](#the-verdicts)), but it will have wasted 45 minutes
 > to tell you that.
+>
+> To measure one branch without the functional matrix, check `bench-only` and
+> set `focus-sdk` to that SDK. For example, `bench-only`, `focus-sdk: js`, and
+> `js-ref: my-branch latest` run a single runner that compares `my-branch` against
+> the newest js release.
 
 - **Section 1 — [Reading a result](#1-reading-a-result)** is for developers on
   the SDKs and the platform: your build got flagged, what does that mean.
