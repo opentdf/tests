@@ -38,6 +38,11 @@ on:
         type: boolean
         default: false
         description: "Run the SDK performance regression benchmarks (adds ~45m per SDK). Needs two builds per SDK: set the *-ref inputs to 'main latest', since a bare 'main' installs no release to use as a baseline and every cell will skip."
+      bench-only:
+        required: false
+        type: boolean
+        default: false
+        description: "Run only the benchmarks: implies run-benchmarks and skips the functional matrix. Set focus-sdk to measure one SDK instead of all three, and that SDK's *-ref to '<branch> latest' to compare the branch against the newest release."
       run-zip64:
         required: false
         type: boolean
@@ -80,6 +85,10 @@ on:
         type: boolean
         default: false
       run-benchmarks:
+        required: false
+        type: boolean
+        default: false
+      bench-only:
         required: false
         type: boolean
         default: false
@@ -129,6 +138,7 @@ jobs:
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
       sdk-version-list: ${{ steps.version-info.outputs.sdk-version-list }}
+      bench-sdks: ${{ steps.bench-sdks.outputs.sdks }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref }}"
       JS_REF: "${{ inputs.js-ref }}"
@@ -143,6 +153,18 @@ jobs:
           if [[ ! "all go java js" =~ (^|[[:space:]])${FOCUS_SDK_INPUT}($|[[:space:]]) ]]; then
             echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
+          fi
+      # Picked here because a matrix cannot be narrowed from inside its own
+      # job: by then all three bench runners have already started.
+      - name: Pick the bench matrix
+        id: bench-sdks
+        env:
+          FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
+        run: |-
+          if [[ "$FOCUS_SDK" == "all" ]]; then
+            echo 'sdks=["go","java","js"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "sdks=[\"${FOCUS_SDK}\"]" >> "$GITHUB_OUTPUT"
           fi
       - name: Default Versions depend on context
         id: default-tags
@@ -330,6 +352,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
+    if: ${{ !inputs.bench-only }}
     # Keep read-only: this job builds third-party dependency trees, and on a
     # workflow_call the token is the *caller's*, so write scope here is write
     # scope for every repo calling xtest. publish-results below holds
@@ -864,16 +887,17 @@ jobs:
     if: >-
       github.event.schedule == '30 6 * * *' ||
       ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
-       && inputs.run-benchmarks)
+       && (inputs.run-benchmarks || inputs.bench-only))
     permissions:
       contents: read
       packages: read
     strategy:
       # One runner per SDK. Two SDKs on one runner would contend for the very
-      # CPU being measured.
+      # CPU being measured. Narrowed by focus-sdk, so investigating one SDK
+      # does not spend 45 minutes measuring the two nobody asked about.
       fail-fast: false
       matrix:
-        sdk: [go, java, js]
+        sdk: ${{ fromJSON(needs.resolve-versions.outputs.bench-sdks) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1461,7 +1485,7 @@ jobs:
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
-    if: always() # Always try to publish results, even if tests fail
+    if: always() && !inputs.bench-only # Always try to publish results, even if tests fail
     permissions:
       pull-requests: write # Add comments to PRs
     steps:
@@ -1505,7 +1529,9 @@ jobs:
     # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
     runs-on: ubuntu-latest
     needs: xct
-    if: always()
+    # Skipped rather than failed on a bench-only run, where xct is skipped by
+    # request; a skipped job does not fail the run.
+    if: always() && !inputs.bench-only
     permissions:
       contents: read
     steps:
