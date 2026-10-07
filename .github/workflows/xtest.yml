@@ -403,7 +403,7 @@ jobs:
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # keycloak-26.4 (opentdf/platform#3792)
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           # The action overlays docker-compose.yaml from bootstrap-ref, independent
@@ -917,7 +917,7 @@ jobs:
       # doing the measuring, which is noise rather than merely waste.
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # keycloak-26.4 (opentdf/platform#3792)
         with:
           platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
           bootstrap-ref: main
@@ -1206,7 +1206,7 @@ jobs:
       # tests need would only consume runner memory and disk.
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # keycloak-26.4 (opentdf/platform#3792)
         with:
           platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
           bootstrap-ref: main
