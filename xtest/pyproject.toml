@@ -24,7 +24,7 @@ dependencies = [
     "cryptography>=49.0.0",
     "gitdb>=4.0.12",
     "GitPython>=3.1.50",
-    "idna>=3.19",
+    "idna>=3.20",
     "iniconfig>=2.3.0",
     "Jinja2>=3.1.6",
     "jsonschema>=4.25.1",
@@ -34,7 +34,7 @@ dependencies = [
     "pluggy>=1.6.0",
     "pycparser>=3.0",
     "pydantic>=2.13.5",
-    "pydantic_core>=2.41.5",
+    "pydantic_core>=2.49.0",
     "Pygments>=2.19.2",
     "pytest>=9.1.1",
     "pytest-html>=4.2.0",
@@ -53,7 +53,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pyright>=1.1.414",
-    "ruff>=0.16.7",
+    "ruff>=0.16.8",
 ]
 
 # Note: This is a test suite, not a distributable package.
