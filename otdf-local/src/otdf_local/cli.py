@@ -117,7 +117,7 @@ def up(
         print_info("Starting Docker services (Keycloak, PostgreSQL)...")
         docker = get_docker_service(settings)
         if not docker.start():
-            print_error("Failed to start Docker services")
+            print_error(f"Failed to start Docker services: {docker.start_error}")
             raise typer.Exit(1)
 
         with status_spinner("Waiting for Keycloak..."):
