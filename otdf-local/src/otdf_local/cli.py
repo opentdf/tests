@@ -546,7 +546,7 @@ def restart(
 
     print_error(f"Unknown service: {service}")
     print_info(
-        "Valid services: docker, platform, kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2"
+        "Valid services: docker, platform, kas-alpha, kas-beta, kas-gamma, kas-delta, kas-km1, kas-km2, kas-km3"
     )
     raise typer.Exit(1)
 
@@ -601,6 +601,7 @@ def env(
         "delta": "KAS_DELTA_LOG_FILE",
         "km1": "KAS_KM1_LOG_FILE",
         "km2": "KAS_KM2_LOG_FILE",
+        "km3": "KAS_KM3_LOG_FILE",
     }
 
     for kas_name, env_var in kas_env_mapping.items():

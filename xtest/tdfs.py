@@ -169,10 +169,18 @@ feature_type = Literal[
     "hexless",
     "hexaflexible",
     "kasallowlist",
-    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
-    # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,
-    # since it is listed in PLATFORM_ONLY_FEATURES below. KAS also needs the
-    # setting on.
+    # Platform: resolve managed keys by the KAS URI recorded in the KAO rather than
+    # by the KAS's own ``services.kas.registered_kas_uri``.
+    #
+    # Force-only via ``XT_FORCE_PLATFORM_SUPPORTS``; it is in
+    # ``PLATFORM_ONLY_FEATURES`` below, so ``XT_FORCE_SUPPORTS`` rejects it. No
+    # release detects it yet, so nothing in ``PlatformFeatureSet`` adds it -- when
+    # one ships, drop this note and add a semver gate beside the others there.
+    #
+    # Opening the gate is necessary but not sufficient: the KAS must also run with
+    # ``services.kas.kas_uri_from_kao: true``, which only km3 does. See "Testing
+    # unreleased platform features" in xtest/README.md for why that makes these
+    # tests dispatch-only in CI.
     "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
