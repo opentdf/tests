@@ -9,6 +9,22 @@ from otdf_local.health.checks import check_http_health, check_port
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
 
 
+def _compose_error(result: subprocess.CompletedProcess[str]) -> str:
+    """The useful lines of a failed `docker compose` run.
+
+    Compose logs its progress to stderr too, so the whole stream is mostly
+    "Container x Starting". The lines worth surfacing are the ones naming a
+    failure, and they come last; keep a few so a multi-line daemon error
+    stays intact.
+    """
+    stream = result.stderr.strip() or result.stdout.strip()
+    lines = [line.strip() for line in stream.splitlines() if line.strip()]
+    interesting = [
+        line for line in lines if "error" in line.lower() or "denied" in line.lower()
+    ]
+    return "\n".join(interesting[-3:] or lines[-3:])
+
+
 class DockerService(Service):
     """Manages Docker compose services (Keycloak, PostgreSQL)."""
 
@@ -34,7 +50,9 @@ class DockerService(Service):
 
     def start(self) -> bool:
         """Start Docker compose services."""
+        self.start_error = None
         if not self._compose_file.exists():
+            self.start_error = f"No compose file at {self._compose_file}"
             return False
 
         result = subprocess.run(
@@ -44,7 +62,17 @@ class DockerService(Service):
             check=False,
             cwd=self._compose_file.parent,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            # Compose says precisely what went wrong -- an unwritable bind
+            # mount, a port already bound, a network owned by another project.
+            # Reporting only "failed to start" leaves the caller to rerun the
+            # command by hand to find out, which is the only way this was
+            # ever diagnosed.
+            self.start_error = _compose_error(result) or (
+                f"docker compose up exited {result.returncode} without output"
+            )
+            return False
+        return True
 
     def stop(self) -> bool:
         """Stop Docker compose services."""
