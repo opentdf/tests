@@ -1,0 +1,1394 @@
+{
+  "$schema_note": "Characterization snapshot of the `cli.sh supports` matrix, taken before the DSPX-4792 strangler migration replaces the shell shims with native adapters. This file records what the shell does TODAY, bugs included -- it is a regression baseline, not a statement of intent. test_supports_matrix.py re-derives every claim here from sdk/*/cli.sh and tdfs.py and fails if they drift.",
+  "ticket": "DSPX-4792",
+  "sdks": ["go", "java", "js"],
+  "features": ["assertions", "assertion_verification", "attribute_traversal", "audit_logging", "autoconfigure", "better-messages-2024", "bulk_rewrap", "chunky", "connectrpc", "dpop", "dpop_nonce_challenge", "ecwrap", "gmac_root_rejected", "hexless", "hexaflexible", "kasallowlist", "key_management", "mechanism-rsa-4096", "mechanism-ec-curves-384-521", "mechanism-xwing", "mechanism-secpmlkem", "mechanism-mlkem", "multikao", "ns_grants", "obligations", "zip64-at-2gib"],
+  "shell_sources": {
+    "go": {
+      "path": "sdk/go/cli.sh",
+      "lines": 259,
+      "supports_block": [39, 170]
+    },
+    "java": {
+      "path": "sdk/java/cli.sh",
+      "lines": 275,
+      "supports_block": [69, 199]
+    },
+    "js": {
+      "path": "sdk/js/cli.sh",
+      "lines": 312,
+      "supports_block": [33, 157]
+    }
+  },
+  "argv_path_probes": [
+    {
+      "sdk": "java",
+      "line": 208,
+      "probe": "jar_help decrypt | grep -q kas-allowlist",
+      "effect": "selects --platform-endpoint=$PLATFORMURL over =$PLATFORMENDPOINT",
+      "becomes": "HelpContains('decrypt', 'kas-allowlist')"
+    },
+    {
+      "sdk": "java",
+      "line": 270,
+      "probe": "jar_help | grep -q -- '--verbose'",
+      "effect": "appends --verbose",
+      "becomes": "HelpContains('', '--verbose')"
+    },
+    {
+      "sdk": "js",
+      "line": 268,
+      "probe": "npx $CTL help | grep autoconfigure",
+      "effect": "appends --policyEndpoint $PLATFORMURL --autoconfigure true on encrypt",
+      "becomes": "HelpContains('', 'autoconfigure')"
+    },
+    {
+      "sdk": "js",
+      "line": 301,
+      "probe": "npx $CTL help | grep 'from \"/key-access-servers\" endpoint'",
+      "effect": "appends --policyEndpoint $PLATFORMURL on decrypt, else --ignoreAllowList",
+      "becomes": "HelpContains('', 'from \"/key-access-servers\" endpoint')"
+    }
+  ],
+  "gates": [
+    {
+      "sdk": "go",
+      "feature": "assertions",
+      "shell": {
+        "kind": "help_contains",
+        "line": 57,
+        "help_argv": ["help", "decrypt"],
+        "needle": "with-assertion-verification-keys",
+        "grep": "grep",
+        "arm": "assertions | assertion_verification",
+        "arm_lines": [56, 59]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "assertion_verification",
+      "shell": {
+        "kind": "help_contains",
+        "line": 57,
+        "help_argv": ["help", "decrypt"],
+        "needle": "with-assertion-verification-keys",
+        "grep": "grep",
+        "arm": "assertions | assertion_verification",
+        "arm_lines": [56, 59]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "attribute_traversal",
+      "shell": {
+        "kind": "min_version",
+        "line": 53,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".sdk_version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 12)) exit 0; else exit 1; }",
+        "min_version": "0.12.0",
+        "comment_claims": "0.12.0",
+        "samples": [
+          ["0.11.99", false],
+          ["0.12.0", true],
+          ["0.13.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "attribute_traversal",
+        "arm_lines": [50, 55]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "audit_logging",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "go",
+      "feature": "autoconfigure",
+      "shell": {
+        "kind": "always",
+        "line": 41,
+        "answer": true,
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [41, 43],
+        "exit_code": 0
+      },
+      "python_override": {
+        "answer": true,
+        "line": 899
+      },
+      "becomes": "Always",
+      "override_relation": "redundant"
+    },
+    {
+      "sdk": "go",
+      "feature": "better-messages-2024",
+      "shell": {
+        "kind": "min_version",
+        "line": 117,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".sdk_version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 18)) exit 0; else exit 1; }",
+        "min_version": "0.3.18",
+        "comment_claims": "0.3.28",
+        "samples": [
+          ["0.2.99", false],
+          ["0.3.17", false],
+          ["0.3.18", true],
+          ["0.4.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": false,
+        "arm": "better-messages-2024",
+        "arm_lines": [113, 119]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "bulk_rewrap",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "go",
+      "feature": "chunky",
+      "shell": {
+        "kind": "always",
+        "line": 141,
+        "answer": false,
+        "note": "broken in every go build to date; DSPX-4590",
+        "arm": "chunky",
+        "arm_lines": [141, 151],
+        "exit_code": 1
+      },
+      "becomes": "Always"
+    },
+    {
+      "sdk": "go",
+      "feature": "connectrpc",
+      "shell": {
+        "kind": "min_version",
+        "line": 110,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".sdk_version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 4) || ($1 == 0 && $2 == 4 && $3 >= 5)) exit 0; else exit 1; }",
+        "min_version": "0.4.5",
+        "comment_claims": "0.4.5",
+        "samples": [
+          ["0.3.99", false],
+          ["0.4.4", false],
+          ["0.4.5", true],
+          ["0.5.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "connectrpc",
+        "arm_lines": [107, 112]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "dpop",
+      "shell": {
+        "kind": "delegate",
+        "line": 137,
+        "delegate_argv": ["--version", "--json"],
+        "note": "jq -e '.supported_features | index(\"dpop\")' -- the binary self-reports its feature list",
+        "arm": "dpop | dpop_nonce_challenge",
+        "arm_lines": [135, 140]
+      },
+      "becomes": "Delegate"
+    },
+    {
+      "sdk": "go",
+      "feature": "dpop_nonce_challenge",
+      "shell": {
+        "kind": "delegate",
+        "line": 137,
+        "delegate_argv": ["--version", "--json"],
+        "note": "jq -e '.supported_features | index(\"dpop_nonce_challenge\")'",
+        "arm": "dpop | dpop_nonce_challenge",
+        "arm_lines": [135, 140]
+      },
+      "becomes": "Delegate"
+    },
+    {
+      "sdk": "go",
+      "feature": "ecwrap",
+      "shell": {
+        "kind": "all_of",
+        "line": 69,
+        "of": [
+          {
+            "kind": "help_contains",
+            "line": 70,
+            "help_argv": ["help", "encrypt"],
+            "needle": "wrapping-key",
+            "grep": "grep"
+          },
+          {
+            "kind": "min_version",
+            "line": 73,
+            "version_probe": {
+              "argv": ["--version", "--json"],
+              "jq": ".sdk_version"
+            },
+            "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 3) || ($1 == 0 && $2 == 3 && $3 >= 29)) exit 0; else exit 1; }",
+            "min_version": "0.3.29",
+            "comment_claims": "0.3.29",
+            "samples": [
+              ["0.2.99", false],
+              ["0.3.28", false],
+              ["0.3.29", true],
+              ["0.4.0", true],
+              ["1.0.0", true]
+            ],
+            "comment_matches_code": true
+          }
+        ],
+        "arm": "ecwrap",
+        "arm_lines": [69, 79]
+      },
+      "becomes": "AllOf(HelpContains, MinVersion)"
+    },
+    {
+      "sdk": "go",
+      "feature": "gmac_root_rejected",
+      "shell": {
+        "kind": "unprobeable",
+        "line": 90,
+        "answer": false,
+        "note": "DSPX-4703: the check runs after the KAS rewrap; no flag, subcommand or version field",
+        "arm": "gmac_root_rejected",
+        "arm_lines": [90, 106],
+        "exit_code": 1
+      },
+      "becomes": "Unprobeable"
+    },
+    {
+      "sdk": "go",
+      "feature": "hexless",
+      "shell": {
+        "kind": "min_version",
+        "line": 83,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".schema_version"
+        },
+        "awk": "{ if ($1 > 4 || ($1 == 4 && $2 >= 2)) exit 0; else exit 1; }",
+        "min_version": "4.2.0",
+        "comment_claims": "4.3.0",
+        "samples": [
+          ["4.1.99", false],
+          ["4.2.0", true],
+          ["4.3.0", true],
+          ["5.0.0", true]
+        ],
+        "comment_matches_code": false,
+        "arm": "hexless",
+        "arm_lines": [80, 85]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "hexaflexible",
+      "shell": {
+        "kind": "help_contains",
+        "line": 87,
+        "help_argv": ["help", "encrypt"],
+        "needle": "target-mode",
+        "grep": "grep",
+        "arm": "hexaflexible",
+        "arm_lines": [86, 89]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "kasallowlist",
+      "shell": {
+        "kind": "help_contains",
+        "line": 61,
+        "help_argv": ["help", "decrypt"],
+        "needle": "kas-allowlist",
+        "grep": "grep",
+        "arm": "kasallowlist",
+        "arm_lines": [60, 63]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "key_management",
+      "shell": {
+        "kind": "min_version",
+        "line": 66,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".sdk_version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 5) || ($1 == 0 && $2 == 5 && $3 >= 1)) exit 0; else exit 1; }",
+        "min_version": "0.5.1",
+        "comment_claims": "0.5.1",
+        "samples": [
+          ["0.4.99", false],
+          ["0.5.0", false],
+          ["0.5.1", true],
+          ["0.6.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "key_management",
+        "arm_lines": [64, 68]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "mechanism-rsa-4096",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 925
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "go",
+      "feature": "mechanism-ec-curves-384-521",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 927
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "go",
+      "feature": "mechanism-xwing",
+      "shell": {
+        "kind": "help_contains",
+        "line": 122,
+        "help_argv": ["help", "policy", "kas-registry", "key", "create"],
+        "needle": "hpqt:xwing",
+        "grep": "grep -i",
+        "arm": "mechanism-xwing",
+        "arm_lines": [120, 124]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "mechanism-secpmlkem",
+      "shell": {
+        "kind": "help_contains",
+        "line": 127,
+        "help_argv": ["help", "policy", "kas-registry", "key", "create"],
+        "needle": "hpqt:secp256r1-mlkem768",
+        "grep": "grep -i",
+        "arm": "mechanism-secpmlkem",
+        "arm_lines": [125, 129]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "mechanism-mlkem",
+      "shell": {
+        "kind": "help_contains",
+        "line": 132,
+        "help_argv": ["help", "policy", "kas-registry", "key", "create"],
+        "needle": "mlkem:768|mlkem:1024",
+        "grep": "grep -iE",
+        "arm": "mechanism-mlkem",
+        "arm_lines": [130, 134]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "go",
+      "feature": "multikao",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 901
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "go",
+      "feature": "ns_grants",
+      "shell": {
+        "kind": "always",
+        "line": 41,
+        "answer": true,
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [41, 43],
+        "exit_code": 0
+      },
+      "python_override": {
+        "answer": true,
+        "line": 923
+      },
+      "becomes": "Always",
+      "override_relation": "redundant"
+    },
+    {
+      "sdk": "go",
+      "feature": "obligations",
+      "shell": {
+        "kind": "min_version",
+        "line": 47,
+        "version_probe": {
+          "argv": ["--version", "--json"],
+          "jq": ".sdk_version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 10) || ($1 == 0 && $2 == 10 && $3 >= 0)) exit 0; else exit 1; }",
+        "min_version": "0.10.0",
+        "comment_claims": "0.10.0",
+        "samples": [
+          ["0.9.99", false],
+          ["0.10.0", true],
+          ["0.11.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "obligations",
+        "arm_lines": [44, 49]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "go",
+      "feature": "zip64-at-2gib",
+      "shell": {
+        "kind": "always",
+        "line": 152,
+        "answer": false,
+        "note": "go switches to the ZIP64 sentinel at 4 GiB, not 2 GiB; DSPX-4590 finding 1",
+        "arm": "zip64-at-2gib",
+        "arm_lines": [152, 164],
+        "exit_code": 1
+      },
+      "becomes": "Always"
+    },
+    {
+      "sdk": "java",
+      "feature": "assertions",
+      "shell": {
+        "kind": "help_contains",
+        "line": 76,
+        "help_argv": ["help", "encrypt"],
+        "needle": "with-assertions",
+        "grep": "grep",
+        "arm": "assertions",
+        "arm_lines": [74, 78]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "assertion_verification",
+      "shell": {
+        "kind": "help_contains",
+        "line": 81,
+        "help_argv": ["help", "decrypt"],
+        "needle": "with-assertion-verification-keys",
+        "grep": "grep",
+        "arm": "assertion_verification",
+        "arm_lines": [79, 83]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "attribute_traversal",
+      "shell": {
+        "kind": "always",
+        "line": 135,
+        "answer": false,
+        "note": "java-sdk does not implement attribute traversal",
+        "arm": "attribute_traversal",
+        "arm_lines": [135, 138],
+        "exit_code": 1
+      },
+      "becomes": "Always"
+    },
+    {
+      "sdk": "java",
+      "feature": "audit_logging",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "java",
+      "feature": "autoconfigure",
+      "shell": {
+        "kind": "always",
+        "line": 71,
+        "answer": true,
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [71, 73],
+        "exit_code": 0
+      },
+      "python_override": {
+        "answer": true,
+        "line": 899
+      },
+      "becomes": "Always",
+      "override_relation": "redundant"
+    },
+    {
+      "sdk": "java",
+      "feature": "better-messages-2024",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 921
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "java",
+      "feature": "bulk_rewrap",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "java",
+      "feature": "chunky",
+      "shell": {
+        "kind": "always",
+        "line": 169,
+        "answer": false,
+        "note": "broken in every java build to date; DSPX-4589",
+        "arm": "chunky",
+        "arm_lines": [169, 179],
+        "exit_code": 1
+      },
+      "becomes": "Always"
+    },
+    {
+      "sdk": "java",
+      "feature": "connectrpc",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "java",
+      "feature": "dpop",
+      "shell": {
+        "kind": "delegate",
+        "line": 162,
+        "delegate_argv": ["supports", "dpop"],
+        "note": "cmdline.jar has a native `supports` verb -- the precedent for Delegate()",
+        "arm": "dpop",
+        "arm_lines": [161, 164]
+      },
+      "becomes": "Delegate"
+    },
+    {
+      "sdk": "java",
+      "feature": "dpop_nonce_challenge",
+      "shell": {
+        "kind": "delegate",
+        "line": 166,
+        "delegate_argv": ["supports", "dpop_nonce_challenge"],
+        "note": "cmdline.jar has a native `supports` verb",
+        "arm": "dpop_nonce_challenge",
+        "arm_lines": [165, 168]
+      },
+      "becomes": "Delegate"
+    },
+    {
+      "sdk": "java",
+      "feature": "ecwrap",
+      "shell": {
+        "kind": "all_of",
+        "line": 95,
+        "of": [
+          {
+            "kind": "help_contains",
+            "line": 97,
+            "help_argv": ["help", "encrypt"],
+            "needle": "encap-key",
+            "grep": "grep"
+          },
+          {
+            "kind": "min_version",
+            "line": 99,
+            "version_probe": {
+              "argv": ["--version"],
+              "jq": ".version"
+            },
+            "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 7) || ($1 == 0 && $2 == 7 && $3 >= 7)) exit 0; else exit 1; }",
+            "min_version": "0.7.7",
+            "comment_claims": "0.7.7",
+            "samples": [
+              ["0.6.99", false],
+              ["0.7.6", false],
+              ["0.7.7", true],
+              ["0.8.0", true],
+              ["1.0.0", true]
+            ],
+            "comment_matches_code": true
+          }
+        ],
+        "arm": "ecwrap",
+        "arm_lines": [95, 105]
+      },
+      "becomes": "AllOf(HelpContains, MinVersion)"
+    },
+    {
+      "sdk": "java",
+      "feature": "gmac_root_rejected",
+      "shell": {
+        "kind": "unprobeable",
+        "line": 118,
+        "answer": false,
+        "note": "DSPX-4703: the check runs after the KAS rewrap; no flag, subcommand or version field",
+        "arm": "gmac_root_rejected",
+        "arm_lines": [118, 134],
+        "exit_code": 1
+      },
+      "becomes": "Unprobeable"
+    },
+    {
+      "sdk": "java",
+      "feature": "hexless",
+      "shell": {
+        "kind": "min_version",
+        "line": 109,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".tdfSpecVersion"
+        },
+        "awk": "{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }",
+        "min_version": "4.3.0",
+        "comment_claims": "4.3.0",
+        "samples": [
+          ["4.2.99", false],
+          ["4.3.0", true],
+          ["4.4.0", true],
+          ["5.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "hexless",
+        "arm_lines": [107, 111]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "java",
+      "feature": "hexaflexible",
+      "shell": {
+        "kind": "help_contains",
+        "line": 115,
+        "help_argv": ["help", "encrypt"],
+        "needle": "with-target-mode",
+        "grep": "grep",
+        "arm": "hexaflexible",
+        "arm_lines": [113, 117]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "kasallowlist",
+      "shell": {
+        "kind": "help_contains",
+        "line": 86,
+        "help_argv": ["help", "decrypt"],
+        "needle": "kas-allowlist",
+        "grep": "grep",
+        "arm": "kasallowlist",
+        "arm_lines": [84, 88]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "key_management",
+      "shell": {
+        "kind": "min_version",
+        "line": 92,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 10)) exit 0; else exit 1; }",
+        "min_version": "0.10.0",
+        "comment_claims": "0.10.0",
+        "samples": [
+          ["0.9.99", false],
+          ["0.10.0", true],
+          ["0.11.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "key_management",
+        "arm_lines": [89, 94]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "java",
+      "feature": "mechanism-rsa-4096",
+      "shell": {
+        "kind": "min_version",
+        "line": 148,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }",
+        "min_version": "0.13.0",
+        "comment_claims": "0.13.0",
+        "samples": [
+          ["0.12.99", false],
+          ["0.13.0", true],
+          ["0.14.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "mechanism-rsa-4096 | mechanism-ec-curves-384-521",
+        "arm_lines": [145, 150]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "java",
+      "feature": "mechanism-ec-curves-384-521",
+      "shell": {
+        "kind": "min_version",
+        "line": 148,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".version"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 13)) exit 0; else exit 1; }",
+        "min_version": "0.13.0",
+        "comment_claims": "0.13.0",
+        "samples": [
+          ["0.12.99", false],
+          ["0.13.0", true],
+          ["0.14.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "mechanism-rsa-4096 | mechanism-ec-curves-384-521",
+        "arm_lines": [145, 150]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "java",
+      "feature": "mechanism-xwing",
+      "shell": {
+        "kind": "help_contains",
+        "line": 158,
+        "help_argv": ["help", "encrypt"],
+        "needle": "xwing",
+        "grep": "grep -i",
+        "arm": "mechanism-xwing",
+        "arm_lines": [156, 160]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "mechanism-secpmlkem",
+      "shell": {
+        "kind": "help_contains",
+        "line": 153,
+        "help_argv": ["help", "encrypt"],
+        "needle": "secp256r1-mlkem768",
+        "grep": "grep -i",
+        "arm": "mechanism-secpmlkem",
+        "arm_lines": [151, 155]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "mechanism-mlkem",
+      "shell": {
+        "kind": "help_contains",
+        "line": 142,
+        "help_argv": ["help", "encrypt"],
+        "needle": "mlkem:768",
+        "grep": "grep -i",
+        "arm": "mechanism-mlkem",
+        "arm_lines": [140, 144]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "java",
+      "feature": "multikao",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 901
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "java",
+      "feature": "ns_grants",
+      "shell": {
+        "kind": "always",
+        "line": 71,
+        "answer": true,
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [71, 73],
+        "exit_code": 0
+      },
+      "python_override": {
+        "answer": true,
+        "line": 923
+      },
+      "becomes": "Always",
+      "override_relation": "redundant"
+    },
+    {
+      "sdk": "java",
+      "feature": "obligations",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "java",
+      "feature": "zip64-at-2gib",
+      "shell": {
+        "kind": "always",
+        "line": 180,
+        "answer": false,
+        "note": "java-sdk#393 merged 2026-09-03, unreleased through v0.18.0; a branch build reports the last released version, so this answers no for java@main too",
+        "arm": "zip64-at-2gib",
+        "arm_lines": [180, 193],
+        "exit_code": 1
+      },
+      "becomes": "Always"
+    },
+    {
+      "sdk": "js",
+      "feature": "assertions",
+      "shell": {
+        "kind": "help_contains",
+        "line": 41,
+        "help_argv": ["help"],
+        "needle": "assertions",
+        "grep": "grep",
+        "arm": "assertions",
+        "arm_lines": [39, 43]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "assertion_verification",
+      "shell": {
+        "kind": "help_contains",
+        "line": 46,
+        "help_argv": ["help"],
+        "needle": "assertionVerificationKeys",
+        "grep": "grep",
+        "arm": "assertion_verification",
+        "arm_lines": [44, 48]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "attribute_traversal",
+      "shell": {
+        "kind": "min_version",
+        "line": 95,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".[\"@opentdf/sdk\"]"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }",
+        "min_version": "0.9.0",
+        "comment_claims": "0.9.0",
+        "samples": [
+          ["0.8.99", false],
+          ["0.9.0", true],
+          ["0.10.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "attribute_traversal",
+        "arm_lines": [92, 97]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "js",
+      "feature": "audit_logging",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "js",
+      "feature": "autoconfigure",
+      "shell": {
+        "kind": "help_contains",
+        "line": 51,
+        "help_argv": ["help"],
+        "needle": "autoconfigure",
+        "grep": "grep",
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [49, 53]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "better-messages-2024",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": true,
+        "line": 921
+      },
+      "becomes": "Always",
+      "override_relation": "supplies-a-missing-answer"
+    },
+    {
+      "sdk": "js",
+      "feature": "bulk_rewrap",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "js",
+      "feature": "chunky",
+      "shell": {
+        "kind": "always",
+        "line": 140,
+        "answer": true,
+        "note": "web-sdk omits and re-defaults the sizes; predates every tested version",
+        "arm": "chunky",
+        "arm_lines": [140, 145],
+        "exit_code": 0
+      },
+      "python_override": {
+        "answer": true,
+        "line": 905
+      },
+      "becomes": "Always",
+      "override_relation": "redundant"
+    },
+    {
+      "sdk": "js",
+      "feature": "connectrpc",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "js",
+      "feature": "dpop",
+      "shell": {
+        "kind": "help_contains",
+        "line": 137,
+        "help_argv": ["help"],
+        "needle": "--dpop-key|--dpopKey",
+        "grep": "grep -iE",
+        "arm": "dpop | dpop_nonce_challenge",
+        "arm_lines": [132, 139]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "dpop_nonce_challenge",
+      "shell": {
+        "kind": "help_contains",
+        "line": 137,
+        "help_argv": ["help"],
+        "needle": "--dpop-key|--dpopKey",
+        "grep": "grep -iE",
+        "arm": "dpop | dpop_nonce_challenge",
+        "arm_lines": [132, 139]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "ecwrap",
+      "shell": {
+        "kind": "all_of",
+        "line": 59,
+        "of": [
+          {
+            "kind": "help_contains",
+            "line": 61,
+            "help_argv": ["help"],
+            "needle": "encapKeyType",
+            "grep": "grep"
+          },
+          {
+            "kind": "min_version",
+            "line": 63,
+            "version_probe": {
+              "argv": ["--version"],
+              "jq": ".[\"@opentdf/sdk\"]"
+            },
+            "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }",
+            "min_version": "0.5.0",
+            "comment_claims": "0.5.0",
+            "samples": [
+              ["0.4.99", false],
+              ["0.5.0", true],
+              ["0.6.0", true],
+              ["1.0.0", true]
+            ],
+            "comment_matches_code": true
+          }
+        ],
+        "arm": "ecwrap",
+        "arm_lines": [59, 69]
+      },
+      "becomes": "AllOf(HelpContains, MinVersion)"
+    },
+    {
+      "sdk": "js",
+      "feature": "gmac_root_rejected",
+      "shell": {
+        "kind": "unprobeable",
+        "line": 103,
+        "answer": false,
+        "note": "DSPX-4703: the check runs after the KAS rewrap; no flag, subcommand or version field",
+        "arm": "gmac_root_rejected",
+        "arm_lines": [103, 119],
+        "exit_code": 1
+      },
+      "becomes": "Unprobeable"
+    },
+    {
+      "sdk": "js",
+      "feature": "hexless",
+      "shell": {
+        "kind": "min_version",
+        "line": 72,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".tdfSpecVersion"
+        },
+        "awk": "{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }",
+        "min_version": "4.3.0",
+        "comment_claims": "4.3.0",
+        "samples": [
+          ["4.2.99", false],
+          ["4.3.0", true],
+          ["4.4.0", true],
+          ["5.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "hexless",
+        "arm_lines": [70, 74]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "js",
+      "feature": "hexaflexible",
+      "shell": {
+        "kind": "help_contains",
+        "line": 77,
+        "help_argv": ["help"],
+        "needle": "tdfSpecVersion",
+        "grep": "grep",
+        "arm": "hexaflexible",
+        "arm_lines": [75, 79]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "kasallowlist",
+      "shell": {
+        "kind": "help_contains",
+        "line": 56,
+        "help_argv": ["help"],
+        "needle": "from \"/key-access-servers\" endpoint",
+        "grep": "grep",
+        "arm": "kasallowlist",
+        "arm_lines": [54, 58]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "key_management",
+      "shell": {
+        "kind": "min_version",
+        "line": 83,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".[\"@opentdf/sdk\"]"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }",
+        "min_version": "0.8.0",
+        "comment_claims": "0.8.0",
+        "samples": [
+          ["0.7.99", false],
+          ["0.8.0", true],
+          ["0.9.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "key_management",
+        "arm_lines": [80, 85]
+      },
+      "python_override": {
+        "answer": false,
+        "when_version": "v0.2.0",
+        "line": 896,
+        "why": "JS SDK v0.2.0 incorrectly reports support for key_management"
+      },
+      "becomes": "MinVersion + a version denylist",
+      "override_relation": "contradicts"
+    },
+    {
+      "sdk": "js",
+      "feature": "mechanism-rsa-4096",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "js",
+      "feature": "mechanism-ec-curves-384-521",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "python_override": {
+        "answer": false,
+        "line": 929
+      },
+      "becomes": "Always",
+      "override_relation": "redundant-with-default"
+    },
+    {
+      "sdk": "js",
+      "feature": "mechanism-xwing",
+      "shell": {
+        "kind": "help_contains",
+        "line": 129,
+        "help_argv": ["help"],
+        "needle": "xwing",
+        "grep": "grep -i",
+        "arm": "mechanism-xwing",
+        "arm_lines": [127, 131]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "mechanism-secpmlkem",
+      "shell": {
+        "kind": "absent",
+        "exit_code": 2,
+        "answer": false,
+        "note": "no case arm; falls through to `*` which prints 'Unknown feature' and exits 2, which tdfs.SDK._uncached_supports reads as False"
+      },
+      "becomes": "Always(False)"
+    },
+    {
+      "sdk": "js",
+      "feature": "mechanism-mlkem",
+      "shell": {
+        "kind": "help_contains",
+        "line": 100,
+        "help_argv": ["encrypt", "--help"],
+        "needle": "mlkem:768",
+        "grep": "grep -i",
+        "arm": "mechanism-mlkem",
+        "arm_lines": [98, 102]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "multikao",
+      "shell": {
+        "kind": "min_version",
+        "line": 124,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".[\"@opentdf/sdk\"]"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }",
+        "min_version": "0.20.0",
+        "comment_claims": "0.20.0",
+        "samples": [
+          ["0.19.99", false],
+          ["0.20.0", true],
+          ["0.21.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "multikao",
+        "arm_lines": [120, 126]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "js",
+      "feature": "ns_grants",
+      "shell": {
+        "kind": "help_contains",
+        "line": 51,
+        "help_argv": ["help"],
+        "needle": "autoconfigure",
+        "grep": "grep",
+        "arm": "autoconfigure | ns_grants",
+        "arm_lines": [49, 53]
+      },
+      "becomes": "HelpContains"
+    },
+    {
+      "sdk": "js",
+      "feature": "obligations",
+      "shell": {
+        "kind": "min_version",
+        "line": 89,
+        "version_probe": {
+          "argv": ["--version"],
+          "jq": ".[\"@opentdf/sdk\"]"
+        },
+        "awk": "{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }",
+        "min_version": "0.6.0",
+        "comment_claims": "0.6.0",
+        "samples": [
+          ["0.5.99", false],
+          ["0.6.0", true],
+          ["0.7.0", true],
+          ["1.0.0", true]
+        ],
+        "comment_matches_code": true,
+        "arm": "obligations",
+        "arm_lines": [86, 91]
+      },
+      "becomes": "MinVersion"
+    },
+    {
+      "sdk": "js",
+      "feature": "zip64-at-2gib",
+      "shell": {
+        "kind": "always",
+        "line": 146,
+        "answer": true,
+        "note": "web-sdk always writes the ZIP64 sentinel",
+        "arm": "zip64-at-2gib",
+        "arm_lines": [146, 151],
+        "exit_code": 0
+      },
+      "becomes": "Always"
+    }
+  ]
+}
