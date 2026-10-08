@@ -4,6 +4,7 @@ import json
 import shutil
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -551,6 +552,55 @@ def restart(
     raise typer.Exit(1)
 
 
+def bench_manifest_path(xtest_root: Path) -> Path:
+    """Where `otdf-sdk-mgr` writes the benchmark installation manifest.
+
+    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path`. The two packages
+    do not depend on each other, so the path and the JSON shape are a written
+    convention rather than a shared import; change one and you must change both.
+    """
+    return xtest_root / "sdk" / "benchmark.installed.json"
+
+
+def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
+    """Environment for a prepared benchmark run, or empty if none was prepared.
+
+    A missing manifest is not an error: most `otdf-local env` invocations have
+    nothing to do with benchmarking.
+    """
+    if not manifest_path.exists():
+        return {}
+
+    env_vars = {"BENCH_INSTALLATION_MANIFEST": str(manifest_path.resolve())}
+
+    # OTDFCTL_HEADS names the *provisioning* CLI, and only that. The measured
+    # SDK arms are deliberately excluded: letting a benchmark arm supply otdfctl
+    # is what made "otdfctl" mean "whatever the go arm happens to be", so the
+    # build under measurement would also be provisioning the fixtures it is
+    # measured against.
+    #
+    # The value is a JSON array, not a comma-separated list: `conftest.py`
+    # reads it with `json.loads` (see `load_otdfctl`), and CI passes the same
+    # shape through `fromJson` in xtest.yml. A bare string is invalid JSON
+    # there and gets silently discarded, dropping the run back onto the
+    # implicit `sdk/go/dist/main` fallback.
+    #
+    # A release pin is exported the same as a source pin. `installed_tag` is
+    # the `dist/` directory name either way, and the point of pinning at all
+    # is that the pin is what runs -- silently ignoring released pins would
+    # reinstate the fallback for exactly the runs that asked not to have it.
+    try:
+        manifest = json.loads(manifest_path.read_text())
+        otdfctl = manifest.get("otdfctl") or {}
+        tag = otdfctl.get("installed_tag", "")
+        if tag:
+            env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
+    except (OSError, ValueError, AttributeError) as e:
+        print_warning(f"Could not read OTDFCTL_HEADS from {manifest_path}: {e}")
+
+    return env_vars
+
+
 @app.command()
 def env(
     format: Annotated[
@@ -631,6 +681,14 @@ def env(
                     env_vars["PLATFORM_VERSION"] = config["version"]
     except Exception as e:  # noqa: BLE001 - best-effort, as above
         print_warning(f"Could not get platform version: {e}", err_console)
+
+    # Benchmark preparation: XT_TMP_DIR for generated fixtures
+    tmp_dir = settings.xtest_root / "tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    env_vars["XT_TMP_DIR"] = str(tmp_dir.resolve())
+
+    # Benchmark preparation: point to installation manifest if it exists
+    env_vars.update(bench_manifest_env(bench_manifest_path(settings.xtest_root)))
 
     # Output in requested format
     if format == "json":
