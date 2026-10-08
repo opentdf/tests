@@ -31,5 +31,8 @@ xtest/sdk/java/cmdline.jar
 /xtest/sdk/go/otdfctl
 /xtest/sdk/go/platform-src/
 /xtest/otdfctl/
+# Written by `otdf-sdk-mgr install benchmark`: one machine's installs,
+# recorded with absolute paths.
+/xtest/sdk/benchmark.installed.json
 
 /tmp/
