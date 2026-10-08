@@ -2,6 +2,7 @@
 
 import shutil
 from pathlib import Path
+from typing import Any
 
 from otdf_local.config.features import PlatformFeatures
 from otdf_local.config.ports import Ports
@@ -13,10 +14,15 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
-from otdf_local.utils.keys import get_golden_keyring_entries, setup_golden_keys
+from otdf_local.utils.keys import (
+    generate_root_key,
+    get_golden_keyring_entries,
+    setup_golden_keys,
+)
 from otdf_local.utils.yaml import (
     append_to_list,
     copy_yaml_with_updates,
+    get_nested,
     load_yaml,
     save_yaml,
 )
@@ -91,11 +97,35 @@ class PlatformService(Service):
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
         # Updates for platform config
-        updates = {
+        updates: dict[str, Any] = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
         }
+
+        # EC and hybrid wrapping were enabled on the km1/km2 instances only
+        # (`services/kas.py`). A benchmark run deliberately starts the default
+        # KAS alone -- no km instances, no background CPU competing with the
+        # measurement -- so without these the ec-wrapped and pqc cells skip and
+        # the run comes back green having measured a subset of the work.
+        updates["services.kas.preview.ec_tdf_enabled"] = True
+        updates["services.kas.preview.hybrid_tdf_enabled"] = True
+
+        # Every KAS reads its root key out of *this* generated config
+        # (`KASService._generate_config`), so supplying a missing one here
+        # fixes it for the whole fleet at once. A template that already pins a
+        # key keeps it: golden-TDF fixtures are encrypted against it.
+        #
+        # A generated key is carried over from the previous generated config
+        # rather than minted per start: running KAS instances, keys stored in
+        # Postgres, and an exported OT_ROOT_KEY all hold the old one, so a new
+        # key on `restart platform` breaks every unwrap they do.
+        template_data = load_yaml(template_path)
+        if not get_nested(template_data, "services.kas.root_key", ""):
+            previous = load_yaml(config_path) if config_path.is_file() else {}
+            updates["services.kas.root_key"] = (
+                get_nested(previous, "services.kas.root_key", "") or generate_root_key()
+            )
 
         copy_yaml_with_updates(template_path, config_path, updates)
 
