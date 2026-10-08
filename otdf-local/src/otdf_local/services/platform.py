@@ -1,5 +1,6 @@
 """Platform service management."""
 
+import shutil
 from pathlib import Path
 
 from otdf_local.config.features import PlatformFeatures
@@ -49,10 +50,39 @@ class PlatformService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
+    def _ensure_template(self) -> Path:
+        """The pristine config to generate from, seeded if it is not there yet.
+
+        `opentdf.yaml` is gitignored in the platform repo -- it is a working
+        copy the manual setup makes by hand (`cp opentdf-dev.yaml
+        opentdf.yaml`, `xtest/README.md`). Nothing in `otdf-sdk-mgr install
+        platform` makes it, so a freshly installed worktree has only the
+        committed `opentdf-dev.yaml`.
+
+        A separate pristine copy is what keeps generation repeatable:
+        `opentdf-dev.yaml` is also where the generated config is *written*, so
+        without one, each run's output would become the next run's input and
+        golden keyring entries would accumulate. Seeding happens before the
+        first generation overwrites anything, so what it captures is the
+        committed config.
+        """
+        template_path = self.settings.platform_template_config
+        if template_path.is_file():
+            return template_path
+
+        pristine = self.settings.platform_config
+        if not pristine.is_file():
+            raise FileNotFoundError(
+                f"No platform config to generate from in {self.settings.platform_dir}: "
+                f"neither {template_path.name} nor {pristine.name} is present."
+            )
+        shutil.copyfile(pristine, template_path)
+        return template_path
+
     def _generate_config(self) -> Path:
         """Generate the platform config file from template."""
         config_path = self.settings.platform_config
-        template_path = self.settings.platform_template_config
+        template_path = self._ensure_template()
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
