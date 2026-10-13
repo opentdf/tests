@@ -414,15 +414,17 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     if not metafunc.config.getoption("--bench"):
         return
 
-    # --sdks may be version-qualified (go@main); benchmark arms come from
-    # --bench-baseline/--bench-candidate instead, so only the name matters.
-    specs = metafunc.config.getoption("--sdks") or " ".join(
-        typing.get_args(tdfs.sdk_type)
-    )
-    names = list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
-    cells = cells_for(names)
+    cells = cells_for(_bench_sdk_names(metafunc.config))
     metafunc.config.stash[report.CELLS_KEY] = cells
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
+
+
+def _bench_sdk_names(config: pytest.Config) -> list[str]:
+    """SDKs the benchmark fans out over, in --sdks order."""
+    # --sdks may be version-qualified (go@main); benchmark arms come from
+    # --bench-baseline/--bench-candidate instead, so only the name matters.
+    specs = config.getoption("--sdks") or " ".join(typing.get_args(tdfs.sdk_type))
+    return list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
 
 
 def pytest_configure(config: pytest.Config):
@@ -467,6 +469,16 @@ def pytest_configure(config: pytest.Config):
             for spec in (baseline, candidate):
                 if spec is not None:
                     validate_sdk_name(parse_arm_spec(spec).name)
+        # A spec only applies to the SDK it names, so one naming an SDK
+        # outside --sdks would be dropped and the run would measure the
+        # defaults instead.
+        benchmarked = _bench_sdk_names(config)
+        for spec in (baseline, candidate):
+            if spec is not None and parse_arm_spec(spec).name not in benchmarked:
+                raise ValueError(
+                    f"{spec!r} names an SDK that is not being benchmarked; "
+                    f"--sdks selects {benchmarked}"
+                )
     except ValueError as e:
         raise pytest.UsageError(f"invalid benchmark options: {e}") from e
 

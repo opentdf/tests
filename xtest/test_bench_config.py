@@ -6,9 +6,12 @@ most of these is not the message but that something is raised at all.
 """
 
 import math
+from typing import cast
 
 import pytest
 
+import conftest
+from perf import stats
 from perf.config import (
     DEFAULT_BOOTSTRAP_RESAMPLES,
     DEFAULT_CONFIDENCE,
@@ -213,3 +216,94 @@ class TestDefaultBudgetForArmCount:
     def test_arm_count_too_low_raises(self):
         with pytest.raises(ValueError, match="arm_count must be at least 2"):
             default_budget_for_arm_count(1)
+
+
+class _FakeConfig:
+    """Just enough of ``pytest.Config`` for the ``--bench`` checks in ``pytest_configure``."""
+
+    def __init__(self, **opts: object):
+        self._options: dict[str, object] = {
+            "--bench": True,
+            "--sdks": "go",
+            "--bench-baseline": None,
+            "--bench-candidate": None,
+            "--bench-threshold": stats.DEFAULT_THRESHOLD,
+            "--bench-min-rounds": 20,
+            "--bench-max-rounds": 60,
+            "--bench-warmup": 5,
+            "--bench-budget-seconds": 1500.0,
+            "--bench-seed": 0,
+            "numprocesses": None,
+        } | opts
+
+    def getoption(self, name: str, default: object = None) -> object:
+        return self._options.get(name, default)
+
+
+def _configure(**opts: object) -> None:
+    conftest.pytest_configure(cast(pytest.Config, _FakeConfig(**opts)))
+
+
+class TestPytestConfigure:
+    """The options are checked at configure time, before any session setup."""
+
+    @pytest.mark.parametrize(
+        "opts",
+        [
+            {},
+            {"--bench-candidate": "go@main"},
+            {"--bench-baseline": "go@v0.29.0"},
+            {"--bench-baseline": "go@v0.29.0", "--bench-candidate": "go@main"},
+            {"--sdks": "go java", "--bench-candidate": "java@main"},
+            {"--sdks": None, "--bench-candidate": "js@main"},
+        ],
+    )
+    def test_accepted(self, opts: dict[str, object]):
+        _configure(**opts)
+
+    @pytest.mark.parametrize(
+        ("opts", "match"),
+        [
+            ({"--bench-baseline": "gp@main"}, "unknown SDK 'gp'"),
+            ({"--bench-candidate": "go@"}, "empty version"),
+            ({"--bench-threshold": 0.9}, "threshold"),
+            (
+                {"--bench-baseline": "go@main", "--bench-candidate": "java@main"},
+                "same SDK",
+            ),
+            (
+                {"--bench-baseline": "go@main", "--bench-candidate": "go@main"},
+                "duplicate",
+            ),
+        ],
+    )
+    def test_rejected(self, opts: dict[str, object], match: str):
+        with pytest.raises(pytest.UsageError, match=match):
+            _configure(**opts)
+
+    @pytest.mark.parametrize(
+        "opts",
+        [
+            {"--sdks": "java", "--bench-candidate": "go@main"},
+            {"--sdks": "java", "--bench-baseline": "go@v0.29.0"},
+            {
+                "--sdks": "java",
+                "--bench-baseline": "go@v0.29.0",
+                "--bench-candidate": "go@main",
+            },
+        ],
+    )
+    def test_spec_for_unbenchmarked_sdk_rejected(self, opts: dict[str, object]):
+        # The spec would be dropped per-SDK and the run would measure the
+        # default builds instead of the one asked for.
+        with pytest.raises(pytest.UsageError, match="not being benchmarked"):
+            _configure(**opts)
+
+    def test_empty_spec_rejected(self):
+        # An empty spec used to mean "use the default"; it is now rejected
+        # with everything else that would otherwise be silently ignored.
+        with pytest.raises(pytest.UsageError, match="unknown SDK ''"):
+            _configure(**{"--bench-baseline": ""})
+
+    def test_noop_without_bench(self):
+        _configure(**{"--bench": False, "--bench-baseline": "gp@main"})
