@@ -28,7 +28,7 @@ jobs:
           # requires-python is only a floor, so without a pin uv takes the
           # newest CPython -- whose wheels lag behind, which breaks the
           # --no-build step below the day it is released.
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Install dependencies
         run: uv sync --extra dev
         working-directory: xtest
