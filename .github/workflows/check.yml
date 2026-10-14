@@ -25,6 +25,10 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: false
+          # requires-python is only a floor, so without a pin uv takes the
+          # newest CPython -- whose wheels lag behind, which breaks the
+          # --no-build step below the day it is released.
+          python-version: "3.15"
       - name: Install dependencies
         run: uv sync --extra dev
         working-directory: xtest
@@ -47,8 +51,9 @@ jobs:
         run: >-
           uv run --frozen --no-build pytest --no-header -q
           test_bench_stats.py test_bench_measure.py test_bench_runner.py
-          test_bench_arms.py test_sdk_commands.py test_tdfs_units.py
-          test_encryption_units.py test_sizes_units.py test_zip64_units.py
+          test_bench_arms.py test_bench_config.py test_bench_report.py
+          test_sdk_commands.py test_tdfs_units.py test_encryption_units.py
+          test_sizes_units.py test_zip64_units.py
         working-directory: xtest
       - name: Lint and test otdf-local
         run: |

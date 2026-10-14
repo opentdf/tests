@@ -43,13 +43,13 @@ from pathlib import Path
 import numpy as np
 
 from perf import stats
-from perf.measure import METRICS, MeasurementError, Sample, measure
 
-#: Target CI half-width on the log scale, as a fraction of the log threshold.
-#: At 1/3, an interval centred on "no change" is comfortably clear of the
-#: threshold, so a PASS is a real statement about precision rather than a
-#: shrug. Tighter costs rounds superlinearly; looser makes PASS meaningless.
-PRECISION_FRACTION = 1 / 3
+# BenchConfig lives in `perf.config`, which the CI adapter and the local
+# entry point can import without dragging in the measurement stack. It is
+# imported (not redefined) here because this is where callers look for the
+# round loop's settings.
+from perf.config import BenchConfig
+from perf.measure import METRICS, MeasurementError, Sample, measure
 
 #: Bootstrap resamples for the between-round precision check. Far fewer than
 #: the final analysis uses: this only needs to answer "is the interval roughly
@@ -64,47 +64,6 @@ _CONTROL_METRIC = "wall"
 
 class BudgetExhausted(RuntimeError):
     """The time budget ran out before the cell could collect usable rounds."""
-
-
-@dataclass(frozen=True, slots=True)
-class BenchConfig:
-    """Knobs for the round loop and the analysis that follows it."""
-
-    min_rounds: int = 20
-    max_rounds: int = 60
-    warmup: int = 5
-    budget_seconds: float = 1500.0
-    seed: int = 0
-    threshold: float = stats.DEFAULT_THRESHOLD
-    confidence: float = 0.95
-    n_resamples: int = stats.DEFAULT_BOOTSTRAP_RESAMPLES
-    #: Per-invocation timeout. A wedged CLI must not eat the whole job.
-    timeout_s: float = 600.0
-    #: Metrics whose verdict can fail the build. CPU time is measured and
-    #: reported but excluded: it is the noisiest of the three on a shared
-    #: runner, and a real CPU regression shows up in wall clock anyway.
-    gated_metrics: tuple[str, ...] = ("wall", "rss")
-
-    def __post_init__(self) -> None:
-        if self.min_rounds < stats.MIN_USABLE_ROUNDS:
-            raise ValueError(
-                f"min_rounds must be at least {stats.MIN_USABLE_ROUNDS}, "
-                f"below which no verdict is possible"
-            )
-        if self.max_rounds < self.min_rounds:
-            raise ValueError("max_rounds must not be below min_rounds")
-        if self.warmup < 0:
-            raise ValueError("warmup must not be negative")
-        if self.threshold <= 1.0:
-            raise ValueError("threshold is a ratio above 1.0, e.g. 1.15 for 15%")
-        unknown = set(self.gated_metrics) - set(METRICS)
-        if unknown:
-            raise ValueError(f"unknown gated metrics: {sorted(unknown)}")
-
-    @property
-    def target_half_width_log(self) -> float:
-        """CI half-width, on the log scale, that ends the round loop."""
-        return float(np.log(self.threshold)) * PRECISION_FRACTION
 
 
 @dataclass(frozen=True, slots=True)
