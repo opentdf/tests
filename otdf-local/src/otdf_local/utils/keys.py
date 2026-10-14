@@ -1,6 +1,7 @@
 """Cryptographic key generation utilities."""
 
 import json
+import re
 import secrets
 import subprocess
 from pathlib import Path
@@ -23,9 +24,13 @@ def validate_alg(alg: str) -> bool:
     return alg in supported_algs
 
 
+# kids name files in the platform dir, so no `/`, `.`, or leading `-`.
+_KID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+
+
 def validate_kid(kid: str) -> bool:
-    """Validate that the kid is a non-empty, less than 33 characters, and alphanumeric."""
-    return 0 < len(kid) < 33 and kid.isalnum()
+    """Validate that the kid is 1-32 of `[A-Za-z0-9_-]`, starting alphanumeric."""
+    return _KID_PATTERN.fullmatch(kid) is not None
 
 
 def generate_rsa_keypair(key_dir: Path, name: str = "kas") -> tuple[Path, Path]:
@@ -167,13 +172,13 @@ def setup_golden_keys(
     to the platform directory for use by the platform service.
 
     Args:
-        xtest_root: Root directory of xtest (contains xtest/extra-keys.json)
+        xtest_root: The xtest directory (contains extra-keys.json)
         platform_dir: Platform source directory
 
     Returns:
         List of key configurations to add to cryptoProvider.standard.keys
     """
-    extra_keys_file = xtest_root / "xtest" / "extra-keys.json"
+    extra_keys_file = xtest_root / "extra-keys.json"
     if not extra_keys_file.exists():
         return []
 
