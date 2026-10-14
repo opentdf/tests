@@ -210,11 +210,48 @@ def test_restart_docker_reports_why_compose_failed(tmp_path, monkeypatch):
 
     docker = _docker_service(tmp_path, monkeypatch, 1, COMPOSE_FAILURE_STDERR)
     monkeypatch.setattr(docker, "stop", lambda: True)
+    # Bypass platform discovery, which depends on what the host has checked out.
+    monkeypatch.setattr(cli, "get_settings", lambda: docker.settings)
     monkeypatch.setattr(cli, "get_docker_service", lambda _settings: docker)
 
     result = CliRunner().invoke(cli.app, ["restart", "docker"])
 
-    # Previously this printed "Docker services restarted" and exited 0.
     assert result.exit_code == 1
+    # CliRunner reports 1 for an uncaught exception too; require a clean exit.
+    assert isinstance(result.exception, SystemExit)
     assert "permission denied" in result.output
     assert "restarted" not in result.output
+
+
+def test_restart_docker_reports_why_compose_down_failed(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from otdf_local import cli
+
+    docker = _docker_service(tmp_path, monkeypatch, 1, COMPOSE_FAILURE_STDERR)
+    monkeypatch.setattr(cli, "get_settings", lambda: docker.settings)
+    monkeypatch.setattr(cli, "get_docker_service", lambda _settings: docker)
+
+    result = CliRunner().invoke(cli.app, ["restart", "docker"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "permission denied" in result.output
+    assert "restarted" not in result.output
+
+
+def test_failed_platform_discovery_exits_cleanly(monkeypatch):
+    from typer.testing import CliRunner
+
+    from otdf_local import cli
+
+    def ambiguous():
+        raise FileNotFoundError("Multiple platform refs installed")
+
+    monkeypatch.setattr(cli, "get_settings", ambiguous)
+
+    result = CliRunner().invoke(cli.app, ["env"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "Multiple platform refs installed" in result.output

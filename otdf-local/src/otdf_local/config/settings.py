@@ -52,12 +52,8 @@ def _find_xtest_root() -> Path:
 
 
 def _has_platform_shape(candidate: Path) -> bool:
-    """True if `candidate` is a platform source tree we can start from.
-
-    Both files are required: `otdf-local` runs `go run ./service` out of this
-    directory and generates its config from `opentdf-dev.yaml`, so a checkout
-    missing either is not startable.
-    """
+    """True if `candidate` has `docker-compose.yaml` (docker deps) and
+    `opentdf-dev.yaml` (committed config, which seeds the template)."""
     return (
         candidate.is_dir()
         and (candidate / "docker-compose.yaml").is_file()
@@ -65,47 +61,47 @@ def _has_platform_shape(candidate: Path) -> bool:
     )
 
 
-def _installed_platform_worktrees(xtest_root: Path) -> list[Path]:
-    """Platform source trees under `xtest/platform/src/`, sorted by name.
+# `otdf-sdk-mgr install scripts` checks out platform `main` here too, as
+# `scripts--<branch>`; it has platform shape but is not an installed platform.
+_HELPER_SCRIPTS_PREFIX = "scripts--"
 
-    This is where `otdf-sdk-mgr` puts them: one worktree per installed ref,
-    beside a bare `platform.git` that has no platform shape and so is skipped
-    by the filter rather than by name.
+
+def _installed_platform_worktrees(xtest_root: Path) -> list[Path]:
+    """Platform worktrees `otdf-sdk-mgr` installed under `xtest/platform/src/`.
+
+    One per ref, named by `ref_slug` (e.g. `main`, `service--v0.9.0`), beside
+    a bare `platform.git` that the shape check skips.
     """
     src_root = xtest_root / "platform" / "src"
     if not src_root.is_dir():
         return []
     return sorted(
-        (c for c in src_root.iterdir() if _has_platform_shape(c)), key=lambda p: p.name
+        (
+            c
+            for c in src_root.iterdir()
+            if not c.name.startswith(_HELPER_SCRIPTS_PREFIX) and _has_platform_shape(c)
+        ),
+        key=lambda p: p.name,
     )
 
 
 def _find_platform_dir(xtest_root: Path) -> Path:
-    """Find a startable platform source tree.
+    """Find a startable platform source tree, in order of preference:
 
-    Two layouts are in use and neither is going away on its own:
+    1. `platform/` beside `xtest/` (a hand-cloned checkout).
+    2. The single worktree under `xtest/platform/src/`, as installed by
+       `otdf-sdk-mgr install tip|release platform`.
+    3. `platform/` beside a further ancestor (e.g. a multi-repo workspace).
 
-    - `tests/platform/`, a checkout sitting beside `xtest/`. Historically how
-      the platform got here, and still what a hand-cloned setup looks like.
-    - `xtest/platform/src/<ref>/`, one worktree per ref, which is what
-      `otdf-sdk-mgr install platform` and `install benchmark --platform`
-      actually create (`platform_installer.get_platform_dir`).
-
-    The sibling layout wins when both exist, so an explicit checkout is never
-    silently shadowed by an installed one. `OTDF_LOCAL_PLATFORM_DIR` overrides
-    either, and is the answer when several refs are installed: picking one
-    would be picking which platform version the benchmark measures against.
+    `OTDF_LOCAL_PLATFORM_DIR` overrides all of these.
 
     Raises:
-        FileNotFoundError: if nothing startable is found, or if the choice
-            among installed refs is ambiguous.
+        FileNotFoundError: if nothing startable is found, or if several
+            worktrees are installed and none is preferred.
     """
-    current = xtest_root
-    while current != current.parent:
-        candidate = current.parent / "platform"
-        if _has_platform_shape(candidate):
-            return candidate
-        current = current.parent
+    sibling = xtest_root.parent / "platform"
+    if _has_platform_shape(sibling):
+        return sibling
 
     installed = _installed_platform_worktrees(xtest_root)
     if len(installed) == 1:
@@ -114,9 +110,15 @@ def _find_platform_dir(xtest_root: Path) -> Path:
         names = ", ".join(p.name for p in installed)
         raise FileNotFoundError(
             f"Multiple platform refs installed under {xtest_root / 'platform' / 'src'}: "
-            f"{names}. Set OTDF_LOCAL_PLATFORM_DIR to the one to run; choosing for you "
-            "would silently decide which platform version everything is measured against."
+            f"{names}. Set OTDF_LOCAL_PLATFORM_DIR to the one to run."
         )
+
+    current = xtest_root.parent
+    while current != current.parent:
+        candidate = current.parent / "platform"
+        if _has_platform_shape(candidate):
+            return candidate
+        current = current.parent
 
     raise FileNotFoundError(
         f"Could not find platform directory with expected shape "
@@ -138,7 +140,7 @@ class Settings(BaseSettings):
     # Directory paths - computed from xtest_root
     xtest_root: Path = Field(default_factory=_find_xtest_root)
     platform_dir: Path = Field(
-        default_factory=lambda: _find_platform_dir(_find_xtest_root())
+        default_factory=lambda data: _find_platform_dir(data["xtest_root"])
     )
 
     @property

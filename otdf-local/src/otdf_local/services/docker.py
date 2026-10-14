@@ -31,6 +31,7 @@ class DockerService(Service):
     def __init__(self, settings: Settings) -> None:
         super().__init__(settings)
         self._compose_file = settings.docker_compose_file
+        self.stop_error: str | None = None
 
     @property
     def name(self) -> str:
@@ -75,8 +76,10 @@ class DockerService(Service):
         return True
 
     def stop(self) -> bool:
-        """Stop Docker compose services."""
+        """Stop Docker compose services. On False, ``stop_error`` says why."""
+        self.stop_error = None
         if not self._compose_file.exists():
+            self.stop_error = f"No compose file at {self._compose_file}"
             return False
 
         result = subprocess.run(
@@ -86,7 +89,12 @@ class DockerService(Service):
             check=False,
             cwd=self._compose_file.parent,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            self.stop_error = _compose_error(result) or (
+                f"docker compose down exited {result.returncode} without output"
+            )
+            return False
+        return True
 
     def is_running(self) -> bool:
         """Check if Docker services are running."""

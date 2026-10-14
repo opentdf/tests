@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import subprocess
+
 import pytest
 from otdf_local.config.settings import Settings
 from otdf_local.services.platform import PlatformService
@@ -36,13 +38,7 @@ def platform(tmp_path: Path) -> PlatformService:
 
 
 class TestPristineTemplate:
-    """Generation needs a pristine copy an installed worktree does not have.
-
-    `opentdf.yaml` is gitignored in the platform repo and made by hand in the
-    manual setup; `otdf-sdk-mgr install platform` does not make it. Since
-    `opentdf-dev.yaml` is both the committed config and where generation
-    *writes*, the seeding has to happen before the first write.
-    """
+    """Seeding `opentdf.yaml`, which an installed worktree lacks."""
 
     def test_an_installed_worktree_is_seeded_from_the_committed_config(
         self, platform: PlatformService
@@ -50,7 +46,10 @@ class TestPristineTemplate:
         platform.settings.platform_config.write_text(TEMPLATE_WITHOUT_ROOT_KEY)
         data = load_yaml(platform._generate_config())
 
-        assert platform.settings.platform_template_config.is_file()
+        assert (
+            platform.settings.platform_template_config.read_text()
+            == TEMPLATE_WITHOUT_ROOT_KEY
+        )
         assert get_nested(data, "logger.level") == "debug"
 
     def test_the_template_is_not_reseeded_over(self, platform: PlatformService):
@@ -59,8 +58,7 @@ class TestPristineTemplate:
 
         data = load_yaml(platform._generate_config())
 
-        # The hand-made template wins. Seeding from the generated file instead
-        # would silently swap out the key golden-TDF fixtures are encrypted to.
+        # An existing template is never overwritten by seeding.
         assert (
             get_nested(data, "services.kas.root_key")
             == "00112233445566778899aabbccddeeff"
@@ -83,3 +81,30 @@ class TestPristineTemplate:
             platform._generate_config()
         assert "opentdf.yaml" in str(excinfo.value)
         assert "opentdf-dev.yaml" in str(excinfo.value)
+
+    def test_seeding_takes_the_committed_config_not_an_earlier_run(
+        self, platform: PlatformService
+    ):
+        # If opentdf.yaml was deleted after a run, opentdf-dev.yaml holds that
+        # run's output; seeding from it would feed output back in as input.
+        platform_dir = platform.settings.platform_dir
+        config = platform.settings.platform_config
+        config.write_text(TEMPLATE_WITHOUT_ROOT_KEY)
+        git = [
+            "git",
+            "-C",
+            str(platform_dir),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+        ]
+        subprocess.run([*git, "init", "-q"], check=True)
+        subprocess.run([*git, "add", config.name], check=True)
+        subprocess.run([*git, "commit", "-qm", "init"], check=True)
+        config.write_text(TEMPLATE_WITH_ROOT_KEY)
+
+        platform._generate_config()
+
+        template = load_yaml(platform.settings.platform_template_config)
+        assert get_nested(template, "services.kas.root_key") is None
