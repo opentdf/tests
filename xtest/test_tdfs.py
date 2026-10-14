@@ -487,6 +487,42 @@ def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
+def _set_policy_binding_hash(kao: tdfs.KeyAccessObject, hash: str) -> None:
+    if isinstance(kao.policyBinding, tdfs.PolicyBinding):
+        kao.policyBinding.hash = hash
+    else:
+        kao.policyBinding = hash
+
+
+def spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """Re-encode every policy binding as the spec's Base64(HMAC).
+
+    SDKs write the legacy Base64(hex(HMAC)). Both spell the same HMAC, so this
+    needs no key, and a KAS that accepts the spec form must still decrypt.
+    """
+    for kao in manifest.encryptionInformation.keyAccess:
+        pb = kao.policyBinding
+        mac = base64.b64decode(pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb)
+        if len(mac) == 64:
+            mac = bytes.fromhex(mac.decode())
+        assert len(mac) == 32, f"unexpected policy binding length {len(mac)}"
+        _set_policy_binding_hash(kao, base64.b64encode(mac).decode())
+    return manifest
+
+
+def change_spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """A spec-form binding with its HMAC altered: well-formed, but wrong."""
+    manifest = spec_policy_binding(manifest)
+    kao = manifest.encryptionInformation.keyAccess[0]
+    pb = kao.policyBinding
+    mac = bytearray(
+        base64.b64decode(pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb)
+    )
+    mac[-1] ^= 0x01
+    _set_policy_binding_hash(kao, base64.b64encode(bytes(mac)).decode())
+    return manifest
+
+
 def change_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
     root_sig = manifest.encryptionInformation.integrityInformation.rootSignature.sig
     altered_sig = base64.b64encode(change_last_three(base64.b64decode(root_sig)))
@@ -660,6 +696,63 @@ def test_tdf_with_altered_policy_binding(
     )
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
+    )
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+
+    try:
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert_kas_request_error(exc, decrypt_sdk)
+
+
+def test_tdf_with_spec_policy_binding(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> None:
+    """KAS accepts the spec's Base64(HMAC) policy binding, not only legacy hex."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("spec_policy_binding")
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    b_file = tdfs.update_manifest("spec_policy_binding", ct_file, spec_policy_binding)
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+
+    decrypt_sdk.decrypt(b_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_tdf_with_altered_spec_policy_binding(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> None:
+    """Accepting the spec form must not fail open on a wrong HMAC."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    b_file = tdfs.update_manifest(
+        "altered_spec_policy_binding", ct_file, change_spec_policy_binding
     )
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 

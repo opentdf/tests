@@ -375,3 +375,80 @@ class TestEncryptedSegmentSizes:
     def test_uses_the_per_segment_override(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
+
+
+# --- spec_policy_binding / change_spec_policy_binding ------------------------
+#
+# The xtest for spec-form policy bindings rewrites a real manifest. If the
+# rewrite produced the wrong bytes, the positive test would fail for the wrong
+# reason and the negative one would pass for it.
+
+
+def _binding_manifest(binding: object) -> tdfs.Manifest:
+    return tdfs.Manifest.model_validate(
+        {
+            "encryptionInformation": {
+                "type": "split",
+                "policy": "",
+                "keyAccess": [
+                    {
+                        "type": "wrapped",
+                        "url": "http://kas",
+                        "protocol": "kas",
+                        "wrappedKey": "",
+                        "policyBinding": binding,
+                    }
+                ],
+                "method": {"algorithm": "AES-256-GCM"},
+                "integrityInformation": {
+                    "rootSignature": {"alg": "HS256", "sig": ""},
+                    "segmentHashAlg": "GMAC",
+                    "segments": [],
+                },
+            },
+            "payload": {
+                "type": "reference",
+                "url": "0.payload",
+                "protocol": "zip",
+                "isEncrypted": True,
+            },
+        }
+    )
+
+
+_MAC = bytes(range(32))
+_LEGACY = base64.b64encode(_MAC.hex().encode()).decode()
+_SPEC = base64.b64encode(_MAC).decode()
+
+
+def _binding_hash(m: tdfs.Manifest) -> str:
+    pb = m.encryptionInformation.keyAccess[0].policyBinding
+    return pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb
+
+
+class TestSpecPolicyBinding:
+    @pytest.mark.parametrize(
+        "binding",
+        [{"alg": "HS256", "hash": _LEGACY}, _LEGACY],
+        ids=["object", "string"],
+    )
+    def test_legacy_hex_becomes_spec_form_of_the_same_hmac(self, binding: object):
+        from test_tdfs import spec_policy_binding
+
+        assert _binding_hash(spec_policy_binding(_binding_manifest(binding))) == _SPEC
+
+    def test_spec_form_is_left_as_is(self):
+        from test_tdfs import spec_policy_binding
+
+        m = _binding_manifest({"alg": "HS256", "hash": _SPEC})
+        assert _binding_hash(spec_policy_binding(m)) == _SPEC
+
+    def test_altered_spec_form_is_well_formed_but_wrong(self):
+        from test_tdfs import change_spec_policy_binding
+
+        m = change_spec_policy_binding(
+            _binding_manifest({"alg": "HS256", "hash": _LEGACY})
+        )
+        altered = base64.b64decode(_binding_hash(m))
+        assert len(altered) == len(_MAC)
+        assert altered != _MAC
