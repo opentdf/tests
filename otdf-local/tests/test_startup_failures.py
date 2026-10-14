@@ -137,6 +137,25 @@ def test_kas_start_clears_a_stale_error_from_a_previous_attempt(
     assert kas.start_error is None
 
 
+def test_kas_start_leaves_a_running_kas_alone_when_config_is_bad(
+    tmp_path, spawn, monkeypatch
+):
+    """A config that fails validation must not take down the KAS on the port."""
+    kas = _kas_service(tmp_path, spawn, SURVIVES, monkeypatch)
+    killed: list[int] = []
+    monkeypatch.setattr("otdf_local.services.kas.kill_process_on_port", killed.append)
+
+    def bad_config() -> Path:
+        raise ValueError("No services.kas.root_key")
+
+    monkeypatch.setattr(kas, "_generate_config", bad_config)
+
+    assert kas.start() is False
+    assert kas.start_error is not None
+    assert "root_key" in kas.start_error
+    assert killed == []
+
+
 # A real failure, copied from a run where the compose file bind-mounted a file
 # Docker could not chown. Compose reports progress on stderr too, so the line
 # that matters is buried in noise -- which is how it came to be discarded.
