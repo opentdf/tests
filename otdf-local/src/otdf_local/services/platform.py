@@ -1,5 +1,6 @@
 """Platform service management."""
 
+import subprocess
 from pathlib import Path
 
 from otdf_local.config.features import PlatformFeatures
@@ -12,6 +13,7 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
+from otdf_local.utils.console import print_info
 from otdf_local.utils.keys import get_golden_keyring_entries, setup_golden_keys
 from otdf_local.utils.yaml import (
     append_to_list,
@@ -19,6 +21,20 @@ from otdf_local.utils.yaml import (
     load_yaml,
     save_yaml,
 )
+
+
+def _committed_content(path: Path) -> bytes | None:
+    """`path` as of git HEAD, or None if it is not in a git checkout."""
+    try:
+        result = subprocess.run(
+            ["git", "show", f"HEAD:./{path.name}"],
+            capture_output=True,
+            check=False,
+            cwd=path.parent,
+        )
+    except FileNotFoundError:  # no git binary
+        return None
+    return result.stdout if result.returncode == 0 else None
 
 
 class PlatformService(Service):
@@ -49,10 +65,39 @@ class PlatformService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
+    def _ensure_template(self) -> Path:
+        """The pristine config to generate from, seeded if it is not there yet.
+
+        `opentdf.yaml` is gitignored in the platform repo and `otdf-sdk-mgr`
+        does not create it. It must be separate from `opentdf-dev.yaml`, which
+        generation overwrites; otherwise each run's output becomes the next
+        run's input. So seed from the committed `opentdf-dev.yaml` (git HEAD),
+        not the working copy, which may hold an earlier run's output.
+        """
+        template_path = self.settings.platform_template_config
+        if template_path.is_file():
+            return template_path
+
+        committed = self.settings.platform_config
+        content = _committed_content(committed)
+        if content is None:
+            if not committed.is_file():
+                raise FileNotFoundError(
+                    f"No platform config to generate from in {self.settings.platform_dir}: "
+                    f"neither {template_path.name} nor {committed.name} is present."
+                )
+            content = committed.read_bytes()
+
+        partial = template_path.with_name(template_path.name + ".tmp")
+        partial.write_bytes(content)
+        partial.replace(template_path)
+        print_info(f"Seeded {template_path} from {committed.name}")
+        return template_path
+
     def _generate_config(self) -> Path:
         """Generate the platform config file from template."""
         config_path = self.settings.platform_config
-        template_path = self.settings.platform_template_config
+        template_path = self._ensure_template()
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
