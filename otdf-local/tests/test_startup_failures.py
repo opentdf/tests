@@ -201,3 +201,20 @@ def test_docker_start_clears_a_stale_error(tmp_path, monkeypatch):
 
     assert docker.start() is True
     assert docker.start_error is None
+
+
+def test_restart_docker_reports_why_compose_failed(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from otdf_local import cli
+
+    docker = _docker_service(tmp_path, monkeypatch, 1, COMPOSE_FAILURE_STDERR)
+    monkeypatch.setattr(docker, "stop", lambda: True)
+    monkeypatch.setattr(cli, "get_docker_service", lambda _settings: docker)
+
+    result = CliRunner().invoke(cli.app, ["restart", "docker"])
+
+    # Previously this printed "Docker services restarted" and exited 0.
+    assert result.exit_code == 1
+    assert "permission denied" in result.output
+    assert "restarted" not in result.output

@@ -498,7 +498,9 @@ def restart(
         print_info("Restarting Docker services...")
         docker = get_docker_service(settings)
         docker.stop()
-        docker.start()
+        if not docker.start():
+            print_error(docker.start_error or "Failed to restart Docker services")
+            raise typer.Exit(1)
         print_success("Docker services restarted")
         return
 
