@@ -99,17 +99,19 @@ class KASService(Service):
         # Ensure directories exist
         self.settings.ensure_directories()
 
-        # Kill any existing process on the port
-        kill_process_on_port(self.port)
-
         # Report a bad config the same way a failed launch is reported, so
         # callers keep their single `start() -> bool` + `start_error` contract.
+        # Validate before touching the port so a bad config leaves any running
+        # KAS in place.
         self.start_error = None
         try:
             config_path = self._generate_config()
         except (OSError, ValueError) as e:
             self.start_error = str(e)
             return False
+
+        # Kill any existing process on the port
+        kill_process_on_port(self.port)
 
         # Build the command
         cmd = [
