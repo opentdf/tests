@@ -731,7 +731,7 @@ def test_tdf_with_spec_policy_binding(
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 
     decrypt_sdk.decrypt(b_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
 
 
 def test_tdf_with_altered_spec_policy_binding(
