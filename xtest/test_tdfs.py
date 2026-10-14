@@ -714,11 +714,15 @@ def test_tdf_with_spec_policy_binding(
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
 ) -> None:
-    """KAS accepts the spec's Base64(HMAC) policy binding, not only legacy hex."""
+    """KAS accepts the spec's Base64(HMAC) policy binding, not only legacy hex.
+
+    Deliberately ungated: no released KAS accepts the spec form
+    (opentdf/platform#2095 compared an untrimmed buffer), so this fails until a
+    platform carrying opentdf/platform#4223 is under test.
+    """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("spec_policy_binding")
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
