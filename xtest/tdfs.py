@@ -194,6 +194,12 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # Platform: KAS verifies a policy binding in the spec's Base64(HMAC) form as
+    # well as the legacy Base64(hex(HMAC)) every SDK writes. Released KAS never
+    # accepted the spec form (opentdf/platform#2095 compared an untrimmed
+    # buffer); fixed in opentdf/platform#4223. Force-only via
+    # XT_FORCE_PLATFORM_SUPPORTS until the first release carrying it is known.
+    "spec_policy_binding",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
@@ -227,7 +233,9 @@ ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
 #: ``autoconfigure`` and ``ecwrap`` need the SDK to emit them *and* the platform
 #: to honour them, so forcing either side alone is a reasonable thing to ask for.
 #: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
-PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset({"kas_uri_from_kao"})
+PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
+    {"kas_uri_from_kao", "spec_policy_binding"}
+)
 
 SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
 
