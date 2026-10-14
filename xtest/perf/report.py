@@ -226,7 +226,8 @@ def markdown(
         "",
         f"<sub>seed {config.seed}; warm-up {config.warmup} rounds; "
         f"{config.min_rounds}-{config.max_rounds} measured rounds per cell; "
-        "stopping on attained CI width, never on significance.</sub>",
+        "stopping on attained CI width, never on significance; "
+        "p is one-sided, in the direction of the observed ratio.</sub>",
     ]
     return "\n".join(lines) + "\n"
 
@@ -240,7 +241,14 @@ def _ratio_cell(c: stats.PairedComparison) -> str:
 
 
 def _p_cell(c: stats.PairedComparison) -> str:
-    p = c.p_adjusted if c.p_adjusted is not None else c.p_value
+    # Show the one-sided tail matching the observed effect. Below one that is
+    # the explicit faster-tail test: a BH-adjusted slower-tail p-value cannot
+    # be read backwards as evidence of improvement, and printing it beside an
+    # IMPROVED verdict shows ~1.000 next to a significant result.
+    if c.ratio < 1:
+        p = c.p_adjusted_faster if c.p_adjusted_faster is not None else c.p_value_faster
+    else:
+        p = c.p_adjusted if c.p_adjusted is not None else c.p_value
     if p is None or not math.isfinite(p):
         return "-"
     return f"{p:.3f}" if p >= 0.001 else "<0.001"
