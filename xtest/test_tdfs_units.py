@@ -452,3 +452,19 @@ class TestSpecPolicyBinding:
         altered = base64.b64decode(_binding_hash(m))
         assert len(altered) == len(_MAC)
         assert altered != _MAC
+
+
+class TestChangePolicyBinding:
+    @pytest.mark.parametrize(
+        "binding",
+        [{"alg": "HS256", "hash": _LEGACY}, _LEGACY],
+        ids=["object", "string"],
+    )
+    def test_legacy_hex_stays_well_formed_hex_with_a_wrong_hmac(self, binding: object):
+        """A malformed binding is rejected before the HMAC is ever compared."""
+        from test_tdfs import change_policy_binding
+
+        m = change_policy_binding(_binding_manifest(binding))
+        altered = bytes.fromhex(base64.b64decode(_binding_hash(m)).decode())
+        assert len(altered) == len(_MAC)
+        assert altered != _MAC

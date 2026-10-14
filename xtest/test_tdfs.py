@@ -472,19 +472,9 @@ def change_policy(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
-def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    pb = manifest.encryptionInformation.keyAccess[0].policyBinding
-    ## if the pb is str then json decode to tdfs.PolicyBinding
-    if isinstance(pb, tdfs.PolicyBinding):
-        hash = pb.hash
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
-        pb.hash = str(altered_hash)
-        manifest.encryptionInformation.keyAccess[0].policyBinding = pb
-    else:
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
-        manifest.encryptionInformation.keyAccess[0].policyBinding = str(altered_hash)
-
-    return manifest
+def _policy_binding_hash(kao: tdfs.KeyAccessObject) -> str:
+    pb = kao.policyBinding
+    return pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb
 
 
 def _set_policy_binding_hash(kao: tdfs.KeyAccessObject, hash: str) -> None:
@@ -494,6 +484,22 @@ def _set_policy_binding_hash(kao: tdfs.KeyAccessObject, hash: str) -> None:
         kao.policyBinding = hash
 
 
+def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """Alter the first policy binding's HMAC, keeping its encoding well-formed.
+
+    A malformed binding is rejected before the HMAC is compared, so only a
+    well-formed one shows the KAS checks the HMAC itself.
+    """
+    kao = manifest.encryptionInformation.keyAccess[0]
+    decoded = base64.b64decode(_policy_binding_hash(kao))
+    legacy = len(decoded) == 64
+    mac = bytearray(bytes.fromhex(decoded.decode()) if legacy else decoded)
+    mac[-1] ^= 0x01
+    altered = mac.hex().encode() if legacy else bytes(mac)
+    _set_policy_binding_hash(kao, base64.b64encode(altered).decode())
+    return manifest
+
+
 def spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     """Re-encode every policy binding as the spec's Base64(HMAC).
 
@@ -501,8 +507,7 @@ def spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     needs no key, and a KAS that accepts the spec form must still decrypt.
     """
     for kao in manifest.encryptionInformation.keyAccess:
-        pb = kao.policyBinding
-        mac = base64.b64decode(pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb)
+        mac = base64.b64decode(_policy_binding_hash(kao))
         if len(mac) == 64:
             mac = bytes.fromhex(mac.decode())
         assert len(mac) == 32, f"unexpected policy binding length {len(mac)}"
@@ -512,15 +517,7 @@ def spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
 
 def change_spec_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
     """A spec-form binding with its HMAC altered: well-formed, but wrong."""
-    manifest = spec_policy_binding(manifest)
-    kao = manifest.encryptionInformation.keyAccess[0]
-    pb = kao.policyBinding
-    mac = bytearray(
-        base64.b64decode(pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb)
-    )
-    mac[-1] ^= 0x01
-    _set_policy_binding_hash(kao, base64.b64encode(bytes(mac)).decode())
-    return manifest
+    return change_policy_binding(spec_policy_binding(manifest))
 
 
 def change_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
