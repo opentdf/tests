@@ -182,6 +182,49 @@ class TestZip64ReaderIsBroken:
         assert not tdfs.zip64_reader_is_broken(_stub_sdk("java", None))
 
 
+# --- tdfs.spec_policy_binding_is_rejected -------------------------------------
+
+
+class TestSpecPolicyBindingIsRejected:
+    """Which platforms ``test_tdf_with_spec_policy_binding`` requires a failure from.
+
+    Each "False" here is a platform held to a successful decrypt, so a
+    predicate that were too generous would hide a KAS that regressed.
+    """
+
+    def test_a_pre_fix_release_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PLATFORM_TAG", "v0.29.0")
+        assert tdfs.spec_policy_binding_is_rejected()
+
+    def test_the_bug_release_itself_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
+        """Boundary: the constant names the first release *with* the bug."""
+        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_BUG
+        monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
+        assert tdfs.spec_policy_binding_is_rejected()
+
+    def test_a_release_before_the_bug_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """Before opentdf/platform#2095, KAS accepted the spec form."""
+        monkeypatch.setenv("PLATFORM_TAG", "v0.5.2")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_the_fix_release_itself_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """Boundary: the constant names the first release *with* the fix."""
+        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_FIX
+        monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_a_branch_build_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """main reports the last release's PLATFORM_VERSION, so that is not consulted."""
+        monkeypatch.setenv("PLATFORM_TAG", "main")
+        monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_no_tag_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("PLATFORM_TAG", raising=False)
+        monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------
 
 

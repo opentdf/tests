@@ -713,9 +713,11 @@ def test_tdf_with_spec_policy_binding(
 ) -> None:
     """KAS accepts the spec's Base64(HMAC) policy binding, not only legacy hex.
 
-    Deliberately ungated: no released KAS accepts the spec form
-    (opentdf/platform#2095 compared an untrimmed buffer), so this fails until a
-    platform carrying opentdf/platform#4223 is under test.
+    Releases from opentdf/platform#2095 until #4223 reject it, so against those
+    the decrypt is asserted to fail with a KAS error rather than skipped or
+    xfailed: a node-level xfail would absorb unrelated failures, and a release
+    that has quietly gained the fix turns the cell red. See
+    :func:`tdfs.spec_policy_binding_is_rejected`.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -729,6 +731,12 @@ def test_tdf_with_spec_policy_binding(
     )
     b_file = tdfs.update_manifest("spec_policy_binding", ct_file, spec_policy_binding)
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+
+    if tdfs.spec_policy_binding_is_rejected():
+        with pytest.raises(subprocess.CalledProcessError) as exc:
+            decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        assert_kas_request_error(exc.value, decrypt_sdk)
+        return
 
     decrypt_sdk.decrypt(b_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file, shallow=False)
