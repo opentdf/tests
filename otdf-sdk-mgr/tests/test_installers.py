@@ -322,11 +322,12 @@ class TestLatestStableVersion:
         with patch.object(installers, "list_java_github_releases", return_value=[]):
             assert latest_stable_version("java") is None
 
-    def test_js_is_newest_release_tag_not_newest_npm_cli(self):
-        resolved = {"sdk": "js", "alias": "latest", "sha": "a" * 40, "tag": "v0.22.0"}
+    @pytest.mark.parametrize("sdk", ["js", "web"])
+    def test_js_is_newest_release_tag_not_newest_npm_cli(self, sdk: str):
+        resolved = {"sdk": sdk, "alias": "latest", "sha": "a" * 40, "tag": "v0.22.0"}
         with patch.object(installers, "resolve", return_value=resolved) as res:
-            assert latest_stable_version("js") == "v0.22.0"
-        res.assert_called_once_with("js", "latest", "sdk")
+            assert latest_stable_version(sdk) == "v0.22.0"
+        res.assert_called_once_with(sdk, "latest", "sdk")
 
     def test_js_resolve_error_raises(self):
         err = {"sdk": "js", "alias": "latest", "err": "no tags"}
