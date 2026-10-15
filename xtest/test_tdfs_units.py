@@ -182,6 +182,49 @@ class TestZip64ReaderIsBroken:
         assert not tdfs.zip64_reader_is_broken(_stub_sdk("java", None))
 
 
+# --- tdfs.spec_policy_binding_is_rejected -------------------------------------
+
+
+class TestSpecPolicyBindingIsRejected:
+    """Which platforms ``test_tdf_with_spec_policy_binding`` requires a failure from.
+
+    Each "False" here is a platform held to a successful decrypt, so a
+    predicate that were too generous would hide a KAS that regressed.
+    """
+
+    def test_a_pre_fix_release_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PLATFORM_TAG", "v0.29.0")
+        assert tdfs.spec_policy_binding_is_rejected()
+
+    def test_the_bug_release_itself_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
+        """Boundary: the constant names the first release *with* the bug."""
+        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_BUG
+        monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
+        assert tdfs.spec_policy_binding_is_rejected()
+
+    def test_a_release_before_the_bug_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """Before opentdf/platform#2095, KAS accepted the spec form."""
+        monkeypatch.setenv("PLATFORM_TAG", "v0.5.2")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_the_fix_release_itself_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """Boundary: the constant names the first release *with* the fix."""
+        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_FIX
+        monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_a_branch_build_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        """main reports the last release's PLATFORM_VERSION, so that is not consulted."""
+        monkeypatch.setenv("PLATFORM_TAG", "main")
+        monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+    def test_no_tag_is_not(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("PLATFORM_TAG", raising=False)
+        monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
+        assert not tdfs.spec_policy_binding_is_rejected()
+
+
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------
 
 
@@ -375,3 +418,96 @@ class TestEncryptedSegmentSizes:
     def test_uses_the_per_segment_override(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
+
+
+# --- spec_policy_binding / change_spec_policy_binding ------------------------
+#
+# The xtest for spec-form policy bindings rewrites a real manifest. If the
+# rewrite produced the wrong bytes, the positive test would fail for the wrong
+# reason and the negative one would pass for it.
+
+
+def _binding_manifest(binding: object) -> tdfs.Manifest:
+    return tdfs.Manifest.model_validate(
+        {
+            "encryptionInformation": {
+                "type": "split",
+                "policy": "",
+                "keyAccess": [
+                    {
+                        "type": "wrapped",
+                        "url": "http://kas",
+                        "protocol": "kas",
+                        "wrappedKey": "",
+                        "policyBinding": binding,
+                    }
+                ],
+                "method": {"algorithm": "AES-256-GCM"},
+                "integrityInformation": {
+                    "rootSignature": {"alg": "HS256", "sig": ""},
+                    "segmentHashAlg": "GMAC",
+                    "segments": [],
+                },
+            },
+            "payload": {
+                "type": "reference",
+                "url": "0.payload",
+                "protocol": "zip",
+                "isEncrypted": True,
+            },
+        }
+    )
+
+
+_MAC = bytes(range(32))
+_LEGACY = base64.b64encode(_MAC.hex().encode()).decode()
+_SPEC = base64.b64encode(_MAC).decode()
+
+
+def _binding_hash(m: tdfs.Manifest) -> str:
+    pb = m.encryptionInformation.keyAccess[0].policyBinding
+    return pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb
+
+
+class TestSpecPolicyBinding:
+    @pytest.mark.parametrize(
+        "binding",
+        [{"alg": "HS256", "hash": _LEGACY}, _LEGACY],
+        ids=["object", "string"],
+    )
+    def test_legacy_hex_becomes_spec_form_of_the_same_hmac(self, binding: object):
+        from test_tdfs import spec_policy_binding
+
+        assert _binding_hash(spec_policy_binding(_binding_manifest(binding))) == _SPEC
+
+    def test_spec_form_is_left_as_is(self):
+        from test_tdfs import spec_policy_binding
+
+        m = _binding_manifest({"alg": "HS256", "hash": _SPEC})
+        assert _binding_hash(spec_policy_binding(m)) == _SPEC
+
+    def test_altered_spec_form_is_well_formed_but_wrong(self):
+        from test_tdfs import change_spec_policy_binding
+
+        m = change_spec_policy_binding(
+            _binding_manifest({"alg": "HS256", "hash": _LEGACY})
+        )
+        altered = base64.b64decode(_binding_hash(m))
+        assert len(altered) == len(_MAC)
+        assert altered != _MAC
+
+
+class TestChangePolicyBinding:
+    @pytest.mark.parametrize(
+        "binding",
+        [{"alg": "HS256", "hash": _LEGACY}, _LEGACY],
+        ids=["object", "string"],
+    )
+    def test_legacy_hex_stays_well_formed_hex_with_a_wrong_hmac(self, binding: object):
+        """A malformed binding is rejected before the HMAC is ever compared."""
+        from test_tdfs import change_policy_binding
+
+        m = change_policy_binding(_binding_manifest(binding))
+        altered = bytes.fromhex(base64.b64decode(_binding_hash(m)).decode())
+        assert len(altered) == len(_MAC)
+        assert altered != _MAC
