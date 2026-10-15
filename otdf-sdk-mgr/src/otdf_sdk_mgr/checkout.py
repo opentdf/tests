@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
+from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, SDK_SOURCE_ALIASES, get_sdk_dirs
 from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 
 
@@ -44,6 +44,9 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
             "checkout_sdk_branch does not support 'go'; use checkout_go_from_platform "
             "(otdfctl is now sourced from the opentdf/platform monorepo)."
         )
+
+    # `web` has no checkout of its own; it builds from the `js` worktree.
+    language = SDK_SOURCE_ALIASES.get(language, language)
 
     sdk_dirs = get_sdk_dirs()
     if language not in sdk_dirs:

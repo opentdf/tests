@@ -82,6 +82,28 @@ def install_js_release(version: str, dist_dir: Path) -> None:
     print(f"  JS release {v} installed to {dist_dir}")
 
 
+def install_web_release(version: str, dist_dir: Path) -> None:
+    """Install the headless-browser `web` flavour against an npm release.
+
+    Delegates to `xtest/sdk/web/stage.sh`, the same script the source build
+    uses: it copies `cli.sh` and the Playwright driver in, `npm install`s the
+    driver plus `@opentdf/sdk@<version>`, bundles the page, and runs
+    `playwright install` for the browser. stage.sh assembles everything in a
+    scratch directory and renames it into place last, so a failure never
+    leaves a `dist_dir` that the exists-check in `install_release` would
+    mistake for a finished install.
+    """
+    web_dir = get_sdk_dir() / "web"
+    # Strip infix prefix (e.g., "sdk/v0.4.0" -> "v0.4.0") for npm install
+    v = version.split("/")[-1].lstrip("v")
+    print(f"  Staging web driver against @opentdf/sdk@{v}...")
+    try:
+        subprocess.check_call([str(web_dir / "stage.sh"), str(dist_dir), f"@opentdf/sdk@{v}"])
+    except subprocess.CalledProcessError as e:
+        raise InstallError(f"staging the web driver for @opentdf/sdk@{v} failed: {e}") from e
+    print(f"  Web release {v} installed to {dist_dir}")
+
+
 def install_java_release(version: str, dist_dir: Path) -> None:
     """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
 
@@ -143,6 +165,7 @@ INSTALLERS = {
     "go": install_go_release,
     "js": install_js_release,
     "java": install_java_release,
+    "web": install_web_release,
 }
 
 
@@ -170,8 +193,8 @@ def latest_stable_version(sdk: str) -> str | None:
     if sdk == "go":
         stable = [v for v in list_go_versions() if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
-    elif sdk == "js":
-        stable = [v for v in list_js_versions() if v.get("stable", False)]
+    elif sdk in ("js", "web"):
+        stable = [v for v in list_js_versions(sdk) if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
     elif sdk == "java":
         stable_with_cli = [
@@ -234,6 +257,8 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
             platform_dir = checkout_go_from_platform(expanded)
             env["GOWORK"] = str(platform_dir / "go.work")
         else:
+            # For `web` this checks out the shared web-sdk worktree under
+            # sdk/js/src/<slug>; sdk/web/Makefile packs the library from it.
             checkout_sdk_branch(sdk, expanded)
         subprocess.check_call(["make"], cwd=make_dir, env=env)
         print(f"  {sdk} built from source")
