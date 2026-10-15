@@ -30,7 +30,9 @@ def skip_rts_as_needed(
                 f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
             )
         # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
+        if decrypt_sdk.sdk not in tdfs.WEB_SDK_FLAVOURS and not decrypt_sdk.supports(
+            "ecwrap"
+        ):
             pytest.skip(
                 f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
             )

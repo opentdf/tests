@@ -1,7 +1,7 @@
 # Makefile
 
 # Targets
-.PHONY: all js go java
+.PHONY: all js go java web
 
 all: js go java
 	@echo "Setup all sdk clis"
@@ -20,3 +20,10 @@ java:
 	@echo "Building Java SDK..."
 	@cd java && make all
 	@echo "Java SDK built successfully"
+
+# Not in `all`: staging web downloads a Playwright browser. Builds from the
+# same checkouts as js (sdk/js/src).
+web:
+	@echo "Building headless-browser web SDK flavour..."
+	@cd web && make all
+	@echo "web SDK flavour built successfully"
