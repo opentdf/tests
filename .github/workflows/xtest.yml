@@ -575,7 +575,7 @@ jobs:
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        if: steps.configure-java.outputs.needs-build == 'true'
         run: |
           make
         working-directory: otdftests/xtest/sdk/java
@@ -1050,7 +1050,7 @@ jobs:
           platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the ${{ matrix.sdk }} cli
-        if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
+        if: steps.configure-sdk.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/${{ matrix.sdk }}
         env:
@@ -1352,7 +1352,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Build the java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        if: steps.configure-java.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/java
         env:

@@ -14,6 +14,8 @@ from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.config import (
     GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
+    SDK_GIT_URLS,
+    SDK_MAVEN_COORDS,
     get_sdk_dir,
     get_sdk_dirs,
     go_module_for_tag,
@@ -83,13 +85,34 @@ def install_js_release(version: str, dist_dir: Path) -> None:
 
 
 def install_java_release(version: str, dist_dir: Path) -> None:
-    """Install a Java CLI release by downloading cmdline.jar from GitHub Releases.
+    """Install a Java CLI release.
 
-    Raises InstallError if the artifact is not available or download fails,
-    so the caller can fall back to building from source.
+    Prefers a prebuilt cmdline.jar from GitHub Releases. Failing that, builds
+    only the cmdline module of the release tag against the sdk jars published
+    to Maven Central, which skips the sdk module's `buf generate` codegen (and
+    its buf.build rate limits) entirely.
+
+    Raises InstallError if neither works, so CI (xtest/setup-cli-tool) can
+    fall back to a full source build.
     """
-    java_dir = get_sdk_dir() / "java"
     tag = normalize_version(version)
+    try:
+        _download_java_github_release(tag, dist_dir)
+    except InstallError as download_err:
+        print(f"  {download_err}", file=sys.stderr)
+        print(f"  Building the {tag} CLI against the sdk published to Maven Central...")
+        try:
+            _build_java_cli_against_maven_central(tag, dist_dir)
+        except InstallError as build_err:
+            raise InstallError(
+                f"No usable GitHub cmdline.jar for {tag} ({download_err}); "
+                f"Maven Central build failed ({build_err})"
+            ) from build_err
+
+
+def _download_java_github_release(tag: str, dist_dir: Path) -> None:
+    """Download cmdline.jar from a java-sdk GitHub Release into dist_dir."""
+    java_dir = get_sdk_dir() / "java"
     url = f"https://github.com/opentdf/java-sdk/releases/download/{tag}/cmdline.jar"
 
     # Check if artifact exists before trying to download
@@ -102,11 +125,10 @@ def install_java_release(version: str, dist_dir: Path) -> None:
             raise InstallError(
                 f"cmdline.jar not found for {tag}. "
                 f"The release {tag} does not include a CLI artifact. "
-                f"This version will need to be built from source. "
                 f"Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}"
             )
-        raise
-    except (urllib.error.URLError, OSError) as e:
+        raise InstallError(f"Could not check GitHub for {tag} cmdline.jar: {e}") from e
+    except OSError as e:
         print(f"  Warning: Could not verify artifact availability: {e}", file=sys.stderr)
         # Proceed with download attempt anyway
 
@@ -124,7 +146,9 @@ def install_java_release(version: str, dist_dir: Path) -> None:
                     f"cmdline.jar not found for {tag} (race condition?). "
                     f"Check: https://github.com/opentdf/java-sdk/releases/tag/{tag}"
                 )
-            raise
+            raise InstallError(f"Downloading {tag} cmdline.jar failed: {e}") from e
+        except OSError as e:
+            raise InstallError(f"Downloading {tag} cmdline.jar failed: {e}") from e
 
         dist_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(java_dir / "cli.sh", dist_dir / "cli.sh")
@@ -137,6 +161,87 @@ def install_java_release(version: str, dist_dir: Path) -> None:
             shutil.rmtree(dist_dir, ignore_errors=True)
 
     print(f"  Java release {tag} installed to {dist_dir}")
+
+
+# Local Maven repository for release CLI builds; see _build_java_cli_against_maven_central.
+JAVA_RELEASE_MAVEN_REPO = Path.home() / ".m2" / "otdf-sdk-mgr-releases"
+
+
+def _java_sdk_on_maven_central(tag: str) -> bool:
+    """Whether io.opentdf.platform:sdk is published to Maven Central at `tag`."""
+    v = tag.removeprefix("v")
+    url = f"{SDK_MAVEN_COORDS['java']['base_url']}/{v}/sdk-{v}.pom"
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=10):
+            return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise InstallError(f"Could not check Maven Central for sdk {v}: {e}") from e
+    except OSError as e:
+        raise InstallError(f"Could not reach Maven Central to check for sdk {v}: {e}") from e
+
+
+def _build_java_cli_against_maven_central(tag: str, dist_dir: Path) -> None:
+    """Build cmdline.jar from the `tag` checkout, resolving sdk* from Maven Central.
+
+    `-pl .,cmdline` builds just the parent pom (the enforcer's reactor
+    convergence rule needs it) and the CLI, so the sdk module's codegen never
+    runs. The checkout lives in a temp dir, not under src/, so the java
+    Makefile won't pick it up for a second, full build.
+
+    Maven uses its own local repository: java-sdk branches carry the version
+    of the last release, so a head that was `mvn install`ed into ~/.m2 would
+    otherwise shadow the published sdk jars this build is meant to use.
+    """
+    if not _java_sdk_on_maven_central(tag):
+        raise InstallError(f"io.opentdf.platform:sdk {tag} is not published to Maven Central")
+    java_dir = get_sdk_dir() / "java"
+    with tempfile.TemporaryDirectory(prefix=f"java-sdk-{tag}-") as tmp:
+        src_dir = Path(tmp) / "java-sdk"
+        cmds = [
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--depth=1",
+                f"--branch={tag}",
+                SDK_GIT_URLS["java"],
+                str(src_dir),
+            ],
+            [
+                "mvn",
+                "--batch-mode",
+                "--file",
+                str(src_dir / "pom.xml"),
+                "--projects",
+                ".,cmdline",
+                f"-Dmaven.repo.local={JAVA_RELEASE_MAVEN_REPO}",
+                "package",
+                "-DskipTests",
+                "-Dmaven.javadoc.skip=true",
+            ],
+        ]
+        for cmd in cmds:
+            try:
+                subprocess.check_call(cmd)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                raise InstallError(f"Running {cmd[0]} for the {tag} CLI failed: {e}") from e
+        jar = src_dir / "cmdline" / "target" / "cmdline.jar"
+        if not jar.is_file():
+            raise InstallError(f"Built the {tag} CLI but {jar} is missing")
+        try:
+            dist_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(java_dir / "cli.sh", dist_dir / "cli.sh")
+            shutil.copy(jar, dist_dir / "cmdline.jar")
+        except OSError as e:
+            # A partial dist_dir would be skipped as "already installed" next time.
+            shutil.rmtree(dist_dir, ignore_errors=True)
+            raise InstallError(
+                f"Built the {tag} CLI but could not install it to {dist_dir}: {e}"
+            ) from e
+    print(f"  Java release {tag} built against Maven Central and installed to {dist_dir}")
 
 
 INSTALLERS = {
@@ -166,7 +271,7 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
 
 
 def latest_stable_version(sdk: str) -> str | None:
-    """Find the latest stable version for an SDK that has a CLI available."""
+    """Find the latest stable release version for an SDK."""
     if sdk == "go":
         stable = [v for v in list_go_versions() if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
@@ -174,12 +279,12 @@ def latest_stable_version(sdk: str) -> str | None:
         stable = [v for v in list_js_versions() if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
     elif sdk == "java":
-        stable_with_cli = [
-            v
-            for v in list_java_github_releases()
-            if v.get("stable", False) and v.get("has_cli", False)
-        ]
-        return stable_with_cli[-1]["version"] if stable_with_cli else None
+        # No has_cli filter: install_java_release builds the CLI against Maven
+        # Central when a release has no cmdline.jar asset (and fails, for a CI
+        # source build, if the sdk isn't published there). The GitHub listing is
+        # only needed for its prerelease flag.
+        stable = [v for v in list_java_github_releases() if v.get("stable", False)]
+        return stable[-1]["version"] if stable else None
     return None
 
 
