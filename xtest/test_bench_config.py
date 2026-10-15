@@ -8,11 +8,12 @@ most of these is not the message but that something is raised at all.
 import math
 import shutil
 from types import SimpleNamespace
-from typing import cast
+from typing import cast, get_args
 
 import pytest
 
 import conftest
+import tdfs
 from perf import report, stats
 from perf.cells import DEFAULT_PAYLOAD_SPEC, BenchCell
 from perf.config import (
@@ -22,6 +23,7 @@ from perf.config import (
     MAX_ARM_COUNT,
     MIN_USABLE_ROUNDS,
     PRECISION_FRACTION,
+    SDK_NAMES,
     ArmRequest,
     BenchConfig,
     BenchmarkRequest,
@@ -41,9 +43,14 @@ class TestArmRequest:
 
 
 class TestValidateSdkName:
-    @pytest.mark.parametrize("name", ["go", "java", "js"])
+    @pytest.mark.parametrize("name", ["go", "java", "js", "web"])
     def test_valid_names(self, name: str):
         validate_sdk_name(name)
+
+    def test_names_mirror_sdk_type(self):
+        # SDK_NAMES is a copy of tdfs.sdk_type, kept separate only to avoid an
+        # import; a flavour added to one and not the other is unbenchmarkable.
+        assert set(SDK_NAMES) == set(get_args(tdfs.sdk_type))
 
     def test_invalid_name(self):
         with pytest.raises(ValueError, match="unknown SDK 'python'"):
