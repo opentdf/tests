@@ -100,7 +100,13 @@ def _kas_supports_algorithm(algorithm: str) -> bool:
         return False
 
 
-sdk_type = Literal["go", "java", "js"]
+# "js" is web-sdk through its Node CLI (@opentdf/ctl); "web" is the same
+# library run inside a headless browser by sdk/web/driver.mjs. Both share most
+# answers below, since the library is the same; they differ in runtime.
+sdk_type = Literal["go", "java", "js", "web"]
+
+#: SDK flavours backed by web-sdk's library, whatever runtime hosts it.
+WEB_SDK_FLAVOURS: frozenset[str] = frozenset({"js", "web"})
 
 
 def is_sdk_type(val: str) -> TypeIs[sdk_type]:
@@ -980,7 +986,7 @@ class SDK:
                 # go/java reconstruct by skipping already-satisfied splits, so a
                 # duplicate KAS on the same split has always decrypted.
                 return True
-            case ("chunky", "js"):
+            case ("chunky", ("js" | "web")):
                 # web-sdk is the SDK that omits the sizes, and it defaults them
                 # on the way back in (lib/tdf3/src/tdf.ts destructures
                 # `segmentSize = segmentSizeDefault`). Both halves have been
@@ -996,7 +1002,7 @@ class SDK:
                 # To evaluate a fix before it releases, set
                 # XT_FORCE_SUPPORTS=chunky -- see FORCED_SUPPORTS above.
                 return True
-            case ("better-messages-2024", ("js" | "java")):
+            case ("better-messages-2024", ("js" | "java" | "web")):
                 return True
             case ("ns_grants", ("go" | "java")):
                 return True
@@ -1004,7 +1010,7 @@ class SDK:
                 return True
             case ("mechanism-ec-curves-384-521", "go"):
                 return True
-            case ("mechanism-ec-curves-384-521", "js"):
+            case ("mechanism-ec-curves-384-521", ("js" | "web")):
                 return False
             case _:
                 pass

@@ -1,0 +1,11 @@
+{
+  "name": "xtest-web-sdk-driver",
+  "private": true,
+  "description": "Runs @opentdf/sdk in a headless browser for xtest. Staged into xtest/sdk/web/dist/<version>/ by stage.sh, which adds the @opentdf/sdk dependency for the version under test.",
+  "type": "module",
+  "license": "BSD-3-Clause-Clear",
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.56.1"
+  }
+}
