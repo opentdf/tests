@@ -66,7 +66,7 @@ otdf-sdk-mgr java-fixup
 
 - **Go**: Writes a `.version` file containing `module-path@version`; `cli.sh`/`otdfctl.sh` use `go run <module>@<version>` (no local compilation needed, Go caches the binary). The resolver always targets the opentdf/platform monorepo (`github.com/opentdf/platform/otdfctl`) for v0.31.0 and newer; pre-v0.31.0 tags fall back to the archived standalone repo (`github.com/opentdf/otdfctl`) for artifact install via the Go module proxy. Bare semver inputs like `v0.32.0` are auto-prepended with `otdfctl/` when looking up platform tags.
 - **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
-- **Java**: Downloads `cmdline.jar` from GitHub Releases; `cli.sh` uses `java -jar cmdline.jar`
+- **Java**: Downloads `cmdline.jar` from GitHub Releases if the release has one. Otherwise, if `io.opentdf.platform:sdk` is on Maven Central at that version, shallow-clones the tag and builds only the CLI (`mvn -pl .,cmdline package`) against the published sdk jars, which skips the sdk module's `buf generate` and its buf.build rate limits. That build uses its own local Maven repository (`~/.m2/otdf-sdk-mgr-releases`) so a same-versioned head `mvn install`ed into `~/.m2/repository` can't shadow the release; delete it to reclaim space. This path needs `git`, a JDK, and Maven, and takes a few minutes. If neither works, the install fails and CI falls back to a full source build. `cli.sh` uses `java -jar cmdline.jar`
 
 ## Source Builds
 

@@ -333,33 +333,10 @@ def _resolve_against(
         alias = version
         matching_tags = []
         if version == "latest":
-            # For Java, check if CLI artifacts are available and fall back to source build if not
-            if sdk == "java":
-                from otdf_sdk_mgr.registry import list_java_github_releases
-
-                gh_releases = list_java_github_releases()
-                # Find the latest version with CLI artifact
-                versions_with_cli = [r for r in gh_releases if r.get("has_cli", False)]
-                if versions_with_cli:
-                    # Use the latest version that has CLI
-                    latest_with_cli_tag = versions_with_cli[-1]["version"]
-                    matching_tags = [
-                        (sha, tag)
-                        for (sha, tag) in stable_tags
-                        if tag in [latest_with_cli_tag, latest_with_cli_tag.lstrip("v")]
-                    ]
-                if not matching_tags:
-                    # No versions with CLI found, fall back to building latest from source
-                    sha, tag = stable_tags[-1]
-                    return {
-                        "sdk": sdk,
-                        "alias": alias,
-                        "head": True,  # Mark as head to trigger source checkout
-                        "sha": sha,
-                        "tag": tag,
-                    }
-            else:
-                matching_tags = stable_tags[-1:]
+            # The newest semver tag, for every SDK. For java this holds even
+            # when the release has no cmdline.jar asset: the installer builds
+            # the CLI against the sdk on Maven Central instead.
+            matching_tags = stable_tags[-1:]
         else:
             if version == "lts":
                 if sdk not in LTS_VERSIONS:

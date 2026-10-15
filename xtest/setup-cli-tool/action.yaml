@@ -32,6 +32,11 @@ outputs:
   heads:
     description: "JSON list of tags that represent main or branch heads"
     value: ${{ steps.resolve.outputs.heads }}
+  needs-build:
+    description: >-
+      "true" if any version needs a source build: a head, or a release whose
+      artifact install failed. Gate `make` on this rather than on heads.
+    value: ${{ steps.check-source.outputs.needs-build }}
 
 runs:
   using: composite
@@ -116,6 +121,7 @@ runs:
         # failed. For go, the only source path is opentdf/platform's otdfctl/
         # subtree — reuse the existing platform checkout when the SHAs match,
         # otherwise check out a fresh one.
+        needs_build=false
         for slot in a b c d; do
           case "$slot" in
             a) row=$(echo "${version_info}" | jq -rc '.[0] // empty') ;;
@@ -140,6 +146,7 @@ runs:
           needs_source=false
           if [[ "$head" == "true" || "${!build_from_source_var}" == "true" ]]; then
             needs_source=true
+            needs_build=true
           fi
 
           is_platform=false
@@ -165,6 +172,7 @@ runs:
           echo "checkout-repo-${slot}=${checkout_repo}" >> "$GITHUB_OUTPUT"
           echo "checkout-path-${slot}=${checkout_path}" >> "$GITHUB_OUTPUT"
         done
+        echo "needs-build=${needs_build}" >> "$GITHUB_OUTPUT"
       env:
         version_info: ${{ inputs.version-info }}
         INPUT_PATH: ${{ inputs.path }}

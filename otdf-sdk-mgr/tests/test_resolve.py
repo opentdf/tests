@@ -332,39 +332,19 @@ class TestResolveLatest:
         assert is_resolve_success(result)
         assert result["tag"] == "v0.33.0"
 
-    def test_java_with_cli_available(self):
+    def test_java_returns_last_stable_as_release(self):
+        # No GitHub Release cmdline.jar lookup: the installer builds the CLI
+        # against Maven Central, so latest is a release row, not a head.
         ls = make_ls_remote(
             ("1" * 40, "refs/tags/v0.1.0"),
             ("2" * 40, "refs/tags/v0.2.0"),
         )
-        mock_releases = [
-            {"version": "v0.1.0", "has_cli": False},
-            {"version": "v0.2.0", "has_cli": True},
-        ]
-        with (
-            patch_git(ls),
-            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
-        ):
+        with patch_git(ls):
             result = resolve("java", "latest", None)
         assert is_resolve_success(result)
         assert result["tag"] == "v0.2.0"
-
-    def test_java_no_cli_available_falls_back_to_source(self):
-        ls = make_ls_remote(
-            ("1" * 40, "refs/tags/v0.1.0"),
-            ("2" * 40, "refs/tags/v0.2.0"),
-        )
-        mock_releases = [
-            {"version": "v0.1.0", "has_cli": False},
-            {"version": "v0.2.0", "has_cli": False},
-        ]
-        with (
-            patch_git(ls),
-            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
-        ):
-            result = resolve("java", "latest", None)
-        assert is_resolve_success(result)
-        assert result.get("head") is True
+        assert result.get("release") == "v0.2.0"
+        assert "head" not in result
 
 
 # ---------------------------------------------------------------------------
