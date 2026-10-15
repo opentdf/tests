@@ -1130,6 +1130,37 @@ def zip64_reader_is_broken(decrypt_sdk: SDK) -> bool:
     return decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX
 
 
+#: First platform release whose KAS rejects the spec's Base64(HMAC) policy
+#: binding: opentdf/platform#2095 compared the decoded binding against an
+#: untrimmed buffer, so only the legacy Base64(hex(HMAC)) form verifies.
+#: Releases before it accepted both forms.
+PLATFORM_SPEC_POLICY_BINDING_BUG = (0, 5, 3)
+
+#: First platform release carrying the fix, opentdf/platform#4223.
+#:
+#: Like :data:`JAVA_ZIP64_READER_FIX`, both directions of getting it wrong turn
+#: the cell red. Not yet released when written; 0.29.1 is the next version
+#: release-please would cut from main, and stays correct if it is 0.30.0
+#: instead. Confirm it when the release actually ships.
+PLATFORM_SPEC_POLICY_BINDING_FIX = (0, 29, 1)
+
+
+def spec_policy_binding_is_rejected() -> bool:
+    """True for platform releases known to reject a spec-form policy binding.
+
+    Keyed on ``PLATFORM_TAG``, not ``PLATFORM_VERSION``: a source build reports
+    the last release's version -- platform ``main`` carrying #4223 still says
+    0.29.0 -- so only the tag tells that release apart from the fix. An unset
+    tag or a branch name is never assumed broken, so a local run against an
+    old release fails rather than hides; export ``PLATFORM_TAG`` to match it.
+    """
+    sv = _parse_semver(os.getenv("PLATFORM_TAG", ""))
+    return (
+        sv is not None
+        and PLATFORM_SPEC_POLICY_BINDING_BUG <= sv < PLATFORM_SPEC_POLICY_BINDING_FIX
+    )
+
+
 def _parse_semver(version: str) -> tuple[int, int, int] | None:
     """Parse a version string (with optional 'v' prefix) into (major, minor, patch)."""
     m = _version_re.match(version.lstrip("v"))
