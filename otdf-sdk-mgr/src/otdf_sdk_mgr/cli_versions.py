@@ -43,11 +43,13 @@ def list_versions(
         list_platform_versions,
     )
 
-    allowed = {"go", "js", "java", "platform", "all"}
+    allowed = {"go", "js", "java", "web", "platform", "all"}
     if sdk not in allowed:
-        typer.echo(f"Unknown SDK: {sdk!r}. Choose from: go, js, java, platform, all.", err=True)
+        typer.echo(
+            f"Unknown SDK: {sdk!r}. Choose from: go, js, java, web, platform, all.", err=True
+        )
         raise typer.Exit(2)
-    sdks = ["go", "js", "java", "platform"] if sdk == "all" else [sdk]
+    sdks = ["go", "js", "java", "web", "platform"] if sdk == "all" else [sdk]
     all_entries: list[dict[str, Any]] = []
 
     try:
@@ -55,8 +57,8 @@ def list_versions(
             if s == "go":
                 entries = list_go_versions()
                 all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
-            elif s == "js":
-                entries = list_js_versions()
+            elif s in ("js", "web"):
+                entries = list_js_versions(s)
                 all_entries.extend(apply_filters(entries, stable_only=stable, latest_n=latest))
             elif s == "java":
                 maven_entries = list_java_maven_versions()
@@ -114,7 +116,7 @@ def _print_rich_table(entries: list[dict[str, Any]]) -> None:
 
 @versions_app.command("resolve")
 def resolve_versions(
-    sdk: Annotated[str, typer.Argument(help="SDK to resolve (go, js, java, platform)")],
+    sdk: Annotated[str, typer.Argument(help="SDK to resolve (go, js, java, web, platform)")],
     tags: Annotated[list[str], typer.Argument(help="Version tags to resolve")],
 ) -> None:
     """Resolve version tags to git SHAs."""

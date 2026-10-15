@@ -276,7 +276,11 @@ jobs:
             for (const [sdkType, refInfo] of Object.entries(versionData)) {
               if (sdkType === 'platform') continue;
               for (const { tag, err } of refInfo) {
-                if (!err) sdkVersionList.push(`${sdkType}@${tag}`);
+                if (err) continue;
+                sdkVersionList.push(`${sdkType}@${tag}`);
+                // The headless-browser `web` flavour is staged from the same
+                // js versions (`make from-js` in xct), so it shares their tags.
+                if (sdkType === 'js') sdkVersionList.push(`web@${tag}`);
               }
             }
             core.setOutput('sdk-version-list', JSON.stringify(sdkVersionList));
@@ -493,6 +497,22 @@ jobs:
         run: |
           make
         working-directory: otdftests/xtest/sdk/js
+
+      ######## SETUP THE HEADLESS-BROWSER WEB FLAVOUR #############
+      # `web` runs the same web-sdk library as `js`, but inside headless
+      # Chromium (xtest/sdk/web). It is staged for every js version installed
+      # above, under the same name, so it joins the decrypt side of every cell
+      # here and gets its own `web@<tag>` encrypt entries in sdk-version-list.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/web/driver/package.json') }}
+
+      - name: Stage the web flavour from the installed js versions
+        run: |
+          make from-js
+        working-directory: otdftests/xtest/sdk/web
 
       ######## CHECKOUT GO CLI #############
       - name: Configure otdfctl

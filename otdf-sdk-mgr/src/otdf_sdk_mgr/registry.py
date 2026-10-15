@@ -109,9 +109,13 @@ def list_go_versions() -> list[dict[str, Any]]:
     return results
 
 
-def list_js_versions() -> list[dict[str, Any]]:
-    """List JS SDK versions from npm registry."""
-    package = SDK_NPM_PACKAGES["js"]
+def list_js_versions(sdk: str = "js") -> list[dict[str, Any]]:
+    """List versions of a web-sdk flavour from the npm registry.
+
+    `js` lists `@opentdf/ctl` (the Node CLI); `web` lists `@opentdf/sdk`, the
+    library the headless-browser driver bundles.
+    """
+    package = SDK_NPM_PACKAGES[sdk]
     url = f"https://registry.npmjs.org/{package}"
     try:
         data = fetch_json(url)
@@ -129,7 +133,7 @@ def list_js_versions() -> list[dict[str, Any]]:
         if not parse_semver(version):
             continue
         entry: dict[str, Any] = {
-            "sdk": "js",
+            "sdk": sdk,
             "version": version,
             "source": "npm",
             "install_method": f"npx {package}@{version}",
