@@ -22,6 +22,10 @@
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
 #  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
+#  XT_JS_RUNTIME [node|bun|deno] - JavaScript runtime that runs the CLI
+#    (default: the contents of a `.js-runtime` file next to this script, if
+#    present, else node). bun and deno run the installed package's bin script
+#    directly, so they must be on PATH. See DSPX-5162.
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -29,6 +33,37 @@ CTL=@opentdf/ctl
 if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
   CTL=@opentdf/cli
 fi
+
+JS_RUNTIME=${XT_JS_RUNTIME:-}
+if [[ -z "$JS_RUNTIME" && -f "$SCRIPT_DIR/.js-runtime" ]]; then
+  JS_RUNTIME=$(tr -d '[:space:]' <"$SCRIPT_DIR/.js-runtime")
+fi
+JS_RUNTIME=${JS_RUNTIME:-node}
+case "$JS_RUNTIME" in
+  node | bun | deno) ;;
+  *)
+    echo "Unsupported XT_JS_RUNTIME [$JS_RUNTIME]; expected node, bun or deno" >&2
+    exit 2
+    ;;
+esac
+
+# Run the installed CLI under $JS_RUNTIME. node keeps the historical `npx`
+# path; bun and deno run the package's bin script directly, since `npx` (and
+# `bunx` without --bun) would honour its `#!/usr/bin/env node` shebang.
+ctl() {
+  local bin="$SCRIPT_DIR/node_modules/.bin/opentdf"
+  case "$JS_RUNTIME" in
+    node)
+      npx $CTL "$@"
+      ;;
+    bun)
+      bun "$bin" "$@"
+      ;;
+    deno)
+      deno run -A "$bin" "$@"
+      ;;
+  esac
+}
 
 if [[ "$1" == "supports" ]]; then
   if ! cd "$SCRIPT_DIR"; then
@@ -38,29 +73,29 @@ if [[ "$1" == "supports" ]]; then
   case "$2" in
     assertions)
       set -o pipefail
-      npx $CTL help | grep assertions
+      ctl help | grep assertions
       exit $?
       ;;
     assertion_verification)
       set -o pipefail
-      npx $CTL help | grep assertionVerificationKeys
+      ctl help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
       set -o pipefail
-      npx $CTL help | grep autoconfigure
+      ctl help | grep autoconfigure
       exit $?
       ;;
     kasallowlist)
       set -o pipefail
-      npx $CTL help | grep 'from "/key-access-servers" endpoint'
+      ctl help | grep 'from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
       set -o pipefail
-      if npx $CTL help | grep encapKeyType; then
+      if ctl help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
-        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
+        ctl --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
         exit $?
       else
         echo "ecwrap not supported"
@@ -69,35 +104,35 @@ if [[ "$1" == "supports" ]]; then
       ;;
     hexless)
       set -o pipefail
-      npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      ctl --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;
     hexaflexible)
       set -o pipefail
-      npx $CTL help | grep tdfSpecVersion
+      ctl help | grep tdfSpecVersion
       exit $?
       ;;
     key_management)
       # Advanced key management from SDK version >= 0.8.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
+      ctl --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
       exit $?
       ;;
     obligations)
       # Obligations support from SDK version >= 0.6.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
+      ctl --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
       exit $?
       ;;
     attribute_traversal)
       # Attribute traversal support from web-sdk version >= 0.9.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
+      ctl --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
       exit $?
       ;;
     mechanism-mlkem)
       set -o pipefail
-      npx $CTL encrypt --help | grep -i 'mlkem:768'
+      ctl encrypt --help | grep -i 'mlkem:768'
       exit $?
       ;;
     gmac_root_rejected)
@@ -121,12 +156,12 @@ if [[ "$1" == "supports" ]]; then
       # Tolerate a KAO array where the same KAS wraps the same split more than
       # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      ctl --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
       exit $?
       ;;
     mechanism-xwing)
       set -o pipefail
-      npx $CTL help | grep -i xwing
+      ctl help | grep -i xwing
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
@@ -134,7 +169,7 @@ if [[ "$1" == "supports" ]]; then
       # exists as an unwired boolean on pre-DPoP main, so discriminate on the
       # companion --dpop-key flag that ships with the real implementation.
       set -o pipefail
-      npx $CTL help | grep -iE -- '--dpop-key|--dpopKey'
+      ctl help | grep -iE -- '--dpop-key|--dpopKey'
       exit $?
       ;;
     chunky)
@@ -265,7 +300,7 @@ echo_redacted() {
 }
 
 if [[ "$1" == "encrypt" ]]; then
-  if npx $CTL help | grep autoconfigure; then
+  if ctl help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
   if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
@@ -282,8 +317,8 @@ if [[ "$1" == "encrypt" ]]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
-  echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"
-  npx $CTL encrypt "$src_file" "${args[@]}"
+  echo_redacted "[$JS_RUNTIME]" ctl encrypt "$src_file" "${args[@]}"
+  ctl encrypt "$src_file" "${args[@]}"
 elif [[ "$1" == "decrypt" ]]; then
   if [[ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]]; then
     args+=(--noVerifyAssertions)
@@ -298,14 +333,14 @@ elif [[ "$1" == "decrypt" ]]; then
     args+=(--ignoreAllowList)
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+  if ctl help | grep 'from "/key-access-servers" endpoint'; then
     args+=(--policyEndpoint "$PLATFORMURL")
   else
     args+=(--ignoreAllowList)
   fi
 
-  echo_redacted npx $CTL decrypt "$src_file" "${args[@]}"
-  npx $CTL decrypt "$src_file" "${args[@]}"
+  echo_redacted "[$JS_RUNTIME]" ctl decrypt "$src_file" "${args[@]}"
+  ctl decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"
   exit 1

@@ -128,6 +128,25 @@ Both reject unknown feature names. A few features are platform-only
 rejected too, because it would force the feature on for every SDK while leaving
 the platform gate the tests read untouched — a green run that tested nothing.
 
+#### Running the JS CLI under Bun or Deno
+
+`sdk/js/cli.sh` runs `@opentdf/ctl` under Node by default. Set
+`XT_JS_RUNTIME=bun` or `XT_JS_RUNTIME=deno` to run the installed package's bin
+script under that runtime instead (it must be on `PATH`). The variable applies
+to every `js` SDK in the session. To compare runtimes side by side, copy an
+installed dist dir and pin its runtime with a `.js-runtime` file:
+
+```shell
+cp -R sdk/js/dist/v0.20.0 sdk/js/dist/bun-v0.20.0
+echo bun > sdk/js/dist/bun-v0.20.0/.js-runtime
+uv run pytest test_tdfs.py --sdks "js@v0.20.0 js@bun-v0.20.0"
+```
+
+`XT_JS_RUNTIME`, when set, overrides `.js-runtime`. This is an evaluation
+affordance, not a supported configuration: released CLIs up to at least
+v0.20.0 fail every decrypt under Bun (a `Blob.slice(-n)` quirk; see
+DSPX-5162), and Deno's `openAsBlob` reads the whole input into memory.
+
 #### Run TDF Tests
 
 ```shell
