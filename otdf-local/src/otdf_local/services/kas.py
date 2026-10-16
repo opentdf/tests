@@ -55,9 +55,19 @@ class KASService(Service):
         config_path = self.settings.get_kas_config_path(self._kas_name)
         template_path = self.settings.kas_template_config
 
-        # Load platform config to get root_key
+        # The platform config is the single source of the root key --
+        # `PlatformService._generate_config` writes one if the template has
+        # none. Starting anyway with "" produces a KAS that unwraps nothing
+        # and reports it as "cipher: message authentication failed" at decrypt
+        # time, several minutes and one confusing stack trace later.
         platform_config = load_yaml(self.settings.platform_config)
         root_key = get_nested(platform_config, "services.kas.root_key", "")
+        if not root_key:
+            raise ValueError(
+                f"No services.kas.root_key in {self.settings.platform_config}; "
+                f"cannot configure KAS {self._kas_name}. Start the platform first "
+                "so the config is generated."
+            )
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
@@ -89,11 +99,19 @@ class KASService(Service):
         # Ensure directories exist
         self.settings.ensure_directories()
 
+        # Report a bad config the same way a failed launch is reported, so
+        # callers keep their single `start() -> bool` + `start_error` contract.
+        # Validate before touching the port so a bad config leaves any running
+        # KAS in place.
+        self.start_error = None
+        try:
+            config_path = self._generate_config()
+        except (OSError, ValueError) as e:
+            self.start_error = str(e)
+            return False
+
         # Kill any existing process on the port
         kill_process_on_port(self.port)
-
-        # Generate config
-        config_path = self._generate_config()
 
         # Build the command
         cmd = [
@@ -108,7 +126,6 @@ class KASService(Service):
         # Start the process
         log_file = self.settings.get_kas_log_path(self._kas_name)
 
-        self.start_error = None
         # See PlatformService.start: OPENTDF_LOG_LEVEL resolved to the config key
         # "log.level", not "logger.level", so it was never read. Level belongs in
         # the generated config.
