@@ -198,6 +198,101 @@ class ExtentStore:
         return b"".join(os.pread(fd, n, p) for p, n in self._pieces(start, end))
 
 
+class ManifestTooLarge(Exception):
+    """The TDF's tail did not fit in the sink's rolling buffer."""
+
+
+class _TailView:
+    """The rolling tail buffer, addressed by offsets into the whole stream."""
+
+    def __init__(self, buf: bytearray, base: int):
+        self._buf, self._base, self._pos = buf, base, base
+
+    def seek(self, offset: int, /) -> int:
+        if offset < self._base:
+            raise ManifestTooLarge(
+                f"the TDF tail reaches back to {offset}, but only bytes from "
+                f"{self._base} were buffered; raise tail_ceiling"
+            )
+        self._pos = offset
+        return offset
+
+    def read(self, n: int, /) -> bytes:
+        start = self._pos - self._base
+        self._pos += n
+        return bytes(self._buf[start : start + n])
+
+
+class SparseSink:
+    """Keep only the planned extents and the tail of a TDF as it streams past.
+
+    ``write`` the TDF in order, in chunks of any size, then ``close`` to get
+    the :class:`ExtentStore`. The tail -- everything after the payload data:
+    manifest entry, central directory, end records -- is not known until the
+    stream ends, so the last ``tail_ceiling`` bytes are held in memory. A
+    tail longer than that raises :class:`ManifestTooLarge` rather than
+    silently keeping part of it; at 50 TiB with 2 MiB segments the manifest
+    alone is about 2.6 GB, so size the ceiling to the run.
+    """
+
+    def __init__(
+        self, directory: Path, plan: Sequence[tuple[int, int]], *, tail_ceiling: int
+    ):
+        # The EOCD search reads up to this much from the end, whatever the ceiling.
+        self._ceiling = max(tail_ceiling, zipinspect.MAX_EOCD_SEARCH)
+        self._plan = merge(plan)
+        self._next = 0  # first plan extent not yet fully written
+        self._pos = 0
+        self._tail = bytearray()
+        # Logical length is unknown until close; ExtentStore checks it on add.
+        self._store = ExtentStore(directory, 2**63)
+
+    def write(self, data: bytes) -> None:
+        start, end = self._pos, self._pos + len(data)
+        i = self._next
+        while i < len(self._plan) and self._plan[i][0] < end:
+            lo, hi = max(self._plan[i][0], start), min(self._plan[i][1], end)
+            if lo < hi:
+                self._store.add(lo, data[lo - start : hi - start])
+            if self._plan[i][1] > end:
+                break
+            i += 1
+        self._next = i
+        self._pos = end
+        self._tail += data
+        del self._tail[: -self._ceiling]
+
+    def close(self) -> ExtentStore:
+        total = self._pos
+        if self._plan and self._plan[-1][1] > total:
+            raise ValueError(
+                f"stream ended at {total}, before planned extent {self._plan[-1]}"
+            )
+        self._store.length = total
+        base = total - len(self._tail)
+        cd = zipinspect.read_central_directory(_TailView(self._tail, base), total)
+        payload = next((e for e in cd.entries if e.name == "0.payload"), None)
+        if payload is None:
+            raise zipinspect.MalformedZipError("no 0.payload entry")
+        # The payload's local header is in the head, which every plan keeps.
+        header = self._store.read(
+            payload.local_header_offset,
+            payload.local_header_offset + _LOCAL_HEADER_FIXED_SIZE,
+        )
+        name_len, extra_len = struct.unpack_from("<HH", header, 26)
+        tail_start = (
+            payload.local_header_offset
+            + _LOCAL_HEADER_FIXED_SIZE
+            + name_len
+            + extra_len
+            + payload.compressed_size
+        )
+        _TailView(self._tail, base).seek(tail_start)
+        self._store.add(tail_start, bytes(self._tail[tail_start - base :]))
+        self._tail = bytearray()
+        return self._store
+
+
 class Request(NamedTuple):
     method: str
     range: str | None
