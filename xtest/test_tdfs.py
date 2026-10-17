@@ -4,6 +4,7 @@ import random
 import re
 import string
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -337,6 +338,38 @@ def test_manifest_validity_with_assertions(
     )
 
     tdfs.validate_manifest_schema(ct_file)
+
+
+def test_manifest_entry_name_is_spec_compliant(
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+):
+    """The manifest member is named ``manifest.json``, as the spec requires.
+
+    Distinct from ``test_manifest_validity``, which checks the manifest's
+    *contents* against manifest.schema.json: a manifest that satisfies the
+    schema byte for byte is still unreadable by a spec-conformant
+    implementation if the archive files it under some other name.
+
+    Deliberately ungated. A writer that names the entry anything else fails
+    here, and that red cell is the finding, not a configuration problem to
+    route around.
+    """
+    if not in_focus & {encrypt_sdk}:
+        pytest.skip("Not in focus")
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+
+    with zipfile.ZipFile(ct_file, "r") as z:
+        names = z.namelist()
+    assert tdfs.MANIFEST_ENTRY in names, (
+        f"{encrypt_sdk} wrote {names}; the spec names the manifest entry "
+        f"{tdfs.MANIFEST_ENTRY}"
+    )
 
 
 #### ASSERTION TESTS

@@ -20,6 +20,7 @@ from typing import cast
 import pytest
 
 import conftest
+import tdfs
 import zipinspect
 from sizes import MEDIUM_BYTES, ZIP64_WINDOW_HIGH, ZIP64_WINDOW_LOW
 from zipinspect import ZIP64_SENTINEL_32, MalformedZipError
@@ -283,10 +284,10 @@ class TestCentralDirectory:
         p = tmp_path / "ordinary.zip"
         with zipfile.ZipFile(p, "w") as z:
             z.writestr("0.payload", b"a" * 4096)
-            z.writestr("0.manifest.json", b"{}")
+            z.writestr(tdfs.MANIFEST_ENTRY, b"{}")
 
         cd = zipinspect.central_directory(p)
-        assert [e.name for e in cd.entries] == ["0.payload", "0.manifest.json"]
+        assert [e.name for e in cd.entries] == ["0.payload", tdfs.MANIFEST_ENTRY]
         with zipfile.ZipFile(p) as z:
             expected = {i.filename: i.header_offset for i in z.infolist()}
         assert {e.name: e.local_header_offset for e in cd.entries} == expected
@@ -326,11 +327,11 @@ class TestCentralDirectory:
         """
         records = [
             cen_record("0.payload", raw_offset=0),
-            cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES),
+            cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES),
         ]
         p = synth_zip64_eocd(tmp_path / "z64-eocd.zip", records)
         cd = zipinspect.central_directory(p)
-        assert [e.name for e in cd.entries] == ["0.payload", "0.manifest.json"]
+        assert [e.name for e in cd.entries] == ["0.payload", tdfs.MANIFEST_ENTRY]
         assert cd.entries[1].raw_local_header_offset == MEDIUM_BYTES
 
     def test_rejects_a_locator_pointing_at_nothing(self, tmp_path: Path):
@@ -354,7 +355,7 @@ class TestCentralDirectory:
             tmp_path / "window.zip",
             [
                 cen_record("0.payload", raw_offset=0, raw_usize=MEDIUM_BYTES),
-                cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES + 64),
+                cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES + 64),
             ],
         )
         manifest = zipinspect.central_directory(p).entries[1]
@@ -372,7 +373,7 @@ class TestCentralDirectory:
         """
         p = synth_zip(
             tmp_path / "signed.zip",
-            [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)],
+            [cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES)],
         )
         (entry,) = zipinspect.central_directory(p).entries
         assert entry.signed_read_of_offset() < 0
@@ -382,7 +383,7 @@ class TestCentralDirectory:
         """Below 2**31 the two reads agree, which is why smaller payloads miss this."""
         offset = ZIP64_WINDOW_LOW - 1
         p = synth_zip(
-            tmp_path / "safe.zip", [cen_record("0.manifest.json", raw_offset=offset)]
+            tmp_path / "safe.zip", [cen_record(tdfs.MANIFEST_ENTRY, raw_offset=offset)]
         )
         (entry,) = zipinspect.central_directory(p).entries
         assert entry.signed_read_of_offset() == offset
@@ -394,7 +395,7 @@ class TestCentralDirectory:
             tmp_path / "sentinel.zip",
             [
                 cen_record(
-                    "0.manifest.json",
+                    tdfs.MANIFEST_ENTRY,
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_offset=true_offset,
                 )
@@ -445,7 +446,7 @@ class TestCentralDirectory:
             tmp_path / "foreign-extra.zip",
             [
                 cen_record(
-                    "0.manifest.json",
+                    tdfs.MANIFEST_ENTRY,
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_offset=7 * 2**30,
                     extra_prefix=timestamp,
@@ -471,7 +472,7 @@ class TestCentralDirectory:
         """
         p = synth_zip(
             tmp_path / "sentinel-no-extra.zip",
-            [cen_record("0.manifest.json", raw_offset=ZIP64_SENTINEL_32)],
+            [cen_record(tdfs.MANIFEST_ENTRY, raw_offset=ZIP64_SENTINEL_32)],
         )
         with pytest.raises(MalformedZipError, match="local header offset"):
             zipinspect.central_directory(p)
@@ -492,7 +493,7 @@ class TestMalformedExtraField:
             tmp_path / "over-long-extra.zip",
             [
                 cen_record(
-                    "0.manifest.json",
+                    tdfs.MANIFEST_ENTRY,
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_usize=MEDIUM_BYTES,
                     zip64_csize=MEDIUM_BYTES,
@@ -539,7 +540,7 @@ class TestMalformedExtraField:
             tmp_path / "overrun-extra.zip",
             [
                 cen_record(
-                    "0.manifest.json",
+                    tdfs.MANIFEST_ENTRY,
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_offset=5 * 2**30,
                     zip64_extra_len_override=64,
@@ -559,7 +560,7 @@ class TestMalformedExtraField:
             tmp_path / "disk-start.zip",
             [
                 cen_record(
-                    "0.manifest.json",
+                    tdfs.MANIFEST_ENTRY,
                     raw_offset=ZIP64_SENTINEL_32,
                     zip64_offset=5 * 2**30,
                     zip64_disk_start=0,
@@ -586,7 +587,7 @@ class TestTruncatedContainers:
             zipinspect.central_directory(p)
 
     def test_truncated_central_directory_record(self, tmp_path: Path):
-        record = cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)
+        record = cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES)
         p = tmp_path / "short-cen.zip"
         cd = record[:20]
         eocd = (
@@ -601,8 +602,8 @@ class TestTruncatedContainers:
 
     def test_central_directory_record_with_a_name_past_the_end(self, tmp_path: Path):
         """A plausible header whose variable-length fields overrun the buffer."""
-        record = cen_record("0.manifest.json", raw_offset=0)
-        # Claim a 4096-byte name where 15 bytes were written.
+        record = cen_record(tdfs.MANIFEST_ENTRY, raw_offset=0)
+        # Claim a 4096-byte name where only the entry name's bytes were written.
         record = record[:28] + struct.pack("<H", 4096) + record[30:]
         p = tmp_path / "long-name.zip"
         eocd = (
@@ -685,7 +686,7 @@ class TestConformanceAssertions:
         """The 2-4 GiB band has latitude; only above 2**32 is ZIP64 mandatory."""
         p = synth_zip(
             tmp_path / "medium.zip",
-            [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)],
+            [cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES)],
             cd_offset=MEDIUM_BYTES + 128,
         )
         zipinspect.assert_zip64_above_4gib(zipinspect.central_directory(p))
@@ -733,7 +734,7 @@ class TestConformanceAssertions:
             tmp_path / "dup-offset.zip",
             [
                 cen_record("0.payload", raw_offset=512),
-                cen_record("0.manifest.json", raw_offset=512),
+                cen_record(tdfs.MANIFEST_ENTRY, raw_offset=512),
             ],
             cd_offset=4096,
         )
@@ -746,7 +747,7 @@ class TestConformanceAssertions:
             tmp_path / "fine.zip",
             [
                 cen_record("0.payload", raw_offset=0, raw_csize=2048),
-                cen_record("0.manifest.json", raw_offset=2100, raw_csize=64),
+                cen_record(tdfs.MANIFEST_ENTRY, raw_offset=2100, raw_csize=64),
             ],
             cd_offset=4096,
         )
@@ -801,8 +802,9 @@ class TestConformanceAssertions:
 
     def test_describe_includes_the_numbers_needed_to_debug(self, tmp_path: Path):
         p = synth_zip(
-            tmp_path / "d.zip", [cen_record("0.manifest.json", raw_offset=MEDIUM_BYTES)]
+            tmp_path / "d.zip",
+            [cen_record(tdfs.MANIFEST_ENTRY, raw_offset=MEDIUM_BYTES)],
         )
         text = zipinspect.describe(zipinspect.central_directory(p).entries)
-        assert "0.manifest.json" in text
+        assert tdfs.MANIFEST_ENTRY in text
         assert str(MEDIUM_BYTES) in text
