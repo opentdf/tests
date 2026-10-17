@@ -19,7 +19,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from sizes import ZIP64_WINDOW_HIGH, in_zip64_window
 
@@ -43,7 +43,7 @@ _EOCD64_LOCATOR_SIZE = 20
 _CEN_FIXED_SIZE = 46
 #: A ZIP comment is a 16-bit length, so the EOCD cannot start further back
 #: than this from the end of the file.
-_MAX_EOCD_SEARCH = _EOCD_SIZE + 0xFFFF
+MAX_EOCD_SEARCH = _EOCD_SIZE + 0xFFFF
 
 
 class MalformedZipError(Exception):
@@ -221,55 +221,68 @@ def central_directory(path: Path) -> CentralDirectory:
     :class:`MalformedZipError` naming the problem, not as a bare
     ``struct.error`` from somewhere in the middle of the parse.
     """
-    file_size = path.stat().st_size
     with path.open("rb") as f:
-        tail_len = min(file_size, _MAX_EOCD_SEARCH)
-        f.seek(file_size - tail_len)
-        tail = f.read(tail_len)
+        return read_central_directory(f, path.stat().st_size)
 
-        eocd_at = _find_eocd(tail)
-        if eocd_at + _EOCD_SIZE > len(tail):
+
+class Seekable(Protocol):
+    def seek(self, offset: int, /) -> object: ...
+    def read(self, n: int, /) -> bytes: ...
+
+
+def read_central_directory(f: Seekable, file_size: int) -> CentralDirectory:
+    """:func:`central_directory` over any seekable source of ``file_size`` bytes.
+
+    Only the tail and the directory are read, which is what lets a streaming
+    writer's rolling tail buffer stand in for the whole file.
+    """
+    tail_len = min(file_size, MAX_EOCD_SEARCH)
+    f.seek(file_size - tail_len)
+    tail = f.read(tail_len)
+
+    eocd_at = _find_eocd(tail)
+    if eocd_at + _EOCD_SIZE > len(tail):
+        raise MalformedZipError(
+            f"end-of-central-directory record at {eocd_at} is truncated: "
+            f"{len(tail) - eocd_at} of {_EOCD_SIZE} bytes"
+        )
+    (
+        cd_entries_this_disk,
+        cd_entries_total,
+        cd_size,
+        cd_offset,
+    ) = struct.unpack_from("<HHII", tail, eocd_at + 8)
+    del cd_entries_this_disk
+
+    entry_count = cd_entries_total
+    # ZIP64: the 32-bit EOCD holds sentinels and the real values live in
+    # the ZIP64 EOCD record, found via the locator that precedes the EOCD.
+    locator_at = eocd_at - _EOCD64_LOCATOR_SIZE
+    if locator_at >= 0 and tail[locator_at : locator_at + 4] == _EOCD64_LOCATOR_SIG:
+        (eocd64_offset,) = struct.unpack_from("<Q", tail, locator_at + 8)
+        if eocd64_offset + _EOCD64_SIZE > file_size:
             raise MalformedZipError(
-                f"end-of-central-directory record at {eocd_at} is truncated: "
-                f"{len(tail) - eocd_at} of {_EOCD_SIZE} bytes"
+                f"zip64 locator points at {eocd64_offset}, past the end of "
+                f"a {file_size}-byte file"
             )
-        (
-            cd_entries_this_disk,
-            cd_entries_total,
-            cd_size,
-            cd_offset,
-        ) = struct.unpack_from("<HHII", tail, eocd_at + 8)
-        del cd_entries_this_disk
-
-        entry_count = cd_entries_total
-        # ZIP64: the 32-bit EOCD holds sentinels and the real values live in
-        # the ZIP64 EOCD record, found via the locator that precedes the EOCD.
-        locator_at = eocd_at - _EOCD64_LOCATOR_SIZE
-        if locator_at >= 0 and tail[locator_at : locator_at + 4] == _EOCD64_LOCATOR_SIG:
-            (eocd64_offset,) = struct.unpack_from("<Q", tail, locator_at + 8)
-            if eocd64_offset + _EOCD64_SIZE > file_size:
-                raise MalformedZipError(
-                    f"zip64 locator points at {eocd64_offset}, past the end of "
-                    f"a {file_size}-byte file"
-                )
-            f.seek(eocd64_offset)
-            eocd64 = f.read(_EOCD64_SIZE)
-            if eocd64[:4] != _EOCD64_SIG:
-                raise MalformedZipError(
-                    f"zip64 locator points at {eocd64_offset}, which is not a "
-                    "zip64 end-of-central-directory record"
-                )
-            entry_count, cd_size, cd_offset = struct.unpack_from("<QQQ", eocd64, 32)
-
-        # Before the seek, not after: cd_size comes straight off the wire and
-        # a garbage value here would otherwise drive an unbounded read.
-        if cd_offset + cd_size > file_size:
+        f.seek(eocd64_offset)
+        eocd64 = f.read(_EOCD64_SIZE)
+        if eocd64[:4] != _EOCD64_SIG:
             raise MalformedZipError(
-                f"central directory claims {cd_size} bytes at offset "
-                f"{cd_offset}, past the end of a {file_size}-byte file"
+                f"zip64 locator points at {eocd64_offset}, which is not a "
+                "zip64 end-of-central-directory record"
             )
-        f.seek(cd_offset)
-        cd = f.read(cd_size)
+        entry_count, cd_size, cd_offset = struct.unpack_from("<QQQ", eocd64, 32)
+
+    # Before the seek, not after: cd_size comes straight off the wire and
+    # a garbage value here would otherwise drive an unbounded read.
+    if cd_offset + cd_size > file_size:
+        raise MalformedZipError(
+            f"central directory claims {cd_size} bytes at offset "
+            f"{cd_offset}, past the end of a {file_size}-byte file"
+        )
+    f.seek(cd_offset)
+    cd = f.read(cd_size)
 
     entries: list[CentralDirectoryEntry] = []
     pos = 0

@@ -206,3 +206,58 @@ def test_fixture_serves_several(range_server, tdf: Path):
     b, _ = range_server(FullFile(tdf))
     assert a != b
     assert get(a, "bytes=0-3") == get(b, "bytes=0-3")
+
+
+# --- SparseSink ---------------------------------------------------------------
+
+
+def make_tdf(path: Path, manifest_len: int, *, force_zip64: bool = False) -> Path:
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as z:
+        with z.open("0.payload", "w", force_zip64=force_zip64) as f:
+            f.write(random.Random(5111).randbytes(PT_LEN + 5 * GCM))
+        z.writestr("0.manifest.json", "{}" + " " * manifest_len)
+    return path
+
+
+def stream(sink: rangeserve.SparseSink, data: bytes, chunk: int) -> None:
+    for i in range(0, len(data), chunk):
+        sink.write(data[i : i + chunk])
+
+
+@pytest.mark.parametrize("chunk", [1, 7, 4096, 1 << 20])
+@pytest.mark.parametrize("force_zip64", [False, True], ids=["zip32", "zip64"])
+def test_sink_keeps_plan_and_tail(tmp_path: Path, chunk: int, force_zip64: bool):
+    tdf = make_tdf(tmp_path / "t.tdf", 3000, force_zip64=force_zip64)
+    data = tdf.read_bytes()
+    start = rangeserve.payload_start(tdf)
+    kept = plan((SEG - 1, SEG + 1), (3 * SEG + 1, 3 * SEG + 2), start=start)
+    (tmp_path / "store").mkdir()
+    sink = rangeserve.SparseSink(tmp_path / "store", kept, tail_ceiling=1 << 16)
+    stream(sink, data, chunk)
+    store = sink.close()
+
+    payload_end = start + PT_LEN + 5 * GCM
+    assert store.length == len(data)
+    assert store.read(payload_end, len(data)) == data[payload_end:]
+    for s, e in kept:
+        assert store.read(s, e) == data[s:e]
+    assert store.physical_size == sum(e - s for s, e in kept) + len(data) - payload_end
+    with serve(store) as (url, _):
+        assert get(url, "bytes=-22") == (206, data[-22:])
+        assert get(url, f"bytes={kept[0][1]}-{kept[1][0] - 1}")[0] == 410
+    store.close()
+
+
+def test_sink_refuses_tail_over_ceiling(tmp_path: Path):
+    data = make_tdf(tmp_path / "t.tdf", 200_000).read_bytes()
+    sink = rangeserve.SparseSink(tmp_path, [(0, 100)], tail_ceiling=1 << 16)
+    stream(sink, data, 65536)
+    with pytest.raises(rangeserve.ManifestTooLarge):
+        sink.close()
+
+
+def test_sink_refuses_short_stream(tmp_path: Path):
+    sink = rangeserve.SparseSink(tmp_path, [(0, 100), (500, 600)], tail_ceiling=0)
+    sink.write(b"x" * 550)
+    with pytest.raises(ValueError, match="before planned extent"):
+        sink.close()
