@@ -177,6 +177,16 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4589"
       exit 1
       ;;
+    partial_decrypt | http_range_source)
+      # Decrypt a plaintext byte range, and load a TDF from an http(s) URL.
+      # Not yet in any release; see DSPX-5113 and DSPX-5115. Turn this into a version
+      # gate when they ship.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "$2 unsupported: see DSPX-5113 and DSPX-5115"
+      exit 1
+      ;;
     zip64-at-2gib)
       # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
       # 4 GiB. java-sdk adopted MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE in

@@ -143,6 +143,16 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
+    partial_decrypt | http_range_source)
+      # Decrypt a plaintext byte range, and load a TDF from an http(s) URL.
+      # Not yet in any release; see DSPX-5116. Turn this into a version
+      # gate when they ship.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "$2 unsupported: see DSPX-5116"
+      exit 1
+      ;;
     zip64-at-2gib)
       # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
       # on the right side of the 2 GiB switch point. Predates any version we

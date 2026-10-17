@@ -167,6 +167,10 @@ feature_type = Literal[
     # still vulnerable rather than a skip.
     "gmac_root_rejected",
     "hexless",
+    # Load a TDF from an http(s) URL with Range requests, fetching only the
+    # bytes a read needs rather than the whole object. DSPX-5112/5113; JS has
+    # long had ``fromUrl``.
+    "http_range_source",
     "hexaflexible",
     "kasallowlist",
     # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
@@ -194,6 +198,9 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # Decrypt only a plaintext byte range (``--offset``/``--length``), reading
+    # just the segments that cover it. DSPX-5114/5115/5116.
+    "partial_decrypt",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
@@ -859,7 +866,7 @@ class SDK:
 
     def decrypt_command(
         self,
-        ct_file: Path,
+        ct_file: Path | str,
         rt_file: Path,
         container: container_type = "ztdf",
         assert_keys: str = "",
@@ -867,12 +874,17 @@ class SDK:
         ecwrap: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        plaintext_range: tuple[int, int | None] | None = None,
     ) -> tuple[list[str], dict[str, str]]:
         """Build the argv and CLI-specific env vars for a decrypt invocation.
 
         See :meth:`encrypt_command` for why this is separate. ``expect_error``
         has no counterpart here: it selects how the caller runs the command,
         not what the command is.
+
+        ``ct_file`` may be an http(s) URL (feature ``http_range_source``).
+        ``plaintext_range`` is ``(offset, length)``; a length of None means to
+        the end (feature ``partial_decrypt``).
         """
         fmt = simple_container(container)
 
@@ -895,11 +907,15 @@ class SDK:
             local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
         if ignore_kas_allowlist:
             local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
+        if plaintext_range is not None:
+            offset, length = plaintext_range
+            length_s = "" if length is None else str(length)
+            local_env |= {"XT_WITH_PLAINTEXT_RANGE": f"{offset}:{length_s}"}
         return c, local_env
 
     def decrypt(
         self,
-        ct_file: Path,
+        ct_file: Path | str,
         rt_file: Path,
         container: container_type = "ztdf",
         assert_keys: str = "",
@@ -908,6 +924,7 @@ class SDK:
         expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        plaintext_range: tuple[int, int | None] | None = None,
     ):
         c, local_env = self.decrypt_command(
             ct_file,
@@ -918,6 +935,7 @@ class SDK:
             ecwrap=ecwrap,
             kasallowlist=kasallowlist,
             ignore_kas_allowlist=ignore_kas_allowlist,
+            plaintext_range=plaintext_range,
         )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
