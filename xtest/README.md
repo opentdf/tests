@@ -116,18 +116,6 @@ uv sync --extra dev
 pytest
 ```
 
-#### Testing unreleased platform features
-
-Set `XT_FORCE_PLATFORM_SUPPORTS` to a comma-separated list of platform features
-to bypass their test gates. In CI, use the `force-platform-supports` input.
-SDK overrides use `XT_FORCE_SUPPORTS` separately. These overrides do not enable
-service configuration.
-
-Both reject unknown feature names. A few features are platform-only
-(`PLATFORM_ONLY_FEATURES` in `tdfs.py`); naming one in `XT_FORCE_SUPPORTS` is
-rejected too, because it would force the feature on for every SDK while leaving
-the platform gate the tests read untouched — a green run that tested nothing.
-
 #### Run TDF Tests
 
 ```shell
