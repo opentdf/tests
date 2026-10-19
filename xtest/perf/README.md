@@ -51,9 +51,12 @@ The artifact is `"schema": 2`:
 
 - Each cell names its `arms` (`id` and build `label`) and its `reference`,
   which is an arm id. `samples` is keyed by arm id.
-- The statistics live under `contrasts`, one entry per candidate. Each has `a`
-  (the reference's arm id), `b` (the candidate's), and `metrics`, whose
-  per-metric results carry `a_median` and `b_median`, those two arms' medians.
+- The statistics live under `contrasts`: one entry per candidate against the
+  reference, then one per pair of candidates (see
+  [Comparing candidates](#comparing-candidates-with-each-other)). Each has `a`
+  and `b`, read as "`b` against `a`" (against the reference, `a` is the
+  reference's arm id), and `metrics`, whose per-metric results carry `a_median`
+  and `b_median`, those two arms' medians.
 - A two-arm cell also carries the `baseline` and `candidate` labels for
   convenience. A cell with more candidates does not, since "the candidate"
   would silently mean only the first.
@@ -162,6 +165,38 @@ lists the reason for each cell.
 > Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
 > instead of two means there is nothing to measure until `main` moves.
 
+### Comparing candidates with each other
+
+With more than one candidate, each pair of candidates is also compared
+directly — the same within-round ratio, so the comparison is as fair as the
+one against the reference. These comparisons **never fail the build**: there
+is no incumbent, so "regression" means nothing between them. They are listed
+under **Candidate comparisons** in the summary and in the JSON `conclusions`.
+
+**FASTER** / **SLOWER** — the interval lies entirely outside the
+`[1/threshold, threshold]` band and the matching one-sided adjusted p-value is
+below `alpha / 2`. Half alpha because the question is two-sided: neither
+candidate is privileged, and testing both tails at alpha would double the
+chance of ranking two equal builds.
+
+**TIED** — the interval lies entirely *inside* the band: any real difference
+is smaller than the threshold. A positive finding, and deliberately not PASS,
+which only claims "not slower".
+
+**inconclusive** — anything else, including a missing or underpowered A/A
+control.
+
+Reversing a pair turns FASTER into SLOWER and leaves TIED alone, so the order
+the candidates were listed in does not change any conclusion. They form their
+own correction family: adding candidates costs the regression gate no power.
+
+A **winner** is named for a cell and metric only when one candidate is FASTER
+than *every* other candidate in their own contrasts, and the A/A control did
+not trip. A tie, an inconclusive pair involving a contender, or a tripped
+control — however narrow the interval — means no winner, and the summary says
+which of those it was. Ranking by point estimates is not evidence that two
+candidates differ.
+
 ### The A/A control
 
 Each SDK gets a control cell that compares the reference build **against itself**
@@ -169,8 +204,8 @@ through the identical pipeline. Its true ratio is exactly 1.0 by construction, s
 whatever it reports is the harness's own error on this runner. With K arms the
 control runs K copies of the reference: a K-arm round is longer, and the two arms
 of a contrast sit further apart in it on average, so a two-arm control would
-understate the noise. Of its K-1 A/A contrasts, the worst one stands as the
-floor. It does two jobs:
+understate the noise. Of its C(K,2) copy-to-copy contrasts, the worst one stands
+as the floor. It does two jobs:
 
 - If the control *trips* — its own A/A comparison looks like a real effect — then
   something is systematically biased and **the whole run stops being able to fail
@@ -268,6 +303,7 @@ things; the noise floor will tell you whether you succeeded.
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact (`SCHEMA_VERSION`), step-summary markdown |
+| `conclusions.py` | Candidate-to-candidate conclusions and winner eligibility, read by every renderer |
 | `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
 | `installation.py` | Reads the installation manifest `otdf-sdk-mgr install benchmark` writes. No pytest |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
@@ -592,6 +628,8 @@ two builds doing different amounts of work) is invisible in the output.
 10. Never hand-edit the figures. Change `docs/make_figures.py` and regenerate;
     if a number moves, `--verify` is what tells you whether the figure or the
     world changed.
+11. Never let a comparison between two candidates fail the build, share the
+    gate's correction family, or name a winner the conclusions model did not.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.
