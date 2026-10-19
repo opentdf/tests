@@ -79,7 +79,7 @@ def test_zip64_band_roundtrip(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,

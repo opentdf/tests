@@ -62,7 +62,7 @@ class TestRewrapAudit:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
         ct_file = tmp_dir / f"rewrap-success-{encrypt_sdk}.tdf"
         encrypt_sdk.encrypt(
@@ -110,7 +110,7 @@ class TestRewrapAudit:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
         # Create a TDF with an attribute - the test client should have access
@@ -156,7 +156,7 @@ class TestRewrapAudit:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
         ct_file = tmp_dir / f"multi-kao-{encrypt_sdk}.tdf"
@@ -310,7 +310,7 @@ class TestDecisionAudit:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
         tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
 
         ct_file = tmp_dir / f"decision-success-{encrypt_sdk}.tdf"
@@ -372,7 +372,7 @@ class TestEdgeCases:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
         # Create valid TDF
         ct_file = tmp_dir / f"tamper-audit-{encrypt_sdk}.tdf"
@@ -431,7 +431,7 @@ class TestEdgeCases:
             pytest.skip("Not in focus")
         pfs = tdfs.get_platform_features()
         tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-        tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+        tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
         num_decrypts = 5
 

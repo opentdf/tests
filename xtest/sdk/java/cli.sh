@@ -104,7 +104,7 @@ if [ "$1" == "supports" ]; then
       fi
       ;;
 
-    hexless)
+    hexless_integrity)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?

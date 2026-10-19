@@ -438,7 +438,7 @@ delta reads zero.
 Both arms get the same plaintext, the same attribute (explicit RSA, so an arm
 does not silently switch to EC), the same container, and the same target mode.
 `comparability_problem()` refuses the comparison outright when the two builds
-disagree on `hexless`, `hexaflexible`, or `autoconfigure` — a timing difference
+disagree on `hexless_integrity`, `hexaflexible`, or `autoconfigure` — a timing difference
 there is a difference in *work*, not in speed.
 
 For decrypt, both arms read one ciphertext produced by the baseline. If each arm

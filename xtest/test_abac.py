@@ -93,7 +93,7 @@ def test_key_mapping_multiple_mechanisms(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     # Currently, we only support rsa:2048 and ec:secp256r1
     vals = [
@@ -145,7 +145,7 @@ def test_key_mapping_extended_mechanisms(
     )
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
 
     attr, key_ids = attribute_allof_with_extended_mechanisms
@@ -208,7 +208,7 @@ def test_key_mapping_extended_ec_mechanisms(
         "key_management", "autoconfigure", "mechanism-ec-curves-384-521"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
 
     attr, key_ids = attribute_allof_with_extended_mechanisms
@@ -266,7 +266,7 @@ def test_key_mapping_extended_rsa_mechanisms(
     encrypt_sdk.skip_if_unsupported("mechanism-rsa-4096")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     skip_dspx1153(encrypt_sdk, decrypt_sdk)
 
     attr, key_ids = attribute_allof_with_extended_mechanisms
@@ -321,7 +321,7 @@ def test_autoconfigure_one_attribute_standard(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -368,7 +368,7 @@ def test_autoconfigure_two_kas_or_standard(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -421,7 +421,7 @@ def test_autoconfigure_double_kas_and(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -473,7 +473,7 @@ def test_autoconfigure_one_attribute_attr_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -511,7 +511,7 @@ def test_autoconfigure_two_kas_or_attr_and_value_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -556,7 +556,7 @@ def test_autoconfigure_two_kas_and_attr_and_value_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -600,7 +600,7 @@ def test_autoconfigure_one_attribute_ns_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -638,7 +638,7 @@ def test_autoconfigure_two_kas_or_ns_and_value_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -683,7 +683,7 @@ def test_autoconfigure_two_kas_and_ns_and_value_grant(
     tdfs.skip_if_unsupported(encrypt_sdk, "autoconfigure", "ns_grants")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -953,7 +953,7 @@ def test_decrypt_uses_kao_kas_registration(
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
     decrypt_sdk.skip_if_unsupported("key_management")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     attr, key = attribute_with_alternate_kas_registration
     ct_file = encrypted_tdf(
@@ -1030,7 +1030,7 @@ def test_decrypt_rejects_kao_kas_registration_when_disabled(
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
     decrypt_sdk.skip_if_unsupported("key_management")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     attr, key = attribute_with_alternate_kas_registration_disabled
     ct_file = encrypted_tdf(
@@ -1112,7 +1112,7 @@ def test_decrypt_same_kid_in_different_registries_with_cache(
         pytest.skip("Not in focus")
     encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
     decrypt_sdk.skip_if_unsupported("key_management")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ciphertexts = []
     for attr, key in attributes_with_same_kid_in_different_registries:
@@ -1175,7 +1175,7 @@ def test_autoconfigure_key_management_two_kas_two_keys(
     skip_dspx2457(encrypt_sdk)
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = encrypted_tdf(
         encrypt_sdk,
@@ -1246,8 +1246,8 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
     tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
 
     from test_legacy import get_golden_file
 
@@ -1274,7 +1274,7 @@ def test_encrypt_decrypt_all_containers_with_base_key_e1(
     tdfs.skip_if_unsupported(decrypt_sdk, "key_management")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     sample_name = f"base-e1-{encrypt_sdk}"
     ct_file = tmp_dir / f"{sample_name}.tdf"
