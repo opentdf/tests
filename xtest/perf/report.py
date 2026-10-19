@@ -280,8 +280,8 @@ def markdown(
                     f"| {result.cell_id} | {build} | {label} "
                     f"| {format_metric(metric, c.baseline_median)} "
                     f"| {format_metric(metric, c.candidate_median)} "
-                    f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
-                    f"| {_verdict_cell(c)} |"
+                    f"| {ratio_cell(c)} | {p_cell(c)} | {c.n_rounds} "
+                    f"| {verdict_cell(c)} |"
                 )
 
     lines += _candidate_comparisons(recorder.conclusions(config, gate))
@@ -346,7 +346,7 @@ def conclusion_line(c: Conclusion) -> str:
     return head + f"{c.reason}."
 
 
-def _ratio_cell(c: stats.PairedComparison) -> str:
+def ratio_cell(c: stats.PairedComparison) -> str:
     if not math.isfinite(c.ratio):
         return "-"
     if not (math.isfinite(c.ci_low) and math.isfinite(c.ci_high)):
@@ -354,7 +354,7 @@ def _ratio_cell(c: stats.PairedComparison) -> str:
     return f"{c.ratio:.3f}x [{c.ci_low:.3f}, {c.ci_high:.3f}]"
 
 
-def _p_cell(c: stats.PairedComparison) -> str:
+def p_cell(c: stats.PairedComparison) -> str:
     # Show the one-sided tail matching the observed effect. Below one that is
     # the explicit faster-tail test: a BH-adjusted slower-tail p-value cannot
     # be read backwards as evidence of improvement, and printing it beside an
@@ -379,7 +379,7 @@ _VERDICT_ICONS = {
 }
 
 
-def _verdict_cell(c: stats.PairedComparison) -> str:
+def verdict_cell(c: stats.PairedComparison) -> str:
     text = _VERDICT_ICONS[c.verdict]
     return f"{text} ({c.note})" if c.note else text
 

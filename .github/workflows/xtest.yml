@@ -1101,20 +1101,37 @@ jobs:
           # The benchmark never touches the audit-log fixture; asserting on
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"
+          # pytest writes the summary as a template; it is published below,
+          # once the upload has produced the URL its links point at.
+          BENCH_DEFER_SUMMARY: "1"
 
       # Raw per-round samples and the manifest, not just the verdict.
       # Re-analysing a surprising result offline beats re-running a 30-minute
       # job to look at the same numbers again.
       - name: Upload benchmark results
+        id: upload-results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: ${{ job.status == 'success' && '✅' || '❌' }} bench-${{ matrix.sdk }}
           path: |
-            otdftests/xtest/test-results/benchmarks/*.json
+            otdftests/xtest/test-results/benchmarks/
             otdftests/xtest/test-results/*.html
             otdftests/xtest/sdk/benchmark.installed.json
           if-no-files-found: warn
+
+      # The only CI-specific part of the summary is the artifact URL, and it
+      # is substituted by the same function a local run uses to drop it.
+      - name: Publish benchmark summary
+        if: always() && hashFiles(format('otdftests/xtest/test-results/benchmarks/{0}.summary.md', matrix.sdk)) != ''
+        working-directory: otdftests/xtest
+        env:
+          BENCH_SDK: ${{ matrix.sdk }}
+          ARTIFACT_URL: ${{ steps.upload-results.outputs.artifact-url }}
+        run: |-
+          uv run --frozen --no-build python -m perf.publish \
+            "test-results/benchmarks/${BENCH_SDK}.summary.md" \
+            --artifact-url "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload service logs on failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

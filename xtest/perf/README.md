@@ -47,9 +47,20 @@ measure.
 
 | Artifact | Where | Contents |
 | --- | --- | --- |
-| Job summary | The Actions run page | The table below, plus the verdict |
-| `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
-| Terminal | Job log tail | One-line summary and the JSON path |
+| Job summary | The Actions run page | The decision-first summary, linked to its artifact |
+| `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, the summary, the plain table, the installation manifest, and an HTML report |
+| Terminal | Job log tail | The headline, any candidate conclusions, and the file paths |
+
+Locally the same files land in `test-results/benchmarks/`: `<sdk>.json`,
+`<sdk>.md` (the summary), `<sdk>-table.md` (the plain table below), and
+`<sdk>.summary.md`, the template CI publishes once the artifact URL is known.
+
+The summary leads with one status — PASS, REGRESSION, INCONCLUSIVE, PARTIAL
+(something did not run), UNTRUSTWORTHY (the A/A control tripped), NOTHING
+MEASURED, or NEUTRAL (same commit) — then the compared builds with their
+commits and a diff link, what changed, candidate comparisons, and every
+measurement behind them. It is rendered from the analysed result and never
+changes it: the JSON, the terminal line and the summary cannot disagree.
 
 The JSON is the useful one. It holds each cell's full per-round vectors for
 every arm, so a surprising verdict can be re-analysed offline instead of by
@@ -282,6 +293,8 @@ things; the noise floor will tell you whether you succeeded.
 | `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
 | `installation.py` | Reads the installation manifest `otdf-sdk-mgr install benchmark` writes. No pytest |
 | `ci.py` | The workflow's only adapter: validates dispatch inputs and emits the bench matrix, budget and timeout |
+| `presentation.py` | The decision-first summary. Rendering only; reads the analysed result and never decides anything |
+| `publish.py` | Fills the artifact URL into a rendered summary, or drops those links locally |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
 | `../fixtures/bench.py` | The pytest glue: arm selection (options, manifest, defaults), payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
