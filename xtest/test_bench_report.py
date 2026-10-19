@@ -148,6 +148,7 @@ class TestJsonSchema:
         assert [(c["a"], c["b"]) for c in out["contrasts"]] == [
             ("main", "a"),
             ("main", "b"),
+            ("a", "b"),
         ]
         slowed = out["contrasts"][1]["metrics"]["wall"]
         assert slowed["verdict"] == "REGRESSION"
@@ -206,3 +207,31 @@ class TestMarkdown:
         text = report.markdown(recorder, cfg, recorder.gate(cfg))
         assert "NEUTRAL" in text and "abc12345" in text
         assert "NOTHING MEASURED" not in text
+
+
+class TestCandidateComparisons:
+    def test_json_markdown_and_terminal_share_one_conclusion(self):
+        aa = _cell("go-aa", {"main#1": 1.0, "main#2": 1.0, "main#3": 1.0}, control=True)
+        cell = _cell("go-encrypt", {"main": 1.0, "a": 1.0, "b": 0.6})
+        recorder, cfg, gate = _run(aa, cell)
+        (wall,) = [
+            c
+            for c in report.to_dict(recorder, cfg, gate)["conclusions"]  # pyright: ignore[reportGeneralTypeIssues]
+            if c["metric"] == "wall"
+        ]
+        assert wall["winner"] == "b"
+        text = report.markdown(recorder, cfg, gate)
+        assert "### Candidate comparisons" in text
+        line = next(
+            report.conclusion_line(c)
+            for c in recorder.conclusions(cfg, gate)
+            if c.metric == "wall"
+        )
+        assert "`go@b` wins" in line and line in text
+
+    def test_a_two_arm_run_has_no_candidate_section(self):
+        aa = _cell("go-aa", {"main#1": 1.0, "main#2": 1.0}, control=True)
+        cell = _cell("go-encrypt", {"v0.29.0": 1.0, "main": 1.0})
+        recorder, cfg, gate = _run(aa, cell)
+        assert report.to_dict(recorder, cfg, gate)["conclusions"] == []
+        assert "Candidate comparisons" not in report.markdown(recorder, cfg, gate)
