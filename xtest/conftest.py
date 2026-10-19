@@ -29,7 +29,7 @@ import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
-from perf.cells import cells_for
+from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -274,6 +274,16 @@ def _add_benchmark_options(parser: pytest.Parser):
         "--bench-refs entry",
     )
     group.addoption(
+        "--bench-payloads",
+        default=DEFAULT_PAYLOAD_SPEC,
+        help="comma-separated payload sizes to measure, e.g. "
+        "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
+        "default are opt-in because they are what a throughput gate actually "
+        "needs and what a nightly cannot afford: each one adds two cells, and "
+        "a run holds roughly twice the total plus one live output per arm of "
+        "the largest on disk",
+    )
+    group.addoption(
         "--bench-threshold",
         type=float,
         default=stats.DEFAULT_THRESHOLD,
@@ -426,7 +436,11 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     if not metafunc.config.getoption("--bench"):
         return
 
-    cells = cells_for(_bench_sdk_names(metafunc.config))
+    from fixtures.bench import payloads_from_options
+
+    cells = cells_for(
+        _bench_sdk_names(metafunc.config), payloads_from_options(metafunc.config)
+    )
     metafunc.config.stash[report.CELLS_KEY] = cells
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
 
@@ -459,7 +473,11 @@ def pytest_configure(config: pytest.Config):
     # --bench-threshold used to surface from the bench_config fixture, which
     # runs after the session has already built payloads and installed CLIs --
     # minutes of work discarded to report a typo.
-    from fixtures.bench import config_from_options, installation_for
+    from fixtures.bench import (
+        config_from_options,
+        installation_for,
+        payloads_from_options,
+    )
     from perf.config import (
         BenchmarkRequest,
         parse_arm_spec,
@@ -470,6 +488,7 @@ def pytest_configure(config: pytest.Config):
     # An unreadable manifest is a usage error now, not a fallback later.
     installation_for(config)
     bench_config = config_from_options(config)
+    payloads_from_options(config)
     refs = config.getoption("--bench-refs", default=None)
     baseline = config.getoption("--bench-baseline", default=None)
     candidate = config.getoption("--bench-candidate", default=None)
