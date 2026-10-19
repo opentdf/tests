@@ -683,9 +683,9 @@ def chunky_pt_file(tmp_dir: Path) -> Path:
 
     Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
     sizes would fan out every test that takes :func:`pt_file` -- the whole of
-    test_tdfs.py and test_policytypes.py -- to pay for a property one test
-    needs. A separate fixture buys the coverage for one extra encrypt and
-    decrypt of 5 MiB, which is cheap enough for the PR gate.
+    test_tdfs.py, test_tdf_assertions.py and test_policytypes.py -- to pay for
+    a property one test needs. A separate fixture buys the coverage for one
+    extra encrypt and decrypt of 5 MiB, which is cheap enough for the PR gate.
     """
     return _plaintext_of(tmp_dir, "chunky")
 
