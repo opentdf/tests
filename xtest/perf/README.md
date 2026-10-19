@@ -14,17 +14,25 @@ It runs nightly (one runner per SDK) and on `workflow_dispatch` with
 measurement is too slow for a PR gate, and a PR runner is the noisiest place to
 measure.
 
-> **Dispatching it by hand:** set the `*-ref` inputs to `main latest`, not the
-> default `main`. The nightly cron resolves `main latest` on its own, but an
-> explicit `main` installs only the branch build — no release to use as a
-> baseline — and every cell skips. The run fails rather than passing empty
-> (see [NOTHING MEASURED](#the-verdicts)), but it will have wasted 45 minutes
-> to tell you that.
+> **Dispatching it by hand:** to name the builds exactly, set `bench-refs`,
+> e.g. `js@latest,js@my-branch,js@other-branch` — reference first, 2 to 4
+> builds of one SDK. It narrows the run to that SDK.
 >
-> To measure one branch without the functional matrix, check `bench-only` and
-> set `focus-sdk` to that SDK. For example, `bench-only`, `focus-sdk: js`, and
-> `js-ref: my-branch latest` run a single runner that compares `my-branch` against
-> the newest js release.
+> Without `bench-refs`, each SDK compares the two builds in its `*-ref` input
+> (default `main latest`), with the release as the reference whichever order
+> they are typed in. A `*-ref` naming one build is refused in
+> `resolve-versions`, before any runner starts, rather than measuring nothing
+> 45 minutes later.
+>
+> To measure without the functional matrix, check `bench-only`. For example,
+> `bench-only`, `focus-sdk: js`, and `js-ref: my-branch latest` run a single
+> runner that compares `my-branch` against the newest js release.
+>
+> Every input is validated by `perf/ci.py`, and each bench runner then runs the
+> [local sequence](#3-local-preparation-and-execution) — `otdf-sdk-mgr install
+> benchmark`, `otdf-local up --services docker,platform`, `otdf-local env`,
+> pytest — so a CI result can be reproduced locally from the refs in its
+> artifact's manifest.
 
 - **Section 1 — [Reading a result](#1-reading-a-result)** is for developers on
   the SDKs and the platform: your build got flagged, what does that mean.
@@ -273,6 +281,7 @@ things; the noise floor will tell you whether you succeeded.
 | `conclusions.py` | Candidate-to-candidate conclusions and winner eligibility, read by every renderer |
 | `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
 | `installation.py` | Reads the installation manifest `otdf-sdk-mgr install benchmark` writes. No pytest |
+| `ci.py` | The workflow's only adapter: validates dispatch inputs and emits the bench matrix, budget and timeout |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
 | `../fixtures/bench.py` | The pytest glue: arm selection (options, manifest, defaults), payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |

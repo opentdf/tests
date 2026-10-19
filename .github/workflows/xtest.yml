@@ -43,6 +43,11 @@ on:
         type: boolean
         default: false
         description: "Run only the benchmarks: implies run-benchmarks and skips the functional matrix. Set focus-sdk to measure one SDK instead of all three, and that SDK's *-ref to '<branch> latest' to compare the branch against the newest release."
+      bench-refs:
+        required: false
+        type: string
+        default: ""
+        description: "2 to 4 builds of one SDK to benchmark, reference first, e.g. 'go@v0.29.0,go@main,go@my-branch'. Narrows the bench matrix to that SDK. Empty: each SDK compares the release and the branch in its *-ref input (default 'main latest'), release as the reference."
       bench-payloads:
         required: false
         type: string
@@ -52,7 +57,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Wall-clock allowance shared by every benchmark cell (default 1500). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start. The bench job's timeout grows with it."
+        description: "Wall-clock allowance shared by every benchmark cell (default 1500 for two arms, scaled by K/2 for K arms). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start. The bench job's timeout grows with it."
       run-zip64:
         required: false
         type: boolean
@@ -102,6 +107,10 @@ on:
         required: false
         type: boolean
         default: false
+      bench-refs:
+        required: false
+        type: string
+        default: ""
       bench-payloads:
         required: false
         type: string
@@ -156,7 +165,7 @@ jobs:
       java: ${{ steps.version-info.outputs.java-version-info }}
       js: ${{ steps.version-info.outputs.js-version-info }}
       sdk-version-list: ${{ steps.version-info.outputs.sdk-version-list }}
-      bench-sdks: ${{ steps.bench-sdks.outputs.sdks }}
+      bench-matrix: ${{ steps.bench-settings.outputs.matrix }}
       bench-payloads: ${{ steps.bench-settings.outputs.payloads }}
       bench-budget-seconds: ${{ steps.bench-settings.outputs.budget-seconds }}
       bench-timeout-minutes: ${{ steps.bench-settings.outputs.timeout-minutes }}
@@ -174,18 +183,6 @@ jobs:
           if [[ ! "all go java js" =~ (^|[[:space:]])${FOCUS_SDK_INPUT}($|[[:space:]]) ]]; then
             echo "Invalid focus-sdk input: ${FOCUS_SDK_INPUT}. Must be one of: all, go, java, js." >> "$GITHUB_STEP_SUMMARY"
             exit 1
-          fi
-      # Picked here because a matrix cannot be narrowed from inside its own
-      # job: by then all three bench runners have already started.
-      - name: Pick the bench matrix
-        id: bench-sdks
-        env:
-          FOCUS_SDK: ${{ inputs.focus-sdk || 'all' }}
-        run: |-
-          if [[ "$FOCUS_SDK" == "all" ]]; then
-            echo 'sdks=["go","java","js"]' >> "$GITHUB_OUTPUT"
-          else
-            echo "sdks=[\"${FOCUS_SDK}\"]" >> "$GITHUB_OUTPUT"
           fi
       - name: Default Versions depend on context
         id: default-tags
@@ -219,56 +216,32 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.15"
-      # Here rather than in the bench job, which starts the platform first: a
-      # typo'd size is worth catching before three runners spend ~15 minutes
-      # each bringing it up. This calls the harness's own parser rather than
-      # reimplementing the grammar in bash -- perf.cells imports nothing
-      # outside the standard library, so a bare python3 can read it, and a
-      # bash copy that drifted would start refusing specs the run itself
-      # would have accepted. The scheduled nightly supplies no inputs, so the
-      # fallbacks are what keep its matrix and budget where they have always
-      # been.
-      - name: Validate benchmark settings
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      # Every benchmark input is validated here, by the harness's own Python,
+      # before any bench runner spends ~15 minutes bringing up a platform.
+      # perf.ci is the only adapter between the dispatch inputs and the
+      # harness: refs, arm limits, payload sizes, the scaled default budget
+      # and the job timeout all come from the same code a local run uses,
+      # rather than from a shell copy that drifts. Same-commit requests are
+      # detected later, by `install benchmark`, so local and CI report them
+      # identically. Gated like the bench job: a functional-only dispatch
+      # with a single *-ref is not a broken benchmark request.
+      - name: Validate benchmark inputs
         id: bench-settings
+        if: >-
+          github.event.schedule == '30 6 * * *' ||
+          ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+           && (inputs.run-benchmarks || inputs.bench-only))
         working-directory: otdf-sdk/xtest
         env:
-          BENCH_PAYLOADS: ${{ inputs.bench-payloads || '1KiB,1MiB,32MiB' }}
-          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
-        run: |-
-          python3 - <<'PY'
-          import math
-          import os
-
-          from perf.cells import parse_payloads
-
-          # Installation, platform startup, and artifact upload, on top of the
-          # measurement budget itself.
-          OVERHEAD_MINUTES = 20
-          # Six hours is GitHub's ceiling for a hosted-runner job.
-          MAX_BUDGET_SECONDS = (360 - OVERHEAD_MINUTES) * 60
-
-          try:
-              sizes = parse_payloads(os.environ["BENCH_PAYLOADS"])
-          except ValueError as e:
-              raise SystemExit(f"::error::invalid bench-payloads: {e}")
-          raw = os.environ["BENCH_BUDGET_SECONDS"]
-          try:
-              budget = float(raw)
-          except ValueError:
-              budget = math.nan
-          if not (0 < budget <= MAX_BUDGET_SECONDS):
-              raise SystemExit(
-                  f"::error::invalid bench-budget-seconds: {raw!r}; expected a "
-                  f"number above 0 and at most {MAX_BUDGET_SECONDS}"
-              )
-          timeout = math.ceil(budget / 60) + OVERHEAD_MINUTES
-          print("payload sizes:", ", ".join(p.label for p in sizes))
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"payloads={','.join(p.label for p in sizes)}\n")
-              out.write(f"budget-seconds={budget:g}\n")
-              out.write(f"timeout-minutes={timeout}\n")
-          PY
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+          BENCH_FOCUS_SDK: ${{ inputs.focus-sdk }}
+          BENCH_REFS: ${{ inputs.bench-refs }}
+          BENCH_GO_REF: ${{ inputs.otdfctl-ref }}
+          BENCH_JAVA_REF: ${{ inputs.java-ref }}
+          BENCH_JS_REF: ${{ inputs.js-ref }}
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads }}
+          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds }}
+        run: uv run --frozen --no-build python -m perf.ci >> "$GITHUB_OUTPUT"
       - id: version-info
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
         # github-script authenticates its own `github` client, but the token
@@ -953,9 +926,9 @@ jobs:
   # Never runs on pull requests: 30 minutes of serial measurement is too slow
   # for a PR gate, and a PR runner is the noisiest place to measure.
   bench:
-    # The 1500 s default budget plus ~20 minutes of setup; scaled with
-    # bench-budget-seconds in resolve-versions.
-    timeout-minutes: ${{ fromJSON(needs.resolve-versions.outputs.bench-timeout-minutes) }}
+    # Budget plus setup, computed with the budget in resolve-versions. The
+    # fallback only satisfies the expression when the job is skipped.
+    timeout-minutes: ${{ fromJSON(needs.resolve-versions.outputs.bench-timeout-minutes || '60') }}
     runs-on: ubuntu-latest
     needs: resolve-versions
     # Nightly cron only, not the Mon/Wed or weekly ones: three runs a week of
@@ -969,11 +942,16 @@ jobs:
       packages: read
     strategy:
       # One runner per SDK. Two SDKs on one runner would contend for the very
-      # CPU being measured. Narrowed by focus-sdk, so investigating one SDK
-      # does not spend 45 minutes measuring the two nobody asked about.
+      # CPU being measured. Narrowed by focus-sdk or bench-refs, so
+      # investigating one SDK does not spend 45 minutes measuring the two
+      # nobody asked about.
       fail-fast: false
       matrix:
-        sdk: ${{ fromJSON(needs.resolve-versions.outputs.bench-sdks) }}
+        include: ${{ fromJSON(needs.resolve-versions.outputs.bench-matrix) }}
+    # Everything below is the local sequence in xtest/perf/README.md ("Local
+    # preparation and execution"), plus toolchains, caches and uploads. A step
+    # that does more than call one of those commands is a step that can make
+    # CI measure something a local run cannot reproduce.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -981,39 +959,24 @@ jobs:
           path: otdftests
           persist-credentials: false
 
-      - name: load extra keys from file
-        id: load-extra-keys
-        run: |-
-          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
-
-      ######## SPIN UP PLATFORM BACKEND #############
-      # Pinned to main, and to the default KAS only. We are measuring SDK
-      # regressions, so the server is held constant; and the six extra KAS
-      # instances the ABAC tests need would draw background CPU on the runner
-      # doing the measuring, which is noise rather than merely waste.
-      - name: Check out and start up platform with deps/containers
-        id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@18b8070f7ae1e3547234342f42d0d686dc77788f  # keycloak-26.4 (opentdf/platform#3792)
-        with:
-          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
-          bootstrap-ref: main
-          ec-tdf-enabled: true
-          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
-          log-type: json
-          pqc-enabled: true
-
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           # Pinned so a new CPython release can't land before its wheels do.
           python-version: "3.15"
+      # Every bench runner builds go: the platform, the provisioning otdfctl,
+      # and on the go runner the arms. GOTOOLCHAIN=auto lets each module's own
+      # toolchain directive pick the exact version it needs.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
       - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
         if: matrix.sdk == 'java'
         with:
           setup_only: true
           token: ${{ secrets.BUF_TOKEN }}
           version: "1.56.0"
-
       - name: Set up JDK
         if: matrix.sdk == 'java'
         uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287
@@ -1021,75 +984,21 @@ jobs:
           java-version: "11"
           distribution: "adopt"
           server-id: github
-
       - name: Set up Node 22
         if: matrix.sdk == 'js'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "22.x"
 
-      # Not gated on matrix.sdk: every bench runner needs otdfctl now, and
-      # leaving these outputs empty on the java and js runners would send
-      # setup-cli-tool off to make its own platform checkout to build it from.
-      - name: Capture platform otdfctl location
-        id: platform-otdfctl
-        run: |-
-          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
-            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
-            sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
-              echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
-              exit 1
-            }
-            echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          else
-            echo "dir=" >> "$GITHUB_OUTPUT"
-            echo "sha=" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
-
-      ######## INSTALL BOTH ARMS OF THE COMPARISON #############
-      # The whole design rests on this step laying down two builds side by
-      # side under sdk/<sdk>/dist/: the branch head (candidate) and the
-      # newest release (baseline). Arm selection picks them up from there.
-      - name: Configure ${{ matrix.sdk }} sdk
-        id: configure-sdk
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: ${{ matrix.sdk }}
-          version-info: "${{ needs.resolve-versions.outputs[matrix.sdk] }}"
-          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
-          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
-
-      # otdfctl provisions the attributes and KAS registry every cell needs,
-      # whichever SDK is under measurement, and conftest.py loads it at import
-      # time. The go runner already has it from the step above; without this
-      # the java and js runners fail during collection, before a single
-      # measurement is taken.
-      - name: Configure otdfctl
-        id: configure-otdfctl
-        if: matrix.sdk != 'go'
-        uses: ./otdftests/xtest/setup-cli-tool
-        with:
-          path: otdftests/xtest/sdk
-          sdk: go
-          version-info: "${{ needs.resolve-versions.outputs.go }}"
-          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
-          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
-
-      # Unconditional: every bench runner builds go now, either as the SDK
-      # under measurement or as otdfctl.
       - name: Cache Go modules
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
+          key: go-bench-${{ runner.os }}-${{ hashFiles('otdftests/otdf-sdk-mgr/uv.lock') }}
           restore-keys: |
-            go-${{ runner.os }}-
-
+            go-bench-${{ runner.os }}-
       - name: Cache npm
         if: matrix.sdk == 'js'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1098,7 +1007,6 @@ jobs:
           key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
           restore-keys: |
             npm-${{ runner.os }}-
-
       - name: Cache Maven repository
         if: matrix.sdk == 'java'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1108,35 +1016,52 @@ jobs:
           restore-keys: |
             maven-${{ runner.os }}-
 
-      - name: point java heads at the platform under test
-        if: matrix.sdk == 'java' && fromJson(steps.configure-sdk.outputs.heads)[0] != null
+      ######## PREPARE #############
+      # One command resolves every arm to a commit, installs or builds each,
+      # installs the platform and the provisioning otdfctl, and writes the
+      # manifest pytest reads its arms and provenance from. The platform is
+      # pinned to main's resolved SHA and the provisioning CLI to main: the
+      # server and the fixtures are held constant while the SDK varies.
+      # A neutral outcome (every ref at one commit) is not a failure; it is
+      # carried through to the report like any other result.
+      - name: Prepare ${{ matrix.sdk }} benchmark
+        id: prepare
+        working-directory: otdftests/otdf-sdk-mgr
+        env:
+          BENCH_SDK: ${{ matrix.sdk }}
+          BENCH_REFS: ${{ matrix.refs }}
+          PLATFORM_SHA: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |-
-          for row in $(echo "$java_version_info" | jq -c '.[]'); do
-            TAG=$(echo "$row" | jq -r '.tag')
-            HEAD=$(echo "$row" | jq -r '.head')
-            if [[ "$HEAD" == "true" ]]; then
-              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
-            fi
-          done
-        env:
-          java_version_info: ${{ needs.resolve-versions.outputs.java }}
-          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+          read -ra refs <<< "$BENCH_REFS"
+          uv run --frozen otdf-sdk-mgr install benchmark "$BENCH_SDK" "${refs[@]}" \
+            --platform "$PLATFORM_SHA" --otdfctl main
+          status=$(jq -r .status ../xtest/sdk/benchmark.installed.json)
+          echo "status=$status" >> "$GITHUB_OUTPUT"
 
-      - name: Build the ${{ matrix.sdk }} cli
-        if: steps.configure-sdk.outputs.needs-build == 'true'
-        run: make
-        working-directory: otdftests/xtest/sdk/${{ matrix.sdk }}
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+      ######## START SERVICES #############
+      # The platform and its default KAS only. The six extra KAS instances the
+      # ABAC tests need would draw background CPU on the runner doing the
+      # measuring, which is noise rather than merely waste. Skipped on a
+      # neutral preparation: nothing will be measured, and the cells skip
+      # before they need a platform.
+      - name: Start platform services
+        if: steps.prepare.outputs.status == 'success'
+        working-directory: otdftests/otdf-local
+        run: uv run --frozen otdf-local up --services docker,platform
 
-      - name: Build otdfctl
-        if: matrix.sdk != 'go' && fromJson(steps.configure-otdfctl.outputs.heads)[0] != null
-        run: make
-        working-directory: otdftests/xtest/sdk/go
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+      # The same environment `eval $(otdf-local env)` gives a local run: the
+      # manifest path, the provisioning CLI pin, XT_TMP_DIR and the platform
+      # settings. Not on a neutral preparation, which installed no platform
+      # for otdf-local to describe.
+      - name: Export benchmark environment
+        if: steps.prepare.outputs.status == 'success'
+        working-directory: otdftests/otdf-local
+        run: |-
+          uv run --frozen otdf-local env --format json \
+            | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
       ######## MEASURE #############
       # --locked --no-build: install exactly what uv.lock pins, and run no
@@ -1149,6 +1074,7 @@ jobs:
       # Deliberately serial: no -n / --dist. Parallel pytest workers contend
       # for the CPU under measurement and would invalidate every number here.
       # conftest.py refuses to run --bench under xdist for the same reason.
+      # No arm options: the manifest written above names the arms.
       - name: Run performance benchmarks
         id: bench
         run: |-
@@ -1164,42 +1090,44 @@ jobs:
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
-          # Validated and defaulted in resolve-versions.
+          # Validated, defaulted and scaled by arm count in resolve-versions.
           BENCH_PAYLOADS: ${{ needs.resolve-versions.outputs.bench-payloads }}
           BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
-          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          # Also exported by `otdf-local env`; named here so a neutral
+          # preparation, which skips that step, still reports as neutral.
+          BENCH_INSTALLATION_MANIFEST: ${{ github.workspace }}/otdftests/xtest/sdk/benchmark.installed.json
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          # go's heads, not the matrix SDK's: conftest reads this to locate
-          # otdfctl under sdk/go/dist/<head>/, so pointing it at java's or
-          # js's head names a directory that does not exist.
-          OTDFCTL_HEADS: >-
-            ${{ matrix.sdk == 'go' && steps.configure-sdk.outputs.heads
-                || steps.configure-otdfctl.outputs.heads }}
           # The benchmark never touches the audit-log fixture; asserting on
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"
 
-      # Raw per-round samples, not just the verdict. Re-analysing a
-      # surprising result offline beats re-running a 30-minute job to look at
-      # the same numbers again.
+      # Raw per-round samples and the manifest, not just the verdict.
+      # Re-analysing a surprising result offline beats re-running a 30-minute
+      # job to look at the same numbers again.
       - name: Upload benchmark results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: success() || failure()
+        if: always()
         with:
           name: ${{ job.status == 'success' && '✅' || '❌' }} bench-${{ matrix.sdk }}
           path: |
             otdftests/xtest/test-results/benchmarks/*.json
             otdftests/xtest/test-results/*.html
+            otdftests/xtest/sdk/benchmark.installed.json
           if-no-files-found: warn
 
-      - name: Upload server logs on failure
+      - name: Upload service logs on failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: bench-server-logs-${{ matrix.sdk }}
-          path: ${{ steps.run-platform.outputs.platform-log-file }}
+          path: otdftests/xtest/tmp/logs/
           if-no-files-found: ignore
+
+      - name: Stop services
+        if: always()
+        working-directory: otdftests/otdf-local
+        run: uv run --frozen otdf-local down || true
 
   # ZIP64 boundary conformance at 2.1 GiB (DSPX-4592).
   #
