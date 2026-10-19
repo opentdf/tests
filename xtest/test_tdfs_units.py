@@ -182,11 +182,11 @@ class TestZip64ReaderIsBroken:
         assert not tdfs.zip64_reader_is_broken(_stub_sdk("java", None))
 
 
-# --- tdfs.spec_policy_binding_is_rejected -------------------------------------
+# --- tdfs.hexless_policy_binding_is_rejected -------------------------------------
 
 
-class TestSpecPolicyBindingIsRejected:
-    """Which platforms ``test_tdf_with_spec_policy_binding`` requires a failure from.
+class TestHexlessPolicyBindingIsRejected:
+    """Which platforms ``test_tdf_with_hexless_policy_binding`` requires a failure from.
 
     Each "False" here is a platform held to a successful decrypt, so a
     predicate that were too generous would hide a KAS that regressed.
@@ -194,35 +194,35 @@ class TestSpecPolicyBindingIsRejected:
 
     def test_a_pre_fix_release_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("PLATFORM_TAG", "v0.29.0")
-        assert tdfs.spec_policy_binding_is_rejected()
+        assert tdfs.hexless_policy_binding_is_rejected()
 
     def test_the_bug_release_itself_is_rejected(self, monkeypatch: pytest.MonkeyPatch):
         """Boundary: the constant names the first release *with* the bug."""
-        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_BUG
+        major, minor, patch = tdfs.PLATFORM_HEXLESS_POLICY_BINDING_BUG
         monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
-        assert tdfs.spec_policy_binding_is_rejected()
+        assert tdfs.hexless_policy_binding_is_rejected()
 
     def test_a_release_before_the_bug_is_not(self, monkeypatch: pytest.MonkeyPatch):
-        """Before opentdf/platform#2095, KAS accepted the spec form."""
+        """Before opentdf/platform#2095, KAS accepted the hexless form."""
         monkeypatch.setenv("PLATFORM_TAG", "v0.5.2")
-        assert not tdfs.spec_policy_binding_is_rejected()
+        assert not tdfs.hexless_policy_binding_is_rejected()
 
     def test_the_fix_release_itself_is_not(self, monkeypatch: pytest.MonkeyPatch):
         """Boundary: the constant names the first release *with* the fix."""
-        major, minor, patch = tdfs.PLATFORM_SPEC_POLICY_BINDING_FIX
+        major, minor, patch = tdfs.PLATFORM_HEXLESS_POLICY_BINDING_FIX
         monkeypatch.setenv("PLATFORM_TAG", f"v{major}.{minor}.{patch}")
-        assert not tdfs.spec_policy_binding_is_rejected()
+        assert not tdfs.hexless_policy_binding_is_rejected()
 
     def test_a_branch_build_is_not(self, monkeypatch: pytest.MonkeyPatch):
         """main reports the last release's PLATFORM_VERSION, so that is not consulted."""
         monkeypatch.setenv("PLATFORM_TAG", "main")
         monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
-        assert not tdfs.spec_policy_binding_is_rejected()
+        assert not tdfs.hexless_policy_binding_is_rejected()
 
     def test_no_tag_is_not(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("PLATFORM_TAG", raising=False)
         monkeypatch.setenv("PLATFORM_VERSION", "0.29.0")
-        assert not tdfs.spec_policy_binding_is_rejected()
+        assert not tdfs.hexless_policy_binding_is_rejected()
 
 
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------
@@ -420,9 +420,9 @@ class TestEncryptedSegmentSizes:
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
 
 
-# --- spec_policy_binding / change_spec_policy_binding ------------------------
+# --- make_hexless_policy_binding / change_hexless_policy_binding ------------------------
 #
-# The xtest for spec-form policy bindings rewrites a real manifest. If the
+# The xtest for hexless-form policy bindings rewrites a real manifest. If the
 # rewrite produced the wrong bytes, the positive test would fail for the wrong
 # reason and the negative one would pass for it.
 
@@ -461,7 +461,7 @@ def _binding_manifest(binding: object) -> tdfs.Manifest:
 
 _MAC = bytes(range(32))
 _LEGACY = base64.b64encode(_MAC.hex().encode()).decode()
-_SPEC = base64.b64encode(_MAC).decode()
+_HEXLESS = base64.b64encode(_MAC).decode()
 
 
 def _binding_hash(m: tdfs.Manifest) -> str:
@@ -469,27 +469,30 @@ def _binding_hash(m: tdfs.Manifest) -> str:
     return pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb
 
 
-class TestSpecPolicyBinding:
+class TestHexlessPolicyBinding:
     @pytest.mark.parametrize(
         "binding",
         [{"alg": "HS256", "hash": _LEGACY}, _LEGACY],
         ids=["object", "string"],
     )
-    def test_legacy_hex_becomes_spec_form_of_the_same_hmac(self, binding: object):
-        from test_tdfs import spec_policy_binding
+    def test_legacy_hex_becomes_hexless_form_of_the_same_hmac(self, binding: object):
+        from test_tdfs import make_hexless_policy_binding
 
-        assert _binding_hash(spec_policy_binding(_binding_manifest(binding))) == _SPEC
+        assert (
+            _binding_hash(make_hexless_policy_binding(_binding_manifest(binding)))
+            == _HEXLESS
+        )
 
-    def test_spec_form_is_left_as_is(self):
-        from test_tdfs import spec_policy_binding
+    def test_hexless_form_is_left_as_is(self):
+        from test_tdfs import make_hexless_policy_binding
 
-        m = _binding_manifest({"alg": "HS256", "hash": _SPEC})
-        assert _binding_hash(spec_policy_binding(m)) == _SPEC
+        m = _binding_manifest({"alg": "HS256", "hash": _HEXLESS})
+        assert _binding_hash(make_hexless_policy_binding(m)) == _HEXLESS
 
-    def test_altered_spec_form_is_well_formed_but_wrong(self):
-        from test_tdfs import change_spec_policy_binding
+    def test_altered_hexless_form_is_well_formed_but_wrong(self):
+        from test_tdfs import change_hexless_policy_binding
 
-        m = change_spec_policy_binding(
+        m = change_hexless_policy_binding(
             _binding_manifest({"alg": "HS256", "hash": _LEGACY})
         )
         altered = base64.b64decode(_binding_hash(m))
