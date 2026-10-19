@@ -11,7 +11,7 @@ import random
 import pytest
 
 from perf import report, stats
-from perf.report import BenchmarkRecorder, _p_cell
+from perf.report import BenchmarkRecorder, p_cell
 from perf.runner import BenchConfig, CellResult
 from perf.stats import Verdict
 
@@ -52,7 +52,7 @@ class TestPCell:
             p_adjusted_faster=0.0011,
             verdict=Verdict.IMPROVED,
         )
-        assert _p_cell(c) == "0.001"
+        assert p_cell(c) == "0.001"
 
     def test_a_slowdown_shows_the_slower_tail(self):
         c = _comparison(
@@ -63,11 +63,11 @@ class TestPCell:
             p_adjusted_faster=1.0,
             verdict=Verdict.REGRESSION,
         )
-        assert _p_cell(c) == "0.002"
+        assert p_cell(c) == "0.002"
 
     def test_no_change_shows_the_slower_tail(self):
         c = _comparison(1.0, p_value=0.5, p_value_faster=0.5, p_adjusted=0.6)
-        assert _p_cell(c) == "0.600"
+        assert p_cell(c) == "0.600"
 
     @pytest.mark.parametrize(
         ("ratio", "expected"),
@@ -77,15 +77,15 @@ class TestPCell:
     def test_unadjusted_tail_is_used_when_not_corrected(self, ratio, expected):
         # Controls are reported unadjusted: they stay out of the BH families.
         c = _comparison(ratio, p_value=0.02, p_value_faster=0.03)
-        assert _p_cell(c) == expected
+        assert p_cell(c) == expected
 
     def test_tiny_p_is_floored(self):
         c = _comparison(0.5, p_value=1.0, p_value_faster=1e-6, p_adjusted_faster=1e-5)
-        assert _p_cell(c) == "<0.001"
+        assert p_cell(c) == "<0.001"
 
     def test_an_empty_comparison_shows_a_dash(self):
         c = _comparison(math.nan, p_value=math.nan, p_value_faster=math.nan)
-        assert _p_cell(c) == "-"
+        assert p_cell(c) == "-"
 
 
 def _cell(

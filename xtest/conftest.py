@@ -599,8 +599,21 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
         out_dir / f"{name}.json", recorder, bench_config, gate
     )
 
-    summary = report.markdown(recorder, bench_config, gate)
-    report.append_step_summary(summary)
+    # Three renderings of one result. The plain table needs nothing beyond
+    # the JSON; the decision-first summary is a template whose artifact links
+    # CI fills in after upload (see perf/publish.py), and a local copy with
+    # those links dropped is written beside it so a local run reads the same.
+    from perf import presentation
+
+    (out_dir / f"{name}-table.md").write_text(
+        report.markdown(recorder, bench_config, gate)
+    )
+    template = presentation.render(recorder, bench_config, gate)
+    (out_dir / f"{name}.summary.md").write_text(template)
+    summary_path = out_dir / f"{name}.md"
+    summary_path.write_text(presentation.publish(template))
+    if not os.environ.get("BENCH_DEFER_SUMMARY"):
+        report.append_step_summary(presentation.publish(template))
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")
@@ -608,6 +621,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
         for conclusion in recorder.conclusions(bench_config, gate):
             reporter.write_line(report.conclusion_line(conclusion))
         reporter.write_line(f"raw samples and statistics: {json_path}")
+        reporter.write_line(f"summary: {summary_path}")
 
     if config.getoption("--bench-no-gate", default=False):
         return

@@ -637,10 +637,21 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
         "runner_os": os.environ.get("RUNNER_OS", ""),
         "runner_arch": os.environ.get("RUNNER_ARCH", ""),
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "github_run_url": _github_run_url(),
         "platform_version": _platform_version(),
         "seed": config.getoption("--bench-seed"),
         **_installation_metadata(config),
     }
+
+
+def _github_run_url() -> str:
+    """The Actions run this result came from, or empty outside Actions."""
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if not (server and repository and run_id):
+        return ""
+    return f"{server}/{repository}/actions/runs/{run_id}"
 
 
 def _installation_metadata(config: pytest.Config) -> dict[str, object]:
