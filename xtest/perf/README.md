@@ -139,14 +139,46 @@ lists the reason for each cell.
 > Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
 > instead of two means there is nothing to measure until `main` moves.
 
+### Comparing candidates with each other
+
+With more than one candidate, each pair of candidates is also compared
+directly — the same within-round ratio, so the comparison is as fair as the
+one against the reference. These comparisons **never fail the build**: there
+is no incumbent, so "regression" means nothing between them. They are listed
+under **Candidate comparisons** in the summary and in the JSON `conclusions`.
+
+**FASTER** / **SLOWER** — the interval lies entirely outside the
+`[1/threshold, threshold]` band and the matching one-sided adjusted p-value is
+below `alpha / 2`. Half alpha because the question is two-sided: neither
+candidate is privileged, and testing both tails at alpha would double the
+chance of ranking two equal builds.
+
+**TIED** — the interval lies entirely *inside* the band: any real difference
+is smaller than the threshold. A positive finding, and deliberately not PASS,
+which only claims "not slower".
+
+**inconclusive** — anything else, including a missing or underpowered A/A
+control.
+
+Reversing a pair turns FASTER into SLOWER and leaves TIED alone, so the order
+the candidates were listed in does not change any conclusion. They form their
+own correction family: adding candidates costs the regression gate no power.
+
+A **winner** is named for a cell and metric only when one candidate is FASTER
+than *every* other candidate in their own contrasts, and the A/A control did
+not trip. A tie, an inconclusive pair involving a contender, or a tripped
+control — however narrow the interval — means no winner, and the summary says
+which of those it was. Ranking by point estimates is not evidence that two
+candidates differ.
+
 ### The A/A control
 
 Each SDK gets a control cell that compares the reference build **against itself**
 through the identical pipeline. Its true ratio is exactly 1.0 by construction, so
 whatever it reports is the harness's own error on this runner. With K arms the
 control runs K copies of the reference, since the last arm in a round drifts
-further from the first than an adjacent pair does; of its K-1 A/A contrasts, the
-worst one stands as the floor. It does two jobs:
+further from the first than an adjacent pair does; of its C(K,2) copy-to-copy
+contrasts, the worst one stands as the floor. It does two jobs:
 
 - If the control *trips* — its own A/A comparison looks like a real effect — then
   something is systematically biased and **the whole run stops being able to fail
@@ -238,6 +270,7 @@ things; the noise floor will tell you whether you succeeded.
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact (`SCHEMA_VERSION`), step-summary markdown |
+| `conclusions.py` | Candidate-to-candidate conclusions and winner eligibility, read by every renderer |
 | `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
 | `installation.py` | Reads the installation manifest `otdf-sdk-mgr install benchmark` writes. No pytest |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
@@ -560,6 +593,8 @@ two builds doing different amounts of work) is invisible in the output.
 10. Never hand-edit the figures. Change `docs/make_figures.py` and regenerate;
     if a number moves, `--verify` is what tells you whether the figure or the
     world changed.
+11. Never let a comparison between two candidates fail the build, share the
+    gate's correction family, or name a winner the conclusions model did not.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.

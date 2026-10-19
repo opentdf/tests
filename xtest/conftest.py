@@ -586,6 +586,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")
         reporter.write_line(report.headline(recorder, gate))
+        for conclusion in recorder.conclusions(bench_config, gate):
+            reporter.write_line(report.conclusion_line(conclusion))
         reporter.write_line(f"raw samples and statistics: {json_path}")
 
     if config.getoption("--bench-no-gate", default=False):

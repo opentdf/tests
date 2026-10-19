@@ -3,7 +3,17 @@
 A *cell* is one operation at one payload size, measured for 2 to 4 SDK
 builds. The loop runs every arm once per round, in a randomized order, until
 it has either enough precision or no more time. The first arm is the
-*reference*, and every other arm is compared against it.
+*reference*: every other arm is gated against it, and candidates are also
+compared with each other.
+
+Why every arm shares a round, and why that matters beyond two
+-------------------------------------------------------------
+Because every arm is measured in the same round on the same runner, *every*
+pairwise contrast is a within-run ratio -- candidate against candidate as well
+as against the reference. That is what makes "which of these two
+implementations is faster" answerable at all. Two separate two-arm jobs would
+put them on different runners, and this harness's founding premise is that
+timings from different runners are not comparable.
 
 Why rounds rather than "run A 30 times, then B 30 times"
 --------------------------------------------------------
@@ -179,12 +189,24 @@ class CellResult:
         )
 
     def contrast_pairs(self) -> list[tuple[str, str]]:
-        """Every ordered ``(a, b)`` pair the analysis judges.
+        """Every ordered ``(a, b)`` pair the analysis judges, reference first.
 
-        One per candidate, quoted as ``(reference, candidate)`` so it reads as
-        "candidate vs reference".
+        Reference contrasts are quoted as ``(reference, candidate)`` so they
+        read as "candidate vs reference". Candidate-to-candidate pairs follow
+        in configured order, once each: a pair and its inverse are the same
+        measurement read two ways, and reporting both would double-count it
+        in the multiplicity correction. In a control cell those are the
+        copy-to-copy pairs, which give the noise floor for contrasts between
+        arms as far apart in the round as any candidates are.
         """
-        return [(self.reference, b) for b in self.candidates]
+        pairs = [(self.reference, b) for b in self.candidates]
+        others = self.candidates
+        pairs += [(a, b) for i, a in enumerate(others) for b in others[i + 1 :]]
+        return pairs
+
+    def is_reference_pair(self, a: str, b: str) -> bool:
+        """True if this contrast is a candidate against the reference."""
+        return self.reference in (a, b)
 
 
 def contrast_key(cell_id: str, a: str, b: str, metric: str) -> str:
@@ -457,21 +479,29 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
 
     ``GateResult.comparisons`` is keyed by ``"<cell_id>/<b>_vs_<a>/<metric>"``
     (see :func:`contrast_key`) and holds the *finalized* comparisons -- the
-    ones carrying adjusted p-values and verdicts. There is one contrast per
-    candidate, cell and metric: each candidate against the reference.
-    Ungated metrics are included so they appear in the report, but they
-    cannot fail the build, and they are corrected separately from the gated
-    ones: adjusting across tests nobody gates on only makes a real regression
-    harder to confirm.
+    ones carrying adjusted p-values and verdicts. Every pairwise contrast in
+    every cell is there, in three separately corrected groups:
+
+    - **Gated**: a candidate against the reference, on a gated metric. Only
+      these can fail the build.
+    - **Candidate-to-candidate**: two candidates against each other, on any
+      metric. Judged two-sided (FASTER/SLOWER/TIED) and never gated -- see
+      invariant 11 in ``README.md``.
+    - **Ungated**: a candidate against the reference on an ungated metric,
+      reported for context.
+
+    Adjusting the gate across tests nobody gates on only makes a real
+    regression harder to confirm, so none of them shares its family.
 
     Each SDK's cells are paired with *that SDK's* control. A run measuring go
     and java has two harness paths and two noise floors, and judging java's
     cells against go's control would be judging them against a floor that was
     never measured for them. A control with K copies of the reference yields
-    K-1 A/A contrasts, and the worst of them is the floor.
+    C(K,2) A/A contrasts, and the worst of them is the floor.
     """
     comparisons: dict[str, stats.PairedComparison] = {}
     gated: set[str] = set()
+    symmetric: set[str] = set()
     censored: dict[str, str] = {}
     control_keys: set[str] = set()
 
@@ -490,7 +520,11 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
                 if metric == "rss" and floored is not None:
                     censored[key] = floored
                     continue
-                if not result.control and metric in config.gated_metrics:
+                if result.control:
+                    continue
+                if not result.is_reference_pair(a, b):
+                    symmetric.add(key)
+                elif metric in config.gated_metrics:
                     gated.add(key)
 
     # Pick each SDK's noise floor only once every control contrast exists.
@@ -518,6 +552,7 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
     return stats.apply_multiplicity_control(
         comparisons,
         gated=gated,
+        symmetric=symmetric,
         controls=controls,
         control_keys=control_keys,
         censored=censored,

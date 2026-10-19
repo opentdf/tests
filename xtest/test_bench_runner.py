@@ -632,9 +632,12 @@ class TestMultiArmRoundLoop:
         assert result.candidates == ("a", "b")
         assert result.arm_labels == {REF: "sdk@base", "a": "sdk@a", "b": "sdk@b"}
 
-    def test_every_candidate_is_contrasted_with_the_reference_only(self):
+    def test_contrast_pairs_cover_every_pair_once(self):
         result, _ = run_arms({REF: 1.0, "a": 1.0, "b": 1.0})
-        assert result.contrast_pairs() == [(REF, "a"), (REF, "b")]
+        # Reference contrasts first, then candidate-to-candidate. A pair and
+        # its inverse are the same measurement, so only one of each appears.
+        assert result.contrast_pairs() == [(REF, "a"), (REF, "b"), ("a", "b")]
+        assert not result.is_reference_pair("a", "b")
 
     def test_contrast_direction_is_b_over_a(self):
         result, _ = run_arms({REF: 1.0, "slow": 1.5}, noise=0.01)
@@ -794,16 +797,39 @@ class TestGateAtSeveralArms:
         assert gate.comparisons[cpu].verdict is stats.Verdict.REGRESSION
         assert cpu not in gate.regressions
 
-    def test_no_contrast_between_two_candidates_is_judged(self):
-        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
-        assert k("encrypt", "wall", "a", "b") not in gate.comparisons
+    def test_a_gap_between_candidates_never_fails_the_build(self):
+        # Neither candidate regressed against the reference; one is simply
+        # slower than the other. That is a comparison, and it does not turn
+        # the build red -- invariant 11.
+        gate = self.gate({REF: 1.3, "slow": 1.3, "quick": 1.0})
+        h2h = k("encrypt", "wall", "slow", "quick")
+        assert gate.comparisons[h2h].verdict is stats.Verdict.FASTER
+        assert not gate.should_fail
+        assert h2h not in gate.regressions and h2h not in gate.improvements
+        assert h2h in gate.ranked
 
-    def test_the_control_yields_one_contrast_per_copy_of_the_reference(self):
+    def test_candidates_are_compared_in_the_symmetric_vocabulary(self):
+        # PASS and REGRESSION presume an incumbent; between two candidates
+        # there is none.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
+        h2h = gate.comparisons[k("encrypt", "wall", "a", "b")]
+        assert h2h.verdict is stats.Verdict.SLOWER
+
+    def test_indistinguishable_candidates_are_tied_not_passed(self):
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0}, noise=0.01)
+        assert (
+            gate.comparisons[k("encrypt", "wall", "a", "b")].verdict
+            is stats.Verdict.TIED
+        )
+
+    def test_the_control_yields_one_contrast_per_pair_of_copies(self):
+        # C(4,2), not K-1: candidate contrasts span copies as far apart in
+        # the round as any two candidates, and the floor has to cover them.
         gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0})
         aa = [
             c for c in gate.comparisons if c.startswith("aa/") and c.endswith("/wall")
         ]
-        assert len(aa) == 3
+        assert len(aa) == 6
 
     def test_the_noise_floor_is_the_worst_control_contrast(self):
         gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0})
