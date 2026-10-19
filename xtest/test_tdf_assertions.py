@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import assertions
 import tdfs
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
@@ -30,6 +31,10 @@ def test_manifest_validity_with_assertions(
     )
 
     tdfs.validate_manifest_schema(ct_file)
+    assertions.assert_bound(
+        tdfs.manifest_json(ct_file),
+        assertions.load_assertions(assertion_file_no_keys),
+    )
 
 
 #### ASSERTION TESTS
@@ -58,6 +63,10 @@ def test_tdf_assertions_unkeyed(
         az=assertion_file_no_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
+    )
+    assertions.assert_bound(
+        tdfs.manifest_json(ct_file),
+        assertions.load_assertions(assertion_file_no_keys),
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
@@ -88,6 +97,11 @@ def test_tdf_assertions_with_keys(
         az=assertion_file_rs_and_hs_keys,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
+    )
+    assertions.assert_bound(
+        tdfs.manifest_json(ct_file),
+        assertions.load_assertions(assertion_file_rs_and_hs_keys),
+        assertions.load_verification_keys(assertion_verification_file_rs_and_hs_keys),
     )
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
 
@@ -129,6 +143,11 @@ def test_tdf_assertions_422_format(
         attr_values=attribute_default_rsa.value_fqns,
     )
     looks_like_422(tdfs.manifest(ct_file))
+    assertions.assert_bound(
+        tdfs.manifest_json(ct_file),
+        assertions.load_assertions(assertion_file_rs_and_hs_keys),
+        assertions.load_verification_keys(assertion_verification_file_rs_and_hs_keys),
+    )
 
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
 
