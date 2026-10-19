@@ -13,6 +13,7 @@ from otdf_sdk_mgr.bench_prepare import (
 )
 from otdf_sdk_mgr.manifest import (
     ArtifactIdentity,
+    InstallationManifest,
     PreparationStatus,
     ResolvedArtifact,
     dist_slug_for,
@@ -179,6 +180,10 @@ class TestPrepareBenchmark:
         # absent". A leftover `dist/main` from an earlier run is common, and
         # naming it would claim a provenance this preparation never checked.
         assert all(arm.installed_path == "" for arm in manifest.sdk_arms)
+        # Recorded on every exit path: the arms are bare refs, and xtest needs
+        # the SDK to turn them back into arms -- including to report neutral.
+        assert manifest.metadata["sdk"] == "go"
+        assert InstallationManifest.read(tmp_path / "m.json").metadata["sdk"] == "go"
 
     @patch("otdf_sdk_mgr.bench_prepare.install_artifact")
     @patch("otdf_sdk_mgr.bench_prepare.resolve_ordered")

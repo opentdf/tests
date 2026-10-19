@@ -235,7 +235,10 @@ def prepare_benchmark(
     if manifest_path is None:
         manifest_path = default_manifest_path()
 
-    manifest = InstallationManifest()
+    # The arms are recorded as bare refs, so the SDK they belong to has to be
+    # recorded too: xtest reads it to turn each installed tag back into an
+    # `sdk@tag` arm.
+    manifest = InstallationManifest(metadata={"sdk": sdk})
 
     # Resolve SDK arms
     resolved, error = resolve_ordered(sdk, requested_aliases)

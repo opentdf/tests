@@ -3,8 +3,8 @@
 The experiment matrix, the payload files, the arm selection, and the shared
 time budget all live here. The measurement loop itself is in ``perf/runner.py``
 and the statistics in ``perf/stats.py``; this module is the glue that turns
-pytest's world (options, fixtures, SDK discovery) into the runner's world
-(two arms and a config).
+pytest's world (options, fixtures, SDK discovery, the installation manifest)
+into the runner's world (2 to 4 arms and a config).
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import platform
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -20,32 +21,39 @@ import pytest
 
 import abac
 import tdfs
-from perf import report
+from perf import installation, report
 from perf.cells import PAYLOADS, BenchCell
+from perf.config import budget_seconds, requested_arms
 from perf.runner import Arm, BenchConfig, Budget, Invocation
+
+#: The run's installation manifest, read once in ``pytest_configure``.
+INSTALLATION_KEY: pytest.StashKey[installation.Installation | None] = pytest.StashKey()
 
 
 class ArmSelectionError(Exception):
-    """The two builds a comparison needs are not both installed."""
+    """The builds a comparison needs are not all installed."""
 
 
 def select_arms(
     sdk: str,
+    specs: Sequence[str] | None = None,
     *,
     baseline_spec: str | None = None,
     candidate_spec: str | None = None,
-) -> tuple[tdfs.SDK, tdfs.SDK]:
-    """Pick (baseline, candidate) builds for one SDK.
+) -> tuple[tdfs.SDK, ...]:
+    """Pick the builds to compare for one SDK, reference first.
 
-    By default the candidate is the branch build (``main``) and the baseline
-    is the newest installed release, which is exactly what the CI setup action
-    lays down side by side. Explicit specs override either side, for
-    reproducing a comparison or for pinning a specific release.
+    ``specs`` names every arm, in order: the reproduction of a recorded
+    comparison, or a multi-arm run. Without it the run is the nightly two-arm
+    comparison -- the newest installed final release as the reference and the
+    branch build (``main``) as the candidate -- and ``baseline_spec`` or
+    ``candidate_spec`` may override either side of that pair.
 
     Raises:
-        ArmSelectionError: if either side is missing or the two resolve to the
-            same build (a comparison of a build against itself is only
-            meaningful as the explicit A/A control).
+        ArmSelectionError: if any named build is missing, if the default pair
+            cannot be found, or if two arms resolve to the same build (a
+            comparison of a build against itself is only meaningful as the
+            explicit A/A control).
     """
     installed = tdfs.all_versions_of(sdk)  # pyright: ignore[reportArgumentType]
     if not installed:
@@ -62,6 +70,16 @@ def select_arms(
                 "name one exactly, e.g. go@v0.29.0"
             )
         return matches[0]
+
+    if specs:
+        arms = tuple(
+            resolve(spec, "reference" if i == 0 else f"arm {i + 1}")
+            for i, spec in enumerate(specs)
+        )
+        if len(set(arms)) != len(arms):
+            names = ", ".join(str(a) for a in arms)
+            raise ArmSelectionError(f"arms resolved to the same build: {names}")
+        return arms
 
     if candidate_spec:
         candidate = resolve(candidate_spec, "candidate")
@@ -101,11 +119,93 @@ def select_arms(
 # --- Session-scoped configuration -------------------------------------------
 
 
+def installation_for(config: pytest.Config) -> installation.Installation | None:
+    """The manifest this run was prepared with, or None if it was not.
+
+    Read once and kept on the config, so every fixture and the end-of-run
+    report see the same record even if the file changes mid-session.
+    """
+    if INSTALLATION_KEY not in config.stash:
+        try:
+            config.stash[INSTALLATION_KEY] = installation.from_env()
+        except installation.ManifestError as e:
+            raise pytest.UsageError(str(e)) from e
+    return config.stash[INSTALLATION_KEY]
+
+
+def arm_specs_from_options(config: pytest.Config) -> tuple[str, ...] | None:
+    """The run's ordered arm specs, reference first, or None for the defaults.
+
+    Explicit options win. Without them, a prepared run measures exactly what
+    preparation installed, in the order it was requested -- so a local run and
+    a CI run that prepared the same request measure the same arms without
+    anyone restating them. A manifest that cannot be measured (failed,
+    partial, or neutral) yields no specs here; :func:`preparation_problem`
+    says why, per SDK.
+    """
+    refs = cast(str | None, config.getoption("--bench-refs"))
+    baseline = cast(str | None, config.getoption("--bench-baseline"))
+    candidate = cast(str | None, config.getoption("--bench-candidate"))
+    if refs is None and (baseline is None) != (candidate is None):
+        # A lone --bench-baseline or --bench-candidate overrides one side of
+        # the default pair; `select_arms` defaults the other.
+        return None
+    try:
+        arms = requested_arms(refs, baseline, candidate)
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+    if arms:
+        return tuple(str(a) for a in arms)
+    prepared = installation_for(config)
+    if prepared is not None and prepared.usable:
+        return prepared.arm_specs()
+    return None
+
+
+def preparation_problem(config: pytest.Config, sdk: str) -> str | None:
+    """Why this SDK's prepared arms cannot be measured, or None.
+
+    Only consulted when no arms were named explicitly: an explicit request is
+    a statement that the manifest is not what this run should measure.
+    """
+    if any(
+        config.getoption(o) is not None
+        for o in ("--bench-refs", "--bench-baseline", "--bench-candidate")
+    ):
+        return None
+    prepared = installation_for(config)
+    if prepared is None or prepared.sdk != sdk or prepared.usable:
+        return None
+    if prepared.neutral:
+        return f"neutral preparation: {prepared.status_message}"
+    return (
+        f"preparation {prepared.status or 'incomplete'}: "
+        f"{prepared.status_message or 'fewer than two arms were installed'}"
+    )
+
+
+def preparation_is_neutral(config: pytest.Config) -> bool:
+    """True if this run's only prepared arms collapsed onto one commit."""
+    prepared = installation_for(config)
+    return (
+        prepared is not None
+        and prepared.neutral
+        and arm_specs_from_options(config) is None
+    )
+
+
+def arm_count(config: pytest.Config) -> int:
+    """How many arms this run will measure per cell."""
+    specs = arm_specs_from_options(config)
+    return len(specs) if specs else 2
+
+
 def config_from_options(config: pytest.Config) -> BenchConfig:
     """Build a :class:`BenchConfig` from the ``--bench-*`` options.
 
-    Every option has a default, so ``getoption`` never returns None here; the
-    casts are for the type checker, which cannot see the parser setup.
+    Every option except the budget has a default, so ``getoption`` never
+    returns None for them; the casts are for the type checker, which cannot
+    see the parser setup. The budget defaults to one scaled by the arm count.
     """
 
     def as_int(name: str) -> int:
@@ -114,12 +214,13 @@ def config_from_options(config: pytest.Config) -> BenchConfig:
     def as_float(name: str) -> float:
         return float(cast(float, config.getoption(name)))
 
+    budget = cast(float | None, config.getoption("--bench-budget-seconds"))
     try:
         return BenchConfig(
             min_rounds=as_int("--bench-min-rounds"),
             max_rounds=as_int("--bench-max-rounds"),
             warmup=as_int("--bench-warmup"),
-            budget_seconds=as_float("--bench-budget-seconds"),
+            budget_seconds=budget_seconds(budget, arm_count(config)),
             seed=as_int("--bench-seed"),
             threshold=as_float("--bench-threshold"),
         )
@@ -135,7 +236,7 @@ def bench_config(request: pytest.FixtureRequest) -> BenchConfig:
 
 @pytest.fixture(scope="session")
 def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
-    """Generate one plaintext file per payload size, shared by both arms.
+    """Generate one plaintext file per payload size, shared by every arm.
 
     Content is pseudo-random but seeded, so a rerun measures byte-identical
     input. Random rather than repetitive because compressible input would let
@@ -186,40 +287,70 @@ def _selected_cells(config: pytest.Config) -> list[BenchCell]:
 
 @dataclass(frozen=True, slots=True)
 class BenchArms:
-    baseline: tdfs.SDK
-    candidate: tdfs.SDK
+    """The builds one SDK's cells compare, reference first."""
+
+    arms: tuple[tdfs.SDK, ...]
+
+    @property
+    def reference(self) -> tdfs.SDK:
+        """The build every candidate is compared against."""
+        return self.arms[0]
+
+    @property
+    def candidates(self) -> tuple[tdfs.SDK, ...]:
+        """Every other arm -- one in the nightly comparison, up to three."""
+        return self.arms[1:]
 
 
 class ArmResolver:
-    """Resolves and memoizes the two builds to compare, per SDK.
+    """Resolves and memoizes the builds to compare, per SDK.
 
     Resolution is lazy so that a missing build skips one SDK's cells with a
     readable reason instead of erroring out every cell in the module.
     """
 
-    def __init__(self, baseline_spec: str | None, candidate_spec: str | None) -> None:
+    def __init__(
+        self,
+        specs: Sequence[str] | None,
+        *,
+        baseline_spec: str | None = None,
+        candidate_spec: str | None = None,
+        problem: dict[str, str | None] | None = None,
+    ) -> None:
+        self._specs = tuple(specs) if specs else None
         self._baseline_spec = baseline_spec
         self._candidate_spec = candidate_spec
+        self._problem = problem or {}
         self._cache: dict[str, BenchArms] = {}
 
     def __call__(self, sdk: str) -> BenchArms:
         cached = self._cache.get(sdk)
         if cached is None:
-            baseline, candidate = select_arms(
-                sdk,
-                baseline_spec=_spec_for(self._baseline_spec, sdk),
-                candidate_spec=_spec_for(self._candidate_spec, sdk),
+            problem = self._problem.get(sdk)
+            if problem:
+                raise ArmSelectionError(problem)
+            cached = self._cache[sdk] = BenchArms(
+                select_arms(
+                    sdk,
+                    _specs_for(self._specs, sdk),
+                    baseline_spec=_spec_for(self._baseline_spec, sdk),
+                    candidate_spec=_spec_for(self._candidate_spec, sdk),
+                )
             )
-            cached = self._cache[sdk] = BenchArms(baseline, candidate)
         return cached
 
 
 @pytest.fixture(scope="module")
 def bench_arms(request: pytest.FixtureRequest) -> ArmResolver:
-    """Resolver for the (baseline, candidate) pair of any SDK in the run."""
+    """Resolver for the arms of any SDK in the run, reference first."""
+    config = request.config
+    specs = arm_specs_from_options(config)
+    cells = _selected_cells(config)
     return ArmResolver(
-        cast(str | None, request.config.getoption("--bench-baseline")),
-        cast(str | None, request.config.getoption("--bench-candidate")),
+        specs,
+        baseline_spec=None if specs else config.getoption("--bench-baseline"),
+        candidate_spec=None if specs else config.getoption("--bench-candidate"),
+        problem={c.sdk: preparation_problem(config, c.sdk) for c in cells},
     )
 
 
@@ -230,8 +361,20 @@ def _spec_for(spec: str | None, sdk: str) -> str | None:
     return spec if spec.split("@", 1)[0] == sdk else None
 
 
+def _specs_for(specs: Sequence[str] | None, sdk: str) -> tuple[str, ...] | None:
+    """Return ``specs`` only if they name this SDK, so one flag covers a run.
+
+    A run that measures several SDKs but names arms for one of them lets the
+    others fall back to their default pair. Validation has already required
+    every spec to name the same SDK.
+    """
+    if not specs or specs[0].split("@", 1)[0] != sdk:
+        return None
+    return tuple(specs)
+
+
 #: Features whose presence changes what an encrypt or decrypt actually *does*.
-#: If the two arms disagree on one of these they are not performing the same
+#: If two arms disagree on one of these they are not performing the same
 #: operation, and a timing difference between them is a difference in work,
 #: not in speed.
 _COMPARABILITY_FEATURES: tuple[tdfs.feature_type, ...] = (
@@ -242,44 +385,49 @@ _COMPARABILITY_FEATURES: tuple[tdfs.feature_type, ...] = (
 
 
 def comparability_problem(arms: BenchArms) -> str | None:
-    """Return why these two builds cannot be fairly compared, or None."""
+    """Return why these builds cannot be fairly compared, or None.
+
+    Every candidate is checked against the reference, since the reference is
+    what each candidate's contrast is taken against: a candidate that
+    disagrees with it invalidates its own comparison whatever the other
+    candidates do. Agreement is transitive through the reference, so this
+    also establishes that the candidates agree with each other.
+    """
     for feature in _COMPARABILITY_FEATURES:
-        if arms.baseline.supports(feature) != arms.candidate.supports(feature):
+        ref_has = arms.reference.supports(feature)
+        for arm in arms.candidates:
+            if arm.supports(feature) == ref_has:
+                continue
             supporter, other = (
-                (arms.baseline, arms.candidate)
-                if arms.baseline.supports(feature)
-                else (arms.candidate, arms.baseline)
+                (arms.reference, arm) if ref_has else (arm, arms.reference)
             )
             return (
                 f"{supporter} supports [{feature}] and {other} does not, so the "
-                "two arms would not be doing the same work"
+                "arms would not be doing the same work"
             )
     return None
 
 
 def pinned_target_mode(arms: BenchArms) -> tdfs.container_version | None:
-    """Pick one container version both arms emit, or None for their default.
+    """Pick one container version every arm emits, or None for their default.
 
-    Letting each arm choose its own target would compare two output formats.
-    ``None`` is only returned when neither arm can be told which to use, in
+    Letting each arm choose its own target would compare output formats.
+    ``None`` is only returned when the arms cannot be told which to use, in
     which case :func:`comparability_problem` has already established that they
     agree on the relevant features and will pick the same one.
     """
-    if not (
-        arms.baseline.supports("hexaflexible")
-        and arms.candidate.supports("hexaflexible")
-    ):
+    if not all(a.supports("hexaflexible") for a in arms.arms):
         return None
-    if arms.baseline.supports("hexless") and arms.candidate.supports("hexless"):
+    if all(a.supports("hexless") for a in arms.arms):
         return "4.3.0"
     return "4.2.2"
 
 
 class CiphertextFactory:
-    """Baseline-produced ciphertexts for the decrypt cells, made on demand.
+    """Reference-produced ciphertexts for the decrypt cells, made on demand.
 
-    Both arms of a decrypt comparison must read the *same* file. If each arm
-    decrypted its own output, a difference in how the two builds *write* a TDF
+    Every arm of a decrypt comparison must read the *same* file. If each arm
+    decrypted its own output, a difference in how the builds *write* a TDF
     would show up as a difference in how fast they read one.
     """
 
@@ -295,12 +443,13 @@ class CiphertextFactory:
         self._cache: dict[tuple[str, str], Path] = {}
 
     def __call__(self, arms: BenchArms, payload_label: str) -> Path:
-        key = (str(arms.baseline), payload_label)
+        reference = arms.reference
+        key = (str(reference), payload_label)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
-        ct_file = self._tmp_dir / f"bench-ct-{arms.baseline}-{payload_label}.tdf"
-        arms.baseline.encrypt(
+        ct_file = self._tmp_dir / f"bench-ct-{reference}-{payload_label}.tdf"
+        reference.encrypt(
             self._payloads[payload_label],
             ct_file,
             container="ztdf",
@@ -320,10 +469,10 @@ def bench_ciphertexts(
 ) -> CiphertextFactory:
     """Ciphertext source for decrypt cells.
 
-    Pinned to the explicit RSA attribute so both arms wrap with RSA regardless
-    of what base key the platform happens to have configured -- an arm that
-    silently switched to EC would look slower for reasons that have nothing to
-    do with a regression.
+    Pinned to the explicit RSA attribute so every arm wraps with RSA
+    regardless of what base key the platform happens to have configured -- an
+    arm that silently switched to EC would look slower for reasons that have
+    nothing to do with a regression.
     """
     return CiphertextFactory(bench_payloads, tmp_dir, attribute_default_rsa.value_fqns)
 
@@ -336,28 +485,30 @@ def build_arms(
     ct_file: Path | None,
     tmp_dir: Path,
     attr_values: list[str],
-) -> tuple[Arm, Arm]:
-    """Turn a cell plus its two builds into two ready-to-run invocations.
+) -> tuple[Arm, ...]:
+    """Turn a cell plus its builds into one ready-to-run invocation each.
 
     Everything that is not the build under test is pinned identically across
-    the arms: same plaintext, same attribute (so both wrap with RSA), same
-    container, same target mode. A functional difference between the builds
-    that changed any of these would otherwise show up as a speed difference.
+    the arms: same plaintext, same attribute (so every arm wraps with RSA),
+    same container, same target mode. A functional difference between the
+    builds that changed any of these would otherwise show up as a speed
+    difference.
 
-    For decrypt, both arms read the *same* ``ct_file``, produced once by the
-    baseline. Letting each arm decrypt its own output would compare the cost
-    of reading two different files.
+    For decrypt, every arm reads the *same* ``ct_file``, produced once by the
+    reference. Letting each arm decrypt its own output would compare the cost
+    of reading different files.
 
-    In a control cell both arms are the baseline build, so the pair differs
-    only in the output path -- exactly the harness overhead the A/A cell
-    exists to measure.
+    In a control cell every arm is the reference build, so they differ only in
+    the output path -- exactly the harness overhead the A/A cell exists to
+    measure. It has as many arms as the real cells rather than a cheap pair:
+    in a K-arm round the last arm runs K-1 invocations after the first and
+    carries more drift than an adjacent pair does, and a two-arm control would
+    understate the noise of the contrasts being judged.
     """
-    baseline_sdk = arms.baseline
-    candidate_sdk = arms.baseline if cell.control else arms.candidate
     target_mode = pinned_target_mode(arms)
 
-    def invocation(sdk: tdfs.SDK, role: str) -> Invocation:
-        out = tmp_dir / f"bench-{cell.id}-{role}"
+    def invocation(sdk: tdfs.SDK, arm_id: str) -> Invocation:
+        out = tmp_dir / f"bench-{cell.id}-{arm_id}"
         if cell.operation == "encrypt":
             out = out.with_suffix(".tdf")
             argv, env = sdk.encrypt_command(
@@ -374,9 +525,17 @@ def build_arms(
             argv, env = sdk.decrypt_command(ct_file, out, container="ztdf")
         return Invocation(argv, env, out)
 
-    return (
-        Arm("baseline", str(baseline_sdk), invocation(baseline_sdk, "baseline")),
-        Arm("candidate", str(candidate_sdk), invocation(candidate_sdk, "candidate")),
+    if cell.control:
+        # Same build K times. The ids have to differ -- they key the sample
+        # vectors -- so they are numbered rather than named after the version.
+        builds = [
+            (f"{arms.reference.version}#{i + 1}", arms.reference)
+            for i in range(len(arms.arms))
+        ]
+    else:
+        builds = [(sdk.version, sdk) for sdk in arms.arms]
+    return tuple(
+        Arm(arm_id, str(sdk), invocation(sdk, arm_id)) for arm_id, sdk in builds
     )
 
 
@@ -397,6 +556,24 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
         "platform_version": _platform_version(),
         "seed": config.getoption("--bench-seed"),
+        **_installation_metadata(config),
+    }
+
+
+def _installation_metadata(config: pytest.Config) -> dict[str, object]:
+    """Provenance from the installation manifest, when the run was prepared.
+
+    Carried into the artifact so a result names the commits it measured
+    rather than only their dist tags, which a moving branch reuses.
+    ``preparation`` is the explicit status a reader checks first: ``neutral``
+    means every requested alias named one commit and nothing was compared.
+    """
+    prepared = installation_for(config)
+    if prepared is None:
+        return {}
+    return {
+        "installation": prepared.to_dict(),
+        "preparation": "neutral" if preparation_is_neutral(config) else prepared.status,
     }
 
 

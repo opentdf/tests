@@ -338,6 +338,13 @@ def assess_noise_floor(
     )
 
 
+def _noise_rank(n: NoiseFloor) -> tuple[bool, bool, float]:
+    """Order noise floors from most to least reassuring."""
+    # A NaN width is an unusable interval, which is worse than any real one.
+    width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
+    return (n.tripped, n.underpowered, width)
+
+
 def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     """The least reassuring control in the run, or None if there were none.
 
@@ -345,13 +352,32 @@ def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     harness may be biased on this runner, and averaging that away with two
     quiet ones is exactly the reassurance the control exists to withhold.
     """
+    return max(noises, key=_noise_rank, default=None)
 
-    def rank(n: NoiseFloor) -> tuple[bool, bool, float]:
-        # A NaN width is an unusable interval, which is worse than any real one.
-        width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
-        return (n.tripped, n.underpowered, width)
 
-    return max(noises, key=rank, default=None)
+def worst_control_key(
+    comparisons: Mapping[str, PairedComparison],
+    keys: Sequence[str],
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+) -> str | None:
+    """Which of several A/A contrasts should stand as the noise floor.
+
+    A K-arm control cell yields one A/A contrast per copy of the reference
+    rather than one, and they are not interchangeable: the last copy in a
+    round runs K-1 invocations after the first, so it carries more
+    within-round drift than an adjacent pair does. Taking the worst keeps the
+    floor honest for the widest-spaced contrast the run actually judges.
+    Taking whichever came first would let dict ordering decide how noisy the
+    run is allowed to look.
+
+    Ties break on input order, so the choice is reproducible across runs.
+    """
+    ranked = [
+        (_noise_rank(assess_noise_floor(comparisons.get(k), threshold=threshold)), i, k)
+        for i, k in enumerate(keys)
+    ]
+    return max(ranked, key=lambda r: (r[0], -r[1]))[2] if ranked else None
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:

@@ -6,6 +6,7 @@ most of these is not the message but that something is raised at all.
 """
 
 import math
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -22,9 +23,12 @@ from perf.config import (
     ArmRequest,
     BenchConfig,
     BenchmarkRequest,
+    budget_seconds,
     default_budget_for_arm_count,
     normalize_baseline_candidate,
     parse_arm_spec,
+    parse_refs,
+    requested_arms,
     validate_sdk_name,
 )
 
@@ -218,6 +222,56 @@ class TestDefaultBudgetForArmCount:
             default_budget_for_arm_count(1)
 
 
+class TestParseRefs:
+    @pytest.mark.parametrize(
+        "spec",
+        ["go@v0.29.0,go@main", "go@v0.29.0 go@main go@a", "go@1, go@2 ,go@3,go@4"],
+    )
+    def test_two_to_four_refs_parse_in_order(self, spec: str):
+        arms = parse_refs(spec)
+        assert 2 <= len(arms) <= MAX_ARM_COUNT == 4
+        assert arms[0].name == "go"
+        assert str(arms[0]) == spec.replace(",", " ").split()[0]
+
+    @pytest.mark.parametrize(
+        ("spec", "match"),
+        [
+            ("go@main", "need 2 to 4"),
+            ("go@1,go@2,go@3,go@4,go@5", "at most 4"),
+            ("go@main,go@main", "duplicate"),
+            ("go@main,java@main", "same SDK"),
+            ("gp@main,gp@v1", "unknown SDK"),
+            ("go@,go@main", "empty version"),
+        ],
+    )
+    def test_invalid_requests_are_refused(self, spec: str, match: str):
+        with pytest.raises(ValueError, match=match):
+            parse_refs(spec)
+
+
+class TestRequestedArms:
+    def test_baseline_and_candidate_are_an_adapter_onto_refs(self):
+        assert requested_arms(None, "go@v0.29.0", "go@main") == parse_refs(
+            "go@v0.29.0,go@main"
+        )
+
+    def test_mixing_the_forms_is_refused(self):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            requested_arms("go@a,go@b", "go@v0.29.0", None)
+
+    def test_nothing_named_defers_to_arm_selection(self):
+        assert requested_arms(None, None, None) == ()
+
+
+class TestBudgetSeconds:
+    def test_the_default_scales_with_arm_count(self):
+        assert budget_seconds(None, 2) == 1500.0
+        assert budget_seconds(None, 3) == 2250.0
+
+    def test_an_explicit_budget_is_taken_as_given(self):
+        assert budget_seconds(900.0, 4) == 900.0
+
+
 class _FakeConfig:
     """Just enough of ``pytest.Config`` for the ``--bench`` checks in ``pytest_configure``."""
 
@@ -225,6 +279,7 @@ class _FakeConfig:
         self._options: dict[str, object] = {
             "--bench": True,
             "--sdks": "go",
+            "--bench-refs": None,
             "--bench-baseline": None,
             "--bench-candidate": None,
             "--bench-threshold": stats.DEFAULT_THRESHOLD,
@@ -235,6 +290,7 @@ class _FakeConfig:
             "--bench-seed": 0,
             "numprocesses": None,
         } | opts
+        self.stash = pytest.Stash()
 
     def getoption(self, name: str, default: object = None) -> object:
         return self._options.get(name, default)
@@ -242,6 +298,13 @@ class _FakeConfig:
 
 def _configure(**opts: object) -> None:
     conftest.pytest_configure(cast(pytest.Config, _FakeConfig(**opts)))
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `otdf-local env` exports this; a developer's shell must not change what
+    # these tests see.
+    monkeypatch.delenv("BENCH_INSTALLATION_MANIFEST", raising=False)
 
 
 class TestPytestConfigure:
@@ -304,6 +367,35 @@ class TestPytestConfigure:
         # with everything else that would otherwise be silently ignored.
         with pytest.raises(pytest.UsageError, match="unknown SDK ''"):
             _configure(**{"--bench-baseline": ""})
+
+    def test_multi_arm_refs_accepted(self):
+        _configure(**{"--bench-refs": "go@v0.29.0,go@main,go@my-branch"})
+
+    @pytest.mark.parametrize(
+        ("opts", "match"),
+        [
+            (
+                {"--bench-refs": "go@a,go@b", "--bench-candidate": "go@main"},
+                "cannot be combined",
+            ),
+            ({"--bench-refs": "go@1,go@2,go@3,go@4,go@5"}, "at most 4"),
+            ({"--sdks": "java", "--bench-refs": "go@a,go@b"}, "not being benchmarked"),
+        ],
+    )
+    def test_bad_refs_rejected(self, opts: dict[str, object], match: str):
+        with pytest.raises(pytest.UsageError, match=match):
+            _configure(**opts)
+
+    def test_an_unreadable_manifest_is_a_usage_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        # Set means "this run was prepared"; measuring whatever is in dist/
+        # instead would attach no provenance without saying so.
+        monkeypatch.setenv(
+            "BENCH_INSTALLATION_MANIFEST", str(tmp_path / "missing.json")
+        )
+        with pytest.raises(pytest.UsageError, match="cannot read"):
+            _configure()
 
     def test_noop_without_bench(self):
         _configure(**{"--bench": False, "--bench-baseline": "gp@main"})

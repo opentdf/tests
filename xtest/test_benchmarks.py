@@ -1,8 +1,8 @@
 """SDK performance regression cells.
 
-One test per cell: an operation at a payload size, measuring the newest
-installed release against the branch build on the same runner, in the same
-round, in a randomized order.
+One test per cell: an operation at a payload size, measuring 2 to 4 builds --
+by default the newest installed release against the branch build -- on the
+same runner, in the same round, in a randomized order.
 
 **These tests do not assert.** Each one records its raw samples and passes.
 The verdict cannot be reached cell by cell: the multiplicity correction is
@@ -17,7 +17,7 @@ Nothing is collected here without ``--bench``; see ``conftest.py``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
 import pytest
 
@@ -30,22 +30,24 @@ pytestmark = pytest.mark.benchmark
 
 
 def test_sdk_performance(
+    request: pytest.FixtureRequest,
     bench_cell: BenchCell,
     bench_config: runner.BenchConfig,
     bench_arms: bench.ArmResolver,
-    bench_payloads: dict[str, Path],
-    bench_ciphertexts: bench.CiphertextFactory,
     bench_budget: runner.Budget,
     bench_recorder: report.BenchmarkRecorder,
-    attribute_default_rsa: abac.Attribute,
     tmp_dir: Path,
 ) -> None:
     """Measure one cell and record it; the session-wide gate decides.
 
     A cell that cannot be measured -- a missing build, two builds that would
-    not be doing the same work, a budget that ran out -- is skipped *and*
-    recorded as skipped, so that a quiet report is visibly quiet rather than
-    indistinguishable from a clean one.
+    not be doing the same work, a neutral preparation, a budget that ran out
+    -- is skipped *and* recorded as skipped, so that a quiet report is
+    visibly quiet rather than indistinguishable from a clean one.
+
+    The payloads, ciphertexts and attribute are requested only once the arms
+    are known to be measurable. They need a running platform; a cell that is
+    going to skip anyway -- every cell of a neutral preparation -- must not.
     """
 
     def bail(reason: str) -> NoReturn:
@@ -61,12 +63,20 @@ def test_sdk_performance(
     if problem:
         bail(problem)
 
+    bench_payloads = cast(dict[str, Path], request.getfixturevalue("bench_payloads"))
+    bench_ciphertexts = cast(
+        bench.CiphertextFactory, request.getfixturevalue("bench_ciphertexts")
+    )
+    attribute_default_rsa = cast(
+        abac.Attribute, request.getfixturevalue("attribute_default_rsa")
+    )
+
     ct_file = (
         bench_ciphertexts(arms, bench_cell.payload.label)
         if bench_cell.operation == "decrypt"
         else None
     )
-    baseline, candidate = bench.build_arms(
+    arms_to_run = bench.build_arms(
         bench_cell,
         arms,
         pt_file=bench_payloads[bench_cell.payload.label],
@@ -78,8 +88,7 @@ def test_sdk_performance(
     try:
         result = runner.run_cell(
             bench_cell.id,
-            baseline,
-            candidate,
+            arms_to_run,
             bench_config,
             deadline=bench_budget.next_deadline(),
             control=bench_cell.control,
