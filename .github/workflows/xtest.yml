@@ -1188,6 +1188,17 @@ jobs:
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"
 
+      # Under --bench-prune-scratch every bench-* file is gone by the end of
+      # the run. One that is still here is where to start when a large-payload
+      # run comes up short of disk.
+      - name: Report leftover scratch files
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          df -h .
+          echo "bench files left under tmp/:"
+          find tmp -name 'bench-*' -type f -printf '%12s  %p\n' 2>/dev/null || true
+
       # Raw per-round samples, not just the verdict. Re-analysing a
       # surprising result offline beats re-running a 30-minute job to look at
       # the same numbers again.
