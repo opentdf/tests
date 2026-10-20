@@ -6,13 +6,15 @@ most of these is not the message but that something is raised at all.
 """
 
 import math
+import shutil
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
 import conftest
-from perf import stats
-from perf.cells import DEFAULT_PAYLOAD_SPEC
+from perf import report, stats
+from perf.cells import DEFAULT_PAYLOAD_SPEC, BenchCell
 from perf.config import (
     DEFAULT_BOOTSTRAP_RESAMPLES,
     DEFAULT_CONFIDENCE,
@@ -235,8 +237,10 @@ class _FakeConfig:
             "--bench-budget-seconds": 1500.0,
             "--bench-seed": 0,
             "--bench-payloads": DEFAULT_PAYLOAD_SPEC,
+            "--bench-prune-scratch": False,
             "numprocesses": None,
         } | opts
+        self.stash = pytest.Stash()
 
     def getoption(self, name: str, default: object = None) -> object:
         return self._options.get(name, default)
@@ -246,8 +250,19 @@ def _configure(**opts: object) -> None:
     conftest.pytest_configure(cast(pytest.Config, _FakeConfig(**opts)))
 
 
+def free_space(monkeypatch: pytest.MonkeyPatch, free: int) -> None:
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda p: SimpleNamespace(total=0, used=0, free=free)
+    )
+
+
 class TestPytestConfigure:
     """The options are checked at configure time, before any session setup."""
+
+    @pytest.fixture(autouse=True)
+    def plenty_of_disk(self, monkeypatch: pytest.MonkeyPatch):
+        # The scratch-disk check would otherwise read this machine's disk.
+        free_space(monkeypatch, 2**40)
 
     @pytest.mark.parametrize(
         "opts",
@@ -313,5 +328,40 @@ class TestPytestConfigure:
         with pytest.raises(pytest.UsageError, match="invalid --bench-payloads"):
             _configure(**{"--bench-payloads": "1GB"})
 
+    def test_payloads_that_cannot_fit_are_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        # As one usage error before the session starts, not as a fixture
+        # error repeated on every cell, or a CLI failing mid-run in a way that
+        # reads as a broken build.
+        free_space(monkeypatch, 0)
+        with pytest.raises(pytest.UsageError, match="scratch space"):
+            _configure()
+
     def test_noop_without_bench(self):
         _configure(**{"--bench": False, "--bench-baseline": "gp@main"})
+
+
+class TestBenchCellParametrization:
+    def test_the_payload_option_reaches_the_cell_matrix(self):
+        # cells_for falls back to the default sizes, so a parametrizer that
+        # stopped passing --bench-payloads through would drop the very cells
+        # the option was used to ask for, and the run would still pass.
+        config = _FakeConfig(**{"--bench-payloads": "1KiB,1GiB"})
+        calls: list[tuple[str, list[BenchCell], list[str]]] = []
+        metafunc = SimpleNamespace(
+            config=config,
+            parametrize=lambda name, cells, ids: calls.append((name, cells, ids)),
+        )
+        conftest._parametrize_bench_cells(cast(pytest.Metafunc, metafunc))
+        [(name, cells, ids)] = calls
+        assert name == "bench_cell"
+        assert ids == [
+            "go-encrypt-1MiB-control",
+            "go-encrypt-1KiB",
+            "go-decrypt-1KiB",
+            "go-encrypt-1GiB",
+            "go-decrypt-1GiB",
+        ]
+        # The budget is divided by this list, so it must be the same one.
+        assert config.stash[report.CELLS_KEY] == cells

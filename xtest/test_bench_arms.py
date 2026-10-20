@@ -10,7 +10,10 @@ No platform and no real SDK; the builds are stub ``cli.sh`` trees in
 ``tmp_path``.
 """
 
+import random
 import shutil
+import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
@@ -112,11 +115,21 @@ class TestPayloadSpec:
     def test_sizes_parse(self, spec: str, n_bytes: int):
         assert parse_payload(spec).n_bytes == n_bytes
 
-    def test_the_label_is_canonical_regardless_of_case(self):
-        # The label is a filename and a cell id. '1gib' and '1GiB' naming two
-        # cells would measure one size twice and report it as two results.
-        assert parse_payload("1gib").label == "1GiB"
-        assert parse_payload(" 1 GIB ").label == "1GiB"
+    @pytest.mark.parametrize(
+        ("spec", "label"),
+        [
+            ("1gib", "1GiB"),
+            (" 1 GIB ", "1GiB"),
+            ("1024MiB", "1GiB"),
+            ("1024B", "1KiB"),
+            ("1536KiB", "1536KiB"),
+        ],
+    )
+    def test_the_label_is_canonical(self, spec: str, label: str):
+        # The label is a filename, a cell id, and part of the seed. Two
+        # spellings of one size naming two cells would measure it twice, on
+        # different bytes, and report it as two results.
+        assert parse_payload(spec).label == label
 
     @pytest.mark.parametrize(
         "spec", ["", "1", "MiB", "1MB", "1.5GiB", "-1GiB", "0GiB", "1GiB extra"]
@@ -133,15 +146,30 @@ class TestPayloadSpec:
         # Otherwise the run pays for two identical cells and reports them as
         # independent results, which the multiplicity correction then treats
         # as two tests.
-        assert [p.label for p in parse_payloads("1KiB,1024B")] == ["1KiB"]
+        for spec in ("1KiB,1024B", "1024B,1KiB"):
+            assert [p.label for p in parse_payloads(spec)] == ["1KiB"]
 
     def test_an_empty_list_is_refused(self):
         with pytest.raises(ValueError, match="no payload sizes"):
             parse_payloads(" , ")
 
+    def test_the_parser_needs_only_the_standard_library(self):
+        # resolve-versions validates bench-payloads by importing perf.cells
+        # with a bare python3, before any dependency is installed. -I -S
+        # holds this interpreter to the standard library too.
+        xtest = str(Path(__file__).parent)
+        code = f"import sys; sys.path.insert(0, {xtest!r}); import perf.cells"
+        run = subprocess.run(
+            [sys.executable, "-I", "-S", "-c", code], capture_output=True, text=True
+        )
+        assert run.returncode == 0, run.stderr
+
 
 class TestCellMatrix:
-    def test_the_default_matrix_is_unchanged(self):
+    def test_the_default_matrix(self):
+        # Each size's decrypt follows its encrypt, so a size's files are done
+        # with before the next size starts -- which is what lets
+        # --bench-prune-scratch delete its plaintext early.
         ids = [c.id for c in cells_for(["go"], parse_payloads(DEFAULT_PAYLOAD_SPEC))]
         assert ids == [
             "go-encrypt-1MiB-control",
@@ -154,10 +182,10 @@ class TestCellMatrix:
         ]
 
     def test_the_control_comes_first_and_the_biggest_pair_last(self):
-        # The budget is spent in cell order, so whatever is last is what a
-        # short run loses. Losing the control invalidates every other cell;
-        # losing the largest pair costs the most expensive measurement but
-        # leaves the rest readable.
+        # The budget is shared out as each cell starts. Run last, the
+        # expensive pair inherits whatever the cheap cells left unspent; run
+        # first, it would be held to a bare even share. The control goes
+        # before everything: without a noise floor no cell may report PASS.
         cells = cells_for(["go"], parse_payloads("1KiB,1GiB"))
         assert cells[0].control
         assert [c.id for c in cells[-2:]] == ["go-encrypt-1GiB", "go-decrypt-1GiB"]
@@ -227,38 +255,138 @@ class TestPayloads:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         # A 1 GiB payload is written in chunks rather than built in RAM. The
-        # chunk size must not be part of the seed contract: a run compared
-        # against an earlier one has to measure the same bytes, and the check
-        # is cheap next to the cost of discovering otherwise.
-        payload = Payload("40KiB", 40 * 1024)
-        whole = subdir(tmp_path, "whole")
-        bench.write_payload(whole / "p.bin", payload, seed=7)
+        # bytes must still be those of one randbytes() call, as they were
+        # before chunking, so a rerun measures the same input and a file
+        # cached before the change stays valid. Three bytes past a whole
+        # number of chunks exercises the short final chunk.
+        payload = parse_payload("12291B")
+        assert payload.n_bytes == 3 * 4096 + 3
         monkeypatch.setattr(bench, "_CHUNK_BYTES", 4096)
-        chunked = subdir(tmp_path, "chunked")
-        bench.write_payload(chunked / "p.bin", payload, seed=7)
-        assert (whole / "p.bin").read_bytes() == (chunked / "p.bin").read_bytes()
+        bench.write_payload(tmp_path / "p.bin", payload, seed=7)
+        whole = random.Random(f"7:{payload.label}").randbytes(payload.n_bytes)
+        assert (tmp_path / "p.bin").read_bytes() == whole
 
-    def test_a_payload_too_big_for_the_disk_is_refused_up_front(self, tmp_path: Path):
-        # Running out of disk mid-benchmark surfaces as a non-zero exit from
-        # the CLI under measurement, which reads as "this build is broken".
-        huge = Payload("1024GiB", 1024 * 2**30)
-        assert bench.disk_shortfall(tmp_path, [huge]) is not None
-        assert bench.disk_shortfall(tmp_path, [Payload("1KiB", 1024)]) is None
+    def test_the_chunk_size_keeps_the_stream_intact(self):
+        # randbytes() draws 32-bit words. A chunk that is not a whole number
+        # of words discards part of one and shifts every byte after it.
+        assert bench._CHUNK_BYTES % 4 == 0
 
-    def test_the_disk_estimate_counts_one_live_output_per_arm(
+
+GIB = 2**30
+
+#: A small size and a large one, so an estimate built on the largest size
+#: cannot pass for one built on the sum, or the reverse.
+TWO_SIZES = (Payload("32MiB", 32 * 2**20), Payload("1GiB", GIB))
+
+
+def free_space(monkeypatch: pytest.MonkeyPatch, free: int) -> None:
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda p: SimpleNamespace(total=0, used=0, free=free)
+    )
+
+
+class TestScratchDisk:
+    def test_a_payload_too_big_for_the_disk_is_refused_up_front(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        # A cell holds one live output per arm on top of the plaintexts and
-        # cached ciphertexts; at 1 GiB that difference is the whole margin on
-        # a GitHub runner.
-        gib = 2**30
-        payloads = [Payload("1GiB", gib)]
-        free = 2 * gib + 2 * gib + bench._DISK_HEADROOM_BYTES  # exactly two arms
-        monkeypatch.setattr(
-            shutil, "disk_usage", lambda p: SimpleNamespace(total=0, used=0, free=free)
-        )
-        assert bench.disk_shortfall(tmp_path, payloads) is None
-        assert bench.disk_shortfall(tmp_path, payloads, 3) is not None
+        # Running out of disk mid-benchmark surfaces as a non-zero exit from
+        # the CLI under measurement, which reads as "this build is broken".
+        free_space(monkeypatch, 10 * GIB)
+        huge = [Payload("1024GiB", 1024 * GIB)]
+        small = [Payload("1KiB", 1024)]
+        assert bench.disk_shortfall(tmp_path, huge, n_sdks=1, prune=True)
+        assert bench.disk_shortfall(tmp_path, small, n_sdks=1, prune=True) is None
+
+    def test_a_pruned_run_holds_the_plaintexts_and_one_cell(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Every plaintext, plus the largest decrypt cell's ciphertext and one
+        # output per arm. Each cell's files go when it ends, so the number of
+        # SDKs does not enter into it.
+        total = sum(p.n_bytes for p in TWO_SIZES)
+        need = total + 3 * GIB + bench._DISK_HEADROOM_BYTES
+        free_space(monkeypatch, need)
+        assert bench.disk_shortfall(tmp_path, TWO_SIZES, n_sdks=3, prune=True) is None
+        assert bench.disk_shortfall(tmp_path, TWO_SIZES, n_sdks=3, prune=True, n_arms=3)
+        free_space(monkeypatch, need - 1)
+        assert bench.disk_shortfall(tmp_path, TWO_SIZES, n_sdks=3, prune=True)
+
+    def test_an_unpruned_run_keeps_every_cells_files_for_every_sdk(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Each SDK leaves a ciphertext per size and one output per arm from
+        # both of that size's cells: five times the sum of the sizes, on top
+        # of the plaintexts.
+        total = sum(p.n_bytes for p in TWO_SIZES)
+        need = total + 2 * 5 * total + bench._DISK_HEADROOM_BYTES
+        free_space(monkeypatch, need)
+        assert bench.disk_shortfall(tmp_path, TWO_SIZES, n_sdks=2, prune=False) is None
+        free_space(monkeypatch, need - 1)
+        refusal = bench.disk_shortfall(tmp_path, TWO_SIZES, n_sdks=2, prune=False)
+        assert refusal is not None
+        assert "--bench-prune-scratch" in refusal
+        assert "XT_TMP_DIR" in refusal
+
+    def test_a_scratch_dir_not_made_yet_is_measured_on_its_volume(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # pytest_configure runs the check before the tmp_dir fixture creates
+        # the directory.
+        probed: list[Path] = []
+
+        def disk_usage(path: Path) -> SimpleNamespace:
+            probed.append(Path(path))
+            return SimpleNamespace(total=0, used=0, free=10 * GIB)
+
+        monkeypatch.setattr(shutil, "disk_usage", disk_usage)
+        small = [Payload("1KiB", 1024)]
+        bench.disk_shortfall(tmp_path / "not" / "yet", small, n_sdks=1, prune=True)
+        assert probed == [tmp_path]
+
+    def test_a_failure_on_a_full_disk_is_blamed_on_the_disk(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Otherwise ENOSPC from the CLI under measurement reads as that build
+        # failing, and the larger cells after it fail the same way.
+        free_space(monkeypatch, 4096)
+        assert "scratch disk filled up" in (bench.disk_exhausted(tmp_path) or "")
+        free_space(monkeypatch, GIB)
+        assert bench.disk_exhausted(tmp_path) is None
+
+
+class TestScratch:
+    @staticmethod
+    def plaintexts(root: Path) -> dict[str, Path]:
+        return {label: touch(root / f"plain-{label}") for label in ("1KiB", "1MiB")}
+
+    def test_pruning_frees_each_file_once_no_cell_needs_it(self, tmp_path: Path):
+        control, encrypt, decrypt = cells_for(["go"], parse_payloads("1KiB"))
+        plaintexts = self.plaintexts(tmp_path)
+        scratch = bench.Scratch(plaintexts, [control, encrypt, decrypt], prune=True)
+
+        output = touch(tmp_path / "out.tdf")
+        scratch.release(encrypt, [output])
+        scratch.release(encrypt, [])
+        assert not output.exists()
+        # The decrypt cell still makes its ciphertext from this plaintext.
+        assert plaintexts["1KiB"].exists()
+
+        scratch.release(decrypt, [])
+        assert not plaintexts["1KiB"].exists()
+        assert plaintexts["1MiB"].exists()
+        scratch.release(control, [])
+        assert not plaintexts["1MiB"].exists()
+
+    def test_without_pruning_nothing_is_deleted(self, tmp_path: Path):
+        # A local run keeps its outputs to inspect and its plaintexts to reuse.
+        cells = cells_for(["go"], parse_payloads("1KiB"))
+        plaintexts = self.plaintexts(tmp_path)
+        scratch = bench.Scratch(plaintexts, cells, prune=False)
+        output = touch(tmp_path / "out.tdf")
+        for cell in cells:
+            scratch.release(cell, [output])
+        assert output.exists()
+        assert all(p.exists() for p in plaintexts.values())
 
 
 def read_all(paths: dict[str, Path]) -> dict[str, bytes]:
@@ -269,3 +397,8 @@ def subdir(root: Path, name: str) -> Path:
     out = root / name
     out.mkdir()
     return out
+
+
+def touch(path: Path) -> Path:
+    path.write_bytes(b"x")
+    return path

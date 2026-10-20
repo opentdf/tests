@@ -2,6 +2,11 @@
 
 Kept free of pytest and of ``tdfs`` so that both the conftest parametrizer and
 the reporting layer can name a cell without importing each other.
+
+Kept free of everything outside the standard library, too: the workflow's
+resolve-versions job validates ``bench-payloads`` by importing this module
+with a bare ``python3``, before any runner spends time starting the platform.
+``test_bench_arms`` holds it to that.
 """
 
 from __future__ import annotations
@@ -20,14 +25,14 @@ class Payload:
 
     The sizes separate two failure modes that hide each other. At 1 KiB
     essentially all the cost is process startup -- JVM boot, npx resolution,
-    TLS handshake, token fetch -- so a throughput regression is invisible. At
-    32 MiB the crypto and IO dominate and a startup regression is invisible.
-    A benchmark at one size only will miss half the regressions it claims to
+    TLS handshake, token fetch -- so a throughput regression is invisible.
+    Only where the payload work outweighs startup does the reverse hold. A
+    benchmark at one size only will miss half the regressions it claims to
     cover.
 
-    "Dominate" is relative, and at 32 MiB it is not yet true. On a 4-core
-    Linux runner a go encrypt costs ~450 ms of fixed startup against ~72 ms
-    that scales with the payload, so payload work is ~14% of the cell and the
+    The default sizes stop short of that crossover. On a 4-core Linux runner
+    a go encrypt of 32 MiB costs ~450 ms of fixed startup against ~72 ms that
+    scales with the payload, so payload work is ~14% of the cell and the
     default 1.15x gate is wider than the whole of it -- a candidate that
     doubled every per-segment cost would still report PASS. Gating throughput
     needs a size where the ratio inverts, which is what ``--bench-payloads``
@@ -53,40 +58,41 @@ _SIZE_RE = re.compile(r"^\s*(\d+)\s*([a-z]+)\s*$", re.IGNORECASE)
 def parse_payload(spec: str) -> Payload:
     """Parse one size spec, e.g. ``"32MiB"``, into a :class:`Payload`.
 
-    The unit is matched case-insensitively but the label is rebuilt from the
-    canonical spelling, so ``"1gib"`` and ``"1GiB"`` name the same cell rather
-    than two cells that measure the same thing under different ids.
+    The label is rebuilt in the largest unit that divides the size exactly,
+    so ``"1gib"``, ``"1GiB"`` and ``"1024MiB"`` all name one cell rather than
+    three cells that measure the same thing under different ids. The label
+    is also the payload's filename and part of its seed, so two spellings
+    would otherwise generate, and measure, two different files.
     """
     match = _SIZE_RE.match(spec)
-    units = {name.lower(): (name, mult) for name, mult in _UNITS}
+    units = {name.lower(): mult for name, mult in _UNITS}
     if match is None or match.group(2).lower() not in units:
         raise ValueError(
             f"{spec!r} is not a payload size; expected a count and one of "
             f"{', '.join(name for name, _ in _UNITS)}, e.g. '32MiB'"
         )
     count = int(match.group(1))
-    name, multiplier = units[match.group(2).lower()]
     if count <= 0:
         raise ValueError(f"{spec!r} is not a payload size; it must be above zero")
-    return Payload(f"{count}{name}", count * multiplier)
+    n_bytes = count * units[match.group(2).lower()]
+    name, multiplier = next(
+        (name, mult) for name, mult in reversed(_UNITS) if n_bytes % mult == 0
+    )
+    return Payload(f"{n_bytes // multiplier}{name}", n_bytes)
 
 
 def parse_payloads(spec: str) -> tuple[Payload, ...]:
     """Parse a comma-separated size list into the run's payload set.
 
-    Sorted ascending and deduplicated *by byte count*, not by label: ``1024B``
-    and ``1KiB`` are one size written two ways, and admitting both would run
-    two identically-sized cells whose only difference is the id in the report.
+    Sorted ascending, with duplicates dropped. ``1024B`` and ``1KiB`` are one
+    size written two ways and parse to the same payload, and admitting both
+    would run two identical cells that the report presents as independent
+    results.
     """
-    by_size: dict[int, Payload] = {}
-    for part in spec.split(","):
-        if not part.strip():
-            continue
-        payload = parse_payload(part)
-        by_size.setdefault(payload.n_bytes, payload)
-    if not by_size:
+    payloads = {parse_payload(part) for part in spec.split(",") if part.strip()}
+    if not payloads:
         raise ValueError("no payload sizes given")
-    return tuple(by_size[n] for n in sorted(by_size))
+    return tuple(sorted(payloads, key=lambda p: p.n_bytes))
 
 
 #: What a run measures unless ``--bench-payloads`` says otherwise. Anything
@@ -96,8 +102,8 @@ DEFAULT_PAYLOAD_SPEC = "1KiB,1MiB,32MiB"
 
 PAYLOADS: tuple[Payload, ...] = parse_payloads(DEFAULT_PAYLOAD_SPEC)
 
-#: Payload used for the A/A control. Mid-size: large enough that startup noise
-#: does not dominate it, small enough that the control is not a big slice of
+#: Payload used for the A/A control. Mid-size and cheap: startup still
+#: dominates it (see :class:`Payload`), so the control is not a big slice of
 #: the budget.
 #:
 #: Fixed rather than picked out of the selected set, because the control's
@@ -116,8 +122,7 @@ def payloads_to_generate(payloads: Sequence[Payload]) -> tuple[Payload, ...]:
     1GiB`` is a legitimate ask -- but its file is still required, and a
     missing one surfaces as a KeyError deep in arm construction.
     """
-    by_label = {p.label: p for p in (*payloads, CONTROL_PAYLOAD)}
-    return tuple(sorted(by_label.values(), key=lambda p: p.n_bytes))
+    return tuple(sorted({*payloads, CONTROL_PAYLOAD}, key=lambda p: p.n_bytes))
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,9 +160,12 @@ def cells_for(
     trustworthy; losing the control leaves nothing trustworthy at all, since
     without a noise floor no cell may report PASS.
 
-    Within an SDK the payloads run smallest first, so that when the budget
-    does run out it is the most expensive cell that is lost rather than an
-    arbitrary one.
+    Within an SDK the payloads run smallest first. The budget is shared out
+    as each cell starts (``perf.runner.Budget``), so time the cheap cells do
+    not use flows to the expensive ones at the end, rather than the
+    expensive ones being held to a bare even share. Each size's decrypt
+    follows its encrypt directly, so a size's files are finished with -- and
+    under ``--bench-prune-scratch``, deleted -- before the next size starts.
     """
     cells: list[BenchCell] = []
     for sdk in sdks:

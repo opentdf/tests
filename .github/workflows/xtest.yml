@@ -47,7 +47,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Payload sizes to benchmark, comma-separated, e.g. '1KiB,1MiB,32MiB,1GiB'. Default is 1KiB,1MiB,32MiB, at which ~86% of a go encrypt is fixed startup cost -- so the 1.15x gate is wider than the whole payload-dependent part and no throughput change can fail a cell. Add 1GiB to actually gate throughput; it needs a bench-budget-seconds to match and ~5 GiB of runner disk."
+        description: "Payload sizes to benchmark, comma-separated, e.g. '1KiB,1MiB,32MiB,1GiB'. Default is 1KiB,1MiB,32MiB. Even at 32 MiB ~86% of a go encrypt is fixed startup cost, so a throughput regression has to roughly double the payload-dependent cost before it fails the 1.15x gate. Add 1GiB to gate throughput properly; it needs a bench-budget-seconds to match and ~5 GiB of runner disk."
       bench-budget-seconds:
         required: false
         type: string
@@ -227,19 +227,20 @@ jobs:
       # bash copy that drifted would start refusing specs the run itself
       # would have accepted. The scheduled nightly supplies no inputs, so the
       # fallbacks are what keep its matrix and budget where they have always
-      # been.
+      # been: the harness's own default sizes, and conftest's default budget,
+      # copied because perf.config needs numpy and cannot be imported here.
       - name: Validate benchmark settings
         id: bench-settings
         working-directory: otdf-sdk/xtest
         env:
-          BENCH_PAYLOADS: ${{ inputs.bench-payloads || '1KiB,1MiB,32MiB' }}
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads }}
           BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
         run: |-
           python3 - <<'PY'
           import math
           import os
 
-          from perf.cells import parse_payloads
+          from perf.cells import DEFAULT_PAYLOAD_SPEC, parse_payloads
 
           # Installation, platform startup, and artifact upload, on top of the
           # measurement budget itself.
@@ -248,7 +249,9 @@ jobs:
           MAX_BUDGET_SECONDS = (360 - OVERHEAD_MINUTES) * 60
 
           try:
-              sizes = parse_payloads(os.environ["BENCH_PAYLOADS"])
+              sizes = parse_payloads(
+                  os.environ["BENCH_PAYLOADS"] or DEFAULT_PAYLOAD_SPEC
+              )
           except ValueError as e:
               raise SystemExit(f"::error::invalid bench-payloads: {e}")
           raw = os.environ["BENCH_BUDGET_SECONDS"]
@@ -1149,6 +1152,10 @@ jobs:
       # Deliberately serial: no -n / --dist. Parallel pytest workers contend
       # for the CPU under measurement and would invalidate every number here.
       # conftest.py refuses to run --bench under xdist for the same reason.
+      #
+      # --bench-prune-scratch: a fresh runner has no use for outputs or
+      # cached plaintexts after the cell that needed them, and keeping them
+      # all would take a 1GiB run to ~7 GiB of scratch instead of ~5.
       - name: Run performance benchmarks
         id: bench
         run: |-
@@ -1157,6 +1164,7 @@ jobs:
             --sdks "$BENCH_SDK" \
             --bench-payloads "$BENCH_PAYLOADS" \
             --bench-budget-seconds "$BENCH_BUDGET_SECONDS" \
+            --bench-prune-scratch \
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
