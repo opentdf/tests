@@ -121,12 +121,26 @@ class Service(ABC):
             health_url=self.health_url,
         )
 
+    def _preflight(self) -> bool:
+        """Do the part of start() that can fail without touching a running instance.
+
+        Returns:
+            True if start() may proceed. On False, ``start_error`` says why.
+        """
+        return True
+
     def restart(self) -> bool:
         """Restart the service.
+
+        Runs ``_preflight`` before ``stop``, so a config that start() would
+        reject leaves the running instance up.
 
         Returns:
             True if restarted successfully
         """
+        self.start_error = None
+        if not self._preflight():
+            return False
         self.stop()
         if self.is_running():
             self.start_error = (
