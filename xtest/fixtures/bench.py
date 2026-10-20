@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import platform
 import random
+import shutil
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -21,7 +23,7 @@ import pytest
 import abac
 import tdfs
 from perf import report
-from perf.cells import PAYLOADS, BenchCell
+from perf.cells import BenchCell, Payload, parse_payloads, payloads_to_generate
 from perf.runner import Arm, BenchConfig, Budget, Invocation
 
 
@@ -133,8 +135,136 @@ def bench_config(request: pytest.FixtureRequest) -> BenchConfig:
     return config_from_options(request.config)
 
 
+def payloads_from_options(config: pytest.Config) -> tuple[Payload, ...]:
+    """The run's payload set, from ``--bench-payloads``."""
+    spec = cast(str, config.getoption("--bench-payloads"))
+    try:
+        return parse_payloads(spec)
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid --bench-payloads: {e}") from e
+
+
 @pytest.fixture(scope="session")
-def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
+def bench_payload_set(request: pytest.FixtureRequest) -> tuple[Payload, ...]:
+    """Payload sizes this run measures, from --bench-payloads."""
+    return payloads_from_options(request.config)
+
+
+#: Bytes generated per ``randbytes`` call. Must stay a multiple of 4: CPython
+#: builds ``randbytes(n)`` from 32-bit words, so chunks on a 4-byte boundary
+#: concatenate to exactly the bytes of one ``randbytes(n_bytes)`` call, short
+#: final chunk included. That keeps the promise in :func:`bench_payloads` --
+#: a given seed and label always produce the same bytes -- independent of
+#: this constant, and keeps files cached before chunking valid. It rests on a
+#: CPython implementation detail; ``test_bench_arms`` is what enforces it.
+_CHUNK_BYTES = 8 * 2**20
+
+#: Free space a run keeps in hand beyond its payload arithmetic, for the
+#: platform's own logs and database growth over a long benchmark.
+_DISK_HEADROOM_BYTES = 2**30
+
+#: Free space below which a failed cell is blamed on the disk. A CLI that hits
+#: ENOSPC has filled the volume to within a few blocks by the time it exits,
+#: so this only has to be well clear of zero.
+_DISK_FULL_BYTES = 64 * 2**20
+
+
+def write_payload(path: Path, payload: Payload, seed: int) -> None:
+    """Write one payload file, in chunks so a 1 GiB file is not built in RAM."""
+    rng = random.Random(f"{seed}:{payload.label}")
+    remaining = payload.n_bytes
+    with path.open("wb") as f:
+        while remaining > 0:
+            n = min(remaining, _CHUNK_BYTES)
+            f.write(rng.randbytes(n))
+            remaining -= n
+
+
+def disk_shortfall(
+    tmp_dir: Path,
+    payloads: Sequence[Payload],
+    *,
+    n_sdks: int,
+    prune: bool,
+    n_arms: int = 2,
+) -> str | None:
+    """Return why ``payloads`` will not fit in ``tmp_dir``, or None.
+
+    Checked up front because the alternative is finding out mid-run: ENOSPC
+    reaches the harness as a non-zero exit from the CLI under measurement,
+    which is reported as a failed measurement of that build. A run can lose
+    an hour before anyone notices the disk was the problem, and the report
+    points at the wrong thing while they look.
+
+    Every plaintext counts as live for the whole run. On top of that:
+
+    - With ``prune`` (see :class:`Scratch`), a cell's outputs and ciphertext
+      are deleted as it ends, so one cell's worth is live at a time: at most
+      the largest decrypt cell's ciphertext plus one output per arm.
+    - Without it nothing is deleted. Each SDK leaves a baseline-made
+      ciphertext per size and one output per arm from every cell, so the
+      total grows with the number of SDKs.
+
+    A coarse bound, deliberately. It does not credit files an earlier run
+    left in ``tmp_dir``, which this run would reuse or overwrite but which
+    already count against free space; DSPX-5253 tracks doing better.
+    ``n_arms`` is a parameter so the bound stays right once a run compares
+    more than two builds.
+    """
+    total = sum(p.n_bytes for p in payloads)
+    if prune:
+        need = total + (1 + n_arms) * max(p.n_bytes for p in payloads)
+    else:
+        need = total + n_sdks * (1 + 2 * n_arms) * total
+    need += _DISK_HEADROOM_BYTES
+    # tmp_dir may not exist yet; measure the volume that will hold it.
+    probe = tmp_dir
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = shutil.disk_usage(probe).free
+    if free >= need:
+        return None
+    gib = 2**30
+    sizes = ", ".join(p.label for p in payloads)
+    remedies = [
+        "drop the largest size from --bench-payloads",
+        "point XT_TMP_DIR at a larger volume",
+        "delete the bench-* files an earlier run left there",
+    ]
+    if not prune:
+        remedies.insert(0, "pass --bench-prune-scratch")
+    return (
+        f"payloads {sizes} need about {need / gib:.1f} GiB of scratch space "
+        f"in {tmp_dir} but only {free / gib:.1f} GiB is free; "
+        f"{', '.join(remedies[:-1])}, or {remedies[-1]}"
+    )
+
+
+def disk_exhausted(tmp_dir: Path) -> str | None:
+    """Return why a cell that just failed is the scratch disk's fault, or None.
+
+    ENOSPC reaches the harness as a non-zero exit from the CLI being
+    measured, which would otherwise be reported as a failure of that build --
+    and the cells after it, no smaller, would fail the same way, burying the
+    cause under a column of failures that each blame a build.
+    """
+    free = shutil.disk_usage(tmp_dir).free
+    if free >= _DISK_FULL_BYTES:
+        return None
+    return (
+        f"the scratch disk filled up ({free / 2**20:.0f} MiB left in {tmp_dir}), "
+        "so this failure says nothing about the build; free some space, point "
+        "XT_TMP_DIR at a larger volume, pass --bench-prune-scratch, or drop "
+        "the largest size from --bench-payloads"
+    )
+
+
+@pytest.fixture(scope="session")
+def bench_payloads(
+    tmp_dir: Path,
+    bench_config: BenchConfig,
+    bench_payload_set: tuple[Payload, ...],
+) -> dict[str, Path]:
     """Generate one plaintext file per payload size, shared by both arms.
 
     Content is pseudo-random but seeded, so a rerun measures byte-identical
@@ -147,15 +277,84 @@ def bench_payloads(tmp_dir: Path, bench_config: BenchConfig) -> dict[str, Path]:
     calls and shifts the stream for every payload after it. Deriving each
     payload's bytes from the seed *and* its label keeps the promise above true
     whether the cache is empty, full, or half there.
+
+    The control's payload is generated whether or not it was selected -- see
+    :func:`perf.cells.payloads_to_generate`. Whether they all fit was checked
+    in ``pytest_configure``, before the session started.
     """
     out: dict[str, Path] = {}
-    for payload in PAYLOADS:
+    for payload in payloads_to_generate(bench_payload_set):
         path = tmp_dir / f"bench-plain-{payload.label}.bin"
         if not path.is_file() or path.stat().st_size != payload.n_bytes:
-            rng = random.Random(f"{bench_config.seed}:{payload.label}")
-            path.write_bytes(rng.randbytes(payload.n_bytes))
+            write_payload(path, payload, bench_config.seed)
         out[payload.label] = path
     return out
+
+
+class Scratch:
+    """Deletes each benchmark file once no remaining cell needs it, if asked.
+
+    Off unless ``--bench-prune-scratch``: a local run keeps its outputs to
+    inspect and its plaintexts to reuse next time. CI turns it on because a
+    fresh runner gains from neither, and keeping everything leaves about six
+    times the payload total on disk by the end of the run.
+
+    A cell's own files -- its outputs and, for decrypt, its ciphertext -- go
+    when it ends, however it ends. A plaintext goes when the last cell of its
+    size has ended, which, with each size's cells adjacent (see
+    :func:`perf.cells.cells_for`), is as soon as that size is done.
+    """
+
+    def __init__(
+        self,
+        plaintexts: dict[str, Path],
+        cells: Sequence[BenchCell],
+        *,
+        prune: bool,
+    ) -> None:
+        self.prune = prune
+        self._plaintexts = plaintexts
+        # Ids rather than a count, so a cell that ends twice cannot release a
+        # plaintext early. A deselected cell never ends, which only keeps its
+        # plaintext -- disk_shortfall already counts every plaintext as live.
+        self._pending: dict[str, set[str]] = {}
+        for cell in cells:
+            self._pending.setdefault(cell.payload.label, set()).add(cell.id)
+
+    def release(self, cell: BenchCell, files: Iterable[Path]) -> None:
+        """Delete ``cell``'s own files, and its plaintext if nothing else reads it."""
+        if not self.prune:
+            return
+        for path in files:
+            path.unlink(missing_ok=True)
+        pending = self._pending.get(cell.payload.label)
+        if pending is None:
+            return
+        pending.discard(cell.id)
+        if not pending:
+            self._plaintexts[cell.payload.label].unlink(missing_ok=True)
+
+
+@pytest.fixture(scope="session")
+def bench_scratch(
+    request: pytest.FixtureRequest, bench_payloads: dict[str, Path]
+) -> Scratch:
+    """The session's :class:`Scratch`, pruning under --bench-prune-scratch."""
+    return Scratch(
+        bench_payloads,
+        _selected_cells(request.config),
+        prune=bool(request.config.getoption("--bench-prune-scratch")),
+    )
+
+
+@pytest.fixture
+def bench_cell_files(
+    bench_cell: BenchCell, bench_scratch: Scratch
+) -> Iterator[list[Path]]:
+    """Files the running cell creates, released when it ends however it ends."""
+    files: list[Path] = []
+    yield files
+    bench_scratch.release(bench_cell, files)
 
 
 @pytest.fixture(scope="session")
@@ -297,7 +496,8 @@ class CiphertextFactory:
     def __call__(self, arms: BenchArms, payload_label: str) -> Path:
         key = (str(arms.baseline), payload_label)
         cached = self._cache.get(key)
-        if cached is not None:
+        # --bench-prune-scratch deletes a ciphertext once its cell ends.
+        if cached is not None and cached.is_file():
             return cached
         ct_file = self._tmp_dir / f"bench-ct-{arms.baseline}-{payload_label}.tdf"
         arms.baseline.encrypt(
