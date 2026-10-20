@@ -544,10 +544,10 @@ def manifest(tdf_file: Path) -> Manifest:
 
 
 def manifest_json(tdf_file: Path) -> dict[str, Any]:
-    """The manifest as written, for checks that a model round-trip would blur.
+    """The manifest as written, including fields not present in the Manifest type.
 
-    Assertion hashes are computed over the JSON the writer emitted; rebuilding
-    it from :class:`Manifest` drops fields the model does not declare.
+    This is useful for computing assertion over the JSON the writer emitted, including
+    removed or experimental fields the model does not declare.
     """
     with zipfile.ZipFile(tdf_file, "r") as tdfz:
         with tdfz.open("0.manifest.json") as manifestEntry:
