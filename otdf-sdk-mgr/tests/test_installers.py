@@ -1,4 +1,4 @@
-"""Tests for the java release installer — network and subprocesses are mocked."""
+"""Tests for the java and js release installers — network and subprocesses are mocked."""
 
 import subprocess
 import urllib.error
@@ -6,10 +6,16 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import git.exc
 import pytest
 
 from otdf_sdk_mgr import installers
-from otdf_sdk_mgr.installers import InstallError, install_java_release, latest_stable_version
+from otdf_sdk_mgr.installers import (
+    InstallError,
+    install_java_release,
+    install_js_release,
+    latest_stable_version,
+)
 
 
 def http_error(url: str, code: int) -> urllib.error.HTTPError:
@@ -22,9 +28,9 @@ def http_404(url: str) -> urllib.error.HTTPError:
 
 @pytest.fixture
 def sdk_dir(tmp_path: Path) -> Iterator[Path]:
-    java_dir = tmp_path / "java"
-    java_dir.mkdir()
-    (java_dir / "cli.sh").write_text("#!/bin/sh\n")
+    for sdk in ("java", "js"):
+        (tmp_path / sdk).mkdir()
+        (tmp_path / sdk / "cli.sh").write_text("#!/bin/sh\n")
     with patch("otdf_sdk_mgr.installers.get_sdk_dir", return_value=tmp_path):
         yield tmp_path
 
@@ -139,6 +145,155 @@ class TestInstallJavaRelease:
         cc.assert_not_called()
 
 
+def fake_js_build(cmd: list[str], cwd: Path | None = None) -> int:
+    """Stand-in for check_call: lay down what clone + npm pack would produce."""
+    if cmd[:2] == ["git", "clone"]:
+        (Path(cmd[-1]) / "cli").mkdir(parents=True)
+    elif cmd[:2] == ["npm", "pack"]:
+        dest = Path(cmd[cmd.index("--pack-destination") + 1])
+        (dest / "opentdf-ctl-0.22.0.tgz").write_text("tgz")
+    return 0
+
+
+def npm_has(*published: str):
+    """`_on_npm` stand-in: True only for the given `package@version` specs."""
+    return lambda package, version: f"{package}@{version}" in published
+
+
+class TestInstallJsRelease:
+    @pytest.mark.parametrize("version", ["sdk-v0.20.0", "sdk/v0.20.0", "v0.20.0", "0.20.0"])
+    def test_cli_on_npm_installs_it(self, sdk_dir: Path, version: str):
+        dist = sdk_dir / "js" / "dist" / "v0.20.0"
+        with (
+            patch.object(installers, "_on_npm", side_effect=npm_has("@opentdf/ctl@0.20.0")),
+            patch("otdf_sdk_mgr.installers.subprocess.check_call") as cc,
+        ):
+            install_js_release(version, dist)
+        cc.assert_called_once_with(["npm", "install", "@opentdf/ctl@0.20.0"], cwd=dist)
+        assert (dist / "cli.sh").exists()
+
+    def test_cli_missing_builds_against_npm_sdk(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.22.0"
+        with (
+            patch.object(installers, "_on_npm", side_effect=npm_has("@opentdf/sdk@0.22.0")),
+            patch.object(installers, "_js_release_tag", return_value="sdk-v0.22.0"),
+            patch("otdf_sdk_mgr.installers.subprocess.check_call", side_effect=fake_js_build) as cc,
+        ):
+            install_js_release("sdk-v0.22.0", dist)
+
+        cmds = [c.args[0] for c in cc.call_args_list]
+        assert "--branch=sdk-v0.22.0" in cmds[0]
+        # The CLI resolves the published sdk, not ../lib's tarball, so the lib
+        # never has to be built.
+        assert ["npm", "install", "--save-exact", "@opentdf/sdk@0.22.0"] in cmds
+        assert cmds[-1] == ["npm", "install", "./opentdf-ctl-0.22.0.tgz"]
+        assert cc.call_args_list[-1].kwargs["cwd"] == dist
+        # Kept beside package.json, whose file: dependency points at it.
+        assert (dist / "opentdf-ctl-0.22.0.tgz").read_text() == "tgz"
+        assert (dist / "cli.sh").exists()
+
+    def test_nothing_on_npm_raises_for_source_fallback(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.23.0"
+        with (
+            patch.object(installers, "_on_npm", return_value=False),
+            patch("otdf_sdk_mgr.installers.subprocess.check_call") as cc,
+            pytest.raises(InstallError, match="Neither @opentdf/ctl nor @opentdf/sdk"),
+        ):
+            install_js_release("v0.23.0", dist)
+        cc.assert_not_called()
+        assert not dist.exists()
+
+    def test_npm_install_failure_leaves_no_partial_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.20.0"
+        with (
+            patch.object(installers, "_on_npm", return_value=True),
+            patch(
+                "otdf_sdk_mgr.installers.subprocess.check_call",
+                side_effect=subprocess.CalledProcessError(1, ["npm"]),
+            ),
+            pytest.raises(InstallError, match="from npm failed"),
+        ):
+            install_js_release("v0.20.0", dist)
+        # A leftover dist with only cli.sh would be skipped as installed next run.
+        assert not dist.exists()
+
+    def test_build_failure_raises_without_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.22.0"
+
+        def ci_fails(cmd: list[str], cwd: Path | None = None) -> int:
+            if cmd[:2] == ["npm", "ci"]:
+                raise subprocess.CalledProcessError(1, cmd)
+            return fake_js_build(cmd, cwd)
+
+        with (
+            patch.object(installers, "_on_npm", side_effect=npm_has("@opentdf/sdk@0.22.0")),
+            patch.object(installers, "_js_release_tag", return_value="sdk-v0.22.0"),
+            patch("otdf_sdk_mgr.installers.subprocess.check_call", side_effect=ci_fails),
+            pytest.raises(InstallError, match="Running npm ci for the 0.22.0 CLI failed"),
+        ):
+            install_js_release("v0.22.0", dist)
+        assert not dist.exists()
+
+
+class TestJsReleaseTag:
+    def ls_remote(self, *tags: str):
+        mock_git = MagicMock()
+        mock_git.ls_remote.return_value = "\n".join(f"{'a' * 40}\trefs/tags/{t}" for t in tags)
+        return patch("otdf_sdk_mgr.installers.Git", return_value=mock_git)
+
+    def test_dash_form(self):
+        with self.ls_remote("sdk-v0.22.0"):
+            assert installers._js_release_tag("0.22.0") == "sdk-v0.22.0"
+
+    def test_slash_form_up_to_0_4_0(self):
+        with self.ls_remote("sdk/v0.4.0"):
+            assert installers._js_release_tag("0.4.0") == "sdk/v0.4.0"
+
+    def test_missing_raises(self):
+        with self.ls_remote(), pytest.raises(InstallError, match="No web-sdk tag for sdk 0.99.0"):
+            installers._js_release_tag("0.99.0")
+
+    def test_git_failure_raises_install_error(self):
+        mock_git = MagicMock()
+        mock_git.ls_remote.side_effect = git.exc.GitCommandError("ls-remote", 128)
+        with (
+            patch("otdf_sdk_mgr.installers.Git", return_value=mock_git),
+            pytest.raises(InstallError, match="Could not list web-sdk tags"),
+        ):
+            installers._js_release_tag("0.22.0")
+
+
+class TestOnNpm:
+    def test_found(self):
+        with patch.object(installers, "fetch_json", return_value={"version": "0.22.0"}) as fj:
+            assert installers._on_npm("@opentdf/sdk", "0.22.0") is True
+        fj.assert_called_once_with("https://registry.npmjs.org/@opentdf/sdk/0.22.0")
+
+    def test_missing(self):
+        with patch.object(
+            installers, "fetch_json", side_effect=http_404("https://registry.npmjs.org/x")
+        ):
+            assert installers._on_npm("@opentdf/ctl", "0.22.0") is False
+
+    def test_server_error_raises(self):
+        with (
+            patch.object(
+                installers,
+                "fetch_json",
+                side_effect=http_error("https://registry.npmjs.org/x", 503),
+            ),
+            pytest.raises(InstallError, match="Could not check npm"),
+        ):
+            installers._on_npm("@opentdf/ctl", "0.22.0")
+
+    def test_unreachable_raises(self):
+        with (
+            patch.object(installers, "fetch_json", side_effect=urllib.error.URLError("no route")),
+            pytest.raises(InstallError, match="Could not reach npm"),
+        ):
+            installers._on_npm("@opentdf/ctl", "0.22.0")
+
+
 class TestDownloadJavaGithubRelease:
     def test_rate_limit_raises_install_error(self, sdk_dir: Path):
         # Not a bare HTTPError: install_java_release only falls through to the
@@ -166,6 +321,20 @@ class TestLatestStableVersion:
     def test_java_none_stable(self):
         with patch.object(installers, "list_java_github_releases", return_value=[]):
             assert latest_stable_version("java") is None
+
+    def test_js_is_newest_release_tag_not_newest_npm_cli(self):
+        resolved = {"sdk": "js", "alias": "latest", "sha": "a" * 40, "tag": "v0.22.0"}
+        with patch.object(installers, "resolve", return_value=resolved) as res:
+            assert latest_stable_version("js") == "v0.22.0"
+        res.assert_called_once_with("js", "latest", "sdk")
+
+    def test_js_resolve_error_raises(self):
+        err = {"sdk": "js", "alias": "latest", "err": "no tags"}
+        with (
+            patch.object(installers, "resolve", return_value=err),
+            pytest.raises(InstallError, match="no tags"),
+        ):
+            latest_stable_version("js")
 
 
 class TestJavaSdkOnMavenCentral:

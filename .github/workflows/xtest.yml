@@ -478,7 +478,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       - name: Cache npm
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.npm
@@ -489,7 +489,7 @@ jobs:
       ######## SETUP THE JS CLI #############
       - name: build and setup the web-sdk cli
         id: build-web-sdk
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         run: |
           make
         working-directory: otdftests/xtest/sdk/js
@@ -1360,7 +1360,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Build the js cli
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/js
         env:

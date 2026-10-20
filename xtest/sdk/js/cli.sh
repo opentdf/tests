@@ -125,8 +125,17 @@ if [[ "$1" == "supports" ]]; then
       exit $?
       ;;
     mechanism-xwing)
+      # The --encapKeyType choices are web-sdk's KEY_ALGORITHMS, the list it
+      # can wrap a KAS key for. No release has X-Wing yet.
       set -o pipefail
-      npx $CTL help | grep -i xwing
+      npx $CTL help | grep -i 'hpqt:xwing'
+      exit $?
+      ;;
+    mechanism-secpmlkem)
+      # As mechanism-xwing. web-sdk#1049 adds both secp+ML-KEM hybrids to
+      # KEY_ALGORITHMS, which turns this on without an edit here.
+      set -o pipefail
+      npx $CTL help | grep -i 'hpqt:secp256r1-mlkem768'
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
