@@ -10,6 +10,7 @@ from otdf_sdk_mgr.resolve import (
     is_resolve_error,
     is_resolve_success,
     resolve,
+    strip_tag_infix,
 )
 
 SHA40 = "a" * 40
@@ -332,39 +333,50 @@ class TestResolveLatest:
         assert is_resolve_success(result)
         assert result["tag"] == "v0.33.0"
 
-    def test_java_with_cli_available(self):
+    def test_js_latest_spans_both_tag_forms(self):
+        # web-sdk tagged sdk/v0.4.0, then sdk-v0.4.1 onward. The bare v2.0.0 is
+        # a legacy client tag outside the sdk namespace and must not win.
+        ls = make_ls_remote(
+            ("1" * 40, "refs/tags/sdk/v0.4.0"),
+            ("2" * 40, "refs/tags/sdk-v0.4.1"),
+            ("3" * 40, "refs/tags/sdk-v0.22.0"),
+            ("4" * 40, "refs/tags/sdk-v0.21.0"),
+            ("5" * 40, "refs/tags/v2.0.0"),
+        )
+        with patch_git(ls):
+            result = resolve("js", "latest", "sdk")
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.22.0"
+        assert result["sha"] == "3" * 40
+        # The tag as git names it: install_js_release and the run summary's
+        # release link both use it.
+        assert result.get("release") == "sdk-v0.22.0"
+
+    def test_platform_release_keeps_slash_infix(self):
+        ls = make_ls_remote(
+            ("1" * 40, "refs/tags/service/v0.28.0"),
+            ("2" * 40, "refs/tags/service/v0.29.0"),
+            ("3" * 40, "refs/tags/protocol/go/v0.42.0"),
+        )
+        with patch_git(ls):
+            result = resolve("platform", "latest", "service")
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.29.0"
+        assert result.get("release") == "service/v0.29.0"
+
+    def test_java_returns_last_stable_as_release(self):
+        # No GitHub Release cmdline.jar lookup: the installer builds the CLI
+        # against Maven Central, so latest is a release row, not a head.
         ls = make_ls_remote(
             ("1" * 40, "refs/tags/v0.1.0"),
             ("2" * 40, "refs/tags/v0.2.0"),
         )
-        mock_releases = [
-            {"version": "v0.1.0", "has_cli": False},
-            {"version": "v0.2.0", "has_cli": True},
-        ]
-        with (
-            patch_git(ls),
-            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
-        ):
+        with patch_git(ls):
             result = resolve("java", "latest", None)
         assert is_resolve_success(result)
         assert result["tag"] == "v0.2.0"
-
-    def test_java_no_cli_available_falls_back_to_source(self):
-        ls = make_ls_remote(
-            ("1" * 40, "refs/tags/v0.1.0"),
-            ("2" * 40, "refs/tags/v0.2.0"),
-        )
-        mock_releases = [
-            {"version": "v0.1.0", "has_cli": False},
-            {"version": "v0.2.0", "has_cli": False},
-        ]
-        with (
-            patch_git(ls),
-            patch("otdf_sdk_mgr.registry.list_java_github_releases", return_value=mock_releases),
-        ):
-            result = resolve("java", "latest", None)
-        assert is_resolve_success(result)
-        assert result.get("head") is True
+        assert result.get("release") == "v0.2.0"
+        assert "head" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +409,50 @@ class TestResolveGo:
             result = resolve("go", "v0.24.0", None)
         assert is_resolve_success(result)
         assert result["tag"] == "v0.24.0"
+
+
+class TestResolveJsGitTags:
+    """resolve() — js versions the CLI was never published to npm for."""
+
+    def npm_404(self):
+        return patch(
+            "otdf_sdk_mgr.registry.fetch_json",
+            side_effect=urllib.error.HTTPError(
+                "https://registry.npmjs.org/x", 404, "", MagicMock(), None
+            ),
+        )
+
+    def test_explicit_version_found_by_dash_tag(self):
+        ls = make_ls_remote((SHA40, "refs/tags/sdk-v0.22.0"))
+        with patch_git(ls), self.npm_404():
+            result = resolve("js", "v0.22.0", "sdk")
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.22.0"
+        assert result.get("release") == "sdk-v0.22.0"
+
+    def test_infixed_version_accepted_in_either_form(self):
+        ls = make_ls_remote((SHA40, "refs/tags/sdk-v0.22.0"), ("0" * 40, "refs/tags/sdk/v0.4.0"))
+        with patch_git(ls), self.npm_404():
+            dash = resolve("js", "sdk-v0.22.0", "sdk")
+            slash = resolve("js", "sdk/v0.4.0", "sdk")
+        assert is_resolve_success(dash) and dash.get("release") == "sdk-v0.22.0"
+        assert is_resolve_success(slash) and slash.get("release") == "sdk/v0.4.0"
+
+
+class TestStripTagInfix:
+    def test_slash(self):
+        assert strip_tag_infix("service/v0.29.0", "service") == "v0.29.0"
+
+    def test_dash(self):
+        assert strip_tag_infix("sdk-v0.22.0", "sdk") == "v0.22.0"
+
+    def test_outside_namespace(self):
+        assert strip_tag_infix("v2.0.0", "sdk") is None
+        assert strip_tag_infix("protocol/go/v0.42.0", "service") is None
+
+    def test_prefix_only(self):
+        # Substring matches used to count; a tag must start with the infix.
+        assert strip_tag_infix("lib/sdk/v1.0.0", "sdk") is None
 
 
 class TestTryResolveJsNpm:

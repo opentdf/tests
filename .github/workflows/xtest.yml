@@ -43,6 +43,16 @@ on:
         type: boolean
         default: false
         description: "Run only the benchmarks: implies run-benchmarks and skips the functional matrix. Set focus-sdk to measure one SDK instead of all three, and that SDK's *-ref to '<branch> latest' to compare the branch against the newest release."
+      bench-payloads:
+        required: false
+        type: string
+        default: ""
+        description: "Payload sizes to benchmark, comma-separated, e.g. '1KiB,1MiB,32MiB,1GiB'. Default is 1KiB,1MiB,32MiB. Even at 32 MiB ~86% of a go encrypt is fixed startup cost, so a throughput regression has to roughly double the payload-dependent cost before it fails the 1.15x gate. Add 1GiB to gate throughput properly; it needs a bench-budget-seconds to match and ~5 GiB of runner disk."
+      bench-budget-seconds:
+        required: false
+        type: string
+        default: ""
+        description: "Wall-clock allowance shared by every benchmark cell (default 1500). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start. The bench job's timeout grows with it."
       run-zip64:
         required: false
         type: boolean
@@ -92,6 +102,14 @@ on:
         required: false
         type: boolean
         default: false
+      bench-payloads:
+        required: false
+        type: string
+        default: ""
+      bench-budget-seconds:
+        required: false
+        type: string
+        default: ""
       run-zip64:
         required: false
         type: boolean
@@ -139,6 +157,9 @@ jobs:
       js: ${{ steps.version-info.outputs.js-version-info }}
       sdk-version-list: ${{ steps.version-info.outputs.sdk-version-list }}
       bench-sdks: ${{ steps.bench-sdks.outputs.sdks }}
+      bench-payloads: ${{ steps.bench-settings.outputs.payloads }}
+      bench-budget-seconds: ${{ steps.bench-settings.outputs.budget-seconds }}
+      bench-timeout-minutes: ${{ steps.bench-settings.outputs.timeout-minutes }}
     env:
       PLATFORM_REF: "${{ inputs.platform-ref }}"
       JS_REF: "${{ inputs.js-ref }}"
@@ -193,10 +214,63 @@ jobs:
           repository: opentdf/tests
           sparse-checkout: |
             xtest/sdk
+            xtest/perf
             otdf-sdk-mgr
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.15"
+      # Here rather than in the bench job, which starts the platform first: a
+      # typo'd size is worth catching before three runners spend ~15 minutes
+      # each bringing it up. This calls the harness's own parser rather than
+      # reimplementing the grammar in bash -- perf.cells imports nothing
+      # outside the standard library, so a bare python3 can read it, and a
+      # bash copy that drifted would start refusing specs the run itself
+      # would have accepted. The scheduled nightly supplies no inputs, so the
+      # fallbacks are what keep its matrix and budget where they have always
+      # been: the harness's own default sizes, and conftest's default budget,
+      # copied because perf.config needs numpy and cannot be imported here.
+      - name: Validate benchmark settings
+        id: bench-settings
+        working-directory: otdf-sdk/xtest
+        env:
+          BENCH_PAYLOADS: ${{ inputs.bench-payloads }}
+          BENCH_BUDGET_SECONDS: ${{ inputs.bench-budget-seconds || '1500' }}
+        run: |-
+          python3 - <<'PY'
+          import math
+          import os
+
+          from perf.cells import DEFAULT_PAYLOAD_SPEC, parse_payloads
+
+          # Installation, platform startup, and artifact upload, on top of the
+          # measurement budget itself.
+          OVERHEAD_MINUTES = 20
+          # Six hours is GitHub's ceiling for a hosted-runner job.
+          MAX_BUDGET_SECONDS = (360 - OVERHEAD_MINUTES) * 60
+
+          try:
+              sizes = parse_payloads(
+                  os.environ["BENCH_PAYLOADS"] or DEFAULT_PAYLOAD_SPEC
+              )
+          except ValueError as e:
+              raise SystemExit(f"::error::invalid bench-payloads: {e}")
+          raw = os.environ["BENCH_BUDGET_SECONDS"]
+          try:
+              budget = float(raw)
+          except ValueError:
+              budget = math.nan
+          if not (0 < budget <= MAX_BUDGET_SECONDS):
+              raise SystemExit(
+                  f"::error::invalid bench-budget-seconds: {raw!r}; expected a "
+                  f"number above 0 and at most {MAX_BUDGET_SECONDS}"
+              )
+          timeout = math.ceil(budget / 60) + OVERHEAD_MINUTES
+          print("payload sizes:", ", ".join(p.label for p in sizes))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"payloads={','.join(p.label for p in sizes)}\n")
+              out.write(f"budget-seconds={budget:g}\n")
+              out.write(f"timeout-minutes={timeout}\n")
+          PY
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - id: version-info
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
@@ -478,7 +552,7 @@ jobs:
           version-info: "${{ needs.resolve-versions.outputs.js }}"
 
       - name: Cache npm
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.npm
@@ -489,7 +563,7 @@ jobs:
       ######## SETUP THE JS CLI #############
       - name: build and setup the web-sdk cli
         id: build-web-sdk
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         run: |
           make
         working-directory: otdftests/xtest/sdk/js
@@ -575,7 +649,7 @@ jobs:
 
       ####### SETUP JAVA CLI ##############
       - name: Prepare java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        if: steps.configure-java.outputs.needs-build == 'true'
         run: |
           make
         working-directory: otdftests/xtest/sdk/java
@@ -882,7 +956,9 @@ jobs:
   # Never runs on pull requests: 30 minutes of serial measurement is too slow
   # for a PR gate, and a PR runner is the noisiest place to measure.
   bench:
-    timeout-minutes: 45
+    # The 1500 s default budget plus ~20 minutes of setup; scaled with
+    # bench-budget-seconds in resolve-versions.
+    timeout-minutes: ${{ fromJSON(needs.resolve-versions.outputs.bench-timeout-minutes) }}
     runs-on: ubuntu-latest
     needs: resolve-versions
     # Nightly cron only, not the Mon/Wed or weekly ones: three runs a week of
@@ -1050,7 +1126,7 @@ jobs:
           platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the ${{ matrix.sdk }} cli
-        if: fromJson(steps.configure-sdk.outputs.heads)[0] != null
+        if: steps.configure-sdk.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/${{ matrix.sdk }}
         env:
@@ -1076,13 +1152,19 @@ jobs:
       # Deliberately serial: no -n / --dist. Parallel pytest workers contend
       # for the CPU under measurement and would invalidate every number here.
       # conftest.py refuses to run --bench under xdist for the same reason.
+      #
+      # --bench-prune-scratch: a fresh runner has no use for outputs or
+      # cached plaintexts after the cell that needed them, and keeping them
+      # all would take a 1GiB run to ~7 GiB of scratch instead of ~5.
       - name: Run performance benchmarks
         id: bench
         run: |-
           uv run --frozen --no-build pytest -ra -v \
             --bench \
             --sdks "$BENCH_SDK" \
-            --bench-budget-seconds 1500 \
+            --bench-payloads "$BENCH_PAYLOADS" \
+            --bench-budget-seconds "$BENCH_BUDGET_SECONDS" \
+            --bench-prune-scratch \
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
@@ -1090,6 +1172,9 @@ jobs:
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
+          # Validated and defaulted in resolve-versions.
+          BENCH_PAYLOADS: ${{ needs.resolve-versions.outputs.bench-payloads }}
+          BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
@@ -1102,6 +1187,17 @@ jobs:
           # The benchmark never touches the audit-log fixture; asserting on
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"
+
+      # Under --bench-prune-scratch every bench-* file is gone by the end of
+      # the run. One that is still here is where to start when a large-payload
+      # run comes up short of disk.
+      - name: Report leftover scratch files
+        if: success() || failure()
+        working-directory: otdftests/xtest
+        run: |-
+          df -h .
+          echo "bench files left under tmp/:"
+          find tmp -name 'bench-*' -type f -printf '%12s  %p\n' 2>/dev/null || true
 
       # Raw per-round samples, not just the verdict. Re-analysing a
       # surprising result offline beats re-running a 30-minute job to look at
@@ -1352,7 +1448,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Build the java cli
-        if: fromJson(steps.configure-java.outputs.heads)[0] != null
+        if: steps.configure-java.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/java
         env:
@@ -1360,7 +1456,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Build the js cli
-        if: fromJson(steps.configure-js.outputs.heads)[0] != null
+        if: steps.configure-js.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/js
         env:
@@ -1405,10 +1501,11 @@ jobs:
           # the workspace disk.
           XT_TMP_DIR: /mnt/xtest-tmp
           # The java shim pipes CLI stdout to a file with no -Xmx, and the js
-          # shim is a bare npx. Both runtimes honour these automatically, so
-          # the headroom is set here rather than by editing the shims. If a
-          # shim turns out to buffer the whole payload rather than stream it,
-          # that is a finding for the SDK, not a reason to shrink the payload.
+          # shim runs the CLI's node bin directly. Both runtimes honour these
+          # automatically, so the headroom is set here rather than by editing
+          # the shims. If a shim turns out to buffer the whole payload rather
+          # than stream it, that is a finding for the SDK, not a reason to
+          # shrink the payload.
           JAVA_TOOL_OPTIONS: -Xmx6g
           NODE_OPTIONS: --max-old-space-size=8192
 

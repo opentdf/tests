@@ -12,7 +12,7 @@ from rich.live import Live
 
 from otdf_local import __version__
 from otdf_local.config.ports import Ports
-from otdf_local.config.settings import get_settings
+from otdf_local.config.settings import Settings, get_settings
 from otdf_local.health.waits import WaitTimeoutError, wait_for_health, wait_for_port
 from otdf_local.process.logs import LogAggregator, LogEntry
 from otdf_local.services import (
@@ -43,6 +43,16 @@ app = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=sys.stderr.isatty(),
 )
+
+
+def _settings() -> Settings:
+    """Load settings, turning a failed platform discovery into a clean exit."""
+    try:
+        return get_settings()
+    except FileNotFoundError as e:
+        # stderr, so `eval $(otdf-local env)` does not try to run the message.
+        err_console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(1) from e
 
 
 def _show_provision_error(result: ProvisionResult, target: str) -> None:
@@ -99,7 +109,7 @@ def up(
 
     By default starts all services: docker (keycloak, postgres), platform, and all KAS instances.
     """
-    settings = get_settings()
+    settings = _settings()
     settings.ensure_directories()
 
     # Parse services to start
@@ -117,7 +127,7 @@ def up(
         print_info("Starting Docker services (Keycloak, PostgreSQL)...")
         docker = get_docker_service(settings)
         if not docker.start():
-            print_error("Failed to start Docker services")
+            print_error(f"Failed to start Docker services: {docker.start_error}")
             raise typer.Exit(1)
 
         with status_spinner("Waiting for Keycloak..."):
@@ -156,10 +166,10 @@ def up(
 
     # Step 2: Start Platform
     if start_platform:
-        print_info("Starting Platform...")
+        print_info(f"Starting Platform from {settings.platform_dir}...")
         platform = get_platform_service(settings)
         if not platform.start():
-            print_error("Failed to start Platform")
+            print_error(platform.start_error or "Failed to start Platform")
             raise typer.Exit(1)
 
         with status_spinner("Waiting for Platform..."):
@@ -236,7 +246,7 @@ def down(
     ] = False,
 ) -> None:
     """Stop all services."""
-    settings = get_settings()
+    settings = _settings()
 
     # Stop KAS instances
     print_info("Stopping KAS instances...")
@@ -272,7 +282,7 @@ def list_services(
     ] = False,
 ) -> None:
     """List all services with their status."""
-    settings = get_settings()
+    settings = _settings()
 
     # Gather all service info
     docker = get_docker_service(settings)
@@ -319,7 +329,7 @@ def status(
     ] = False,
 ) -> None:
     """Show detailed status with health checks."""
-    settings = get_settings()
+    settings = _settings()
 
     def get_status_table():
         docker = get_docker_service(settings)
@@ -381,7 +391,7 @@ def logs(
 
     Without a service name, shows aggregated logs from all services.
     """
-    settings = get_settings()
+    settings = _settings()
     aggregator = LogAggregator(settings.logs_dir)
 
     # Add all services to aggregator
@@ -425,7 +435,7 @@ def clean(
     ] = False,
 ) -> None:
     """Clean up generated files and logs."""
-    settings = get_settings()
+    settings = _settings()
     _do_clean(settings, keep_logs)
     print_success("Cleanup complete")
 
@@ -451,7 +461,7 @@ def provision(
     ] = "all",
 ) -> None:
     """Run provisioning steps."""
-    settings = get_settings()
+    settings = _settings()
     provisioner = get_provisioner(settings)
 
     if target == "all":
@@ -492,13 +502,17 @@ def restart(
     ],
 ) -> None:
     """Restart a specific service."""
-    settings = get_settings()
+    settings = _settings()
 
     if service == "docker":
         print_info("Restarting Docker services...")
         docker = get_docker_service(settings)
-        docker.stop()
-        docker.start()
+        if not docker.stop():
+            print_error(docker.stop_error or "Failed to stop Docker services")
+            raise typer.Exit(1)
+        if not docker.start():
+            print_error(docker.start_error or "Failed to restart Docker services")
+            raise typer.Exit(1)
         print_success("Docker services restarted")
         return
 
@@ -574,7 +588,7 @@ def env(
 
     This sets variables like PLATFORM_LOG_FILE, KAS_*_LOG_FILE, PLATFORMURL, OT_ROOT_KEY, etc.
     """
-    settings = get_settings()
+    settings = _settings()
 
     # Build environment variable dict
     env_vars = {}
