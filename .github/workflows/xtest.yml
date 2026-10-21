@@ -1405,10 +1405,11 @@ jobs:
           # the workspace disk.
           XT_TMP_DIR: /mnt/xtest-tmp
           # The java shim pipes CLI stdout to a file with no -Xmx, and the js
-          # shim is a bare npx. Both runtimes honour these automatically, so
-          # the headroom is set here rather than by editing the shims. If a
-          # shim turns out to buffer the whole payload rather than stream it,
-          # that is a finding for the SDK, not a reason to shrink the payload.
+          # shim runs the CLI's node bin directly. Both runtimes honour these
+          # automatically, so the headroom is set here rather than by editing
+          # the shims. If a shim turns out to buffer the whole payload rather
+          # than stream it, that is a finding for the SDK, not a reason to
+          # shrink the payload.
           JAVA_TOOL_OPTIONS: -Xmx6g
           NODE_OPTIONS: --max-old-space-size=8192
 
