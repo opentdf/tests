@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
 import pytest
 
@@ -32,23 +32,24 @@ pytestmark = pytest.mark.benchmark
 
 
 def test_sdk_performance(
+    request: pytest.FixtureRequest,
     bench_cell: BenchCell,
     bench_config: runner.BenchConfig,
     bench_arms: bench.ArmResolver,
-    bench_payloads: dict[str, Path],
-    bench_ciphertexts: bench.CiphertextFactory,
     bench_budget: runner.Budget,
     bench_recorder: report.BenchmarkRecorder,
-    bench_cell_files: list[Path],
-    attribute_default_rsa: abac.Attribute,
     tmp_dir: Path,
 ) -> None:
     """Measure one cell and record it; the session-wide gate decides.
 
     A cell that cannot be measured -- a missing build, two builds that would
-    not be doing the same work, a budget that ran out -- is skipped *and*
-    recorded as skipped, so that a quiet report is visibly quiet rather than
-    indistinguishable from a clean one.
+    not be doing the same work, a neutral preparation, a budget that ran out
+    -- is skipped *and* recorded as skipped, so that a quiet report is
+    visibly quiet rather than indistinguishable from a clean one.
+
+    The payloads, ciphertexts and attribute are requested only once the arms
+    are known to be measurable. They need a running platform; a cell that is
+    going to skip anyway -- every cell of a neutral preparation -- must not.
 
     A cell that fails because the scratch disk filled up ends the session
     instead, with one message saying so: see :func:`bench.disk_exhausted`.
@@ -66,6 +67,16 @@ def test_sdk_performance(
     problem = bench.comparability_problem(arms)
     if problem:
         bail(problem)
+
+    bench_payloads = cast(dict[str, Path], request.getfixturevalue("bench_payloads"))
+    bench_ciphertexts = cast(
+        bench.CiphertextFactory, request.getfixturevalue("bench_ciphertexts")
+    )
+    attribute_default_rsa = cast(
+        abac.Attribute, request.getfixturevalue("attribute_default_rsa")
+    )
+    # Lazy too: its scratch tracker is what pulls in the payloads.
+    bench_cell_files = cast(list[Path], request.getfixturevalue("bench_cell_files"))
 
     try:
         ct_file = None

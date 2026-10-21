@@ -10,6 +10,7 @@ No platform and no real SDK; the builds are stub ``cli.sh`` trees in
 ``tmp_path``.
 """
 
+import json
 import random
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -404,6 +406,70 @@ def touch(path: Path) -> Path:
     return path
 
 
+class FakeConfig:
+    """Just enough of ``pytest.Config`` for the option-reading helpers."""
+
+    def __init__(self, **opts: object) -> None:
+        self._opts: dict[str, object] = {
+            "--bench-refs": None,
+            "--bench-baseline": None,
+            "--bench-candidate": None,
+            "--bench-min-rounds": 20,
+            "--bench-max-rounds": 60,
+            "--bench-warmup": 5,
+            "--bench-budget-seconds": None,
+            "--bench-seed": 0,
+            "--bench-threshold": 1.15,
+        } | opts
+        self.stash = pytest.Stash()
+
+    def getoption(self, name: str, default: object = None) -> object:
+        return self._opts.get(name, default)
+
+
+def options(**opts: object) -> pytest.Config:
+    return cast(pytest.Config, FakeConfig(**opts))
+
+
+def prepared(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tags: Sequence[str],
+    *,
+    sdk: str = "go",
+    status: str = "success",
+    message: str = "",
+) -> None:
+    """Point the run at a manifest recording ``tags`` as its arms, in order."""
+    doc = {
+        "schema_version": "v1alpha1",
+        "sdk_arms": [
+            {
+                "requested_alias": t,
+                "repository": "https://github.com/opentdf/platform.git",
+                "commit_sha": f"{i:040d}",
+                "installed_tag": t,
+                "installed_path": "",
+                "installation_method": "source",
+            }
+            for i, t in enumerate(tags)
+        ],
+        "status": status,
+        "status_message": message,
+        "metadata": {"sdk": sdk},
+    }
+    path = tmp_path / "benchmark.installed.json"
+    path.write_text(json.dumps(doc))
+    monkeypatch.setenv("BENCH_INSTALLATION_MANIFEST", str(path))
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `otdf-local env` exports this; a developer's shell must not change what
+    # these tests see.
+    monkeypatch.delenv("BENCH_INSTALLATION_MANIFEST", raising=False)
+
+
 class TestMultiArmSelection:
     def test_named_arms_resolve_in_order(self, cwd: Path):
         install(cwd, "go", "main", "v0.29.0", "my-branch")
@@ -414,6 +480,69 @@ class TestMultiArmSelection:
         install(cwd, "go", "main", "v0.29.0")
         with pytest.raises(bench.ArmSelectionError, match="arm 3"):
             bench.select_arms("go", ["go@v0.29.0", "go@main", "go@nope"])
+
+
+class TestPreparedArms:
+    def test_the_manifest_supplies_the_arms_in_request_order(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        prepared(tmp_path, monkeypatch, ["v0.29.0", "main", "my--branch"])
+        config = options()
+        assert bench.arm_specs_from_options(config) == (
+            "go@v0.29.0",
+            "go@main",
+            "go@my--branch",
+        )
+        assert bench.arm_count(config) == 3
+        # The default budget follows the prepared arm count.
+        assert bench.config_from_options(config).budget_seconds == 2250.0
+
+    def test_explicit_refs_win_over_the_manifest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        prepared(tmp_path, monkeypatch, ["v0.29.0", "main"])
+        config = options(**{"--bench-refs": "go@v0.28.0,go@main"})
+        assert bench.arm_specs_from_options(config) == ("go@v0.28.0", "go@main")
+        assert bench.preparation_problem(config, "go") is None
+
+    def test_a_neutral_preparation_skips_with_its_reason_and_is_neutral(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        prepared(
+            tmp_path,
+            monkeypatch,
+            ["latest", "main"],
+            status="neutral",
+            message="All 2 requested aliases resolved to the same commit: abc12345",
+        )
+        config = options()
+        assert bench.arm_specs_from_options(config) is None
+        problem = bench.preparation_problem(config, "go")
+        assert problem is not None and "neutral" in problem and "abc12345" in problem
+        assert bench.preparation_is_neutral(config)
+        assert bench.runner_metadata(config)["preparation"] == "neutral"
+
+    def test_a_failed_preparation_is_a_problem_but_not_neutral(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        prepared(tmp_path, monkeypatch, [], status="failed", message="no such ref")
+        config = options()
+        problem = bench.preparation_problem(config, "go")
+        assert problem is not None and "no such ref" in problem
+        assert not bench.preparation_is_neutral(config)
+
+    def test_another_sdks_manifest_does_not_affect_this_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        prepared(
+            tmp_path, monkeypatch, ["latest", "main"], sdk="java", status="neutral"
+        )
+        assert bench.preparation_problem(options(), "go") is None
+
+    def test_a_resolver_with_a_problem_skips_that_sdk(self):
+        resolver = bench.ArmResolver(None, problem={"go": "neutral preparation: x"})
+        with pytest.raises(bench.ArmSelectionError, match="neutral"):
+            resolver("go")
 
 
 class TestBuildArms:

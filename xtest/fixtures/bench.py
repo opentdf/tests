@@ -3,8 +3,8 @@
 The experiment matrix, the payload files, the arm selection, and the shared
 time budget all live here. The measurement loop itself is in ``perf/runner.py``
 and the statistics in ``perf/stats.py``; this module is the glue that turns
-pytest's world (options, fixtures, SDK discovery) into the runner's world
-(2 to 4 arms and a config).
+pytest's world (options, fixtures, SDK discovery, the installation manifest)
+into the runner's world (2 to 4 arms and a config).
 """
 
 from __future__ import annotations
@@ -22,10 +22,13 @@ import pytest
 
 import abac
 import tdfs
-from perf import report
+from perf import installation, report
 from perf.cells import BenchCell, Payload, parse_payloads, payloads_to_generate
 from perf.config import budget_seconds, requested_arms
 from perf.runner import Arm, BenchConfig, Budget, Invocation
+
+#: The run's installation manifest, read once in ``pytest_configure``.
+INSTALLATION_KEY: pytest.StashKey[installation.Installation | None] = pytest.StashKey()
 
 
 class ArmSelectionError(Exception):
@@ -117,8 +120,30 @@ def select_arms(
 # --- Session-scoped configuration -------------------------------------------
 
 
+def installation_for(config: pytest.Config) -> installation.Installation | None:
+    """The manifest this run was prepared with, or None if it was not.
+
+    Read once and kept on the config, so every fixture and the end-of-run
+    report see the same record even if the file changes mid-session.
+    """
+    if INSTALLATION_KEY not in config.stash:
+        try:
+            config.stash[INSTALLATION_KEY] = installation.from_env()
+        except installation.ManifestError as e:
+            raise pytest.UsageError(str(e)) from e
+    return config.stash[INSTALLATION_KEY]
+
+
 def arm_specs_from_options(config: pytest.Config) -> tuple[str, ...] | None:
-    """The run's ordered arm specs, reference first, or None for the defaults."""
+    """The run's ordered arm specs, reference first, or None for the defaults.
+
+    Explicit options win. Without them, a prepared run measures exactly what
+    preparation installed, in the order it was requested -- so a local run and
+    a CI run that prepared the same request measure the same arms without
+    anyone restating them. A manifest that cannot be measured (failed,
+    partial, or neutral) yields no specs here; :func:`preparation_problem`
+    says why, per SDK.
+    """
     refs = cast(str | None, config.getoption("--bench-refs"))
     baseline = cast(str | None, config.getoption("--bench-baseline"))
     candidate = cast(str | None, config.getoption("--bench-candidate"))
@@ -132,7 +157,42 @@ def arm_specs_from_options(config: pytest.Config) -> tuple[str, ...] | None:
         raise pytest.UsageError(f"invalid benchmark options: {e}") from e
     if arms:
         return tuple(str(a) for a in arms)
+    prepared = installation_for(config)
+    if prepared is not None and prepared.usable:
+        return prepared.arm_specs()
     return None
+
+
+def preparation_problem(config: pytest.Config, sdk: str) -> str | None:
+    """Why this SDK's prepared arms cannot be measured, or None.
+
+    Only consulted when no arms were named explicitly: an explicit request is
+    a statement that the manifest is not what this run should measure.
+    """
+    if any(
+        config.getoption(o) is not None
+        for o in ("--bench-refs", "--bench-baseline", "--bench-candidate")
+    ):
+        return None
+    prepared = installation_for(config)
+    if prepared is None or prepared.sdk != sdk or prepared.usable:
+        return None
+    if prepared.neutral:
+        return f"neutral preparation: {prepared.status_message}"
+    return (
+        f"preparation {prepared.status or 'incomplete'}: "
+        f"{prepared.status_message or 'fewer than two arms were installed'}"
+    )
+
+
+def preparation_is_neutral(config: pytest.Config) -> bool:
+    """True if this run's only prepared arms collapsed onto one commit."""
+    prepared = installation_for(config)
+    return (
+        prepared is not None
+        and prepared.neutral
+        and arm_specs_from_options(config) is None
+    )
 
 
 def arm_count(config: pytest.Config) -> int:
@@ -451,15 +511,20 @@ class ArmResolver:
         *,
         baseline_spec: str | None = None,
         candidate_spec: str | None = None,
+        problem: dict[str, str | None] | None = None,
     ) -> None:
         self._specs = tuple(specs) if specs else None
         self._baseline_spec = baseline_spec
         self._candidate_spec = candidate_spec
+        self._problem = problem or {}
         self._cache: dict[str, BenchArms] = {}
 
     def __call__(self, sdk: str) -> BenchArms:
         cached = self._cache.get(sdk)
         if cached is None:
+            problem = self._problem.get(sdk)
+            if problem:
+                raise ArmSelectionError(problem)
             cached = self._cache[sdk] = BenchArms(
                 select_arms(
                     sdk,
@@ -476,10 +541,12 @@ def bench_arms(request: pytest.FixtureRequest) -> ArmResolver:
     """Resolver for the arms of any SDK in the run, reference first."""
     config = request.config
     specs = arm_specs_from_options(config)
+    cells = _selected_cells(config)
     return ArmResolver(
         specs,
         baseline_spec=None if specs else config.getoption("--bench-baseline"),
         candidate_spec=None if specs else config.getoption("--bench-candidate"),
+        problem={c.sdk: preparation_problem(config, c.sdk) for c in cells},
     )
 
 
@@ -688,6 +755,24 @@ def runner_metadata(config: pytest.Config) -> dict[str, object]:
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
         "platform_version": _platform_version(),
         "seed": config.getoption("--bench-seed"),
+        **_installation_metadata(config),
+    }
+
+
+def _installation_metadata(config: pytest.Config) -> dict[str, object]:
+    """Provenance from the installation manifest, when the run was prepared.
+
+    Carried into the artifact so a result names the commits it measured
+    rather than only their dist tags, which a moving branch reuses.
+    ``preparation`` is the explicit status a reader checks first: ``neutral``
+    means every requested alias named one commit and nothing was compared.
+    """
+    prepared = installation_for(config)
+    if prepared is None:
+        return {}
+    return {
+        "installation": prepared.to_dict(),
+        "preparation": "neutral" if preparation_is_neutral(config) else prepared.status,
     }
 
 
