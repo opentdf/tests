@@ -16,7 +16,7 @@ FeatureType = Literal[
     "bulk_rewrap",
     "connectrpc",
     "ecwrap",
-    "hexless",
+    "hexless_integrity",
     "hexaflexible",
     "kasallowlist",
     "key_management",
@@ -96,7 +96,7 @@ def _compute_features(semver: tuple[int, int, int]) -> set[FeatureType]:
 
     # Hexless format support
     if semver >= (0, 4, 39):
-        features.add("hexless")
+        features.add("hexless_integrity")
         features.add("hexaflexible")
 
     # Namespace grants

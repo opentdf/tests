@@ -27,9 +27,9 @@ import tdfs
 
 class TestParseForcedSupports:
     def test_parses_comma_and_whitespace_separated_names(self):
-        assert tdfs._parse_forced_supports(" hexless, dpop ,ecwrap") == frozenset(
-            {"hexless", "dpop", "ecwrap"}
-        )
+        assert tdfs._parse_forced_supports(
+            " hexless_integrity, dpop ,ecwrap"
+        ) == frozenset({"hexless_integrity", "dpop", "ecwrap"})
 
     def test_empty_string_yields_empty_set(self):
         assert tdfs._parse_forced_supports("") == frozenset()

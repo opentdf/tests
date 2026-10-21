@@ -77,9 +77,9 @@ if [ "$1" == "supports" ]; then
         exit 1
       fi
       ;;
-    hexless)
+    hexless_integrity)
       set -o pipefail
-      # Schema version 4.3.0 introduced hexless
+      # Schema version 4.3.0 introduced hexless integrity
       "${cmd[@]}" --version --json | jq -re .schema_version | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 >= 2)) exit 0; else exit 1; }'
       exit $?
       ;;

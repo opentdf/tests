@@ -40,7 +40,7 @@ def test_tdf_roundtrip(
     pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if container == "ztdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
@@ -78,7 +78,7 @@ def test_tdf_roundtrip(
         assert kao.type == "wrapped"
         assert kao.ephemeralPublicKey is None
     if target_mode == "4.2.2" or (
-        target_mode is None and not encrypt_sdk.supports("hexless")
+        target_mode is None and not encrypt_sdk.supports("hexless_integrity")
     ):
         looks_like_422(manifest)
     else:
@@ -132,7 +132,7 @@ def test_chunky_roundtrip(
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     ct_file = chunky_tdf(
         encrypt_sdk,
@@ -205,7 +205,7 @@ def test_tdf_spec_target_430(
         pytest.skip(
             f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.3.0"
         )
-    if not decrypt_sdk.supports("hexless"):
+    if not decrypt_sdk.supports("hexless_integrity"):
         pytest.skip(
             f"Decrypt SDK {decrypt_sdk} doesn't support hexless integrity information in container format 4.3.0"
         )
@@ -354,7 +354,7 @@ def test_tdf_assertions_unkeyed(
     pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -384,7 +384,7 @@ def test_tdf_assertions_with_keys(
     pfs = tdfs.get_platform_features()
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
@@ -626,7 +626,7 @@ def test_tdf_with_unbound_policy(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
@@ -653,7 +653,7 @@ def test_tdf_with_altered_policy_binding(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         attr_values=attribute_default_rsa.value_fqns,
@@ -684,7 +684,7 @@ def test_tdf_with_altered_root_sig(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
@@ -710,7 +710,7 @@ def test_tdf_with_altered_seg_sig_wrong(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
@@ -741,7 +741,7 @@ def test_tdf_with_altered_enc_seg_size(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
@@ -773,7 +773,7 @@ def test_tdf_with_altered_assertion_statement(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not decrypt_sdk.supports("assertions"):
@@ -808,7 +808,7 @@ def test_tdf_with_altered_assertion_with_keys(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     if not encrypt_sdk.supports("assertions"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
     if not decrypt_sdk.supports("assertion_verification"):
@@ -852,7 +852,7 @@ def test_tdf_altered_payload_end(
         pytest.skip(f"DSPX-1153 SDK [{decrypt_sdk}] has a bug with payload tampering")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     ct_file = encrypted_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
@@ -882,7 +882,7 @@ def test_tdf_with_malicious_kao(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     if not decrypt_sdk.supports("kasallowlist"):
         pytest.skip(f"{encrypt_sdk} sdk doesn't yet support an allowlist for kases")
     ct_file = encrypted_tdf(
@@ -927,7 +927,7 @@ def test_tdf_with_duplicate_kao_same_kas(
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     # Only the decrypt side needs to tolerate the duplicate KAO; the encrypt
     # side just produces a normal TDF that we mutate below.
     if not decrypt_sdk.supports("multikao"):

@@ -21,8 +21,8 @@ def test_decrypt_small(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("small-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / f"small-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -41,8 +41,8 @@ def test_decrypt_big(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("big-java-4.3.0-e0f8caf.tdf")
     rt_file = tmp_dir / f"big-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -62,8 +62,8 @@ def test_decrypt_SDKv0_7_5(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.tdf")
     rt_file = tmp_dir / f"0.7.5-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -79,8 +79,8 @@ def test_decrypt_SDKv0_7_8(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("xstext-java-v0.7.8-7f487c2-DSP2.0.4.tdf")
     rt_file = tmp_dir / f"0.7.8-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -96,8 +96,8 @@ def test_decrypt_SDKv0_9_0(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("xstext-java-v0.9.0-2de6a49-DSP2.0.5.1_and_2.0.6.tdf")
     rt_file = tmp_dir / f"0.9.0-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
@@ -112,8 +112,8 @@ def test_decrypt_no_splitid(
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
-    if not decrypt_sdk.supports("hexless"):
-        pytest.skip("Decrypting hexless files is not supported")
+    if not decrypt_sdk.supports("hexless_integrity"):
+        pytest.skip("Decrypting hexless integrity files is not supported")
     ct_file = get_golden_file("no-splitids-java.tdf")
     rt_file = tmp_dir / f"no-splitids-java-{decrypt_sdk}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")

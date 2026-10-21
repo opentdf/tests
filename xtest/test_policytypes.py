@@ -21,7 +21,7 @@ def skip_rts_as_needed(
 
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     if container == "ztdf-ecwrap":
         if not encrypt_sdk.supports("ecwrap"):
             pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")

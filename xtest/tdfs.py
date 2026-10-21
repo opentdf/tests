@@ -166,7 +166,7 @@ feature_type = Literal[
     # unconditionally, which is how you get a red repro out of a build that is
     # still vulnerable rather than a skip.
     "gmac_root_rejected",
-    "hexless",
+    "hexless_integrity",
     "hexaflexible",
     "kasallowlist",
     # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
@@ -351,7 +351,7 @@ class PlatformFeatureSet(BaseModel):
 
         # Included in SDK 0.3.27, service 0.4.39
         if self.semver >= (0, 4, 39):
-            self.features.add("hexless")
+            self.features.add("hexless_integrity")
             self.features.add("hexaflexible")
 
         if self.semver >= (0, 4, 19):
@@ -1041,12 +1041,14 @@ def skip_if_unsupported(sdk: SDK, *features: feature_type):
     sdk.skip_if_unsupported(*features)
 
 
-def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
+def skip_hexless_integrity_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
     if encrypt_sdk.supports("hexaflexible"):
         return
-    if encrypt_sdk.supports("hexless") and not decrypt_sdk.supports("hexless"):
+    if encrypt_sdk.supports("hexless_integrity") and not decrypt_sdk.supports(
+        "hexless_integrity"
+    ):
         pytest.skip(
-            f"{decrypt_sdk} sdk doesn't yet support [hexless], but {encrypt_sdk} does"
+            f"{decrypt_sdk} sdk doesn't yet support hexless integrity, but {encrypt_sdk} does"
         )
 
 
@@ -1191,8 +1193,12 @@ def skip_pqc_hybrid_format_skew(encrypt_sdk: SDK | None = None) -> None:
 def select_target_version(
     encrypt_sdk: SDK, decrypt_sdk: SDK
 ) -> container_version | None:
-    if encrypt_sdk.supports("hexaflexible") and not decrypt_sdk.supports("hexless"):
+    if encrypt_sdk.supports("hexaflexible") and not decrypt_sdk.supports(
+        "hexless_integrity"
+    ):
         return "4.2.2"
-    if encrypt_sdk.supports("hexaflexible") and decrypt_sdk.supports("hexless"):
+    if encrypt_sdk.supports("hexaflexible") and decrypt_sdk.supports(
+        "hexless_integrity"
+    ):
         return "4.3.0"
     return None

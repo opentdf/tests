@@ -54,7 +54,7 @@ def skip_unless_in_play(
 ) -> None:
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
 
 # --- manifest and payload surgery --------------------------------------------

@@ -434,7 +434,7 @@ def _spec_for(spec: str | None, sdk: str) -> str | None:
 #: operation, and a timing difference between them is a difference in work,
 #: not in speed.
 _COMPARABILITY_FEATURES: tuple[tdfs.feature_type, ...] = (
-    "hexless",
+    "hexless_integrity",
     "hexaflexible",
     "autoconfigure",
 )
@@ -469,7 +469,9 @@ def pinned_target_mode(arms: BenchArms) -> tdfs.container_version | None:
         and arms.candidate.supports("hexaflexible")
     ):
         return None
-    if arms.baseline.supports("hexless") and arms.candidate.supports("hexless"):
+    if arms.baseline.supports("hexless_integrity") and arms.candidate.supports(
+        "hexless_integrity"
+    ):
         return "4.3.0"
     return "4.2.2"
 

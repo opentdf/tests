@@ -82,7 +82,7 @@ def test_xwing_roundtrip(
         "key_management", "autoconfigure", "mechanism-xwing"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_pqc_hybrid_format_skew(encrypt_sdk)
 
     attr, key_ids = attribute_with_xwing_key
@@ -135,7 +135,7 @@ def test_xwing_with_ec_roundtrip(
         "key_management", "autoconfigure", "mechanism-xwing"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_pqc_hybrid_format_skew(encrypt_sdk)
 
     attr, key_ids = attribute_with_xwing_and_ec_keys
@@ -200,7 +200,7 @@ def test_secpmlkem_3_roundtrip(
         "key_management", "autoconfigure", "mechanism-secpmlkem"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_pqc_hybrid_format_skew(encrypt_sdk)
 
     attr, key_ids = attribute_with_secpmlkem_3_key
@@ -279,7 +279,7 @@ def test_secpmlkem_5_roundtrip(
         "key_management", "autoconfigure", "mechanism-secpmlkem"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_pqc_hybrid_format_skew(encrypt_sdk)
 
     attr, key_ids = attribute_with_secpmlkem_5_key
@@ -343,7 +343,7 @@ def test_mlkem_768_roundtrip(
         "key_management", "autoconfigure", "mechanism-mlkem"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     attr, key_ids = attribute_with_mlkem_768_key
 
@@ -393,7 +393,7 @@ def test_mlkem_1024_roundtrip(
         "key_management", "autoconfigure", "mechanism-mlkem"
     )
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_hexless_integrity_skew(encrypt_sdk, decrypt_sdk)
 
     attr, key_ids = attribute_with_mlkem_1024_key
 
