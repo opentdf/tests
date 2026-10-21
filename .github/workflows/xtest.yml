@@ -53,6 +53,11 @@ on:
         type: string
         default: ""
         description: "Wall-clock allowance shared by every benchmark cell (default 1500). Manual runs are not on the nightly's schedule, so this is the knob to raise when adding payload sizes -- each one adds an encrypt and a decrypt cell, and the budget is divided evenly as cells start. The bench job's timeout grows with it."
+      bench-arms:
+        required: false
+        type: string
+        default: ""
+        description: "Baseline and candidate dist names, space-separated, e.g. 'main my-branch' (a '/' in a branch name becomes '--'). Applied to every flavour the runner measures, so the js runner compares web@main with web@my-branch too. Default: the newest installed release against the one branch build, which is ambiguous once two branches are installed."
       run-zip64:
         required: false
         type: boolean
@@ -107,6 +112,10 @@ on:
         type: string
         default: ""
       bench-budget-seconds:
+        required: false
+        type: string
+        default: ""
+      bench-arms:
         required: false
         type: string
         default: ""
@@ -1161,6 +1170,21 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
+      # `web` is the js runner's own builds run inside headless Chromium, so
+      # it is staged from them here and measured on the same runner, after js:
+      # in-browser and Node numbers for the same pair of builds.
+      - name: Cache Playwright browsers
+        if: matrix.sdk == 'js'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/web/driver/package.json') }}
+
+      - name: Stage the web flavour from the installed js versions
+        if: matrix.sdk == 'js'
+        run: make from-js
+        working-directory: otdftests/xtest/sdk/web
+
       ######## MEASURE #############
       # --locked --no-build: install exactly what uv.lock pins, and run no
       # setup scripts doing it. A benchmark that measured a differently
@@ -1176,22 +1200,49 @@ jobs:
       # --bench-prune-scratch: a fresh runner has no use for outputs or
       # cached plaintexts after the cell that needed them, and keeping them
       # all would take a 1GiB run to ~7 GiB of scratch instead of ~5.
+      #
+      # One session per flavour, because --bench-baseline and
+      # --bench-candidate each name a single SDK. The budget is split between
+      # them so the job timeout, sized from it in resolve-versions, still
+      # holds. A regression in js does not stop web from being measured.
       - name: Run performance benchmarks
         id: bench
         run: |-
-          uv run --frozen --no-build pytest -ra -v \
-            --bench \
-            --sdks "$BENCH_SDK" \
-            --bench-payloads "$BENCH_PAYLOADS" \
-            --bench-budget-seconds "$BENCH_BUDGET_SECONDS" \
-            --bench-prune-scratch \
-            --bench-out test-results/benchmarks \
-            --html "test-results/bench-${BENCH_SDK}.html" \
-            --self-contained-html \
-            test_benchmarks.py
+          flavours=("$BENCH_SDK")
+          if [[ "$BENCH_SDK" == js ]]; then
+            flavours+=(web)
+          fi
+          if [[ -n "$BENCH_ARMS" ]]; then
+            read -r baseline candidate extra <<<"$BENCH_ARMS"
+            if [[ -z "$candidate" || -n "$extra" ]]; then
+              echo "::error::bench-arms needs exactly two dist names; got '$BENCH_ARMS'"
+              exit 1
+            fi
+          fi
+          budget=$(awk -v b="$BENCH_BUDGET_SECONDS" -v n="${#flavours[@]}" 'BEGIN { print b / n }')
+          rc=0
+          for sdk in "${flavours[@]}"; do
+            arm_args=()
+            if [[ -n "$BENCH_ARMS" ]]; then
+              arm_args=(--bench-baseline "$sdk@$baseline" --bench-candidate "$sdk@$candidate")
+            fi
+            uv run --frozen --no-build pytest -ra -v \
+              --bench \
+              --sdks "$sdk" \
+              "${arm_args[@]}" \
+              --bench-payloads "$BENCH_PAYLOADS" \
+              --bench-budget-seconds "$budget" \
+              --bench-prune-scratch \
+              --bench-out test-results/benchmarks \
+              --html "test-results/bench-${sdk}.html" \
+              --self-contained-html \
+              test_benchmarks.py || rc=$?
+          done
+          exit "$rc"
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
+          BENCH_ARMS: ${{ inputs.bench-arms }}
           # Validated and defaulted in resolve-versions.
           BENCH_PAYLOADS: ${{ needs.resolve-versions.outputs.bench-payloads }}
           BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
