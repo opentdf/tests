@@ -1,10 +1,14 @@
-"""Git-ref helpers shared by platform and SDK installers."""
+"""Git-ref helpers and a typed `git ls-remote` wrapper used across otdf-sdk-mgr."""
 
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, cast
 
 from otdf_sdk_mgr.semver import SEMVER_RE
+
+if TYPE_CHECKING:
+    from git import Git
 
 _PR_SHORTHAND_RE = re.compile(r"^pr:(\d+)$")
 _HEX_SHA_LEN = (40, 64)
@@ -45,3 +49,19 @@ def ref_slug(ref: str) -> str:
     `checkout_sdk_branch`: replace `/` with `--`. Idempotent.
     """
     return ref.replace("/", "--")
+
+
+def git_ls_remote(
+    repo: Git, url: str, *patterns: str, heads: bool = False, tags: bool = False
+) -> str:
+    """Run `git ls-remote [--heads] [--tags] <url> [<patterns>...]`; return stdout.
+
+    Only narrows the type. GitPython >= 3.1.51 annotates `Git.ls_remote`
+    with every shape `Git.execute` can return (bytes, an extended-output
+    tuple, a process handle), but without `execute` options it is always a
+    `str`. The signature admits no such options, so the cast holds.
+
+    `repo` comes from the caller so tests that patch the caller's `Git`
+    (e.g. `otdf_sdk_mgr.resolve.Git`) still intercept the call.
+    """
+    return cast("str", repo.ls_remote(url, *patterns, heads=heads, tags=tags))

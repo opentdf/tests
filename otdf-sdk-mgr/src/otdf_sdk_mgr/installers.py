@@ -25,6 +25,7 @@ from otdf_sdk_mgr.config import (
     get_sdk_dirs,
     go_module_for_tag,
 )
+from otdf_sdk_mgr.refs import git_ls_remote
 from otdf_sdk_mgr.registry import fetch_json, list_go_versions, list_java_github_releases
 from otdf_sdk_mgr.resolve import is_resolve_success, resolve, strip_tag_infix
 from otdf_sdk_mgr.semver import normalize_version
@@ -129,7 +130,7 @@ def _js_release_tag(v: str) -> str:
     infix = SDK_TAG_INFIXES["js"]
     candidates = [f"{infix}-v{v}", f"{infix}/v{v}"]
     try:
-        raw = Git().ls_remote(SDK_GIT_URLS["js"], *candidates, tags=True)
+        raw = git_ls_remote(Git(), SDK_GIT_URLS["js"], *candidates, tags=True)
     except git.exc.GitCommandError as e:
         raise InstallError(f"Could not list web-sdk tags: {e}") from e
     found = {line.split("\t", 1)[1].removeprefix("refs/tags/") for line in raw.splitlines()}
