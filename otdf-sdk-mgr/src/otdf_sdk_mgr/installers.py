@@ -10,17 +10,23 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import git.exc
+from git import Git
+
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.config import (
     GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
     SDK_GIT_URLS,
     SDK_MAVEN_COORDS,
+    SDK_NPM_PACKAGES,
+    SDK_TAG_INFIXES,
     get_sdk_dir,
     get_sdk_dirs,
     go_module_for_tag,
 )
-from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
+from otdf_sdk_mgr.registry import fetch_json, list_go_versions, list_java_github_releases
+from otdf_sdk_mgr.resolve import is_resolve_success, resolve, strip_tag_infix
 from otdf_sdk_mgr.semver import normalize_version
 
 
@@ -70,18 +76,132 @@ def install_go_release(version: str, dist_dir: Path) -> None:
 
 
 def install_js_release(version: str, dist_dir: Path) -> None:
-    """Install a JS CLI release from npm registry."""
+    """Install a JS CLI release.
+
+    Prefers `@opentdf/ctl` from npm. web-sdk has shipped releases without it
+    -- sdk 0.21.0 and 0.22.0 reached npm as `@opentdf/sdk` only (DSPX-5277) --
+    so failing that, builds the CLI from the release tag against the
+    `@opentdf/sdk` published to npm.
+
+    Raises InstallError if neither works, so CI (xtest/setup-cli-tool) can
+    fall back to a full source build.
+    """
+    # "sdk-v0.22.0", "sdk/v0.4.0" and "v0.22.0" all name npm version 0.22.0.
+    v = (strip_tag_infix(version, SDK_TAG_INFIXES["js"]) or version).lstrip("v")
+    if _on_npm(SDK_NPM_PACKAGES["js"], v):
+        _install_js_cli_from_npm(v, dist_dir)
+        return
+    print(f"  {SDK_NPM_PACKAGES['js']}@{v} is not on npm; building it against @opentdf/sdk@{v}...")
+    _build_js_cli_against_npm_sdk(v, dist_dir)
+
+
+def _on_npm(package: str, version: str) -> bool:
+    """Whether npm has `package` at `version` (or at the dist-tag `version`)."""
+    url = f"https://registry.npmjs.org/{package}/{version}"
+    try:
+        fetch_json(url)
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise InstallError(f"Could not check npm for {package}@{version}: {e}") from e
+    except (OSError, ValueError) as e:
+        raise InstallError(f"Could not reach npm to check for {package}@{version}: {e}") from e
+
+
+def _install_js_cli_from_npm(v: str, dist_dir: Path) -> None:
     js_dir = get_sdk_dir() / "js"
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
-    # Strip infix prefix (e.g., "sdk/v0.4.0" -> "v0.4.0") for npm install
-    v = version.split("/")[-1].lstrip("v")
-    print(f"  Installing @opentdf/ctl@{v} from npm...")
-    subprocess.check_call(
-        ["npm", "install", f"@opentdf/ctl@{v}"],
-        cwd=dist_dir,
-    )
+    package = SDK_NPM_PACKAGES["js"]
+    print(f"  Installing {package}@{v} from npm...")
+    try:
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
+        subprocess.check_call(["npm", "install", f"{package}@{v}"], cwd=dist_dir)
+    except (OSError, subprocess.CalledProcessError) as e:
+        # A partial dist_dir would be skipped as "already installed" next time.
+        shutil.rmtree(dist_dir, ignore_errors=True)
+        raise InstallError(f"Installing {package}@{v} from npm failed: {e}") from e
     print(f"  JS release {v} installed to {dist_dir}")
+
+
+def _js_release_tag(v: str) -> str:
+    """The web-sdk git tag for sdk release `v`: `sdk-vX.Y.Z`, or `sdk/vX.Y.Z` up to 0.4.0."""
+    infix = SDK_TAG_INFIXES["js"]
+    candidates = [f"{infix}-v{v}", f"{infix}/v{v}"]
+    try:
+        raw = Git().ls_remote(SDK_GIT_URLS["js"], *candidates, tags=True)
+    except git.exc.GitCommandError as e:
+        raise InstallError(f"Could not list web-sdk tags: {e}") from e
+    found = {line.split("\t", 1)[1].removeprefix("refs/tags/") for line in raw.splitlines()}
+    for tag in candidates:
+        if tag in found:
+            return tag
+    raise InstallError(f"No web-sdk tag for sdk {v} (looked for {', '.join(candidates)})")
+
+
+def _build_js_cli_against_npm_sdk(v: str, dist_dir: Path) -> None:
+    """Build `cli/` from the release tag, resolving `@opentdf/sdk` from npm.
+
+    At a release tag, `cli/package.json` points `@opentdf/sdk` at
+    `../lib/opentdf-sdk-<v>.tgz`, which only a lib build produces. Swapping
+    that for the published package skips the lib build and tests the sdk that
+    users actually install. web-sdk's own `make cli` swaps in its tarball the
+    same way: uninstall, `npm ci`, then install the replacement.
+
+    The checkout lives in a temp dir, not under src/, so the js Makefile won't
+    pick it up for a second, full build. The packed CLI is copied into
+    dist_dir, so the `file:` dependency npm records stays valid.
+    """
+    if not _on_npm("@opentdf/sdk", v):
+        raise InstallError(f"Neither {SDK_NPM_PACKAGES['js']} nor @opentdf/sdk {v} is on npm")
+    tag = _js_release_tag(v)
+    js_dir = get_sdk_dir() / "js"
+    with tempfile.TemporaryDirectory(prefix=f"web-sdk-{v}-") as tmp:
+        src_dir = Path(tmp) / "web-sdk"
+        cli_dir = src_dir / "cli"
+        pack_dir = Path(tmp) / "pack"
+        pack_dir.mkdir()
+        steps: list[tuple[list[str], Path | None]] = [
+            (
+                [
+                    "git",
+                    "clone",
+                    "--quiet",
+                    "--depth=1",
+                    f"--branch={tag}",
+                    SDK_GIT_URLS["js"],
+                    str(src_dir),
+                ],
+                None,
+            ),
+            (["npm", "uninstall", "@opentdf/sdk"], cli_dir),
+            (["npm", "ci"], cli_dir),
+            (["npm", "install", "--save-exact", f"@opentdf/sdk@{v}"], cli_dir),
+            (["npm", "pack", "--pack-destination", str(pack_dir)], cli_dir),
+        ]
+        for cmd, cwd in steps:
+            try:
+                subprocess.check_call(cmd, cwd=cwd)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                raise InstallError(
+                    f"Running {' '.join(cmd[:2])} for the {v} CLI failed: {e}"
+                ) from e
+        packed = list(pack_dir.glob("*.tgz"))
+        if len(packed) != 1:
+            raise InstallError(f"Expected one packed CLI in {pack_dir}, found {packed}")
+        tgz = packed[0]
+        try:
+            dist_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
+            shutil.copy(tgz, dist_dir / tgz.name)
+            subprocess.check_call(["npm", "install", f"./{tgz.name}"], cwd=dist_dir)
+        except (OSError, subprocess.CalledProcessError) as e:
+            # A partial dist_dir would be skipped as "already installed" next time.
+            shutil.rmtree(dist_dir, ignore_errors=True)
+            raise InstallError(
+                f"Built the {v} CLI but could not install it to {dist_dir}: {e}"
+            ) from e
+    print(f"  JS release {v} built against @opentdf/sdk from npm and installed to {dist_dir}")
 
 
 def install_java_release(version: str, dist_dir: Path) -> None:
@@ -276,8 +396,14 @@ def latest_stable_version(sdk: str) -> str | None:
         stable = [v for v in list_go_versions() if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
     elif sdk == "js":
-        stable = [v for v in list_js_versions() if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        # The newest sdk release tag, as `versions resolve js latest` hands CI,
+        # rather than the newest @opentdf/ctl on npm: web-sdk has released
+        # without publishing the CLI (DSPX-5277), and install_js_release builds
+        # those from the tag.
+        latest = resolve("js", "latest", SDK_TAG_INFIXES["js"])
+        if not is_resolve_success(latest):
+            raise InstallError(f"Could not find the latest js release: {latest}")
+        return latest["tag"]
     elif sdk == "java":
         # No has_cli filter: install_java_release builds the CLI against Maven
         # Central when a release has no cmdline.jar asset (and fails, for a CI
