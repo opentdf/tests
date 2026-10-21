@@ -160,3 +160,16 @@ class TestMarkdown:
         assert len(rows) == 2 * 3
         assert any("`go@b`" in r and "**REGRESSION**" in r for r in rows)
         assert "Reference: `go@main`." in text
+
+    def test_a_neutral_preparation_says_so_instead_of_nothing_measured(self):
+        recorder = BenchmarkRecorder(
+            skipped={"go-encrypt-1KiB": "neutral preparation: same commit"},
+            metadata={
+                "preparation": "neutral",
+                "installation": {"status_message": "All 2 resolved to abc12345"},
+            },
+        )
+        cfg = BenchConfig(n_resamples=300)
+        text = report.markdown(recorder, cfg, recorder.gate(cfg))
+        assert "NEUTRAL" in text and "abc12345" in text
+        assert "NOTHING MEASURED" not in text

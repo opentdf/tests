@@ -63,6 +63,10 @@ gate reads, and `p_value_faster` / `p_adjusted_faster` are the matching
 Benjamini–Hochberg values within that key's correction family and are `null`
 for controls and censored keys, which enter no family.
 
+When the run was prepared with `otdf-sdk-mgr install benchmark`,
+`metadata.installation` records each arm's requested alias, commit and dist
+tag, and `metadata.preparation` the preparation status.
+
 ### The table
 
 ```markdown
@@ -242,8 +246,9 @@ things; the noise floor will tell you whether you succeeded.
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact (`SCHEMA_VERSION`), step-summary markdown |
 | `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
+| `installation.py` | Reads the installation manifest `otdf-sdk-mgr install benchmark` writes. No pytest |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
-| `../fixtures/bench.py` | The pytest glue: arm selection (options or defaults), payloads, ciphertexts, budget |
+| `../fixtures/bench.py` | The pytest glue: arm selection (options, manifest, defaults), payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
 
