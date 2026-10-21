@@ -202,7 +202,7 @@ def setup_golden_keys(
         cert_path = platform_dir / f"{kid}-cert.pem"
 
         _write_owner_only(private_path, private_key)
-        cert_path.write_text(cert)
+        cert_path.write_text(cert, encoding="utf-8")
 
         keys_config.append(
             {
@@ -226,8 +226,8 @@ def _read_extra_keys(path: Path) -> list[tuple[str, str, str, str]]:
     `PlatformService._preflight` reports as a start error.
     """
     try:
-        raw = json.loads(path.read_text())
-    except json.JSONDecodeError as e:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise ValueError(f"{path} is not valid JSON: {e}") from e
     if not isinstance(raw, list):
         raise ValueError(f"{path} must hold a JSON array of keys")
@@ -265,7 +265,7 @@ def _read_extra_keys(path: Path) -> list[tuple[str, str, str, str]]:
 def _write_owner_only(path: Path, content: str) -> None:
     """Write `path` so that only its owner can ever read the content."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         # The mode above applies only on creation; an existing file keeps its
         # own, so narrow it before any content goes in.
         os.fchmod(f.fileno(), 0o600)

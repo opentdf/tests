@@ -180,6 +180,17 @@ def test_a_malformed_extra_keys_file_is_a_value_error(
     assert list(platform_dir.iterdir()) == []
 
 
+def test_extra_keys_that_are_not_utf8_name_the_file(
+    xtest_root: Path, platform_dir: Path
+):
+    # UnicodeDecodeError is already a ValueError, but its message does not
+    # say which file it was decoding.
+    (xtest_root / "extra-keys.json").write_bytes(b'[{"kid": "\xff"}]')
+
+    with pytest.raises(ValueError, match="extra-keys.json"):
+        setup_golden_keys(xtest_root, platform_dir)
+
+
 def test_a_malformed_extra_keys_file_fails_start(xtest_root: Path, platform_dir: Path):
     (xtest_root / "extra-keys.json").write_text(json.dumps([_golden_entry(kid=1)]))
     platform = _platform(xtest_root, platform_dir, TEMPLATE)
