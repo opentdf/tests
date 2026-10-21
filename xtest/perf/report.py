@@ -9,7 +9,8 @@ finish, from :meth:`BenchmarkRecorder.gate`.
 Two artifacts come out:
 
 - A JSON file per run, holding **every raw per-round sample** alongside the
-  derived statistics. Re-analysing a surprising result offline is the
+  derived statistics, under an explicit ``schema`` version (see
+  :data:`SCHEMA_VERSION`). Re-analysing a surprising result offline is the
   difference between understanding a red build and re-running a 30-minute job
   to look at the same numbers again.
 - A markdown table for ``$GITHUB_STEP_SUMMARY``, so the answer is on the job
@@ -29,7 +30,13 @@ import pytest
 from perf import stats
 from perf.cells import BenchCell
 from perf.measure import METRIC_LABELS, METRICS, format_metric
-from perf.runner import BenchConfig, CellResult, analyze
+from perf.runner import BenchConfig, CellResult, analyze, contrast_key
+
+#: Version of the JSON artifact's shape. 2 added multi-arm cells: samples are
+#: keyed by arm id, each cell names its ``arms`` and ``reference``, and the
+#: statistics live under ``contrasts`` -- one per candidate -- instead of a
+#: single ``metrics`` block. Consumers that read version 1 must check this.
+SCHEMA_VERSION = 2
 
 #: Cells the session intends to run. Set by the conftest parametrizer, read by
 #: the budget and arm-resolution fixtures.
@@ -74,7 +81,7 @@ def to_dict(
 ) -> dict[str, object]:
     """Serialize a whole run, raw samples included."""
     return {
-        "schema": 1,
+        "schema": SCHEMA_VERSION,
         "metadata": recorder.metadata,
         "config": {
             "min_rounds": config.min_rounds,
@@ -95,31 +102,49 @@ def to_dict(
             k: _noise_dict(n) for k, n in gate.noise_by_control.items()
         },
         "trustworthy": gate.trustworthy,
+        "nothing_measured": gate.nothing_measured,
         "regressions": gate.regressions,
         "improvements": gate.improvements,
         "summary": gate.summary,
         "skipped": recorder.skipped,
-        "cells": [
+        "cells": [_cell_dict(r, gate) for r in recorder.results],
+    }
+
+
+def _cell_dict(r: CellResult, gate: stats.GateResult) -> dict[str, object]:
+    cell: dict[str, object] = {
+        "id": r.cell_id,
+        "sdk": r.sdk,
+        "control": r.control,
+        "reference": r.reference,
+        "arms": [{"id": a, "label": r.arm_labels[a]} for a in r.arm_ids],
+    }
+    if len(r.candidates) == 1:
+        # The two-arm convenience labels. Omitted above two arms, where "the
+        # candidate" would silently mean only the first of several.
+        cell["baseline"] = r.arm_labels[r.reference]
+        cell["candidate"] = r.arm_labels[r.candidates[0]]
+    cell |= {
+        "n_rounds": r.n_rounds,
+        "n_warmup": r.n_warmup,
+        "elapsed_s": round(r.elapsed_s, 3),
+        "stopped_because": r.stopped_because,
+        "rss_floor_bytes": r.rss_floor_bytes,
+        "samples": r.samples,
+        "contrasts": [
             {
-                "id": r.cell_id,
-                "baseline": r.baseline_label,
-                "candidate": r.candidate_label,
-                "control": r.control,
-                "n_rounds": r.n_rounds,
-                "n_warmup": r.n_warmup,
-                "elapsed_s": round(r.elapsed_s, 3),
-                "stopped_because": r.stopped_because,
-                "rss_floor_bytes": r.rss_floor_bytes,
-                "samples": r.samples,
+                "a": a,
+                "b": b,
                 "metrics": {
-                    m: _comparison_dict(gate.comparisons[f"{r.cell_id}/{m}"])
+                    m: _comparison_dict(gate.comparisons[key])
                     for m in METRICS
-                    if f"{r.cell_id}/{m}" in gate.comparisons
+                    if (key := contrast_key(r.cell_id, a, b, m)) in gate.comparisons
                 },
             }
-            for r in recorder.results
+            for a, b in r.contrast_pairs()
         ],
     }
+    return cell
 
 
 def _noise_dict(noise: stats.NoiseFloor | None) -> dict[str, object]:
@@ -137,16 +162,16 @@ def _noise_dict(noise: stats.NoiseFloor | None) -> dict[str, object]:
 def _comparison_dict(c: stats.PairedComparison) -> dict[str, object]:
     return {
         "n_rounds": c.n_rounds,
-        "baseline_median": _jsonable(c.baseline_median),
-        "candidate_median": _jsonable(c.candidate_median),
+        # Medians of the contrast's ``a`` and ``b`` arms respectively.
+        "a_median": _jsonable(c.baseline_median),
+        "b_median": _jsonable(c.candidate_median),
         "ratio": _jsonable(c.ratio),
         "ci_low": _jsonable(c.ci_low),
         "ci_high": _jsonable(c.ci_high),
         "p_value": _jsonable(c.p_value),
         "p_adjusted": _jsonable(c.p_adjusted),
-        # Both directions are carried explicitly. The schema stays at 1: these
-        # are additive fields, and a consumer that only knows the slower tail
-        # reads exactly what it read before.
+        # Both directions are carried explicitly: the faster tail is its own
+        # test, not the slower one read backwards.
         "p_value_faster": _jsonable(c.p_value_faster),
         "p_adjusted_faster": _jsonable(c.p_adjusted_faster),
         "verdict": str(c.verdict),
@@ -175,18 +200,23 @@ def write_json(
 def markdown(
     recorder: BenchmarkRecorder, config: BenchConfig, gate: stats.GateResult
 ) -> str:
-    """Render the run as a GitHub step summary."""
+    """Render the run as a GitHub step summary.
+
+    One row per candidate, cell and metric, each against that cell's
+    reference. Deliberately plain: it is a view of the JSON, not a separate
+    source, and every value in it can be found there.
+    """
     threshold_pct = (config.threshold - 1) * 100
     lines = [
         "## SDK performance regression benchmark",
         "",
-        f"Paired A/B on one runner. A cell fails only if the 95% CI lower "
-        f"bound exceeds **{config.threshold:.2f}x** (+{threshold_pct:.0f}%) "
-        f"*and* the BH-adjusted p < {stats.DEFAULT_ALPHA}.",
-        "",
-        f"**{gate.summary}**",
+        f"Paired comparison on one runner: every build runs once per round, "
+        f"and each candidate is compared with the reference. A cell fails only "
+        f"if the 95% CI lower bound exceeds **{config.threshold:.2f}x** "
+        f"(+{threshold_pct:.0f}%) *and* the BH-adjusted p < {stats.DEFAULT_ALPHA}.",
         "",
     ]
+    lines += [f"**{gate.summary}**", ""]
 
     noise = gate.noise
     if noise is not None and noise.detail:
@@ -199,24 +229,31 @@ def markdown(
         ]
 
     lines += [
-        "| cell | metric | baseline | candidate | ratio (95% CI) | p (BH) | n | verdict |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| cell | build | metric | reference | build | ratio (95% CI) | p (BH) | n | verdict |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for result in recorder.results:
-        for metric in METRICS:
-            key = f"{result.cell_id}/{metric}"
-            c = gate.comparisons.get(key)
-            if c is None:
-                continue
-            gated = metric in config.gated_metrics and not result.control
-            label = METRIC_LABELS[metric][0] + ("" if gated else " (ungated)")
-            lines.append(
-                f"| {result.cell_id} | {label} "
-                f"| {format_metric(metric, c.baseline_median)} "
-                f"| {format_metric(metric, c.candidate_median)} "
-                f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
-                f"| {_verdict_cell(c)} |"
-            )
+        for a, b in result.contrast_pairs():
+            build = f"A/A {b}" if result.control else f"`{result.arm_labels[b]}`"
+            for metric in METRICS:
+                c = gate.comparisons.get(contrast_key(result.cell_id, a, b, metric))
+                if c is None:
+                    continue
+                gated = metric in config.gated_metrics and not result.control
+                label = METRIC_LABELS[metric][0] + ("" if gated else " (ungated)")
+                lines.append(
+                    f"| {result.cell_id} | {build} | {label} "
+                    f"| {format_metric(metric, c.baseline_median)} "
+                    f"| {format_metric(metric, c.candidate_median)} "
+                    f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
+                    f"| {_verdict_cell(c)} |"
+                )
+
+    references = sorted(
+        {r.arm_labels[r.reference] for r in recorder.results if not r.control}
+    )
+    if references:
+        lines += ["", f"Reference: {', '.join(f'`{ref}`' for ref in references)}."]
 
     if recorder.skipped:
         lines += ["", "### Not measured", ""]

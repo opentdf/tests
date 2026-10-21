@@ -402,3 +402,39 @@ def subdir(root: Path, name: str) -> Path:
 def touch(path: Path) -> Path:
     path.write_bytes(b"x")
     return path
+
+
+class TestBuildArms:
+    def arms(self, cwd: Path) -> bench.BenchArms:
+        install(cwd, "go", "v0.29.0", "main")
+        for v in ("v0.29.0", "main"):
+            # `supports` runs the stub, which then answers yes to everything.
+            (cwd / "sdk" / "go" / "dist" / v / "cli.sh").chmod(0o755)
+        return bench.BenchArms(tdfs.SDK("go", "v0.29.0"), tdfs.SDK("go", "main"))
+
+    def test_arms_are_named_after_their_builds(self, cwd: Path):
+        cell = next(c for c in cells_for(["go"]) if not c.control)
+        built = bench.build_arms(
+            cell,
+            self.arms(cwd),
+            pt_file=cwd / "pt",
+            ct_file=None,
+            tmp_dir=cwd,
+            attr_values=[],
+        )
+        assert [a.name for a in built] == ["v0.29.0", "main"]
+        assert len({a.invocation.output for a in built}) == 2
+
+    def test_the_control_runs_the_baseline_twice_under_distinct_ids(self, cwd: Path):
+        control = next(c for c in cells_for(["go"]) if c.control)
+        built = bench.build_arms(
+            control,
+            self.arms(cwd),
+            pt_file=cwd / "pt",
+            ct_file=None,
+            tmp_dir=cwd,
+            attr_values=[],
+        )
+        assert {a.label for a in built} == {"go@v0.29.0"}
+        assert len({a.name for a in built}) == 2, "ids key the sample vectors"
+        assert len({a.invocation.output for a in built}) == 2
