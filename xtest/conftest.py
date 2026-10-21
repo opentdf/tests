@@ -67,6 +67,7 @@ pytest_plugins = [
     "fixtures.audit",
     "fixtures.encryption",
     "fixtures.bench",
+    "fixtures.range_server",
 ]
 
 
