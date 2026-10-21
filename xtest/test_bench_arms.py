@@ -404,37 +404,50 @@ def touch(path: Path) -> Path:
     return path
 
 
+class TestMultiArmSelection:
+    def test_named_arms_resolve_in_order(self, cwd: Path):
+        install(cwd, "go", "main", "v0.29.0", "my-branch")
+        arms = bench.select_arms("go", ["go@v0.29.0", "go@main", "go@my-branch"])
+        assert [a.version for a in arms] == ["v0.29.0", "main", "my-branch"]
+
+    def test_a_missing_arm_is_named(self, cwd: Path):
+        install(cwd, "go", "main", "v0.29.0")
+        with pytest.raises(bench.ArmSelectionError, match="arm 3"):
+            bench.select_arms("go", ["go@v0.29.0", "go@main", "go@nope"])
+
+
 class TestBuildArms:
-    def arms(self, cwd: Path) -> bench.BenchArms:
-        install(cwd, "go", "v0.29.0", "main")
-        for v in ("v0.29.0", "main"):
+    def arms(self, cwd: Path, n: int) -> bench.BenchArms:
+        # A release first, as in the nightly pair: its dots must survive into
+        # every output name.
+        versions = ("v0.29.0", "main", "a--impl", "b--impl")[:n]
+        install(cwd, "go", *versions)
+        for v in versions:
             # `supports` runs the stub, which then answers yes to everything.
             (cwd / "sdk" / "go" / "dist" / v / "cli.sh").chmod(0o755)
-        return bench.BenchArms(tdfs.SDK("go", "v0.29.0"), tdfs.SDK("go", "main"))
+        return bench.BenchArms(tuple(tdfs.SDK("go", v) for v in versions))
 
-    def test_arms_are_named_after_their_builds(self, cwd: Path):
+    @pytest.mark.parametrize("n", [2, 3, 4])
+    def test_a_cell_runs_each_build_once(self, cwd: Path, n: int):
+        arms = self.arms(cwd, n)
         cell = next(c for c in cells_for(["go"]) if not c.control)
         built = bench.build_arms(
-            cell,
-            self.arms(cwd),
-            pt_file=cwd / "pt",
-            ct_file=None,
-            tmp_dir=cwd,
-            attr_values=[],
+            cell, arms, pt_file=cwd / "pt", ct_file=None, tmp_dir=cwd, attr_values=[]
         )
-        assert [a.name for a in built] == ["v0.29.0", "main"]
-        assert len({a.invocation.output for a in built}) == 2
+        assert [a.name for a in built] == [s.version for s in arms.arms]
+        assert len({a.invocation.output for a in built}) == n
 
-    def test_the_control_runs_the_baseline_twice_under_distinct_ids(self, cwd: Path):
+    @pytest.mark.parametrize("n", [2, 3, 4])
+    def test_the_control_is_k_copies_of_the_reference(self, cwd: Path, n: int):
+        # As many arms as the real cells: the last of K drifts further from
+        # the first than an adjacent pair does, and a two-arm control would
+        # understate the noise of the contrasts being judged.
+        arms = self.arms(cwd, n)
         control = next(c for c in cells_for(["go"]) if c.control)
         built = bench.build_arms(
-            control,
-            self.arms(cwd),
-            pt_file=cwd / "pt",
-            ct_file=None,
-            tmp_dir=cwd,
-            attr_values=[],
+            control, arms, pt_file=cwd / "pt", ct_file=None, tmp_dir=cwd, attr_values=[]
         )
+        assert len(built) == n
         assert {a.label for a in built} == {"go@v0.29.0"}
-        assert len({a.name for a in built}) == 2, "ids key the sample vectors"
-        assert len({a.invocation.output for a in built}) == 2
+        assert len({a.name for a in built}) == n, "ids key the sample vectors"
+        assert len({a.invocation.output for a in built}) == n
