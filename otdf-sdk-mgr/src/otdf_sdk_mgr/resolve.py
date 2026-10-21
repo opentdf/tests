@@ -14,6 +14,7 @@ from otdf_sdk_mgr.config import (
     SDK_GIT_URLS,
     SDK_NPM_PACKAGES,
 )
+from otdf_sdk_mgr.refs import git_ls_remote
 
 
 class ResolveSuccess(TypedDict):
@@ -244,7 +245,9 @@ def _resolve_against(
         repo = Git()
         version = version.removeprefix("refs/heads/")
         if version == "main":
-            all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
+            all_heads = [
+                r.split("\t") for r in git_ls_remote(repo, sdk_url, heads=True).split("\n")
+            ]
             try:
                 sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
             except StopIteration:
@@ -258,7 +261,7 @@ def _resolve_against(
             }
 
         if re.match(SHA_REGEX, version):
-            ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
+            ls_remote = [r.split("\t") for r in git_ls_remote(repo, sdk_url).split("\n")]
             matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
                 return {
@@ -276,7 +279,9 @@ def _resolve_against(
 
         if version.startswith("refs/pull/"):
             merge_heads = [
-                r.split("\t") for r in repo.ls_remote(sdk_url).split("\n") if r.endswith(version)
+                r.split("\t")
+                for r in git_ls_remote(repo, sdk_url).split("\n")
+                if r.endswith(version)
             ]
             pr_number = version.split("/")[2]
             if not merge_heads:
@@ -295,7 +300,7 @@ def _resolve_against(
                 "tag": f"pull-{pr_number}",
             }
 
-        remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
+        remote_tags = [r.split("\t") for r in git_ls_remote(repo, sdk_url).split("\n")]
         all_listed_tags = [
             (sha, tag.split("refs/tags/")[-1]) for (sha, tag) in remote_tags if "refs/tags/" in tag
         ]
