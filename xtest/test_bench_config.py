@@ -13,6 +13,7 @@ from typing import cast
 import pytest
 
 import conftest
+from fixtures import bench
 from perf import report, stats
 from perf.cells import DEFAULT_PAYLOAD_SPEC, BenchCell
 from perf.config import (
@@ -25,9 +26,12 @@ from perf.config import (
     ArmRequest,
     BenchConfig,
     BenchmarkRequest,
+    budget_seconds,
     default_budget_for_arm_count,
     normalize_baseline_candidate,
     parse_arm_spec,
+    parse_refs,
+    requested_arms,
     validate_sdk_name,
 )
 
@@ -221,6 +225,56 @@ class TestDefaultBudgetForArmCount:
             default_budget_for_arm_count(1)
 
 
+class TestParseRefs:
+    @pytest.mark.parametrize(
+        "spec",
+        ["go@v0.29.0,go@main", "go@v0.29.0 go@main go@a", "go@1, go@2 ,go@3,go@4"],
+    )
+    def test_two_to_four_refs_parse_in_order(self, spec: str):
+        arms = parse_refs(spec)
+        assert 2 <= len(arms) <= MAX_ARM_COUNT == 4
+        assert arms[0].name == "go"
+        assert str(arms[0]) == spec.replace(",", " ").split()[0]
+
+    @pytest.mark.parametrize(
+        ("spec", "match"),
+        [
+            ("go@main", "need 2 to 4"),
+            ("go@1,go@2,go@3,go@4,go@5", "at most 4"),
+            ("go@main,go@main", "duplicate"),
+            ("go@main,java@main", "same SDK"),
+            ("gp@main,gp@v1", "unknown SDK"),
+            ("go@,go@main", "empty version"),
+        ],
+    )
+    def test_invalid_requests_are_refused(self, spec: str, match: str):
+        with pytest.raises(ValueError, match=match):
+            parse_refs(spec)
+
+
+class TestRequestedArms:
+    def test_baseline_and_candidate_are_an_adapter_onto_refs(self):
+        assert requested_arms(None, "go@v0.29.0", "go@main") == parse_refs(
+            "go@v0.29.0,go@main"
+        )
+
+    def test_mixing_the_forms_is_refused(self):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            requested_arms("go@a,go@b", "go@v0.29.0", None)
+
+    def test_nothing_named_defers_to_arm_selection(self):
+        assert requested_arms(None, None, None) == ()
+
+
+class TestBudgetSeconds:
+    def test_the_default_scales_with_arm_count(self):
+        assert budget_seconds(None, 2) == 1500.0
+        assert budget_seconds(None, 3) == 2250.0
+
+    def test_an_explicit_budget_is_taken_as_given(self):
+        assert budget_seconds(900.0, 4) == 900.0
+
+
 class _FakeConfig:
     """Just enough of ``pytest.Config`` for the ``--bench`` checks in ``pytest_configure``."""
 
@@ -228,6 +282,7 @@ class _FakeConfig:
         self._options: dict[str, object] = {
             "--bench": True,
             "--sdks": "go",
+            "--bench-refs": None,
             "--bench-baseline": None,
             "--bench-candidate": None,
             "--bench-threshold": stats.DEFAULT_THRESHOLD,
@@ -337,6 +392,34 @@ class TestPytestConfigure:
         free_space(monkeypatch, 0)
         with pytest.raises(pytest.UsageError, match="scratch space"):
             _configure()
+
+    def test_the_disk_check_counts_every_arm(self, monkeypatch: pytest.MonkeyPatch):
+        # Each arm leaves its own output per cell, so room for the default
+        # pair is not room for four.
+        seen: list[object] = []
+        monkeypatch.setattr(
+            bench, "disk_shortfall", lambda *a, **kw: seen.append(kw["n_arms"])
+        )
+        _configure(**{"--bench-refs": "go@a,go@b,go@c,go@d"})
+        assert seen == [4]
+
+    def test_multi_arm_refs_accepted(self):
+        _configure(**{"--bench-refs": "go@v0.29.0,go@main,go@my-branch"})
+
+    @pytest.mark.parametrize(
+        ("opts", "match"),
+        [
+            (
+                {"--bench-refs": "go@a,go@b", "--bench-candidate": "go@main"},
+                "cannot be combined",
+            ),
+            ({"--bench-refs": "go@1,go@2,go@3,go@4,go@5"}, "at most 4"),
+            ({"--sdks": "java", "--bench-refs": "go@a,go@b"}, "not being benchmarked"),
+        ],
+    )
+    def test_bad_refs_rejected(self, opts: dict[str, object], match: str):
+        with pytest.raises(pytest.UsageError, match=match):
+            _configure(**opts)
 
     def test_noop_without_bench(self):
         _configure(**{"--bench": False, "--bench-baseline": "gp@main"})
