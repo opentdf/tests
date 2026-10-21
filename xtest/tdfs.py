@@ -205,6 +205,10 @@ feature_type = Literal[
     # java-sdk#424 and web-sdk#1099. Every shim answers no until a release
     # carries its PR; flip each to a version gate then.
     #
+    # Builds of main are the exception: SDK._uncached_supports answers yes for
+    # them without asking the shim, so CI runs these cells against main and
+    # they fail until each SDK's PR merges. Released builds keep skipping.
+    #
     # Writers need nothing: test_tdf_roundtrip_deflated_entries re-compresses
     # the writer's output itself (see deflate_entries). To run it against an
     # unreleased build of one of those PRs, set XT_FORCE_SUPPORTS=zip-deflate
@@ -1004,6 +1008,10 @@ class SDK:
             case ("key_management", "js") if self.version == "v0.2.0":
                 # JS SDK v0.2.0 incorrectly reports support for key_management.
                 return False
+            case ("zip-deflate", _) if self.version == "main":
+                # Run the deflate cells against main so they fail until each
+                # SDK's reader PR merges; see the feature's comment above.
+                return True
             case ("autoconfigure", ("go" | "java")):
                 return True
             case ("multikao", ("go" | "java")):

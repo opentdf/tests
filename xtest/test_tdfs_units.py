@@ -418,13 +418,34 @@ def _local_header_method(path: Path, info: zipfile.ZipInfo) -> int:
 
 
 def test_zip_deflate_is_forceable_from_xt_force_supports():
-    """The gated cells run before a release only via XT_FORCE_SUPPORTS.
+    """A released build runs the gated cells early only via XT_FORCE_SUPPORTS.
 
     Every SDK shim reports on zip-deflate, so it must not be platform-only;
     if it were, the override documented for it would be rejected.
     """
     assert "zip-deflate" not in tdfs.PLATFORM_ONLY_FEATURES
     assert tdfs._parse_forced_supports("zip-deflate") == frozenset({"zip-deflate"})
+
+
+@pytest.mark.parametrize("sdk", ["go", "java", "js"])
+def test_zip_deflate_is_on_for_main_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sdk: tdfs.sdk_type
+):
+    """A build of main runs the deflate cells without asking its shim.
+
+    The shims below answer no to everything, so a main build that consulted
+    one would skip; a released build still defers to its shim.
+    """
+    monkeypatch.chdir(tmp_path)
+    for version in ("main", "v1.0.0"):
+        shim = tmp_path / "sdk" / sdk / "dist" / version / "cli.sh"
+        shim.parent.mkdir(parents=True)
+        shim.write_text("#!/bin/sh\nexit 1\n")
+        shim.chmod(0o755)
+    monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset())
+
+    assert tdfs.SDK(sdk, "main").supports("zip-deflate")
+    assert not tdfs.SDK(sdk, "v1.0.0").supports("zip-deflate")
 
 
 class TestDeflateEntries:
