@@ -7,6 +7,7 @@ most of these is not the message but that something is raised at all.
 
 import math
 import shutil
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -311,6 +312,13 @@ def free_space(monkeypatch: pytest.MonkeyPatch, free: int) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `otdf-local env` exports this; a developer's shell must not change what
+    # these tests see.
+    monkeypatch.delenv("BENCH_INSTALLATION_MANIFEST", raising=False)
+
+
 class TestPytestConfigure:
     """The options are checked at configure time, before any session setup."""
 
@@ -420,6 +428,17 @@ class TestPytestConfigure:
     def test_bad_refs_rejected(self, opts: dict[str, object], match: str):
         with pytest.raises(pytest.UsageError, match=match):
             _configure(**opts)
+
+    def test_an_unreadable_manifest_is_a_usage_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        # Set means "this run was prepared"; measuring whatever is in dist/
+        # instead would attach no provenance without saying so.
+        monkeypatch.setenv(
+            "BENCH_INSTALLATION_MANIFEST", str(tmp_path / "missing.json")
+        )
+        with pytest.raises(pytest.UsageError, match="cannot read"):
+            _configure()
 
     def test_noop_without_bench(self):
         _configure(**{"--bench": False, "--bench-baseline": "gp@main"})

@@ -223,3 +223,16 @@ class TestMarkdown:
         assert wall.endswith("| 30 | **REGRESSION** |")
         assert not any("| 0.0 ms |" in r for r in lines)
         assert "Reference: `go@v0.29.0`." in lines
+
+    def test_a_neutral_preparation_says_so_instead_of_nothing_measured(self):
+        recorder = BenchmarkRecorder(
+            skipped={"go-encrypt-1KiB": "neutral preparation: same commit"},
+            metadata={
+                "preparation": "neutral",
+                "installation": {"status_message": "All 2 resolved to abc12345"},
+            },
+        )
+        cfg = BenchConfig(n_resamples=300)
+        text = report.markdown(recorder, cfg, recorder.gate(cfg))
+        assert "NEUTRAL" in text and "abc12345" in text
+        assert "NOTHING MEASURED" not in text
