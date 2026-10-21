@@ -9,10 +9,16 @@ parser they sit next to is tested in ``test_zip64_units.py``.
 The GMAC root forgery (DSPX-4703) is here for a related reason: an exploit
 helper that quietly forges the wrong bytes would make the security tests in
 ``test_root_signature.py`` pass for the wrong reason.
+
+``deflate_entries`` is here for the same reason: if it ever wrote STORED
+entries, ``test_tdf_roundtrip_deflated_entries`` would pass on every reader
+without any of them inflating anything.
 """
 
 import base64
 import json
+import random
+import struct
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -375,3 +381,103 @@ class TestEncryptedSegmentSizes:
     def test_uses_the_per_segment_override(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
+
+
+# --- tdfs.deflate_entries -----------------------------------------------------
+
+#: Incompressible, like the ciphertext in a real ``0.payload``.
+_DEFLATE_PAYLOAD = random.Random(0).randbytes(4096)
+
+
+def _stored_tdf(tmp_path: Path, manifest_name: str = "0.manifest.json") -> Path:
+    """A STORED container laid out as OpenTDF writers do: payload, then manifest.
+
+    The manifest comes from :func:`_manifest_zip`, so :func:`tdfs.manifest` can
+    parse the default-named variant.
+    """
+    with zipfile.ZipFile(_manifest_zip(tmp_path, "m.tdf", elides=False)) as z:
+        manifest = z.read("0.manifest.json")
+    p = tmp_path / "plain.tdf"
+    with zipfile.ZipFile(p, "w", compression=zipfile.ZIP_STORED) as z:
+        z.writestr("0.payload", _DEFLATE_PAYLOAD)
+        z.writestr(manifest_name, manifest)
+    return p
+
+
+def _local_header_method(path: Path, info: zipfile.ZipInfo) -> int:
+    """The compression method recorded in an entry's local file header.
+
+    ``ZipInfo.compress_type`` is read from the central directory, but a
+    streaming reader goes by the local header, so both have to say DEFLATE.
+    """
+    with path.open("rb") as f:
+        f.seek(info.header_offset)
+        sig, _version, _flags, method = struct.unpack("<4sHHH", f.read(10))
+    assert sig == b"PK\x03\x04"
+    return method
+
+
+def test_zip_deflate_is_forceable_from_xt_force_supports():
+    """The gated cells run before a release only via XT_FORCE_SUPPORTS.
+
+    Every SDK shim reports on zip-deflate, so it must not be platform-only;
+    if it were, the override documented for it would be rejected.
+    """
+    assert "zip-deflate" not in tdfs.PLATFORM_ONLY_FEATURES
+    assert tdfs._parse_forced_supports("zip-deflate") == frozenset({"zip-deflate"})
+
+
+class TestDeflateEntries:
+    @pytest.mark.parametrize("manifest_name", ["0.manifest.json", "manifest.json"])
+    def test_keeps_entry_names_order_and_bytes(
+        self, tmp_path: Path, manifest_name: str
+    ):
+        src = _stored_tdf(tmp_path, manifest_name)
+        out = tdfs.deflate_entries("deflated", src)
+        with zipfile.ZipFile(src) as s, zipfile.ZipFile(out) as d:
+            assert d.namelist() == s.namelist() == ["0.payload", manifest_name]
+            for name in s.namelist():
+                assert d.read(name) == s.read(name), name
+
+    def test_every_entry_is_deflated_in_both_headers(self, tmp_path: Path):
+        src = _stored_tdf(tmp_path)
+        with zipfile.ZipFile(src) as s:
+            # Precondition: "now deflated" means nothing if it already was.
+            assert {i.compress_type for i in s.infolist()} == {zipfile.ZIP_STORED}
+        out = tdfs.deflate_entries("deflated", src)
+        with zipfile.ZipFile(out) as d:
+            infos = d.infolist()
+        assert len(infos) == 2
+        for info in infos:
+            assert info.compress_type == zipfile.ZIP_DEFLATED, info.filename
+            assert _local_header_method(out, info) == zipfile.ZIP_DEFLATED, (
+                info.filename
+            )
+
+    def test_the_manifest_is_genuinely_compressed(self, tmp_path: Path):
+        """Method 8 alone is not enough; the manifest has to actually shrink.
+
+        For incompressible input such as ciphertext, zlib emits stored blocks
+        inside the DEFLATE stream. The manifest is JSON, so it is the entry
+        that forces a reader through real Huffman decoding.
+        """
+        out = tdfs.deflate_entries("deflated", _stored_tdf(tmp_path))
+        with zipfile.ZipFile(out) as d:
+            info = d.getinfo("0.manifest.json")
+        assert info.compress_size < info.file_size
+
+    def test_round_trips_through_zipfile(self, tmp_path: Path):
+        src = _stored_tdf(tmp_path)
+        out = tdfs.deflate_entries("deflated", src)
+        with zipfile.ZipFile(out) as d:
+            assert d.testzip() is None, "an entry failed its CRC check"
+            assert d.read("0.payload") == _DEFLATE_PAYLOAD
+        assert tdfs.manifest(out) == tdfs.manifest(src)
+
+    def test_writes_beside_the_source_and_leaves_it_stored(self, tmp_path: Path):
+        """Same naming as update_manifest / update_payload, so it lands in tmp_dir."""
+        src = _stored_tdf(tmp_path)
+        out = tdfs.deflate_entries("deflated", src)
+        assert out == tmp_path / "plain-deflated.tdf"
+        with zipfile.ZipFile(src) as s:
+            assert {i.compress_type for i in s.infolist()} == {zipfile.ZIP_STORED}

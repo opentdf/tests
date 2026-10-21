@@ -162,6 +162,19 @@ if [ "$1" == "supports" ]; then
       echo "zip64-at-2gib unsupported: see DSPX-4590"
       exit 1
       ;;
+    zip-deflate)
+      # Decrypt a TDF whose ZIP entries are DEFLATE-compressed (method 8)
+      # rather than STORED. No go SDK release reads them yet; support is in
+      # platform#4247 (open). Turn this into a version gate on .sdk_version
+      # once an SDK release (and an otdfctl built against it) carries that PR.
+      # Until then, evaluate a build of the branch with
+      # XT_FORCE_SUPPORTS=zip-deflate.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip-deflate unsupported: needs the release carrying platform#4247"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2

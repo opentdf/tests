@@ -4,6 +4,7 @@ import random
 import re
 import string
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -158,6 +159,57 @@ def test_chunky_roundtrip(
     mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(chunky_pt_file, rt_file, shallow=False)
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
+
+
+def test_tdf_roundtrip_deflated_entries(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+):
+    """Decrypt a TDF whose ZIP entries have been re-compressed with DEFLATE.
+
+    Every OpenTDF writer emits STORED entries, but the container format allows
+    DEFLATE (method 8) and other implementations may use it. So this encrypts
+    normally, rewrites the archive with every entry deflated -- same names,
+    order and bytes -- and requires the reader to inflate it.
+
+    Only the reader needs the ``zip-deflate`` feature, and no SDK release has
+    it yet; run against a PR build with ``XT_FORCE_SUPPORTS=zip-deflate``.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    decrypt_sdk.skip_if_unsupported("zip-deflate")
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    # --sizes chunky can produce a container this reader cannot open whether
+    # or not it is deflated; skip that rather than blame the compression.
+    tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
+
+    deflated = tdfs.deflate_entries("deflated", ct_file)
+    with zipfile.ZipFile(deflated) as z:
+        infos = z.infolist()
+    # Load-bearing: had the rewrite left any entry STORED, every reader would
+    # pass without inflating anything.
+    assert infos, f"{deflated.name} has no entries"
+    stored = [i.filename for i in infos if i.compress_type != zipfile.ZIP_DEFLATED]
+    assert not stored, f"{deflated.name}: entries not DEFLATE-compressed: {stored}"
+
+    rt_file = encrypted_tdf.rt_file(deflated, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
+    decrypt_sdk.decrypt(deflated, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
     audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
 
 

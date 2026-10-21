@@ -194,6 +194,22 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # Reader-side: decrypt a TDF whose ZIP entries are compressed with DEFLATE
+    # (compression method 8) rather than STORED (method 0).
+    #
+    # The container format allows either method, but every OpenTDF writer
+    # emits STORED entries, so nothing else in this suite reaches a reader's
+    # inflate path -- and a TDF written by another implementation may
+    # compress its manifest and payload. Gated because reader support is still
+    # in open PRs: platform#4247 (the go SDK that otdfctl builds against),
+    # java-sdk#424 and web-sdk#1099. Every shim answers no until a release
+    # carries its PR; flip each to a version gate then.
+    #
+    # Writers need nothing: test_tdf_roundtrip_deflated_entries re-compresses
+    # the writer's output itself (see deflate_entries). To run it against an
+    # unreleased build of one of those PRs, set XT_FORCE_SUPPORTS=zip-deflate
+    # -- see FORCED_SUPPORTS below.
+    "zip-deflate",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
@@ -602,6 +618,37 @@ def update_payload(
                 zipped.write(file_path, file_path.relative_to(unzipped_dir))
     # Cleanup the unzipped directory; its contents are now stored as outfile
     shutil.rmtree(unzipped_dir, ignore_errors=True)
+    return outfile
+
+
+# Create a variant of a TDF whose ZIP entries are DEFLATE-compressed
+def deflate_entries(scenario_name: str, tdf_file: Path) -> Path:
+    """Rewrite ``tdf_file`` with every entry compressed using ``ZIP_DEFLATED``.
+
+    Entry names, order and uncompressed bytes are unchanged; only the
+    compression method differs. OpenTDF writers emit STORED entries, so this
+    is how the suite gets a container whose reader has to inflate (the
+    ``zip-deflate`` feature).
+
+    Output is named like :func:`update_manifest` and :func:`update_payload`
+    name theirs, but this copies entry by entry rather than extracting and
+    re-walking a directory: ``os.walk`` order is not archive order, and
+    nothing but the compression method should change. Entries are streamed,
+    so a multi-GiB payload is never held in memory.
+    """
+    outfile = tdf_file.parent / f"{tdf_file.stem}-{scenario_name}.tdf"
+    with (
+        zipfile.ZipFile(tdf_file, "r") as src,
+        zipfile.ZipFile(outfile, "w") as dst,
+    ):
+        for info in src.infolist():
+            entry = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            # Declared up front so zipfile picks ZIP64 for a payload that needs
+            # it; a streamed write otherwise assumes the entry is small.
+            entry.file_size = info.file_size
+            with src.open(info) as r, dst.open(entry, "w") as w:
+                shutil.copyfileobj(r, w)
     return outfile
 
 

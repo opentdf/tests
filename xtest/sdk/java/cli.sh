@@ -191,6 +191,18 @@ if [ "$1" == "supports" ]; then
       echo "zip64-at-2gib unsupported: needs the release carrying java-sdk#393"
       exit 1
       ;;
+    zip-deflate)
+      # Decrypt a TDF whose ZIP entries are DEFLATE-compressed (method 8)
+      # rather than STORED. No java-sdk release reads them yet; support is in
+      # java-sdk#424 (open). Turn this into a version gate on .version once a
+      # release carries that PR. A branch build reports the last released
+      # version, so until then evaluate it with XT_FORCE_SUPPORTS=zip-deflate.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip-deflate unsupported: needs the release carrying java-sdk#424"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
