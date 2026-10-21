@@ -53,6 +53,20 @@ MERGE_QUEUE_REGEX = (
 SHA_REGEX = r"^[a-f0-9]{7,64}$"
 
 
+def strip_tag_infix(tag: str, infix: str) -> str | None:
+    """Return the version part of an ``<infix>/vX.Y.Z`` or ``<infix>-vX.Y.Z`` tag.
+
+    Returns None for a tag outside the ``infix`` namespace. Both separators
+    occur in practice: web-sdk tagged ``sdk/v0.4.0``, then release-please moved
+    it to ``sdk-v0.4.1`` and every release since. Matching ``/`` alone left js
+    ``latest`` pinned to 0.4.0.
+    """
+    for sep in ("/", "-"):
+        if tag.startswith(f"{infix}{sep}"):
+            return tag.removeprefix(f"{infix}{sep}")
+    return None
+
+
 def _ref_specificity(ref: str) -> int:
     """Sort key for refs that share a SHA, lowest wins.
 
@@ -126,7 +140,7 @@ def _classify_sha_match(
 
     tag = ref.removeprefix("refs/tags/")
     if infix:
-        tag = tag.removeprefix(f"{infix}/")
+        tag = strip_tag_infix(tag, infix) or tag
     return {
         "sdk": sdk,
         "alias": version,
@@ -309,16 +323,19 @@ def _resolve_against(
                 "tag": version.replace("/", "--"),
             }
 
-        if infix and version.startswith(f"{infix}/"):
-            version = version.split(f"{infix}/")[-1]
-
-        listed_tags = all_listed_tags
         if infix:
-            listed_tags = [
-                (sha, tag.split(f"{infix}/")[-1])
-                for (sha, tag) in listed_tags
-                if f"{infix}/" in tag
-            ]
+            version = strip_tag_infix(version, infix) or version
+
+        listed_tags: list[tuple[str, str]] = all_listed_tags
+        # Infix-stripped version -> the tag as git names it, for `release`.
+        git_tags: dict[str, str] = {}
+        if infix:
+            listed_tags = []
+            for sha, tag in all_listed_tags:
+                stripped = strip_tag_infix(tag, infix)
+                if stripped is not None:
+                    listed_tags.append((sha, stripped))
+                    git_tags[stripped] = tag
 
         # For JS: explicit version refs resolve via npm first so that pre-release and
         # dist-tag refs (e.g. "0.9.0-beta.84", "next") work without a matching git tag.
@@ -356,9 +373,7 @@ def _resolve_against(
         if not matching_tags:
             raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
         sha, tag = matching_tags[-1]
-        release = tag
-        if infix:
-            release = f"{infix}/{release}"
+        release = git_tags.get(tag, tag)
         return {
             "sdk": sdk,
             "alias": alias,
