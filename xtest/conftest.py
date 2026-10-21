@@ -254,14 +254,24 @@ def _add_benchmark_options(parser: pytest.Parser):
         "are opt-in and collect nothing otherwise)",
     )
     group.addoption(
+        "--bench-refs",
+        help="2 to 4 builds of one sdk to compare, comma- or space-separated, "
+        "e.g. 'go@v0.29.0,go@main,go@my-branch'. The first is the reference "
+        "every other build is compared against. Defaults to the newest "
+        "installed release against main. Supersedes "
+        "--bench-baseline/--bench-candidate",
+    )
+    group.addoption(
         "--bench-baseline",
         help="build to compare against, e.g. go@v0.29.0; defaults to the newest "
-        "installed release of each sdk",
+        "installed release of each sdk. Two-arm shorthand for the first "
+        "--bench-refs entry",
     )
     group.addoption(
         "--bench-candidate",
         help="build under test, e.g. go@main; defaults to the installed "
-        "unreleased build of each sdk",
+        "unreleased build of each sdk. Two-arm shorthand for the second "
+        "--bench-refs entry",
     )
     group.addoption(
         "--bench-payloads",
@@ -311,8 +321,10 @@ def _add_benchmark_options(parser: pytest.Parser):
     group.addoption(
         "--bench-budget-seconds",
         type=float,
-        default=1500.0,
-        help="wall-clock allowance shared by every cell (default: %(default)s)",
+        default=None,
+        help="wall-clock allowance shared by every cell (default: 1500 for two "
+        "arms, scaled by K/2 for K arms, so each interval stays about as narrow "
+        "as with two)",
     )
     group.addoption(
         "--bench-seed",
@@ -444,7 +456,8 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
 def _bench_sdk_names(config: pytest.Config) -> list[str]:
     """SDKs the benchmark fans out over, in --sdks order."""
     # --sdks may be version-qualified (go@main); benchmark arms come from
-    # --bench-baseline/--bench-candidate instead, so only the name matters.
+    # --bench-refs or --bench-baseline/--bench-candidate instead, so only the
+    # name matters.
     specs = config.getoption("--sdks") or " ".join(typing.get_args(tdfs.sdk_type))
     return list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
 
@@ -469,6 +482,7 @@ def pytest_configure(config: pytest.Config):
     # runs after the session has already built payloads and installed CLIs --
     # minutes of work discarded to report a typo.
     from fixtures.bench import (
+        arm_count,
         config_from_options,
         disk_shortfall,
         payloads_from_options,
@@ -476,33 +490,35 @@ def pytest_configure(config: pytest.Config):
     from perf.cells import payloads_to_generate
     from perf.config import (
         BenchmarkRequest,
-        normalize_baseline_candidate,
         parse_arm_spec,
+        requested_arms,
         validate_sdk_name,
     )
 
     bench_config = config_from_options(config)
     payloads = payloads_from_options(config)
+    refs = config.getoption("--bench-refs", default=None)
     baseline = config.getoption("--bench-baseline", default=None)
     candidate = config.getoption("--bench-candidate", default=None)
     try:
-        if baseline is not None and candidate is not None:
-            # A full pair meets the same rules the local and CI entry points
-            # apply.
-            arms = normalize_baseline_candidate(baseline, candidate)
+        if refs is not None or (baseline is not None and candidate is not None):
+            # A full request meets the same rules the local and CI entry
+            # points apply.
+            arms = requested_arms(refs, baseline, candidate)
             BenchmarkRequest(arms=arms, config=bench_config)
+            specs = [str(a) for a in arms]
         else:
             # Either side may be given alone -- `select_arms` defaults the
             # other -- so a lone spec is checked only for what it names.
-            for spec in (baseline, candidate):
-                if spec is not None:
-                    validate_sdk_name(parse_arm_spec(spec).name)
+            specs = [s for s in (baseline, candidate) if s is not None]
+            for spec in specs:
+                validate_sdk_name(parse_arm_spec(spec).name)
         # A spec only applies to the SDK it names, so one naming an SDK
         # outside --sdks would be dropped and the run would measure the
         # defaults instead.
         benchmarked = _bench_sdk_names(config)
-        for spec in (baseline, candidate):
-            if spec is not None and parse_arm_spec(spec).name not in benchmarked:
+        for spec in specs:
+            if parse_arm_spec(spec).name not in benchmarked:
                 raise ValueError(
                     f"{spec!r} names an SDK that is not being benchmarked; "
                     f"--sdks selects {benchmarked}"
@@ -519,6 +535,7 @@ def pytest_configure(config: pytest.Config):
         payloads_to_generate(payloads),
         n_sdks=len(_bench_sdk_names(config)),
         prune=bool(config.getoption("--bench-prune-scratch", default=False)),
+        n_arms=arm_count(config),
     )
     if shortfall:
         raise pytest.UsageError(shortfall)

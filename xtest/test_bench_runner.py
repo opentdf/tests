@@ -670,6 +670,47 @@ class TestMultiArmRoundLoop:
         assert result.stopped_because == "budget"
         assert result.n_rounds == 5
 
+    def test_each_arm_output_is_removed_before_its_own_run(self, tmp_path: Path):
+        names = [REF, "a", "b"]
+        outputs = {name: tmp_path / f"{name}.out" for name in names}
+        for out in outputs.values():
+            out.write_bytes(b"stale")
+        stale: list[str] = []
+        runs = FakeRuns(dict.fromkeys(names, 1.0))
+
+        def observe(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
+            out = outputs[argv[0]]
+            if out.exists():
+                stale.append(argv[0])
+            out.write_bytes(b"produced")
+            return runs(argv, env, **kwargs)
+
+        run_cell(
+            "cell",
+            [arm(name, name, outputs[name]) for name in names],
+            config(max_rounds=stats.MIN_USABLE_ROUNDS),
+            clock=clock_from(runs),
+            run=observe,
+        )
+        assert len(runs.calls) == 3 * (2 + stats.MIN_USABLE_ROUNDS)
+        assert not stale, "a surviving output makes the next run measure an overwrite"
+
+    def test_warmup_gives_up_when_the_budget_runs_out_at_three_arms(self):
+        # Rounds cost ~3 simulated seconds: two warm-ups finish, and the
+        # deadline passes during the third.
+        runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0})
+        clock = clock_from(runs)
+        with pytest.raises(BudgetExhausted, match="during warm-up after 2 of 10"):
+            run_cell(
+                "cell",
+                [arm(REF, REF), arm("a", "a"), arm("b", "b")],
+                config(warmup=10),
+                deadline=clock() + 7.5,
+                clock=clock,
+                run=runs,
+            )
+        assert len(runs.calls) == 3 * 2 + 2, "warm-up ran past its own deadline"
+
     def test_a_failing_arm_raises_naming_its_id(self):
         # A control's copies share a label, so the label alone is ambiguous.
         runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0})
