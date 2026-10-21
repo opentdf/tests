@@ -30,7 +30,7 @@ from perf.stats import (
     MIN_USABLE_ROUNDS,
 )
 
-#: Benchmark arm-count ceiling. Stage 3 raises this to 4 when multi-arm
+#: Benchmark arm-count ceiling. Stage 3b raises this to 4 when multi-arm
 #: measurement lands; it is one constant so that stage changes one number
 #: rather than adding a second encoding.
 MAX_ARM_COUNT = 2

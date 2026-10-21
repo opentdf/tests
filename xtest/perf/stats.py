@@ -85,22 +85,23 @@ class Verdict(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PairedComparison:
-    """The statistical summary of one (cell, metric) comparison.
+    """The statistical summary of one contrast: arm ``b`` against arm ``a``.
 
-    Ratios are candidate-over-baseline: 1.20 means the candidate took 20%
-    longer (or used 20% more memory) than the baseline.
+    Ratios are b-over-a: 1.20 means ``b`` took 20% longer (or used 20% more
+    memory) than ``a``. In a gated contrast ``a`` is the reference and ``b``
+    a candidate, so a ratio above 1 is the candidate being slower.
     """
 
     n_rounds: int
-    baseline_median: float
-    candidate_median: float
+    a_median: float
+    b_median: float
     ratio: float
     ci_low: float
     ci_high: float
-    #: One-sided p-value for "candidate is slower". Retains the original field
+    #: One-sided p-value for "``b`` is slower". Retains the original field
     #: name for artifact/API compatibility; the opposite direction is explicit.
     p_value: float
-    #: One-sided p-value for "candidate is faster".
+    #: One-sided p-value for "``b`` is faster".
     p_value_faster: float
     #: Set by :func:`apply_multiplicity_control` once every cell is known.
     p_adjusted: float | None = None
@@ -233,8 +234,8 @@ def compare(
     if n < MIN_USABLE_ROUNDS:
         return PairedComparison(
             n_rounds=n,
-            baseline_median=b_med,
-            candidate_median=c_med,
+            a_median=b_med,
+            b_median=c_med,
             ratio=math.exp(float(np.median(d))) if n else math.nan,
             ci_low=math.nan,
             ci_high=math.nan,
@@ -249,8 +250,8 @@ def compare(
     p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
-        baseline_median=b_med,
-        candidate_median=c_med,
+        a_median=b_med,
+        b_median=c_med,
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),
@@ -338,6 +339,13 @@ def assess_noise_floor(
     )
 
 
+def _noise_rank(n: NoiseFloor) -> tuple[bool, bool, float]:
+    """Order noise floors from most to least reassuring."""
+    # A NaN width is an unusable interval, which is worse than any real one.
+    width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
+    return (n.tripped, n.underpowered, width)
+
+
 def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     """The least reassuring control in the run, or None if there were none.
 
@@ -345,13 +353,34 @@ def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     harness may be biased on this runner, and averaging that away with two
     quiet ones is exactly the reassurance the control exists to withhold.
     """
+    return max(noises, key=_noise_rank, default=None)
 
-    def rank(n: NoiseFloor) -> tuple[bool, bool, float]:
-        # A NaN width is an unusable interval, which is worse than any real one.
-        width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
-        return (n.tripped, n.underpowered, width)
 
-    return max(noises, key=rank, default=None)
+def worst_control_key(
+    comparisons: Mapping[str, PairedComparison],
+    keys: Sequence[str],
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+) -> str | None:
+    """Which of several A/A contrasts should stand as the noise floor.
+
+    A control cell with K copies of one build yields K-1 A/A contrasts. They
+    are interchangeable noisy readings of the same null -- every copy is the
+    same build, and the round loop shuffles their order every round -- so no
+    one of them is the right floor. Taking the least reassuring stops the
+    luckiest reading from setting the floor for the whole SDK. The choice
+    does not depend on the order the copies ran in, and ties break on input
+    order, so it is reproducible.
+
+    Every key must be in ``comparisons``; :func:`perf.runner.analyze` stores
+    each one before choosing. A missing key is a wrongly built one, and it
+    raises rather than quietly ranking as an unusable interval.
+    """
+    ranked = [
+        (_noise_rank(assess_noise_floor(comparisons[k], threshold=threshold)), i, k)
+        for i, k in enumerate(keys)
+    ]
+    return max(ranked, key=lambda r: (r[0], -r[1]))[2] if ranked else None
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
@@ -389,8 +418,8 @@ class GateResult:
     #: we still report, but a gate we cannot trust must not turn the build red.
     trustworthy: bool = True
     summary: str = ""
-    #: At least one comparison between distinct baseline and candidate roles
-    #: was measured. A clean A/A control alone says nothing about the candidate.
+    #: At least one candidate-vs-reference contrast was measured. A clean A/A
+    #: control alone says nothing about any candidate.
     has_candidate_comparisons: bool = False
 
     @property
@@ -399,7 +428,7 @@ class GateResult:
 
     @property
     def nothing_measured(self) -> bool:
-        """True if the run produced no baseline/candidate comparison.
+        """True if the run produced no candidate-vs-reference contrast.
 
         An A/A control measures the harness, not the candidate, so a control-only
         run still measured nothing that can answer the benchmark's question.
@@ -520,8 +549,8 @@ def apply_multiplicity_control(
             )
         result.comparisons[key] = PairedComparison(
             n_rounds=c.n_rounds,
-            baseline_median=c.baseline_median,
-            candidate_median=c.candidate_median,
+            a_median=c.a_median,
+            b_median=c.b_median,
             ratio=c.ratio,
             ci_low=c.ci_low,
             ci_high=c.ci_high,

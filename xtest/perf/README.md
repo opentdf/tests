@@ -42,37 +42,69 @@ measure.
 | `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
 | Terminal | Job log tail | One-line summary and the JSON path |
 
-The JSON is the useful one. It holds each cell's full per-round vectors for both
-arms, so a surprising verdict can be re-analysed offline instead of by re-running
-a 30-minute job to look at the same numbers again.
+The JSON is the useful one. It holds each cell's full per-round vectors for
+every arm, so a surprising verdict can be re-analysed offline instead of by
+re-running a 30-minute job to look at the same numbers again.
 
-Each `metrics` entry carries both directions of the test: `p_value` /
+The artifact is `"schema": 2`:
+
+- Each cell names its `arms` (`id` and build `label`) and its `reference`,
+  which is an arm id. `samples` is keyed by arm id.
+- The statistics live under `contrasts`, one entry per candidate. Each has `a`
+  (the reference's arm id), `b` (the candidate's), and `metrics`, whose
+  per-metric results carry `a_median` and `b_median`, those two arms' medians.
+- A two-arm cell also carries the `baseline` and `candidate` labels for
+  convenience. A cell with more candidates does not, since "the candidate"
+  would silently mean only the first.
+- `regressions`, `improvements` and `noise_floor_by_control` are keyed
+  `<cell>/<b>_vs_<a>/<metric>`, e.g. `go-encrypt-1MiB/main_vs_v0.29.0/wall`.
+- The top level adds `nothing_measured`, true when no candidate was compared
+  with a reference (see [NOTHING MEASURED](#the-verdicts)).
+
+Schema 1 had a single `metrics` block per cell, with
+`baseline_median`/`candidate_median`, and keys of the form `<cell>/<metric>`.
+Consumers must check `schema` before reading.
+
+Each metric entry carries both directions of the test: `p_value` /
 `p_adjusted` are the one-sided "candidate is slower" pair that the regression
 gate reads, and `p_value_faster` / `p_adjusted_faster` are the matching
 "candidate is faster" pair behind IMPROVED. The `_adjusted` forms are the
 Benjamini–Hochberg values within that key's correction family and are `null`
-for controls and censored keys, which enter no family. These are additive
-fields; the artifact is still `"schema": 1`.
+for controls and censored keys, which enter no family.
 
 ### The table
 
 ```markdown
-| cell                | metric     | baseline | candidate | ratio (95% CI)        | p (BH) | n  | verdict |
-| go-encrypt-1MiB     | wall clock | 412.3 ms | 498.1 ms  | 1.208x [1.171, 1.245] | <0.001 | 22 | **REGRESSION** |
+| cell                    | candidate     | metric               | reference median | candidate median | ratio (95% CI)        | p (BH) | n  | verdict |
+| go-encrypt-1MiB-control | A/A v0.29.0#2 | wall clock (ungated) | 410.8 ms         | 411.5 ms         | 1.002x [0.991, 1.012] | 0.412  | 24 | PASS |
+| go-encrypt-1MiB         | `go@main`     | wall clock           | 412.3 ms         | 498.1 ms         | 1.208x [1.171, 1.245] | <0.001 | 22 | **REGRESSION** |
 ```
+
+One row per candidate and metric; the reference is named under the table
+(`Reference: ...`).
 
 - **cell** — `<sdk>-<operation>-<payload>`, plus `-control` for the A/A cell.
   Payload sizes are 1 KiB, 1 MiB, and 32 MiB unless `--bench-payloads` (the
   `bench-payloads` workflow input) asks for others. The control is always 1 MiB.
-- **ratio** — candidate ÷ baseline. `1.208x` means the candidate took 20.8%
+- **candidate** — the build compared with the reference. In the A/A control
+  every arm is the reference build, so the row reads `A/A <copy id>` instead:
+  the arm id of the copy compared with the first one, e.g. `v0.29.0#2`.
+- **metric** — wall clock, CPU time or peak RSS. `(ungated)` marks a metric
+  that is reported but cannot fail the run: CPU time by default, and every
+  metric of the control, which judges the harness rather than a build.
+- **reference median** / **candidate median** — each arm's median over the
+  measured rounds, in the metric's unit.
+- **ratio** — candidate ÷ reference. `1.208x` means the candidate took 20.8%
   longer. Below 1.0 means faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
   this run could measure; a wide interval means a noisy runner, not a big change.
-- **p (BH)** — the one-sided "candidate is slower" p-value, Benjamini–Hochberg
-  adjusted across the run. The opposite direction has its own adjusted p-value;
-  it is in the JSON rather than the table.
+- **p (BH)** — the one-sided p-value in the direction of the ratio ("candidate
+  is slower" at 1.0 and above, "candidate is faster" below), Benjamini–Hochberg
+  adjusted across the run. Control rows enter no correction and show the
+  unadjusted value. Both directions are in the JSON.
 - **n** — paired rounds actually measured (20–60; the loop stops early once the
   interval is narrow enough).
+- **verdict** — see below, with the reason beside it when there is one.
 
 ### The verdicts
 
@@ -226,7 +258,7 @@ things; the noise floor will tell you whether you succeeded.
 | `_launcher.py` | The separate process that actually forks the measured command |
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
-| `report.py` | Session recorder, JSON artifact, step-summary markdown |
+| `report.py` | Session recorder, JSON artifact (`SCHEMA_VERSION`), step-summary markdown |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
 | `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
