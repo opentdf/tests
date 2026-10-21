@@ -3,10 +3,11 @@
 A paired A/B benchmark for the OpenTDF SDK CLIs. It answers one question:
 **did this change make the SDK measurably and meaningfully slower?**
 
-Two builds — normally the newest installed release and the branch build —
-are measured on the *same* runner, interleaved round by round, and only their
-*ratio* is reported. Nothing is ever compared against a stored historical
-number.
+Two to four builds of one SDK — normally the newest installed release and the
+branch build — are measured on the *same* runner, interleaved round by round,
+and only their *ratios* are reported. The first build is the **reference**;
+each other build (a **candidate**) is compared against it and can fail the run.
+Nothing is ever compared against a stored historical number.
 
 It runs nightly (one runner per SDK) and on `workflow_dispatch` with
 `run-benchmarks` checked. It never runs on pull requests: 30 minutes of serial
@@ -159,9 +160,13 @@ lists the reason for each cell.
 
 ### The A/A control
 
-Each SDK gets a control cell that compares the baseline build **against itself**
+Each SDK gets a control cell that compares the reference build **against itself**
 through the identical pipeline. Its true ratio is exactly 1.0 by construction, so
-whatever it reports is the harness's own error on this runner. It does two jobs:
+whatever it reports is the harness's own error on this runner. With K arms the
+control runs K copies of the reference: a K-arm round is longer, and the two arms
+of a contrast sit further apart in it on average, so a two-arm control would
+understate the noise. Of its K-1 A/A contrasts, the worst one stands as the
+floor. It does two jobs:
 
 - If the control *trips* — its own A/A comparison looks like a real effect — then
   something is systematically biased and **the whole run stops being able to fail
@@ -259,8 +264,9 @@ things; the noise floor will tell you whether you succeeded.
 | `runner.py` | The paired round loop, the stopping rule, the budget, `analyze()` |
 | `stats.py` | Pure functions: log-ratios, bootstrap CI, Wilcoxon, BH, the decision rule |
 | `report.py` | Session recorder, JSON artifact (`SCHEMA_VERSION`), step-summary markdown |
+| `config.py` | Option parsing and validation shared by pytest and CI: `BenchConfig`, `--bench-refs`, the arm ceiling, the budget default. No pytest |
 | `docs/` | The figures in this README, and the Monte Carlo behind them. Documentation only; imported by nothing in the harness |
-| `../fixtures/bench.py` | The pytest glue: arm selection, payloads, ciphertexts, budget |
+| `../fixtures/bench.py` | The pytest glue: arm selection (options or defaults), payloads, ciphertexts, budget |
 | `../test_benchmarks.py` | One test per cell. **Records; never asserts** |
 | `../conftest.py` | `--bench*` options, cell parametrization, the session-finish gate |
 
@@ -480,8 +486,8 @@ does not silently switch to EC), the same container, and the same target mode.
 disagree on `hexless`, `hexaflexible`, or `autoconfigure` — a timing difference
 there is a difference in *work*, not in speed.
 
-For decrypt, both arms read one ciphertext produced by the baseline. If each arm
-decrypted its own output, a difference in how the two builds *write* a TDF would
+For decrypt, every arm reads one ciphertext produced by the reference. If each
+arm decrypted its own output, a difference in how the builds *write* a TDF would
 show up as a difference in how fast they read one.
 
 #### Baselines must be final releases
@@ -572,7 +578,7 @@ two builds doing different amounts of work) is invisible in the output.
 3. Never let a cell assert; the gate is run-level.
 4. Never report PASS without a noise floor establishing the run had the power to
    fail.
-5. Never let the two arms differ in anything but the build.
+5. Never let the arms differ in anything but the build.
 6. Never run the measured command from a process holding memory.
 7. Never run the benchmark in parallel with anything, including itself.
 8. Never let a run that measured nothing report success.

@@ -1,9 +1,9 @@
 """The paired round loop that produces comparable samples for one cell.
 
-A *cell* is one operation at one payload size, measured for two or more SDK
-builds, up to :data:`perf.config.MAX_ARM_COUNT`. The loop runs every arm once
-per round, in a randomized order, until it has either enough precision or no
-more time. The first arm is the *reference*, and every other arm is compared
+A *cell* is one operation at one payload size, measured for two to four SDK
+builds (:data:`perf.config.MAX_ARM_COUNT`). The loop runs every arm once per
+round, in a randomized order, until it has either enough precision or no more
+time. The first arm is the *reference*, and every other arm is compared
 against it.
 
 Why rounds rather than "run A 30 times, then B 30 times"
@@ -242,10 +242,10 @@ def run_cell(
     Args:
         cell_id: stable identifier, also the per-cell RNG seed material so
             that two cells do not share an interleaving order.
-        arms: the builds to measure, all in every round: two or more, up to
-            :data:`perf.config.MAX_ARM_COUNT`. The first is the reference
-            every other arm is compared against. For an A/A control these
-            are copies of one build running through identical paths.
+        arms: the 2 to 4 builds to measure (:data:`perf.config.MAX_ARM_COUNT`),
+            all in every round. The first is the reference every other arm
+            is compared against. For an A/A control these are copies of one
+            build running through identical paths.
         config: round-loop knobs.
         deadline: absolute ``clock()`` value past which no new round starts.
         control: records that this is the A/A cell; does not change the loop.
