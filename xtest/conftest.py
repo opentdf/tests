@@ -29,7 +29,7 @@ import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
-from perf.cells import cells_for
+from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -264,6 +264,24 @@ def _add_benchmark_options(parser: pytest.Parser):
         "unreleased build of each sdk",
     )
     group.addoption(
+        "--bench-payloads",
+        default=DEFAULT_PAYLOAD_SPEC,
+        help="comma-separated payload sizes to measure, e.g. "
+        "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
+        "default are opt-in because they are what a throughput gate actually "
+        "needs and what a nightly cannot afford: each one adds two cells, and "
+        "a run needs scratch disk for every plaintext plus, with "
+        "--bench-prune-scratch, three times the largest size -- or, without "
+        "it, about five times the sum of the sizes per SDK",
+    )
+    group.addoption(
+        "--bench-prune-scratch",
+        action="store_true",
+        help="delete each benchmark file as soon as no remaining cell needs "
+        "it, instead of keeping outputs to inspect and plaintexts to reuse. "
+        "CI sets it; worth setting locally for large --bench-payloads",
+    )
+    group.addoption(
         "--bench-threshold",
         type=float,
         default=stats.DEFAULT_THRESHOLD,
@@ -414,7 +432,11 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     if not metafunc.config.getoption("--bench"):
         return
 
-    cells = cells_for(_bench_sdk_names(metafunc.config))
+    from fixtures.bench import payloads_from_options
+
+    cells = cells_for(
+        _bench_sdk_names(metafunc.config), payloads_from_options(metafunc.config)
+    )
     metafunc.config.stash[report.CELLS_KEY] = cells
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
 
@@ -446,7 +468,12 @@ def pytest_configure(config: pytest.Config):
     # --bench-threshold used to surface from the bench_config fixture, which
     # runs after the session has already built payloads and installed CLIs --
     # minutes of work discarded to report a typo.
-    from fixtures.bench import config_from_options
+    from fixtures.bench import (
+        config_from_options,
+        disk_shortfall,
+        payloads_from_options,
+    )
+    from perf.cells import payloads_to_generate
     from perf.config import (
         BenchmarkRequest,
         normalize_baseline_candidate,
@@ -455,6 +482,7 @@ def pytest_configure(config: pytest.Config):
     )
 
     bench_config = config_from_options(config)
+    payloads = payloads_from_options(config)
     baseline = config.getoption("--bench-baseline", default=None)
     candidate = config.getoption("--bench-candidate", default=None)
     try:
@@ -481,6 +509,19 @@ def pytest_configure(config: pytest.Config):
                 )
     except ValueError as e:
         raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+
+    # Disk is checked here for the same reason. Found by a fixture instead,
+    # it would error every cell with one repeated traceback and leave no
+    # report; found by the CLI under measurement, it would read as that build
+    # failing.
+    shortfall = disk_shortfall(
+        _tmp_root(),
+        payloads_to_generate(payloads),
+        n_sdks=len(_bench_sdk_names(config)),
+        prune=bool(config.getoption("--bench-prune-scratch", default=False)),
+    )
+    if shortfall:
+        raise pytest.UsageError(shortfall)
 
 
 def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
@@ -628,9 +669,8 @@ def _write_bulk_plaintext(path: Path, length: int) -> None:
     window is 32 KiB -- so the payload stays realistically incompressible
     while costing one ``randbytes`` call instead of one per megabyte.
 
-    Deliberately not ``rng.randbytes(length)`` the way ``fixtures/bench.py``
-    does it: that materialises the whole payload in memory, which is fine at
-    32 MiB and fatal at 2.1 GiB.
+    Deliberately not one ``rng.randbytes(length)`` call: that materialises
+    the whole payload in memory, which is fine at 32 MiB and fatal at 2.1 GiB.
     """
     block = bytearray(random.Random("dspx-4592").randbytes(_BULK_BLOCK))
     view = memoryview(block)
@@ -690,6 +730,11 @@ def chunky_pt_file(tmp_dir: Path) -> Path:
     return _plaintext_of(tmp_dir, "chunky")
 
 
+def _tmp_root() -> Path:
+    """Root of every worker's :func:`tmp_dir`; ``XT_TMP_DIR`` relocates it."""
+    return Path(os.environ.get("XT_TMP_DIR", "tmp"))
+
+
 @pytest.fixture(scope="session")
 def tmp_dir(request: pytest.FixtureRequest) -> Path:
     """Create worker-specific temporary directory for test files.
@@ -702,8 +747,7 @@ def tmp_dir(request: pytest.FixtureRequest) -> Path:
     override is hard-coding a runner-specific path here.
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    root = Path(os.environ.get("XT_TMP_DIR", "tmp"))
-    dname = root / worker_id
+    dname = _tmp_root() / worker_id
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 
