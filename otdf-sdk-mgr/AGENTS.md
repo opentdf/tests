@@ -43,9 +43,10 @@ before editing either module:
   lost its `.git` file (an interrupted `clean` or `git worktree add`), `git -C
   <worktree>` climbs to opentdf/tests itself, and `reset --hard` there throws
   away the developer's uncommitted work. Call `checkout.require_worktree`
-  before resetting an existing worktree; it refuses anything that isn't a
-  worktree of the expected bare repo. The refresh runs `git worktree prune`,
-  so a worktree directory that was removed can be added again.
+  before reading an existing worktree's HEAD or resetting it; it refuses
+  anything that isn't a worktree of the expected bare repo. The refresh runs
+  `git worktree prune`, so a worktree directory that was removed can be added
+  again.
 - **Platform tags are namespaced** as `service/vX.Y.Z`. `_resolve_platform_ref`
   prefixes the `service/` infix on plain versions (`v0.9.0`, `0.9.0`) and
   nothing else. Branches, `HEAD`, SHAs, refs with a `/`, and `pr:N`
@@ -70,7 +71,14 @@ before editing either module:
   `service/vX.Y.Z` release (`_is_pinned`) and sends anything else through
   `_ensure_worktree` and a rebuild. Don't reintroduce an unconditional
   dist-exists skip — it silently serves stale binaries when a user installs
-  the same branch a second time.
+  the same branch a second time. Tags can move as well, when upstream
+  re-creates one after a botched release. `BARE_REFRESH` passes `--force` so
+  the fetch takes the new commit rather than failing with `would clobber
+  existing tag`, and `checkout.needs_reset` resets any worktree whose HEAD
+  isn't its target's commit. The pinned-dist cache is the exception: being
+  offline, it keeps serving a moved release tag's old build. Remove its dist
+  directory (`xtest/platform/dist/vX.Y.Z` by default; `otdf-sdk-mgr clean`
+  covers only the SDKs) and install again to rebuild from the moved tag.
 - Subprocess output is **not captured** — long-running `go build` / `git
   clone` streams to the terminal so users can see progress. On failure the
   error message just reports the command and exit code.

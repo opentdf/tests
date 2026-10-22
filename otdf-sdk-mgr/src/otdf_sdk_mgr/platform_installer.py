@@ -16,9 +16,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from otdf_sdk_mgr.checkout import BARE_REFRESH, CheckoutError, require_worktree, upstream_ref
+from otdf_sdk_mgr.checkout import (
+    BARE_REFRESH,
+    CheckoutError,
+    needs_reset,
+    require_worktree,
+    upstream_ref,
+)
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_target, ref_slug
+from otdf_sdk_mgr.refs import expand_pr_shorthand, ref_slug
 from otdf_sdk_mgr.semver import normalize_version, parse_semver
 
 PLATFORM_BARE_REPO = "platform.git"
@@ -193,11 +199,12 @@ def _ensure_worktree(ref: str) -> Path:
     """Create (or reuse) a detached git worktree at the given platform ref.
 
     Branch names resolve to origin's current tip via `upstream_ref`; a branch
-    origin has deleted raises PlatformInstallError. For mutable refs
+    origin has deleted raises PlatformInstallError, as does an existing
+    directory that is not a worktree of the bare repo. For mutable refs
     (`is_mutable_target`: branches, whatever their names look like, and PR
     heads) an existing worktree is reset to that tip so a subsequent install
-    picks up new commits, unless it is not a worktree of the bare repo
-    (PlatformInstallError). For immutable refs (tags, SHAs) we just reuse.
+    picks up new commits. A tag's is reset only if origin moved the tag, and
+    a SHA's is reused (`needs_reset`).
     """
     bare = _ensure_bare_repo()
     # `_ensure_bare_repo` refreshes branches and tags only (BARE_REFRESH), so
@@ -210,9 +217,9 @@ def _ensure_worktree(ref: str) -> Path:
     target = _upstream_ref(bare, ref)
     worktree = _worktree_path_for(ref)
     if worktree.exists():
-        if is_mutable_target(ref, target):
+        _require_worktree(worktree, bare)
+        if needs_reset(worktree, ref, target):
             print(f"Worktree exists at {worktree}; resetting to {ref}.")
-            _require_worktree(worktree, bare)
             _run(["git", "-C", str(worktree), "reset", "--hard", target])
         else:
             print(f"Worktree already exists at {worktree}; reusing.")
