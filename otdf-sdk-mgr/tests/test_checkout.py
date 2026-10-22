@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from otdf_sdk_mgr import checkout, config, platform_installer
 from otdf_sdk_mgr.checkout import CheckoutError
+from otdf_sdk_mgr.cli import app
 from otdf_sdk_mgr.cli_install import install_app
 from otdf_sdk_mgr.platform_installer import PlatformInstallError
 from otdf_sdk_mgr.refs import expand_pr_shorthand
@@ -45,8 +46,8 @@ def _assert_untouched(worktree: Path, head: str) -> None:
 
 @pytest.fixture
 def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_git: None) -> Path:
-    """A one-commit repo standing in for the js and platform remotes (go
-    builds come from platform)."""
+    """A one-commit repo standing in for the js, java and platform remotes
+    (go builds come from platform)."""
     repo = tmp_path / "origin"
     repo.mkdir()
     _git("init", "-q", "-b", "main", cwd=repo)
@@ -59,10 +60,10 @@ def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_git: None) 
     _git("commit", "-q", "-m", "first", cwd=repo)
     _git("branch", "other", cwd=repo)
 
-    for name in ("js", "platform"):
+    for name in ("js", "java", "platform"):
         monkeypatch.setitem(config.SDK_GIT_URLS, name, str(repo))
     monkeypatch.setattr(
-        checkout, "get_sdk_dirs", lambda: {"js": tmp_path / "js", "go": tmp_path / "go"}
+        checkout, "get_sdk_dirs", lambda: {s: tmp_path / s for s in ("go", "js", "java")}
     )
     monkeypatch.setenv("OTDF_PLATFORM_DIR", str(tmp_path / "platform"))
     return repo
@@ -448,3 +449,55 @@ class TestInstallTip:
         assert result.exit_code == 0, result.output
         assert builds == [_head(origin)]
         assert (origin.parent / "platform" / "dist" / "my-branch" / "service").exists()
+
+
+class TestCheckoutCommand:
+    def test_go_comes_from_the_platform_monorepo(self, origin: Path):
+        result = CliRunner().invoke(app, ["checkout", "go", "main"])
+
+        assert result.exit_code == 0, result.output
+        link = origin.parent / "go" / "src" / "main"
+        assert link.is_symlink()
+        assert link.resolve() == origin.parent / "go" / "platform-src" / "main" / "otdfctl"
+        assert _head(link) == _head(origin)
+
+    def test_all_checks_out_every_sdk(self, origin: Path):
+        """go is first in the list, so its failure used to stop js and java
+        being checked out at all."""
+        result = CliRunner().invoke(app, ["checkout", "--all", "main"])
+
+        assert result.exit_code == 0, result.output
+        for sdk in ("go", "js", "java"):
+            assert _head(origin.parent / sdk / "src" / "main") == _head(origin), sdk
+
+    def test_failed_git_command_shows_gits_stderr(self, origin: Path):
+        """checkout._run captures it; without it the error is just an exit status."""
+        result = CliRunner().invoke(app, ["checkout", "js", "no-such-ref"])
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit), result.exception
+        assert "returned non-zero exit status" in result.output
+        assert "invalid reference: no-such-ref" in result.output
+
+    def test_go_ref_without_otdfctl_is_an_error_not_a_traceback(self, origin: Path):
+        """A platform ref from before otdfctl moved into the monorepo."""
+        _git("switch", "-q", "-c", "old", cwd=origin)
+        _git("rm", "-q", "-r", "otdfctl", cwd=origin)
+        _git("commit", "-q", "-m", "before otdfctl", cwd=origin)
+
+        result = CliRunner().invoke(app, ["checkout", "go", "old"])
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit), result.exception
+        assert "has no otdfctl/ directory" in result.output
+
+    @pytest.mark.parametrize("args", [[], ["rust"]], ids=["no-sdk", "unknown-sdk"])
+    def test_usage_error_is_reported_once(self, args: list[str], origin: Path):
+        """The missing-SDK exit is a typer.Exit, which is a RuntimeError, so the
+        handler could report it twice. An unknown SDK raises a plain ValueError,
+        not a CheckoutError, so a narrower handler would let it through."""
+        result = CliRunner().invoke(app, ["checkout", *args])
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit), result.exception
+        assert result.output.count("Error:") == 1, result.output

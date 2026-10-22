@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from otdf_sdk_mgr.cli_install import install_app
+from otdf_sdk_mgr.cli_install import exit_with_error, install_app
 from otdf_sdk_mgr.cli_versions import versions_app
 from otdf_sdk_mgr.config import ALL_SDKS, get_sdk_dirs
 
@@ -23,6 +23,17 @@ app.add_typer(install_app, name="install")
 app.add_typer(versions_app, name="versions")
 
 
+def _checkout_one(sdk: str, branch: str) -> None:
+    """Check out one SDK's source as `install tip` does, without building it."""
+    from otdf_sdk_mgr.checkout import checkout_go_from_platform, checkout_sdk_branch
+
+    # otdfctl's source is in the platform monorepo; see installers.cmd_tip.
+    if sdk == "go":
+        checkout_go_from_platform(branch)
+    else:
+        checkout_sdk_branch(sdk, branch)
+
+
 @app.command()
 def checkout(
     sdk: Annotated[
@@ -33,20 +44,21 @@ def checkout(
     all_sdks: Annotated[bool, typer.Option("--all", help="Checkout all SDKs")] = False,
 ) -> None:
     """Clone bare repo and create/update worktree for an SDK branch."""
-    from otdf_sdk_mgr.checkout import checkout_sdk_branch
-
     try:
         if all_sdks:
             for s in ALL_SDKS:
-                checkout_sdk_branch(s, branch)
+                _checkout_one(s, branch)
         elif sdk:
-            checkout_sdk_branch(sdk, branch)
+            _checkout_one(sdk, branch)
         else:
             typer.echo("Error: provide an SDK name or use --all", err=True)
             raise typer.Exit(1)
-    except (ValueError, subprocess.CalledProcessError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1) from e
+    except typer.Exit:
+        raise  # typer.Exit is a RuntimeError; this one is already reported
+    except (ValueError, RuntimeError, subprocess.CalledProcessError) as e:
+        # `install tip`'s set, but ValueError rather than its subclass
+        # CheckoutError, so that an unknown SDK name is reported too.
+        exit_with_error(e)
 
 
 @app.command()
