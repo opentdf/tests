@@ -28,7 +28,9 @@ def expand_pr_shorthand(ref: str) -> str:
 def is_mutable_ref(ref: str) -> bool:
     """True if `ref` can change over time (branches, PR heads); False for tags/SHAs.
 
-    Used to decide whether to re-fetch and rebuild on subsequent installs.
+    A guess from the name alone, which takes a branch named like a version
+    (`release/v1.2.3`) for a tag. Once the bare repo has been refreshed, decide
+    with `is_mutable_target` instead.
 
     The caller is expected to have already expanded `pr:N` shorthand and any
     tag-namespace prefixes (e.g. `service/v0.9.0`, `sdk/v0.4.0`).
@@ -40,6 +42,23 @@ def is_mutable_ref(ref: str) -> bool:
     # `/` is treated as an immutable tag.
     tail = ref.rsplit("/", 1)[-1]
     return not SEMVER_RE.match(tail)
+
+
+def is_mutable_target(ref: str, target: str) -> bool:
+    """`is_mutable_ref`, once `checkout.upstream_ref` has resolved `ref` to `target`.
+
+    upstream_ref maps every branch origin has onto `refs/remotes/origin/*`, so
+    such a target is a branch however its name looks: web-sdk cuts
+    `release/1.3.1`. Any other `refs/...` ref but a tag, such as a PR head, can
+    move too. Other names upstream_ref passes through: tags, SHAs, and names
+    git can't resolve, such as a branch origin deleted since the clone. Those
+    are judged by name. Answering False for all of them would quietly reuse a
+    deleted branch's worktree, where a reset fails loudly unless the name looks
+    like a version.
+    """
+    if target.startswith("refs/") and not target.startswith("refs/tags/"):
+        return True
+    return is_mutable_ref(ref)
 
 
 def ref_slug(ref: str) -> str:

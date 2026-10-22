@@ -18,8 +18,8 @@ from pathlib import Path
 
 from otdf_sdk_mgr.checkout import BARE_REFRESH, CheckoutError, require_worktree, upstream_ref
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
-from otdf_sdk_mgr.semver import normalize_version
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_target, ref_slug
+from otdf_sdk_mgr.semver import normalize_version, parse_semver
 
 PLATFORM_BARE_REPO = "platform.git"
 HELPER_SCRIPTS_BRANCH = "main"
@@ -115,32 +115,49 @@ def _is_hex(s: str) -> bool:
     return bool(s) and all(c in "0123456789abcdef" for c in s.lower())
 
 
-def _resolve_platform_ref(version_or_ref: str) -> str:
-    """Turn a user-supplied version into the actual git ref to checkout.
+def _is_version(s: str) -> bool:
+    """A plain version, `v0.9.0` or `0.9.0`. SEMVER_RE would let a `/` into a
+    pre-release suffix, but a name with one is a ref."""
+    return "/" not in s and parse_semver(s) is not None
 
-    `v0.9.0` → `service/v0.9.0` (matches SDK_TAG_INFIXES["platform"]).
-    `pr:42` → `refs/pull/42/head` (expanded first, then passes through the
-    `/` check).
-    A ref that already contains `/`, a full-length hex SHA, or `main` is
-    returned as-is. 7-39 char hex inputs are returned unchanged — they
-    might be abbreviated SHAs or branch names; `install_platform_source`
+
+def _resolve_platform_ref(version_or_ref: str) -> str:
+    """Turn a user-supplied version or ref into the git ref to check out.
+
+    Only a plain version names a release, so only it gets the tag infix:
+    `v0.9.0` or `0.9.0` → `service/v0.9.0` (SDK_TAG_INFIXES["platform"]).
+    `pr:42` → `refs/pull/42/head`. Anything else is returned as-is for git
+    to resolve: a branch (`main`, `my-branch`, `release/v1.2.3`), `HEAD`, a
+    namespaced tag (`service/v0.9.0`), a `refs/...` ref, or a SHA. 7-39 char
+    hex might be an abbreviated SHA or a branch name; `install_platform_source`
     resolves the ambiguity via `_expand_short_sha` once the bare repo is
     available.
     """
     version_or_ref = expand_pr_shorthand(version_or_ref)
-    infix = SDK_TAG_INFIXES.get("platform", "service")
     if "/" in version_or_ref and (":" in version_or_ref or "@" in version_or_ref):
         raise PlatformInstallError(
             f"container-image refs are not supported: {version_or_ref!r}; "
             "use a git ref like v0.9.0, service/v0.9.0, main, or a SHA"
         )
-    if "/" in version_or_ref or version_or_ref in ("main", "HEAD"):
-        return version_or_ref
-    if len(version_or_ref) in (40, 64) and _is_hex(version_or_ref):
-        return version_or_ref
-    if 7 <= len(version_or_ref) <= 39 and _is_hex(version_or_ref):
-        return version_or_ref
-    return f"{infix}/{normalize_version(version_or_ref)}"
+    if _is_version(version_or_ref):
+        infix = SDK_TAG_INFIXES.get("platform", "service")
+        return f"{infix}/{normalize_version(version_or_ref)}"
+    return version_or_ref
+
+
+def _is_pinned(full_ref: str) -> bool:
+    """True if `full_ref` names one commit for good: a full SHA, or a release
+    tag `service/vX.Y.Z`.
+
+    Only these may reuse a dist without refreshing the bare repo. Anything else
+    might be a branch, whatever its name looks like (`release/v1.2.3`), and
+    only origin can say.
+    """
+    if len(full_ref) in (40, 64) and _is_hex(full_ref):
+        return True
+    infix = SDK_TAG_INFIXES.get("platform", "service")
+    version = full_ref.removeprefix(f"{infix}/")
+    return version != full_ref and _is_version(version)
 
 
 def _expand_short_sha(short: str) -> str:
@@ -177,10 +194,10 @@ def _ensure_worktree(ref: str) -> Path:
 
     Branch names resolve to origin's current tip via `upstream_ref`; a branch
     origin has deleted raises PlatformInstallError. For mutable refs
-    (branches, PR heads) an existing worktree is reset to that tip so a
-    subsequent install picks up new commits, unless it is not a worktree of
-    the bare repo (PlatformInstallError). For immutable refs (tags, SHAs) we
-    just reuse.
+    (`is_mutable_target`: branches, whatever their names look like, and PR
+    heads) an existing worktree is reset to that tip so a subsequent install
+    picks up new commits, unless it is not a worktree of the bare repo
+    (PlatformInstallError). For immutable refs (tags, SHAs) we just reuse.
     """
     bare = _ensure_bare_repo()
     # `_ensure_bare_repo` refreshes branches and tags only (BARE_REFRESH), so
@@ -193,7 +210,7 @@ def _ensure_worktree(ref: str) -> Path:
     target = _upstream_ref(bare, ref)
     worktree = _worktree_path_for(ref)
     if worktree.exists():
-        if is_mutable_ref(ref):
+        if is_mutable_target(ref, target):
             print(f"Worktree exists at {worktree}; resetting to {ref}.")
             _require_worktree(worktree, bare)
             _run(["git", "-C", str(worktree), "reset", "--hard", target])
@@ -253,9 +270,12 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
     (`service/v0.9.0`), a branch (`main`), a PR shorthand (`pr:42`), a raw
     ref (`refs/pull/42/head`), or a SHA. Returns the dist dir.
 
-    For immutable refs (tags, SHAs) an existing dist is reused. For mutable
-    refs (branches, PR heads) the bare repo is re-fetched, the worktree is
-    reset, the old dist is removed, and the service binary is rebuilt.
+    A release or a full SHA reuses an existing dist without touching the bare
+    repo, so a cached release installs offline. Anything else might be a
+    branch, whatever its name looks like, so it goes through
+    `_ensure_worktree`, which re-fetches the bare repo and resets the worktree
+    if the ref can move; then the old dist is removed and the service binary
+    is rebuilt.
     """
     full_ref = _resolve_platform_ref(ref)
     if 7 <= len(full_ref) <= 39 and _is_hex(full_ref):
@@ -263,17 +283,18 @@ def install_platform_source(ref: str, dist_name: str | None = None) -> Path:
         # full-SHA case. Falls through to branch-name handling if git can't
         # resolve the prefix; raises on ambiguity.
         full_ref = _expand_short_sha(full_ref)
+    pinned = _is_pinned(full_ref)
     if dist_name is None:
-        if is_mutable_ref(full_ref):
-            dist_name = ref_slug(full_ref)
-        else:
+        if pinned:
             # Normalize only the semver tail so namespaced tags like
             # `service/v0.9.0` produce the same dist_name as `v0.9.0`.
             dist_name = normalize_version(full_ref.rsplit("/", 1)[-1])
+        else:
+            dist_name = ref_slug(full_ref)
     dist_dir = _platform_dist_root() / dist_name
     binary = dist_dir / "service"
     marker = dist_dir / ".complete"
-    if binary.exists() and marker.exists() and not is_mutable_ref(full_ref):
+    if binary.exists() and marker.exists() and pinned:
         print(f"  Dist already present at {dist_dir}; skipping build.")
         return dist_dir
     worktree = _ensure_worktree(full_ref)

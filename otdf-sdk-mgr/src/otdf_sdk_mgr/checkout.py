@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_target
 
 # `git clone --bare` records no fetch refspec: `git fetch` alone updates no refs
 # and `--tags` adds only tags, so the bare repo's branches stay where the clone
@@ -173,7 +173,7 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     target = upstream_ref(bare_repo_path, branch)
 
     if worktree_path.exists():
-        if is_mutable_ref(branch):
+        if is_mutable_target(branch, target):
             print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
             require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
@@ -248,7 +248,7 @@ def checkout_go_from_platform(ref: str) -> Path:
     target = upstream_ref(bare_repo_path, ref)
 
     if worktree_path.exists():
-        if is_mutable_ref(ref):
+        if is_mutable_target(ref, target):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
             require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])

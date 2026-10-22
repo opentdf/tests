@@ -47,21 +47,30 @@ before editing either module:
   worktree of the expected bare repo. The refresh runs `git worktree prune`,
   so a worktree directory that was removed can be added again.
 - **Platform tags are namespaced** as `service/vX.Y.Z`. `_resolve_platform_ref`
-  prefixes the `service/` infix on plain versions; raw SHAs, refs with a
-  `/`, `pr:N` shorthand (expanded to `refs/pull/N/head`), and `main`/`HEAD`
-  pass through unchanged.
+  prefixes the `service/` infix on plain versions (`v0.9.0`, `0.9.0`) and
+  nothing else. Branches, `HEAD`, SHAs, refs with a `/`, and `pr:N`
+  shorthand (expanded to `refs/pull/N/head`) pass through unchanged.
+  Prefixing every name that isn't obviously a ref would look up
+  `install tip --ref my-branch platform` as the tag `service/vmy-branch`.
 - **PR refs aren't under `refs/heads/`,** so `BARE_REFRESH` never pulls
   `refs/pull/N/head`. `_ensure_worktree` (and the SDK equivalents in
   `checkout.py`) explicitly `fetch origin +refs/...:refs/...` for any
   `refs/...` ref before adding or resetting the worktree. Otherwise `git
   worktree add refs/pull/N/head` dies with `invalid reference`, and a reset
   rebuilds the PR head as it was at the last fetch.
-- **Mutable refs auto-refresh; immutable refs cache.** `refs.is_mutable_ref`
-  treats full-length hex SHAs and `<infix>/vX.Y.Z` tag forms as immutable
-  (reuse existing dist), and everything else as mutable (re-fetch the bare
-  repo, `git reset --hard` the worktree, drop the stale binary, rebuild).
-  Don't reintroduce an unconditional dist-exists skip — it silently serves
-  stale binaries when a user installs the same branch a second time.
+- **Mutable refs auto-refresh; immutable refs cache.** Ask origin, not the
+  name: a branch can look like a version (web-sdk cuts `release/1.3.1`).
+  After the bare-repo refresh, `refs.is_mutable_target` takes what
+  `upstream_ref` resolved to a branch on origin (`refs/remotes/origin/*`),
+  or any other `refs/...` ref but a tag, as mutable; only names it passed
+  through fall back on the name heuristic `refs.is_mutable_ref`. Mutable
+  means `git reset --hard` the worktree, and for the platform drop the stale
+  binary and rebuild. `install_platform_source` looks for a cached dist
+  before the refresh, so it reuses one only for a full SHA or a
+  `service/vX.Y.Z` release (`_is_pinned`) and sends anything else through
+  `_ensure_worktree` and a rebuild. Don't reintroduce an unconditional
+  dist-exists skip — it silently serves stale binaries when a user installs
+  the same branch a second time.
 - Subprocess output is **not captured** — long-running `go build` / `git
   clone` streams to the terminal so users can see progress. On failure the
   error message just reports the command and exit code.

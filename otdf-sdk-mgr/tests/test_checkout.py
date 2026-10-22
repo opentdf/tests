@@ -186,6 +186,18 @@ class TestEveryEntryPoint:
 
         _assert_untouched(worktree, pinned)
 
+    @pytest.mark.parametrize("branch", ["release/v1.2.3", "release/1.3.1"])
+    def test_version_named_branch_follows_origin(self, entry: str, branch: str, origin: Path):
+        """A branch whatever its name looks like; web-sdk cuts `release/1.3.1`.
+        Reused like a tag's, its worktree would keep the first commit."""
+        _git("branch", branch, cwd=origin)
+        worktree = _check_out(entry, origin, branch)
+        _git("update-ref", f"refs/heads/{branch}", _advance(origin), cwd=origin)
+
+        _check_out(entry, origin, branch)
+
+        assert _head(worktree) == _head(origin)
+
     def test_pr_ref_follows_a_force_push(self, entry: str, origin: Path):
         """BARE_REFRESH skips `refs/pull/*`, so each checkout fetches the PR
         head itself, and has to overwrite the old one."""
@@ -294,6 +306,51 @@ class TestPlatformWorktree:
         _assert_enclosing_untouched(enclosing)
 
 
+@pytest.fixture
+def builds(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Stub out the platform's `go build`; record the commit each build compiles."""
+    built: list[str] = []
+
+    def build(worktree: Path, dist_dir: Path) -> Path:
+        built.append(_head(worktree))
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        (dist_dir / ".complete").write_text("")
+        binary = dist_dir / "service"
+        binary.write_text("")
+        return binary
+
+    monkeypatch.setattr(platform_installer, "_build_service", build)
+    return built
+
+
+class TestPlatformInstall:
+    def test_version_named_branch_is_rebuilt(self, origin: Path, builds: list[str]):
+        """Not served from the first build's dist as if it were a release."""
+        _git("branch", "release/v1.2.3", cwd=origin)
+        platform_installer.install_platform_source("release/v1.2.3")
+        tip = _advance(origin)
+        _git("update-ref", "refs/heads/release/v1.2.3", tip, cwd=origin)
+
+        dist = platform_installer.install_platform_source("release/v1.2.3")
+
+        assert builds[1:] == [tip]
+        assert dist.name == "release--v1.2.3"
+
+    @pytest.mark.parametrize("kind", ["release", "sha"])
+    def test_pinned_build_is_reused_without_origin(
+        self, kind: str, origin: Path, builds: list[str]
+    ):
+        """Neither can move, so a finished dist needs no fetch: `install lts`
+        and `install release` work offline once built."""
+        _git("tag", "service/v1.2.3", cwd=origin)
+        ref = "v1.2.3" if kind == "release" else _head(origin)
+        dist = platform_installer.install_platform_source(ref)
+        shutil.rmtree(origin)
+
+        assert platform_installer.install_platform_source(ref) == dist
+        assert len(builds) == 1
+
+
 class TestInstallTip:
     def test_branch_gone_from_origin_is_an_error_not_a_traceback(self, origin: Path):
         _check_out("sdk", origin, "main")
@@ -304,3 +361,14 @@ class TestInstallTip:
         assert result.exit_code == 1
         assert isinstance(result.exception, SystemExit), result.exception
         assert "Error: branch 'other' is not on origin" in result.output
+
+    def test_platform_branch_without_a_slash(self, origin: Path, builds: list[str]):
+        """The `tip` docstring's own example. Not a version, so not looked up
+        as the tag `service/vmy-branch`."""
+        _git("branch", "my-branch", cwd=origin)
+
+        result = CliRunner().invoke(install_app, ["tip", "--ref", "my-branch", "platform"])
+
+        assert result.exit_code == 0, result.output
+        assert builds == [_head(origin)]
+        assert (origin.parent / "platform" / "dist" / "my-branch" / "service").exists()
