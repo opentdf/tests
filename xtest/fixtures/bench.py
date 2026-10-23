@@ -536,8 +536,8 @@ def build_arms(
     ct_file: Path | None,
     tmp_dir: Path,
     attr_values: list[str],
-) -> tuple[Arm, Arm]:
-    """Turn a cell plus its two builds into two ready-to-run invocations.
+) -> tuple[Arm, ...]:
+    """Turn a cell plus its two builds into one ready-to-run invocation each.
 
     Everything that is not the build under test is pinned identically across
     the arms: same plaintext, same attribute (so both wrap with RSA), same
@@ -548,18 +548,18 @@ def build_arms(
     baseline. Letting each arm decrypt its own output would compare the cost
     of reading two different files.
 
-    In a control cell both arms are the baseline build, so the pair differs
-    only in the output path -- exactly the harness overhead the A/A cell
-    exists to measure.
+    In a control cell both arms are the baseline build, so they differ only in
+    the output path -- exactly the harness overhead the A/A cell exists to
+    measure.
     """
-    baseline_sdk = arms.baseline
-    candidate_sdk = arms.baseline if cell.control else arms.candidate
     target_mode = pinned_target_mode(arms)
 
-    def invocation(sdk: tdfs.SDK, role: str) -> Invocation:
-        out = tmp_dir / f"bench-{cell.id}-{role}"
+    def invocation(sdk: tdfs.SDK, arm_id: str) -> Invocation:
+        # Appended, not `with_suffix`: arm ids are versions, and with_suffix
+        # would replace the ".0" of "v0.29.0", giving two builds one output.
+        stem = f"bench-{cell.id}-{arm_id}"
         if cell.operation == "encrypt":
-            out = out.with_suffix(".tdf")
+            out = tmp_dir / f"{stem}.tdf"
             argv, env = sdk.encrypt_command(
                 pt_file,
                 out,
@@ -570,13 +570,18 @@ def build_arms(
         else:
             if ct_file is None:
                 raise ValueError(f"{cell.id} is a decrypt cell but has no ciphertext")
-            out = out.with_suffix(".untdf")
+            out = tmp_dir / f"{stem}.untdf"
             argv, env = sdk.decrypt_command(ct_file, out, container="ztdf")
         return Invocation(argv, env, out)
 
-    return (
-        Arm("baseline", str(baseline_sdk), invocation(baseline_sdk, "baseline")),
-        Arm("candidate", str(candidate_sdk), invocation(candidate_sdk, "candidate")),
+    if cell.control:
+        # The same build twice. The ids have to differ -- they key the sample
+        # vectors -- so they are numbered rather than named after the version.
+        builds = [(f"{arms.baseline.version}#{i + 1}", arms.baseline) for i in range(2)]
+    else:
+        builds = [(sdk.version, sdk) for sdk in (arms.baseline, arms.candidate)]
+    return tuple(
+        Arm(arm_id, str(sdk), invocation(sdk, arm_id)) for arm_id, sdk in builds
     )
 
 
