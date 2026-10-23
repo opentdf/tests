@@ -16,8 +16,19 @@ from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_target
 # left them. Fetch origin's branches into remote-tracking refs instead. No
 # worktree has those checked out, and `--prune` deletes the ones origin dropped,
 # so `upstream_ref` can tell a deleted branch from a live one and an `x` → `x/y`
-# rename doesn't collide.
-BARE_REFRESH = ["fetch", "--prune", "--tags", "origin", "+refs/heads/*:refs/remotes/origin/*"]
+# rename doesn't collide. `--force` lets `--tags` move a tag that origin
+# re-created on another commit, as after a botched release; git 2.20+ otherwise
+# rejects it ("would clobber existing tag") and fails the whole fetch. Forcing a
+# `+refs/tags/*:refs/tags/*` refspec instead would put tags under `--prune`,
+# which `--tags` exempts, and delete the ones origin dropped as well.
+BARE_REFRESH = [
+    "fetch",
+    "--prune",
+    "--tags",
+    "--force",
+    "origin",
+    "+refs/heads/*:refs/remotes/origin/*",
+]
 
 
 class CheckoutError(ValueError):
@@ -110,6 +121,34 @@ def require_worktree(worktree: Path, bare_repo: Path) -> None:
         )
 
 
+def _commit(worktree: Path, rev: str) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def needs_reset(worktree: Path, ref: str, target: str) -> bool:
+    """Whether to `reset --hard` an existing worktree of `ref` to `target`.
+
+    Call require_worktree first, or git may answer for the enclosing checkout.
+    A ref that can move (`is_mutable_target`) is always reset. So is a tag
+    that origin re-created on another commit: builds run on whatever the
+    worktree holds, so reuse would build the old commit under the tag's name.
+    BARE_REFRESH has already fetched the tag, so comparing costs no network,
+    and a SHA never differs from itself. A target that names no commit, such
+    as a version-named branch origin deleted, counts as moved, so the reset
+    fails on it instead of the worktree being reused.
+    """
+    if is_mutable_target(ref, target):
+        return True
+    head = _commit(worktree, "HEAD")
+    return head is None or head != _commit(worktree, target)
+
+
 def checkout_sdk_branch(language: str, branch: str) -> str:
     """Clone bare repo and create/update a worktree for the given branch.
 
@@ -173,9 +212,9 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     target = upstream_ref(bare_repo_path, branch)
 
     if worktree_path.exists():
-        if is_mutable_target(branch, target):
+        require_worktree(worktree_path, bare_repo_path)
+        if needs_reset(worktree_path, branch, target):
             print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
-            require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for '{branch}' already exists at {worktree_path}; reusing.")
@@ -248,9 +287,9 @@ def checkout_go_from_platform(ref: str) -> Path:
     target = upstream_ref(bare_repo_path, ref)
 
     if worktree_path.exists():
-        if is_mutable_target(ref, target):
+        require_worktree(worktree_path, bare_repo_path)
+        if needs_reset(worktree_path, ref, target):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
-            require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for ref '{ref}' already exists at {worktree_path}; reusing.")

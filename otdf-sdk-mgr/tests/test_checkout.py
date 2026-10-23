@@ -106,6 +106,14 @@ def _check_out(entry: str, origin: Path, ref: str) -> Path:
     return platform_installer._ensure_worktree(expand_pr_shorthand(ref))
 
 
+def _bare_repo(entry: str, origin: Path) -> Path:
+    if entry == "sdk":
+        return origin.parent / "js" / "src" / config.SDK_BARE_REPOS["js"]
+    if entry == "go":
+        return origin.parent / "go" / "platform-src" / "platform.git"
+    return platform_installer._platform_bare_repo()
+
+
 @pytest.mark.parametrize("entry", ENTRY_POINTS)
 class TestEveryEntryPoint:
     def test_new_worktree_gets_the_branch_as_it_is_now(self, entry: str, origin: Path):
@@ -146,17 +154,20 @@ class TestEveryEntryPoint:
         with pytest.raises(error, match="'other' is not on origin"):
             _check_out(entry, origin, "other")
 
+    @pytest.mark.parametrize("ref", ["main", "v1.2.3"])
     def test_directory_that_lost_its_git_file_is_refused(
-        self, entry: str, origin: Path, enclosing: Path
+        self, entry: str, ref: str, origin: Path, enclosing: Path
     ):
         """As an interrupted `clean` or `git worktree add` can leave it. git
-        would climb past it to the enclosing repo and reset that instead."""
-        worktree = _check_out(entry, origin, "main")
+        would climb past it to the enclosing repo and reset that instead. A
+        tag's worktree is checked too, since it is reset if the tag moved."""
+        _git("tag", "v1.2.3", cwd=origin)
+        worktree = _check_out(entry, origin, ref)
         (worktree / ".git").unlink()
 
         error = PlatformInstallError if entry == "platform" else CheckoutError
         with pytest.raises(error, match=_not_a_worktree(worktree)):
-            _check_out(entry, origin, "main")
+            _check_out(entry, origin, ref)
 
         _assert_enclosing_untouched(enclosing)
 
@@ -185,6 +196,54 @@ class TestEveryEntryPoint:
         _check_out(entry, origin, ref)
 
         _assert_untouched(worktree, pinned)
+
+    @pytest.mark.parametrize("annotated", [False, True], ids=["lightweight", "annotated"])
+    def test_existing_worktree_follows_a_moved_tag(self, entry: str, annotated: bool, origin: Path):
+        """As upstream does after a botched release. git won't clobber a tag on
+        fetch without force, and a tag's worktree is otherwise reused, so it
+        would build the old commit under the tag's name."""
+        tag = ["tag", "-a", "-m", "release"] if annotated else ["tag"]
+        _git(*tag, "v1.2.2", cwd=origin)
+        _git(*tag, "v1.2.3", cwd=origin)
+        released = _head(origin)
+        unmoved = _check_out(entry, origin, "v1.2.2")
+        worktree = _check_out(entry, origin, "v1.2.3")
+        moved = _advance(origin)
+        _git(*tag, "-f", "v1.2.3", moved, cwd=origin)
+
+        _check_out(entry, origin, "v1.2.3")
+        _check_out(entry, origin, "v1.2.2")
+
+        bare = _bare_repo(entry, origin)
+        assert _git(f"--git-dir={bare}", "rev-parse", "v1.2.3^{commit}", cwd=origin) == moved
+        assert _head(worktree) == moved
+        _assert_untouched(unmoved, released)
+
+    def test_unmoved_tag_keeps_local_edits(self, entry: str, origin: Path):
+        """Only a moved tag is reset. An annotated tag names a tag object, not
+        the commit the worktree has checked out."""
+        _git("tag", "-a", "-m", "release", "v1.2.3", cwd=origin)
+        worktree = _check_out(entry, origin, "v1.2.3")
+        (worktree / "scripts" / "a.sh").write_text("debugging\n")
+        _advance(origin)
+
+        _check_out(entry, origin, "v1.2.3")
+
+        assert (worktree / "scripts" / "a.sh").read_text() == "debugging\n"
+
+    def test_version_named_branch_gone_from_origin_fails(self, entry: str, origin: Path):
+        """Made after the clone, so there's no local copy for upstream_ref to
+        refuse, and the name passes through looking like a tag. It names no
+        commit now, so it can't match the worktree; reuse would build a branch
+        origin deleted."""
+        _check_out(entry, origin, "main")
+        _git("branch", "release/v1.2.3", cwd=origin)
+        _check_out(entry, origin, "release/v1.2.3")
+        _git("branch", "-D", "release/v1.2.3", cwd=origin)
+
+        error = PlatformInstallError if entry == "platform" else subprocess.CalledProcessError
+        with pytest.raises(error, match="reset"):
+            _check_out(entry, origin, "release/v1.2.3")
 
     @pytest.mark.parametrize("branch", ["release/v1.2.3", "release/1.3.1"])
     def test_version_named_branch_follows_origin(self, entry: str, branch: str, origin: Path):
@@ -349,6 +408,23 @@ class TestPlatformInstall:
 
         assert platform_installer.install_platform_source(ref) == dist
         assert len(builds) == 1
+
+    def test_moved_release_is_rebuilt_once_its_dist_is_removed(
+        self, origin: Path, builds: list[str]
+    ):
+        """The cached dist is served without a fetch, so it keeps the old
+        commit; AGENTS.md says to remove it."""
+        _git("tag", "service/v1.2.3", cwd=origin)
+        dist = platform_installer.install_platform_source("v1.2.3")
+        moved = _advance(origin)
+        _git("tag", "-f", "service/v1.2.3", moved, cwd=origin)
+        platform_installer.install_platform_source("v1.2.3")
+        assert len(builds) == 1
+
+        shutil.rmtree(dist)
+        platform_installer.install_platform_source("v1.2.3")
+
+        assert builds[1:] == [moved]
 
 
 class TestInstallTip:
