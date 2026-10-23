@@ -9,6 +9,10 @@
 # ./cli.sh supports <feature>
 #   Check if the SDK supports a specific feature.
 #
+# ./cli.sh validate <file>
+#   Is <file> a valid TDF? Offline. Passes the CLI's stdout and exit status
+#   (0 valid, 3 invalid) through unchanged; see spec/tdf-validity.md.
+#
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
 #  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
@@ -149,6 +153,13 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4590"
       exit 1
       ;;
+    tdf_validity)
+      # `otdfctl validate <file>` (DSPX-5350). Cobra answers `help <unknown>`
+      # with the root usage and exit 0, so the exit status says nothing; look
+      # for the command's own usage line ("  otdfctl validate <file> [flags]").
+      "${cmd[@]}" help validate 2>/dev/null | grep -qE '^[[:space:]]+[^[:space:]]+ validate( |$)'
+      exit $?
+      ;;
     zip64-at-2gib)
       # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
       # 4 GiB, so a reader that widens the central-directory fields with a
@@ -167,6 +178,34 @@ if [ "$1" == "supports" ]; then
       exit 2
       ;;
   esac
+fi
+
+if [[ "$1" == "validate" ]]; then
+  if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 validate <file>" >&2
+    exit 2
+  fi
+  if [[ "${cmd[0]}" == go ]]; then
+    # `go run` reports a nonzero exit as "exit status N" on stderr and exits 1
+    # itself, which would turn every invalid verdict (3) into a failure to run.
+    # Install the same module@version once per user and run the binary.
+    gobin="${TMPDIR:-/tmp}/xtest-otdfctl-$(id -u)-$(printf '%s' "${cmd[2]}" | tr -c 'a-zA-Z0-9' '_')"
+    if [[ ! -x "$gobin/otdfctl" ]]; then
+      # Install to a process-unique directory, then rename: concurrent xdist
+      # workers see either no binary or a complete one.
+      if ! GOBIN="$gobin.$$" go install "${cmd[2]}" >&2; then
+        echo "go install ${cmd[2]} failed" >&2
+        exit 2
+      fi
+      mkdir -p "$gobin"
+      mv -f "$gobin.$$/otdfctl" "$gobin/otdfctl"
+      rm -rf "$gobin.$$"
+    fi
+    cmd=("$gobin/otdfctl")
+  fi
+  # No platform flags: validate is offline. No --log-level either, so that
+  # stdout stays the one JSON line the contract promises.
+  exec "${cmd[@]}" validate "$2"
 fi
 
 XTEST_DIR="$SCRIPT_DIR"

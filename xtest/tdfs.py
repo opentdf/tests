@@ -194,6 +194,13 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # ``cli.sh validate <file>``: answer "is this a valid TDF?" offline, with
+    # no platform or credentials, as one JSON line on stdout and exit 0
+    # (valid) or 3 (invalid). See validity/contract.py for the contract and
+    # validity/test_tdf_validity.py for the suite (DSPX-5349). Each shim
+    # detects the CLI's ``validate`` command, so released CLIs that predate it
+    # skip rather than fail.
+    "tdf_validity",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
