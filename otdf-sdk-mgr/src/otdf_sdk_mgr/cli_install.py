@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
@@ -12,6 +12,15 @@ from otdf_sdk_mgr.config import ALL_SDKS
 
 install_app = typer.Typer(help="Install SDK CLI artifacts from registries or source.")
 install_app.command("scenario")(install_scenario_cmd)
+
+
+def exit_with_error(e: Exception) -> NoReturn:
+    """Report `e` as an `Error:` line, not a traceback, and exit 1."""
+    typer.echo(f"Error: {e}", err=True)
+    # checkout._run captures git's stderr; make streams its own.
+    if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+        typer.echo(e.stderr.rstrip(), err=True)
+    raise typer.Exit(1) from e
 
 
 def _split_platform(sdks: list[str]) -> tuple[bool, list[str]]:
@@ -126,11 +135,7 @@ def tip(
         try:
             cmd_tip(sdk_targets, ref=ref)
         except (CheckoutError, RuntimeError, subprocess.CalledProcessError) as e:
-            typer.echo(f"Error: {e}", err=True)
-            # checkout._run captures git's stderr; make streams its own.
-            if isinstance(e, subprocess.CalledProcessError) and e.stderr:
-                typer.echo(e.stderr.rstrip(), err=True)
-            raise typer.Exit(1)
+            exit_with_error(e)
 
 
 @install_app.command()
