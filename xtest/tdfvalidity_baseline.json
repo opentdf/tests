@@ -1,0 +1,188 @@
+{
+  "about": [
+    "Expected per-SDK answers for test_tdf_validity.py (DSPX-5349). See spec/tdf-validity.md.",
+    "A case's agreed answer lives in tdfvalidity_corpus.py. This file records only what differs from it, each with the ticket that explains it, and every SDK's answer to the undecided and unspecified cases.",
+    "A cell is \"valid\", \"invalid\" or \"error\", or an object adding \"ticket\", \"layer\" (where the rejection lands, when not the case's layer) and \"note\".",
+    "Any difference from this file fails the run. Refresh with: uv run python tdfvalidity.py test-results/tdf-validity*.json"
+  ],
+  "format": 1,
+  "sdks": {
+    "go": {
+      "status": "seeded",
+      "source": "otdfctl validate (DSPX-5350, opentdf/platform#4254), which reports sdk.IsValidTdf and its error. Seeded by running platform/sdk v0.35.0 IsValidTdf as a library over this corpus.",
+      "reason_patterns": {
+        "archive": "NewTDFReader",
+        "manifest-missing": "Manifest failed",
+        "manifest-json": "could not validate manifest",
+        "manifest-schema": "manifest was not valid"
+      }
+    },
+    "java": {
+      "status": "pending",
+      "source": "java cmdline validate (DSPX-5352) does not exist yet; java-sdk has only SDK.isTDF, which never parses the manifest. Seed from the first run: see spec/tdf-validity.md.",
+      "ticket": "DSPX-5352"
+    },
+    "js": {
+      "status": "seeded",
+      "source": "@opentdf/ctl validate (DSPX-5351, opentdf/web-sdk#1119), which reports validateTdf. Seeded by running validateTdf from #1119 (d293e509, stacked on #1118, #1117 and #1104) as a library over this corpus; its verdicts match #1104 isValidTdf on every case.",
+      "reason_patterns": {
+        "archive": "central directory|local file header|compression method|compressed size",
+        "manifest-missing": "CD manifest",
+        "manifest-json": "not valid JSON",
+        "manifest-schema": "lax schema|not a JSON object"
+      }
+    }
+  },
+  "cells": {
+    "archive/cd-size-0xfffffff0": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      }
+    },
+    "archive/comment": {
+      "go": "invalid",
+      "js": "valid"
+    },
+    "archive/comment-max": {
+      "go": "invalid",
+      "js": "valid"
+    },
+    "archive/deflated-manifest": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-5354",
+        "layer": "manifest-json",
+        "note": "Go ignores the compression method and fails to parse the deflated bytes as JSON"
+      }
+    },
+    "archive/deflated-payload": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      }
+    },
+    "archive/method-8-on-stored-bytes": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      }
+    },
+    "archive/payload-size-mismatch": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      }
+    },
+    "json/duplicate-key": {
+      "go": "invalid",
+      "js": "invalid"
+    },
+    "json/nesting-1000": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "json/nesting-20000": {
+      "go": "invalid",
+      "js": "valid"
+    },
+    "json/trailing-garbage": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5353"
+      }
+    },
+    "json/trailing-object": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5353"
+      }
+    },
+    "profile/directory-entry": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/duplicate-legacy-name-invalid-last": {
+      "go": "invalid",
+      "js": "invalid"
+    },
+    "profile/duplicate-legacy-name-valid-last": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/duplicate-pairs": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/duplicate-spec-name-invalid-last": {
+      "go": "invalid",
+      "js": "invalid"
+    },
+    "profile/duplicate-spec-name-valid-last": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/encrypted-flag": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/extra-entry": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/manifest-first": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "profile/no-payload-entry": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "roundtrip/mlkem-768": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    },
+    "scope/manifest-crc-mismatch": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "scope/payload-corrupted": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "scope/payload-crc-mismatch": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "scope/payload-length-mismatch": {
+      "go": "valid",
+      "js": "valid"
+    },
+    "writer/go-mlkem-wrapped": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    },
+    "writer/js-mlkem-wrapped": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    }
+  }
+}

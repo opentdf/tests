@@ -9,6 +9,16 @@
 # ./cli.sh supports <feature>
 #   Check if the SDK supports a specific feature.
 #
+# ./cli.sh validate <file>
+#   Is <file> a valid TDF? Offline: no platform, KAS or credentials. The CLI's
+#   stdout and exit status pass through unchanged (DSPX-5349):
+#     exit 0, stdout {"valid":true}                 - a valid TDF
+#     exit 3, stdout {"valid":false,"reason":"..."} - checked; not a valid TDF
+#     any other exit, a signal or a timeout         - the check could not run
+#   Not exit 1 for "invalid": cobra, node and picocli all exit 1 on an
+#   unhandled error, so a crash would read as a verdict. Gated by
+#   `supports tdf_validity`.
+#
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
 #  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
@@ -156,6 +166,13 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
+    tdf_validity)
+      # `opentdf validate [file]` (DSPX-5351). Top-level help only, as above:
+      # look for the command in its list ("  opentdf validate [file]  ...").
+      set -o pipefail
+      "$CLI" help | grep -qE '^[[:space:]]+[^[:space:]]+ validate( |$)'
+      exit $?
+      ;;
     zip64-at-2gib)
       # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
       # on the right side of the 2 GiB switch point. Predates any version we
@@ -167,6 +184,23 @@ if [[ "$1" == "supports" ]]; then
       exit 2
       ;;
   esac
+fi
+
+if [[ "$1" == "validate" ]]; then
+  if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 validate <file>" >&2
+    exit 2
+  fi
+  # Resolve before the cd below. No auth, endpoint or --log-level options: at
+  # debug level the CLI logs to stdout, which would break the one-line contract.
+  if ! src_file=$(realpath "$2"); then
+    exit 2
+  fi
+  if ! cd "$SCRIPT_DIR"; then
+    echo "failed: [cd $SCRIPT_DIR]" >&2
+    exit 1
+  fi
+  exec "$CLI" validate "$src_file"
 fi
 
 XTEST_DIR=$SCRIPT_DIR

@@ -4,19 +4,21 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import urllib.parse
 import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeIs, cast, get_args
+from typing import Any, Literal, NamedTuple, TypeIs, cast, get_args
 
 import jsonschema
 import pytest
 from pydantic import BaseModel
 
 import assertions as tdfassertions
+import tdfvalidity
 
 logger = logging.getLogger("xtest")
 logging.basicConfig()
@@ -194,6 +196,13 @@ feature_type = Literal[
     "multikao",
     "ns_grants",
     "obligations",
+    # ``cli.sh validate <file>``: answer "is this a valid TDF?" offline, with
+    # no platform or credentials, as one JSON line on stdout and exit 0
+    # (valid) or 3 (invalid). See tdfvalidity.py for the contract and
+    # test_tdf_validity.py for the suite (DSPX-5349). Each shim detects the
+    # CLI's ``validate`` command in its help, so released CLIs that predate it
+    # skip rather than fail.
+    "tdf_validity",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
@@ -720,6 +729,64 @@ def validate_manifest_schema(tdf_file: Path):
     jsonschema.validate(instance=manifest, schema=schema)
 
 
+class Bounded(NamedTuple):
+    """A finished (or killed) subprocess. ``returncode`` is None on timeout."""
+
+    argv: list[str]
+    returncode: int | None
+    stdout: bytes
+    stderr: bytes
+    timed_out: bool
+
+
+def run_bounded(
+    argv: list[str], *, timeout: float, env: dict[str, str] | None = None
+) -> Bounded:
+    """Run ``argv`` to completion or ``timeout``, whichever comes first.
+
+    The child leads its own process group, and on timeout the whole group is
+    killed: ``cli.sh`` is a shell script in front of a JVM, a node process or a
+    Go binary, and killing only the shell would leave the real reader running
+    and holding the pipes open. Output is drained by ``communicate`` either
+    way, so a chatty child cannot deadlock on a full pipe.
+
+    A hang is reported, not raised: the caller decides what a timeout means.
+    """
+    with subprocess.Popen(
+        argv,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    ) as proc:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            stdout, stderr = proc.communicate()
+            return Bounded(argv, None, stdout, stderr, True)
+        except BaseException:
+            # KeyboardInterrupt, or an xdist worker being torn down: do not
+            # leave an orphaned reader behind.
+            _kill_group(proc)
+            raise
+        return Bounded(argv, proc.returncode, stdout, stderr, False)
+
+
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # the group exited between the timeout and the kill
+
+
+#: Seconds one ``validate`` may take. Generous: the slowest honest answer is a
+#: cold JVM reading an 11 MiB manifest, which is well under this. A reader
+#: that hangs on a malformed archive is what it is there to catch.
+VALIDATE_TIMEOUT = float(os.environ.get("XT_VALIDATE_TIMEOUT", "60"))
+
+
 def fmt_env(env: dict[str, str]) -> str:
     a: list[str] = []
     for k, v in env.items():
@@ -949,6 +1016,26 @@ class SDK:
                 raise subprocess.CalledProcessError(
                     result.returncode, c, output=result.stdout, stderr=result.stderr
                 )
+
+    def validate(
+        self, tdf_file: Path, *, timeout: float = VALIDATE_TIMEOUT
+    ) -> tdfvalidity.ValidateResult:
+        """Ask this SDK's CLI whether ``tdf_file`` is a valid TDF.
+
+        Never raises for the CLI's sake: a crash, a hang or output outside the
+        contract comes back as an ``error`` result, so the caller can hold it
+        to the baseline like any other answer. Needs no platform.
+        """
+        c = [self.path, "validate", str(tdf_file)]
+        logger.debug(f"val [{' '.join(c)}]")
+        run = run_bounded(c, timeout=timeout)
+        return tdfvalidity.parse_output(
+            run.returncode,
+            run.stdout,
+            run.stderr,
+            timed_out=run.timed_out,
+            timeout=timeout,
+        )
 
     def supports(self, feature: feature_type) -> bool:
         if feature in FORCED_SUPPORTS:

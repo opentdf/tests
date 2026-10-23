@@ -11,7 +11,7 @@ fixture system.
 
 | Path | Contents |
 |------|----------|
-| `test_*.py` | Test modules. One per concern: `test_tdfs.py` (core roundtrip), `test_tdf_assertions.py` (assertions), `test_abac.py` (ABAC), `test_legacy.py` (golden TDFs), `test_policytypes.py`, `test_self.py`, `test_audit_logs.py`, `test_pqc.py`. |
+| `test_*.py` | Test modules. One per concern: `test_tdfs.py` (core roundtrip), `test_tdf_assertions.py` (assertions), `test_abac.py` (ABAC), `test_legacy.py` (golden TDFs), `test_policytypes.py`, `test_self.py`, `test_audit_logs.py`, `test_pqc.py`, `test_tdf_validity.py` (cross-SDK `validate`; see `../spec/tdf-validity.md`). |
 | `conftest.py` | `pytest_addoption` + the encrypt/decrypt SDK parametrization. Defines `--sdks`, `--sdks-encrypt`, `--sdks-decrypt`, `--containers`, `--no-audit-logs`. |
 | `fixtures/` | Module-scoped pytest fixtures: `attributes.py`, `keys.py`, `audit.py`, `assertions.py`, `kas.py`, `encryption.py`, `obligations.py`. |
 | `tdfs.py` | SDK abstraction layer — wraps the `cli.sh` shims under `sdk/<lang>/dist/<version>/`. |
@@ -38,6 +38,7 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
 | `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
 | `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. |
+| `XT_VALIDATE_TIMEOUT` | Seconds one `cli.sh validate` may run before its process group is killed (default 60). See `../spec/tdf-validity.md`. |
 
 ## Authoring a New Test
 

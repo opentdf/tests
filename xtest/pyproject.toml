@@ -89,6 +89,9 @@ known-first-party = [
     "fixtures",
     "perf",
     "sizes",
+    "tdfvalidity",
+    "tdfvalidity_corpus",
+    "tdfvalidity_fixtures",
     "zipinspect",
 ]
 
@@ -115,4 +118,5 @@ markers = [
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",
     "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",
+    "tdf_validity_pqc: TDF validity round trip needing the key-management KAS (km1); CI runs these after it starts",
 ]

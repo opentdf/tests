@@ -9,6 +9,16 @@
 # ./cli.sh supports <feature>
 #   Check if the SDK supports a specific feature.
 #
+# ./cli.sh validate <file>
+#   Is <file> a valid TDF? Offline: no platform, KAS or credentials. The CLI's
+#   stdout and exit status pass through unchanged (DSPX-5349):
+#     exit 0, stdout {"valid":true}                 - a valid TDF
+#     exit 3, stdout {"valid":false,"reason":"..."} - checked; not a valid TDF
+#     any other exit, a signal or a timeout         - the check could not run
+#   Not exit 1 for "invalid": cobra, node and picocli all exit 1 on an
+#   unhandled error, so a crash would read as a verdict. Gated by
+#   `supports tdf_validity`.
+#
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
 #  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
@@ -177,6 +187,13 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4589"
       exit 1
       ;;
+    tdf_validity)
+      # `java -jar cmdline.jar validate <file>` (DSPX-5352). picocli's `help`
+      # for an unknown subcommand prints the parent's usage instead, so look
+      # for the subcommand's own synopsis. Cached, like every help probe here.
+      jar_help validate | grep -qE '^Usage:.* validate( |$)'
+      exit $?
+      ;;
     zip64-at-2gib)
       # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
       # 4 GiB. java-sdk adopted MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE in
@@ -196,6 +213,15 @@ if [ "$1" == "supports" ]; then
       exit 2
       ;;
   esac
+fi
+
+if [ "$1" == "validate" ]; then
+  if [ $# -ne 2 ]; then
+    echo "Usage: $0 validate <file>" >&2
+    exit 2
+  fi
+  # Offline: none of the platform or credential options below apply.
+  exec java -jar "$SCRIPT_DIR"/cmdline.jar validate "$2"
 fi
 
 args=(
