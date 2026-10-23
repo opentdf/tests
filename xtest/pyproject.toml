@@ -89,9 +89,7 @@ known-first-party = [
     "fixtures",
     "perf",
     "sizes",
-    "tdfvalidity",
-    "tdfvalidity_corpus",
-    "tdfvalidity_fixtures",
+    "validity",
     "zipinspect",
 ]
 

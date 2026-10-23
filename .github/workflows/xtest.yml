@@ -743,7 +743,7 @@ jobs:
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py test_tdf_validity.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py validity/test_tdf_validity.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -755,7 +755,7 @@ jobs:
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py test_tdf_validity.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py validity/test_tdf_validity.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -903,10 +903,9 @@ jobs:
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
           KAS_KM3_LOG_FILE: "../../${{ steps.kas-km3.outputs.log-file }}"
 
-      # The PQ round trips of test_tdf_validity.py need km1's managed X-Wing
-      # and ML-KEM keys, which do not exist until the KAS instances above
-      # start; in the earlier step those cells skip. Their own report file, so
-      # the earlier step's table is not overwritten.
+      # The PQ round trips of validity/test_tdf_validity.py need km1's managed
+      # X-Wing and ML-KEM keys, which do not exist until the KAS instances
+      # above start; in the earlier step those cells skip.
       - name: Run TDF validity round trips with managed PQ keys
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         run: |-
@@ -915,12 +914,11 @@ jobs:
           uv run pytest -ra -v --numprocesses auto --dist loadscope \
             --html test-results/tdf-validity-pqc-${FOCUS_SDK}-${PLATFORM_TAG}.html \
             --self-contained-html \
-            --tdf-validity-report test-results/tdf-validity-pqc.json \
             --sdks-encrypt "${ENCRYPT_SDK}" \
             $focus_flag \
             $skip_flag \
             -m tdf_validity_pqc \
-            test_tdf_validity.py
+            validity/test_tdf_validity.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -943,11 +941,7 @@ jobs:
         if: success() || failure()
         with:
           name: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' }} ${{ steps.artifact-name.outputs.sdk_version }}-${{ steps.artifact-name.outputs.platform_tag }}
-          # tdf-validity*.json is the case x SDK table test_tdf_validity.py
-          # writes, and the input to refreshing its baseline.
-          path: |
-            otdftests/xtest/test-results/**/*.html
-            otdftests/xtest/test-results/**/*.json
+          path: otdftests/xtest/test-results/**/*.html
 
       - name: Upload audit logs on failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

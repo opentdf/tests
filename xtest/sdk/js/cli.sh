@@ -10,14 +10,8 @@
 #   Check if the SDK supports a specific feature.
 #
 # ./cli.sh validate <file>
-#   Is <file> a valid TDF? Offline: no platform, KAS or credentials. The CLI's
-#   stdout and exit status pass through unchanged (DSPX-5349):
-#     exit 0, stdout {"valid":true}                 - a valid TDF
-#     exit 3, stdout {"valid":false,"reason":"..."} - checked; not a valid TDF
-#     any other exit, a signal or a timeout         - the check could not run
-#   Not exit 1 for "invalid": cobra, node and picocli all exit 1 on an
-#   unhandled error, so a crash would read as a verdict. Gated by
-#   `supports tdf_validity`.
+#   Is <file> a valid TDF? Offline. Passes the CLI's stdout and exit status
+#   (0 valid, 3 invalid) through unchanged; see spec/tdf-validity.md.
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption

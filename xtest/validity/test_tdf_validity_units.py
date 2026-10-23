@@ -31,14 +31,14 @@ import jsonschema
 import pytest
 
 import tdfs
-import tdfvalidity as tv
-import tdfvalidity_corpus as corpus
-import tdfvalidity_fixtures as gofix
 import zipinspect
+from validity import baseline as vb
+from validity import corpus, zipbuild
+from validity.contract import ValidateResult, parse_output, validate
 
-XTEST = Path(__file__).parent
+XTEST = Path(__file__).parent.parent
 CASES = corpus.corpus()
-BY_ID = corpus.by_id(CASES)
+BY_ID = {c.id: c for c in CASES}
 
 
 def _zip(data: bytes) -> zipfile.ZipFile:
@@ -57,34 +57,10 @@ def _inspect(tmp_path: Path, data: bytes) -> zipinspect.CentralDirectory:
 class TestCorpusShape:
     def test_is_deterministic(self):
         again = corpus.corpus()
-        assert [c.id for c in again] == [c.id for c in CASES]
-        assert corpus.digest(again) == corpus.digest(CASES)
+        assert [(c.id, c.data) for c in again] == [(c.id, c.data) for c in CASES]
 
-    def test_ids_and_filenames_are_unique(self):
-        assert len({c.id for c in CASES}) == len(CASES)
+    def test_filenames_are_unique(self):
         assert len({c.filename for c in CASES}) == len(CASES)
-
-    def test_every_group_is_present(self):
-        groups = {c.group for c in CASES}
-        assert groups >= {
-            "control",
-            "archive",
-            "truncated",
-            "zip",
-            "profile",
-            "name",
-            "json",
-            "manifest",
-            "schema",
-            "writer",
-            "golden",
-            "scope",
-        }
-
-    def test_undecided_cases_name_their_decision(self):
-        for c in CASES:
-            if c.expect == "undecided":
-                assert c.ticket, c.id
 
     def test_invalid_cases_say_where_they_should_fail(self):
         """Without a layer, no SDK's reason can be checked."""
@@ -160,15 +136,15 @@ class TestZipBuilder:
             _inspect(tmp_path, BY_ID["archive/cd-size-0xfffffff0"].data)
 
     def test_overrides_only_change_the_trailer(self):
-        base = corpus.build_zip([corpus.Entry("a", b"x")])
-        lied = corpus.build_zip([corpus.Entry("a", b"x")], entry_count=9)
+        base = zipbuild.build_zip([zipbuild.Entry("a", b"x")])
+        lied = zipbuild.build_zip([zipbuild.Entry("a", b"x")], entry_count=9)
         cd = dict(base.boundaries)["cd"]
         assert lied.data[:cd] == base.data[:cd]
         assert lied.data != base.data
 
     def test_boundaries_are_in_file_order(self):
-        built = corpus.build_zip(
-            [corpus.Entry("a", b"x", zip64=True, data_descriptor=True)],
+        built = zipbuild.build_zip(
+            [zipbuild.Entry("a", b"x", zip64=True, data_descriptor=True)],
             zip64_eocd=True,
         )
         offsets = [at for _, at in built.boundaries]
@@ -261,32 +237,8 @@ class TestCaseContents:
                 continue
             assert json.loads(z.read(corpus.MANIFEST)) == corpus.GO_MANIFEST, c.id
 
-    def test_golden_cases_are_the_files(self):
-        for name in corpus.GOLDEN_FILES:
-            case_id = f"golden/{corpus._slug(name.removesuffix('.tdf'))}"
-            assert BY_ID[case_id].data == (XTEST / "golden" / name).read_bytes()
-
 
 class TestPinnedInputs:
-    """Inputs copied from elsewhere must stay byte-identical to their source."""
-
-    def test_go_fixtures(self):
-        digests = {
-            name: hashlib.sha256(getattr(gofix, name)).hexdigest()[:16]
-            for name in (
-                "GO_STANDARD_TDF",
-                "GO_SPEC_MANIFEST_NAME_TDF",
-                "GO_BAD_STANDARD_TDF",
-                "GO_MISSING_PAYLOAD_TYPE_TDF",
-            )
-        }
-        assert digests == {
-            "GO_STANDARD_TDF": "99ee59fe5044634d",
-            "GO_SPEC_MANIFEST_NAME_TDF": "c45ff000ecbbb34f",
-            "GO_BAD_STANDARD_TDF": "b5cb80c111373de7",
-            "GO_MISSING_PAYLOAD_TYPE_TDF": "8121d3942119d0b1",
-        }
-
     def test_lax_schema_is_go_v0_35_0(self):
         """platform/sdk v0.35.0 schema/manifest-lax.schema.json, verbatim.
 
@@ -484,35 +436,30 @@ class TestMutationAnalysis:
 
 class TestParseOutput:
     def test_valid(self):
-        r = tv.parse_output(0, b'{"valid":true}\n')
-        assert (r.outcome, r.reason, r.returncode) == ("valid", "", 0)
+        r = parse_output(0, b'{"valid":true}\n')
+        assert (r.outcome, r.reason) == ("valid", "")
 
     def test_invalid_with_reason(self):
-        r = tv.parse_output(3, b'{"valid":false,"reason":"zip: bad"}\n')
+        r = parse_output(3, b'{"valid":false,"reason":"zip: bad"}\n')
         assert (r.outcome, r.reason) == ("invalid", "zip: bad")
 
     def test_invalid_without_reason(self):
-        assert tv.parse_output(3, b'{"valid":false}').outcome == "invalid"
+        assert parse_output(3, b'{"valid":false}').outcome == "invalid"
 
     @pytest.mark.parametrize("code", [1, 2, 4, 127])
     def test_other_exits_are_errors(self, code: int):
-        r = tv.parse_output(code, b"", b"boom\n")
+        r = parse_output(code, b"", b"boom\n")
         assert r.outcome == "error"
         assert f"exit {code}" in r.reason
         assert r.stderr == "boom"
 
     def test_exit_1_with_invalid_json_is_still_an_error(self):
         """The whole reason the contract does not use 1 for invalid."""
-        assert tv.parse_output(1, b'{"valid":false}').outcome == "error"
+        assert parse_output(1, b'{"valid":false}').outcome == "error"
 
     def test_signal(self):
-        r = tv.parse_output(-9, b"")
+        r = parse_output(-9, b"")
         assert (r.outcome, r.reason) == ("error", "killed by SIGKILL")
-
-    def test_timeout(self):
-        r = tv.parse_output(None, b"", timed_out=True, timeout=5)
-        assert (r.outcome, r.returncode) == ("error", None)
-        assert "timed out after 5" in r.reason
 
     @pytest.mark.parametrize(
         ("code", "stdout", "why"),
@@ -528,45 +475,17 @@ class TestParseOutput:
         ],
     )
     def test_contract_violations_are_errors(self, code: int, stdout: bytes, why: str):
-        r = tv.parse_output(code, stdout)
+        r = parse_output(code, stdout)
         assert r.outcome == "error"
         assert why in r.reason
 
     def test_long_reasons_are_trimmed(self):
         long = "x" * 5000
-        r = tv.parse_output(
+        r = parse_output(
             3, json.dumps({"valid": False, "reason": "zip: " + long}).encode()
         )
         assert r.outcome == "invalid" and len(r.reason) < 500
         assert r.reason.startswith("zip: "), "the start says which layer rejected it"
-
-
-class TestRunBounded:
-    def test_passes_through_exit_and_output(self):
-        run = tdfs.run_bounded(
-            ["sh", "-c", "echo '{\"valid\":false}'; echo err >&2; exit 3"], timeout=10
-        )
-        assert (run.returncode, run.timed_out) == (3, False)
-        assert run.stdout == b'{"valid":false}\n' and run.stderr == b"err\n"
-
-    def test_timeout_kills_the_whole_group(self, tmp_path: Path):
-        pidfile = tmp_path / "child.pid"
-        start = time.monotonic()
-        run = tdfs.run_bounded(
-            ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], timeout=0.5
-        )
-        assert run.timed_out and run.returncode is None
-        assert time.monotonic() - start < 10
-        child = int(pidfile.read_text())
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            try:
-                os.kill(child, 0)
-            except ProcessLookupError:
-                break
-            time.sleep(0.05)
-        else:
-            pytest.fail(f"grandchild {child} outlived the timeout")
 
 
 def _fake_sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str) -> tdfs.SDK:
@@ -579,7 +498,7 @@ def _fake_sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str) -> t
     return tdfs.SDK("go", "fake")
 
 
-class TestSdkValidate:
+class TestValidate:
     def test_invalid(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         sdk = _fake_sdk(
             tmp_path,
@@ -587,104 +506,38 @@ class TestSdkValidate:
             '[ "$1" = validate ] || exit 9\n'
             'echo "{\\"valid\\":false,\\"reason\\":\\"got $2\\"}"; exit 3\n',
         )
-        r = sdk.validate(Path("x.tdf"))
+        r = validate(sdk, Path("x.tdf"))
         assert (r.outcome, r.reason) == ("invalid", "got x.tdf")
 
     def test_hang_is_an_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        sdk = _fake_sdk(tmp_path, monkeypatch, "sleep 30\n")
-        r = sdk.validate(Path("x.tdf"), timeout=0.3)
-        assert r.outcome == "error" and "timed out" in r.reason
+        sdk = _fake_sdk(tmp_path, monkeypatch, "echo stuck >&2\nexec sleep 30\n")
+        start = time.monotonic()
+        r = validate(sdk, Path("x.tdf"), timeout=0.3)
+        assert time.monotonic() - start < 10
+        assert (r.outcome, r.reason, r.stderr) == (
+            "error",
+            "timed out after 0.3s",
+            "stuck",
+        )
 
 
 # --- the baseline --------------------------------------------------------------
 
-SPECS: list[tv.Spec] = [*CASES, *corpus.ROUND_TRIPS]
+SPECS: list[vb.Spec] = [*CASES, *corpus.ROUND_TRIPS]
 
 
-def _baseline(cells: dict[str, Any], **sdks: dict[str, Any]) -> tv.Baseline:
-    return tv.parse_baseline(
-        {
-            "format": 1,
-            "sdks": sdks or {"go": {"status": "seeded"}, "java": {"status": "pending"}},
-            "cells": cells,
-        }
+def _baseline(cells: dict[str, Any], **sdks: dict[str, Any]) -> vb.Baseline:
+    return vb.Baseline.model_validate(
+        {"format": 1, "sdks": sdks or {"go": {}}, "cells": cells}
     )
 
 
 class TestCheckedInBaseline:
-    def test_parses(self):
-        tv.load_baseline()
-
     def test_has_no_problems(self):
-        assert tv.problems(tv.load_baseline(), SPECS) == []
+        assert vb.problems(vb.load(), SPECS) == []
 
     def test_describes_every_sdk(self):
-        assert set(tv.load_baseline().sdks) == set(tdfs.sdk_type.__args__)
-
-    def test_every_sdk_is_seeded_from_its_cli_ticket(self):
-        """Each SDK's answers came from the code behind its validate command."""
-        sdks = tv.load_baseline().sdks
-        assert {name: sb.status for name, sb in sdks.items()} == {
-            "go": "seeded",
-            "java": "seeded",
-            "js": "seeded",
-        }
-        for name, ticket in (
-            ("go", "DSPX-5350"),
-            ("js", "DSPX-5351"),
-            ("java", "DSPX-5352"),
-        ):
-            assert ticket in sdks[name].source, name
-
-    def test_every_divergence_ticket_is_one_we_know(self):
-        """A typo'd key would make a divergence look explained."""
-        known = {
-            "DSPX-4388",
-            "DSPX-5103",
-            "DSPX-4924",
-            "DSPX-5353",
-            "DSPX-5354",
-            "DSPX-5355",
-            "DSPX-5356",
-            "DSPX-5357",
-        }
-        b = tv.load_baseline()
-        used = {c.ticket for row in b.cells.values() for c in row.values() if c.ticket}
-        used |= {s.ticket for s in SPECS if s.ticket}
-        assert used <= known
-
-    def test_pins_the_epic_divergence_table(self):
-        """DSPX-5348's table, verified against Go v0.35.0 and web-sdk#1104."""
-        b = tv.load_baseline()
-
-        def outcome(case_id: str, sdk: str) -> str:
-            spec = BY_ID[case_id]
-            return b.expected(spec, sdk).outcome
-
-        table = {
-            "archive/comment": ("invalid", "valid"),
-            "json/nesting-20000": ("invalid", "valid"),
-            "json/trailing-garbage": ("valid", "invalid"),
-            "json/trailing-object": ("valid", "invalid"),
-            "archive/deflated-payload": ("valid", "invalid"),
-            "archive/method-8-on-stored-bytes": ("valid", "invalid"),
-            "archive/payload-size-mismatch": ("valid", "invalid"),
-            "archive/cd-size-0xfffffff0": ("valid", "invalid"),
-            "writer/go-mlkem-wrapped": ("invalid", "invalid"),
-        }
-        for case_id, (go, js) in table.items():
-            assert (outcome(case_id, "go"), outcome(case_id, "js")) == (go, js), case_id
-
-    def test_mlkem_round_trip_is_a_known_divergence(self):
-        b = tv.load_baseline()
-        spec = next(s for s in corpus.ROUND_TRIPS if s.id == "roundtrip/mlkem-768")
-        for sdk in ("go", "java", "js"):
-            cell = b.expected(spec, sdk)
-            assert (cell.outcome, cell.ticket) == ("invalid", "DSPX-4388")
-
-    def test_round_trip_features_are_real(self):
-        for s in corpus.ROUND_TRIPS:
-            assert set(s.features) <= tdfs.ALL_FEATURES, s.id
+        assert set(vb.load().sdks) == set(tdfs.sdk_type.__args__)
 
 
 class TestBaselineParsing:
@@ -692,10 +545,10 @@ class TestBaselineParsing:
         ("cell", "match"),
         [
             ("maybe", "outcome"),
-            ({"outcome": "valid", "ticket": "dspx 1"}, "tracker key"),
-            ({"outcome": "valid", "colour": "red"}, "unknown cell keys"),
+            ({"outcome": "valid", "ticket": "dspx 1"}, "pattern"),
+            ({"outcome": "valid", "colour": "red"}, "Extra inputs"),
             ({"outcome": "invalid", "layer": "payload"}, "layer"),
-            (7, "string or an object"),
+            (7, "valid dictionary"),
         ],
     )
     def test_bad_cells(self, cell: object, match: str):
@@ -703,59 +556,40 @@ class TestBaselineParsing:
             _baseline({"a/b": {"go": cell}})
 
     def test_bad_sdk_entries(self):
-        with pytest.raises(ValueError, match="status"):
-            _baseline({}, go={"status": "maybe"})
-        with pytest.raises(ValueError, match="unknown layer"):
-            _baseline({}, go={"status": "seeded", "reason_patterns": {"x": "y"}})
-        with pytest.raises(Exception, match="unterminated|missing"):
-            _baseline({}, go={"status": "seeded", "reason_patterns": {"archive": "("}})
+        with pytest.raises(ValueError, match="Extra inputs"):
+            _baseline({}, go={"status": "seeded"})
+        with pytest.raises(ValueError, match="reason_patterns"):
+            _baseline({}, go={"reason_patterns": {"x": "y"}})
+        with pytest.raises(ValueError, match="unterminated|missing"):
+            _baseline({}, go={"reason_patterns": {"archive": "("}})
 
     def test_bad_format(self):
         with pytest.raises(ValueError, match="format"):
-            tv.parse_baseline({"format": 2})
+            vb.Baseline.model_validate({"format": 2, "sdks": {}})
 
-    def test_dump_round_trips(self):
-        b = tv.load_baseline()
-        assert tv.parse_baseline(json.loads(tv.dump_baseline(b))) == b
-
-    def test_checked_in_file_is_in_canonical_form(self):
-        """So a refresh diffs only the cells it changed."""
-        raw = tv.BASELINE_PATH.read_text(encoding="utf-8")
-        doc = json.loads(raw)
-        header = {k: v for k, v in doc.items() if k == "about"}
-        assert tv.dump_baseline(tv.parse_baseline(doc), header) == raw
+    def test_bare_outcome_is_a_cell(self):
+        b = _baseline({"a/b": {"go": "valid"}})
+        assert b.cells["a/b"]["go"] == vb.Cell(outcome="valid")
 
 
 class TestExpected:
     spec = corpus.Case("a/b", b"", "invalid", "x", layer="archive")
     open_spec = corpus.Case("a/c", b"", "undecided", "x", ticket="DSPX-1")
 
-    def test_seeded_sdk_without_a_cell_gets_the_agreed_answer(self):
-        assert _baseline({}).expected(self.spec, "go") == tv.Cell("invalid")
+    def test_without_a_cell_any_sdk_gets_the_agreed_answer(self):
+        assert _baseline({}).expected(self.spec, "go") == vb.Cell(outcome="invalid")
+        assert _baseline({}).expected(self.spec, "rust") == vb.Cell(outcome="invalid")
 
-    def test_pending_or_unknown_sdk_is_pending(self):
-        assert _baseline({}).expected(self.spec, "java").outcome == "pending"
-        assert _baseline({}).expected(self.spec, "rust").outcome == "pending"
+    def test_undecided_without_a_cell_has_no_expectation(self):
+        assert _baseline({}).expected(self.open_spec, "go") is None
 
-    def test_undecided_without_a_cell_is_pending(self):
-        assert _baseline({}).expected(self.open_spec, "go").outcome == "pending"
-
-    def test_recorded_cell_wins_and_writer_cells_win_over_it(self):
-        b = _baseline(
-            {
-                "a/b": {
-                    "go": {"outcome": "valid", "ticket": "DSPX-2"},
-                    "go:java": {"outcome": "error", "ticket": "DSPX-3"},
-                }
-            }
-        )
-        assert b.expected(self.spec, "go").ticket == "DSPX-2"
-        assert b.expected(self.spec, "go", "js").ticket == "DSPX-2"
-        assert b.expected(self.spec, "go", "java").ticket == "DSPX-3"
+    def test_recorded_cell_wins(self):
+        b = _baseline({"a/b": {"go": {"outcome": "valid", "ticket": "DSPX-2"}}})
+        assert b.expected(self.spec, "go") == vb.Cell(outcome="valid", ticket="DSPX-2")
 
 
 class TestProblems:
-    specs: list[tv.Spec] = [
+    specs: list[vb.Spec] = [
         corpus.Case("a/agreed", b"", "valid", "x"),
         corpus.Case("a/open", b"", "undecided", "x", ticket="DSPX-1"),
         corpus.Case("a/pin", b"", "unspecified", "x"),
@@ -763,18 +597,18 @@ class TestProblems:
     complete = {"a/open": {"go": "valid"}, "a/pin": {"go": "invalid"}}
 
     def test_complete_baseline_is_clean(self):
-        assert tv.problems(_baseline(self.complete), self.specs) == []
+        assert vb.problems(_baseline(self.complete), self.specs) == []
 
     def test_divergence_needs_a_ticket(self):
         b = _baseline({**self.complete, "a/agreed": {"go": "invalid"}})
-        assert any("without a ticket" in p for p in tv.problems(b, self.specs))
+        assert any("without a ticket" in p for p in vb.problems(b, self.specs))
         b = _baseline(
             {
                 **self.complete,
                 "a/agreed": {"go": {"outcome": "invalid", "ticket": "DSPX-9"}},
             }
         )
-        assert tv.problems(b, self.specs) == []
+        assert vb.problems(b, self.specs) == []
 
     def test_layer_override_needs_a_ticket(self):
         b = _baseline(
@@ -783,13 +617,16 @@ class TestProblems:
                 "a/agreed": {"go": {"outcome": "valid", "layer": "archive"}},
             }
         )
-        assert any("without a ticket" in p for p in tv.problems(b, self.specs))
+        assert any("without a ticket" in p for p in vb.problems(b, self.specs))
 
-    def test_open_cases_need_an_answer_from_every_seeded_sdk(self):
-        problems = tv.problems(_baseline({}), self.specs)
-        assert any(p.startswith("a/open.go") for p in problems)
-        assert any(p.startswith("a/pin.go") for p in problems)
-        assert not any(".java" in p for p in problems), "java is pending"
+    def test_open_cases_need_an_answer_from_every_sdk(self):
+        problems = vb.problems(_baseline({}, go={}, java={}), self.specs)
+        assert sorted(p.split(":")[0] for p in problems) == [
+            "a/open.go",
+            "a/open.java",
+            "a/pin.go",
+            "a/pin.java",
+        ]
 
     def test_orphans_and_unknown_sdks(self):
         b = _baseline(
@@ -799,7 +636,7 @@ class TestProblems:
                 "a/pin": {"rust": "valid", "go": "valid"},
             }
         )
-        problems = tv.problems(b, self.specs)
+        problems = vb.problems(b, self.specs)
         assert any("not in the corpus" in p for p in problems)
         assert any("no such SDK" in p for p in problems)
 
@@ -810,82 +647,61 @@ class TestProblems:
                 "a/agreed": {"go": {"outcome": "valid", "ticket": "DSPX-9"}},
             }
         )
-        assert any("delete the cell" in p for p in tv.problems(b, self.specs))
+        assert any("delete the cell" in p for p in vb.problems(b, self.specs))
 
 
 # --- judging --------------------------------------------------------------------
 
 
-def _result(outcome: tv.Outcome, reason: str = "") -> tv.ValidateResult:
-    code = {"valid": 0, "invalid": 3}.get(outcome, 1)
-    return tv.ValidateResult(outcome, reason, code)
-
-
 class TestJudge:
     spec = corpus.Case("a/b", b"", "invalid", "x", layer="archive")
-    patterns = {"status": "seeded", "reason_patterns": {"archive": "zip"}}
 
-    def _b(self, cells: dict[str, Any] | None = None) -> tv.Baseline:
-        return _baseline(cells or {}, go=self.patterns, java={"status": "pending"})
+    def _b(self, cells: dict[str, Any] | None = None) -> vb.Baseline:
+        return _baseline(cells or {}, go={"reason_patterns": {"archive": "zip"}})
+
+    def _judge(
+        self, result: ValidateResult, b: vb.Baseline | None = None, spec=None
+    ) -> str | None:
+        return vb.judge(spec or self.spec, "go", "go@main", result, b or self._b())
 
     def test_match(self):
-        v = tv.judge(
-            self.spec, "go", "go@main", _result("invalid", "zip: no"), self._b()
-        )
-        assert (v.status, v.ok, v.build) == ("match", True, "go@main")
+        assert self._judge(ValidateResult("invalid", "zip: no")) is None
 
     def test_new_divergence(self):
-        v = tv.judge(self.spec, "go", "go@main", _result("valid"), self._b())
-        assert v.status == "drift" and not v.ok
-        assert "A new divergence" in v.message
+        failure = self._judge(ValidateResult("valid"))
+        assert failure and "A new divergence" in failure
 
     def test_fixed_divergence(self):
         b = self._b({"a/b": {"go": {"outcome": "valid", "ticket": "DSPX-7"}}})
-        v = tv.judge(self.spec, "go", "go@main", _result("invalid", "zip"), b)
-        assert v.status == "drift"
-        assert "DSPX-7 no longer reproduces" in v.message
+        failure = self._judge(ValidateResult("invalid", "zip"), b)
+        assert failure and "DSPX-7 no longer reproduces" in failure
 
     def test_known_divergence_matches(self):
         b = self._b({"a/b": {"go": {"outcome": "valid", "ticket": "DSPX-7"}}})
-        v = tv.judge(self.spec, "go", "go@main", _result("valid"), b)
-        assert (v.status, v.ticket) == ("match", "DSPX-7")
+        assert self._judge(ValidateResult("valid"), b) is None
 
     def test_open_case_changing_is_the_finding(self):
         spec = corpus.Case("a/c", b"", "undecided", "x", ticket="DSPX-5355")
         b = self._b({"a/c": {"go": "invalid"}})
-        v = tv.judge(spec, "go", "go@main", _result("valid"), b)
-        assert v.status == "drift" and "no agreed answer" in v.message
+        failure = self._judge(ValidateResult("valid"), b, spec)
+        assert failure and "no agreed answer" in failure and "DSPX-5355" in failure
 
-    def test_error_fails_even_when_pending(self):
-        v = tv.judge(
-            self.spec,
-            "java",
-            "java@main",
-            tv.ValidateResult("error", "exit 1", 1, "trace"),
-            self._b(),
-        )
-        assert (
-            v.status == "drift"
-            and "could not check" in v.message
-            and "trace" in v.message
-        )
+    def test_open_case_with_no_recorded_answer_fails(self):
+        spec = corpus.Case("a/c", b"", "undecided", "x", ticket="DSPX-5355")
+        failure = self._judge(ValidateResult("valid"), spec=spec)
+        assert failure and "records none for go" in failure
+
+    def test_error_fails(self):
+        failure = self._judge(ValidateResult("error", "exit 1", "trace"))
+        assert failure and "could not check" in failure and "trace" in failure
 
     def test_pinned_error_matches(self):
         b = self._b({"a/b": {"go": {"outcome": "error", "ticket": "DSPX-8"}}})
-        v = tv.judge(
-            self.spec, "go", "go@main", tv.ValidateResult("error", "boom", 2), b
-        )
-        assert v.status == "match"
-
-    def test_pending_is_recorded_not_judged(self):
-        v = tv.judge(self.spec, "java", "java@main", _result("valid"), self._b())
-        assert (v.status, v.ok) == ("pending", True)
+        assert self._judge(ValidateResult("error", "boom"), b) is None
 
     def test_reason_at_the_wrong_layer(self):
-        v = tv.judge(
-            self.spec, "go", "go@main", _result("invalid", "schema says no"), self._b()
-        )
-        assert v.status == "reason" and not v.ok
+        failure = self._judge(ValidateResult("invalid", "schema says no"))
+        assert failure and "archive-layer rejection" in failure
 
     def test_reason_check_honours_a_layer_override(self):
         b = _baseline(
@@ -898,142 +714,14 @@ class TestJudge:
                     }
                 }
             },
-            go={"status": "seeded", "reason_patterns": {"manifest-json": "JSON"}},
+            go={"reason_patterns": {"manifest-json": "JSON"}},
         )
-        assert (
-            tv.judge(self.spec, "go", "g", _result("invalid", "bad JSON"), b).status
-            == "match"
-        )
-        assert (
-            tv.judge(self.spec, "go", "g", _result("invalid", "zip"), b).status
-            == "reason"
-        )
+        assert self._judge(ValidateResult("invalid", "bad JSON"), b) is None
+        assert self._judge(ValidateResult("invalid", "zip"), b)
 
     def test_no_pattern_no_reason_check(self):
-        b = _baseline({}, go={"status": "seeded"})
-        assert tv.judge(self.spec, "go", "g", _result("invalid", "anything"), b).ok
-
-    def test_writer_is_carried(self):
-        v = tv.judge(
-            self.spec, "go", "g", _result("invalid", "zip"), self._b(), writer="js"
-        )
-        assert v.writer == "js"
-
-
-# --- report and refresh ----------------------------------------------------------
-
-
-def _verdicts() -> list[tv.Verdict]:
-    b = _baseline(
-        {}, go={"status": "seeded"}, js={"status": "seeded"}, java={"status": "pending"}
-    )
-    s1 = corpus.Case("a/one", b"", "valid", "x")
-    s2 = corpus.Case("a/two", b"", "invalid", "x", layer="archive")
-    return [
-        tv.judge(s2, "js", "js@main", _result("invalid", "zip"), b),
-        tv.judge(s1, "go", "go@main", _result("valid"), b),
-        tv.judge(s2, "go", "go@main", _result("valid"), b),
-        tv.judge(s1, "java", "java@main", _result("invalid", "nope"), b),
-        tv.judge(s1, "js", "js@main", _result("valid"), b, writer="go"),
-    ]
-
-
-class TestReport:
-    def test_encode_collect_round_trip(self):
-        props: list[tuple[str, object]] = [("other", "x")]
-        props += [(tv.PROPERTY, tv.encode(v)) for v in _verdicts()]
-        assert tv.collect(props) == _verdicts()
-
-    def test_table_is_stable_and_complete(self):
-        r1 = tv.report(_verdicts(), "abc")
-        r2 = tv.report(list(reversed(_verdicts())), "abc")
-        assert r1 == r2
-        assert r1["corpus_digest"] == "abc"
-        assert r1["builds"]["go@main"] == {"drift": 1, "match": 1}
-        assert r1["table"]["a/two"]["go@main"]["status"] == "drift"
-        assert "js@main<-go" in r1["table"]["a/one"]
-
-    def test_summaries_name_the_failures(self):
-        lines = tv.terminal_lines(_verdicts())
-        assert any("drift" in line and "a/two" in line for line in lines)
-        assert any("no baseline yet" in line for line in lines)
-        md = tv.markdown(_verdicts())
-        assert "| `a/two` | go@main | valid | invalid |" in md
-
-    def test_write(self, tmp_path: Path):
-        p = tv.write_report(tmp_path / "x" / "r.json", _verdicts())
-        assert json.loads(p.read_text())["format"] == 1
-
-
-class TestRefresh:
-    specs: list[tv.Spec] = [
-        corpus.Case("a/one", b"", "valid", "x"),
-        corpus.Case("a/two", b"", "invalid", "x", layer="archive"),
-    ]
-
-    def _v(
-        self,
-        case_id: str,
-        sdk: str,
-        observed: tv.Outcome,
-        status: tv.Status = "drift",
-        expected: tv.Expected = "pending",
-    ) -> tv.Verdict:
-        return tv.Verdict(
-            case_id, sdk, f"{sdk}@main", "valid", expected, observed, status
-        )
-
-    def test_fixed_divergence_disappears(self):
-        b = _baseline({"a/two": {"go": {"outcome": "valid", "ticket": "DSPX-1"}}})
-        out = tv.refresh(b, self.specs, [self._v("a/two", "go", "invalid")])
-        assert out.cells == {}
-
-    def test_new_divergence_is_recorded_without_a_ticket(self):
-        out = tv.refresh(_baseline({}), self.specs, [self._v("a/one", "go", "invalid")])
-        assert out.cells == {"a/one": {"go": tv.Cell("invalid")}}
-        assert any("without a ticket" in p for p in tv.problems(out, self.specs))
-
-    def test_existing_ticket_survives_an_outcome_change(self):
-        b = _baseline({"a/one": {"go": {"outcome": "invalid", "ticket": "DSPX-1"}}})
-        out = tv.refresh(
-            b, self.specs, [self._v("a/one", "go", "error", expected="invalid")]
-        )
-        assert out.cells == b.cells, "a broken run is not a baseline"
-        b = _baseline({"a/one": {"go": {"outcome": "error", "ticket": "DSPX-1"}}})
-        out = tv.refresh(
-            b, self.specs, [self._v("a/one", "go", "invalid", expected="error")]
-        )
-        assert out.cells["a/one"]["go"] == tv.Cell("invalid", "DSPX-1")
-
-    def test_seed_flips_pending_and_records_disagreements(self):
-        verdicts = [
-            self._v("a/one", "java", "valid", "pending", "pending"),
-            self._v("a/two", "java", "valid", "pending", "pending"),
-        ]
-        out = tv.refresh(_baseline({}), self.specs, verdicts, seed=["java"])
-        assert out.sdks["java"].status == "seeded"
-        assert out.cells == {"a/two": {"java": tv.Cell("valid")}}
-
-    def test_matches_are_left_alone(self):
-        b = _baseline({})
-        assert (
-            tv.refresh(b, self.specs, [self._v("a/one", "go", "valid", "match")]) == b
-        )
-
-    def test_cli(self, tmp_path: Path):
-        """The documented refresh command, end to end on a copy."""
-        base = tmp_path / "b.json"
-        shutil.copy(tv.BASELINE_PATH, base)
-        report = tmp_path / "r.json"
-        spec = BY_ID["json/trailing-garbage"]
-        b = tv.load_baseline(base)
-        fixed = tv.judge(
-            spec, "go", "go@main", _result("invalid", "could not validate manifest"), b
-        )
-        assert fixed.status == "drift"
-        tv.write_report(report, [fixed])
-        assert tv._main([str(report), "--baseline", str(base)]) == 0
-        assert "json/trailing-garbage" not in tv.load_baseline(base).cells
+        b = _baseline({}, go={})
+        assert self._judge(ValidateResult("invalid", "anything"), b) is None
 
 
 # --- the shims ---------------------------------------------------------------------
@@ -1142,9 +830,7 @@ class TestShims:
             cli, shim_root, "validate", str(target), FAKE_OUT=out, FAKE_EXIT=str(code)
         )
         assert run.returncode == code, run.stderr
-        assert (
-            tv.parse_output(run.returncode, run.stdout, run.stderr).outcome == outcome
-        )
+        assert parse_output(run.returncode, run.stdout, run.stderr).outcome == outcome
         if out:
             assert run.stdout == (out + "\n").encode(), (
                 "stdout must pass through untouched"

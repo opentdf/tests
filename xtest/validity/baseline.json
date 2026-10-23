@@ -1,14 +1,13 @@
 {
   "about": [
-    "Expected per-SDK answers for test_tdf_validity.py (DSPX-5349). See spec/tdf-validity.md.",
-    "A case's agreed answer lives in tdfvalidity_corpus.py. This file records only what differs from it, each with the ticket that explains it, and every SDK's answer to the undecided and unspecified cases.",
+    "Expected per-SDK answers for validity/test_tdf_validity.py (DSPX-5349). See spec/tdf-validity.md.",
+    "A case's agreed answer lives in corpus.py. This file records only what differs from it, each with the ticket that explains it, and every SDK's answer to the undecided and unspecified cases.",
     "A cell is \"valid\", \"invalid\" or \"error\", or an object adding \"ticket\", \"layer\" (where the rejection lands, when not the case's layer) and \"note\".",
-    "Any difference from this file fails the run. Refresh with: uv run python tdfvalidity.py test-results/tdf-validity*.json"
+    "Any difference from this file fails the run; each failure says which cell to add, change or delete."
   ],
   "format": 1,
   "sdks": {
     "go": {
-      "status": "seeded",
       "source": "otdfctl validate (DSPX-5350), built from opentdf/platform#4254 at e33f3cb and run over this corpus. It reports sdk.IsValidTdf from platform/sdk v0.35.0, with err.Error() as the reason.",
       "reason_patterns": {
         "archive": "NewTDFReader",
@@ -18,7 +17,6 @@
       }
     },
     "java": {
-      "status": "seeded",
       "source": "java -jar cmdline.jar validate (DSPX-5352, opentdf/java-sdk#428). Seeded by running that command, built from #428 at 8e9221d (stacked on #418), over this corpus.",
       "reason_patterns": {
         "archive": "zip",
@@ -28,7 +26,6 @@
       }
     },
     "js": {
-      "status": "seeded",
       "source": "@opentdf/ctl validate (DSPX-5351), built from opentdf/web-sdk#1119 at d293e509 (stacked on #1118, #1117 and #1104) and run over this corpus. Its verdicts match #1104 isValidTdf on every case.",
       "reason_patterns": {
         "archive": "central directory|local file header|compression method|compressed size",

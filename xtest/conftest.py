@@ -27,7 +27,6 @@ import pytest
 
 import sizes
 import tdfs
-import tdfvalidity
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
 from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
@@ -238,13 +237,6 @@ def pytest_addoption(parser: pytest.Parser):
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
     )
-    parser.addoption(
-        "--tdf-validity-report",
-        type=Path,
-        default=tdfvalidity.DEFAULT_REPORT,
-        help="where test_tdf_validity.py writes its case x SDK table "
-        "(default: %(default)s)",
-    )
     _add_benchmark_options(parser)
 
 
@@ -400,19 +392,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             raise pytest.UsageError(str(e)) from e
         metafunc.parametrize("decrypt_sdk", d_sdks, ids=[str(x) for x in d_sdks])
         subject_sdks |= set(d_sdks)
-    if "validate_sdk" in metafunc.fixturenames:
-        # "Is this a valid TDF?" is a reader's question, so validators follow
-        # the decrypt-side selection.
-        try:
-            v_sdks = [
-                sdk
-                for spec in sdk_specs_opt(["--sdks-decrypt", "--sdks"])
-                for sdk in tdfs.parse_sdk_spec(spec)
-            ]
-        except (FileNotFoundError, ValueError) as e:
-            raise pytest.UsageError(str(e)) from e
-        metafunc.parametrize("validate_sdk", v_sdks, ids=[str(x) for x in v_sdks])
-        subject_sdks |= set(v_sdks)
 
     if "in_focus" in metafunc.fixturenames:
         focus_opt = "all"
@@ -592,48 +571,6 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
-#: test_tdf_validity.py verdicts for the whole run. A plain list: the
-#: logreport hook is handed a report and nothing else.
-_validity_verdicts: list[tdfvalidity.Verdict] = []
-
-
-def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    """Accumulate validity verdicts as each cell finishes.
-
-    Under xdist this fires on the worker that ran the cell and again on the
-    controller that receives its report; only the controller writes (see
-    :func:`_finish_tdf_validity`), so a worker's partial list dies with it.
-    """
-    if report.when == "call":
-        _validity_verdicts.extend(tdfvalidity.collect(report.user_properties))
-
-
-def _finish_tdf_validity(session: pytest.Session) -> None:
-    """Write and print the case x SDK table, if anything was judged.
-
-    The pass/fail of each cell is already the gate; this is the table a
-    person reads to see *which* SDKs disagree, and the artifact a baseline
-    refresh is made from.
-    """
-    config = session.config
-    if getattr(config, "workerinput", None) is not None or not _validity_verdicts:
-        return
-    import tdfvalidity_corpus
-
-    path = tdfvalidity.write_report(
-        cast(Path, config.getoption("--tdf-validity-report")),
-        _validity_verdicts,
-        tdfvalidity_corpus.digest(tdfvalidity_corpus.corpus()),
-    )
-    report.append_step_summary(tdfvalidity.markdown(_validity_verdicts))
-    reporter = config.pluginmanager.get_plugin("terminalreporter")
-    if reporter is not None:
-        reporter.write_sep("=", "tdf validity")
-        for line in tdfvalidity.terminal_lines(_validity_verdicts):
-            reporter.write_line(line)
-        reporter.write_line(f"case x SDK table: {path}")
-
-
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     """Analyse every recorded cell, write the artifacts, and gate the run.
 
@@ -643,7 +580,6 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     a run that is about to fail is exactly the run whose raw numbers someone
     will want to read.
     """
-    _finish_tdf_validity(session)
     del exitstatus  # the benchmark's own verdict is independent of test outcomes
     config = session.config
     if not config.getoption("--bench", default=False):
@@ -694,7 +630,7 @@ def pytest_runtest_setup(item: pytest.Item):
     if params is None:
         return
     e = params.params.get("encrypt_sdk")
-    d = params.params.get("decrypt_sdk") or params.params.get("validate_sdk")
+    d = params.params.get("decrypt_sdk")
     if e is not None and d is not None and e.is_released() and d.is_released():
         pytest.skip(f"released-only pair ({e} × {d})")
 

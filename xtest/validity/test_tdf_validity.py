@@ -1,9 +1,9 @@
 """Cross-SDK "is this a valid TDF?" suite (DSPX-5349).
 
 Asks every SDK's ``cli.sh validate`` the same question about the same bytes,
-and holds each answer to ``tdfvalidity_baseline.json``:
+and holds each answer to ``baseline.json``:
 
-- the static corpus (``tdfvalidity_corpus.py``) needs no platform -- a few
+- the static corpus (:mod:`validity.corpus`) needs no platform -- a few
   hundred hand-built archives, written once per worker and identical for
   every SDK;
 - the round trips need a platform: every encrypt SDK's output, for each
@@ -15,22 +15,21 @@ quietly stops reproducing: the fix is then to delete its baseline cell, which
 is how the baseline stays honest. SDK builds whose CLI has no ``validate``
 command skip through the ``tdf_validity`` feature gate.
 
-Every judged cell is also recorded for ``test-results/tdf-validity.json``; see
-:mod:`tdfvalidity` and ``spec/tdf-validity.md``.
+"Is this a valid TDF?" is a reader's question, so the validator is the
+``decrypt_sdk`` parameter: it follows ``--sdks-decrypt``.
 """
 
-from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 import pytest
 
 import tdfs
-import tdfvalidity
-import tdfvalidity_corpus as corpus
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
 from test_tdfs import duplicate_first_kao
+from validity import baseline as vb
+from validity import corpus
+from validity.contract import validate
 
 #: Nothing here reads KAS logs: validation is offline, and the round trips
 #: only encrypt.
@@ -38,12 +37,10 @@ pytestmark = pytest.mark.no_audit_logs
 
 CASES = corpus.corpus()
 
-Record = Callable[[tdfvalidity.Verdict], None]
-
 
 @pytest.fixture(scope="session")
-def validity_baseline() -> tdfvalidity.Baseline:
-    return tdfvalidity.load_baseline()
+def validity_baseline() -> vb.Baseline:
+    return vb.load()
 
 
 @pytest.fixture(scope="session")
@@ -52,43 +49,16 @@ def validity_corpus(tmp_dir: Path) -> dict[str, Path]:
     return corpus.write(CASES, tmp_dir / "tdf-validity")
 
 
-@pytest.fixture
-def record_verdict(record_property: Callable[[str, object], None]) -> Record:
-    def record(verdict: tdfvalidity.Verdict) -> None:
-        record_property(tdfvalidity.PROPERTY, tdfvalidity.encode(verdict))
-
-    return record
-
-
-def _features(shape: corpus.RoundTrip) -> tuple[tdfs.feature_type, ...]:
-    """The shape's gate, checked against tdfs's feature names."""
-    unknown = set(shape.features) - tdfs.ALL_FEATURES
-    assert not unknown, f"{shape.id} names unknown features {sorted(unknown)}"
-    return cast(tuple[tdfs.feature_type, ...], shape.features)
-
-
 def _check(
-    case: corpus.Case | corpus.RoundTrip,
-    validate_sdk: tdfs.SDK,
-    tdf_file: Path,
-    baseline: tdfvalidity.Baseline,
-    record: Record,
-    writer: tdfs.SDK | None = None,
+    case: vb.Spec, validator: tdfs.SDK, tdf_file: Path, baseline: vb.Baseline
 ) -> None:
-    result = validate_sdk.validate(tdf_file)
-    verdict = tdfvalidity.judge(
-        case,
-        validate_sdk.sdk,
-        str(validate_sdk),
-        result,
-        baseline,
-        writer=writer.sdk if writer else None,
+    failure = vb.judge(
+        case, validator.sdk, str(validator), validate(validator, tdf_file), baseline
     )
-    record(verdict)
-    if not verdict.ok:
+    if failure:
         # The message says what differs and what to do about it; a traceback
         # into this helper would only bury it.
-        pytest.fail(verdict.message, pytrace=False)
+        pytest.fail(failure, pytrace=False)
 
 
 # --- the static corpus -------------------------------------------------------
@@ -99,23 +69,16 @@ def _corpus_test(cases: list[corpus.Case]):
     def test_case(
         self,
         case: corpus.Case,
-        validate_sdk: tdfs.SDK,
+        decrypt_sdk: tdfs.SDK,
         in_focus: set[tdfs.SDK],
         validity_corpus: dict[str, Path],
-        validity_baseline: tdfvalidity.Baseline,
-        record_verdict: Record,
+        validity_baseline: vb.Baseline,
     ):
         del self
-        if validate_sdk not in in_focus:
+        if decrypt_sdk not in in_focus:
             pytest.skip("Not in focus")
-        validate_sdk.skip_if_unsupported("tdf_validity")
-        _check(
-            case,
-            validate_sdk,
-            validity_corpus[case.id],
-            validity_baseline,
-            record_verdict,
-        )
+        decrypt_sdk.skip_if_unsupported("tdf_validity")
+        _check(case, decrypt_sdk, validity_corpus[case.id], validity_baseline)
 
     return test_case
 
@@ -142,7 +105,6 @@ def test_corpus_is_not_empty():
 
 # --- round trips -------------------------------------------------------------
 
-_ROUND_TRIPS = {s.id: s for s in corpus.ROUND_TRIPS}
 _PLAIN = [s for s in corpus.ROUND_TRIPS if not s.pqc]
 _PQC = [s for s in corpus.ROUND_TRIPS if s.pqc]
 
@@ -160,19 +122,18 @@ _PQC_ATTRIBUTES = {
 def test_roundtrip(
     shape: corpus.RoundTrip,
     encrypt_sdk: tdfs.SDK,
-    validate_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
     assertion_file_no_keys: Path,
     encrypted_tdf: EncryptFactory,
-    validity_baseline: tdfvalidity.Baseline,
-    record_verdict: Record,
+    validity_baseline: vb.Baseline,
 ):
     """Every encrypt SDK's output is a valid TDF to every validator."""
-    if not in_focus & {encrypt_sdk, validate_sdk}:
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    validate_sdk.skip_if_unsupported("tdf_validity")
-    encrypt_sdk.skip_if_unsupported(*_features(shape))
+    decrypt_sdk.skip_if_unsupported("tdf_validity")
+    encrypt_sdk.skip_if_unsupported(*shape.features)
 
     rsa = attribute_default_rsa.value_fqns
     match shape.id:
@@ -196,7 +157,7 @@ def test_roundtrip(
         case _:
             raise AssertionError(f"no recipe for {shape.id}")
 
-    _check(shape, validate_sdk, ct_file, validity_baseline, record_verdict, encrypt_sdk)
+    _check(shape, decrypt_sdk, ct_file, validity_baseline)
 
 
 @pytest.mark.tdf_validity_pqc
@@ -204,11 +165,10 @@ def test_roundtrip(
 def test_roundtrip_pqc(
     shape: corpus.RoundTrip,
     encrypt_sdk: tdfs.SDK,
-    validate_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
-    validity_baseline: tdfvalidity.Baseline,
-    record_verdict: Record,
+    validity_baseline: vb.Baseline,
     request: pytest.FixtureRequest,
 ):
     """As :func:`test_roundtrip`, for the managed PQ keys on km1.
@@ -218,17 +178,17 @@ def test_roundtrip_pqc(
     ML-KEM is expected to be rejected until DSPX-4388 adds ``mlkem-wrapped``
     to the lax schema -- recorded in the baseline, not skipped.
     """
-    if not in_focus & {encrypt_sdk, validate_sdk}:
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
-    validate_sdk.skip_if_unsupported("tdf_validity")
-    tdfs.get_platform_features().skip_if_unsupported(*_features(shape))
-    encrypt_sdk.skip_if_unsupported(*_features(shape))
+    decrypt_sdk.skip_if_unsupported("tdf_validity")
+    tdfs.get_platform_features().skip_if_unsupported(*shape.features)
+    encrypt_sdk.skip_if_unsupported(*shape.features)
     if shape.id != "roundtrip/mlkem-768":
         tdfs.skip_pqc_hybrid_format_skew(encrypt_sdk)
 
     attr, _ = request.getfixturevalue(_PQC_ATTRIBUTES[shape.id])
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
-    _check(shape, validate_sdk, ct_file, validity_baseline, record_verdict, encrypt_sdk)
+    _check(shape, decrypt_sdk, ct_file, validity_baseline)
 
 
 def test_every_round_trip_has_a_recipe():
@@ -240,4 +200,4 @@ def test_every_round_trip_has_a_recipe():
         "roundtrip/assertions",
         "roundtrip/multikao",
     } | set(_PQC_ATTRIBUTES)
-    assert set(_ROUND_TRIPS) == recipes
+    assert {s.id for s in corpus.ROUND_TRIPS} == recipes

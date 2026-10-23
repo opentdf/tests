@@ -13,9 +13,9 @@ updated: 2026-10-23
 
 ## Summary
 
-`xtest/test_tdf_validity.py` asks each SDK's `validate` command the same
-question about the same bytes: *is this a valid TDF?* The answers are held to
-one checked-in baseline, `xtest/tdfvalidity_baseline.json`. Any difference
+`xtest/validity/test_tdf_validity.py` asks each SDK's `validate` command the
+same question about the same bytes: *is this a valid TDF?* The answers are held
+to one checked-in baseline, `xtest/validity/baseline.json`. Any difference
 from it fails the run, in either direction: a validator that grows more
 lenient fails, and so does a known divergence that quietly stops reproducing.
 
@@ -38,7 +38,7 @@ The agreed answer, until the decisions listed below change it, is what Go's
 3. **Manifest bytes.** Exactly one JSON value, an object, with no byte-order
    mark and nothing after it but whitespace.
 4. **Manifest content.** The object passes the *lax* manifest schema,
-   `xtest/manifest-lax.schema.json`, vendored verbatim from platform/sdk
+   `xtest/validity/manifest-lax.schema.json`, vendored verbatim from platform/sdk
    v0.35.0 (web-sdk#1104 vendors the same file). One known exception:
    `mlkem-wrapped` key access objects are valid even though the schema omits
    them (DSPX-4388).
@@ -74,12 +74,13 @@ picocli exits 2 on a usage error. With 1 meaning "invalid", a crash would be
 indistinguishable from a verdict. This supersedes the "exit 1 = invalid"
 wording in DSPX-5349 to DSPX-5352.
 
-`tdfvalidity.parse_output` is strict: an exit of 0 or 3 is a verdict only if
-stdout agrees with it, as exactly one JSON object. Anything else is an
+`validity.contract.parse_output` is strict: an exit of 0 or 3 is a verdict
+only if stdout agrees with it, as exactly one JSON object. Anything else is an
 `error`, which fails the cell unless the baseline pins that error with a
-ticket. `SDK.validate` runs the shim in its own process group with a timeout
-(`XT_VALIDATE_TIMEOUT`, default 60 s) and kills the whole group on expiry,
-so a hang is reported rather than wedging the run.
+ticket. `validity.contract.validate` runs the shim with a timeout
+(`XT_VALIDATE_TIMEOUT`, default 60 s). Every shim `exec`s its CLI, so killing
+the child on expiry kills the reader, and a hang is reported rather than
+wedging the run.
 
 Support is detected per build, so released CLIs that predate `validate` skip
 through the feature gate: `cli.sh supports tdf_validity` looks for the command's
@@ -90,9 +91,10 @@ for java asks the jar itself (`supports tdf_validity`, as for `dpop`).
 
 ## The corpus
 
-`xtest/tdfvalidity_corpus.py` builds every static case in Python, once, so
-every SDK reads the same bytes. The ZIP writer there is deliberately not
-`zipfile`: most cases are archives `zipfile` refuses to write.
+`xtest/validity/corpus.py` builds every static case in Python, once, so
+every SDK reads the same bytes. The ZIP writer, `validity/zipbuild.py`, is
+deliberately not `zipfile`: most cases are archives `zipfile` refuses to
+write.
 
 | group | cases | what it pins |
 | --- | --- | --- |
@@ -106,7 +108,7 @@ every SDK reads the same bytes. The ZIP writer there is deliberately not
 | `manifest/` | 42 | web-sdk#1104's lax-schema cases, ported |
 | `schema/` | 84 | one keyword of the lax schema at a time, generated from the schema |
 | `writer/` | 5 | realistic go, js, hybrid and ML-KEM manifests |
-| `golden/` | 11 | Go's unit-test fixtures and `xtest/golden`'s small java files |
+| `golden/` | 11 | Go's unit-test fixtures (`validity/golden`) and `xtest/golden`'s small java files |
 | `scope/` | 4 | payload damage no validity API checks |
 
 **Mutation analysis.** The `schema/` cases exist because web-sdk#1104's 42
@@ -143,21 +145,18 @@ directory walk (DSPX-4924) -- so where an SDK reports reasons, the baseline
 holds its `reason_patterns` per layer and a mismatch fails the cell.
 
 The **baseline** records only what differs from the agreed answer, and every
-such cell carries the ticket that explains it, plus every seeded SDK's answer
-to each undecided and unspecified case. A cell may also override the layer
+such cell carries the ticket that explains it, plus every SDK's answer to
+each undecided and unspecified case. A cell may also override the layer
 (Go reads a deflated manifest as JSON instead of refusing the compression
-method). `tdfvalidity.problems` enforces this, and runs in the offline unit
-tests: a divergence without a ticket, a stale row, or a missing answer fails
-`check.yml`.
+method). `validity.baseline.problems` enforces this, and runs in the offline
+unit tests: a divergence without a ticket, a stale row, or a missing answer
+fails `check.yml`.
 
-Each judged cell is one of:
-
-| status | meaning | fails? |
-| --- | --- | --- |
-| `match` | the answer the baseline expects | no |
-| `drift` | a different answer, or the check could not run | yes |
-| `reason` | the expected rejection, at the wrong layer | yes |
-| `pending` | the SDK has no baseline yet (a new SDK starts here) | no |
+A cell fails when the answer differs from what the baseline expects, when the
+check could not run, when an expected rejection's reason does not match the
+SDK's pattern for the case's layer, or when a case with no agreed answer has
+no recorded answer for that SDK. The failure message says which baseline cell
+to add, change or delete.
 
 ## Current results
 
@@ -213,46 +212,33 @@ cases just under and over the limit), and the container profile (DSPX-4924).
 
 ```bash
 cd xtest
-uv run pytest test_tdf_validity_units.py              # offline: corpus, parser, baseline
-uv run pytest test_tdf_validity.py --sdks "go js" -k TestCorpus   # static corpus, no platform
-uv run pytest test_tdf_validity.py --sdks "go js"     # plus round trips: needs a platform
+uv run pytest validity/test_tdf_validity_units.py     # offline: corpus, parser, baseline
+uv run pytest validity/test_tdf_validity.py --sdks "go js" -k TestCorpus   # static corpus, no platform
+uv run pytest validity/test_tdf_validity.py --sdks "go js"   # plus round trips: needs a platform
 ```
 
-Each run writes `test-results/tdf-validity.json` (`--tdf-validity-report`
-moves it): per-build tallies, a case x build table, and every verdict.
+## Updating the baseline
 
-## Refreshing the baseline
-
-After a CLI changes behaviour on purpose, or once a ticket's fix lands:
+After a CLI changes behaviour on purpose, or once a ticket's fix lands, edit
+`validity/baseline.json` as each failing cell's message directs: delete a
+cell whose ticket no longer reproduces, record a new divergence with the
+ticket that explains it, or record an undecided case's new answer. Then check
+the file:
 
 ```bash
 cd xtest
-uv run python tdfvalidity.py test-results/tdf-validity*.json
-uv run pytest test_tdf_validity_units.py -k Baseline
+uv run pytest validity/test_tdf_validity_units.py -k Baseline
 ```
 
-`refresh` folds every non-matching verdict into the baseline and deletes cells
-that now match the agreed answer, so a fixed divergence disappears. A new
-disagreement is written without a ticket on purpose: the unit tests then fail
-until someone files one and adds it. Verdicts that are `error`s are never
-folded in.
-
-**Seeding an SDK** -- a new one, or one whose baseline is being rebuilt: mark it
-`pending` in the baseline, run the suite with a build that has `validate`
-(`XT_FORCE_SUPPORTS=tdf_validity` if the gate lags), then
-
-```bash
-uv run python tdfvalidity.py test-results/tdf-validity*.json --seed <sdk>
-```
-
-which flips it to `seeded` and records every answer that differs from the
-agreed one. Then add tickets, and `reason_patterns` for its wording. java was
-seeded this way from a local build of java-sdk#428.
+**Adding an SDK**: add it to `sdks` with its `source`, run the suite with a
+build that has `validate` (`XT_FORCE_SUPPORTS=tdf_validity` if the gate lags),
+and record each failing cell. Then add tickets, and `reason_patterns` for its
+wording.
 
 **Changing the corpus** changes what the baseline describes: add the case with
-its agreed answer, run against each SDK, and refresh. Changing the vendored
-schema (DSPX-4388 adding `mlkem-wrapped`) updates a digest pinned in the unit
-tests, and should drop the DSPX-4388 cells once the CLIs pick it up.
+its agreed answer, run against each SDK, and record what differs. Changing the
+vendored schema (DSPX-4388 adding `mlkem-wrapped`) updates a digest pinned in
+the unit tests, and should drop the DSPX-4388 cells once the CLIs pick it up.
 
 ## Known gaps
 
@@ -260,8 +246,6 @@ tests, and should drop the DSPX-4388 cells once the CLIs pick it up.
   If they change before release, the first run against them shows it.
 - Cells are keyed by SDK name, not version. Go v0.34.0 and earlier capped the
   manifest at 10 MiB (`json/large-11mib`), but no CLI that old has `validate`.
-  A writer-specific round-trip answer can be pinned as `validator:writer`
-  (`"go:java"`).
 - `xtest/manifest.schema.json`, the strict schema `test_tdfs.py` checks writer
   output against, lists only `wrapped`, `remote` and `ec-wrapped` key access
   types (no `hybrid-wrapped` or `mlkem-wrapped`). Not touched here.
