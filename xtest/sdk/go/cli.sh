@@ -186,17 +186,17 @@ if [ "$1" == "supports" ]; then
   esac
 fi
 
-if [ "$1" == "validate" ]; then
-  if [ $# -ne 2 ]; then
+if [[ "$1" == "validate" ]]; then
+  if [[ $# -ne 2 ]]; then
     echo "Usage: $0 validate <file>" >&2
     exit 2
   fi
-  if [ "${cmd[0]}" == go ]; then
+  if [[ "${cmd[0]}" == go ]]; then
     # `go run` reports a nonzero exit as "exit status N" on stderr and exits 1
     # itself, which would turn every invalid verdict (3) into a failure to run.
     # Install the same module@version once per user and run the binary.
     gobin="${TMPDIR:-/tmp}/xtest-otdfctl-$(id -u)-$(printf '%s' "${cmd[2]}" | tr -c 'a-zA-Z0-9' '_')"
-    if [ ! -x "$gobin/otdfctl" ]; then
+    if [[ ! -x "$gobin/otdfctl" ]]; then
       # Install to a process-unique directory, then rename: concurrent xdist
       # workers see either no binary or a complete one.
       if ! GOBIN="$gobin.$$" go install "${cmd[2]}" >&2; then

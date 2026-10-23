@@ -215,8 +215,8 @@ if [ "$1" == "supports" ]; then
   esac
 fi
 
-if [ "$1" == "validate" ]; then
-  if [ $# -ne 2 ]; then
+if [[ "$1" == "validate" ]]; then
+  if [[ $# -ne 2 ]]; then
     echo "Usage: $0 validate <file>" >&2
     exit 2
   fi

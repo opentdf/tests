@@ -36,7 +36,6 @@ import base64
 import copy
 import hashlib
 import json
-import random
 import re
 import struct
 import zlib
@@ -297,19 +296,29 @@ def deflate(data: bytes) -> bytes:
 
 # --- manifests ---------------------------------------------------------------
 
+
+def filler(label: str, n: int) -> bytes:
+    """``n`` deterministic, random-looking bytes: SHA-256 in counter mode.
+
+    Not a PRNG on purpose. The corpus must be byte-identical everywhere, and
+    none of it is secret -- it stands in for ciphertext, keys and noise.
+    """
+    out = b""
+    counter = 0
+    while len(out) < n:
+        out += hashlib.sha256(f"{label}:{counter}".encode()).digest()
+        counter += 1
+    return out[:n]
+
+
 #: One encrypted segment's worth of stand-in ciphertext. Nothing here is
 #: decrypted; it only has to be the length the manifest says.
-PAYLOAD_BYTES = random.Random("dspx-5349").randbytes(48)
+PAYLOAD_BYTES = filler("dspx-5349/payload", 48)
 
 
 def _b64ish(label: str, n: int = 32) -> str:
     """Deterministic base64 text standing in for a key, hash or signature."""
-    digest = b""
-    counter = 0
-    while len(digest) < n:
-        digest += hashlib.sha256(f"{label}:{counter}".encode()).digest()
-        counter += 1
-    return base64.b64encode(digest[:n]).decode()
+    return base64.b64encode(filler(label, n)).decode()
 
 
 _POLICY = _b64ish("policy", 96)
@@ -676,9 +685,9 @@ def zip_cases() -> Iterator[Case]:
     yield Case("zip/empty", b"", "invalid", "zero bytes", layer="archive")
     yield Case(
         "zip/random",
-        random.Random("dspx-5349/random").randbytes(1024),
+        filler("dspx-5349/random", 1024),
         "invalid",
-        "1 KiB of seeded random bytes",
+        "1 KiB of random-looking bytes",
         layer="archive",
     )
     yield Case(
