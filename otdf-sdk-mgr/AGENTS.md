@@ -39,6 +39,13 @@ before editing either module:
   worktree, so the worktree would see a missing or stale one. Worktrees made
   by older versions may still have a branch checked out; the reset moves it,
   which is harmless.
+- **Worktrees sit inside this repo's checkout,** gitignored. In one that has
+  lost its `.git` file (an interrupted `clean` or `git worktree add`), `git -C
+  <worktree>` climbs to opentdf/tests itself, and `reset --hard` there throws
+  away the developer's uncommitted work. Call `checkout.require_worktree`
+  before resetting an existing worktree; it refuses anything that isn't a
+  worktree of the expected bare repo. The refresh runs `git worktree prune`,
+  so a worktree directory that was removed can be added again.
 - **Platform tags are namespaced** as `service/vX.Y.Z`. `_resolve_platform_ref`
   prefixes the `service/` infix on plain versions; raw SHAs, refs with a
   `/`, `pr:N` shorthand (expanded to `refs/pull/N/head`), and `main`/`HEAD`
