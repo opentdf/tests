@@ -543,6 +543,17 @@ def manifest(tdf_file: Path) -> Manifest:
             return Manifest.model_validate_json(manifestEntry.read())
 
 
+def manifest_json(tdf_file: Path) -> dict[str, Any]:
+    """The manifest as written, including fields not present in the Manifest type.
+
+    This is useful for computing assertion over the JSON the writer emitted, including
+    removed or experimental fields the model does not declare.
+    """
+    with zipfile.ZipFile(tdf_file, "r") as tdfz:
+        with tdfz.open("0.manifest.json") as manifestEntry:
+            return json.load(manifestEntry)
+
+
 # Create a modified variant of a TDF by manipulating its manifest
 def update_manifest(
     scenario_name: str, tdf_file: Path, manifest_change: Callable[[Manifest], Manifest]
