@@ -95,7 +95,14 @@ class ValidateResult:
     stderr: str = ""
 
 
+def _head(text: str, n: int = _KEEP) -> str:
+    """The start of a reason: where every SDK says which layer rejected it."""
+    text = text.strip()
+    return text if len(text) <= n else text[:n] + "..."
+
+
 def _tail(raw: bytes | str, n: int = _KEEP) -> str:
+    """The end of stderr: where a stack trace says what actually failed."""
     text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
     text = text.strip()
     return text if len(text) <= n else "..." + text[-n:]
@@ -174,7 +181,7 @@ def parse_output(
         return ValidateResult(
             "error", f'"reason" is not a string: {reason!r}', returncode, err
         )
-    return ValidateResult("invalid", _tail(reason), returncode, err)
+    return ValidateResult("invalid", _head(reason), returncode, err)
 
 
 # --- the baseline ------------------------------------------------------------

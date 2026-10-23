@@ -534,8 +534,11 @@ class TestParseOutput:
 
     def test_long_reasons_are_trimmed(self):
         long = "x" * 5000
-        r = tv.parse_output(3, json.dumps({"valid": False, "reason": long}).encode())
+        r = tv.parse_output(
+            3, json.dumps({"valid": False, "reason": "zip: " + long}).encode()
+        )
         assert r.outcome == "invalid" and len(r.reason) < 500
+        assert r.reason.startswith("zip: "), "the start says which layer rejected it"
 
 
 class TestRunBounded:
@@ -618,15 +621,26 @@ class TestCheckedInBaseline:
     def test_describes_every_sdk(self):
         assert set(tv.load_baseline().sdks) == set(tdfs.sdk_type.__args__)
 
-    def test_java_is_pending_until_its_cli_exists(self):
-        """DSPX-5352. Flip with ``--seed java`` from its first real run."""
-        java = tv.load_baseline().sdks["java"]
-        assert java.status == "pending" and java.ticket == "DSPX-5352"
+    def test_every_sdk_is_seeded_from_its_cli_ticket(self):
+        """Each SDK's answers came from the code behind its validate command."""
+        sdks = tv.load_baseline().sdks
+        assert {name: sb.status for name, sb in sdks.items()} == {
+            "go": "seeded",
+            "java": "seeded",
+            "js": "seeded",
+        }
+        for name, ticket in (
+            ("go", "DSPX-5350"),
+            ("js", "DSPX-5351"),
+            ("java", "DSPX-5352"),
+        ):
+            assert ticket in sdks[name].source, name
 
     def test_every_divergence_ticket_is_one_we_know(self):
         """A typo'd key would make a divergence look explained."""
         known = {
             "DSPX-4388",
+            "DSPX-5103",
             "DSPX-4924",
             "DSPX-5353",
             "DSPX-5354",
@@ -664,7 +678,7 @@ class TestCheckedInBaseline:
     def test_mlkem_round_trip_is_a_known_divergence(self):
         b = tv.load_baseline()
         spec = next(s for s in corpus.ROUND_TRIPS if s.id == "roundtrip/mlkem-768")
-        for sdk in ("go", "js"):
+        for sdk in ("go", "java", "js"):
             cell = b.expected(spec, sdk)
             assert (cell.outcome, cell.ticket) == ("invalid", "DSPX-4388")
 
@@ -1035,9 +1049,13 @@ def _exe(path: Path, body: str) -> Path:
 
 
 #: A stand-in CLI: ``validate`` echoes $FAKE_OUT and exits $FAKE_EXIT; help
-#: output includes a validate usage line only when $FAKE_HAS_VALIDATE is set.
+#: output includes a validate usage line, and ``supports tdf_validity`` (which
+#: java's jar answers itself) succeeds, only when $FAKE_HAS_VALIDATE is set.
 _FAKE = """
 case "$*" in
+  "supports tdf_validity")
+    [ -n "$FAKE_HAS_VALIDATE" ] && exit 0
+    exit 1 ;;
   *help*)
     echo "Usage:"
     echo "  tool [command]"
@@ -1073,7 +1091,7 @@ def _shim(root: Path, sdk: str) -> Path:
 
 _HELP_LINES = {
     "go": "  otdfctl validate <file> [flags]",
-    "java": "Usage: cmdline validate [-hV] <file>",
+    "java": "",  # java's jar answers `supports tdf_validity` itself
     "js": "  opentdf validate [file]  Check whether a file is a valid TDF",
 }
 
@@ -1096,10 +1114,6 @@ class TestShims:
     def test_supports_needs_the_validate_command(self, sdk: str, shim_root: Path):
         cli = _shim(shim_root, sdk)
         assert _run(cli, shim_root, "supports", "tdf_validity").returncode != 0
-        # java's shim caches help output per jar mtime, in $TMPDIR; the fake
-        # CLI changing its mind is not something a real jar does.
-        for cached in shim_root.glob("xtest-java-help-*"):
-            cached.unlink()
         present = _run(
             cli,
             shim_root,

@@ -9,7 +9,7 @@
   "sdks": {
     "go": {
       "status": "seeded",
-      "source": "otdfctl validate (DSPX-5350, opentdf/platform#4254), which reports sdk.IsValidTdf and its error. Seeded by running platform/sdk v0.35.0 IsValidTdf as a library over this corpus.",
+      "source": "otdfctl validate (DSPX-5350), built from opentdf/platform#4254 at e33f3cb and run over this corpus. It reports sdk.IsValidTdf from platform/sdk v0.35.0, with err.Error() as the reason.",
       "reason_patterns": {
         "archive": "NewTDFReader",
         "manifest-missing": "Manifest failed",
@@ -18,13 +18,18 @@
       }
     },
     "java": {
-      "status": "pending",
-      "source": "java cmdline validate (DSPX-5352) does not exist yet; java-sdk has only SDK.isTDF, which never parses the manifest. Seed from the first run: see spec/tdf-validity.md.",
-      "ticket": "DSPX-5352"
+      "status": "seeded",
+      "source": "java -jar cmdline.jar validate (DSPX-5352, opentdf/java-sdk#428). Seeded by running that command, built from #428 at 8e9221d (stacked on #418), over this corpus.",
+      "reason_patterns": {
+        "archive": "zip",
+        "manifest-missing": "doesn't contain a manifest",
+        "manifest-json": "JSON|byte order mark",
+        "manifest-schema": "lax manifest schema"
+      }
     },
     "js": {
       "status": "seeded",
-      "source": "@opentdf/ctl validate (DSPX-5351, opentdf/web-sdk#1119), which reports validateTdf. Seeded by running validateTdf from #1119 (d293e509, stacked on #1118, #1117 and #1104) as a library over this corpus; its verdicts match #1104 isValidTdf on every case.",
+      "source": "@opentdf/ctl validate (DSPX-5351), built from opentdf/web-sdk#1119 at d293e509 (stacked on #1118, #1117 and #1104) and run over this corpus. Its verdicts match #1104 isValidTdf on every case.",
       "reason_patterns": {
         "archive": "central directory|local file header|compression method|compressed size",
         "manifest-missing": "CD manifest",
@@ -42,10 +47,12 @@
     },
     "archive/comment": {
       "go": "invalid",
+      "java": "valid",
       "js": "valid"
     },
     "archive/comment-max": {
       "go": "invalid",
+      "java": "valid",
       "js": "valid"
     },
     "archive/deflated-manifest": {
@@ -54,36 +61,65 @@
         "ticket": "DSPX-5354",
         "layer": "manifest-json",
         "note": "Go ignores the compression method and fails to parse the deflated bytes as JSON"
+      },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4924",
+        "layer": "manifest-json",
+        "note": "java-sdk#428 does not check the compression method and fails to parse the deflated bytes as JSON"
       }
     },
     "archive/deflated-payload": {
       "go": {
         "outcome": "valid",
         "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
       }
     },
     "archive/method-8-on-stored-bytes": {
       "go": {
         "outcome": "valid",
         "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
       }
     },
     "archive/payload-size-mismatch": {
       "go": {
         "outcome": "valid",
         "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
       }
     },
     "json/duplicate-key": {
       "go": "invalid",
+      "java": "invalid",
       "js": "invalid"
     },
     "json/nesting-1000": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "json/nesting-20000": {
       "go": "invalid",
+      "java": "invalid",
+      "js": "valid"
+    },
+    "json/number-10001-digits": {
+      "go": "valid",
+      "java": "invalid",
       "js": "valid"
     },
     "json/trailing-garbage": {
@@ -100,46 +136,76 @@
     },
     "profile/directory-entry": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "profile/duplicate-legacy-name-invalid-last": {
       "go": "invalid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
       "js": "invalid"
     },
     "profile/duplicate-legacy-name-valid-last": {
       "go": "valid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
       "js": "valid"
     },
     "profile/duplicate-pairs": {
       "go": "valid",
+      "java": "invalid",
       "js": "valid"
     },
     "profile/duplicate-spec-name-invalid-last": {
       "go": "invalid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
       "js": "invalid"
     },
     "profile/duplicate-spec-name-valid-last": {
       "go": "valid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
       "js": "valid"
     },
     "profile/encrypted-flag": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "profile/extra-entry": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "profile/manifest-first": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "profile/no-payload-entry": {
       "go": "valid",
+      "java": "invalid",
       "js": "valid"
     },
     "roundtrip/mlkem-768": {
       "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "java": {
         "outcome": "invalid",
         "ticket": "DSPX-4388"
       },
@@ -150,22 +216,30 @@
     },
     "scope/manifest-crc-mismatch": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "scope/payload-corrupted": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "scope/payload-crc-mismatch": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "scope/payload-length-mismatch": {
       "go": "valid",
+      "java": "valid",
       "js": "valid"
     },
     "writer/go-mlkem-wrapped": {
       "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "java": {
         "outcome": "invalid",
         "ticket": "DSPX-4388"
       },
@@ -179,9 +253,20 @@
         "outcome": "invalid",
         "ticket": "DSPX-4388"
       },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
       "js": {
         "outcome": "invalid",
         "ticket": "DSPX-4388"
+      }
+    },
+    "zip/manifest-size-into-cd": {
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-5103",
+        "note": "java-sdk#428 bounds an entry by the end of the file, not the start of the central directory, and reads a stored entry by its uncompressed size"
       }
     }
   }

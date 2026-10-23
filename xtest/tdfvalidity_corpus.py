@@ -1013,6 +1013,14 @@ def json_cases() -> Iterator[Case]:
         "a repeated top-level key, the last one invalid; RFC 8259 leaves this open",
     )
     yield Case(
+        "json/number-10001-digits",
+        tdf(good[:-1] + ',"n":' + "9" * 10001 + "}"),
+        "unspecified",
+        "an extra key holding a 10,001-digit number; RFC 8259 lets parsers limit"
+        " number size, and java-sdk#428 does",
+        layer="manifest-json",
+    )
+    yield Case(
         "json/nesting-32",
         tdf(_nested(32)),
         "valid",

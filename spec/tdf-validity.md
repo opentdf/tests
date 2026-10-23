@@ -60,7 +60,7 @@ shim passes stdout and the exit status through unchanged:
 | --- | --- | --- |
 | go | `otdfctl validate <file>` | DSPX-5350, opentdf/platform#4254 |
 | js | `opentdf validate <file>` (`@opentdf/ctl`) | DSPX-5351, opentdf/web-sdk#1119 |
-| java | `java -jar cmdline.jar validate <file>` | DSPX-5352 |
+| java | `java -jar cmdline.jar validate <file>` | DSPX-5352, opentdf/java-sdk#428 |
 
 - stdout is exactly one JSON line: `{"valid":true}` or
   `{"valid":false,"reason":"..."}`.
@@ -81,11 +81,12 @@ ticket. `SDK.validate` runs the shim in its own process group with a timeout
 (`XT_VALIDATE_TIMEOUT`, default 60 s) and kills the whole group on expiry,
 so a hang is reported rather than wedging the run.
 
-Support is detected per build: `cli.sh supports tdf_validity` looks for the
-`validate` command in the CLI's help (`help validate` for go and java, the
-command list for js), so released CLIs that predate it skip through the
-feature gate. `XT_FORCE_SUPPORTS=tdf_validity` overrides that, as for any
-feature.
+Support is detected per build, so released CLIs that predate `validate` skip
+through the feature gate: `cli.sh supports tdf_validity` looks for the command's
+usage line in `otdfctl help validate` (cobra exits 0 for an unknown help topic,
+so the exit status says nothing), for the command in `opentdf help`'s list, and
+for java asks the jar itself (`supports tdf_validity`, as for `dpop`).
+`XT_FORCE_SUPPORTS=tdf_validity` overrides the gate, as for any feature.
 
 ## The corpus
 
@@ -101,7 +102,7 @@ every SDK reads the same bytes. The ZIP writer there is deliberately not
 | `zip/` | 14 | malformed archives: empty, random, lying offsets and counts |
 | `profile/` | 10 | legal ZIP, questionable TDF: extra, missing, duplicated, reordered entries |
 | `name/` | 8 | which manifest entry a reader picks |
-| `json/` | 14 | manifest bytes that are not one clean JSON object |
+| `json/` | 15 | manifest bytes that are not one clean JSON object |
 | `manifest/` | 42 | web-sdk#1104's lax-schema cases, ported |
 | `schema/` | 84 | one keyword of the lax schema at a time, generated from the schema |
 | `writer/` | 5 | realistic go, js, hybrid and ML-KEM manifests |
@@ -156,38 +157,48 @@ Each judged cell is one of:
 | `match` | the answer the baseline expects | no |
 | `drift` | a different answer, or the check could not run | yes |
 | `reason` | the expected rejection, at the wrong layer | yes |
-| `pending` | the SDK has no baseline yet (java) | no |
+| `pending` | the SDK has no baseline yet (a new SDK starts here) | no |
 
 ## Current results
 
-Seeded from the libraries the CLIs wrap, run over this corpus:
+Seeded by running each SDK's own code over this corpus:
 
-- **go**: platform/sdk v0.35.0 `IsValidTdf`, which `otdfctl validate`
-  (#4254) reports along with `err.Error()`. otdfctl on that branch requires
-  sdk v0.35.0, and the validity code has not changed since.
-- **js**: `validateTdf` from web-sdk#1119 (d293e509, stacked on #1118, #1117
-  and #1104); its verdicts match #1104's `isValidTdf` on every case.
-- **java**: pending. There is no `validate` command yet, and java-sdk's only
-  API, `SDK.isTDF`, never parses the manifest (DSPX-5352).
+- **go**: `otdfctl validate`, built from opentdf/platform#4254 (e33f3cb). It
+  reports `sdk.IsValidTdf` and `err.Error()`; otdfctl on that branch requires
+  platform/sdk v0.35.0, and the validity code has not changed since that tag.
+- **java**: `java -jar cmdline.jar validate`, built from opentdf/java-sdk#428
+  (8e9221d, stacked on #418).
+- **js**: `opentdf validate` (`@opentdf/ctl`), built from opentdf/web-sdk#1119
+  (d293e509, stacked on #1118, #1117 and #1104). Its verdicts match #1104's
+  `isValidTdf` on every case.
 
-Every case not listed here gets the agreed answer from both go and js:
+Every case not listed here gets the agreed answer from all three:
 
-| case | agreed | go | js | ticket |
-| --- | --- | --- | --- | --- |
-| `archive/comment`, `archive/comment-max` | undecided | invalid | valid | DSPX-5355 |
-| `archive/deflated-payload` | invalid | valid | invalid | DSPX-5354 |
-| `archive/deflated-manifest` | invalid | invalid (JSON layer) | invalid | DSPX-5354 |
-| `archive/method-8-on-stored-bytes` | invalid | valid | invalid | DSPX-5354 |
-| `archive/payload-size-mismatch` | invalid | valid | invalid | DSPX-5354 |
-| `archive/cd-size-0xfffffff0` | invalid | valid | invalid | DSPX-5354 |
-| `json/trailing-garbage`, `json/trailing-object` | invalid | valid | invalid | DSPX-5353 |
-| `json/nesting-1000` | undecided | valid | valid | DSPX-5356 |
-| `json/nesting-20000` | undecided | invalid | valid | DSPX-5356 |
-| `writer/go-mlkem-wrapped`, `writer/js-mlkem-wrapped` | valid | invalid | invalid | DSPX-4388 |
-| `roundtrip/mlkem-768` | valid | invalid | invalid | DSPX-4388 |
-| `profile/*` (10 cases) | undecided | valid, unless the last duplicate manifest is invalid | same as go | DSPX-4924 |
-| `json/duplicate-key` | unspecified | invalid | invalid | |
-| `scope/*` (4 cases) | unspecified | valid | valid | |
+| case | agreed | go | java | js | ticket |
+| --- | --- | --- | --- | --- | --- |
+| `archive/comment`, `archive/comment-max` | undecided | invalid | valid | valid | DSPX-5355 |
+| `archive/deflated-payload`, `archive/method-8-on-stored-bytes`, `archive/payload-size-mismatch` | invalid | valid | valid | invalid | DSPX-5354 (go), DSPX-4924 (java) |
+| `archive/deflated-manifest` | invalid | invalid, at the JSON layer | invalid, at the JSON layer | invalid | DSPX-5354 (go), DSPX-4924 (java) |
+| `archive/cd-size-0xfffffff0` | invalid | valid | invalid | invalid | DSPX-5354 |
+| `zip/manifest-size-into-cd` | invalid | invalid | valid | invalid | DSPX-5103 |
+| `json/trailing-garbage`, `json/trailing-object` | invalid | valid | invalid | invalid | DSPX-5353 |
+| `json/nesting-1000` | undecided | valid | valid | valid | DSPX-5356 |
+| `json/nesting-20000` | undecided | invalid | invalid | valid | DSPX-5356 |
+| `json/number-10001-digits` | unspecified | valid | invalid | valid | |
+| `json/duplicate-key` | unspecified | invalid | invalid | invalid | |
+| `writer/go-mlkem-wrapped`, `writer/js-mlkem-wrapped` | valid | invalid | invalid | invalid | DSPX-4388 |
+| `roundtrip/mlkem-768` | valid | invalid | invalid | invalid | DSPX-4388 |
+| `profile/no-payload-entry` | undecided | valid | invalid | valid | DSPX-4924 |
+| `profile/duplicate-*` (5 cases) | undecided | last copy wins | rejected, at the archive layer | last copy wins | DSPX-4924 |
+| other `profile/*` (4 cases) | undecided | valid | valid | valid | DSPX-4924 |
+| `scope/*` (4 cases) | unspecified | valid | valid | valid | |
+
+`roundtrip/mlkem-768` is inferred, not observed: all three vendor the same lax
+schema, and the `writer/*-mlkem-wrapped` cases show each rejecting
+`mlkem-wrapped`. java's STORED cells use DSPX-4924 because no java ticket
+exists yet; java-sdk#424 would make java read deflated entries, which is the
+opposite of what DSPX-5354 asks of Go, so the profile decision has to come
+first.
 
 DSPX-5357 (web-sdk resolving a duplicated manifest and payload to different
 records) is a decrypt-path problem: validation never reads the payload, so
@@ -226,16 +237,17 @@ disagreement is written without a ticket on purpose: the unit tests then fail
 until someone files one and adds it. Verdicts that are `error`s are never
 folded in.
 
-**Seeding java**, once DSPX-5352 ships: run the suite with a java build that
-has `validate` (`XT_FORCE_SUPPORTS=tdf_validity` if the gate lags), then
+**Seeding an SDK** -- a new one, or one whose baseline is being rebuilt: mark it
+`pending` in the baseline, run the suite with a build that has `validate`
+(`XT_FORCE_SUPPORTS=tdf_validity` if the gate lags), then
 
 ```bash
-uv run python tdfvalidity.py test-results/tdf-validity*.json --seed java
+uv run python tdfvalidity.py test-results/tdf-validity*.json --seed <sdk>
 ```
 
-which flips java from `pending` to `seeded` and records every answer that
-differs from the agreed one. Then add tickets, and java `reason_patterns` once
-its wording is known.
+which flips it to `seeded` and records every answer that differs from the
+agreed one. Then add tickets, and `reason_patterns` for its wording. java was
+seeded this way from a local build of java-sdk#428.
 
 **Changing the corpus** changes what the baseline describes: add the case with
 its agreed answer, run against each SDK, and refresh. Changing the vendored
@@ -244,7 +256,8 @@ tests, and should drop the DSPX-4388 cells once the CLIs pick it up.
 
 ## Known gaps
 
-- java has no baseline until DSPX-5352 ships a `validate` command.
+- The baseline comes from unmerged CLI branches (#4254, #1119, java-sdk#428).
+  If they change before release, the first run against them shows it.
 - Cells are keyed by SDK name, not version. Go v0.34.0 and earlier capped the
   manifest at 10 MiB (`json/large-11mib`), but no CLI that old has `validate`.
   A writer-specific round-trip answer can be pinned as `validator:writer`

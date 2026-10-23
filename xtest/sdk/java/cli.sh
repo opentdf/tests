@@ -188,10 +188,10 @@ if [ "$1" == "supports" ]; then
       exit 1
       ;;
     tdf_validity)
-      # `java -jar cmdline.jar validate <file>` (DSPX-5352). picocli's `help`
-      # for an unknown subcommand prints the parent's usage instead, so look
-      # for the subcommand's own synopsis. Cached, like every help probe here.
-      jar_help validate | grep -qE '^Usage:.* validate( |$)'
+      # `java -jar cmdline.jar validate <file>` (DSPX-5352). Asked of the jar
+      # itself, as for dpop: a jar that predates `supports`, or this feature,
+      # exits nonzero.
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports tdf_validity
       exit $?
       ;;
     zip64-at-2gib)
