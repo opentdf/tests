@@ -109,8 +109,8 @@ _PLAIN = [s for s in corpus.ROUND_TRIPS if not s.pqc]
 _PQC = [s for s in corpus.ROUND_TRIPS if s.pqc]
 
 #: Attribute fixtures (from fixtures/keys.py) that pin each PQ mechanism.
-#: Requested lazily, after the platform gate, so a run without the
-#: key-management KAS skips instead of registering keys against nothing.
+#: Requested lazily, after the platform gate, so a run whose platform reports
+#: no PQ mechanism skips instead of registering keys against nothing.
 _PQC_ATTRIBUTES = {
     "roundtrip/xwing": "attribute_with_xwing_key",
     "roundtrip/secpmlkem": "attribute_with_secpmlkem_3_key",
@@ -174,7 +174,8 @@ def test_roundtrip_pqc(
     """As :func:`test_roundtrip`, for the managed PQ keys on km1.
 
     Separate, and marked, because km1 starts later in the workflow than the
-    rest of this module runs; see the ``tdf_validity_pqc`` step in xtest.yml.
+    rest of this module runs: xtest.yml deselects ``-m tdf_validity_pqc`` in
+    the standard steps and runs it once the KAS instances are up.
     ML-KEM is expected to be rejected until DSPX-4388 adds ``mlkem-wrapped``
     to the lax schema -- recorded in the baseline, not skipped.
     """

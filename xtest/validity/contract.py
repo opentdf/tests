@@ -67,7 +67,8 @@ def parse_output(returncode: int, stdout: bytes, stderr: bytes = b"") -> Validat
     """Classify one finished ``validate`` process against the contract.
 
     Strict on purpose. Exit 0 or 3 is a verdict only if stdout agrees with it,
-    as exactly one JSON object; anything else is reported as an ``error``
+    as exactly one JSON object with exactly the contract's keys -- for
+    invalid, a non-empty ``reason``; anything else is reported as an ``error``
     naming the violation, because a shim or CLI that has drifted from the
     contract is not answering the question this suite asks.
     """
@@ -85,7 +86,10 @@ def parse_output(returncode: int, stdout: bytes, stderr: bytes = b"") -> Validat
     if returncode not in (EXIT_VALID, EXIT_INVALID):
         return error(f"exit {returncode}: the check could not run")
 
-    text = stdout.decode("utf-8", errors="replace").strip()
+    try:
+        text = stdout.decode("utf-8").strip()
+    except UnicodeDecodeError as e:
+        return error(f"exit {returncode} but stdout is not UTF-8: {e}")
     shown = repr(_tail(text, 200))
     lines = text.splitlines()
     if len(lines) != 1:
@@ -105,11 +109,18 @@ def parse_output(returncode: int, stdout: bytes, stderr: bytes = b"") -> Validat
         return error(
             f'exit {returncode} contradicts stdout "valid":{json.dumps(valid)}'
         )
+    extra = record.keys() - ({"valid"} if valid else {"valid", "reason"})
+    if extra:
+        return error(f"exit {returncode} but stdout has extra keys: {shown}")
     if valid:
         return ValidateResult("valid", "", err)
-    reason = record.get("reason", "")
+    reason = record.get("reason")
+    if reason is None:
+        return error(f'exit {returncode} but stdout has no "reason": {shown}')
     if not isinstance(reason, str):
         return error(f'"reason" is not a string: {reason!r}')
+    if not reason.strip():
+        return error(f'exit {returncode} but "reason" is empty: {shown}')
     return ValidateResult("invalid", _head(reason), err)
 
 
@@ -120,18 +131,35 @@ def validate(
 
     Never raises for the CLI's sake: a crash, a hang or output outside the
     contract comes back as an ``error`` result, so the caller can hold it to
-    the baseline like any other answer. Needs no platform. Every shim
-    ``exec``\\s its CLI, so killing the child on timeout kills the reader.
+    the baseline like any other answer. Needs no platform.
+
+    The shim leads its own process group, and a timeout kills the whole group:
+    a shim does not always ``exec`` its CLI straight away -- go's first call
+    runs ``go install`` -- and killing only the shell would orphan that work.
     """
+    with subprocess.Popen(
+        [sdk.path, "validate", str(tdf_file)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    ) as proc:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            _, stderr = proc.communicate()
+            return ValidateResult("error", f"timed out after {timeout}s", _tail(stderr))
+        except BaseException:
+            # KeyboardInterrupt, or an xdist worker being torn down: do not
+            # leave an orphaned reader behind.
+            _kill_group(proc)
+            raise
+    return parse_output(proc.returncode, stdout, stderr)
+
+
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
     try:
-        run = subprocess.run(
-            [sdk.path, "validate", str(tdf_file)],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as e:
-        return ValidateResult(
-            "error", f"timed out after {timeout}s", _tail(e.stderr or b"")
-        )
-    return parse_output(run.returncode, run.stdout, run.stderr)
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # the group exited between the timeout and the kill

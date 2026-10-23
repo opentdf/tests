@@ -75,12 +75,13 @@ indistinguishable from a verdict. This supersedes the "exit 1 = invalid"
 wording in DSPX-5349 to DSPX-5352.
 
 `validity.contract.parse_output` is strict: an exit of 0 or 3 is a verdict
-only if stdout agrees with it, as exactly one JSON object. Anything else is an
-`error`, which fails the cell unless the baseline pins that error with a
-ticket. `validity.contract.validate` runs the shim with a timeout
-(`XT_VALIDATE_TIMEOUT`, default 60 s). Every shim `exec`s its CLI, so killing
-the child on expiry kills the reader, and a hang is reported rather than
-wedging the run.
+only if stdout agrees with it, as exactly one JSON object with exactly the
+contract's keys, and an invalid verdict needs a non-empty `reason`. Anything
+else is an `error`, which always fails the cell: the baseline records
+verdicts, not crashes. `validity.contract.validate` runs the shim in its own
+process group with a timeout (`XT_VALIDATE_TIMEOUT`, default 60 s). On expiry
+the whole group is killed -- go's shim runs `go install` before it `exec`s
+its CLI -- and a hang is reported rather than wedging the run.
 
 Support is detected per build, so released CLIs that predate `validate` skip
 through the feature gate: `cli.sh supports tdf_validity` looks for the command's
@@ -142,15 +143,18 @@ Invalid cases also name the **layer** a rejection belongs to (`archive`,
 `manifest-missing`, `manifest-json`, `manifest-schema`). A reader can reject at
 the wrong layer -- an "entry count is not 2" check never exercises the
 directory walk (DSPX-4924) -- so where an SDK reports reasons, the baseline
-holds its `reason_patterns` per layer and a mismatch fails the cell.
+holds its `reason_patterns` per layer and a mismatch fails the cell. An SDK
+has a pattern for every layer or none, and no pattern may match an empty
+reason, so the check cannot switch itself off.
 
 The **baseline** records only what differs from the agreed answer, and every
 such cell carries the ticket that explains it, plus every SDK's answer to
 each undecided and unspecified case. A cell may also override the layer
 (Go reads a deflated manifest as JSON instead of refusing the compression
 method). `validity.baseline.problems` enforces this, and runs in the offline
-unit tests: a divergence without a ticket, a stale row, or a missing answer
-fails `check.yml`.
+unit tests: a divergence without a ticket of its own (a case's ticket
+excuses only an undecided case), a stale row, a missing answer, or two cases
+sharing an id fails `check.yml`.
 
 A cell fails when the answer differs from what the baseline expects, when the
 check could not run, when an expected rejection's reason does not match the

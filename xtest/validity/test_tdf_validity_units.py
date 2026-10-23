@@ -443,9 +443,6 @@ class TestParseOutput:
         r = parse_output(3, b'{"valid":false,"reason":"zip: bad"}\n')
         assert (r.outcome, r.reason) == ("invalid", "zip: bad")
 
-    def test_invalid_without_reason(self):
-        assert parse_output(3, b'{"valid":false}').outcome == "invalid"
-
     @pytest.mark.parametrize("code", [1, 2, 4, 127])
     def test_other_exits_are_errors(self, code: int):
         r = parse_output(code, b"", b"boom\n")
@@ -472,6 +469,12 @@ class TestParseOutput:
             (0, b"[true]", 'no boolean "valid"'),
             (0, b'{"valid":"true"}', 'no boolean "valid"'),
             (3, b'{"valid":false,"reason":7}', "not a string"),
+            (3, b'{"valid":false}', 'no "reason"'),
+            (3, b'{"valid":false,"reason":null}', 'no "reason"'),
+            (3, b'{"valid":false,"reason":" "}', '"reason" is empty'),
+            (0, b'{"valid":true,"reason":"schema skipped"}', "extra keys"),
+            (3, b'{"valid":false,"reason":"zip","layer":"x"}', "extra keys"),
+            (0, b'{"valid":true}\xff', "not UTF-8"),
         ],
     )
     def test_contract_violations_are_errors(self, code: int, stdout: bytes, why: str):
@@ -498,6 +501,14 @@ def _fake_sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str) -> t
     return tdfs.SDK("go", "fake")
 
 
+def _running(pid: int) -> bool:
+    """Whether ``pid`` exists and is not a zombie waiting to be reaped."""
+    ps = subprocess.run(
+        ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True
+    )
+    return ps.returncode == 0 and not ps.stdout.strip().startswith("Z")
+
+
 class TestValidate:
     def test_invalid(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         sdk = _fake_sdk(
@@ -520,10 +531,35 @@ class TestValidate:
             "stuck",
         )
 
+    def test_hang_kills_what_the_shim_started(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A shim that has not exec'd yet -- go's first call runs ``go install``
+        -- must not leave its children running past the timeout."""
+        pid_file = tmp_path / "child.pid"
+        sdk = _fake_sdk(
+            tmp_path, monkeypatch, f"sleep 30 &\necho $! > '{pid_file}'\nwait\n"
+        )
+        assert validate(sdk, Path("x.tdf"), timeout=1).outcome == "error"
+        pid = int(pid_file.read_text())
+        deadline = time.monotonic() + 5
+        while _running(pid):
+            assert time.monotonic() < deadline, f"child {pid} outlived the timeout"
+            time.sleep(0.05)
+
 
 # --- the baseline --------------------------------------------------------------
 
 SPECS: list[vb.Spec] = [*CASES, *corpus.ROUND_TRIPS]
+
+
+#: A ``reason_patterns`` entry naming every layer, as the model requires.
+_PATTERNS = {
+    "archive": "zip",
+    "manifest-missing": "no manifest",
+    "manifest-json": "JSON",
+    "manifest-schema": "schema",
+}
 
 
 def _baseline(cells: dict[str, Any], **sdks: dict[str, Any]) -> vb.Baseline:
@@ -548,6 +584,7 @@ class TestBaselineParsing:
             ({"outcome": "valid", "ticket": "dspx 1"}, "pattern"),
             ({"outcome": "valid", "colour": "red"}, "Extra inputs"),
             ({"outcome": "invalid", "layer": "payload"}, "layer"),
+            ({"outcome": "error", "ticket": "DSPX-8"}, "outcome"),
             (7, "valid dictionary"),
         ],
     )
@@ -560,8 +597,16 @@ class TestBaselineParsing:
             _baseline({}, go={"status": "seeded"})
         with pytest.raises(ValueError, match="reason_patterns"):
             _baseline({}, go={"reason_patterns": {"x": "y"}})
-        with pytest.raises(ValueError, match="unterminated|missing"):
-            _baseline({}, go={"reason_patterns": {"archive": "("}})
+        with pytest.raises(ValueError, match="unterminated"):
+            _baseline({}, go={"reason_patterns": {**_PATTERNS, "archive": "("}})
+
+    def test_reason_patterns_cannot_skip_the_check(self):
+        with pytest.raises(ValueError, match="every layer or none"):
+            _baseline({}, go={"reason_patterns": {"archive": "zip"}})
+        with pytest.raises(ValueError, match="matches any reason"):
+            _baseline({}, go={"reason_patterns": {**_PATTERNS, "archive": ""}})
+        with pytest.raises(ValueError, match="matches any reason"):
+            _baseline({}, go={"reason_patterns": {**_PATTERNS, "archive": "zip|"}})
 
     def test_bad_format(self):
         with pytest.raises(ValueError, match="format"):
@@ -640,6 +685,19 @@ class TestProblems:
         assert any("not in the corpus" in p for p in problems)
         assert any("no such SDK" in p for p in problems)
 
+    def test_duplicate_ids(self):
+        twin = corpus.Case("a/agreed", b"", "invalid", "x", layer="archive")
+        problems = vb.problems(_baseline(self.complete), [*self.specs, twin])
+        assert problems == ["a/agreed: 2 cases share this id"]
+
+    def test_case_ticket_excuses_only_undecided_cells(self):
+        traced = corpus.Case("a/traced", b"", "valid", "x", ticket="DSPX-3")
+        b = _baseline({**self.complete, "a/traced": {"go": "invalid"}})
+        problems = vb.problems(b, [*self.specs, traced])
+        assert problems == [
+            "a/traced.go: invalid differs from the agreed valid without a ticket"
+        ]
+
     def test_cell_repeating_the_agreed_answer(self):
         b = _baseline(
             {
@@ -657,7 +715,7 @@ class TestJudge:
     spec = corpus.Case("a/b", b"", "invalid", "x", layer="archive")
 
     def _b(self, cells: dict[str, Any] | None = None) -> vb.Baseline:
-        return _baseline(cells or {}, go={"reason_patterns": {"archive": "zip"}})
+        return _baseline(cells or {}, go={"reason_patterns": _PATTERNS})
 
     def _judge(
         self, result: ValidateResult, b: vb.Baseline | None = None, spec=None
@@ -695,10 +753,6 @@ class TestJudge:
         failure = self._judge(ValidateResult("error", "exit 1", "trace"))
         assert failure and "could not check" in failure and "trace" in failure
 
-    def test_pinned_error_matches(self):
-        b = self._b({"a/b": {"go": {"outcome": "error", "ticket": "DSPX-8"}}})
-        assert self._judge(ValidateResult("error", "boom"), b) is None
-
     def test_reason_at_the_wrong_layer(self):
         failure = self._judge(ValidateResult("invalid", "schema says no"))
         assert failure and "archive-layer rejection" in failure
@@ -714,7 +768,7 @@ class TestJudge:
                     }
                 }
             },
-            go={"reason_patterns": {"manifest-json": "JSON"}},
+            go={"reason_patterns": _PATTERNS},
         )
         assert self._judge(ValidateResult("invalid", "bad JSON"), b) is None
         assert self._judge(ValidateResult("invalid", "zip"), b)

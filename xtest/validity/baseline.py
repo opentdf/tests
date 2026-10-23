@@ -9,9 +9,10 @@ checks the file itself, offline.
 """
 
 import re
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol, get_args
 
 from pydantic import (
     BaseModel,
@@ -21,7 +22,7 @@ from pydantic import (
     model_validator,
 )
 
-from validity.contract import Outcome, ValidateResult
+from validity.contract import ValidateResult
 
 #: A case's agreed answer. ``undecided`` cases have an open decision ticket
 #: and each SDK's current answer is pinned in the baseline. ``unspecified``
@@ -66,7 +67,9 @@ class Cell(_Strict):
     In the file, a bare outcome string is a cell with nothing else to say.
     """
 
-    outcome: Outcome
+    #: A verdict, never ``error``: a CLI that could not check a file always
+    #: fails its cell, however it failed.
+    outcome: Literal["valid", "invalid"]
     #: Why this differs from the agreed answer. Required whenever it does.
     ticket: Ticket | None = None
     #: Where this SDK's rejection lands, when it is not the case's layer --
@@ -85,17 +88,23 @@ class SdkBaseline(_Strict):
     #: Which build the answers were recorded from.
     source: str = ""
     #: Regex per layer, searched (case-insensitively) in this SDK's reason for
-    #: an invalid verdict. Absent for an SDK whose reasons are not yet known.
+    #: an invalid verdict. Every layer or none: absent for an SDK whose reasons
+    #: are not yet known, since a missing layer would skip the check silently.
     reason_patterns: dict[Layer, str] = {}
 
     @field_validator("reason_patterns")
     @classmethod
     def _compiles(cls, patterns: dict[Layer, str]) -> dict[Layer, str]:
+        missing = set(get_args(Layer)) - patterns.keys()
+        if patterns and missing:
+            raise ValueError(f"every layer or none; missing {sorted(missing)}")
         for layer, pattern in patterns.items():
             try:
-                re.compile(pattern)
+                matches_anything = re.search(pattern, "") is not None
             except re.error as e:
                 raise ValueError(f"{layer}: {e}") from e
+            if matches_anything:
+                raise ValueError(f"{layer}: /{pattern}/ matches any reason")
         return patterns
 
 
@@ -127,14 +136,19 @@ def load(path: Path = PATH) -> Baseline:
 def problems(baseline: Baseline, specs: Iterable[Spec]) -> list[str]:
     """Everything wrong with ``baseline`` as a description of ``specs``.
 
+    - two cases with one id, which would share a row;
     - a row for a case that does not exist;
     - a cell naming an SDK the baseline does not describe;
-    - a cell that differs from its case's agreed answer without a ticket;
+    - a cell that differs from its case's agreed answer without a ticket of
+      its own (a case's ticket excuses only an undecided case's cells);
     - a cell that just repeats the agreed answer, with nothing to say;
     - an SDK with no recorded answer to a case that has no agreed one.
     """
+    specs = list(specs)
+    ids = Counter(s.id for s in specs)
     by_id = {s.id: s for s in specs}
-    out = [
+    out = [f"{i}: {n} cases share this id" for i, n in sorted(ids.items()) if n > 1]
+    out += [
         f"{case_id}: baseline row for a case that is not in the corpus"
         for case_id in sorted(baseline.cells.keys() - by_id.keys())
     ]
@@ -151,7 +165,9 @@ def problems(baseline: Baseline, specs: Iterable[Spec]) -> list[str]:
                     out.append(
                         f"{case_id}.{sdk}: repeats the agreed answer; delete the cell"
                     )
-            elif spec.expect != "unspecified" and not (cell.ticket or spec.ticket):
+            elif spec.expect != "unspecified" and not (
+                cell.ticket or (spec.expect == "undecided" and spec.ticket)
+            ):
                 out.append(
                     f"{case_id}.{sdk}: {cell.outcome} differs from the agreed "
                     f"{spec.expect} without a ticket"
@@ -173,7 +189,7 @@ def judge(
     """Hold ``result`` to the baseline: None if it matches, else what differs
     and what to do about it."""
     cell = baseline.expected(spec, sdk)
-    if result.outcome == "error" and (cell is None or cell.outcome != "error"):
+    if result.outcome == "error":
         return f"{build} could not check {spec.id}: {result.reason}" + (
             f"\nstderr: {result.stderr}" if result.stderr else ""
         )

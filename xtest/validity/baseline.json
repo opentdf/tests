@@ -2,7 +2,7 @@
   "about": [
     "Expected per-SDK answers for validity/test_tdf_validity.py (DSPX-5349). See spec/tdf-validity.md.",
     "A case's agreed answer lives in corpus.py. This file records only what differs from it, each with the ticket that explains it, and every SDK's answer to the undecided and unspecified cases.",
-    "A cell is \"valid\", \"invalid\" or \"error\", or an object adding \"ticket\", \"layer\" (where the rejection lands, when not the case's layer) and \"note\".",
+    "A cell is \"valid\" or \"invalid\" (never \"error\": a CLI that could not check a file always fails), or an object adding \"ticket\", \"layer\" (where the rejection lands, when not the case's layer) and \"note\".",
     "Any difference from this file fails the run; each failure says which cell to add, change or delete."
   ],
   "format": 1,
