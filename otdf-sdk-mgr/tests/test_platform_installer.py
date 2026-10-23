@@ -13,6 +13,7 @@ from otdf_sdk_mgr.platform_installer import (
     _resolve_platform_ref,
     install_platform_source,
 )
+from otdf_sdk_mgr.refs import ref_slug
 
 
 @pytest.mark.parametrize(
@@ -20,8 +21,12 @@ from otdf_sdk_mgr.platform_installer import (
     [
         ("v0.9.0", "service/v0.9.0"),
         ("0.9.0", "service/v0.9.0"),
+        ("v0.9.0-rc.1", "service/v0.9.0-rc.1"),
+        # Anything else that isn't a version is a ref for git to resolve.
         ("main", "main"),
         ("HEAD", "HEAD"),
+        ("my-branch", "my-branch"),
+        ("release/v1.2.3", "release/v1.2.3"),
         ("service/v0.9.0", "service/v0.9.0"),
         ("a" * 40, "a" * 40),
         ("b" * 64, "b" * 64),
@@ -114,6 +119,9 @@ def _stub_installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str
         # Mutable refs: use ref_slug
         ("main", "main"),
         ("refs/pull/42/head", "refs--pull--42--head"),
+        ("my-branch", "my-branch"),
+        # A branch named like a version, not release v1.2.3's dist.
+        ("release/v1.2.3", "release--v1.2.3"),
     ],
 )
 def test_dist_name_derivation(
@@ -125,17 +133,26 @@ def test_dist_name_derivation(
     assert dist_dir.name == expected_dist_name
 
 
+@pytest.mark.parametrize(
+    "ref,dist_name",
+    [
+        ("v0.9.0", "v0.9.0"),
+        ("service/v0.9.0", "v0.9.0"),
+        ("a" * 40, "v" + "a" * 40),
+    ],
+)
 def test_immutable_ref_with_complete_marker_skips_rebuild(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ref: str, dist_name: str
 ):
-    """An existing immutable build (binary + .complete) is reused, not rebuilt."""
+    """An existing release or SHA build (binary + .complete) is reused, not
+    rebuilt, without touching the bare repo."""
     calls = _stub_installer(monkeypatch, tmp_path)
-    dist_dir = tmp_path / "dist" / "v0.9.0"
+    dist_dir = tmp_path / "dist" / dist_name
     dist_dir.mkdir(parents=True)
     (dist_dir / "service").write_text("prebuilt")
     (dist_dir / ".complete").write_text("")
 
-    install_platform_source("v0.9.0")
+    install_platform_source(ref)
 
     assert calls["build_service"] == []
     assert calls["ensure_worktree"] == []
@@ -155,20 +172,23 @@ def test_immutable_ref_without_complete_marker_rebuilds(
     assert len(calls["build_service"]) == 1
 
 
+@pytest.mark.parametrize("ref", ["main", "my-branch", "release/v1.2.3", "sdk/v0.4.0"])
 def test_mutable_ref_drops_existing_binary_and_rebuilds(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ref: str
 ):
-    """A mutable ref (branch) re-fetches and rebuilds even if a binary exists."""
+    """A branch re-fetches and rebuilds even if a binary exists, whatever its
+    name looks like. So does any ref that isn't provably a release or a SHA
+    before the bare repo is refreshed: `sdk/v0.4.0` is a tag in the
+    monorepo, but `release/v1.2.3` is shaped the same."""
     calls = _stub_installer(monkeypatch, tmp_path)
-    dist_dir = tmp_path / "dist" / "main"
+    dist_dir = tmp_path / "dist" / ref_slug(ref)
     dist_dir.mkdir(parents=True)
     stale_binary = dist_dir / "service"
     stale_binary.write_text("stale")
     (dist_dir / ".complete").write_text("")
 
-    install_platform_source("main")
-
-    assert calls["ensure_worktree"] == ["main"]
+    assert install_platform_source(ref) == dist_dir
+    assert calls["ensure_worktree"] == [ref]
     assert len(calls["build_service"]) == 1
 
 

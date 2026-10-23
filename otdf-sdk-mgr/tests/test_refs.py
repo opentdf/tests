@@ -2,7 +2,7 @@
 
 import pytest
 
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
+from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, is_mutable_target, ref_slug
 
 
 @pytest.mark.parametrize(
@@ -49,6 +49,29 @@ def test_expand_pr_shorthand(inp, expected):
 )
 def test_is_mutable_ref(ref, expected):
     assert is_mutable_ref(ref) is expected
+
+
+@pytest.mark.parametrize(
+    "ref,target,expected",
+    [
+        # Branches origin has, whatever the name looks like.
+        ("main", "refs/remotes/origin/main", True),
+        ("release/v1.2.3", "refs/remotes/origin/release/v1.2.3", True),
+        ("v1.2.3", "refs/remotes/origin/v1.2.3", True),
+        # Explicit refs: anything but a tag can move.
+        ("refs/pull/42/head", "refs/pull/42/head", True),
+        ("refs/heads/release/v1.2.3", "refs/heads/release/v1.2.3", True),
+        ("refs/tags/v1.2.3", "refs/tags/v1.2.3", False),
+        # Names upstream_ref passed through: as is_mutable_ref says.
+        ("v1.2.3", "v1.2.3", False),
+        ("service/v0.9.0", "service/v0.9.0", False),
+        ("a" * 40, "a" * 40, False),
+        # Not on origin; resetting to it fails loudly instead of reusing.
+        ("gone", "gone", True),
+    ],
+)
+def test_is_mutable_target(ref, target, expected):
+    assert is_mutable_target(ref, target) is expected
 
 
 @pytest.mark.parametrize(
