@@ -217,6 +217,36 @@ class TestInstallJsRelease:
         # A leftover dist with only cli.sh would be skipped as installed next run.
         assert not dist.exists()
 
+    def test_interrupted_npm_install_leaves_no_partial_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.20.0"
+        with (
+            patch.object(installers, "_on_npm", return_value=True),
+            patch(
+                "otdf_sdk_mgr.installers.subprocess.check_call",
+                side_effect=KeyboardInterrupt(),
+            ),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            install_js_release("v0.20.0", dist)
+        assert not dist.exists()
+
+    def test_interrupted_install_of_a_built_cli_leaves_no_partial_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "js" / "dist" / "v0.22.0"
+
+        def install_interrupted(cmd: list[str], cwd: Path | None = None) -> int:
+            if cwd == dist:
+                raise KeyboardInterrupt
+            return fake_js_build(cmd, cwd)
+
+        with (
+            patch.object(installers, "_on_npm", side_effect=npm_has("@opentdf/sdk@0.22.0")),
+            patch.object(installers, "_js_release_tag", return_value="sdk-v0.22.0"),
+            patch("otdf_sdk_mgr.installers.subprocess.check_call", side_effect=install_interrupted),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            install_js_release("v0.22.0", dist)
+        assert not dist.exists()
+
     def test_build_failure_raises_without_dist(self, sdk_dir: Path):
         dist = sdk_dir / "js" / "dist" / "v0.22.0"
 

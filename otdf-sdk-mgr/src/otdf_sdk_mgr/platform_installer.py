@@ -16,6 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from otdf_sdk_mgr.checkout import BARE_REFRESH, CheckoutError, upstream_ref
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
 from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
 from otdf_sdk_mgr.semver import normalize_version
@@ -78,17 +79,25 @@ def _run(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def _ensure_bare_repo() -> Path:
-    """Clone the platform bare repo if missing; fetch updates otherwise."""
+    """Clone the platform bare repo if missing, then refresh it (BARE_REFRESH)."""
     bare = _platform_bare_repo()
     bare.parent.mkdir(parents=True, exist_ok=True)
     if not bare.exists():
         url = SDK_GIT_URLS["platform"].removesuffix(".git")
         print(f"Cloning {url} as a bare repository into {bare}...")
         _run(["git", "clone", "--bare", url, str(bare)])
-    else:
-        print(f"Fetching updates for {bare}...")
-        _run(["git", f"--git-dir={bare}", "fetch", "--all", "--tags"])
+    # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
+    print(f"Fetching updates for {bare}...")
+    _run(["git", f"--git-dir={bare}", *BARE_REFRESH])
     return bare
+
+
+def _upstream_ref(bare: Path, ref: str) -> str:
+    """`checkout.upstream_ref`, raising PlatformInstallError."""
+    try:
+        return upstream_ref(bare, ref)
+    except CheckoutError as e:
+        raise PlatformInstallError(str(e)) from e
 
 
 def _is_hex(s: str) -> bool:
@@ -153,34 +162,33 @@ def _worktree_path_for(ref: str) -> Path:
 
 
 def _ensure_worktree(ref: str) -> Path:
-    """Create (or reuse) a git worktree at the given platform ref.
+    """Create (or reuse) a detached git worktree at the given platform ref.
 
-    For mutable refs (branches, PR heads), `_ensure_bare_repo` has already
-    re-fetched, and we reset the worktree HEAD to the freshly-fetched ref so
-    a subsequent install picks up new commits. For immutable refs (tags,
-    SHAs) we just reuse.
+    Branch names resolve to origin's current tip via `upstream_ref`; a branch
+    origin has deleted raises PlatformInstallError. For mutable refs
+    (branches, PR heads) an existing worktree is reset to that tip so a
+    subsequent install picks up new commits. For immutable refs (tags, SHAs)
+    we just reuse.
     """
     bare = _ensure_bare_repo()
-    # The bare clone's default refspec is `+refs/heads/*:refs/heads/*` plus
-    # `--tags`, so GitHub PR refs (`refs/pull/N/head`) are never pulled.
-    # Fetch any explicit `refs/...` ref by name into the bare repo before we
-    # try to use it.
+    # `_ensure_bare_repo` refreshes branches and tags only (BARE_REFRESH), so
+    # GitHub PR refs (`refs/pull/N/head`) are never pulled. Fetch any explicit
+    # `refs/...` ref by name into the bare repo so the worktree add, or the
+    # reset, sees its current tip.
     if ref.startswith("refs/"):
         print(f"Fetching {ref} into bare repo...")
         _run(["git", f"--git-dir={bare}", "fetch", "origin", f"+{ref}:{ref}"])
+    target = _upstream_ref(bare, ref)
     worktree = _worktree_path_for(ref)
     if worktree.exists():
         if is_mutable_ref(ref):
             print(f"Worktree exists at {worktree}; resetting to {ref}.")
-            # Worktrees from a bare clone have no `origin` remote, so we
-            # reset to the bare repo's just-fetched ref. Mirrors the
-            # `install_helper_scripts` pattern below.
-            _run(["git", "-C", str(worktree), "reset", "--hard", ref])
+            _run(["git", "-C", str(worktree), "reset", "--hard", target])
         else:
             print(f"Worktree already exists at {worktree}; reusing.")
         return worktree
     print(f"Adding worktree at {worktree} for ref {ref}...")
-    _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), ref])
+    _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), target])
     return worktree
 
 
@@ -283,16 +291,15 @@ def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
     scripts directory.
     """
     bare = _ensure_bare_repo()
+    target = _upstream_ref(bare, branch)
     scripts_dir = _platform_scripts_dir()
     worktree = _worktree_path_for(f"scripts--{branch}")
     if not worktree.exists():
         print(f"Adding scripts worktree at {worktree} ({branch})...")
-        _run(["git", f"--git-dir={bare}", "worktree", "add", str(worktree), branch])
+        _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), target])
     else:
-        # Worktrees from a bare clone have no `origin` remote, so `git pull`
-        # fails. Reset to the (just-fetched) branch ref in the bare repo.
         print(f"Updating scripts worktree at {worktree}...")
-        _run(["git", "-C", str(worktree), "reset", "--hard", branch])
+        _run(["git", "-C", str(worktree), "reset", "--hard", target])
     src_scripts = worktree / "scripts"
     if not src_scripts.exists():
         raise PlatformInstallError(
