@@ -37,7 +37,30 @@ otdf-sdk-mgr install tip --ref refs/pull/42/head go  # raw ref
 # Install a published version with optional dist name (defaults to version tag)
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
+
+# Prepare a benchmark: the first ref is the reference, the rest candidates
+otdf-sdk-mgr install benchmark go v0.38.0 main pr:123 --platform main --otdfctl v0.38.1
 ```
+
+`install benchmark` resolves every ref (and the `--otdfctl` pin) to a commit
+before building anything, rejects two refs that would share a `dist/`
+directory at different commits, and installs each side by side under
+`xtest/sdk/<sdk>/dist/`. A source build records the commit it actually built in
+`dist/<slug>/.version` and is reused only while that is still the ref's commit.
+
+It writes `xtest/sdk/benchmark.installed.json` (`--manifest` to override) on
+every exit path. Its `status` is one of:
+
+| Status | Meaning | Exit |
+|---|---|---|
+| `success` | Every arm and pin installed. `status_message` warns if two arms are one build. | 0 |
+| `neutral` | Every ref resolved to one build, so nothing was installed or compared. | 0 |
+| `partial` | Some installs completed before one failed; the manifest lists them. | 1 |
+| `failed` | Nothing completed: a resolve error, a collision, or the first install failed. | 1 |
+
+Each arm records its requested alias, repository, `commit_sha` (`null` for a
+js release found on npm but not in git), dist directory, and install method;
+`metadata.sdk` names the SDK.
 
 ### versions
 

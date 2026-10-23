@@ -10,9 +10,10 @@ Full command reference: [README.md](README.md).
 
 | File | Subcommand | Responsibility |
 |------|------------|----------------|
-| `cli_install.py` | `install {stable,lts,tip,release,scripts,artifact,scenario}` | All `install` subcommands; delegates per-SDK work to `installers.py` and platform work to `platform_installer.py`. |
+| `cli_install.py` | `install {stable,lts,tip,release,scripts,artifact,scenario,benchmark}` | All `install` subcommands; delegates per-SDK work to `installers.py` and platform work to `platform_installer.py`. |
 | `cli_scenario.py` | `install scenario <path>` | Reads `scenarios.yaml` / `instance.yaml`, installs every referenced artifact, writes `<name>.installed.json`. |
 | `cli_versions.py` | `versions {list,resolve}` | Lists released versions (`--latest N` filters most-recent) and resolves tags to SHAs. |
+| `bench_prepare.py` | (lib) | `install benchmark`: resolves the arms, checks collisions and neutrality, installs, and writes the manifest on every exit path. |
 | `manifest.py` | (lib) | The `benchmark.installed.json` schema (`v1alpha1`), dist slugging, and the collision and neutrality checks. |
 | `installers.py` | (lib) | Per-SDK install logic for go/java/js. |
 | `platform_installer.py` | (lib) | Builds the platform `service` binary via git worktrees on a bare clone. |
