@@ -747,7 +747,6 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -759,7 +758,6 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -1176,7 +1174,6 @@ jobs:
           BENCH_PAYLOADS: ${{ needs.resolve-versions.outputs.bench-payloads }}
           BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
           # go's heads, not the matrix SDK's: conftest reads this to locate
           # otdfctl under sdk/go/dist/<head>/, so pointing it at java's or
@@ -1489,7 +1486,6 @@ jobs:
         env:
           ZIP64_SDK: ${{ matrix.sdk }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
           # go's heads: conftest reads this to locate otdfctl under
           # sdk/go/dist/<head>/, regardless of which SDK is encrypting.
