@@ -400,3 +400,41 @@ class TestJavaSdkOnMavenCentral:
             pytest.raises(InstallError, match="Could not check Maven Central"),
         ):
             installers._java_sdk_on_maven_central("v0.19.1")
+
+
+class TestCmdTip:
+    @pytest.mark.parametrize("sdk", ["go", "java", "js"])
+    @pytest.mark.parametrize(
+        "ref",
+        ["main", "pr:123", "feature/x", "sdk/v1.2.3", "otdfctl/v0.24.0", "a" * 40],
+    )
+    def test_builds_into_the_directory_install_benchmark_predicts(
+        self, tmp_path: Path, sdk: str, ref: str
+    ):
+        """`install benchmark` looks for the build at `dist_slug_for`; make writes `dist/$VERSIONS`."""
+        from otdf_sdk_mgr.manifest import ResolvedArtifact, dist_slug_for
+
+        envs: list[dict[str, str]] = []
+        with (
+            patch.object(installers, "get_sdk_dirs", return_value={sdk: tmp_path}),
+            patch.object(installers, "checkout_sdk_branch"),
+            patch("otdf_sdk_mgr.checkout.checkout_go_from_platform", return_value=tmp_path),
+            patch.object(
+                installers.subprocess,
+                "check_call",
+                side_effect=lambda cmd, cwd, env: envs.append(env),
+            ),
+        ):
+            installers.cmd_tip([sdk], ref=ref)
+
+        predicted = dist_slug_for(
+            ResolvedArtifact(
+                requested_alias=ref,
+                repository="",
+                commit_sha=None,
+                tag="",
+                is_head=True,
+                is_release=False,
+            )
+        )
+        assert envs[0]["VERSIONS"] == predicted
