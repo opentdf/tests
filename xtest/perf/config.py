@@ -50,7 +50,7 @@ PRECISION_FRACTION = 1 / 3
 
 #: Valid SDK names, mirroring `tdfs.sdk_type`. Duplicated rather than imported
 #: because `tdfs` pulls in the whole SDK abstraction layer.
-SDK_NAMES = ("go", "java", "js")
+SDK_NAMES = ("go", "java", "js", "web")
 
 
 @dataclass(frozen=True, slots=True)

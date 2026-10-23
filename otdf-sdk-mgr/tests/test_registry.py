@@ -39,6 +39,30 @@ def test_list_js_versions_raises_on_network_error(monkeypatch: pytest.MonkeyPatc
         list_js_versions()
 
 
+@pytest.mark.parametrize(
+    ("sdk", "package"),
+    [("js", "@opentdf/ctl"), ("web", "@opentdf/sdk")],
+)
+def test_list_js_versions_queries_the_flavours_package(
+    monkeypatch: pytest.MonkeyPatch, sdk: str, package: str
+):
+    """`web` is versioned by the library it bundles, `js` by the Node CLI."""
+    urls: list[str] = []
+
+    def fake(url: str):
+        urls.append(url)
+        return {
+            "dist-tags": {"latest": "0.22.0"},
+            "versions": {"0.21.0": {}, "0.22.0": {}, "0.22.0-beta.1": {}},
+        }
+
+    monkeypatch.setattr(registry, "fetch_json", fake)
+    results = list_js_versions(sdk)
+    assert urls == [f"https://registry.npmjs.org/{package}"]
+    assert {r["sdk"] for r in results} == {sdk}
+    assert [r["version"] for r in results if r["stable"]] == ["0.21.0", "0.22.0"]
+
+
 def test_list_java_maven_versions_raises_on_network_error(monkeypatch: pytest.MonkeyPatch):
     def boom(_url: str):
         raise urllib.error.URLError("no route to host")

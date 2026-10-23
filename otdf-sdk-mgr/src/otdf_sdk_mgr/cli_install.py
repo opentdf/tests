@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
-from otdf_sdk_mgr.config import ALL_SDKS
+from otdf_sdk_mgr.config import DEFAULT_SDKS
 
 install_app = typer.Typer(help="Install SDK CLI artifacts from registries or source.")
 install_app.command("scenario")(install_scenario_cmd)
@@ -41,7 +41,7 @@ def _install_platform_or_exit(
 def stable(
     sdks: Annotated[
         list[str] | None,
-        typer.Argument(help="SDKs to install (default: all)"),
+        typer.Argument(help="SDKs to install (default: go js java; add web explicitly)"),
     ] = None,
 ) -> None:
     """Install latest stable releases for each SDK."""
@@ -49,7 +49,7 @@ def stable(
     from otdf_sdk_mgr.registry import RegistryUnreachableError
 
     try:
-        cmd_stable(sdks or ALL_SDKS)
+        cmd_stable(sdks or DEFAULT_SDKS)
     except RegistryUnreachableError as e:
         typer.echo(f"Error: could not reach version registry — check network: {e}", err=True)
         raise typer.Exit(1)
@@ -70,7 +70,7 @@ def lts(
     from otdf_sdk_mgr.installers import InstallError, cmd_lts
     from otdf_sdk_mgr.platform_installer import install_platform_release
 
-    want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
+    want_platform, sdk_targets = _split_platform(sdks or DEFAULT_SDKS)
     if want_platform:
         version = LTS_VERSIONS.get("platform")
         if version is None:
@@ -116,7 +116,7 @@ def tip(
     from otdf_sdk_mgr.installers import cmd_tip
     from otdf_sdk_mgr.platform_installer import install_platform_source
 
-    want_platform, sdk_targets = _split_platform(sdks or ALL_SDKS)
+    want_platform, sdk_targets = _split_platform(sdks or DEFAULT_SDKS)
     # Preserve historical `dist/tip/` naming when --ref is omitted; otherwise
     # let the platform installer slugify the ref.
     platform_dist_name = "tip" if ref == "main" else None
@@ -142,7 +142,7 @@ def release(
 ) -> None:
     """Install specific released versions.
 
-    `sdk` may be one of go/js/java or the literal `platform`. Platform is
+    `sdk` may be one of go/js/java/web or the literal `platform`. Platform is
     built from source against the `service/<version>` tag in the
     `opentdf/platform` monorepo.
     """

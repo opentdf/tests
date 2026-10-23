@@ -1,8 +1,14 @@
 # otdf-sdk-mgr - Agent Guide
 
-Python CLI that installs SDK CLIs (`go`, `java`, `js`) and the OpenTDF
+Python CLI that installs SDK CLIs (`go`, `java`, `js`, `web`) and the OpenTDF
 platform service from released artifacts or source. Outputs land in
-`xtest/sdk/{go,java,js}/dist/<version>/` and `xtest/platform/dist/<version>/`.
+`xtest/sdk/{go,java,js,web}/dist/<version>/` and `xtest/platform/dist/<version>/`.
+
+`web` (web-sdk in headless Chromium) is in `ALL_SDKS` but not `DEFAULT_SDKS`:
+it installs only when named. It is versioned by `@opentdf/sdk`, not
+`@opentdf/ctl`, and has no checkout of its own: `SDK_SOURCE_ALIASES` sends
+its checkouts to the `js` worktree. Release and source installs both run
+`xtest/sdk/web/stage.sh`.
 
 Full command reference: [README.md](README.md).
 
@@ -13,7 +19,7 @@ Full command reference: [README.md](README.md).
 | `cli_install.py` | `install {stable,lts,tip,release,scripts,artifact,scenario}` | All `install` subcommands; delegates per-SDK work to `installers.py` and platform work to `platform_installer.py`. |
 | `cli_scenario.py` | `install scenario <path>` | Reads `scenarios.yaml` / `instance.yaml`, installs every referenced artifact, writes `<name>.installed.json`. |
 | `cli_versions.py` | `versions {list,resolve}` | Lists released versions (`--latest N` filters most-recent) and resolves tags to SHAs. |
-| `installers.py` | (lib) | Per-SDK install logic for go/java/js. |
+| `installers.py` | (lib) | Per-SDK install logic for go/java/js/web. |
 | `platform_installer.py` | (lib) | Builds the platform `service` binary via git worktrees on a bare clone. |
 | `schema.py` | (lib) | Pydantic models for `Scenario` / `Instance` + `load_yaml_mapping`. |
 

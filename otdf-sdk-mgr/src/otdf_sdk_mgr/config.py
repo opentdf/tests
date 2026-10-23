@@ -44,6 +44,7 @@ def get_sdk_dirs() -> dict[str, Path]:
         "go": sdk_dir / "go",
         "js": sdk_dir / "js",
         "java": sdk_dir / "java",
+        "web": sdk_dir / "web",
     }
 
 
@@ -52,11 +53,15 @@ SDK_GIT_URLS: dict[str, str] = {
     "go": "https://github.com/opentdf/otdfctl.git",
     "java": "https://github.com/opentdf/java-sdk.git",
     "js": "https://github.com/opentdf/web-sdk.git",
+    "web": "https://github.com/opentdf/web-sdk.git",
     "platform": "https://github.com/opentdf/platform.git",
 }
 
 SDK_NPM_PACKAGES: dict[str, str] = {
     "js": "@opentdf/ctl",
+    # The `web` flavour runs the library itself in a headless browser, so it
+    # is versioned by the library package rather than by the Node CLI.
+    "web": "@opentdf/sdk",
 }
 
 SDK_MAVEN_COORDS: dict[str, dict[str, str]] = {
@@ -93,6 +98,7 @@ LTS_VERSIONS: dict[str, str] = {
     "go": "0.24.0",
     "java": "0.9.0",
     "js": "0.4.0",
+    "web": "0.4.0",
     "platform": "0.9.0",
 }
 
@@ -122,11 +128,24 @@ SDK_BARE_REPOS: dict[str, str] = {
     "js": "web-sdk.git",
 }
 
+# Flavours with no checkout of their own. `web` builds from the same web-sdk
+# worktree as `js` (xtest/sdk/js/src/<slug>), so checking out `web` checks out
+# `js`; xtest/sdk/web/Makefile reads from there.
+SDK_SOURCE_ALIASES: dict[str, str] = {
+    "web": "js",
+}
+
 # Tag infixes for monorepo tag resolution
 SDK_TAG_INFIXES: dict[str, str] = {
     "js": "sdk",
+    "web": "sdk",
     "platform": "service",
 }
 
 
-ALL_SDKS = ["go", "js", "java"]
+# Installed when no SDK is named. `web` is left out because staging it also
+# downloads a Playwright browser; name it explicitly to get it.
+DEFAULT_SDKS = ["go", "js", "java"]
+
+# Every SDK flavour this tool knows how to install or clean.
+ALL_SDKS = [*DEFAULT_SDKS, "web"]

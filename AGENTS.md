@@ -11,7 +11,7 @@ This guide provides essential knowledge for AI agents performing updates, refact
 | `otdf-local/` | Python CLI that runs/stops the platform + KAS instances locally | yes |
 | `vulnerability/` | Playwright UI test suite (run with `npx playwright test`) | no |
 | `platform/` | Platform service source — **installed by `otdf-sdk-mgr install platform`**, not committed. Edits here may be wiped by a reinstall. |  |
-| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) |  |
+| `xtest/sdk/{go,java,js,web}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds). `web` is web-sdk run in headless Chromium, next to `js` (web-sdk's Node CLI); see `xtest/README.md`. |  |
 
 ## Test Framework Overview
 
@@ -68,7 +68,7 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 ### Evaluating an unreleased fix: `XT_FORCE_SUPPORTS`
 
 `SDK.supports(feature)` answers from the `supports` case statements in
-`xtest/sdk/{go,java,js}/cli.sh` — **in this repo, not in the SDK repos**. Most
+`xtest/sdk/{go,java,js,web}/cli.sh` — **in this repo, not in the SDK repos**. Most
 cases are version gates, so a build from an unmerged branch reports the last
 *released* version and answers "no" for precisely the fix you are trying to
 evaluate. The cell then skips and the run is green without having tested
