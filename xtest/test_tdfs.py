@@ -343,19 +343,52 @@ def change_policy(manifest: tdfs.Manifest) -> tdfs.Manifest:
     return manifest
 
 
-def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    pb = manifest.encryptionInformation.keyAccess[0].policyBinding
-    ## if the pb is str then json decode to tdfs.PolicyBinding
-    if isinstance(pb, tdfs.PolicyBinding):
-        hash = pb.hash
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(hash)))
-        pb.hash = str(altered_hash)
-        manifest.encryptionInformation.keyAccess[0].policyBinding = pb
-    else:
-        altered_hash = base64.b64encode(change_last_three(base64.b64decode(pb)))
-        manifest.encryptionInformation.keyAccess[0].policyBinding = str(altered_hash)
+def _policy_binding_hash(kao: tdfs.KeyAccessObject) -> str:
+    pb = kao.policyBinding
+    return pb.hash if isinstance(pb, tdfs.PolicyBinding) else pb
 
+
+def _set_policy_binding_hash(kao: tdfs.KeyAccessObject, hash: str) -> None:
+    if isinstance(kao.policyBinding, tdfs.PolicyBinding):
+        kao.policyBinding.hash = hash
+    else:
+        kao.policyBinding = hash
+
+
+def change_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """Alter the first policy binding's HMAC, keeping its encoding well-formed.
+
+    A malformed binding is rejected before the HMAC is compared, so only a
+    well-formed one shows the KAS checks the HMAC itself.
+    """
+    kao = manifest.encryptionInformation.keyAccess[0]
+    decoded = base64.b64decode(_policy_binding_hash(kao))
+    legacy = len(decoded) == 64
+    mac = bytearray(bytes.fromhex(decoded.decode()) if legacy else decoded)
+    mac[-1] ^= 0x01
+    altered = mac.hex().encode() if legacy else bytes(mac)
+    _set_policy_binding_hash(kao, base64.b64encode(altered).decode())
     return manifest
+
+
+def make_hexless_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """Re-encode every policy binding as the hexless Base64(HMAC).
+
+    SDKs write the legacy Base64(hex(HMAC)). Both spell the same HMAC, so this
+    needs no key, and a KAS that accepts the hexless form must still decrypt.
+    """
+    for kao in manifest.encryptionInformation.keyAccess:
+        mac = base64.b64decode(_policy_binding_hash(kao))
+        if len(mac) == 64:
+            mac = bytes.fromhex(mac.decode())
+        assert len(mac) == 32, f"unexpected policy binding length {len(mac)}"
+        _set_policy_binding_hash(kao, base64.b64encode(mac).decode())
+    return manifest
+
+
+def change_hexless_policy_binding(manifest: tdfs.Manifest) -> tdfs.Manifest:
+    """A hexless-form binding with its HMAC altered: well-formed, but wrong."""
+    return change_policy_binding(make_hexless_policy_binding(manifest))
 
 
 def change_root_signature(manifest: tdfs.Manifest) -> tdfs.Manifest:
@@ -523,6 +556,77 @@ def test_tdf_with_altered_policy_binding(
     )
     b_file = tdfs.update_manifest(
         "altered_policy_binding", ct_file, change_policy_binding
+    )
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+
+    try:
+        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        assert False, "decrypt succeeded unexpectedly"
+    except subprocess.CalledProcessError as exc:
+        assert_kas_request_error(exc, decrypt_sdk)
+
+
+def test_tdf_with_hexless_policy_binding(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> None:
+    """KAS accepts the hexless Base64(HMAC) policy binding, not only legacy hex.
+
+    Releases from opentdf/platform#2095 until #4223 reject it, so against those
+    the decrypt is asserted to fail with a KAS error rather than skipped or
+    xfailed: a node-level xfail would absorb unrelated failures, and a release
+    that has quietly gained the fix turns the cell red. See
+    :func:`tdfs.hexless_policy_binding_is_rejected`.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    b_file = tdfs.update_manifest(
+        "hexless_policy_binding", ct_file, make_hexless_policy_binding
+    )
+    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
+
+    if tdfs.hexless_policy_binding_is_rejected():
+        with pytest.raises(subprocess.CalledProcessError) as exc:
+            decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
+        assert_kas_request_error(exc.value, decrypt_sdk)
+        return
+
+    decrypt_sdk.decrypt(b_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
+
+
+def test_tdf_with_altered_hexless_policy_binding(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> None:
+    """Accepting the hexless form must not fail open on a wrong HMAC."""
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+    b_file = tdfs.update_manifest(
+        "altered_hexless_policy_binding", ct_file, change_hexless_policy_binding
     )
     rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
 

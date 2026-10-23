@@ -1141,6 +1141,28 @@ def zip64_reader_is_broken(decrypt_sdk: SDK) -> bool:
     return decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX
 
 
+#: Platform releases in [BUG, FIX) reject the hexless Base64(HMAC) policy binding
+#: and accept only legacy Base64(hex(HMAC)): opentdf/platform#2095 introduced
+#: the bug, opentdf/platform#4223 fixed it.
+PLATFORM_HEXLESS_POLICY_BINDING_BUG = (0, 5, 3)
+PLATFORM_HEXLESS_POLICY_BINDING_FIX = (0, 29, 1)
+
+
+def hexless_policy_binding_is_rejected() -> bool:
+    """True for platform releases known to reject a hexless-form policy binding.
+
+    Uses ``PLATFORM_TAG`` because source builds report a stale
+    ``PLATFORM_VERSION``. An unset tag or branch name is never assumed broken.
+    """
+    sv = _parse_semver(os.getenv("PLATFORM_TAG", ""))
+    return (
+        sv is not None
+        and PLATFORM_HEXLESS_POLICY_BINDING_BUG
+        <= sv
+        < PLATFORM_HEXLESS_POLICY_BINDING_FIX
+    )
+
+
 def _parse_semver(version: str) -> tuple[int, int, int] | None:
     """Parse a version string (with optional 'v' prefix) into (major, minor, patch)."""
     m = _version_re.match(version.lstrip("v"))
