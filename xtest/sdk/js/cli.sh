@@ -162,6 +162,18 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
+    zip-deflate)
+      # Decrypt a TDF whose ZIP entries are DEFLATE-compressed (method 8)
+      # rather than STORED. No web-sdk release reads them yet; support is in
+      # web-sdk#1099 (open). Turn this into a version gate on
+      # '.["@opentdf/sdk"]' once a release carries that PR. Until then,
+      # evaluate a build of the branch with XT_FORCE_SUPPORTS=zip-deflate.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip-deflate unsupported: needs the release carrying web-sdk#1099"
+      exit 1
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
