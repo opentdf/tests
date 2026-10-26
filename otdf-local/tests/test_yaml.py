@@ -8,6 +8,7 @@ naming the file.
 from pathlib import Path
 
 import pytest
+
 from otdf_local.utils.yaml import load_yaml, save_yaml, set_nested
 
 
