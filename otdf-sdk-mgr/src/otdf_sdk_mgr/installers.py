@@ -114,14 +114,19 @@ def _install_js_cli_from_npm(v: str, dist_dir: Path) -> None:
     js_dir = get_sdk_dir() / "js"
     package = SDK_NPM_PACKAGES["js"]
     print(f"  Installing {package}@{v} from npm...")
+    installed = False
     try:
         dist_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
         subprocess.check_call(["npm", "install", f"{package}@{v}"], cwd=dist_dir)
+        installed = True
     except (OSError, subprocess.CalledProcessError) as e:
-        # A partial dist_dir would be skipped as "already installed" next time.
-        shutil.rmtree(dist_dir, ignore_errors=True)
         raise InstallError(f"Installing {package}@{v} from npm failed: {e}") from e
+    finally:
+        # A partial dist_dir would be skipped as "already installed" next
+        # time, whether the install failed or was interrupted (Ctrl-C).
+        if not installed:
+            shutil.rmtree(dist_dir, ignore_errors=True)
     print(f"  JS release {v} installed to {dist_dir}")
 
 
@@ -191,17 +196,22 @@ def _build_js_cli_against_npm_sdk(v: str, dist_dir: Path) -> None:
         if len(packed) != 1:
             raise InstallError(f"Expected one packed CLI in {pack_dir}, found {packed}")
         tgz = packed[0]
+        installed = False
         try:
             dist_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
             shutil.copy(tgz, dist_dir / tgz.name)
             subprocess.check_call(["npm", "install", f"./{tgz.name}"], cwd=dist_dir)
+            installed = True
         except (OSError, subprocess.CalledProcessError) as e:
-            # A partial dist_dir would be skipped as "already installed" next time.
-            shutil.rmtree(dist_dir, ignore_errors=True)
             raise InstallError(
                 f"Built the {v} CLI but could not install it to {dist_dir}: {e}"
             ) from e
+        finally:
+            # A partial dist_dir would be skipped as "already installed" next
+            # time, whether the install failed or was interrupted (Ctrl-C).
+            if not installed:
+                shutil.rmtree(dist_dir, ignore_errors=True)
     print(f"  JS release {v} built against @opentdf/sdk from npm and installed to {dist_dir}")
 
 

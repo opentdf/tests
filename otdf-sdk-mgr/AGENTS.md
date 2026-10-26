@@ -20,23 +20,35 @@ Full command reference: [README.md](README.md).
 ## Platform Install via Git Worktrees
 
 `platform_installer.py` keeps a **bare clone** at `xtest/platform/src/platform.git`
-and `git worktree add`s each requested ref into a sibling directory. A few
-gotchas worth knowing before editing this module:
+and `git worktree add`s each requested ref into a sibling directory.
+`checkout.py` does the same for SDK sources. A few gotchas worth knowing
+before editing either module:
 
-- **Worktrees from a bare clone have no `origin` remote.** `git pull` inside
-  the worktree will fail. Update by fetching into the bare repo first
-  (`_ensure_bare_repo()` already does this), then `git -C <worktree> reset
-  --hard <branch>` to move the worktree HEAD to the refreshed ref.
+- **A bare clone records no fetch refspec.** `git clone --bare` copies the
+  branches once and sets no `remote.origin.fetch`. `git fetch` alone then
+  updates no refs and `--tags` adds only tags, so the bare repo's own branches
+  stay at clone time. `checkout.BARE_REFRESH` fetches origin's branches into
+  `refs/remotes/origin/*` with `--prune`, and `checkout.upstream_ref` maps a
+  branch name onto them. Don't check out the bare repo's local branches.
+- **Worktrees are detached.** Add them with `worktree add --detach <path>
+  <upstream_ref>` and refresh them with `git -C <worktree> reset --hard
+  <upstream_ref>`. Don't `git pull` in one: with no fetch refspec or upstream,
+  pull fetches origin's HEAD and integrates it into whatever is checked out,
+  silently fast-forwarding a worktree onto the default branch when it can. Nor
+  check out `FETCH_HEAD` after a `--git-dir=<bare>` fetch: `FETCH_HEAD` is per
+  worktree, so the worktree would see a missing or stale one. Worktrees made
+  by older versions may still have a branch checked out; the reset moves it,
+  which is harmless.
 - **Platform tags are namespaced** as `service/vX.Y.Z`. `_resolve_platform_ref`
   prefixes the `service/` infix on plain versions; raw SHAs, refs with a
   `/`, `pr:N` shorthand (expanded to `refs/pull/N/head`), and `main`/`HEAD`
   pass through unchanged.
-- **PR refs aren't in the default bare-clone refspec.** `git clone --bare`
-  sets `+refs/heads/*:refs/heads/*`, so `fetch --all --tags` never pulls
+- **PR refs aren't under `refs/heads/`,** so `BARE_REFRESH` never pulls
   `refs/pull/N/head`. `_ensure_worktree` (and the SDK equivalents in
   `checkout.py`) explicitly `fetch origin +refs/...:refs/...` for any
-  `refs/...` ref before adding the worktree, otherwise `git worktree add
-  refs/pull/N/head` dies with `invalid reference`.
+  `refs/...` ref before adding or resetting the worktree. Otherwise `git
+  worktree add refs/pull/N/head` dies with `invalid reference`, and a reset
+  rebuilds the PR head as it was at the last fetch.
 - **Mutable refs auto-refresh; immutable refs cache.** `refs.is_mutable_ref`
   treats full-length hex SHAs and `<infix>/vX.Y.Z` tag forms as immutable
   (reuse existing dist), and everything else as mutable (re-fetch the bare
