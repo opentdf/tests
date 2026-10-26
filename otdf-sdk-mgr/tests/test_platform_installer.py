@@ -174,36 +174,11 @@ def test_mutable_ref_drops_existing_binary_and_rebuilds(
 
 def test_pr_ref_expands_and_fetches_refspec(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """install_platform_source("pr:123") delegates to _ensure_worktree with the
-    expanded ref. The real `_ensure_worktree` would then run `git fetch origin
-    +refs/pull/123/head:refs/pull/123/head` — exercised by the explicit test
-    below that doesn't stub `_ensure_worktree`."""
+    expanded ref. test_checkout.py runs the real `_ensure_worktree` on a PR ref
+    against a local origin."""
     calls = _stub_installer(monkeypatch, tmp_path)
     install_platform_source("pr:123")
     assert calls["ensure_worktree"] == ["refs/pull/123/head"]
-
-
-def test_ensure_worktree_fetches_pr_refspec(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """_ensure_worktree explicitly fetches `refs/...` refs before `worktree add`.
-
-    The bare clone's default refspec is `+refs/heads/*:refs/heads/*` plus
-    `--tags`, so PR refs are never pulled and `git worktree add
-    refs/pull/N/head` fails without the explicit fetch.
-    """
-    run_calls: list[list[str]] = []
-
-    def fake_run(cmd, cwd=None):
-        run_calls.append(list(cmd))
-
-    bare = tmp_path / "platform.git"
-    bare.mkdir()
-    monkeypatch.setattr(platform_installer, "_run", fake_run)
-    monkeypatch.setattr(platform_installer, "_ensure_bare_repo", lambda: bare)
-    monkeypatch.setattr(platform_installer, "_platform_src_root", lambda: tmp_path / "src")
-
-    platform_installer._ensure_worktree("refs/pull/123/head")
-
-    fetches = [c for c in run_calls if len(c) >= 4 and c[2] == "fetch"]
-    assert any("+refs/pull/123/head:refs/pull/123/head" in c for c in fetches), run_calls
 
 
 def test_short_sha_expansion_at_install_time(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Annotated
 
 import typer
@@ -111,6 +112,7 @@ def tip(
         otdf-sdk-mgr install tip --ref pr:42 go
         otdf-sdk-mgr install tip --ref abc123f platform java
     """
+    from otdf_sdk_mgr.checkout import CheckoutError
     from otdf_sdk_mgr.installers import cmd_tip
     from otdf_sdk_mgr.platform_installer import install_platform_source
 
@@ -121,7 +123,14 @@ def tip(
     if want_platform:
         _install_platform_or_exit(install_platform_source, ref, dist_name=platform_dist_name)
     if sdk_targets:
-        cmd_tip(sdk_targets, ref=ref)
+        try:
+            cmd_tip(sdk_targets, ref=ref)
+        except (CheckoutError, RuntimeError, subprocess.CalledProcessError) as e:
+            typer.echo(f"Error: {e}", err=True)
+            # checkout._run captures git's stderr; make streams its own.
+            if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+                typer.echo(e.stderr.rstrip(), err=True)
+            raise typer.Exit(1)
 
 
 @install_app.command()
