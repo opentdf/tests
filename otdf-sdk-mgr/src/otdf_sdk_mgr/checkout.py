@@ -47,6 +47,16 @@ def _has_ref(git_dir: Path, ref: str) -> bool:
     return result.returncode == 0
 
 
+def _worktree_name(ref: str) -> str:
+    """Name the `src/` directory that a checkout of `ref` goes in.
+
+    Has to match the `VERSIONS=` slug `installers.cmd_tip` passes to make,
+    which builds `src/$VERSIONS`. Otherwise make fails to find the checkout,
+    or builds a stale one an earlier checkout left under that name.
+    """
+    return ref.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+
+
 def upstream_ref(git_dir: Path, ref: str) -> str:
     """Name what to check out for `ref` from a bare repo refreshed by BARE_REFRESH.
 
@@ -115,9 +125,7 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     repo_url = SDK_GIT_URLS[language].removesuffix(".git")
 
     bare_repo_path = sdk_dir / "src" / bare_repo_name
-    local_name = branch.replace("/", "--")
-    if local_name.startswith("sdk--"):
-        local_name = local_name.removeprefix("sdk--")
+    local_name = _worktree_name(branch)
     worktree_path = sdk_dir / "src" / local_name
 
     if not bare_repo_path.exists():
@@ -185,7 +193,7 @@ def checkout_go_from_platform(ref: str) -> Path:
     platform_src_dir = go_dir / "platform-src"
     bare_repo_path = platform_src_dir / "platform.git"
 
-    local_name = ref.replace("/", "--").removeprefix("otdfctl--")
+    local_name = _worktree_name(ref)
     worktree_path = platform_src_dir / local_name
     src_link = go_dir / "src" / local_name
 
