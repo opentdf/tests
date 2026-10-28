@@ -65,3 +65,34 @@ def git_ls_remote(
     (e.g. `otdf_sdk_mgr.resolve.Git`) still intercept the call.
     """
     return cast("str", repo.ls_remote(url, *patterns, heads=heads, tags=tags))
+
+
+def dist_slug(ref: str) -> str:
+    """Normalize a ref to a dist/ directory name.
+
+    Flattens slashes and strips namespace prefixes, matching what `cmd_tip`
+    passes as `VERSIONS=` and therefore what the Makefile actually creates.
+
+    `cmd_tip` names its build directory with this and `dist_slug_for`
+    predicts that directory with it, so the two cannot drift apart. `ref_slug`
+    above flattens only, and `normalize_version` only trims whitespace and
+    leading `v`s and adds one `v` back: predicting with either would give
+    `sdk/feature` and `feature` different names, hiding from `check_collision`
+    that both build into `dist/feature`.
+
+    Examples:
+        "main" → "main"
+        "otdfctl/v0.24.0" → "v0.24.0"
+        "sdk/v1.2.3" → "v1.2.3"
+        "refs/pull/123/head" → "refs--pull--123--head"
+
+    Raises:
+        ValueError: if nothing nameable is left, as for `sdk/` or `otdfctl/..`:
+            `dist/`, `dist/.` and `dist/..` are not a build directory.
+    """
+    slug = ref.replace("/", "--")
+    slug = slug.removeprefix("sdk--")
+    slug = slug.removeprefix("otdfctl--")
+    if slug in ("", ".", ".."):
+        raise ValueError(f"ref {ref!r} names no dist/ directory")
+    return slug
