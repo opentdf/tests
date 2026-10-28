@@ -32,7 +32,7 @@ dependencies = [
     "MarkupSafe>=3.0.3",
     "packaging>=26.3",
     "pluggy>=1.6.0",
-    "pycparser>=3.0",
+    "pycparser>=3.11",
     "pydantic>=2.13.5",
     "pydantic_core>=2.41.5",
     "Pygments>=2.19.2",
@@ -46,14 +46,14 @@ dependencies = [
     "smmap>=5.0.3",
     "typing_extensions>=4.16.0",
     "urllib3>=2.8.0",
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
     "scipy>=1.18.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pyright>=1.1.414",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
 ]
 
 # Note: This is a test suite, not a distributable package.
