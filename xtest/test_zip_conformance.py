@@ -218,7 +218,8 @@ _ZIP_REJECTIONS = {
     ),
     "js": re.compile(
         r"InvalidFileError(?: \[TdfError\])?: [^\n]*"
-        r"(?:central directory|zip64|extra field|retrieve CD|manifest file too large)|"
+        r"(?:central directory|zip64|extra field|retrieve CD|manifest file too large|"
+        r"stored entry \[)|"
         r"Value exceeds MAX_SAFE_INTEGER",
         re.IGNORECASE,
     ),
@@ -793,8 +794,14 @@ def _malformed_trailer(src: Path, case: str) -> zipmutate.MutableTrailer:
     return trailer
 
 
+#: Offsets past anything a signed 64-bit file position holds; a reader without
+#: the ``zip64-offset-bounds`` check crashes on these rather than rejecting.
+_UNBOUNDED_OFFSET_CASES = frozenset({"locator_offset_int64", "directory_offset_int64"})
+
+
 @pytest.mark.parametrize("case", _MALFORMED_CASES)
 def test_malformed_zip_never_yields_wrong_plaintext(
+    decrypt_sdk: tdfs.SDK,
     readable_zip_base: Path,
     zip_outcome: ZipOutcome,
     tmp_path: Path,
@@ -814,6 +821,8 @@ def test_malformed_zip_never_yields_wrong_plaintext(
     timeout, an unrelated failure, and above all exit 0 with the wrong bytes
     still fail. A passing cell alone is not evidence of a particular guard.
     """
+    if case in _UNBOUNDED_OFFSET_CASES:
+        decrypt_sdk.skip_if_unsupported("zip64-offset-bounds")
     trailer = _malformed_trailer(readable_zip_base, case)
     mutated = zipmutate.rewrite(readable_zip_base, tmp_path / "mutated.tdf", trailer)
     zip_outcome(mutated, tmp_path / "roundtrip.bin", legality="adversarial")
