@@ -214,6 +214,14 @@ feature_type = Literal[
     # Only observable from a payload that reaches the window; hence
     # sizes.MEDIUM_BYTES.
     "zip64-at-2gib",
+    # Reader-side: refuse a ZIP64 locator or central-directory offset that no
+    # file position can hold before seeking to it. Without the check, java
+    # narrows 2**63 to a negative long and FileChannelImpl.position throws a
+    # bare IllegalArgumentException -- a crash, not a ZIP diagnostic, so
+    # test_zip_conformance.py fails the cell. java-sdk#398 added the check
+    # after v0.19.1. Answered in SDK._uncached_supports rather than cli.sh;
+    # see there for why.
+    "zip64-offset-bounds",
 ]
 
 
@@ -1006,6 +1014,17 @@ class SDK:
                 return True
             case ("mechanism-ec-curves-384-521", "js"):
                 return False
+            case ("zip64-offset-bounds", "java"):
+                # Not answerable from cli.sh: a source build's jar reports the
+                # last *released* version, so java@main says 0.19.1 just like
+                # the release that lacks the check. Only the install directory
+                # tells them apart. Branch builds are assumed to carry
+                # java-sdk#398 (merged 2026-10-20); one cut before it fails
+                # the cells instead of skipping them.
+                release = self.semver()
+                return release is None or release > (0, 19, 1)
+            case ("zip64-offset-bounds", ("go" | "js")):
+                return True
             case _:
                 pass
 

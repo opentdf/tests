@@ -517,6 +517,11 @@ def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
             b"InvalidFileError [TdfError]: zip64 extended information extra field does not include relative header offset",
         ),
         ("js", b"Error: Value exceeds MAX_SAFE_INTEGER: 9223372036854775808"),
+        (
+            "js",
+            b"InvalidFileError: stored entry [0.manifest.json] has compressed "
+            b"size [6242] but uncompressed size [1532]",
+        ),
     ],
 )
 def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
