@@ -462,8 +462,9 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand
 
     expanded = expand_pr_shorthand(ref)
-    # dist/<slug>, which make builds from src/<slug>. `manifest.dist_slug_for`
-    # predicts this directory with the same function, so change them together.
+    # dist/<slug>, which make builds from src/<slug>. The checkouts below name
+    # src/<slug>, and `manifest.dist_slug_for` predicts dist/<slug>, with the
+    # same function, so change them together.
     slug = dist_slug(expanded)
 
     sdk_dirs = get_sdk_dirs()

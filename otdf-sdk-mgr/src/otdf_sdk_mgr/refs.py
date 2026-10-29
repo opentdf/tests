@@ -43,10 +43,10 @@ def is_mutable_ref(ref: str) -> bool:
 
 
 def ref_slug(ref: str) -> str:
-    """Slugify a git ref for use as a directory name.
+    """Slugify a git ref for use as a platform directory name.
 
-    Mirrors the pattern already used by `_worktree_path_for` and
-    `checkout_sdk_branch`: replace `/` with `--`. Idempotent.
+    Replaces `/` with `--` and keeps the namespace (`service--v0.9.0`).
+    Idempotent. SDK source builds use `dist_slug` below instead.
     """
     return ref.replace("/", "--")
 
@@ -73,12 +73,13 @@ def dist_slug(ref: str) -> str:
     Flattens slashes and strips namespace prefixes, matching what `cmd_tip`
     passes as `VERSIONS=` and therefore what the Makefile actually creates.
 
-    `cmd_tip` names its build directory with this and `dist_slug_for`
-    predicts that directory with it, so the two cannot drift apart. `ref_slug`
-    above flattens only, and `normalize_version` only trims whitespace and
-    leading `v`s and adds one `v` back: predicting with either would give
-    `sdk/feature` and `feature` different names, hiding from `check_collision`
-    that both build into `dist/feature`.
+    `cmd_tip` names its build directory with this, the checkouts in
+    `checkout.py` name the `src/` directory make builds it from with it, and
+    `dist_slug_for` predicts that directory with it, so none can drift apart.
+    `ref_slug` above flattens only, and `normalize_version` only trims
+    whitespace and leading `v`s and adds one `v` back: predicting with either
+    would give `sdk/feature` and `feature` different names, hiding from
+    `check_collision` that both build into `dist/feature`.
 
     Examples:
         "main" → "main"
