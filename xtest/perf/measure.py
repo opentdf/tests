@@ -58,6 +58,16 @@ class MeasurementError(RuntimeError):
     """
 
 
+class MeasurementTimeout(MeasurementError):
+    """A measured invocation ran past its timeout and was killed.
+
+    Kept distinct because it is the only failure the time budget can cause:
+    the round loop clips each timeout to the cell's deadline. A non-zero exit
+    or a command that would not start is the build's doing whenever it
+    happens.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class Sample:
     """Resource usage of one CLI invocation."""
@@ -139,8 +149,9 @@ def measure(
         check: raise :class:`MeasurementError` on a non-zero exit.
 
     Raises:
-        MeasurementError: on non-zero exit (when ``check``), on timeout, or if
-            the process could not be started.
+        MeasurementTimeout: if the child ran past ``timeout_s`` and was killed.
+        MeasurementError: on non-zero exit (when ``check``), or if the process
+            could not be started.
     """
     if not hasattr(os, "wait4"):  # pragma: no cover - Unix-only test suite
         raise MeasurementError(
@@ -192,7 +203,7 @@ def measure(
                 f"could not start {argv[0]!r}: {os.strerror(reading.exec_errno)}"
             )
         if reading.timed_out:
-            raise MeasurementError(
+            raise MeasurementTimeout(
                 f"{argv[0]!r} exceeded the {timeout_s:g}s measurement timeout"
             )
 

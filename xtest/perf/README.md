@@ -125,6 +125,14 @@ lists the reason for each cell.
 > Check with `otdf-sdk-mgr versions resolve <sdk> main latest` — one entry back
 > instead of two means there is nothing to measure until `main` moves.
 
+**A failed cell** is not a verdict but a red test. The build exited non-zero,
+would not start, or timed out, and a benchmark of an operation that errors out
+would be measuring the error path. A build that hangs is the worst regression
+there is, so a timeout fails the cell even though every cell runs against a
+deadline. The exception is a timeout that the time budget plainly caused. That
+cell is skipped, and "Not measured" names the arm and how long it had (see
+[timeouts](#a-timeout-fails-the-cell-unless-the-budget-caused-it)).
+
 ### The A/A control
 
 Each SDK gets a control cell that compares the baseline build **against itself**
@@ -264,6 +272,10 @@ confounder: whichever arm goes second inherits the first one's cache state.
 The shuffle is seeded per cell (`f"{seed}:{cell_id}"`), so a rerun reproduces the
 interleaving exactly while different cells do not share one order — which would
 correlate their noise.
+
+The one fixed order is the cell's first warm-up round, which always runs the
+reference first; see
+[timeouts](#a-timeout-fails-the-cell-unless-the-budget-caused-it).
 
 #### Log-ratios
 
@@ -496,6 +508,54 @@ measurement, because `otdfctl` provisions the attributes and KAS registry that
 every cell needs and `conftest.py` loads it at import time. `OTDFCTL_HEADS` must
 name *go's* head, not the matrix SDK's.
 
+#### A timeout fails the cell unless the budget caused it
+
+Each invocation's timeout is the smaller of `timeout_s` (600 s) and what is
+left before the cell's deadline. In CI one SDK's cells share 1500 s, about
+214 s each, so the deadline sets nearly every timeout. A build that never
+finishes therefore runs out *at the deadline*, exactly like one the budget cut
+short. Treating every timeout at the deadline as budget exhaustion turned the
+worst regression there is into a skip: a candidate that hung on every call read
+"budget ran out during warm-up after 0 of 5 rounds", the other cells passed,
+and the run was green.
+
+So `measure()` raises `MeasurementTimeout` for a timeout, and only that can
+become `BudgetExhausted`. A non-zero exit or a command that would not start
+fails the cell however late it happens. A timeout becomes a skip only when both
+of these hold:
+
+- the deadline set it, so the invocation got less than `timeout_s`; and
+- nothing in the cell says it should have finished. Either nothing has
+  completed yet, or it got less than `_HANG_FACTOR` (10) times the longest
+  invocation the cell has completed, any arm, warm-up included.
+
+Any other timeout fails the cell, in any round, and the message names the arm,
+the time it had and that longest invocation. That includes after `min_rounds`,
+where a hang used to end the loop as `stopped_because: "budget"`, which nothing
+in the step summary shows.
+
+Ten is generous on purpose, because failing a cell that only ran out of time is
+a mistake too. The measured loop starts a round only if its median length fits,
+so an arm the budget really cuts off typically got about a round's time, well
+short of ten times the cell's slowest run, cold first runs included. A cell
+left only seconds by earlier ones that overran skips the same way. The price is
+that a hang with less than that left in the cell still skips. A build that
+always hangs does so on its first call, with the cell's whole share still ahead
+of it.
+
+The first invocation of a cell has no evidence, so the first warm-up round
+always runs the reference first, and every other arm's first run has a
+completed one to be judged against. Warm-up samples are dropped, so this costs
+the measurement nothing, and the shuffle still runs in that round, so a seed
+draws the same measured orders as before. The reference timing out before
+anything has completed counts as the budget's: no candidate has run, and an
+invocation that cannot finish within the cell's share could not have been
+measured either way. With `--bench-warmup 0` there is no warm-up round to
+reorder, and whichever arm is drawn first is judged the same way.
+
+When a timeout does become a skip, the reason recorded for the cell names the
+arm and how long it had, and `__cause__` keeps the chain.
+
 #### Collection and isolation
 
 Benchmark cells are **deselected** without `--bench`, via
@@ -549,6 +609,8 @@ two builds doing different amounts of work) is invisible in the output.
 10. Never hand-edit the figures. Change `docs/make_figures.py` and regenerate;
     if a number moves, `--verify` is what tells you whether the figure or the
     world changed.
+11. Never let a failure pass as the budget running out, except a timeout the
+    deadline caused.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.
