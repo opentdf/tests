@@ -7,8 +7,7 @@ sentinel a field, reorder its extra-field TLVs, add comments, overstate the
 entry count, or declare sizes and offsets that are deliberately false --
 without moving or repacking a single local header or payload byte.
 :func:`rewrite` changes only bytes from ``cd_offset`` onward and copies
-everything before verbatim; :func:`corrupt_entry_bytes` is the one exception,
-and patches inside a single entry's data.
+everything before verbatim.
 
 The rewrite re-encodes rather than copies: see
 :meth:`MutableEntry.from_entry` for what survives from the source records.
@@ -24,10 +23,10 @@ faithfully.
 
 from __future__ import annotations
 
-import shutil
 import struct
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import zipinspect
 
@@ -47,7 +46,8 @@ class MutableEntry:
     uncompressed_size: int
     crc32: int = 0
     #: Ordinary entries use 2.0; tests enabling ZIP64 fields set 4.5 explicitly.
-    #: A lower declaration can still be used for malformed-input compatibility.
+    #: The offline tests also pair ZIP64 with 2.0, to show the inspector keys
+    #: on the sentinel rather than the version.
     version_needed_to_extract: int = 20
     #: A foreign extra-field TLV (e.g. an extended-timestamp record) placed
     #: *before* any ZIP64 record this builds, to test order independence.
@@ -92,6 +92,11 @@ class MutableEntry:
         )
         extra = self.extra_prefix + zip64_tlv
         if self.extra_override is not None:
+            if self.extra_prefix:
+                raise ValueError(
+                    "extra_override replaces the whole extra area; extra_prefix "
+                    "would be silently dropped"
+                )
             extra = self.extra_override
 
         raw_usize = (
@@ -125,6 +130,12 @@ class MutableEntry:
         )
 
 
+Zip64EocdField = Literal["count", "size", "offset"]
+_ALL_ZIP64_EOCD_FIELDS: frozenset[Zip64EocdField] = frozenset(
+    {"count", "size", "offset"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class MutableTrailer:
     """The central directory plus its EOCD (and ZIP64 EOCD/locator if forced)."""
@@ -137,7 +148,7 @@ class MutableTrailer:
     force_zip64_eocd: bool = False
     #: Which ordinary EOCD fields defer to ZIP64; the others remain truthful.
     #: Used only when force_zip64_eocd is true. Disk numbers always remain zero.
-    zip64_eocd_fields: frozenset[str] = frozenset({"count", "size", "offset"})
+    zip64_eocd_fields: frozenset[Zip64EocdField] = _ALL_ZIP64_EOCD_FIELDS
     #: Lie about the entry count in the EOCD (or ZIP64 EOCD). None: truthful.
     #: The central directory's own bytes are never padded to match, so a
     #: reader that walks this many records runs off the real data.
@@ -156,6 +167,16 @@ class MutableTrailer:
             if self.entry_count_override is None
             else self.entry_count_override
         )
+        if not self.force_zip64_eocd and (
+            self.zip64_locator_offset_override is not None
+            or self.zip64_eocd_fields != _ALL_ZIP64_EOCD_FIELDS
+        ):
+            # Both describe the ZIP64 EOCD, and without force_zip64_eocd there
+            # is none: the "malformed" trailer would come out valid.
+            raise ValueError(
+                "zip64_locator_offset_override and zip64_eocd_fields need "
+                "force_zip64_eocd"
+            )
         if len(self.comment) > 0xFFFF:
             raise ValueError(
                 f"EOCD comment is {len(self.comment)} bytes; a 16-bit length "
@@ -252,42 +273,4 @@ def rewrite(src: Path, dest: Path, trailer: MutableTrailer) -> Path:
             f_out.write(chunk)
             remaining -= len(chunk)
         f_out.write(trailer.to_bytes(cd_offset))
-    return dest
-
-
-def corrupt_entry_bytes(
-    src: Path, dest: Path, entry_name: str, *, at: int, patch: bytes
-) -> Path:
-    """Copy ``src`` to ``dest``, then overwrite ``patch`` inside one entry's data.
-
-    ``at`` is relative to the start of ``entry_name``'s data region (located
-    via :func:`zipinspect.local_file_header_data_offset`), not the file.
-    Every structural field -- local headers, central directory, EOCD -- stays
-    byte-identical and truthful; only the named window of that one entry's
-    data changes. This invalidates the entry's CRC-32 and any payload
-    authentication, so callers must account for those failures as well.
-    """
-    if src.resolve() == dest.resolve():
-        raise ValueError(
-            f"corrupt_entry_bytes requires distinct src and dest, both {src}"
-        )
-    cd = zipinspect.central_directory(src)
-    try:
-        entry = next(e for e in cd.entries if e.name == entry_name)
-    except StopIteration:
-        raise ValueError(
-            f"{src} has no entry named {entry_name!r}; entries are "
-            f"{[e.name for e in cd.entries]}"
-        ) from None
-    data_offset = zipinspect.local_file_header_data_offset(src, entry)
-    patch_at = data_offset + at
-    if at < 0 or at + len(patch) > entry.compressed_size:
-        raise ValueError(
-            f"patch of {len(patch)} bytes at relative offset {at} would run "
-            f"outside entry {entry_name!r}'s {entry.compressed_size}-byte data region"
-        )
-    shutil.copyfile(src, dest)
-    with dest.open("r+b") as f:
-        f.seek(patch_at)
-        f.write(patch)
     return dest

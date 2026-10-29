@@ -44,7 +44,7 @@ and in `test-results/zip-conformance.json`.
   invalid stored sizes, invalid local-header/locator/directory offsets,
   impossible entry counts, and an overstated entry count.
 
-The malformed-input and record-length cells first decrypt the rebuilt but
+The adversarial and record-length cells first decrypt the rebuilt but
 unmutated container as a control, which must succeed byte-for-byte; a reader
 that refused the rebuild itself would otherwise have each rejection credited
 as conformant.
