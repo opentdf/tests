@@ -14,6 +14,7 @@ from otdf_sdk_mgr.config import (
     SDK_GIT_URLS,
     SDK_NPM_PACKAGES,
 )
+from otdf_sdk_mgr.refs import git_ls_remote
 
 
 class ResolveSuccess(TypedDict):
@@ -51,6 +52,20 @@ MERGE_QUEUE_REGEX = (
 )
 
 SHA_REGEX = r"^[a-f0-9]{7,64}$"
+
+
+def strip_tag_infix(tag: str, infix: str) -> str | None:
+    """Return the version part of an ``<infix>/vX.Y.Z`` or ``<infix>-vX.Y.Z`` tag.
+
+    Returns None for a tag outside the ``infix`` namespace. Both separators
+    occur in practice: web-sdk tagged ``sdk/v0.4.0``, then release-please moved
+    it to ``sdk-v0.4.1`` and every release since. Matching ``/`` alone left js
+    ``latest`` pinned to 0.4.0.
+    """
+    for sep in ("/", "-"):
+        if tag.startswith(f"{infix}{sep}"):
+            return tag.removeprefix(f"{infix}{sep}")
+    return None
 
 
 def _ref_specificity(ref: str) -> int:
@@ -126,7 +141,7 @@ def _classify_sha_match(
 
     tag = ref.removeprefix("refs/tags/")
     if infix:
-        tag = tag.removeprefix(f"{infix}/")
+        tag = strip_tag_infix(tag, infix) or tag
     return {
         "sdk": sdk,
         "alias": version,
@@ -159,7 +174,7 @@ def _try_resolve_js_npm(
     npm_version = version.lstrip("v")
     try:
         data = fetch_json(f"https://registry.npmjs.org/{package}/{npm_version}")
-    except Exception:
+    except (OSError, ValueError):  # network/HTTP errors, or a non-JSON body
         return None
 
     # npm may resolve a dist-tag (e.g. "next") to a concrete version
@@ -188,8 +203,7 @@ def lookup_additional_options(sdk: str, version: str) -> str | None:
     """Look up additional build options for a given SDK version."""
     if sdk != "java":
         return None
-    if version.startswith("v"):
-        version = version[1:]
+    version = version.removeprefix("v")
     branch = JAVA_PLATFORM_BRANCH_MAP.get(version)
     if branch:
         return f"PLATFORM_BRANCH={branch}"
@@ -231,7 +245,9 @@ def _resolve_against(
         repo = Git()
         version = version.removeprefix("refs/heads/")
         if version == "main":
-            all_heads = [r.split("\t") for r in repo.ls_remote(sdk_url, heads=True).split("\n")]
+            all_heads = [
+                r.split("\t") for r in git_ls_remote(repo, sdk_url, heads=True).split("\n")
+            ]
             try:
                 sha, _ = next(tag for tag in all_heads if "refs/heads/main" in tag)
             except StopIteration:
@@ -245,7 +261,7 @@ def _resolve_against(
             }
 
         if re.match(SHA_REGEX, version):
-            ls_remote = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
+            ls_remote = [r.split("\t") for r in git_ls_remote(repo, sdk_url).split("\n")]
             matching_tags = [(sha, tag) for (sha, tag) in ls_remote if sha.startswith(version)]
             if not matching_tags:
                 return {
@@ -263,7 +279,9 @@ def _resolve_against(
 
         if version.startswith("refs/pull/"):
             merge_heads = [
-                r.split("\t") for r in repo.ls_remote(sdk_url).split("\n") if r.endswith(version)
+                r.split("\t")
+                for r in git_ls_remote(repo, sdk_url).split("\n")
+                if r.endswith(version)
             ]
             pr_number = version.split("/")[2]
             if not merge_heads:
@@ -282,7 +300,7 @@ def _resolve_against(
                 "tag": f"pull-{pr_number}",
             }
 
-        remote_tags = [r.split("\t") for r in repo.ls_remote(sdk_url).split("\n")]
+        remote_tags = [r.split("\t") for r in git_ls_remote(repo, sdk_url).split("\n")]
         all_listed_tags = [
             (sha, tag.split("refs/tags/")[-1]) for (sha, tag) in remote_tags if "refs/tags/" in tag
         ]
@@ -300,19 +318,29 @@ def _resolve_against(
                 "alias": version,
                 "head": True,
                 "sha": sha,
-                "tag": version,
+                # Flattened the same way _classify_sha_match flattens a branch
+                # it reached by SHA: the tag becomes a single dist/<tag>/ and
+                # src/<tag>/ path component. A slash here nests those
+                # directories, and every consumer walks them one level deep --
+                # xtest's all_versions_of() lists dist/*/ and the go Makefile
+                # finds src/*/, so "feat/x" is discovered as a "feat" build
+                # with no cli.sh in it.
+                "tag": version.replace("/", "--"),
             }
 
-        if infix and version.startswith(f"{infix}/"):
-            version = version.split(f"{infix}/")[-1]
-
-        listed_tags = all_listed_tags
         if infix:
-            listed_tags = [
-                (sha, tag.split(f"{infix}/")[-1])
-                for (sha, tag) in listed_tags
-                if f"{infix}/" in tag
-            ]
+            version = strip_tag_infix(version, infix) or version
+
+        listed_tags: list[tuple[str, str]] = all_listed_tags
+        # Infix-stripped version -> the tag as git names it, for `release`.
+        git_tags: dict[str, str] = {}
+        if infix:
+            listed_tags = []
+            for sha, tag in all_listed_tags:
+                stripped = strip_tag_infix(tag, infix)
+                if stripped is not None:
+                    listed_tags.append((sha, stripped))
+                    git_tags[stripped] = tag
 
         # For JS: explicit version refs resolve via npm first so that pre-release and
         # dist-tag refs (e.g. "0.9.0-beta.84", "next") work without a matching git tag.
@@ -327,33 +355,10 @@ def _resolve_against(
         alias = version
         matching_tags = []
         if version == "latest":
-            # For Java, check if CLI artifacts are available and fall back to source build if not
-            if sdk == "java":
-                from otdf_sdk_mgr.registry import list_java_github_releases
-
-                gh_releases = list_java_github_releases()
-                # Find the latest version with CLI artifact
-                versions_with_cli = [r for r in gh_releases if r.get("has_cli", False)]
-                if versions_with_cli:
-                    # Use the latest version that has CLI
-                    latest_with_cli_tag = versions_with_cli[-1]["version"]
-                    matching_tags = [
-                        (sha, tag)
-                        for (sha, tag) in stable_tags
-                        if tag in [latest_with_cli_tag, latest_with_cli_tag.lstrip("v")]
-                    ]
-                if not matching_tags:
-                    # No versions with CLI found, fall back to building latest from source
-                    sha, tag = stable_tags[-1]
-                    return {
-                        "sdk": sdk,
-                        "alias": alias,
-                        "head": True,  # Mark as head to trigger source checkout
-                        "sha": sha,
-                        "tag": tag,
-                    }
-            else:
-                matching_tags = stable_tags[-1:]
+            # The newest semver tag, for every SDK. For java this holds even
+            # when the release has no cmdline.jar asset: the installer builds
+            # the CLI against the sdk on Maven Central instead.
+            matching_tags = stable_tags[-1:]
         else:
             if version == "lts":
                 if sdk not in LTS_VERSIONS:
@@ -373,9 +378,7 @@ def _resolve_against(
         if not matching_tags:
             raise ValueError(f"Tag [{version}] not found in [{sdk_url}]")
         sha, tag = matching_tags[-1]
-        release = tag
-        if infix:
-            release = f"{infix}/{release}"
+        release = git_tags.get(tag, tag)
         return {
             "sdk": sdk,
             "alias": alias,

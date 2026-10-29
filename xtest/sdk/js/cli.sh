@@ -11,22 +11,30 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
+#  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  CLIENTID [string] - Override OIDC client ID (default: opentdf)
+#  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-CTL=@opentdf/ctl
-if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
-  CTL=@opentdf/cli
+# Every @opentdf/ctl and @opentdf/cli release names its bin `opentdf`. Run it
+# directly, not through npx: when the local install is missing, npx fetches
+# the registry's latest and runs that instead -- testing the wrong build.
+CLI="$SCRIPT_DIR/node_modules/.bin/opentdf"
+if [[ ! -x "$CLI" ]]; then
+  echo "No CLI at $CLI; reinstall this SDK version" >&2
+  exit 1
 fi
 
-if [ "$1" == "supports" ]; then
+if [[ "$1" == "supports" ]]; then
   if ! cd "$SCRIPT_DIR"; then
     echo "failed: [cd $SCRIPT_DIR]"
     exit 1
@@ -34,29 +42,29 @@ if [ "$1" == "supports" ]; then
   case "$2" in
     assertions)
       set -o pipefail
-      npx $CTL help | grep assertions
+      "$CLI" help | grep assertions
       exit $?
       ;;
     assertion_verification)
       set -o pipefail
-      npx $CTL help | grep assertionVerificationKeys
+      "$CLI" help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
       set -o pipefail
-      npx $CTL help | grep autoconfigure
+      "$CLI" help | grep autoconfigure
       exit $?
       ;;
     kasallowlist)
       set -o pipefail
-      npx $CTL help | grep 'from "/key-access-servers" endpoint'
+      "$CLI" help | grep 'from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
       set -o pipefail
-      if npx $CTL help | grep encapKeyType; then
+      if "$CLI" help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
-        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
+        "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
         exit $?
       else
         echo "ecwrap not supported"
@@ -65,35 +73,84 @@ if [ "$1" == "supports" ]; then
       ;;
     hexless)
       set -o pipefail
-      npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;
     hexaflexible)
       set -o pipefail
-      npx $CTL help | grep tdfSpecVersion
+      "$CLI" help | grep tdfSpecVersion
       exit $?
       ;;
     key_management)
       # Advanced key management from SDK version >= 0.8.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
       exit $?
       ;;
     obligations)
       # Obligations support from SDK version >= 0.6.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
       exit $?
       ;;
     attribute_traversal)
       # Attribute traversal support from web-sdk version >= 0.9.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    mechanism-mlkem)
+      set -o pipefail
+      "$CLI" encrypt --help | grep -i 'mlkem:768'
+      exit $?
+      ;;
+    gmac_root_rejected)
+      # DSPX-4703: does decrypt refuse a manifest downgraded to
+      # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
+      # runs inside root-signature validation, which needs the unwrapped
+      # payload key and so happens after the KAS rewrap -- there is no flag,
+      # subcommand or version field to grep for.
+      #
+      # test_root_signature forges a root and watches the reader instead, and
+      # only consults this as an escape hatch: XT_FORCE_SUPPORTS=gmac_root_rejected
+      # runs the exploit cases unconditionally, turning a vulnerable build's
+      # skip into a red repro.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
+      exit 1
+      ;;
+    multikao)
+      # Tolerate a KAO array where the same KAS wraps the same split more than
+      # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
+      set -o pipefail
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    session-key-mlkem)
+      # --rewrapKeyType has long accepted "mlkem:768" as a choice (it shares
+      # PUBLIC_KEY_ALGORITHMS with --encapKeyType, used for KAS-managed-key
+      # mechanisms), so grepping --help for it would false-positive on builds
+      # that predate decryptStreamFrom() actually forwarding the requested
+      # algorithm to unwrapKey(). Use the explicit supportedFeatures list from
+      # --version instead, which is hardcoded and scoped to this capability.
+      set -o pipefail
+      "$CLI" --version | jq -e '.supportedFeatures | index("session-key-mlkem")' >/dev/null
       exit $?
       ;;
     mechanism-xwing)
+      # The --encapKeyType choices are web-sdk's KEY_ALGORITHMS, the list it
+      # can wrap a KAS key for. No release has X-Wing yet.
       set -o pipefail
-      npx $CTL help | grep -i xwing
+      "$CLI" help | grep -i 'hpqt:xwing'
+      exit $?
+      ;;
+    mechanism-secpmlkem)
+      # As mechanism-xwing. web-sdk#1049 adds both secp+ML-KEM hybrids to
+      # KEY_ALGORITHMS, which turns this on without an edit here.
+      set -o pipefail
+      "$CLI" help | grep -i 'hpqt:secp256r1-mlkem768'
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
@@ -101,8 +158,20 @@ if [ "$1" == "supports" ]; then
       # exists as an unwired boolean on pre-DPoP main, so discriminate on the
       # companion --dpop-key flag that ships with the real implementation.
       set -o pipefail
-      npx $CTL help | grep -iE -- '--dpop-key|--dpopKey'
+      "$CLI" help | grep -iE -- '--dpop-key|--dpopKey'
       exit $?
+      ;;
+    chunky)
+      # web-sdk omits a segment's sizes when they equal the manifest defaults
+      # and defaults them back on read. Both halves predate any version we
+      # test. See DSPX-4591.
+      exit 0
+      ;;
+    zip64-at-2gib)
+      # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
+      # on the right side of the 2 GiB switch point. Predates any version we
+      # test. See DSPX-4591.
+      exit 0
       ;;
     *)
       echo "Unknown feature: $2"
@@ -112,20 +181,28 @@ if [ "$1" == "supports" ]; then
 fi
 
 XTEST_DIR=$SCRIPT_DIR
-while [ "$XTEST_DIR" != "/" ]; do
-  if [ -f "$XTEST_DIR/pyproject.toml" ] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
+while [[ "$XTEST_DIR" != "/" ]]; do
+  if [[ -f "$XTEST_DIR/pyproject.toml" ]] && grep -q 'name = "xtest"' "$XTEST_DIR/pyproject.toml"; then
     break
   fi
   XTEST_DIR=$(dirname "$XTEST_DIR")
 done
 
-if [ "$XTEST_DIR" = "/" ]; then
+if [[ "$XTEST_DIR" = "/" ]]; then
   echo "xtest root (pyproject.toml with name = \"xtest\") not found."
   exit 1
 fi
 
+# Capture any caller-set overrides before test.env unconditionally resets them.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
+
 # shellcheck disable=SC1091
 source "$XTEST_DIR"/test.env
+
+# Restore caller overrides (e.g. from pytest monkeypatch for DPoP client).
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 src_file=$(realpath "$2")
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
@@ -134,14 +211,21 @@ args=(
   --output "$dst_file"
   --kasEndpoint "$KASURL"
   --oidcEndpoint "$KCFULLURL"
-  --auth opentdf:secret
+  --auth "${CLIENTID:-opentdf}:${CLIENTSECRET:-secret}"
 )
+
+if [[ -n "$XT_WITH_DPOP" ]]; then
+  args+=(--dpop "$XT_WITH_DPOP")
+fi
+if [[ -n "$XT_WITH_DPOP_KEY" ]]; then
+  args+=(--dpop-key "$XT_WITH_DPOP_KEY")
+fi
 
 args+=(--containerType tdf3)
 
-if [ -n "$XT_WITH_ATTRIBUTES" ]; then
+if [[ -n "$XT_WITH_ATTRIBUTES" ]]; then
   attributes="$XT_WITH_ATTRIBUTES"
-  if [ -f "$attributes" ]; then
+  if [[ -f "$attributes" ]]; then
     attributes=$(realpath "$attributes")
     echo "Attributes are a file: $attributes"
     args+=(--attributes "$attributes")
@@ -152,13 +236,13 @@ if [ -n "$XT_WITH_ATTRIBUTES" ]; then
   fi
 fi
 
-if [ -n "$XT_WITH_ASSERTIONS" ]; then
+if [[ -n "$XT_WITH_ASSERTIONS" ]]; then
   assertions="$XT_WITH_ASSERTIONS"
-  if [ -f "$assertions" ]; then
+  if [[ -f "$assertions" ]]; then
     assertions=$(realpath "$assertions")
     echo "Assertions are a file: $assertions"
     args+=(--assertions "$assertions")
-  elif [ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]; then
+  elif [[ "$(echo "$assertions" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)" == "valid" ]]; then
     # Assertions are plain json
     echo "Assertions are plain json: $assertions"
     args+=(--assertions "$assertions")
@@ -168,9 +252,9 @@ if [ -n "$XT_WITH_ASSERTIONS" ]; then
   fi
 fi
 
-if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
+if [[ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]]; then
   verification_keys="$XT_WITH_ASSERTION_VERIFICATION_KEYS"
-  if [ -f "$verification_keys" ]; then
+  if [[ -f "$verification_keys" ]]; then
     verification_keys=$(realpath "$verification_keys")
     echo "Verification keys are a file: $verification_keys"
     args+=(--assertionVerificationKeys "$verification_keys")
@@ -185,50 +269,63 @@ if ! cd "$SCRIPT_DIR"; then
   exit 1
 fi
 
-if [ "$1" == "encrypt" ]; then
-  if npx $CTL help | grep autoconfigure; then
+# Echo a CLI invocation with the --auth secret masked, so CI logs never capture
+# client credentials. The real (unmasked) args are still used for execution.
+echo_redacted() {
+  local out=() a mask_next=0
+  for a in "$@"; do
+    if [[ "$mask_next" == 1 ]]; then
+      out+=("${a%%:*}:***")
+      mask_next=0
+    elif [[ "$a" == "--auth" ]]; then
+      out+=("$a")
+      mask_next=1
+    else
+      out+=("$a")
+    fi
+  done
+  echo "${out[@]}"
+  return 0
+}
+
+if [[ "$1" == "encrypt" ]]; then
+  if "$CLI" help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
-  if [ -n "$XT_WITH_ECDSA_BINDING" ]; then
-    if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
-      args+=(--policyBinding ecdsa)
-    fi
+  if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
+    args+=(--policyBinding ecdsa)
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--encapKeyType "ec:secp256r1")
-  fi
-
-  if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
+  if [[ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]]; then
     args+=(--policyType plaintext)
   fi
-  if [ -n "$XT_WITH_TARGET_MODE" ]; then
+  if [[ -n "$XT_WITH_TARGET_MODE" ]]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
-  echo npx $CTL encrypt "$src_file" "${args[@]}"
-  npx $CTL encrypt "$src_file" "${args[@]}"
-elif [ "$1" == "decrypt" ]; then
-  if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
+  echo_redacted "$CLI" encrypt "$src_file" "${args[@]}"
+  "$CLI" encrypt "$src_file" "${args[@]}"
+elif [[ "$1" == "decrypt" ]]; then
+  if [[ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]]; then
     args+=(--noVerifyAssertions)
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--rewrapKeyType "ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    args+=(--rewrapKeyType "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
-  if [ -n "$XT_WITH_KAS_ALLOW_LIST" ]; then
+  if [[ -n "$XT_WITH_KAS_ALLOW_LIST" ]]; then
     args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")
   fi
-  if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
+  if [[ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]]; then
     args+=(--ignoreAllowList)
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+  if "$CLI" help | grep 'from "/key-access-servers" endpoint'; then
     args+=(--policyEndpoint "$PLATFORMURL")
   else
     args+=(--ignoreAllowList)
   fi
 
-  echo npx $CTL decrypt "$src_file" "${args[@]}"
-  npx $CTL decrypt "$src_file" "${args[@]}"
+  echo_redacted "$CLI" decrypt "$src_file" "${args[@]}"
+  "$CLI" decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"
   exit 1

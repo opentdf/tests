@@ -2,7 +2,15 @@
 
 This guide covers operational procedures for managing the test environment with `otdf-local`. For command reference, see [README.md](README.md).
 
-**Depends on `otdf-sdk-mgr`.** `otdf-local` launches binaries that `otdf-sdk-mgr install platform` (or `otdf-sdk-mgr install scenario`) writes into `xtest/platform/dist/`. If `otdf-local up` complains that a binary is missing, run the installer first.
+**Depends on a platform source tree.** `otdf-local` runs `go run ./service` from the first of:
+
+1. `platform/` beside `xtest/` (a hand-cloned checkout)
+2. the single worktree under `xtest/platform/src/<ref>/`, from `otdf-sdk-mgr install tip|release platform` (the `scripts--*` helper checkout is ignored)
+3. `platform/` beside a further ancestor (e.g. a multi-repo workspace)
+
+If several refs are installed and there is no sibling checkout, it refuses to guess: set `OTDF_LOCAL_PLATFORM_DIR` to the one to run. `otdf-local up` prints the directory it chose.
+
+Config is generated from `opentdf.yaml` into `opentdf-dev.yaml` on every `up`/`restart`. If `opentdf.yaml` is missing it is seeded from the committed `opentdf-dev.yaml` (git HEAD).
 
 ## Environment Setup for pytest
 
@@ -60,7 +68,7 @@ cd otdf-local && uv run otdf-local up
 ```bash
 pkill -9 -f "go run ./service start"
 sleep 2
-cd platform && go run ./service start
+cd "$(uv run otdf-local env --format json | jq -r .PLATFORM_DIR)" && go run ./service start
 ```
 
 ## Viewing Service Logs
@@ -89,7 +97,7 @@ When using `otdf-local up` or `otdf-local restart platform`, golden keys are aut
 
 **Manual configuration** (emergency fallback only — drifts from current platform schema; check `platform/opentdf-dev.yaml.example` if this fails):
 
-Add to `platform/opentdf-dev.yaml`:
+Add to `opentdf.yaml` in the platform directory (`opentdf-dev.yaml` is regenerated from it on every `up`/`restart`):
 ```yaml
 services:
   kas:

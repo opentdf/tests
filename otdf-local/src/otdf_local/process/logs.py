@@ -5,7 +5,7 @@ import time
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -84,8 +84,9 @@ class LogReader:
         )
         if iso_match:
             try:
-                ts_str = iso_match.group(1).rstrip("Z")
-                timestamp = datetime.fromisoformat(ts_str)
+                timestamp = datetime.fromisoformat(iso_match.group(1))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=UTC)
                 message = iso_match.group(2)
             except ValueError:
                 pass
@@ -97,7 +98,10 @@ class LogReader:
         )
         if std_match and timestamp is None:
             try:
-                timestamp = datetime.strptime(std_match.group(1), "%Y/%m/%d %H:%M:%S")
+                # Go's default log format is in local time.
+                timestamp = datetime.strptime(
+                    std_match.group(1), "%Y/%m/%d %H:%M:%S"
+                ).astimezone()
                 message = std_match.group(2)
             except ValueError:
                 pass
@@ -108,6 +112,17 @@ class LogReader:
             message=message,
             raw=raw,
         )
+
+
+def _sorted_by_timestamp(entries: list[LogEntry]) -> list[LogEntry]:
+    """Sort entries by timestamp, putting None timestamps last."""
+    return sorted(
+        entries,
+        key=lambda e: (
+            e.timestamp is None,
+            e.timestamp.timestamp() if e.timestamp else 0.0,
+        ),
+    )
 
 
 class LogAggregator:
@@ -146,11 +161,7 @@ class LogAggregator:
             regex = re.compile(pattern, re.IGNORECASE)
             entries = [e for e in entries if regex.search(e.message)]
 
-        # Sort by timestamp, putting None timestamps last
-        return sorted(
-            entries,
-            key=lambda e: (e.timestamp is None, e.timestamp or datetime.max),
-        )
+        return _sorted_by_timestamp(entries)
 
     def read_tail(
         self,
@@ -177,10 +188,7 @@ class LogAggregator:
             regex = re.compile(pattern, re.IGNORECASE)
             entries = [e for e in entries if regex.search(e.message)]
 
-        return sorted(
-            entries,
-            key=lambda e: (e.timestamp is None, e.timestamp or datetime.max),
-        )
+        return _sorted_by_timestamp(entries)
 
     def follow(
         self,

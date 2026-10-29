@@ -10,7 +10,7 @@ import urllib.request
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeIs, get_args
+from typing import Any, Literal, TypeIs, cast, get_args
 
 import jsonschema
 import pytest
@@ -109,19 +109,33 @@ def is_sdk_type(val: str) -> TypeIs[sdk_type]:
 
 focus_type = Literal[sdk_type, "all"]
 
-container_type = Literal[
-    "ztdf",
-    "ztdf-ecwrap",
-]
+container_type = Literal["ztdf"]
 
 feature_type = Literal[
     "assertions",
     "assertion_verification",
     "attribute_traversal",
     "audit_logging",
+    # Platform: rewrap audit events record the parsed client session-key type
+    # as eventMetaData.sessionKeyType (opentdf/platform#3814, service v0.29.0).
+    "audit-session-key-type",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
+    # Reader-side: default a segment's absent ``segmentSize`` /
+    # ``encryptedSegmentSize`` from the manifest-level
+    # ``segmentSizeDefault`` / ``encryptedSegmentSizeDefault``.
+    #
+    # Those per-segment fields are optional overrides -- ``segments/items`` in
+    # manifest.schema.json has no ``required`` list, while the two defaults are
+    # required on ``integrityInformation`` -- and web-sdk omits them whenever a
+    # segment is exactly default-sized. go and java deserialize them into
+    # primitive integers, so absent reads as 0, and the reader then hashes an
+    # empty buffer and dies inside the GMAC check. See DSPX-4589 finding 4 and
+    # DSPX-4590 finding 7.
+    #
+    # Only observable above one default segment; hence sizes.CHUNKY_BYTES.
+    "chunky",
     "connectrpc",
     # DPoP (RFC 9449): sender-constrained access tokens. SDK signs a DPoP proof
     # JWT per request; KAS validates the proof and binds the access token to
@@ -132,9 +146,34 @@ feature_type = Literal[
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
     "ecwrap",
+    # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
+    # has been downgraded to GMAC? Force-only -- every shim answers no, because
+    # there is nothing to ask. The check lives in root-signature validation,
+    # which needs the unwrapped payload key and so runs after the KAS rewrap;
+    # it adds no flag, subcommand or version field.
+    #
+    # A GMAC root is not a MAC. The GMAC branch returns the trailing 16 bytes
+    # of its input; over a segment's ciphertext that is the tag AES-GCM just
+    # produced under the DEK, but over the aggregate hash -- which AES-GCM
+    # never processed -- it is a copy of the last segment hash, i.e. manifest
+    # data the attacker already controls. Since ``alg`` is read from the
+    # unauthenticated manifest, any HS256-rooted TDF can be downgraded onto
+    # that branch with no key at all.
+    #
+    # ``skip_unless_gmac_root_rejected`` therefore forges a root and watches
+    # what the reader does, and consults this only as the escape hatch: set
+    # ``XT_FORCE_SUPPORTS=gmac_root_rejected`` to run the exploit cases
+    # unconditionally, which is how you get a red repro out of a build that is
+    # still vulnerable rather than a skip.
+    "gmac_root_rejected",
     "hexless",
     "hexaflexible",
     "kasallowlist",
+    # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
+    # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,
+    # since it is listed in PLATFORM_ONLY_FEATURES below. KAS also needs the
+    # setting on.
+    "kas_uri_from_kao",
     # Allow and respect assigning specific keys (kas url + key id) to attributes,
     # including splitting with multiple keys on the same kas (sdk feature),
     # and explicit management of the KAS keys through the policy service (otdfctl+service feature).
@@ -149,9 +188,132 @@ feature_type = Literal[
     "mechanism-secpmlkem",
     # Support for pure (non-hybrid) ML-KEM key wrapping: mlkem:768 and mlkem:1024.
     "mechanism-mlkem",
+    # Decrypt a KAO array that has two entries with the same split id and KAS
+    # URI (the same KAS wrapping the same split more than once). go/java have
+    # always tolerated this; web-sdk gained it in 0.20.0 (DSPX-3379).
+    "multikao",
+    # Support for a client-generated ML-KEM key pair as the rewrap "session key"
+    # (the ephemeral key used to wrap the KAS's rewrap response back to the
+    # client), as opposed to "mechanism-mlkem" which covers ML-KEM as the
+    # KAS-managed TDF/KAO wrapping key.
+    "session-key-mlkem",
     "ns_grants",
     "obligations",
+    # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
+    # rather than at 4 GiB.
+    #
+    # A real 32-bit value in [2**31, 2**32) is *legal* -- the central-directory
+    # size and offset fields are unsigned -- so this is a cross-SDK interop
+    # convention rather than a spec rule, which is why it is a feature gate and
+    # not an unconditional assertion on every writer. A reader that widens
+    # those fields with a signed read sees a negative number, and that
+    # describes every java-sdk released to date. web-sdk always writes ZIP64;
+    # java-sdk adopted the 2 GiB switch in java-sdk#393; go-sdk still switches
+    # at 4 GiB. See DSPX-4590 finding 1.
+    #
+    # Only observable from a payload that reaches the window; hence
+    # sizes.MEDIUM_BYTES.
+    "zip64-at-2gib",
 ]
+
+
+ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
+
+#: Features only the platform can report, so only ``XT_FORCE_PLATFORM_SUPPORTS``
+#: can force them.
+#:
+#: Both overrides validate against the same ``feature_type`` Literal, so without
+#: this set ``XT_FORCE_SUPPORTS=kas_uri_from_kao`` parses cleanly, forces the
+#: feature on for every *SDK*, and leaves the platform gate the test actually
+#: consults untouched. That is the silent no-op the validation exists to prevent,
+#: just reached by naming the wrong variable instead of misspelling the feature.
+#:
+#: Deliberately narrow. Most features are legitimately both-sided --
+#: ``autoconfigure`` and ``ecwrap`` need the SDK to emit them *and* the platform
+#: to honour them, so forcing either side alone is a reasonable thing to ask for.
+#: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
+PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
+    {"audit-session-key-type", "kas_uri_from_kao"}
+)
+
+SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
+
+
+def _parse_forced_supports(
+    raw: str,
+    *,
+    source: str = "XT_FORCE_SUPPORTS",
+    allowed: frozenset[feature_type] = SDK_FORCEABLE_FEATURES,
+) -> frozenset[feature_type]:
+    """Parse an SDK or platform override into validated feature names.
+
+    An unrecognised name is a hard error rather than a no-op. The override
+    exists to turn a skip into a real result, so a typo that quietly left the
+    skip in place would be indistinguishable from a clean run -- which is the
+    exact failure mode the override is meant to escape.
+
+    ``allowed`` narrows that to the features this particular override can act
+    on; a real feature aimed at the wrong variable is the same silent no-op as a
+    typo, so it is rejected the same way. The default is the SDK-side set,
+    because failing closed is what keeps a new platform-only feature from
+    quietly becoming forceable from both.
+    """
+    names = {n.strip() for n in raw.split(",") if n.strip()}
+    unknown = names - ALL_FEATURES
+    if unknown:
+        raise ValueError(
+            f"{source} names unknown feature(s) {sorted(unknown)}; "
+            f"valid features are {sorted(allowed)}"
+        )
+    misdirected = names - allowed
+    if misdirected:
+        raise ValueError(
+            f"{source} cannot force {sorted(misdirected)}: platform-only "
+            "feature(s) that no SDK shim reports on. Use "
+            "XT_FORCE_PLATFORM_SUPPORTS instead."
+        )
+    return cast(frozenset[feature_type], frozenset(names))
+
+
+#: Features to treat as supported no matter what the SDK reports.
+#:
+#: The ``supports`` case statements live in this repo (``sdk/*/cli.sh``) and
+#: answer from a *released* version number, so they say "no" for precisely the
+#: unreleased builds a fix needs to be evaluated against. Setting
+#: ``XT_FORCE_SUPPORTS=chunky`` alongside ``otdf-sdk-mgr install tip --ref ...``
+#: makes those cells run for real and report pass or fail.
+#:
+#: Applies to every SDK in the run. To force a feature for one side only, narrow
+#: the run with ``--sdks-encrypt`` / ``--sdks-decrypt`` rather than adding
+#: per-SDK syntax here. Names in :data:`PLATFORM_ONLY_FEATURES` are rejected --
+#: see :data:`FORCED_PLATFORM_SUPPORTS`.
+FORCED_SUPPORTS = _parse_forced_supports(os.environ.get("XT_FORCE_SUPPORTS", ""))
+
+if FORCED_SUPPORTS:
+    logger.warning(
+        "XT_FORCE_SUPPORTS is set: treating %s as supported by every SDK. "
+        "Results for those features reflect the build under test, not the "
+        "shim's version gate.",
+        ", ".join(sorted(FORCED_SUPPORTS)),
+    )
+
+
+# Platform overrides are independent of SDK overrides and service configuration.
+FORCED_PLATFORM_SUPPORTS = _parse_forced_supports(
+    os.environ.get("XT_FORCE_PLATFORM_SUPPORTS", ""),
+    source="XT_FORCE_PLATFORM_SUPPORTS",
+    # The platform side can force anything: a both-sided feature such as
+    # ``ecwrap`` is as legitimate here as ``kas_uri_from_kao``.
+    allowed=ALL_FEATURES,
+)
+
+if FORCED_PLATFORM_SUPPORTS:
+    logger.warning(
+        "XT_FORCE_PLATFORM_SUPPORTS is set: treating %s as supported by the "
+        "platform. SDK gates and service configuration are unchanged.",
+        ", ".join(sorted(FORCED_PLATFORM_SUPPORTS)),
+    )
+
 
 container_version = Literal["4.2.2", "4.3.0"]
 
@@ -171,6 +333,7 @@ class PlatformFeatureSet(BaseModel):
 
     def __init__(self, **kwargs: dict[str, Any]):
         super().__init__(**kwargs)
+        self.features.update(FORCED_PLATFORM_SUPPORTS)
         v = os.getenv("PLATFORM_VERSION")
         if not v:
             print("PLATFORM_VERSION unset or empty; defaulting to 0.9.0")
@@ -212,6 +375,11 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 10, 0):
             self.features.add("audit_logging")
 
+        # Both added by opentdf/platform#3814, released in service v0.29.0.
+        session_key_fix = self.semver >= (0, 29, 0)
+        if session_key_fix:
+            self.features.add("audit-session-key-type")
+
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
@@ -244,6 +412,12 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+                # The rewrap session-key ML-KEM path is gated server-side by the
+                # same Preview.MLKEMTDFEnabled flag as the KAS-managed mechanism,
+                # but that flag predates the session-key code path, so also
+                # require a release that has it.
+                if session_key_fix:
+                    self.features.add("session-key-mlkem")
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
@@ -387,6 +561,17 @@ def manifest(tdf_file: Path) -> Manifest:
             return Manifest.model_validate_json(manifestEntry.read())
 
 
+def manifest_json(tdf_file: Path) -> dict[str, Any]:
+    """The manifest as written, including fields not present in the Manifest type.
+
+    This is useful for computing assertion over the JSON the writer emitted, including
+    removed or experimental fields the model does not declare.
+    """
+    with zipfile.ZipFile(tdf_file, "r") as tdfz:
+        with tdfz.open("0.manifest.json") as manifestEntry:
+            return json.load(manifestEntry)
+
+
 # Create a modified variant of a TDF by manipulating its manifest
 def update_manifest(
     scenario_name: str, tdf_file: Path, manifest_change: Callable[[Manifest], Manifest]
@@ -401,7 +586,17 @@ def update_manifest(
         manifest_data = Manifest.model_validate_json(manifest_file.read())
     new_manifest_data = manifest_change(manifest_data)
     with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
-        manifest_file.write(new_manifest_data.model_dump_json(by_alias=True))
+        # exclude_unset so the rewrite carries only what the original manifest
+        # said plus whatever manifest_change touched. Without it every optional
+        # field is re-emitted as an explicit null, and a reader that distinguishes
+        # absent from null changes its mind: web-sdk omits per-segment
+        # encryptedSegmentSize and falls back to encryptedSegmentSizeDefault, but
+        # "encryptedSegmentSize": null makes it fail with "Failed to fetch entire
+        # segment". A tamper test whose subject is mangled before the reader sees
+        # it fails for the wrong reason, and reports it as tamper detected.
+        manifest_file.write(
+            new_manifest_data.model_dump_json(by_alias=True, exclude_unset=True)
+        )
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
@@ -439,6 +634,91 @@ def update_payload(
     return outfile
 
 
+#: Length in bytes of an AES-GCM tag, and so of whatever the GMAC branch of
+#: ``calculateSignature`` returns.
+GMAC_TAG_BYTES = 16
+
+#: Length in bytes of an HMAC-SHA256 digest.
+HS256_DIGEST_BYTES = 32
+
+
+def is_legacy_manifest(manifest: Manifest) -> bool:
+    """True for a 4.2.2-shaped container, which hex-encodes before base64.
+
+    Mirrors the readers' own test: go uses ``manifest.TDFVersion == ""`` and
+    web-sdk ``isTargetSpecLegacyTDF``, both of which come down to an absent
+    ``schemaVersion``.
+    """
+    return not manifest.schemaVersion
+
+
+def decode_integrity_value(value: bytes, legacy: bool) -> bytes:
+    """Decode a ``rootSignature.sig`` / ``segment.hash`` field to raw bytes.
+
+    ``value`` is the base64 *text* as it appears in the manifest -- pydantic
+    stores these ``bytes`` fields verbatim rather than decoding them, so this
+    takes exactly one base64 step, plus a hex step for legacy containers.
+    """
+    decoded = base64.b64decode(value, validate=True)
+    if legacy:
+        return bytes.fromhex(decoded.decode("ascii"))
+    return decoded
+
+
+def aggregate_hash(manifest: Manifest) -> bytes:
+    """The bytes a reader signs at the root: every segment hash, concatenated.
+
+    Base64-decoded but *not* hex-decoded, even for a legacy container: every
+    SDK builds this buffer by base64-decoding ``segment.hash`` and appending
+    the result, so for a 4.2.2 file the aggregate is a run of ASCII hex.
+    """
+    segments = manifest.encryptionInformation.integrityInformation.segments
+    return b"".join(base64.b64decode(s.hash, validate=True) for s in segments)
+
+
+def forge_gmac_root_signature(manifest: Manifest, alg: str = "GMAC") -> Manifest:
+    """Rewrite the root signature the way a keyless attacker can (DSPX-4703).
+
+    Declares ``alg`` (any casing of GMAC; the readers compare case
+    insensitively) and emits the trailing 16 bytes of the aggregate hash as
+    the signature. Both inputs are manifest data the attacker already holds,
+    which is the whole finding: the GMAC branch never touches the DEK, so
+    "sign the root" degenerates into "copy the last segment hash".
+
+    Mirrors ``forgeGMACRootSignature`` in
+    ``platform/sdk/tdf_root_signature_test.go``, plus the legacy hex wrapper
+    that ``calculateSignature(..., isLegacyTDF=true)`` applies.
+
+    Mutates and returns ``manifest`` so it composes with
+    :func:`update_manifest`.
+    """
+    aggregate = aggregate_hash(manifest)
+    if len(aggregate) < GMAC_TAG_BYTES:
+        raise ValueError(
+            f"aggregate hash is {len(aggregate)} bytes; need at least "
+            f"{GMAC_TAG_BYTES} to forge a GMAC root signature"
+        )
+    forged = aggregate[-GMAC_TAG_BYTES:]
+    if is_legacy_manifest(manifest):
+        forged = forged.hex().encode()
+    root = manifest.encryptionInformation.integrityInformation.rootSignature
+    root.alg = alg
+    root.sig = base64.b64encode(forged)
+    return manifest
+
+
+def encrypted_segment_sizes(manifest: Manifest) -> list[int]:
+    """Each segment's ciphertext length, defaulting an absent per-segment size.
+
+    web-sdk omits ``encryptedSegmentSize`` whenever it equals the
+    manifest-level default, so a caller slicing ``0.payload`` into segments
+    cannot read the field directly.
+    """
+    ii = manifest.encryptionInformation.integrityInformation
+    default = ii.encryptedSegmentSizeDefault or 0
+    return [s.encryptedSegmentSize or default for s in ii.segments]
+
+
 def validate_manifest_schema(tdf_file: Path):
     ## Get the schema file
     schema_file_path = os.getenv("SCHEMA_FILE")
@@ -463,12 +743,6 @@ def fmt_env(env: dict[str, str]) -> str:
     for k, v in env.items():
         a.append(f"{k}='{v}'")
     return " ".join(a)
-
-
-def simple_container(container: container_type) -> container_type:
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
 
 
 class SDK:
@@ -505,7 +779,26 @@ class SDK:
             )
         )
 
-    def encrypt(
+    def is_final_release(self) -> bool:
+        """True only for a plain ``vX.Y.Z`` tag -- no prerelease, no build metadata.
+
+        :meth:`is_released` accepts ``v0.29.0-rc.1``, and :meth:`semver`
+        parses it to the same ``(0, 29, 0)`` as the final release, so ordering
+        by semver alone leaves the two tied and directory-listing order breaks
+        the tie. Callers that must not pick a release candidate by accident --
+        choosing a benchmark baseline, for one -- want this instead.
+        """
+        return bool(re.fullmatch(r"(?:sdk/)?v?\d+\.\d+\.\d+", self.version))
+
+    def semver(self) -> tuple[int, int, int] | None:
+        """Parsed (major, minor, patch), or None for branch builds like 'main'.
+
+        Lets callers order the installed versions -- picking the newest
+        release as a benchmark baseline, for instance.
+        """
+        return _parse_semver(self.version.removeprefix("sdk/"))
+
+    def encrypt_command(
         self,
         pt_file: Path,
         ct_file: Path,
@@ -515,15 +808,23 @@ class SDK:
         assert_value: str = "",
         policy_mode: str = "encrypted",
         target_mode: container_version | None = None,
-    ):
-        use_ecwrap = container == "ztdf-ecwrap"
-        fmt = simple_container(container)
+    ) -> tuple[list[str], dict[str, str]]:
+        """Build the argv and CLI-specific env vars for an encrypt invocation.
+
+        Split out from :meth:`encrypt` so that callers which need to run the
+        command themselves -- the benchmark harness measures resource usage
+        around it -- share this one definition of the `XT_WITH_*` contract
+        instead of keeping a second copy that drifts.
+
+        The returned env holds only the CLI-specific overrides; merge it over
+        ``os.environ`` before handing it to a subprocess.
+        """
         c = [
             self.path,
             "encrypt",
             str(pt_file),
             str(ct_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
@@ -536,11 +837,32 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if fmt == "ztdf" and target_mode:
+        if target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
-        if use_ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
+        return c, local_env
+
+    def encrypt(
+        self,
+        pt_file: Path,
+        ct_file: Path,
+        mime_type: str = "application/octet-stream",
+        container: container_type = "ztdf",
+        attr_values: list[str] | None = None,
+        assert_value: str = "",
+        policy_mode: str = "encrypted",
+        target_mode: container_version | None = None,
+    ):
+        c, local_env = self.encrypt_command(
+            pt_file,
+            ct_file,
+            mime_type=mime_type,
+            container=container,
+            attr_values=attr_values,
+            assert_value=assert_value,
+            policy_mode=policy_mode,
+            target_mode=target_mode,
+        )
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
@@ -554,6 +876,44 @@ class SDK:
                 result.returncode, c, output=result.stdout, stderr=result.stderr
             )
 
+    def decrypt_command(
+        self,
+        ct_file: Path,
+        rt_file: Path,
+        container: container_type = "ztdf",
+        assert_keys: str = "",
+        verify_assertions: bool = True,
+        kasallowlist: str = "",
+        ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
+    ) -> tuple[list[str], dict[str, str]]:
+        """Build the argv and CLI-specific env vars for a decrypt invocation.
+
+        See :meth:`encrypt_command` for why this is separate. ``expect_error``
+        has no counterpart here: it selects how the caller runs the command,
+        not what the command is.
+        """
+        c = [
+            self.path,
+            "decrypt",
+            str(ct_file),
+            str(rt_file),
+            container,
+        ]
+
+        local_env: dict[str, str] = {}
+        if assert_keys:
+            local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
+        if session_key_algorithm:
+            local_env |= {"XT_WITH_SESSION_KEY_ALGORITHM": session_key_algorithm}
+        if not verify_assertions:
+            local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
+        if kasallowlist:
+            local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
+        if ignore_kas_allowlist:
+            local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
+        return c, local_env
+
     def decrypt(
         self,
         ct_file: Path,
@@ -561,32 +921,21 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ):
-        fmt = simple_container(container)
-
-        c = [
-            self.path,
-            "decrypt",
-            str(ct_file),
-            str(rt_file),
-            fmt,
-        ]
-
-        local_env: dict[str, str] = {}
-        if assert_keys:
-            local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
-        if ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
-        if not verify_assertions:
-            local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
-        if kasallowlist:
-            local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
-        if ignore_kas_allowlist:
-            local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
+        c, local_env = self.decrypt_command(
+            ct_file,
+            rt_file,
+            container=container,
+            assert_keys=assert_keys,
+            verify_assertions=verify_assertions,
+            kasallowlist=kasallowlist,
+            ignore_kas_allowlist=ignore_kas_allowlist,
+            session_key_algorithm=session_key_algorithm,
+        )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
@@ -608,6 +957,8 @@ class SDK:
                 )
 
     def supports(self, feature: feature_type) -> bool:
+        if feature in FORCED_SUPPORTS:
+            return True
         if feature in self._supports:
             return self._supports[feature]
         self._supports[feature] = self._uncached_supports(feature)
@@ -624,6 +975,26 @@ class SDK:
                 # JS SDK v0.2.0 incorrectly reports support for key_management.
                 return False
             case ("autoconfigure", ("go" | "java")):
+                return True
+            case ("multikao", ("go" | "java")):
+                # go/java reconstruct by skipping already-satisfied splits, so a
+                # duplicate KAS on the same split has always decrypted.
+                return True
+            case ("chunky", "js"):
+                # web-sdk is the SDK that omits the sizes, and it defaults them
+                # on the way back in (lib/tdf3/src/tdf.ts destructures
+                # `segmentSize = segmentSizeDefault`). Both halves have been
+                # there since it started omitting them in 2022, so js->js has
+                # always round-tripped at multi-segment sizes.
+                #
+                # go and java answer this from their own `cli.sh supports`
+                # case statement, which is in this repo, not theirs -- see
+                # sdk/{go,java}/cli.sh. Both say no today. Flipping one is a
+                # deliberate edit *here* once the fix releases; it does not
+                # happen by itself when the SDK merges a patch.
+                #
+                # To evaluate a fix before it releases, set
+                # XT_FORCE_SUPPORTS=chunky -- see FORCED_SUPPORTS above.
                 return True
             case ("better-messages-2024", ("js" | "java")):
                 return True
@@ -698,6 +1069,82 @@ def skip_hexless_skew(encrypt_sdk: SDK, decrypt_sdk: SDK):
 
 def skip_connectrpc_skew(encrypt_sdk: SDK, decrypt_sdk: SDK, pfs: PlatformFeatureSet):
     return False
+
+
+def elides_segment_sizes(ct_file: Path) -> bool:
+    """True if any segment leaves its size to the manifest-level default.
+
+    Asked of the container rather than of the writer that produced it. Only
+    web-sdk omits these today, but "which SDK omits them" is a fact with a
+    version axis and a fix pending on two others, and reading the manifest
+    costs one central-directory seek. If go or java ever start eliding, the
+    gate below picks it up with no edit here.
+    """
+    integrity = manifest(ct_file).encryptionInformation.integrityInformation
+    return any(
+        s.segmentSize is None or s.encryptedSegmentSize is None
+        for s in integrity.segments
+    )
+
+
+def skip_chunky_skew(ct_file: Path, decrypt_sdk: SDK):
+    """Skip if ``ct_file`` needs segment-size defaulting and the reader lacks it.
+
+    A skip and not an asserted failure: this cell runs on the PR gate, where a
+    permanently-red job trains people to ignore it, and unlike
+    :func:`zip64_reader_is_broken` it needs no dated guess about which release
+    carries the fix.
+
+    The cost is that it stays skipped until somebody edits
+    ``sdk/{go,java}/cli.sh`` to answer yes -- the ``supports`` case statement
+    lives in this repo, so a fix merging in java-sdk or platform does not flip
+    it. The acceptance criteria on DSPX-4589 and DSPX-4590 both name this cell
+    for that reason.
+
+    To evaluate an unreleased fix, set ``XT_FORCE_SUPPORTS=chunky`` (or pass
+    ``force-supports: chunky`` to the workflow dispatch) so this returns early
+    and the cell reports a real pass or fail. See :data:`FORCED_SUPPORTS`.
+    """
+    if decrypt_sdk.supports("chunky"):
+        return
+    if not elides_segment_sizes(ct_file):
+        return
+    pytest.skip(
+        f"{decrypt_sdk} sdk doesn't yet support [chunky]: {ct_file.name} omits "
+        "per-segment sizes, which this reader cannot default from the manifest"
+    )
+
+
+#: First java-sdk release containing java-sdk#393.
+#:
+#: Before it, ``ZipReader.readInt()`` sign-extends, so a central-directory
+#: offset in ``[2**31, 2**32)`` comes back negative and the read fails or
+#: seeks to nonsense. A 2.1 GiB payload puts the manifest's offset exactly
+#: there. See DSPX-4592.
+#:
+#: Keep this honest, and note that both directions of getting it wrong fail
+#: the run rather than hiding: set too high, a release that does carry the fix
+#: reads the container correctly and the "must fail" assertion fires; set too
+#: low, a pre-fix release is expected to succeed and its real failure is
+#: reported as a defect. Update it when the release with #393 actually ships,
+#: not when the PR merges.
+JAVA_ZIP64_READER_FIX = (0, 19, 0)
+
+
+def zip64_reader_is_broken(decrypt_sdk: SDK) -> bool:
+    """True for decryptors known to mishandle a real 32-bit value in the band.
+
+    The caller asserts the decrypt *fails* for these, rather than marking the
+    cell xfail. That is deliberate on both counts: a node-level xfail would
+    swallow every unrelated failure in the rest of the cell, and asserting the
+    failure means a build that has quietly been fixed turns the cell red so
+    somebody comes and deletes this predicate.
+
+    Branch builds (``main``) have no semver and are never assumed broken --
+    they are the builds expected to carry the fix.
+    """
+    sv = decrypt_sdk.semver()
+    return decrypt_sdk.sdk == "java" and sv is not None and sv < JAVA_ZIP64_READER_FIX
 
 
 def _parse_semver(version: str) -> tuple[int, int, int] | None:

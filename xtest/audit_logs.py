@@ -437,6 +437,16 @@ class ParsedAuditEvent:
         return self.event_metadata.get("algorithm")
 
     @property
+    def session_key_type(self) -> str | None:
+        """Get the client's rewrap session-key type from rewrap event metadata.
+
+        This is the ephemeral key the client generated and sent as
+        clientPublicKey (e.g. "rsa:2048", "ec:secp256r1", "mlkem:768") --
+        distinct from `algorithm`, which is the KAO/TDF wrapping algorithm.
+        """
+        return self.event_metadata.get("sessionKeyType")
+
+    @property
     def tdf_format(self) -> str | None:
         """Get the TDF format from rewrap event metadata."""
         return self.event_metadata.get("tdfFormat")
@@ -467,6 +477,7 @@ class ParsedAuditEvent:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
     ) -> bool:
         """Check if this event matches rewrap criteria.
@@ -476,6 +487,7 @@ class ParsedAuditEvent:
             policy_uuid: Expected policy UUID (object ID)
             key_id: Expected key ID from metadata
             algorithm: Expected algorithm from metadata
+            session_key_type: Expected client session-key type from metadata
             attr_fqns: Expected attribute FQNs (all must be present)
 
         Returns:
@@ -490,6 +502,8 @@ class ParsedAuditEvent:
         if key_id is not None and self.key_id != key_id:
             return False
         if algorithm is not None and self.algorithm != algorithm:
+            return False
+        if session_key_type is not None and self.session_key_type != session_key_type:
             return False
         if attr_fqns is not None:
             event_attrs = set(self.object_attrs)
@@ -1254,6 +1268,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1264,13 +1279,16 @@ class AuditLogAsserter:
         Looks for audit log entries with:
         - msg='rewrap'
         - action.result=<result>
-        - Optionally matching policy_uuid, key_id, algorithm, attr_fqns
+        - Optionally matching policy_uuid, key_id, algorithm, session_key_type, attr_fqns
 
         Args:
             result: Expected action result ('success', 'failure', 'error', 'cancel')
             policy_uuid: Expected policy UUID (object.id)
             key_id: Expected key ID from eventMetaData.keyID
             algorithm: Expected algorithm from eventMetaData.algorithm
+            session_key_type: Expected client session-key type from
+                eventMetaData.sessionKeyType (e.g. "mlkem:768") -- the
+                client's ephemeral rewrap key, not the KAO wrap algorithm
             attr_fqns: Expected attribute FQNs (all must be present)
             min_count: Minimum number of matching entries (default: 1)
             since_mark: Only check logs since marked timestamp
@@ -1306,6 +1324,7 @@ class AuditLogAsserter:
                     policy_uuid=policy_uuid,
                     key_id=key_id,
                     algorithm=algorithm,
+                    session_key_type=session_key_type,
                     attr_fqns=attr_fqns,
                 ):
                     matching.append(event)
@@ -1331,6 +1350,8 @@ class AuditLogAsserter:
             criteria.append(f"key_id={key_id}")
         if algorithm:
             criteria.append(f"algorithm={algorithm}")
+        if session_key_type:
+            criteria.append(f"session_key_type={session_key_type}")
         if attr_fqns:
             criteria.append(f"attr_fqns={attr_fqns}")
 
@@ -1349,6 +1370,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1363,6 +1385,7 @@ class AuditLogAsserter:
             policy_uuid=policy_uuid,
             key_id=key_id,
             algorithm=algorithm,
+            session_key_type=session_key_type,
             attr_fqns=attr_fqns,
             min_count=min_count,
             since_mark=since_mark,
@@ -1374,6 +1397,7 @@ class AuditLogAsserter:
         policy_uuid: str | None = None,
         key_id: str | None = None,
         algorithm: str | None = None,
+        session_key_type: str | None = None,
         attr_fqns: list[str] | None = None,
         min_count: int = 1,
         since_mark: str | None = None,
@@ -1389,6 +1413,7 @@ class AuditLogAsserter:
             policy_uuid=policy_uuid,
             key_id=key_id,
             algorithm=algorithm,
+            session_key_type=session_key_type,
             attr_fqns=attr_fqns,
             min_count=min_count,
             since_mark=since_mark,

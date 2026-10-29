@@ -13,17 +13,23 @@ Domain-specific fixtures are organized in the fixtures/ package:
 - fixtures.keys: Key management fixtures
 """
 
+import argparse
 import json
 import logging
 import os
+import random
 import typing
+import warnings
 from pathlib import Path
 from typing import cast
 
 import pytest
 
+import sizes
 import tdfs
 from otdfctl import OpentdfCommandLineTool
+from perf import report, stats
+from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -35,8 +41,16 @@ def pytest_report_header() -> list[str]:
     and pytest does not show captured output for skipped tests. Echoing the
     detected version and feature set into the report header makes it visible in
     CI even when every gated test skips.
+
+    Detection probes the platform over HTTP, which fails when there is no
+    platform -- running only the offline unit tests, for instance. That is a
+    header, not a test result, so report the failure and carry on rather than
+    breaking collection for tests that never needed a platform.
     """
-    pfs = tdfs.get_platform_features()
+    try:
+        pfs = tdfs.get_platform_features()
+    except Exception as e:  # a header must never break collection
+        return [f"platform features unavailable: {e}"]
     return [
         f"platform version: {pfs.version} (semver={pfs.semver})",
         f"detected features: {', '.join(sorted(pfs.features))}",
@@ -52,10 +66,11 @@ pytest_plugins = [
     "fixtures.keys",
     "fixtures.audit",
     "fixtures.encryption",
+    "fixtures.bench",
 ]
 
 
-def englist(s: tuple[str]) -> str:
+def englist(s: tuple[str, ...]) -> str:
     """Convert tuple of strings to English list format (e.g., 'a, b, or c')."""
     if len(s) > 1:
         return ", ".join(s[:-1]) + ", or " + s[-1]
@@ -92,6 +107,75 @@ def sdk_spec_type(v: str) -> str:
     return v
 
 
+def sizes_opt_type(v: str) -> list[str]:
+    """Validate and de-duplicate a comma-separated list of size names.
+
+    ``ArgumentTypeError`` rather than ``ValueError``: argparse prints the
+    former's message verbatim and replaces the latter's with a generic
+    "invalid value", which would hide the list of names that would have
+    worked.
+    """
+    names = [s.strip() for s in v.split(",") if s.strip()]
+    if not names:
+        raise argparse.ArgumentTypeError("at least one size is required")
+    for name in names:
+        if name not in sizes.SIZES:
+            raise argparse.ArgumentTypeError(
+                f"unknown size {name!r}; expected one or more of "
+                f"{', '.join(sizes.SIZE_ORDER)}"
+            )
+    # Cheapest first, so a fan-out run reports its fast cells before spending
+    # minutes on a multi-GiB one.
+    ordered = [n for n in sizes.SIZE_ORDER if n in set(names)]
+    # SIZE_ORDER is derived from SIZES, so this cannot fire today. It is here
+    # because the failure it guards is invisible: a name validated against
+    # SIZES but absent from SIZE_ORDER is dropped here, which empties the
+    # parameter set, which pytest reports as "got empty parameter set" -- a
+    # *skip*, exit 0. A whole matrix disappears and the run stays green.
+    dropped = sorted(set(names) - set(ordered))
+    if dropped:
+        raise argparse.ArgumentTypeError(
+            f"size(s) {', '.join(dropped)} are in SIZES but missing from "
+            "SIZE_ORDER; they would be silently dropped from the run"
+        )
+    return ordered
+
+
+_SIZES_KEY = pytest.StashKey[list[str]]()
+
+
+def resolve_sizes(config: pytest.Config) -> list[str]:
+    """Size names this session runs, honouring the deprecated --large alias.
+
+    Cached on the config: this is called from both the parametrizer and the
+    collection filter, and the deprecation warning below should be emitted
+    once per session rather than once per caller.
+    """
+    cached = config.stash.get(_SIZES_KEY, None)
+    if cached is not None:
+        return cached
+
+    selected = cast(list[str] | None, config.getoption("--sizes"))
+    if config.getoption("--large"):
+        if selected is not None:
+            raise pytest.UsageError(
+                "--large and --sizes are mutually exclusive; --large is the "
+                "deprecated spelling of --sizes small,large"
+            )
+        warnings.warn(
+            "--large is deprecated; use --sizes small,large (or --sizes medium "
+            "for the 2-4 GiB ZIP64 band, which --large steps straight over)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        resolved = ["small", "large"]
+    else:
+        resolved = selected if selected is not None else ["small"]
+
+    config.stash[_SIZES_KEY] = resolved
+    return resolved
+
+
 def pytest_addoption(parser: pytest.Parser):
     """Add custom CLI options for pytest."""
     parser.addoption(
@@ -117,7 +201,16 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--large",
         action="store_true",
-        help="generate a large (greater than 4 GiB) file for testing",
+        help="deprecated alias for --sizes small,large",
+    )
+    parser.addoption(
+        "--sizes",
+        type=sizes_opt_type,
+        help="comma-separated plaintext sizes to run against, from "
+        f"{englist(tuple(sizes.SIZE_ORDER))} "
+        f"({', '.join(f'{k}={sizes.SIZES[k]}B' for k in sizes.SIZE_ORDER)}); "
+        "default small. Listing more than one fans out every test that takes "
+        "a plaintext file, so CI passes exactly one.",
     )
     parser.addoption(
         "--no-audit-logs",
@@ -144,6 +237,101 @@ def pytest_addoption(parser: pytest.Parser):
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
     )
+    _add_benchmark_options(parser)
+
+
+def _add_benchmark_options(parser: pytest.Parser):
+    """Options for the SDK performance regression benchmarks.
+
+    Grouped separately because they configure an experiment rather than
+    selecting tests, and because none of them do anything without --bench.
+    """
+    group = parser.getgroup("benchmarks", "SDK performance regression benchmarks")
+    group.addoption(
+        "--bench",
+        action="store_true",
+        help="run the performance regression benchmarks (they are long, so they "
+        "are opt-in and collect nothing otherwise)",
+    )
+    group.addoption(
+        "--bench-baseline",
+        help="build to compare against, e.g. go@v0.29.0; defaults to the newest "
+        "installed release of each sdk",
+    )
+    group.addoption(
+        "--bench-candidate",
+        help="build under test, e.g. go@main; defaults to the installed "
+        "unreleased build of each sdk",
+    )
+    group.addoption(
+        "--bench-payloads",
+        default=DEFAULT_PAYLOAD_SPEC,
+        help="comma-separated payload sizes to measure, e.g. "
+        "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
+        "default are opt-in because they are what a throughput gate actually "
+        "needs and what a nightly cannot afford: each one adds two cells, and "
+        "a run needs scratch disk for every plaintext plus, with "
+        "--bench-prune-scratch, three times the largest size -- or, without "
+        "it, about five times the sum of the sizes per SDK",
+    )
+    group.addoption(
+        "--bench-prune-scratch",
+        action="store_true",
+        help="delete each benchmark file as soon as no remaining cell needs "
+        "it, instead of keeping outputs to inspect and plaintexts to reuse. "
+        "CI sets it; worth setting locally for large --bench-payloads",
+    )
+    group.addoption(
+        "--bench-threshold",
+        type=float,
+        default=stats.DEFAULT_THRESHOLD,
+        help="smallest slowdown ratio worth failing on (default: %(default)s, "
+        "i.e. 15%% slower)",
+    )
+    group.addoption(
+        "--bench-min-rounds",
+        type=int,
+        default=20,
+        help="paired rounds to run before the stopping rule may fire "
+        "(default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-max-rounds",
+        type=int,
+        default=60,
+        help="hard cap on paired rounds per cell (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-warmup",
+        type=int,
+        default=5,
+        help="paired rounds discarded before measuring, to pay one-time costs "
+        "like page cache and package resolution (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-budget-seconds",
+        type=float,
+        default=1500.0,
+        help="wall-clock allowance shared by every cell (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-seed",
+        type=int,
+        default=0,
+        help="seed for payload generation, round ordering, and the bootstrap; "
+        "fixing it makes a run reproducible (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-out",
+        type=Path,
+        default=Path("test-results/benchmarks"),
+        help="directory for the JSON result artifact (default: %(default)s)",
+    )
+    group.addoption(
+        "--bench-no-gate",
+        action="store_true",
+        help="measure and report, but never fail the run on a regression",
+    )
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -154,14 +342,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     - encrypt_sdk: which SDK(s) to use for encryption
     - decrypt_sdk: which SDK(s) to use for decryption
     - in_focus: filter tests by SDK focus
-    - container: which container formats to test (ztdf, ztdf-ecwrap)
+    - container: which container formats to test (ztdf)
     """
     if "size" in metafunc.fixturenames:
-        metafunc.parametrize(
-            "size",
-            ["large" if metafunc.config.getoption("large") else "small"],
-            scope="session",
-        )
+        metafunc.parametrize("size", resolve_sizes(metafunc.config), scope="session")
 
     def list_opt(name: str, t: typing.Any) -> list[str]:
         ttt = typing.get_args(t)
@@ -231,6 +415,213 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             containers = list(typing.get_args(tdfs.container_type))
         metafunc.parametrize("container", containers)
 
+    if "bench_cell" in metafunc.fixturenames:
+        _parametrize_bench_cells(metafunc)
+
+
+def _parametrize_bench_cells(metafunc: pytest.Metafunc):
+    """Fan the benchmark module out over its cells.
+
+    Without --bench there is nothing to fan out over, and the items are
+    dropped wholesale in :func:`pytest_collection_modifyitems` rather than
+    parametrized here. Parametrizing over an empty list would *not* collect
+    zero items: pytest's default ``empty_parameter_set_mark`` turns an empty
+    set into one skipped item per test, so every ordinary run would carry
+    benchmark skips it never asked for.
+    """
+    if not metafunc.config.getoption("--bench"):
+        return
+
+    from fixtures.bench import payloads_from_options
+
+    cells = cells_for(
+        _bench_sdk_names(metafunc.config), payloads_from_options(metafunc.config)
+    )
+    metafunc.config.stash[report.CELLS_KEY] = cells
+    metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
+
+
+def _bench_sdk_names(config: pytest.Config) -> list[str]:
+    """SDKs the benchmark fans out over, in --sdks order."""
+    # --sdks may be version-qualified (go@main); benchmark arms come from
+    # --bench-baseline/--bench-candidate instead, so only the name matters.
+    specs = config.getoption("--sdks") or " ".join(typing.get_args(tdfs.sdk_type))
+    return list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
+
+
+def pytest_configure(config: pytest.Config):
+    if not config.getoption("--bench", default=False):
+        return
+    # Parallel workers contend for the CPU the benchmark is measuring, which
+    # turns every number into noise. The CI step also omits -n; this guard is
+    # what stops a later edit from silently invalidating the whole job.
+    distributed = getattr(config, "workerinput", None) is not None or bool(
+        config.getoption("numprocesses", default=None)
+    )
+    if distributed:
+        raise pytest.UsageError(
+            "--bench cannot run under pytest-xdist: parallel workers compete "
+            "for the CPU being measured. Drop -n / --dist."
+        )
+
+    # Validate every benchmark option here, before setup begins. A bad
+    # --bench-threshold used to surface from the bench_config fixture, which
+    # runs after the session has already built payloads and installed CLIs --
+    # minutes of work discarded to report a typo.
+    from fixtures.bench import (
+        config_from_options,
+        disk_shortfall,
+        payloads_from_options,
+    )
+    from perf.cells import payloads_to_generate
+    from perf.config import (
+        BenchmarkRequest,
+        normalize_baseline_candidate,
+        parse_arm_spec,
+        validate_sdk_name,
+    )
+
+    bench_config = config_from_options(config)
+    payloads = payloads_from_options(config)
+    baseline = config.getoption("--bench-baseline", default=None)
+    candidate = config.getoption("--bench-candidate", default=None)
+    try:
+        if baseline is not None and candidate is not None:
+            # A full pair meets the same rules the local and CI entry points
+            # apply.
+            arms = normalize_baseline_candidate(baseline, candidate)
+            BenchmarkRequest(arms=arms, config=bench_config)
+        else:
+            # Either side may be given alone -- `select_arms` defaults the
+            # other -- so a lone spec is checked only for what it names.
+            for spec in (baseline, candidate):
+                if spec is not None:
+                    validate_sdk_name(parse_arm_spec(spec).name)
+        # A spec only applies to the SDK it names, so one naming an SDK
+        # outside --sdks would be dropped and the run would measure the
+        # defaults instead.
+        benchmarked = _bench_sdk_names(config)
+        for spec in (baseline, candidate):
+            if spec is not None and parse_arm_spec(spec).name not in benchmarked:
+                raise ValueError(
+                    f"{spec!r} names an SDK that is not being benchmarked; "
+                    f"--sdks selects {benchmarked}"
+                )
+    except ValueError as e:
+        raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+
+    # Disk is checked here for the same reason. Found by a fixture instead,
+    # it would error every cell with one repeated traceback and leave no
+    # report; found by the CLI under measurement, it would read as that build
+    # failing.
+    shortfall = disk_shortfall(
+        _tmp_root(),
+        payloads_to_generate(payloads),
+        n_sdks=len(_bench_sdk_names(config)),
+        prune=bool(config.getoption("--bench-prune-scratch", default=False)),
+    )
+    if shortfall:
+        raise pytest.UsageError(shortfall)
+
+
+def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
+    """Whether this item has a payload large enough for the ZIP64 tests.
+
+    Size-aware items must be judged by their own parametrized value.  Marked
+    items without a ``size`` parameter retain the session-level behaviour so
+    a future ZIP64 test with a purpose-built fixture is not dropped merely
+    because it does not use :func:`pt_file`.
+    """
+    callspec = getattr(item, "callspec", None)
+    item_size = callspec.params.get("size") if callspec is not None else None
+    if isinstance(item_size, str):
+        return sizes.exercises_zip64_window(item_size)
+    return any(sizes.exercises_zip64_window(size) for size in session_sizes)
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Drop cells the session did not ask for.
+
+    Two groups, deselected rather than skipped for the same reason: neither a
+    20-minute benchmark nor a 2.1 GiB roundtrip has any business in the
+    regular integration matrix, and a skip would report them as tests that
+    exist and were declined rather than ones that were never in scope.
+
+    - ``benchmark``: needs --bench.
+    - ``zip64``: needs a payload size that can reach the 2**31 boundary. At
+      the default 128 bytes these tests cannot exercise anything, and the one
+      thing worse than not running them is running them green on a payload
+      that never touches the code path.
+    """
+    drop: list[pytest.Item] = []
+    want_bench = bool(config.getoption("--bench", default=False))
+    session_sizes = resolve_sizes(config)
+    for item in items:
+        if not want_bench and item.get_closest_marker("benchmark"):
+            drop.append(item)
+        elif item.get_closest_marker("zip64") and not _item_exercises_zip64_window(
+            item, session_sizes
+        ):
+            drop.append(item)
+    if drop:
+        dropped = set(map(id, drop))
+        config.hook.pytest_deselected(items=drop)
+        items[:] = [i for i in items if id(i) not in dropped]
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
+    """Analyse every recorded cell, write the artifacts, and gate the run.
+
+    The gate lives here rather than in the cells because it is a run-level
+    decision: the multiplicity correction spans all cells, and the A/A control
+    can invalidate the lot. Artifacts are written first and unconditionally --
+    a run that is about to fail is exactly the run whose raw numbers someone
+    will want to read.
+    """
+    del exitstatus  # the benchmark's own verdict is independent of test outcomes
+    config = session.config
+    if not config.getoption("--bench", default=False):
+        return
+    recorder = config.stash.get(report.RECORDER_KEY, None)
+    if recorder is None or not (recorder.results or recorder.skipped):
+        return
+
+    # Imported here, not at module scope: importing a pytest plugin from a
+    # conftest before pytest registers it costs the plugin its assertion
+    # rewriting, which the fixture module's own asserts rely on.
+    from fixtures import bench
+
+    bench_config = bench.config_from_options(config)
+    recorder.metadata = bench.runner_metadata(config)
+    gate = recorder.gate(bench_config)
+
+    cells = config.stash.get(report.CELLS_KEY, [])
+    name = "-".join(dict.fromkeys(c.sdk for c in cells)) or "benchmarks"
+    out_dir = cast(Path, config.getoption("--bench-out"))
+    json_path = report.write_json(
+        out_dir / f"{name}.json", recorder, bench_config, gate
+    )
+
+    summary = report.markdown(recorder, bench_config, gate)
+    report.append_step_summary(summary)
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "benchmark results")
+        reporter.write_line(gate.summary)
+        reporter.write_line(f"raw samples and statistics: {json_path}")
+
+    if config.getoption("--bench-no-gate", default=False):
+        return
+    # A run that measured nothing fails too, and not only one that found a
+    # regression. --bench is an explicit request for a measurement; answering
+    # it with a green tick and an empty table is the one outcome nobody
+    # inspects, so a benchmark that has quietly stopped measuring can survive
+    # indefinitely. Every reason a cell skips is already in the report.
+    if gate.should_fail or gate.nothing_measured:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
 
 def pytest_runtest_setup(item: pytest.Item):
     if not item.config.getoption("--skip-released-pairs", default=False):
@@ -245,23 +636,103 @@ def pytest_runtest_setup(item: pytest.Item):
 
 
 # Core fixtures
+
+#: Chunk written per iteration by :func:`_write_bulk_plaintext`.
+_BULK_BLOCK = 1 << 20
+
+#: Sizes at or above this are generated in bulk rather than line by line.
+#: The line generator formats one string per 16 bytes, which is fine for 128
+#: bytes and is ~140 million iterations at 2.1 GiB.
+_BULK_THRESHOLD = 1 << 24
+
+
+def _write_line_plaintext(path: Path, length: int) -> None:
+    """The original generator: one right-aligned offset per 16 bytes.
+
+    Kept byte-for-byte for the small size. Existing tests compare decrypted
+    output against this content, and there is nothing to gain from churning
+    it.
+    """
+    with path.open("w") as f:
+        for i in range(0, length, 16):
+            f.write(f"{i:15,d}\n")
+
+
+def _write_bulk_plaintext(path: Path, length: int) -> None:
+    """Write ``length`` deterministic, poorly-compressible bytes, quickly.
+
+    One pseudorandom block is built once and written repeatedly, with a
+    block counter patched into its first eight bytes so the content is
+    position-dependent rather than a flat repeat.
+
+    Repetition at a 1 MiB period is not something DEFLATE can exploit -- its
+    window is 32 KiB -- so the payload stays realistically incompressible
+    while costing one ``randbytes`` call instead of one per megabyte.
+
+    Deliberately not one ``rng.randbytes(length)`` call: that materialises
+    the whole payload in memory, which is fine at 32 MiB and fatal at 2.1 GiB.
+    """
+    block = bytearray(random.Random("dspx-4592").randbytes(_BULK_BLOCK))
+    view = memoryview(block)
+    with path.open("wb") as f:
+        written = 0
+        while written < length:
+            n = min(_BULK_BLOCK, length - written)
+            block[:8] = (written // _BULK_BLOCK).to_bytes(8, "big")
+            f.write(view[:n])
+            written += n
+
+
+def _plaintext_of(tmp_dir: Path, size: str) -> Path:
+    """Return a plaintext file of the named size, generating it if needed."""
+    length = sizes.SIZES[size]
+    pt_file = tmp_dir / f"test-plain-{size}.txt"
+    # tmp_dir persists between runs, so a multi-GiB payload that is already
+    # there and the right length is reused rather than rewritten. Checking
+    # the length matters: a run killed mid-generation leaves a short file,
+    # and silently encrypting that would test the wrong size.
+    if pt_file.is_file() and pt_file.stat().st_size == length:
+        return pt_file
+    if length >= _BULK_THRESHOLD:
+        _write_bulk_plaintext(pt_file, length)
+    else:
+        _write_line_plaintext(pt_file, length)
+    return pt_file
+
+
 @pytest.fixture(scope="session")
 def pt_file(tmp_dir: Path, size: str) -> Path:
-    """Generate a plaintext test file.
+    """Generate a plaintext test file of the named size.
 
     Args:
         tmp_dir: Temporary directory for test files
-        size: 'large' (>4 GiB) or 'small' (128 bytes)
+        size: a key of :data:`sizes.SIZES` -- 'small' (128 bytes),
+            'chunky' (5 MiB, several default-sized segments),
+            'medium' (2.1 GiB, inside the ZIP64 broken window), or
+            'large' (5 GiB, above it)
 
     Returns:
         Path to the generated plaintext file
     """
-    pt_file = tmp_dir / f"test-plain-{size}.txt"
-    length = (5 * 2**30) if size == "large" else 128
-    with pt_file.open("w") as f:
-        for i in range(0, length, 16):
-            f.write(f"{i:15,d}\n")
-    return pt_file
+    return _plaintext_of(tmp_dir, size)
+
+
+@pytest.fixture(scope="session")
+def chunky_pt_file(tmp_dir: Path) -> Path:
+    """A 5 MiB plaintext: several segments, including default-sized ones.
+
+    Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
+    sizes would fan out every test that takes :func:`pt_file` -- the whole of
+    test_tdfs.py, test_tdf_assertions.py and test_policytypes.py -- to pay for
+    a property one test needs. A separate fixture buys the coverage for one
+    extra encrypt and decrypt of 5 MiB, which is cheap enough for the PR gate.
+    """
+    return _plaintext_of(tmp_dir, "chunky")
+
+
+def _tmp_root() -> Path:
+    """Root of every worker's :func:`tmp_dir`; ``XT_TMP_DIR`` relocates it."""
+    return Path(os.environ.get("XT_TMP_DIR", "tmp"))
 
 
 @pytest.fixture(scope="session")
@@ -270,9 +741,13 @@ def tmp_dir(request: pytest.FixtureRequest) -> Path:
 
     When running with pytest-xdist, each worker gets its own subdirectory
     to prevent file collisions between parallel test processes.
+
+    ``XT_TMP_DIR`` relocates the root. Multi-GiB roundtrips need more space
+    than a CI runner's workspace volume has, and the alternative to an
+    override is hard-coding a runner-specific path here.
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    dname = Path(f"tmp/{worker_id}/")
+    dname = _tmp_root() / worker_id
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 

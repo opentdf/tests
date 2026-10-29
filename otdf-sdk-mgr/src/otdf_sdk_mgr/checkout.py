@@ -10,11 +10,23 @@ from typing import Any
 from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
 from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
 
+# `git clone --bare` records no fetch refspec: `git fetch` alone updates no refs
+# and `--tags` adds only tags, so the bare repo's branches stay where the clone
+# left them. Fetch origin's branches into remote-tracking refs instead. No
+# worktree has those checked out, and `--prune` deletes the ones origin dropped,
+# so `upstream_ref` can tell a deleted branch from a live one and an `x` → `x/y`
+# rename doesn't collide.
+BARE_REFRESH = ["fetch", "--prune", "--tags", "origin", "+refs/heads/*:refs/remotes/origin/*"]
+
+
+class CheckoutError(ValueError):
+    """A ref can't be checked out from a bare repo."""
+
 
 def _run(cmd: list[str], **kwargs: Any) -> None:
     """Run a command, raising on failure with cwd and stderr in the message."""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, **kwargs)
     except FileNotFoundError as e:
         raise RuntimeError(f"executable not found: {cmd[0]} ({e})") from e
     if result.returncode != 0:
@@ -26,6 +38,50 @@ def _run(cmd: list[str], **kwargs: Any) -> None:
             output=result.stdout,
             stderr=(result.stderr or "") + cwd_str,
         )
+
+
+def _has_ref(git_dir: Path, ref: str) -> bool:
+    result = subprocess.run(
+        ["git", f"--git-dir={git_dir}", "show-ref", "--verify", "--quiet", ref], check=False
+    )
+    return result.returncode == 0
+
+
+def upstream_ref(git_dir: Path, ref: str) -> str:
+    """Name what to check out for `ref` from a bare repo refreshed by BARE_REFRESH.
+
+    A branch name resolves to origin's copy, `refs/remotes/origin/<ref>`, which
+    wins over a tag of the same name; the bare repo's own branches date from
+    the clone. `HEAD` resolves to the branch the bare repo's HEAD names.
+    `refs/...` refs, tags, SHAs and unknown names pass through for git to
+    resolve. Raises CheckoutError when `ref` matches only a clone-time local
+    branch, i.e. origin has since deleted it, rather than check out that stale
+    copy.
+    """
+    if ref.startswith("refs/"):
+        return ref
+    if ref == "HEAD":
+        # `git clone` pointed the bare repo's HEAD at origin's default branch
+        # as of the clone; BARE_REFRESH doesn't update it. Not `--short`: with
+        # a tag of the same name that gives `heads/main`, which matches no
+        # check below and would check out the stale local branch.
+        result = subprocess.run(
+            ["git", f"--git-dir={git_dir}", "symbolic-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise CheckoutError(f"cannot resolve HEAD in {git_dir}: {result.stderr.strip()}")
+        ref = result.stdout.strip().removeprefix("refs/heads/")
+    tracking = f"refs/remotes/origin/{ref}"
+    if _has_ref(git_dir, tracking):
+        return tracking
+    if _has_ref(git_dir, f"refs/heads/{ref}") and not _has_ref(git_dir, f"refs/tags/{ref}"):
+        raise CheckoutError(
+            f"branch '{ref}' is not on origin; {git_dir} has only a local copy, which may be stale"
+        )
+    return ref
 
 
 def checkout_sdk_branch(language: str, branch: str) -> str:
@@ -67,12 +123,13 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     if not bare_repo_path.exists():
         print(f"Cloning {repo_url} as a bare repository into {bare_repo_path}...")
         _run(["git", "clone", "--bare", repo_url, str(bare_repo_path)])
-    else:
-        print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+    # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
+    print(f"Fetching updates into {bare_repo_path}...")
+    _run(["git", f"--git-dir={bare_repo_path}", *BARE_REFRESH])
 
-    # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
-    # fetch any explicit `refs/...` ref by name so worktree-add can find it.
+    # PR refs (`refs/pull/N/head`) aren't under refs/heads/, so BARE_REFRESH
+    # skips them; fetch any explicit `refs/...` ref by name so worktree-add,
+    # or the reset below, sees its current tip.
     if branch.startswith("refs/"):
         print(f"Fetching {branch} into bare repo...")
         _run(
@@ -84,26 +141,28 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
                 f"+{branch}:{branch}",
             ]
         )
+    target = upstream_ref(bare_repo_path, branch)
 
     if worktree_path.exists():
         if is_mutable_ref(branch):
             print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
-            # Worktrees from a bare clone have no `origin` remote, so reset
-            # to the just-fetched ref in the bare repo instead of `git pull`.
-            _run(["git", "-C", str(worktree_path), "fetch", "origin", branch])
-            _run(["git", "-C", str(worktree_path), "reset", "--hard", "FETCH_HEAD"])
+            _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for '{branch}' already exists at {worktree_path}; reusing.")
     else:
         print(f"Setting up worktree for branch '{branch}' at {worktree_path}...")
+        # Detached: worktrees never own a branch, so two can follow the same
+        # one, and a name that is both a stale clone-time branch and a tag
+        # checks out the tag.
         _run(
             [
                 "git",
                 f"--git-dir={bare_repo_path}",
                 "worktree",
                 "add",
+                "--detach",
                 str(worktree_path),
-                branch,
+                target,
             ]
         )
     return local_name
@@ -135,12 +194,13 @@ def checkout_go_from_platform(ref: str) -> Path:
     if not bare_repo_path.exists():
         print(f"Cloning {platform_url} as a bare repository into {bare_repo_path}...")
         _run(["git", "clone", "--bare", platform_url, str(bare_repo_path)])
-    else:
-        print(f"Bare repository already exists at {bare_repo_path}. Fetching updates...")
-        _run(["git", f"--git-dir={bare_repo_path}", "fetch", "--all", "--tags"])
+    # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
+    print(f"Fetching updates into {bare_repo_path}...")
+    _run(["git", f"--git-dir={bare_repo_path}", *BARE_REFRESH])
 
-    # PR refs (`refs/pull/N/head`) aren't in the default bare-clone refspec;
-    # fetch any explicit `refs/...` ref by name so worktree-add can find it.
+    # PR refs (`refs/pull/N/head`) aren't under refs/heads/, so BARE_REFRESH
+    # skips them; fetch any explicit `refs/...` ref by name so worktree-add,
+    # or the reset below, sees its current tip.
     if ref.startswith("refs/"):
         print(f"Fetching {ref} into bare repo...")
         _run(
@@ -152,12 +212,12 @@ def checkout_go_from_platform(ref: str) -> Path:
                 f"+{ref}:{ref}",
             ]
         )
+    target = upstream_ref(bare_repo_path, ref)
 
     if worktree_path.exists():
         if is_mutable_ref(ref):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
-            _run(["git", f"--git-dir={bare_repo_path}", "fetch", "origin", ref, "--tags"])
-            _run(["git", "-C", str(worktree_path), "checkout", "--force", "FETCH_HEAD"])
+            _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for ref '{ref}' already exists at {worktree_path}; reusing.")
     else:
@@ -168,8 +228,9 @@ def checkout_go_from_platform(ref: str) -> Path:
                 f"--git-dir={bare_repo_path}",
                 "worktree",
                 "add",
+                "--detach",
                 str(worktree_path),
-                ref,
+                target,
             ]
         )
 

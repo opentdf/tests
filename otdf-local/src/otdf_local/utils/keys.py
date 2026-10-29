@@ -1,9 +1,13 @@
 """Cryptographic key generation utilities."""
 
 import json
+import os
+import re
 import secrets
 import subprocess
 from pathlib import Path
+
+from otdf_local.utils.console import print_warning
 
 
 def generate_root_key() -> str:
@@ -23,9 +27,13 @@ def validate_alg(alg: str) -> bool:
     return alg in supported_algs
 
 
+# kids name files in the platform dir, so no `/`, `.`, or leading `-`.
+_KID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+
+
 def validate_kid(kid: str) -> bool:
-    """Validate that the kid is a non-empty, less than 33 characters, and alphanumeric."""
-    return 0 < len(kid) < 33 and kid.isalnum()
+    """Validate that the kid is 1-32 of `[A-Za-z0-9_-]`, starting alphanumeric."""
+    return _KID_PATTERN.fullmatch(kid) is not None
 
 
 def generate_rsa_keypair(key_dir: Path, name: str = "kas") -> tuple[Path, Path]:
@@ -167,43 +175,34 @@ def setup_golden_keys(
     to the platform directory for use by the platform service.
 
     Args:
-        xtest_root: Root directory of xtest (contains xtest/extra-keys.json)
+        xtest_root: The xtest directory (contains extra-keys.json)
         platform_dir: Platform source directory
 
     Returns:
         List of key configurations to add to cryptoProvider.standard.keys
     """
-    extra_keys_file = xtest_root / "xtest" / "extra-keys.json"
+    extra_keys_file = xtest_root / "extra-keys.json"
     if not extra_keys_file.exists():
+        # Not an error -- a bare xtest_root has no fixtures -- but without
+        # golden keys test_legacy.py fails much later, as "cipher: message
+        # authentication failed", with nothing pointing back here.
+        print_warning(
+            f"No {extra_keys_file}; golden keys not configured, so legacy "
+            "golden TDFs will not decrypt."
+        )
         return []
 
-    with open(extra_keys_file) as f:
-        extra_keys = json.load(f)
+    # Every entry is validated before any file is written, so a bad entry
+    # leaves no partial set of key files behind.
+    entries = _read_extra_keys(extra_keys_file)
 
     keys_config = []
-    for key_entry in extra_keys:
-        kid = key_entry.get("kid", "")
-        if not validate_kid(kid):
-            raise ValueError(f"Invalid kid in extra-keys.json: {kid}")
-        alg = key_entry.get("alg", "")
-        if not validate_alg(alg):
-            raise ValueError(f"Invalid alg in extra-keys.json for kid {kid}: {alg}")
-        private_key = key_entry.get("privateKey", "")
-
-        cert = key_entry.get("cert", "")
-
-        if not all([kid, alg, private_key, cert]):
-            raise ValueError(
-                f"Missing required fields in extra-keys.json for kid: {kid}"
-            )
-
-        # Write key files to platform directory
+    for kid, alg, private_key, cert in entries:
         private_path = platform_dir / f"{kid}-private.pem"
         cert_path = platform_dir / f"{kid}-cert.pem"
 
-        private_path.write_text(private_key)
-        private_path.chmod(0o600)
-        cert_path.write_text(cert)
+        _write_owner_only(private_path, private_key)
+        cert_path.write_text(cert, encoding="utf-8")
 
         keys_config.append(
             {
@@ -215,6 +214,62 @@ def setup_golden_keys(
         )
 
     return keys_config
+
+
+_EXTRA_KEY_FIELDS = ("kid", "alg", "privateKey", "cert")
+
+
+def _read_extra_keys(path: Path) -> list[tuple[str, str, str, str]]:
+    """The (kid, alg, privateKey, cert) of each entry in `path`.
+
+    Every problem is a ValueError naming the file, which is what
+    `PlatformService._preflight` reports as a start error.
+    """
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"{path} is not valid JSON: {e}") from e
+    if not isinstance(raw, list):
+        raise ValueError(f"{path} must hold a JSON array of keys")
+
+    entries = []
+    # Case-folded: on a case-insensitive filesystem (macOS by default),
+    # `Golden-r1` and `golden-r1` would write the same key files.
+    seen_kids: set[str] = set()
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path}: entry {i} is not a JSON object")
+        missing = [
+            field
+            for field in _EXTRA_KEY_FIELDS
+            if not isinstance(entry.get(field), str) or not entry[field]
+        ]
+        if missing:
+            raise ValueError(
+                f"{path}: entry {i} needs non-empty string {', '.join(missing)}"
+            )
+        kid, alg, private_key, cert = (entry[field] for field in _EXTRA_KEY_FIELDS)
+        if not validate_kid(kid):
+            raise ValueError(f"{path}: invalid kid {kid!r}")
+        if not validate_alg(alg):
+            raise ValueError(f"{path}: invalid alg {alg!r} for kid {kid}")
+        if kid.casefold() in seen_kids:
+            raise ValueError(
+                f"{path}: kid {kid!r} repeats an earlier kid (ignoring case)"
+            )
+        seen_kids.add(kid.casefold())
+        entries.append((kid, alg, private_key, cert))
+    return entries
+
+
+def _write_owner_only(path: Path, content: str) -> None:
+    """Write `path` so that only its owner can ever read the content."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        # The mode above applies only on creation; an existing file keeps its
+        # own, so narrow it before any content goes in.
+        os.fchmod(f.fileno(), 0o600)
+        f.write(content)
 
 
 def get_golden_keyring_entries() -> list[dict]:

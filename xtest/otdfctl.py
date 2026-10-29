@@ -198,6 +198,21 @@ class OpentdfCommandLineTool:
             o = o.get("kas_keys", [])
         return [KasKey(**n) for n in o]
 
+    def kas_registry_key_get(self, kas: KasEntry, key_id: str) -> KasKey | None:
+        """Look up a KID under a KAS, returning None only for a missing key."""
+        cmd = self.otdfctl + "policy kas-registry key get".split()
+        cmd += [f"--kas={kas.uri}", f"--key={key_id}"]
+        logger.info(f"kr-key-get [{' '.join(cmd)}]")
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            error = result.stderr.decode(errors="replace")
+            if "not_found" in error or "not found" in error:
+                return None
+            raise subprocess.CalledProcessError(
+                result.returncode, cmd, output=result.stdout, stderr=result.stderr
+            )
+        return KasKey.model_validate_json(result.stdout)
+
     def kas_registry_create_public_key_only(
         self, kas: KasEntry, public_key: KasPublicKey
     ) -> KasKey:

@@ -3,7 +3,7 @@
 This module contains fixtures for setting up KAS instances used in testing:
 - Default KAS (localhost:8080)
 - Named KAS instances matching CI workflow (alpha, beta, gamma, delta)
-- Key management KAS instances (km1, km2)
+- Key management KAS instances (km1, km2, and dedicated KAO-enabled km3)
 """
 
 import os
@@ -193,3 +193,15 @@ def kas_entry_km2(
 ) -> abac.KasEntry:
     """KAS registry entry for key management KAS km2."""
     return otdfctl.kas_registry_create_if_not_present(kas_url_km2)
+
+
+@pytest.fixture(scope="session")
+def kas_url_km3():
+    """URL for the dedicated KAO-enabled key management KAS instance (km3)."""
+    return os.getenv("KASURL7", "http://localhost:8787")
+
+
+@pytest.fixture(scope="module")
+def kas_entry_km3(otdfctl: OpentdfCommandLineTool, kas_url_km3: str) -> abac.KasEntry:
+    """KAS registry entry for the dedicated KAO-enabled key management KAS km3."""
+    return otdfctl.kas_registry_create_if_not_present(kas_url_km3)

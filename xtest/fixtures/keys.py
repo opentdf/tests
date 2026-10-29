@@ -344,6 +344,28 @@ def attribute_with_different_kids(
 
 
 @pytest.fixture(scope="module")
+def attribute_with_ec_key(
+    otdfctl: OpentdfCommandLineTool,
+    key_e256: abac.KasKey,
+    otdf_client_scs: abac.SubjectConditionSet,
+    temporary_namespace: abac.Namespace,
+) -> tuple[abac.Attribute, list[str]]:
+    """Create an ALL_OF attribute and assign an EC secp256r1 key to it.
+
+    No mechanism feature gate: secp256r1 is the baseline EC curve every
+    key-management platform supports (only the 384/521 curves need
+    "mechanism-ec-curves-384-521").
+    """
+    return _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "ec-test",
+        [("ec1", key_e256)],
+        otdf_client_scs,
+    )
+
+
+@pytest.fixture(scope="module")
 def attribute_with_xwing_key(
     otdfctl: OpentdfCommandLineTool,
     key_xwing: abac.KasKey,

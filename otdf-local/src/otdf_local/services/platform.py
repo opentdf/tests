@@ -1,6 +1,8 @@
 """Platform service management."""
 
+import subprocess
 from pathlib import Path
+from typing import Any
 
 from otdf_local.config.features import PlatformFeatures
 from otdf_local.config.ports import Ports
@@ -12,13 +14,33 @@ from otdf_local.process.manager import (
     kill_process_on_port,
 )
 from otdf_local.services.base import Service, ServiceInfo, ServiceType
-from otdf_local.utils.keys import get_golden_keyring_entries, setup_golden_keys
+from otdf_local.utils.console import print_info
+from otdf_local.utils.keys import (
+    generate_root_key,
+    get_golden_keyring_entries,
+    setup_golden_keys,
+)
 from otdf_local.utils.yaml import (
     append_to_list,
     copy_yaml_with_updates,
+    get_nested,
     load_yaml,
     save_yaml,
 )
+
+
+def _committed_content(path: Path) -> bytes | None:
+    """`path` as of git HEAD, or None if it is not in a git checkout."""
+    try:
+        result = subprocess.run(
+            ["git", "show", f"HEAD:./{path.name}"],
+            capture_output=True,
+            check=False,
+            cwd=path.parent,
+        )
+    except FileNotFoundError:  # no git binary
+        return None
+    return result.stdout if result.returncode == 0 else None
 
 
 class PlatformService(Service):
@@ -49,10 +71,39 @@ class PlatformService(Service):
     def health_url(self) -> str:
         return f"http://localhost:{self.port}/healthz"
 
+    def _ensure_template(self) -> Path:
+        """The pristine config to generate from, seeded if it is not there yet.
+
+        `opentdf.yaml` is gitignored in the platform repo and `otdf-sdk-mgr`
+        does not create it. It must be separate from `opentdf-dev.yaml`, which
+        generation overwrites; otherwise each run's output becomes the next
+        run's input. So seed from the committed `opentdf-dev.yaml` (git HEAD),
+        not the working copy, which may hold an earlier run's output.
+        """
+        template_path = self.settings.platform_template_config
+        if template_path.is_file():
+            return template_path
+
+        committed = self.settings.platform_config
+        content = _committed_content(committed)
+        if content is None:
+            if not committed.is_file():
+                raise FileNotFoundError(
+                    f"No platform config to generate from in {self.settings.platform_dir}: "
+                    f"neither {template_path.name} nor {committed.name} is present."
+                )
+            content = committed.read_bytes()
+
+        partial = template_path.with_name(template_path.name + ".tmp")
+        partial.write_bytes(content)
+        partial.replace(template_path)
+        print_info(f"Seeded {template_path} from {committed.name}")
+        return template_path
+
     def _generate_config(self) -> Path:
         """Generate the platform config file from template."""
         config_path = self.settings.platform_config
-        template_path = self.settings.platform_template_config
+        template_path = self._ensure_template()
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
@@ -61,11 +112,35 @@ class PlatformService(Service):
         logger_output = "stderr" if features.supports("logger_stderr") else "stdout"
 
         # Updates for platform config
-        updates = {
+        updates: dict[str, Any] = {
             "logger.level": "debug",
             "logger.type": "json",
             "logger.output": logger_output,
         }
+
+        # The platform's built-in KAS needs these too. The km1/km2 instances
+        # enable them on themselves (`services/kas.py`), but a run that starts
+        # no standalone KAS -- `up` without `kas`, as benchmark runs do to keep
+        # background CPU off the measurement -- has no km instances, and the
+        # ec-wrapped and pqc cells would skip while the run still passes.
+        updates["services.kas.preview.ec_tdf_enabled"] = True
+        updates["services.kas.preview.hybrid_tdf_enabled"] = True
+
+        # Every standalone KAS copies its root key out of *this* generated
+        # config (`KASService._generate_config`), so supplying a missing one
+        # here fixes it for every KAS started afterwards. A key pinned in the
+        # template always wins: CI, an exported OT_ROOT_KEY, and keys already
+        # wrapped in Postgres may depend on it.
+        #
+        # A generated key is carried over from the previous generated config
+        # rather than minted per start: running KAS instances, keys stored in
+        # Postgres, and an exported OT_ROOT_KEY all hold the old one, so a new
+        # key on `restart platform` breaks every unwrap they do.
+        template_data = load_yaml(template_path)
+        if not get_nested(template_data, "services.kas.root_key", ""):
+            updates["services.kas.root_key"] = (
+                self._previous_root_key(config_path) or generate_root_key()
+            )
 
         copy_yaml_with_updates(template_path, config_path, updates)
 
@@ -73,6 +148,24 @@ class PlatformService(Service):
         self._setup_golden_keys(config_path)
 
         return config_path
+
+    def _previous_root_key(self, config_path: Path) -> str:
+        """The root key in the last generated config, or "" if there is none.
+
+        An unreadable previous config is an error rather than a reason to mint
+        a fresh key: silently rotating the key is what carrying it over avoids.
+        """
+        if not config_path.is_file():
+            return ""
+        try:
+            previous = load_yaml(config_path)
+        except ValueError as e:
+            raise ValueError(
+                f"{e}\nIt holds the generated root key. Repair it, or delete it "
+                "to generate a new key (running KAS instances and keys wrapped "
+                "in Postgres will then fail to unwrap)."
+            ) from e
+        return get_nested(previous, "services.kas.root_key", "") or ""
 
     def _setup_golden_keys(self, config_path: Path) -> None:
         """Add golden keys to platform config for legacy TDF decryption.
@@ -101,16 +194,27 @@ class PlatformService(Service):
 
         save_yaml(config_path, data)
 
+    def _preflight(self) -> bool:
+        """Generate the config, reporting failure via start_error."""
+        self.settings.ensure_directories()
+        try:
+            self._generate_config()
+        except (OSError, ValueError) as e:
+            self.start_error = str(e)
+            return False
+        return True
+
     def start(self) -> bool:
         """Start the platform service."""
-        # Ensure directories exist
-        self.settings.ensure_directories()
+        # Generate the config before touching the port, so a config that
+        # cannot be generated leaves a running platform in place.
+        self.start_error = None
+        if not self._preflight():
+            return False
+        config_path = self.settings.platform_config
 
         # Kill any existing process on the port
         kill_process_on_port(self.port)
-
-        # Generate config
-        config_path = self._generate_config()
 
         # Build the command
         cmd = [
@@ -125,15 +229,20 @@ class PlatformService(Service):
         # Start the process
         log_file = self.settings.logs_dir / "platform.log"
 
+        # No OPENTDF_LOG_LEVEL here: the platform's EnvironmentValueLoader turns
+        # OPENTDF_<A>_<B> into the config key "a.b", so that name resolved to
+        # "log.level" and the real key is "logger.level" -- it never had any
+        # effect. Set logger.level in the generated config instead, which is
+        # also how the CI start-additional-kas action does it.
         self._process = self._process_manager.start(
             name=self.name,
             cmd=cmd,
             cwd=self.settings.platform_dir,
             log_file=log_file,
-            env={"OPENTDF_LOG_LEVEL": "info"},
         )
 
-        return self._process is not None
+        self.start_error = self._process.startup_error()
+        return self.start_error is None
 
     def stop(self) -> bool:
         """Stop the platform service."""

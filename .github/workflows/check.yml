@@ -12,7 +12,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: 🦪 ✔ 🧼🧼🧼
@@ -22,9 +22,13 @@ jobs:
       - name: Check shell script formatting with shfmt
         run: docker run --rm -v "$PWD:/mnt" --workdir "/mnt" mvdan/shfmt:v3 -d .
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: false
+          # requires-python is only a floor, so without a pin uv takes the
+          # newest CPython -- whose wheels lag behind, which breaks the
+          # --no-build step below the day it is released.
+          python-version: "3.15"
       - name: Install dependencies
         run: uv sync --extra dev
         working-directory: xtest
@@ -33,6 +37,23 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
+        working-directory: xtest
+      # Offline tests for the harnesses whose own correctness gates a nightly
+      # job: the benchmark statistics, measurement and CLI command builders,
+      # the encryption fixture cache, and the ZIP64 central-directory parser.
+      # No platform and no SDK builds required, so the part that has to be
+      # *correct* is checked on every PR rather than only when the nightly runs.
+      #
+      # --frozen --no-build: resolve nothing and build nothing, so a
+      # dependency cannot slip in an unlocked version or a setup script on a
+      # runner that already has everything installed from the step above.
+      - name: Test xtest offline harnesses
+        run: >-
+          uv run --frozen --no-build pytest --no-header -q
+          test_bench_stats.py test_bench_measure.py test_bench_runner.py
+          test_bench_arms.py test_bench_config.py test_bench_report.py
+          test_sdk_commands.py test_tdfs_units.py test_encryption_units.py
+          test_sizes_units.py test_zip64_units.py test_assertions_units.py
         working-directory: xtest
       - name: Lint and test otdf-local
         run: |

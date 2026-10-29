@@ -190,6 +190,8 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `OTDF_LOCAL_PLATFORM_DIR` | auto-discovered | Platform source tree to run (required when several refs are installed) |
+| `OTDF_LOCAL_XTEST_ROOT` | auto-discovered | xtest directory |
 | `OTDF_LOCAL_PLATFORM_URL` | http://localhost:8080 | Platform URL |
 | `OTDF_LOCAL_KEYCLOAK_URL` | http://localhost:8888 | Keycloak URL |
 | `OTDF_LOCAL_HEALTH_TIMEOUT` | 60 | Health check timeout (seconds) |
