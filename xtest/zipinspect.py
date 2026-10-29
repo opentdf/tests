@@ -5,8 +5,9 @@ entry's header offset and you get the resolved value, whether that came from
 the 32-bit field or from a ZIP64 extra field. The distinction it discards is
 precisely what these tests are about, so the bytes are parsed here instead.
 
-Only the tail of the file plus the central directory is read, so this stays
-cheap on a multi-GiB container.
+:func:`central_directory` reads only the tail of the file plus the central
+directory, so it stays cheap on a multi-GiB container;
+:func:`local_file_header_data_offset` also reads one local header.
 
 Reference: APPNOTE.TXT 4.3.12 (central directory header), 4.3.14 (zip64 end of
 central directory record), 4.3.15 (zip64 end of central directory locator),
@@ -45,8 +46,8 @@ EOCD64_LOCATOR_SIZE = 20
 CEN_FIXED_SIZE = 46
 #: Bytes of a local file header before the variable-length name. APPNOTE 4.3.7.
 LOCAL_FILE_HEADER_FIXED_SIZE = 30
-#: Include the locator immediately before the EOCD even when a maximum-length
-#: (16-bit) comment pushes the EOCD to the beginning of the search window.
+#: EOCD (22) plus a maximum comment (0xFFFF) bounds how far back the EOCD can
+#: start; the extra 20 keep the ZIP64 locator just before it in the same read.
 _MAX_EOCD_SEARCH = EOCD64_LOCATOR_SIZE + EOCD_SIZE + 0xFFFF
 
 

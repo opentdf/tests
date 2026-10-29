@@ -7,8 +7,9 @@ signed 32-bit read goes negative. This module covers a different dimension:
 shapes, and adversarial ones -- that any conformant reader must handle
 correctly regardless of which SDK produced or is consuming the container.
 
-web-sdk PR #1017 (DSPX-4591) fixed four bugs in exactly this area, found and
-verified only by that one SDK's own unit tests, never cross-SDK:
+DSPX-4591 found four web-sdk bugs in exactly this area, verified only by
+web-sdk's own unit tests, never cross-SDK. opentdf/web-sdk#1017 fixed (1),
+(2) and (4); (3) was proposed separately in web-sdk#1086:
 
 1. backward byte-scanning for the central-directory signature instead of
    properly locating EOCD -> (ZIP64 locator ->) ZIP64 EOCD -> walking exactly
@@ -35,10 +36,11 @@ gating the ZIP64 extra on that version -- is *not* exercised cross-SDK; a
 2.0 declaration is tested only against the Python inspector in
 ``test_zip_conformance_units.py``.
 
-Platform PR #3981 adds independent ZIP64 EOCD triggers, conditional per-entry
-ZIP64 fields, and correct traversal past directory-entry comments. The small
-fixtures here cover those behaviors without exercising writer size thresholds.
-Platform PR #4043 adds bounds on untrusted ZIP64 sizes/offsets. Go unit tests
+opentdf/platform#3981 added independent ZIP64 EOCD triggers, conditional
+per-entry ZIP64 fields, and correct traversal past directory-entry comments.
+The small fixtures here cover those behaviors without exercising writer size
+thresholds. opentdf/platform#4043 added bounds on untrusted ZIP64
+sizes/offsets. Go unit tests
 retain coverage of caller-supplied subread indexes and injected writer
 thresholds, which CLI decryption cannot isolate.
 
@@ -66,27 +68,18 @@ answer and only a rejection is worth reporting. Readers should be liberal in
 what they accept, and warning about correct behavior trains people to ignore
 the warnings.
 
-(3) and (4) are latent/cosmetic single-implementation issues with no
-cross-SDK wire disagreement; see the module docstring discussion in the
-project plan for why they are out of scope here.
+(3) is a writer bug and (4) an error-message bug; neither changes what a
+reader sees, so neither has a cross-SDK test here.
 
 Run it with::
 
     uv run pytest test_zip_conformance.py --sdks "go java js" -v
 
-...and to see every cell where a reader was merely safe rather than
-conformant, not just the first per source line::
-
-    PYTHONPATH=. uv run pytest test_zip_conformance.py --sdks "go java js" \
-        -W always::test_zip_conformance.ZipConformanceWarning
-
-``-W`` resolves its category by importing the named module at
-argument-parse time, before pytest has put the rootdir on ``sys.path``;
-without ``PYTHONPATH=.`` the filter is dropped with a
-``PytestConfigWarning`` and the warnings stay deduplicated. They are
-reported either way -- the flag only defeats the once-per-location default.
+Every cell where a reader was merely safe rather than conformant is listed in
+the ``zip conformance outcomes`` table at the end of the run.
 """
 
+import contextlib
 import dataclasses
 import filecmp
 import os
@@ -123,6 +116,7 @@ _ENTRY_ZIP64_FIELDS = ["c", "u", "o", "cu", "co", "uo", "cuo"]
 def _with_zip64_fields(
     entry: zipmutate.MutableEntry, fields: str
 ) -> zipmutate.MutableEntry:
+    assert fields and set(fields) <= set("cuo"), f"unknown ZIP64 fields {fields!r}"
     return dataclasses.replace(
         entry,
         force_zip64_compressed_size="c" in fields,
@@ -152,13 +146,23 @@ def _assert_faithful_roundtrip(
     )
 
 
+def _kill_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError, PermissionError:
+        pass  # Already gone; Darwin reports a group of only zombies as EPERM.
+
+
 def _bounded_decrypt(
     sdk: tdfs.SDK, ct_file: Path, rt_file: Path, *, timeout: float = 30
 ) -> subprocess.CompletedProcess[bytes]:
-    """Bound malformed-input runs, including descendants of the CLI shim.
+    """Bound every mutated decrypt, including descendants of the CLI shim.
 
-    PIPE output is drained by communicate; on timeout kill the whole process
-    group so a shell's child cannot keep running or hold the pipes open.
+    PIPE output is drained by communicate. On timeout -- or anything else
+    that interrupts the wait, Ctrl-C included, since ``start_new_session``
+    keeps the terminal's SIGINT from reaching the CLI -- kill the whole
+    process group so a shell's child cannot keep running or hold the pipes
+    open.
     """
     command, local_env = sdk.decrypt_command(ct_file, rt_file, "ztdf")
     with subprocess.Popen(
@@ -171,12 +175,15 @@ def _bounded_decrypt(
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass  # The group exited between the timeout and the kill.
-            process.communicate()
+            _kill_group(process)
+            # Bounded as well: a descendant that left the group can still
+            # hold the pipes open.
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.communicate(timeout=5)
             pytest.fail(f"{sdk} ZIP decrypt timed out after {timeout}s")
+        except BaseException:
+            _kill_group(process)
+            raise
         return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
@@ -503,7 +510,7 @@ def test_zip64_locator_pushed_past_first_1kib_by_comment(
 ):
     """A ZIP64 EOCD + locator that is not size-mandated is spec-legal.
 
-    Nothing here needs ZIP64 -- the container is a few hundred bytes -- but
+    Nothing here needs ZIP64 -- the container is about 2 KiB -- but
     APPNOTE does not forbid using it anyway, and a maximum-length comment
     then pushes the locator behind whatever a reader's naive "look at the
     last 1 KiB" tail read would have found.
@@ -531,37 +538,28 @@ def test_zip64_locator_pushed_past_first_1kib_by_comment(
 
 @pytest.mark.parametrize("count_offset", [1, None], ids=["real_plus_one", "0xFFFF"])
 def test_central_directory_entry_count_is_overstated(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
     count_offset: int | None,
 ):
     """DSPX-4591 finding 1, from the opposite direction.
 
-    An entry count that overstates what the central directory actually holds
-    must be refused, not walked past into whatever bytes happen to follow --
-    which for a reader that trusts the declared count over the real content
-    is exactly the shape of the misparse that finding fixed. The
-    ``0xFFFF`` case is the boundary value APPNOTE reserves to mean "see the
-    ZIP64 EOCD instead", asserted here with no such record to back it up.
+    A conformant reader refuses an entry count that overstates what the
+    central directory holds, rather than walking on into whatever bytes
+    follow -- for a reader that trusts the declared count over the real
+    content, the shape of the misparse that finding fixed. One that does walk
+    on must still never return wrong plaintext. The ``0xFFFF`` case is the
+    boundary value APPNOTE reserves to mean "see the ZIP64 EOCD instead",
+    asserted here with no such record to back it up.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
-
-    trailer, _ = zipmutate.load_trailer(ct_file)
+    trailer, _ = zipmutate.load_trailer(readable_zip_base)
     real_count = len(trailer.entries)
     declared_count = real_count + count_offset if count_offset is not None else 0xFFFF
     trailer = dataclasses.replace(trailer, entry_count_override=declared_count)
 
     mutated = tmp_path / "mutated.tdf"
-    zipmutate.rewrite(ct_file, mutated, trailer)
+    zipmutate.rewrite(readable_zip_base, mutated, trailer)
 
     with pytest.raises(zipinspect.MalformedZipError):
         zipinspect.central_directory(mutated)
@@ -582,8 +580,8 @@ def test_comment_containing_a_fake_central_directory_record(
 
     A ZIP comment can contain a complete central-directory record without
     making it an entry. The bogus record points past EOF, so interpreting it
-    as structure causes a read failure. Unlike patching encrypted payload
-    bytes, changing the comment preserves authentication -- so a reader that
+    as structure causes a read failure. Placing it in the comment rather than
+    the encrypted payload keeps authentication intact -- so a reader that
     stays anchored to the trailer gets the plaintext back, and nothing here
     can be mistaken for an expected integrity failure. A reader that follows
     the planted record instead must say so as a ZIP error; the warning names
@@ -626,13 +624,14 @@ def test_zip64_eocd_independent_sentinel(
     zip_outcome: ZipOutcome,
     attribute_default_rsa: Attribute,
     tmp_path: Path,
-    eocd_field: str,
+    eocd_field: zipmutate.Zip64EocdField,
 ):
     """Any one sentinel can require ZIP64; other EOCD values stay truthful.
 
     Size-only is compatibility coverage: a reader ignoring directory size
-    could pass it without ever consulting ZIP64. Count-only catches #3981's
-    former dependence on the offset sentinel.
+    could pass it without ever consulting ZIP64. Count-only catches a reader
+    that consults the ZIP64 EOCD only when the offset field is 0xFFFFFFFF, as
+    go did before opentdf/platform#3981.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -668,10 +667,12 @@ def test_zip64_entry_independent_sentinels(
     )
     trailer, _ = zipmutate.load_trailer(ct_file)
     trailer = dataclasses.replace(trailer, force_zip64_eocd=zip64_eocd)
-    trailer.entries[:] = [
-        _with_zip64_fields(e, fields) if e.name == "0.manifest.json" else e
-        for e in trailer.entries
-    ]
+    manifest_index = next(
+        i for i, e in enumerate(trailer.entries) if e.name == "0.manifest.json"
+    )
+    trailer.entries[manifest_index] = _with_zip64_fields(
+        trailer.entries[manifest_index], fields
+    )
     mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
     zip_outcome(mutated, tmp_path / "roundtrip.bin", legality="spec-legal")
 
@@ -750,8 +751,9 @@ _MALFORMED_CASES = [
 def _malformed_trailer(src: Path, case: str) -> zipmutate.MutableTrailer:
     """One malformed declaration per fixture; ciphertext/local headers survive.
 
-    No archive comment: the independent Go/JS comment bugs must not short
-    circuit the reader before it reaches the declaration under test. Positive
+    No archive comment: readers that refuse long archive comments (see
+    ``test_eocd_with_max_length_comment``) must not stop before the
+    declaration under test. Positive
     oversized values stay small enough that an old reader cannot allocate GiB.
     """
     trailer, cd_offset = zipmutate.load_trailer(src)
@@ -830,7 +832,8 @@ def test_malformed_zip_never_yields_wrong_plaintext(
 ):
     """Malformed metadata must never produce the wrong bytes under exit 0.
 
-    Rejecting is the conformant answer and the one #4043 adds bounds for: the
+    Rejecting is the conformant answer and the one opentdf/platform#4043
+    added bounds for: the
     manifest's 2**63 size targets its negative-allocation panic, and the
     payload overlapping the CD targets its tighter data boundary even when
     the manifest would otherwise allow decrypting just the real bytes.
@@ -861,9 +864,10 @@ def test_directory_record_length_boundary(
     """Keep names intact; a large foreign TLV exercises uint16 cursor addition.
 
     Both cells are spec-legal. APPNOTE 4.4.10-12 sizes each of the three
-    length fields as its own uint16, so every field here is representable and
-    only their *sum* crosses the 65535 the note recommends -- a SHOULD with no
-    field behind it. Nothing in either record contradicts anything else: the
+    length fields as its own uint16, so every field here is representable;
+    only the whole record -- 46 fixed bytes plus the three variable fields --
+    crosses the 65535 the note recommends, a SHOULD with no field behind it.
+    Nothing in either record contradicts anything else: the
     declared lengths are truthful and the next record begins exactly where
     they say, so there is one possible parse and it is the right one. That is
     what separates this from the cells in
@@ -871,16 +875,14 @@ def test_directory_record_length_boundary(
     the container disagree and a wrong answer is available to be returned.
 
     So accepting is conformant at both lengths and only a rejection is worth
-    reporting. Refusing ``over_limit`` costs real interop -- timestamp, Unix
-    UID/GID, ACL and signing TLVs push third-party records past 65535, and a
-    reader has to *add* code to compute the combined size and refuse it, since
-    that check does not fall out of parsing. Marking it adversarial would warn
-    about correct behavior.
+    reporting. A reader has to *add* code to compute the combined size and
+    refuse it, since that check does not fall out of parsing; marking
+    ``over_limit`` adversarial would warn about correct behavior.
 
-    A reader that adds these in uint16 still cannot pass quietly: the cursor
-    wraps, so it mis-parses into wrong bytes (a hard failure), a rejection
-    (warned here) or a hang (the decrypt timeout). Go's unit test separately
-    requires correct cursor arithmetic.
+    A reader that computes the record length in a uint16 still cannot pass
+    quietly: at ``over_limit`` it wraps to 0, so it mis-parses into wrong
+    bytes (a hard failure), a rejection (warned here) or a hang (the decrypt
+    timeout). Go's unit test separately requires correct cursor arithmetic.
     """
     trailer, _ = zipmutate.load_trailer(readable_zip_base)
     first = trailer.entries[0]

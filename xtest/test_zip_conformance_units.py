@@ -1,4 +1,5 @@
-"""Offline tests for ``zipmutate.py`` (DSPX-4591 follow-up).
+"""Offline tests for ``zipmutate.py``, ``zipreport.py`` and the conformance
+contract (DSPX-4591 follow-up).
 
 No platform or SDK; one isolated Python subprocess checks timeout cleanup.
 Runs in ``check.yml`` on every PR for the same reason as ``test_zip64_units.py``: a builder
@@ -16,6 +17,9 @@ tolerated result never leaks the client credentials the go and java shims
 echo. That contract is what every cross-SDK cell rests on, and it is cheap to
 get subtly wrong -- so it is checked here, offline, on every PR. Everything
 added for it must stay offline: fake the process result, never spawn a CLI.
+
+The last part covers the reporting end: ``zipreport.py``'s encoding and
+rendering, and the ``conftest.py`` hooks that collect records during a run.
 """
 
 import collections
@@ -41,9 +45,7 @@ from abac import Attribute
 from fixtures.encryption import EncryptFactory
 from zipinspect import MalformedZipError
 
-#: The same extended-timestamp shape real writers emit, reused from
-#: test_zip_conformance.py's fixture-level constant.
-_FOREIGN_EXTRA_TLV = struct.pack("<HH", 0x5455, 5) + b"\x01\x00\x00\x00\x00"
+_FOREIGN_EXTRA_TLV = conformance._FOREIGN_EXTRA_TLV
 
 
 def _ordinary_zip(path: Path) -> Path:
@@ -199,7 +201,8 @@ class TestLoadTrailerAndRewrite:
         self, tmp_path: Path, force_zip64: bool, comment_length: int
     ):
         """Exercise the locator at, partly before, and wholly before the
-        old EOCD-only search window, with ordinary ZIP controls as well.
+        22+0xFFFF window that covers the EOCD but not the 20-byte locator,
+        with ordinary ZIP controls as well.
         """
         src = _ordinary_zip(tmp_path / "src.zip")
         trailer, _ = zipmutate.load_trailer(src)
@@ -224,6 +227,34 @@ class TestLoadTrailerAndRewrite:
         trailer = dataclasses.replace(trailer, comment=b"c" * (0xFFFF + 1))
         with pytest.raises(ValueError, match="0xFFFF"):
             trailer.to_bytes(cd_offset)
+
+
+class TestIgnoredSettingsAreRefused:
+    """A setting that would be dropped must raise, not build a valid ZIP.
+
+    Each of these would otherwise turn an intended malformed case into a
+    well-formed container, which an adversarial cell then reports as a
+    lenient reader -- blaming the SDK for a harness mistake.
+    """
+
+    def test_zip64_eocd_settings_need_a_zip64_eocd(self, tmp_path: Path):
+        src = _ordinary_zip(tmp_path / "src.zip")
+        trailer, cd_offset = zipmutate.load_trailer(src)
+        for lie in (
+            dataclasses.replace(trailer, zip64_locator_offset_override=1 << 63),
+            dataclasses.replace(trailer, zip64_eocd_fields=frozenset({"count"})),
+        ):
+            with pytest.raises(ValueError, match="need force_zip64_eocd"):
+                lie.to_bytes(cd_offset)
+
+    def test_extra_override_does_not_swallow_extra_prefix(self, tmp_path: Path):
+        src = _ordinary_zip(tmp_path / "src.zip")
+        trailer, _ = zipmutate.load_trailer(src)
+        entry = dataclasses.replace(
+            trailer.entries[0], extra_prefix=_FOREIGN_EXTRA_TLV, extra_override=b""
+        )
+        with pytest.raises(ValueError, match="extra_prefix"):
+            entry.to_bytes()
 
 
 class TestEntryCountOverride:
@@ -272,52 +303,15 @@ class TestEntryCountOverride:
             zipinspect.central_directory(dest)
 
 
-class TestCorruptEntryBytes:
-    def test_patches_only_the_named_window(self, tmp_path: Path):
-        src = _ordinary_zip(tmp_path / "src.zip")
-        dest = tmp_path / "dest.zip"
-        cd = zipinspect.central_directory(src)
-        entry = next(e for e in cd.entries if e.name == "0.payload")
-        data_offset = zipinspect.local_file_header_data_offset(src, entry)
-
-        zipmutate.corrupt_entry_bytes(src, dest, "0.payload", at=2, patch=b"PK\x01\x02")
-
-        before = src.read_bytes()
-        after = dest.read_bytes()
-        assert len(before) == len(after)
-        patch_start = data_offset + 2
-        patch_end = patch_start + 4
-        assert after[patch_start:patch_end] == b"PK\x01\x02"
-        assert before[:patch_start] == after[:patch_start]
-        assert before[patch_end:] == after[patch_end:]
-
-    def test_rejects_identical_src_and_dest(self, tmp_path: Path):
-        src = _ordinary_zip(tmp_path / "src.zip")
-        with pytest.raises(ValueError, match="distinct src and dest"):
-            zipmutate.corrupt_entry_bytes(src, src, "0.payload", at=0, patch=b"x")
-
-    def test_rejects_an_unknown_entry_name(self, tmp_path: Path):
-        src = _ordinary_zip(tmp_path / "src.zip")
-        dest = tmp_path / "dest.zip"
-        with pytest.raises(ValueError, match="no entry named"):
-            zipmutate.corrupt_entry_bytes(src, dest, "does.not.exist", at=0, patch=b"x")
-
-    def test_rejects_a_patch_that_would_run_past_the_entrys_data(self, tmp_path: Path):
-        src = _ordinary_zip(tmp_path / "src.zip")
-        dest = tmp_path / "dest.zip"
-        entry = next(
-            e
-            for e in zipinspect.central_directory(src).entries
-            if e.name == "0.payload"
-        )
-        with pytest.raises(ValueError, match="outside entry"):
-            zipmutate.corrupt_entry_bytes(
-                src,
-                dest,
-                "0.payload",
-                at=entry.compressed_size - 1,
-                patch=b"too-long-for-the-remaining-space",
-            )
+def test_local_file_header_data_offset_finds_the_data(tmp_path: Path):
+    """Checked against where the bytes actually are, not against zipmutate."""
+    src = _ordinary_zip(tmp_path / "src.zip")
+    entry = next(
+        e for e in zipinspect.central_directory(src).entries if e.name == "0.payload"
+    )
+    assert zipinspect.local_file_header_data_offset(src, entry) == (
+        src.read_bytes().index(b"payload-bytes-000")
+    )
 
 
 #: A real go parser diagnostic, matched by conformance._ZIP_REJECTIONS["go"].
@@ -469,7 +463,7 @@ def test_independent_entry_sentinels_preserve_contents(
 
 
 @pytest.mark.parametrize("field", ["count", "size", "offset"])
-def test_independent_eocd_sentinels(tmp_path: Path, field: str):
+def test_independent_eocd_sentinels(tmp_path: Path, field: zipmutate.Zip64EocdField):
     src = _ordinary_zip(tmp_path / "src.zip")
     trailer, cd_offset = zipmutate.load_trailer(src)
     trailer = dataclasses.replace(
@@ -755,7 +749,7 @@ def test_a_tolerated_outcome_never_echoes_the_command_line(
     """The go and java shims print client credentials on stdout every run.
 
     Only the allowlist-matched slice of the output may reach a warning or a
-    recorded property -- those end up in CI logs and junit artifacts. A
+    recorded property -- those end up in CI logs and zip-conformance.json. A
     well-meaning change to report "more context" is exactly how a secret
     would get published, so pin it on every quadrant.
     """
