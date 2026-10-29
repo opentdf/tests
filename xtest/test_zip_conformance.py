@@ -187,33 +187,42 @@ _RUNTIME_FAILURE = re.compile(
 # failures must not pass). Keep these tied to observed CLI errors, with
 # offline tests for both expected rejection and unrelated/runtime failures.
 #
-# To add one: run with --html, pull the failing cells' captured logs out of
-# the report's data-jsonblob, and copy the string _verbatim as a bytes
-# literal_ into test_expected_parser_rejections_are_accepted first. Watch it
-# fail, widen the regex until it passes, then re-run
+# To add one: copy the stderr tail from the failing cell's assertion message
+# _verbatim, as a bytes literal_, into test_expected_parser_rejections_are_accepted
+# first. Watch it fail, widen the regex until it passes, then re-run
 # test_abnormal_or_unrelated_failures_do_not_pass to confirm the widening did
-# not also swallow auth/network/usage. (--show-capture=no discards exactly
-# the output you need here.)
+# not also swallow auth/network/usage.
 #
 # Deliberately absent, because noticing by accident downstream of the ZIP
 # layer is not a parser diagnostic -- the same reason _RUNTIME_FAILURE
-# refuses NegativeArraySizeException: java's message-less
-# IllegalArgumentException from a 1<<63 seek reaching FileChannelImpl.position
-# via ZipReader.extractZIP64CentralDirectoryInfo; js's "SyntaxError:
-# Unexpected end of JSON input" from handing an empty read to JSON.parse in
-# zip-reader.js; and go's "json.Unmarshal failed:invalid character 'P' after
-# top-level value", which is the manifest decoder reading past the manifest
-# into payload bytes. All three are filed upstream; all three are pinned as
-# negative rows in test_abnormal_or_unrelated_failures_do_not_pass.
+# refuses NegativeArraySizeException:
+#
+# * A 2**63 offset narrowed to a negative file position and refused by the
+#   runtime rather than by a bounds check: java's message-less
+#   IllegalArgumentException from FileChannelImpl.position via
+#   ZipReader.extractZIP64CentralDirectoryInfo. go's readSeeker.Seek and
+#   io.ReadFull are accepted only for EOF -- a seek or read past the end --
+#   so the same accident there fails too.
+# * A bare java EOFException: Gson's truncated-JSON error and OkHttp's dropped
+#   connection both carry one. Only ZipReader's own wording passes.
+# * js's "SyntaxError: Unexpected end of JSON input" from handing an empty
+#   read to JSON.parse in zip-reader.js.
+# * go's "json.Unmarshal failed:invalid character 'P' after top-level value",
+#   the manifest decoder reading past the manifest into payload bytes.
+#
+# The java seek, js and go JSON cases are filed upstream. Every one is pinned
+# as a negative row in test_abnormal_or_unrelated_failures_do_not_pass.
 _ZIP_REJECTIONS = {
     "go": re.compile(
         r"zip: (?:not a valid|unable to read|file not found)|"
-        r"zipstream\.NewTDFReader failed: (?:binary\.Read|readSeeker\.Seek|io\.ReadFull) failed:|"
+        r"zipstream\.NewTDFReader failed: (?:binary\.Read failed:|"
+        r"(?:readSeeker\.Seek|io\.ReadFull) failed: (?:unexpected )?EOF)|"
         r"tdfReader\.Manifest failed:.*(?:EOF|0\.manifest\.json size too large)",
         re.IGNORECASE,
     ),
     "java": re.compile(
-        r"InvalidZipException|EOFException|IllegalArgumentException: tdf doesn't contain a manifest",
+        r"InvalidZipException|EOFException: Unexpected EOF when reading filename|"
+        r"IllegalArgumentException: tdf doesn't contain a manifest",
         re.IGNORECASE,
     ),
     "js": re.compile(
