@@ -58,7 +58,7 @@ def platform(tmp_path: Path) -> PlatformService:
     """A PlatformService whose config generation touches only `tmp_path`."""
     settings = Settings(xtest_root=tmp_path, platform_dir=tmp_path)
     settings.ensure_directories()
-    # Golden keys come from xtest/extra-keys.json, which tmp_path lacks;
+    # Golden keys come from <xtest_root>/extra-keys.json, which tmp_path lacks;
     # setup_golden_keys already returns [] for that, so config generation is
     # exercised end to end without needing the real fixture file.
     return PlatformService(settings)
