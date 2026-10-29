@@ -42,41 +42,23 @@ def test_tdf_roundtrip(
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if container == "ztdf-ecwrap":
-        if not encrypt_sdk.supports("ecwrap"):
-            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        if "ecwrap" not in pfs.features:
-            pytest.skip(
-                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
-            )
-        # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
-            pytest.skip(
-                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
-            )
 
     target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
-    # Use explicit RSA attribute when not using EC wrapping to avoid base_key interference
-    attr_values = (
-        None if container == "ztdf-ecwrap" else attribute_default_rsa.value_fqns
-    )
+    # Pin the RSA attribute so a base_key set by another module can't change
+    # which mechanism wraps the KAO out from under the assertions below.
     ct_file = encrypted_tdf(
         encrypt_sdk,
         container=container,
         target_mode=target_mode,
-        attr_values=attr_values,
+        attr_values=attribute_default_rsa.value_fqns,
     )
 
     manifest = tdfs.manifest(ct_file)
     assert manifest.payload.isEncrypted
     assert len(manifest.encryptionInformation.keyAccess) == 1
     kao = manifest.encryptionInformation.keyAccess[0]
-    if container == "ztdf-ecwrap":
-        assert kao.type == "ec-wrapped"
-        assert kao.ephemeralPublicKey is not None
-    else:
-        assert kao.type == "wrapped"
-        assert kao.ephemeralPublicKey is None
+    assert kao.type == "wrapped"
+    assert kao.ephemeralPublicKey is None
     if target_mode == "4.2.2" or (
         target_mode is None and not encrypt_sdk.supports("hexless")
     ):
@@ -94,18 +76,6 @@ def test_tdf_roundtrip(
 
     # Verify rewrap was logged in audit logs
     audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
-
-    if (
-        container.startswith("ztdf")
-        and decrypt_sdk.supports("ecwrap")
-        and "ecwrap" in pfs.features
-    ):
-        ert_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="ecrewrap")
-        ec_mark = audit_logs.mark("before_ecwrap_decrypt")
-        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-        assert filecmp.cmp(pt_file, ert_file)
-        # Verify ecwrap rewrap was also logged
-        audit_logs.assert_rewrap_success(min_count=1, since_mark=ec_mark)
 
 
 def test_chunky_roundtrip(

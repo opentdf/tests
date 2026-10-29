@@ -11,12 +11,12 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -132,6 +132,14 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help policy kas-registry key create | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
       ;;
+    session-key-mlkem)
+      # Unlike the java/js help text, otdfctl's decrypt help enum and its
+      # --session-key-algorithm parser gained mlkem:* in the same commit
+      # (opentdf/platform#3814), so the help text is a reliable signal here.
+      set -o pipefail
+      "${cmd[@]}" help decrypt | grep -iE 'mlkem:768|mlkem:1024'
+      exit $?
+      ;;
     dpop | dpop_nonce_challenge)
       set -o pipefail
       "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
@@ -214,9 +222,6 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$XT_WITH_ASSERTIONS" ]; then
     args+=(--with-assertions "$XT_WITH_ASSERTIONS")
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--wrapping-key-algorithm "ec:secp256r1")
-  fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
@@ -238,8 +243,15 @@ elif [ "$1" == "decrypt" ]; then
   if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
     args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--session-key-algorithm "ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    # otdfctl quietly falls back to rsa:2048 for any value its parser doesn't
+    # know, so refuse anything this build's help doesn't list rather than let a
+    # forced run (XT_FORCE_SUPPORTS) pass with the wrong session key.
+    if ! "${cmd[@]}" help decrypt | grep -F -- "$XT_WITH_SESSION_KEY_ALGORITHM" >/dev/null; then
+      echo "otdfctl does not list session key algorithm [$XT_WITH_SESSION_KEY_ALGORITHM]" >&2
+      exit 1
+    fi
+    args+=(--session-key-algorithm "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)
