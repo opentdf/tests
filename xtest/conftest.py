@@ -578,7 +578,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     decision: the multiplicity correction spans all cells, and the A/A control
     can invalidate the lot. Artifacts are written first and unconditionally --
     a run that is about to fail is exactly the run whose raw numbers someone
-    will want to read.
+    will want to read. That includes a run whose analysis raises: there is no
+    gate to report then, so the raw samples go to ``<name>.raw.json`` instead,
+    and the error propagates once they are on disk.
     """
     del exitstatus  # the benchmark's own verdict is independent of test outcomes
     config = session.config
@@ -595,14 +597,24 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
 
     bench_config = bench.config_from_options(config)
     recorder.metadata = bench.runner_metadata(config)
-    gate = recorder.gate(bench_config)
 
     cells = config.stash.get(report.CELLS_KEY, [])
     name = "-".join(dict.fromkeys(c.sdk for c in cells)) or "benchmarks"
     out_dir = cast(Path, config.getoption("--bench-out"))
-    json_path = report.write_json(
-        out_dir / f"{name}.json", recorder, bench_config, gate
-    )
+    try:
+        gate = recorder.gate(bench_config)
+        json_path = report.write_json(
+            out_dir / f"{name}.json", recorder, bench_config, gate
+        )
+    except Exception as e:
+        # Under its own name, so nothing that reads <name>.json can take a run
+        # without statistics for a complete one. Only on this path: a run that
+        # analyses cleanly writes exactly what it always did.
+        raw_path = report.write_raw_json(
+            out_dir / f"{name}.raw.json", recorder, bench_config, e
+        )
+        e.add_note(f"raw samples, without statistics: {raw_path}")
+        raise
 
     summary = report.markdown(recorder, bench_config, gate)
     report.append_step_summary(summary)
