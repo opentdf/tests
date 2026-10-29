@@ -62,7 +62,7 @@ def _recorded_cells(recorded: list[tuple[str, object]]) -> list[zipreport.Cell]:
 
 
 class TestLoadTrailerAndRewrite:
-    def test_unmodified_trailer_round_trips_exactly(self, tmp_path: Path):
+    def test_unmodified_trailer_preserves_entry_values(self, tmp_path: Path):
         """The baseline: rewriting with no changes must reproduce the same
         entries, offsets and sizes zipinspect would report for the original.
         """
@@ -83,6 +83,50 @@ class TestLoadTrailerAndRewrite:
         zipinspect.assert_offsets_are_consistent(after)
         with zipfile.ZipFile(dest) as z:
             assert all(e.extract_version == 20 for e in z.infolist())
+
+    def test_an_unmodified_rewrite_drops_zip64(self, tmp_path: Path):
+        """Pin the normalisation: a ZIP64 source rebuilds as plain ZIP32.
+
+        This is why ``readable_zip_base`` decrypts the rebuilt container
+        rather than the original -- the two are different shapes, and only
+        the rebuilt one is what every malformed case lies on top of.
+        """
+        plain = _ordinary_zip(tmp_path / "plain.zip")
+        trailer, _ = zipmutate.load_trailer(plain)
+        trailer = dataclasses.replace(
+            trailer,
+            force_zip64_eocd=True,
+            entries=[
+                dataclasses.replace(
+                    e,
+                    force_zip64_offset=True,
+                    force_zip64_compressed_size=True,
+                    force_zip64_uncompressed_size=True,
+                    version_needed_to_extract=45,
+                )
+                for e in trailer.entries
+            ],
+        )
+        src = zipmutate.rewrite(plain, tmp_path / "zip64.zip", trailer)
+        assert zipinspect.EOCD64_SIG in src.read_bytes()
+        assert all(e.has_zip64_extra for e in zipinspect.central_directory(src).entries)
+
+        rebuilt, _ = zipmutate.load_trailer(src)
+        dest = zipmutate.rewrite(src, tmp_path / "rebuilt.zip", rebuilt)
+
+        before = zipinspect.central_directory(src)
+        after = zipinspect.central_directory(dest)
+        assert zipinspect.EOCD64_SIG not in dest.read_bytes()
+        assert not any(e.has_zip64_extra for e in after.entries)
+        assert [
+            (e.name, e.local_header_offset, e.compressed_size, e.raw_crc32)
+            for e in after.entries
+        ] == [
+            (e.name, e.local_header_offset, e.compressed_size, e.raw_crc32)
+            for e in before.entries
+        ]
+        with zipfile.ZipFile(dest) as z:
+            assert z.read("0.payload") == b"payload-bytes-000"
 
     def test_rejects_identical_src_and_dest(self, tmp_path: Path):
         src = _ordinary_zip(tmp_path / "src.zip")

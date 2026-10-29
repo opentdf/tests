@@ -1,13 +1,17 @@
 """Deliberately-shaped ZIP trailers over a real TDF, for cross-SDK conformance
 tests (DSPX-4591 follow-up).
 
-A ZIP's central directory is metadata describing where the real bytes are.
-As long as a mutation's resolved values still point at an entry's true,
-physical local header, the CD/EOCD/ZIP64-EOCD/locator trailer can be
-rewritten wholesale -- sentinel a field, reorder its extra-field TLVs,
-inflate the declared entry count, pad the comment -- without moving or
-repacking a single local header or payload byte. Only bytes from
-``cd_offset`` onward change; everything before is copied verbatim.
+A ZIP's central directory is metadata describing where the real bytes are,
+so the CD/EOCD/ZIP64-EOCD/locator trailer can be rewritten wholesale --
+sentinel a field, reorder its extra-field TLVs, add comments, overstate the
+entry count, or declare sizes and offsets that are deliberately false --
+without moving or repacking a single local header or payload byte.
+:func:`rewrite` changes only bytes from ``cd_offset`` onward and copies
+everything before verbatim; :func:`corrupt_entry_bytes` is the one exception,
+and patches inside a single entry's data.
+
+The rewrite re-encodes rather than copies: see
+:meth:`MutableEntry.from_entry` for what survives from the source records.
 
 Read the source through :mod:`zipinspect` -- the same oracle the conformance
 assertions use -- then rebuild only the trailer. This module is write-only
@@ -57,7 +61,13 @@ class MutableEntry:
 
     @staticmethod
     def from_entry(e: zipinspect.CentralDirectoryEntry) -> MutableEntry:
-        """A faithful starting point: same physical values, ZIP64 knobs off."""
+        """Same name, offset, sizes and CRC-32; the encoding is normalised.
+
+        Nothing else from the source record survives: no ZIP64 extra or
+        sentinel, version 2.0, and zero flags, method, times and attributes.
+        A ZIP64 source therefore rebuilds as plain ZIP32 unless a test sets
+        the ``force_zip64_*`` switches.
+        """
         return MutableEntry(
             name=e.name,
             local_header_offset=e.local_header_offset,
@@ -209,9 +219,10 @@ class MutableTrailer:
 def load_trailer(path: Path) -> tuple[MutableTrailer, int]:
     """Parse ``path`` and return an editable trailer plus its ``cd_offset``.
 
-    Every entry starts as a faithful round-trip
-    (:meth:`MutableEntry.from_entry`); callers mutate individual entries or
-    the trailer's own fields before passing the result to :func:`rewrite`.
+    Every entry starts from :meth:`MutableEntry.from_entry` -- the same
+    physical values, normalised -- and the EOCD is plain ZIP32 unless
+    ``force_zip64_eocd`` is set. Callers mutate individual entries or the
+    trailer's own fields before passing the result to :func:`rewrite`.
     """
     cd = zipinspect.central_directory(path)
     trailer = MutableTrailer(entries=[MutableEntry.from_entry(e) for e in cd.entries])
