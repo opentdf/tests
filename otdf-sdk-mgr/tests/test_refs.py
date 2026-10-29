@@ -2,7 +2,7 @@
 
 import pytest
 
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
+from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand, is_mutable_ref, ref_slug
 
 
 @pytest.mark.parametrize(
@@ -63,3 +63,26 @@ def test_is_mutable_ref(ref, expected):
 )
 def test_ref_slug(inp, expected):
     assert ref_slug(inp) == expected
+
+
+@pytest.mark.parametrize(
+    "inp,expected",
+    [
+        ("main", "main"),
+        ("feature/x", "feature--x"),
+        ("sdk/v1.2.3", "v1.2.3"),
+        ("otdfctl/v0.24.0", "v0.24.0"),
+        ("refs/pull/123/head", "refs--pull--123--head"),
+        ("a" * 40, "a" * 40),
+    ],
+)
+def test_dist_slug(inp, expected):
+    """Unlike `ref_slug`, namespace prefixes go: `sdk/v1.2.3` and `v1.2.3` share a dist."""
+    assert dist_slug(inp) == expected
+
+
+@pytest.mark.parametrize("ref", ["", "sdk/", "otdfctl/", "sdk/.", "otdfctl/..", ".", ".."])
+def test_dist_slug_rejects_a_ref_that_names_no_directory(ref):
+    """`dist/`, `dist/.` and `dist/..` are not a build directory of their own."""
+    with pytest.raises(ValueError, match="names no dist/ directory"):
+        dist_slug(ref)
