@@ -1,4 +1,4 @@
-"""Tests for the java and js release installers — network and subprocesses are mocked."""
+"""Tests for the go, java and js release installers — network and subprocesses are mocked."""
 
 import subprocess
 import urllib.error
@@ -12,8 +12,10 @@ import pytest
 from otdf_sdk_mgr import installers
 from otdf_sdk_mgr.installers import (
     InstallError,
+    install_go_release,
     install_java_release,
     install_js_release,
+    install_release,
     latest_stable_version,
 )
 
@@ -28,11 +30,148 @@ def http_404(url: str) -> urllib.error.HTTPError:
 
 @pytest.fixture
 def sdk_dir(tmp_path: Path) -> Iterator[Path]:
-    for sdk in ("java", "js"):
+    for sdk in ("go", "java", "js"):
         (tmp_path / sdk).mkdir()
         (tmp_path / sdk / "cli.sh").write_text("#!/bin/sh\n")
-    with patch("otdf_sdk_mgr.installers.get_sdk_dir", return_value=tmp_path):
+    (tmp_path / "go" / "otdfctl.sh").write_text("#!/bin/sh\n")
+    (tmp_path / "go" / "opentdfctl.yaml").write_text("profile: {}\n")
+    sdk_dirs = {sdk: tmp_path / sdk for sdk in ("go", "java", "js")}
+    with (
+        patch("otdf_sdk_mgr.installers.get_sdk_dir", return_value=tmp_path),
+        patch("otdf_sdk_mgr.installers.get_sdk_dirs", return_value=sdk_dirs),
+    ):
         yield tmp_path
+
+
+def fake_go_install(
+    cmd: list[str], env: dict[str, str], **_: object
+) -> subprocess.CompletedProcess:
+    """Stand-in for subprocess.run: `go install` builds the binary into $GOBIN."""
+    (Path(env["GOBIN"]) / "otdfctl").write_text("binary")
+    return subprocess.CompletedProcess(cmd, 0, "", "")
+
+
+def go_install_fails(cmd: list[str], **_: object) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(cmd, 1, "", "unknown revision")
+
+
+class TestInstallGoRelease:
+    @pytest.mark.parametrize(
+        ("version", "spec"),
+        [
+            ("v0.38.1", "github.com/opentdf/platform/otdfctl@v0.38.1"),
+            ("otdfctl/v0.38.1", "github.com/opentdf/platform/otdfctl@v0.38.1"),
+            # Before otdfctl moved into the platform monorepo.
+            ("v0.24.0", "github.com/opentdf/otdfctl@v0.24.0"),
+        ],
+    )
+    def test_installs_the_binary_into_dist(self, sdk_dir: Path, version: str, spec: str):
+        dist = sdk_dir / "go" / "dist" / spec.rsplit("@", 1)[1]
+        with patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=fake_go_install) as run:
+            install_go_release(version, dist)
+
+        run.assert_called_once()
+        assert run.call_args.args[0] == ["go", "install", spec]
+        # Into the dist, not the user's own GOBIN, so the wrappers need no `go run`.
+        assert Path(run.call_args.kwargs["env"]["GOBIN"]).is_absolute()
+        assert (dist / "otdfctl").read_text() == "binary"
+        assert (dist / ".version").read_text() == f"{spec}\n"
+        for name in ("cli.sh", "otdfctl.sh", "opentdfctl.yaml"):
+            assert (dist / name).exists()
+        # The staging dir is gone, so nothing else lists as a dist.
+        assert [p.name for p in dist.parent.iterdir()] == [dist.name]
+
+    def test_failed_go_install_leaves_no_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        with (
+            patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=go_install_fails),
+            pytest.raises(InstallError, match="go install failed .*unknown revision"),
+        ):
+            install_go_release("v0.38.1", dist)
+        # Any dist_dir would be skipped as installed next run.
+        assert list(dist.parent.iterdir()) == []
+
+    def test_interrupted_go_install_leaves_no_dist(self, sdk_dir: Path):
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        with (
+            patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=KeyboardInterrupt()),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            install_go_release("v0.38.1", dist)
+        assert list(dist.parent.iterdir()) == []
+
+    def test_go_install_without_an_otdfctl_binary_raises(self, sdk_dir: Path):
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        with (
+            patch(
+                "otdf_sdk_mgr.installers.subprocess.run",
+                side_effect=lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, "", ""),
+            ),
+            pytest.raises(InstallError, match="did not produce an otdfctl binary"),
+        ):
+            install_go_release("v0.38.1", dist)
+        assert list(dist.parent.iterdir()) == []
+
+
+class TestInstallReleaseExistingDist:
+    def legacy_go_dist(self, sdk_dir: Path) -> Path:
+        """What install_go_release left before it built a binary."""
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        dist.mkdir(parents=True)
+        (dist / ".version").write_text("github.com/opentdf/platform/otdfctl@v0.38.1\n")
+        (dist / "cli.sh").write_text("old wrapper")
+        return dist
+
+    def test_go_release_without_a_binary_gets_one(self, sdk_dir: Path):
+        dist = self.legacy_go_dist(sdk_dir)
+        with patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=fake_go_install) as run:
+            assert install_release("go", "v0.38.1") == dist
+        run.assert_called_once()
+        assert (dist / "otdfctl").read_text() == "binary"
+        assert (dist / "cli.sh").read_text() == "#!/bin/sh\n"
+        assert [p.name for p in dist.parent.iterdir()] == [dist.name]
+
+    def test_failed_upgrade_keeps_the_go_run_dist(self, sdk_dir: Path):
+        dist = self.legacy_go_dist(sdk_dir)
+        with (
+            patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=go_install_fails),
+            pytest.raises(InstallError),
+        ):
+            install_release("go", "v0.38.1")
+        # Still usable, via `go run`.
+        assert (dist / ".version").exists()
+        assert (dist / "cli.sh").read_text() == "old wrapper"
+        assert [p.name for p in dist.parent.iterdir()] == [dist.name]
+
+    @pytest.mark.parametrize(
+        "version_file",
+        [
+            "github.com/opentdf/platform/otdfctl@v0.38.1\n",
+            # A source build's, in whatever format; or none at all.
+            "ref=main\nsha=abc\n",
+            None,
+        ],
+    )
+    def test_go_dist_with_a_binary_is_skipped(self, sdk_dir: Path, version_file: str | None):
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        dist.mkdir(parents=True)
+        (dist / "otdfctl").write_text("existing")
+        if version_file is not None:
+            (dist / ".version").write_text(version_file)
+        with patch("otdf_sdk_mgr.installers.subprocess.run") as run:
+            assert install_release("go", "v0.38.1") == dist
+        run.assert_not_called()
+        assert (dist / "otdfctl").read_text() == "existing"
+
+    @pytest.mark.parametrize("sdk", ["java", "js"])
+    def test_other_sdks_never_look_for_a_go_binary(self, sdk_dir: Path, sdk: str):
+        dist = sdk_dir / sdk / "dist" / "v0.9.0"
+        dist.mkdir(parents=True)
+        (dist / ".version").write_text("v0.9.0\n")
+        installer = MagicMock()
+        with patch.dict(installers.INSTALLERS, {sdk: installer}):
+            install_release(sdk, "v0.9.0")
+        installer.assert_not_called()
 
 
 def fake_build(cmd: list[str]) -> int:
