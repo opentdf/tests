@@ -30,9 +30,10 @@ from perf.stats import (
     MIN_USABLE_ROUNDS,
 )
 
-#: Benchmark arm-count ceiling. Stage 3b raises this to 4 when multi-arm
-#: measurement lands; it is one constant so that stage changes one number
-#: rather than adding a second encoding.
+#: How many builds one benchmark run may name. Only `BenchmarkRequest` checks
+#: it; the round loop in `perf.runner` accepts any number of arms from two up.
+#: One constant, so that raising the cap changes one number rather than adding
+#: a second encoding.
 MAX_ARM_COUNT = 2
 
 #: Default two-sided confidence level, derived from alpha rather than written

@@ -14,10 +14,11 @@ is testable without a platform, an SDK, or a subprocess.
 
 The scale
 ---------
-Comparisons use the log-ratio ``d_i = ln(candidate_i) - ln(baseline_i)`` of the
-i-th paired round. Logs make ratios symmetric (a 2x slowdown and a 2x speedup
-are equal and opposite) and additive, which is what the median and the
-bootstrap want. Results are exponentiated back to ratios for reporting.
+Comparisons use the log-ratio ``d_i = ln(b_i) - ln(a_i)`` of the i-th paired
+round, where ``b`` is a candidate and ``a`` the reference. Logs make ratios
+symmetric (a 2x slowdown and a 2x speedup are equal and opposite) and
+additive, which is what the median and the bootstrap want. Results are
+exponentiated back to ratios for reporting.
 
 The decision rule
 -----------------
@@ -120,27 +121,27 @@ class PairedComparison:
         return (math.log(self.ci_high) - math.log(self.ci_low)) / 2
 
 
-def log_ratios(baseline: Samples, candidate: Samples) -> np.ndarray:
-    """Return per-round log-ratios ``ln(candidate) - ln(baseline)``.
+def log_ratios(a: Samples, b: Samples) -> np.ndarray:
+    """Return per-round log-ratios ``ln(b) - ln(a)``.
 
     The two vectors must be the same length: entry i of each comes from the
     same round, which is what makes the comparison paired. Non-positive
     measurements cannot be log-transformed and indicate a broken measurement
     rather than a fast one, so they are rejected outright.
     """
-    b = np.asarray(baseline, dtype=float)
-    c = np.asarray(candidate, dtype=float)
-    if b.shape != c.shape:
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
         raise ValueError(
-            f"paired vectors must be the same length, got {b.shape} and {c.shape}"
+            f"paired vectors must be the same length, got {a.shape} and {b.shape}"
         )
-    if b.size == 0:
+    if a.size == 0:
         return np.empty(0, dtype=float)
-    if not (np.all(np.isfinite(b)) and np.all(np.isfinite(c))):
+    if not (np.all(np.isfinite(a)) and np.all(np.isfinite(b))):
         raise ValueError("measurements must all be finite")
-    if np.any(b <= 0) or np.any(c <= 0):
+    if np.any(a <= 0) or np.any(b <= 0):
         raise ValueError("measurements must all be positive to take a log-ratio")
-    return np.log(c) - np.log(b)
+    return np.log(b) - np.log(a)
 
 
 def _bootstrap_ci(
@@ -213,29 +214,29 @@ def _one_sided_ps(d: np.ndarray) -> tuple[float, float]:
 
 
 def compare(
-    baseline: Samples,
-    candidate: Samples,
+    a: Samples,
+    b: Samples,
     *,
     confidence: float = 0.95,
     seed: int = 0,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
 ) -> PairedComparison:
-    """Compute the paired comparison for one metric of one cell.
+    """Compare arm ``b`` against arm ``a`` on one metric; ratios are b over a.
 
     The returned comparison has no final verdict yet: ``p_adjusted`` is unset
     and ``verdict`` is INCONCLUSIVE until :func:`apply_multiplicity_control`
     has seen every cell in the run.
     """
-    d = log_ratios(baseline, candidate)
+    d = log_ratios(a, b)
     n = int(d.size)
-    b_med = float(np.median(baseline)) if n else math.nan
-    c_med = float(np.median(candidate)) if n else math.nan
+    a_med = float(np.median(a)) if n else math.nan
+    b_med = float(np.median(b)) if n else math.nan
 
     if n < MIN_USABLE_ROUNDS:
         return PairedComparison(
             n_rounds=n,
-            a_median=b_med,
-            b_median=c_med,
+            a_median=a_med,
+            b_median=b_med,
             ratio=math.exp(float(np.median(d))) if n else math.nan,
             ci_low=math.nan,
             ci_high=math.nan,
@@ -250,8 +251,8 @@ def compare(
     p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
-        a_median=b_med,
-        b_median=c_med,
+        a_median=a_med,
+        b_median=b_med,
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),

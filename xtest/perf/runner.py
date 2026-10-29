@@ -1,10 +1,14 @@
 """The paired round loop that produces comparable samples for one cell.
 
-A *cell* is one operation at one payload size, measured for two or more SDK
-builds, up to :data:`perf.config.MAX_ARM_COUNT`. The loop runs every arm once
-per round, in a randomized order, until it has either enough precision or no
-more time. The first arm is the *reference*, and every other arm is compared
-against it.
+A *cell* is one operation at one payload size, measured over two or more
+arms: distinct SDK builds, or, in the A/A control, copies of one build. The
+loop runs every arm once per round, in a randomized order, until it has
+either enough precision or no more time. The first arm is the *reference*,
+and every other arm is compared against it.
+
+The round loop accepts any number of arms from two up. How many builds a run
+may name is capped earlier, at the request layer
+(:data:`perf.config.MAX_ARM_COUNT`).
 
 Why rounds rather than "run A 30 times, then B 30 times"
 --------------------------------------------------------
@@ -129,6 +133,7 @@ class CellResult:
     #: Arm id -> the build it ran, e.g. ``"go@v0.29.0"``.
     arm_labels: dict[str, str]
     #: ``samples[arm_id][metric]`` is the per-round vector, warm-up excluded.
+    #: Every arm has every metric, and all vectors share one non-zero length.
     samples: dict[str, dict[str, list[float]]]
     n_warmup: int
     elapsed_s: float
@@ -149,10 +154,19 @@ class CellResult:
             raise ValueError(
                 f"{self.cell_id}: labels and samples must name exactly the arms"
             )
+        # Every contrast reads every metric of both of its arms.
+        for arm_id in self.arm_ids:
+            if set(self.samples[arm_id]) != set(METRICS):
+                raise ValueError(
+                    f"{self.cell_id}: arm {arm_id} needs samples for exactly "
+                    f"{list(METRICS)}, got {sorted(self.samples[arm_id])}"
+                )
         # Entry i of every vector is round i; unequal lengths are unpaired.
         lengths = {len(v) for arm in self.samples.values() for v in arm.values()}
         if len(lengths) > 1:
             raise ValueError(f"{self.cell_id}: sample vectors differ in length")
+        if lengths == {0}:
+            raise ValueError(f"{self.cell_id}: no rounds were recorded")
 
     @property
     def reference(self) -> str:
@@ -172,8 +186,8 @@ class CellResult:
         """
         if self.rss_floor_bytes <= 0:
             return None
-        rss = [v for arm in self.samples.values() for v in arm.get("rss", [])]
-        if not rss or min(rss) > self.rss_floor_bytes:
+        rss = [v for arm in self.samples.values() for v in arm["rss"]]
+        if min(rss) > self.rss_floor_bytes:
             return None
         return (
             f"peak rss reaches the {self.rss_floor_bytes / 2**20:.0f} MiB "
@@ -182,8 +196,7 @@ class CellResult:
 
     @property
     def n_rounds(self) -> int:
-        first = next(iter(self.samples.values()), {})
-        return len(next(iter(first.values()), []))
+        return len(self.samples[self.reference]["wall"])
 
     @property
     def candidates(self) -> tuple[str, ...]:
@@ -242,10 +255,12 @@ def run_cell(
     Args:
         cell_id: stable identifier, also the per-cell RNG seed material so
             that two cells do not share an interleaving order.
-        arms: the builds to measure, all in every round: two or more, up to
-            :data:`perf.config.MAX_ARM_COUNT`. The first is the reference
-            every other arm is compared against. For an A/A control these
-            are copies of one build running through identical paths.
+        arms: the builds to measure, all in every round: any number from
+            two up. How many builds a run may name is capped at the request
+            layer (:data:`perf.config.MAX_ARM_COUNT`), not here. The first is
+            the reference every other arm is compared against. For an A/A
+            control these are copies of one build running through identical
+            paths.
         config: round-loop knobs.
         deadline: absolute ``clock()`` value past which no new round starts.
         control: records that this is the A/A cell; does not change the loop.

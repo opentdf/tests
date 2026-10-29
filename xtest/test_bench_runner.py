@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from perf import stats
-from perf.measure import MeasurementError, Sample
+from perf.measure import METRICS, MeasurementError, Sample
 from perf.runner import (
     Arm,
     BenchConfig,
@@ -113,6 +113,24 @@ class FakeRuns:
 def clock_from(runs: FakeRuns) -> Callable[[], float]:
     """A clock that advances only as simulated work happens."""
     return lambda: runs.elapsed
+
+
+def spiking(runs: FakeRuns, noisy: str, sigma: float = 0.5) -> Callable[..., Sample]:
+    """``runs``, with extra lognormal jitter on the one arm keyed ``noisy``."""
+
+    def jittery(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
+        sample = runs(argv, env, **kwargs)
+        if argv[0] != noisy:
+            return sample
+        spike = math.exp(runs.rng.gauss(0.0, sigma))
+        return Sample(
+            wall_ns=int(sample.wall_ns * spike),
+            cpu_s=sample.cpu_s * spike,
+            max_rss_bytes=int(sample.max_rss_bytes * spike),
+            exit_code=0,
+        )
+
+    return jittery
 
 
 def run(
@@ -646,26 +664,12 @@ class TestMultiArmRoundLoop:
         # candidate unresolved with budget still on the table.
         cfg = config(max_rounds=40)
         runs = FakeRuns({REF: 1.0, "quiet": 1.0, "noisy": 1.0}, noise=0.005)
-        real_call = runs.__call__
-
-        def jittery(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
-            sample = real_call(argv, env, **kwargs)
-            if argv[0] != "noisy":
-                return sample
-            spike = math.exp(runs.rng.gauss(0.0, 0.5))
-            return Sample(
-                wall_ns=int(sample.wall_ns * spike),
-                cpu_s=sample.cpu_s * spike,
-                max_rss_bytes=int(sample.max_rss_bytes * spike),
-                exit_code=0,
-            )
-
         mixed = run_cell(
             "cell",
             [arm(REF, REF), arm("quiet", "quiet"), arm("noisy", "noisy")],
             cfg,
             clock=clock_from(runs),
-            run=jittery,
+            run=spiking(runs, "noisy"),
         )
         assert mixed.stopped_because == "max_rounds", (
             "the loop stopped on the quiet contrast and left the noisy one unresolved"
@@ -757,6 +761,11 @@ class TestMultiArmRoundLoop:
             )
 
 
+def vectors(n: int) -> dict[str, list[float]]:
+    """One arm's samples: every metric, ``n`` rounds of each."""
+    return {m: [1.0] * n for m in METRICS}
+
+
 class TestCellResultInvariants:
     """A result that cannot be analysed is rejected when it is built."""
 
@@ -765,7 +774,7 @@ class TestCellResultInvariants:
             "cell_id": "cell",
             "arm_ids": (REF, "a"),
             "arm_labels": {REF: "sdk@base", "a": "sdk@a"},
-            "samples": {REF: {"wall": [1.0, 1.0]}, "a": {"wall": [1.0, 1.0]}},
+            "samples": {REF: vectors(2), "a": vectors(2)},
             "n_warmup": 0,
             "elapsed_s": 0.0,
             "stopped_because": "precision",
@@ -783,22 +792,40 @@ class TestCellResultInvariants:
                 {
                     "arm_ids": (REF,),
                     "arm_labels": {REF: "sdk@base"},
-                    "samples": {REF: {"wall": [1.0]}},
+                    "samples": {REF: vectors(1)},
                 },
                 "at least two arms",
             ),
             ({"arm_ids": (REF, REF)}, "unique"),
             ({"arm_labels": {REF: "sdk@base"}}, "exactly the arms"),
+            ({"samples": {REF: vectors(2), "b": vectors(2)}}, "exactly the arms"),
+            # A reference with no metrics would report zero rounds.
+            ({"samples": {REF: {}, "a": vectors(2)}}, f"cell: arm {REF} needs samples"),
+            # Otherwise `analyze` gets as far as a bare KeyError('wall').
             (
-                {"samples": {REF: {"wall": [1.0]}, "b": {"wall": [1.0]}}},
-                "exactly the arms",
+                {
+                    "samples": {
+                        REF: vectors(2),
+                        "a": {"cpu": [1.0] * 2, "rss": [1.0] * 2},
+                    }
+                },
+                "cell: arm a needs samples",
             ),
-            (
-                {"samples": {REF: {"wall": [1.0, 1.0]}, "a": {"wall": [1.0]}}},
-                "differ in length",
-            ),
+            ({"samples": {REF: vectors(2), "a": vectors(1)}}, "differ in length"),
+            # Complete and paired but empty, which analyses to a green run of
+            # INCONCLUSIVE +/-nan%.
+            ({"samples": {REF: vectors(0), "a": vectors(0)}}, "cell: no rounds"),
         ],
-        ids=["one-arm", "colliding-ids", "missing-label", "stray-arm", "unpaired"],
+        ids=[
+            "one-arm",
+            "colliding-ids",
+            "missing-label",
+            "stray-arm",
+            "arm-without-metrics",
+            "arm-missing-a-metric",
+            "unpaired",
+            "no-rounds",
+        ],
     )
     def test_rejects_a_cell_that_cannot_be_analysed(
         self, overrides: dict[str, object], match: str
@@ -837,6 +864,20 @@ class TestGateAtSeveralArms:
         # candidate that was slowed.
         assert all(r.startswith(f"encrypt/{slow}_vs_{REF}/") for r in gate.regressions)
 
+    @pytest.mark.parametrize("slow", ["a", "b", "c"])
+    def test_every_candidate_not_slowed_passes(self, slow: str):
+        # A PASS needs the control's noise floor behind it. Wire the floor to
+        # the first candidate's contrasts only and the others read
+        # INCONCLUSIVE for want of a control -- which no regression check sees.
+        costs = {REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0} | {slow: 1.3}
+        gate = self.gate(costs)
+        for b in sorted(set(costs) - {REF, slow}):
+            for metric in config().gated_metrics:
+                assert (
+                    gate.comparisons[k("encrypt", metric, REF, b)].verdict
+                    is stats.Verdict.PASS
+                ), f"{b} was not slowed, so its {metric} should PASS"
+
     def test_cpu_stays_informational_at_several_arms(self):
         gate = self.gate({REF: 1.0, "a": 1.3, "b": 1.0})
         cpu = k("encrypt", "cpu", REF, "a")
@@ -855,16 +896,34 @@ class TestGateAtSeveralArms:
         assert len(aa) == 3
 
     def test_the_noise_floor_is_the_worst_control_contrast(self):
-        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0})
+        # Only the last copy is noisy, so the floor must come from the last
+        # A/A contrast. A floor taken from the first contrast alone passes
+        # whenever the widest one happens to be first.
+        cfg = config(max_rounds=40)
+        copies = {REF: 1.0, "a": 1.0, "b": 1.0}
+        runs = FakeRuns(copies, seed=11)
+        control = run_cell(
+            "aa",
+            [arm(name, name) for name in copies],
+            cfg,
+            control=True,
+            clock=clock_from(runs),
+            run=spiking(runs, "b"),
+        )
+        measured, _ = run_arms(copies, cfg=cfg, seed=12, cell_id="encrypt")
+        gate = analyze([control, measured], cfg)
+
         aa = [
             c for c in gate.comparisons if c.startswith("aa/") and c.endswith("/wall")
         ]
-        assert len(gate.noise_by_control) == 1, "exactly one contrast is the floor"
+        widths = {
+            c: stats.assess_noise_floor(gate.comparisons[c]).width_ratio for c in aa
+        }
+        widest = max(aa, key=widths.__getitem__)
+        assert widest != aa[0], "precondition: the widest A/A contrast is not the first"
+        assert list(gate.noise_by_control) == [widest], "the widest is the one floor"
         assert gate.noise is not None
-        widest = max(
-            stats.assess_noise_floor(gate.comparisons[c]).width_ratio for c in aa
-        )
-        assert gate.noise.width_ratio == pytest.approx(widest)
+        assert gate.noise.width_ratio == pytest.approx(widths[widest])
 
     def test_censored_multi_arm_control_only_run_still_measured_nothing(self):
         # The K-arm counterpart of the two-arm censored-control test: every
