@@ -73,9 +73,9 @@ def dist_slug(ref: str) -> str:
     Flattens slashes and strips namespace prefixes, matching what `cmd_tip`
     passes as `VERSIONS=` and therefore what the Makefile actually creates.
 
-    `cmd_tip` names its build directory with this, the checkouts in
-    `checkout.py` name the `src/` directory make builds it from with it, and
-    `dist_slug_for` predicts that directory with it, so none can drift apart.
+    `cmd_tip` names its build directory, the checkouts in `checkout.py` name
+    the `src/` directory make builds it from, and `dist_slug_for` predicts the
+    build directory, all with this function, so none can drift apart.
     `ref_slug` above flattens only, and `normalize_version` only trims
     whitespace and leading `v`s and adds one `v` back: predicting with either
     would give `sdk/feature` and `feature` different names, hiding from

@@ -3,7 +3,7 @@
 cmd_tip runs make with `VERSIONS=<slug>`, and the SDK Makefiles build
 `src/$VERSIONS` into `dist/$VERSIONS`. Only subprocesses are stubbed: every
 git command succeeds and does nothing except `worktree add`, which creates the
-worktree, and make records what it was told to build and where.
+worktree; make records what it was told to build and where.
 """
 
 import subprocess
@@ -73,9 +73,9 @@ def test_checks_out_where_make_builds(
 def test_a_ref_that_names_no_directory_runs_no_git(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sdk: str, ref: str
 ):
-    """`otdf-sdk-mgr checkout` skips cmd_tip's check. Without its own, `otdfctl/`
-    would make `src/` itself the worktree, and `sdk/..` the SDK directory, and
-    `git reset --hard` there."""
+    """Callers other than cmd_tip, such as `otdf-sdk-mgr checkout`, skip its
+    check. Without one here, `otdfctl/` would make `src/` itself the worktree
+    and `sdk/..` the SDK directory, and run `git reset --hard` there."""
     monkeypatch.setenv("OTDF_SDK_DIR", str(tmp_path))
     with (
         patch("otdf_sdk_mgr.checkout.subprocess.run") as run,
