@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Annotated
 
 import typer
@@ -121,7 +122,16 @@ def tip(
     if want_platform:
         _install_platform_or_exit(install_platform_source, ref, dist_name=platform_dist_name)
     if sdk_targets:
-        cmd_tip(sdk_targets, ref=ref)
+        try:
+            cmd_tip(sdk_targets, ref=ref)
+        # ValueError covers CheckoutError, and a ref that names no dist/
+        # directory, such as `sdk/`.
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as e:
+            typer.echo(f"Error: {e}", err=True)
+            # checkout._run captures git's stderr; make streams its own.
+            if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+                typer.echo(e.stderr.rstrip(), err=True)
+            raise typer.Exit(1)
 
 
 @install_app.command()

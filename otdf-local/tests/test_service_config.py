@@ -7,11 +7,11 @@ config is bad, and seeding of the pristine template.
 """
 
 import re
+import subprocess
 from pathlib import Path
 
-import subprocess
-
 import pytest
+
 from otdf_local.config.settings import Settings
 from otdf_local.services.kas import KASService
 from otdf_local.services.platform import PlatformService

@@ -25,6 +25,7 @@ from otdf_sdk_mgr.config import (
     get_sdk_dirs,
     go_module_for_tag,
 )
+from otdf_sdk_mgr.refs import git_ls_remote
 from otdf_sdk_mgr.registry import fetch_json, list_go_versions, list_java_github_releases
 from otdf_sdk_mgr.resolve import is_resolve_success, resolve, strip_tag_infix
 from otdf_sdk_mgr.semver import normalize_version
@@ -113,14 +114,19 @@ def _install_js_cli_from_npm(v: str, dist_dir: Path) -> None:
     js_dir = get_sdk_dir() / "js"
     package = SDK_NPM_PACKAGES["js"]
     print(f"  Installing {package}@{v} from npm...")
+    installed = False
     try:
         dist_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
         subprocess.check_call(["npm", "install", f"{package}@{v}"], cwd=dist_dir)
+        installed = True
     except (OSError, subprocess.CalledProcessError) as e:
-        # A partial dist_dir would be skipped as "already installed" next time.
-        shutil.rmtree(dist_dir, ignore_errors=True)
         raise InstallError(f"Installing {package}@{v} from npm failed: {e}") from e
+    finally:
+        # A partial dist_dir would be skipped as "already installed" next
+        # time, whether the install failed or was interrupted (Ctrl-C).
+        if not installed:
+            shutil.rmtree(dist_dir, ignore_errors=True)
     print(f"  JS release {v} installed to {dist_dir}")
 
 
@@ -129,7 +135,7 @@ def _js_release_tag(v: str) -> str:
     infix = SDK_TAG_INFIXES["js"]
     candidates = [f"{infix}-v{v}", f"{infix}/v{v}"]
     try:
-        raw = Git().ls_remote(SDK_GIT_URLS["js"], *candidates, tags=True)
+        raw = git_ls_remote(Git(), SDK_GIT_URLS["js"], *candidates, tags=True)
     except git.exc.GitCommandError as e:
         raise InstallError(f"Could not list web-sdk tags: {e}") from e
     found = {line.split("\t", 1)[1].removeprefix("refs/tags/") for line in raw.splitlines()}
@@ -190,17 +196,22 @@ def _build_js_cli_against_npm_sdk(v: str, dist_dir: Path) -> None:
         if len(packed) != 1:
             raise InstallError(f"Expected one packed CLI in {pack_dir}, found {packed}")
         tgz = packed[0]
+        installed = False
         try:
             dist_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
             shutil.copy(tgz, dist_dir / tgz.name)
             subprocess.check_call(["npm", "install", f"./{tgz.name}"], cwd=dist_dir)
+            installed = True
         except (OSError, subprocess.CalledProcessError) as e:
-            # A partial dist_dir would be skipped as "already installed" next time.
-            shutil.rmtree(dist_dir, ignore_errors=True)
             raise InstallError(
                 f"Built the {v} CLI but could not install it to {dist_dir}: {e}"
             ) from e
+        finally:
+            # A partial dist_dir would be skipped as "already installed" next
+            # time, whether the install failed or was interrupted (Ctrl-C).
+            if not installed:
+                shutil.rmtree(dist_dir, ignore_errors=True)
     print(f"  JS release {v} built against @opentdf/sdk from npm and installed to {dist_dir}")
 
 
@@ -448,12 +459,12 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     import os
 
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
-    from otdf_sdk_mgr.refs import expand_pr_shorthand
+    from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand
 
     expanded = expand_pr_shorthand(ref)
-    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
-    # `local_name` calculation in checkout.py.
-    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+    # dist/<slug>, which make builds from src/<slug>. `manifest.dist_slug_for`
+    # predicts this directory with the same function, so change them together.
+    slug = dist_slug(expanded)
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
