@@ -459,12 +459,12 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     import os
 
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
-    from otdf_sdk_mgr.refs import expand_pr_shorthand
+    from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand
 
     expanded = expand_pr_shorthand(ref)
-    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
-    # `local_name` calculation in checkout.py.
-    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+    # dist/<slug>, which make builds from src/<slug>. `manifest.dist_slug_for`
+    # predicts this directory with the same function, so change them together.
+    slug = dist_slug(expanded)
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
