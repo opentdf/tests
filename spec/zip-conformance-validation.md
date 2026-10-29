@@ -2,40 +2,66 @@
 
 The structural cases in `xtest/test_zip_conformance.py` compare SDK readers
 using small, authenticated TDFs whose ZIP metadata is rewritten after
-JS encryption. Payload and local-header bytes are preserved. Ordinary
+JS encryption. Payload and local-header bytes are preserved; the trailer is
+re-encoded from the parsed values, so any ZIP64 structure in a mutated
+container is put there by the test rather than inherited from JS. Ordinary
 rebuilt entries declare extraction version 2.0; entries using ZIP64 declare
 4.5. The separate `test_zip64.py` exercises actual writer size thresholds.
 
 ## Coverage and assertions
 
-- Independent ZIP64 EOCD count, size, and offset sentinels, with all other
-  values truthful: require byte-identical decryption. The size-only case is
-  compatibility coverage, since a reader ignoring directory size can pass it.
-- All seven combinations of per-entry compressed-size, uncompressed-size,
-  and local-header-offset sentinels, under both ZIP32 and ZIP64 EOCDs:
-  require byte-identical decryption. A foreign extra-field TLV precedes ZIP64.
-- A comment on the first directory entry: require decryption of the complete
-  TDF, including the following manifest entry.
-- Truncated ZIP64 values, oversized extra-field declarations, invalid stored
-  sizes, invalid local-header/locator/directory offsets, and impossible entry
-  counts: require a recognized parser rejection. Each case first decrypts
-  an unmodified control. Panics, signals, allocation/runtime failures,
-  timeouts, unrelated errors, and successful decryption fail the assertion.
-- Directory records of 65,535 and 65,536 bytes, using ordinary filenames and
-  a large foreign extra field: require decryption at the first boundary;
-  permit either faithful decryption or recognized rejection above it.
-  APPNOTE 4.4.10-12 recommends keeping the combined record length within
-  65,535 bytes, so universal acceptance above that limit is not required.
+Every mutated container is held to one rule: decrypt either exits 0 with
+byte-identical plaintext, or rejects the container cleanly -- a normal
+nonzero exit, no runtime-crash marker, and a diagnostic this SDK's ZIP
+parser is known to emit. Silent corruption, panics, signals,
+allocation/runtime failures, timeouts, and unrelated errors (auth, network,
+usage) fail the cell.
 
-Malformed decrypts have a 30-second deadline, with process-group cleanup so
+Each cell is also labelled spec-legal or adversarial. The label never moves
+the pass/fail line; it decides which passing outcome is worth reporting.
+Rejecting a spec-legal structure and accepting an adversarial one both pass
+with a warning (`NonConformantZipReader` and `LenientZipReader`), and are
+listed in the `zip conformance outcomes` table printed at the end of the run
+and in `test-results/zip-conformance.json`.
+
+- Spec-legal:
+  - Independent ZIP64 EOCD count, size, and offset sentinels, with all other
+    values truthful. The size-only case is compatibility coverage, since a
+    reader ignoring directory size can pass it.
+  - All seven combinations of per-entry compressed-size, uncompressed-size,
+    and local-header-offset sentinels, under both ZIP32 and ZIP64 EOCDs. A
+    foreign extra-field TLV precedes ZIP64.
+  - A comment on the first directory entry; the following manifest entry
+    must still be found.
+  - Directory records of 65,535 and 65,536 bytes, using ordinary filenames
+    and a large foreign extra field. APPNOTE 4.4.10 recommends keeping a
+    record within 65,535 bytes, but nothing in either record contradicts
+    anything else, so accepting is the conformant answer at both lengths.
+  - The original cases: a maximum-length archive comment, a ZIP64 locator
+    pushed past the first KiB by a comment, a central-directory record planted
+    in the archive comment, and a ZIP64 extra field that is not the first TLV.
+- Adversarial: truncated ZIP64 values, oversized extra-field declarations,
+  invalid stored sizes, invalid local-header/locator/directory offsets,
+  impossible entry counts, and an overstated entry count.
+
+The malformed-input and record-length cells first decrypt the rebuilt but
+unmutated container as a control, which must succeed byte-for-byte; a reader
+that refused the rebuild itself would otherwise have each rejection credited
+as conformant.
+
+The `2**63` locator and directory offsets are skipped for decryptors
+without the `zip64-offset-bounds` check -- today, Java releases through
+v0.19.1, which crash on them; java-sdk#398 adds the check. Force them on
+with `XT_FORCE_SUPPORTS=zip64-offset-bounds`.
+
+Mutated decrypts have a 30-second deadline, with process-group cleanup so
 CLI shim children cannot survive a timeout. Positive out-of-range values
-are only a few KiB beyond the fixture; the signed-conversion case uses
+are only a few KiB beyond the fixture; the signed-conversion cases use
 `2**63`, and the impossible count uses `2**64 - 1`.
 
-A successful decrypt of malformed metadata demonstrates a missing check
-under this rejection contract; it does not establish plaintext corruption.
-Similarly, a generic rejection may predate a fix and does not prove that
-one particular internal guard ran.
+A passing adversarial cell does not prove that a particular guard ran: a
+lenient read returns the right bytes without noticing the lie, and a generic
+rejection may predate a fix.
 
 ## Revisions tested on 2026-09-24
 
@@ -54,6 +80,13 @@ Java used JDK 21. SDK changes were isolated from the unchanged platform.
 | JS 1017 fix | refs/pull/1017/head | `d9342191f8bf3f5818fd1bef3e66d5b8bfffdcd7` |
 
 ## Results
+
+These results were measured on 2026-09-24 under an earlier, stricter rule:
+every malformed case required a recognized rejection, and every valid layout
+required byte-identical decryption. Under the current rule a lenient read of a
+malformed container, or a clean rejection of a valid one, passes with a
+warning instead -- so some failures below would now pass, and they are kept
+as the record of what each build did, not as current pass/fail counts.
 
 The full mutation matrix ran **266 cells: 213 passed, 53 failed, zero skipped**.
 Failures are intentionally visible: no expected-failure markers or feature
@@ -118,12 +151,6 @@ release additionally fails the original foreign-TLV/offset-only case. JS main
 retains two original maximum-comment failures. These are separate from the
 newly demonstrated platform fixes.
 
-Raw XML, HTML, and logs are local ignored artifacts under
-`xtest/test-results/`: `zip-final.*`, `zip-fixed-current.*`, and
-`zip-writer-comparison.*`. `zip-comparison-summary.json` records per-SDK
-counts and failing cases. The local platform and database services were
-healthy after the runs and remain available for debugging.
-
 ## Reproduction
 
 From `otdf-sdk-mgr/`, install source builds with these commands. Set
@@ -167,8 +194,8 @@ which refs were conformant and which were merely safe.
 
 To isolate the 32 added cases, append
 `-k 'independent_sentinel or entry_comment or malformed_zip or record_length_boundary'`.
-The complete module also runs six pre-existing cases, including the known
-archive-comment failures.
+The complete module also runs six pre-existing cases, including the
+archive comments some readers refuse (warned, not failed).
 
 For the actual 2.1 GiB writer threshold, run:
 
