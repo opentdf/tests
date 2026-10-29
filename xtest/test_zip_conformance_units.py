@@ -552,6 +552,17 @@ def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
         ("go", b"tdfReader.Manifest failed: zip: file not found"),
         ("go", b"zipstream.NewTDFReader failed: readSeeker.Seek failed: EOF"),
         ("java", b"io.opentdf.platform.sdk.InvalidZipException: Invalid"),
+        (
+            "java",
+            b"io.opentdf.platform.sdk.SDK$MalformedTDFException: tdf is not a valid zip "
+            b"container: tdf doesn't contain a manifest\n"
+            b"Caused by: java.lang.IllegalArgumentException: tdf doesn't contain a manifest",
+        ),
+        (
+            "java",
+            b"io.opentdf.platform.sdk.SDK$MalformedTDFException: tdf manifest is invalid: "
+            b"com.google.gson.JsonSyntaxException: java.io.EOFException: End of input",
+        ),
         # ZipReader.java's own throw, from source; no CI cell has reached it.
         (
             "java",
@@ -628,6 +639,13 @@ def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
             1,
             b"zipstream.NewTDFReader failed: readSeeker.Seek failed: "
             b"seek mutated.tdf: invalid argument",
+        ),
+        # An SDKException that is not the typed malformed-TDF failure: an I/O error
+        # reading the archive says nothing about its structure.
+        (
+            "java",
+            1,
+            b"io.opentdf.platform.sdk.SDKException: error reading manifest from zip file",
         ),
         # EOFException from layers other than ZipReader: Gson on a truncated
         # manifest, and okio when KAS drops the connection mid-response.

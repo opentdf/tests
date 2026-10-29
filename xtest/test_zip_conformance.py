@@ -214,7 +214,8 @@ _RUNTIME_FAILURE = re.compile(
 #   io.ReadFull are accepted only for EOF -- a seek or read past the end --
 #   so the same accident there fails too.
 # * A bare java EOFException: Gson's truncated-JSON error and OkHttp's dropped
-#   connection both carry one. Only ZipReader's own wording passes.
+#   connection both carry one. Only ZipReader's own wording passes, or the
+#   MalformedTDFException that java-sdk#418 wraps around the Gson error.
 # * js's "SyntaxError: Unexpected end of JSON input" from handing an empty
 #   read to JSON.parse in zip-reader.js.
 # * go's "json.Unmarshal failed:invalid character 'P' after top-level value",
@@ -230,8 +231,12 @@ _ZIP_REJECTIONS = {
         r"tdfReader\.Manifest failed:.*(?:EOF|0\.manifest\.json size too large)",
         re.IGNORECASE,
     ),
+    # MalformedTDFException is the typed failure java-sdk reports for a container or
+    # manifest it cannot read (java-sdk#418); it is public API, so it is matched by
+    # name, not by its cause. The two bare causes are what releases before it throw.
     "java": re.compile(
-        r"InvalidZipException|EOFException: Unexpected EOF when reading filename|"
+        r"MalformedTDFException|InvalidZipException|"
+        r"EOFException: Unexpected EOF when reading filename|"
         r"IllegalArgumentException: tdf doesn't contain a manifest",
         re.IGNORECASE,
     ),
