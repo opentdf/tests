@@ -120,6 +120,55 @@ class TestInstallGoRelease:
         assert list(dist.parent.iterdir()) == []
         assert list((sdk_dir / "go" / ".staging").iterdir()) == []
 
+    @pytest.mark.parametrize(
+        ("version", "stderr", "hint"),
+        [
+            (
+                "v9.9.9",
+                (
+                    "go: github.com/opentdf/platform/otdfctl@v9.9.9: invalid version:"
+                    " unknown revision otdfctl/v9.9.9"
+                ),
+                True,
+            ),
+            ("v9.9.9", "go: cannot install cross-compiled binaries when GOBIN is set", False),
+            # The archived module is no longer published to, so no "yet".
+            (
+                "v0.24.9",
+                "go: github.com/opentdf/otdfctl@v0.24.9: invalid version: unknown revision v0.24.9",
+                False,
+            ),
+        ],
+    )
+    def test_not_published_hint_only_for_an_unknown_platform_tag(
+        self, sdk_dir: Path, version: str, stderr: str, hint: bool
+    ):
+        dist = sdk_dir / "go" / "dist" / version
+        with (
+            patch(
+                "otdf_sdk_mgr.installers.subprocess.run",
+                side_effect=lambda cmd, **_: subprocess.CompletedProcess(cmd, 1, "", stderr),
+            ),
+            pytest.raises(InstallError) as excinfo,
+        ):
+            install_go_release(version, dist)
+        assert stderr in str(excinfo.value)
+        assert ("may not be published yet" in str(excinfo.value)) == hint
+
+    def test_missing_binary_error_says_what_go_did_build(self, sdk_dir: Path):
+        def builds_something_else(
+            cmd: list[str], env: dict[str, str], **_: object
+        ) -> subprocess.CompletedProcess:
+            (Path(env["GOBIN"]) / "cmd").write_text("binary")
+            return subprocess.CompletedProcess(cmd, 0, "", "go: downloading example.com v1.0.0")
+
+        dist = sdk_dir / "go" / "dist" / "v0.38.1"
+        with (
+            patch("otdf_sdk_mgr.installers.subprocess.run", side_effect=builds_something_else),
+            pytest.raises(InstallError, match=r"\(produced: cmd\): go: downloading example.com"),
+        ):
+            install_go_release("v0.38.1", dist)
+
     def test_filesystem_error_is_an_install_error(self, sdk_dir: Path):
         (sdk_dir / "go" / "opentdfctl.yaml").unlink()
         dist = sdk_dir / "go" / "dist" / "v0.38.1"
