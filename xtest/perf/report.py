@@ -29,18 +29,21 @@ import pytest
 
 from perf import stats
 from perf.cells import BenchCell
+from perf.conclusions import Conclusion, conclude
 from perf.measure import METRIC_LABELS, METRICS, format_metric
 from perf.runner import BenchConfig, CellResult, analyze, contrast_key
 
 #: Version of the JSON artifact's shape; consumers of version 1 must check it.
 #: Version 2 added multi-arm cells. Each cell names its ``arms`` (id, label)
 #: and ``reference`` arm id, and keys ``samples`` by arm id. Statistics live
-#: under ``contrasts`` -- one per candidate, with ``a``, ``b`` and ``metrics``
-#: -- not one ``metrics`` block, and medians are ``a_median``/``b_median``, not
-#: ``baseline_median``/``candidate_median``. Only two-arm cells keep the
-#: ``baseline``/``candidate`` labels. ``regressions``, ``improvements`` and
-#: ``noise_floor_by_control`` are keyed ``<cell>/<b>_vs_<a>/<metric>``, not
-#: ``<cell>/<metric>``. The top level adds ``nothing_measured``.
+#: under ``contrasts`` -- one per pair of arms, with ``a``, ``b`` and
+#: ``metrics`` -- not one ``metrics`` block, and medians are
+#: ``a_median``/``b_median``, not ``baseline_median``/``candidate_median``.
+#: Candidate comparisons are summarized under the top-level ``conclusions``.
+#: Only two-arm cells keep the ``baseline``/``candidate`` labels.
+#: ``regressions``, ``improvements`` and ``noise_floor_by_control`` are keyed
+#: ``<cell>/<b>_vs_<a>/<metric>``, not ``<cell>/<metric>``. The top level adds
+#: ``nothing_measured``.
 SCHEMA_VERSION = 2
 
 #: Cells the session intends to run. Set by the conftest parametrizer, read by
@@ -80,6 +83,11 @@ class BenchmarkRecorder:
     def gate(self, config: BenchConfig) -> stats.GateResult:
         return analyze(self.results, config)
 
+    def conclusions(
+        self, config: BenchConfig, gate: stats.GateResult
+    ) -> list[Conclusion]:
+        return conclude(self.results, config, gate)
+
 
 def to_dict(
     recorder: BenchmarkRecorder, config: BenchConfig, gate: stats.GateResult
@@ -111,6 +119,7 @@ def to_dict(
         "regressions": gate.regressions,
         "improvements": gate.improvements,
         "summary": gate.summary,
+        "conclusions": [c.to_dict() for c in recorder.conclusions(config, gate)],
         "skipped": recorder.skipped,
         "cells": [_cell_dict(r, gate) for r in recorder.results],
     }
@@ -267,6 +276,8 @@ def markdown(
     ]
     for result in recorder.results:
         for a, b in result.contrast_pairs():
+            if not result.is_reference_pair(a, b):
+                continue
             candidate = f"A/A {b}" if result.control else f"`{result.arm_labels[b]}`"
             for metric in METRICS:
                 c = gate.comparisons[contrast_key(result.cell_id, a, b, metric)]
@@ -279,6 +290,8 @@ def markdown(
                     f"| {_ratio_cell(c)} | {_p_cell(c)} | {c.n_rounds} "
                     f"| {_verdict_cell(c)} |"
                 )
+
+    lines += _candidate_comparisons(recorder.conclusions(config, gate))
 
     references = sorted(
         {r.arm_labels[r.reference] for r in recorder.results if not r.control}
@@ -298,6 +311,46 @@ def markdown(
         "p is one-sided, in the direction of the observed ratio.</sub>",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _candidate_comparisons(conclusions: list[Conclusion]) -> list[str]:
+    """The candidate-to-candidate section: pairwise verdicts, then any winner."""
+    if not conclusions:
+        return []
+    lines = [
+        "",
+        "### Candidate comparisons",
+        "",
+        "Each pair of candidates, compared directly. These never fail the build. "
+        "A winner is named only when it is faster than every other candidate "
+        "and the A/A control held.",
+        "",
+        "| cell | metric | comparison | ratio (95% CI) | verdict |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for c in conclusions:
+        for p in c.pairwise:
+            interval = (
+                f"{p.ratio:.3f}x [{p.ci_low:.3f}, {p.ci_high:.3f}]"
+                if math.isfinite(p.ci_low) and math.isfinite(p.ci_high)
+                else "-"
+            )
+            verdict = f"{p.verdict} ({p.note})" if p.note else str(p.verdict)
+            lines.append(
+                f"| {c.cell_id} | {METRIC_LABELS[c.metric][0]} "
+                f"| `{c.labels[p.b]}` vs `{c.labels[p.a]}` | {interval} | {verdict} |"
+            )
+    lines.append("")
+    lines += [conclusion_line(c) for c in conclusions]
+    return lines
+
+
+def conclusion_line(c: Conclusion) -> str:
+    """One line per cell and metric: the winner, or why there is none."""
+    head = f"- **{c.cell_id}** ({METRIC_LABELS[c.metric][0]}): "
+    if c.winner is not None:
+        return head + f"`{c.labels[c.winner]}` wins, {c.reason}."
+    return head + f"{c.reason}."
 
 
 def _ratio_cell(c: stats.PairedComparison) -> str:
@@ -327,6 +380,9 @@ _VERDICT_ICONS = {
     stats.Verdict.REGRESSION: "**REGRESSION**",
     stats.Verdict.IMPROVED: "IMPROVED",
     stats.Verdict.INCONCLUSIVE: "inconclusive",
+    stats.Verdict.FASTER: "FASTER",
+    stats.Verdict.SLOWER: "SLOWER",
+    stats.Verdict.TIED: "TIED",
 }
 
 
