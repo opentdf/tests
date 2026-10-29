@@ -19,17 +19,21 @@ verified only by that one SDK's own unit tests, never cross-SDK:
    slots,
 4. a signed 32-bit shift corrupting an error message for sizes >= 2 GiB.
 
-The tests below exercise (1) and ZIP64 extra-field ordering cross-SDK, at a
-128-byte payload rather than a multi-GiB one. ZIP64 records declare version
-4.5 as APPNOTE 4.4.3 requires; tolerance of a 2.0 declaration is tested only
-for the Python inspector in ``test_zip_conformance_units.py``. These tests
-mutate the container's *trailer* after encryption
-(see ``zipmutate.py``), so payload size has no bearing on what they test.
-Only web-sdk (``js``) is used as ``encrypt_sdk`` -- it always writes ZIP64
-regardless of size, per the ``zip64-at-2gib`` feature in ``tdfs.py`` -- so no
-multi-GiB payload is ever needed to manufacture ZIP64 structure here. Every
-``decrypt_sdk`` in the run matrix is exercised against each mutated
-container.
+The tests below exercise (1) cross-SDK -- along with ZIP64 extra-field
+ordering, independent ZIP64 sentinels, entry comments, malformed declarations
+and the directory-record length boundary -- at a 128-byte payload rather than
+a multi-GiB one. They rebuild the container's *trailer* after encryption (see
+``zipmutate.py``): every central-directory record and EOCD is re-encoded from
+the parsed values, and any ZIP64 structure in it is put there by the test,
+not inherited from the writer. So payload size has no bearing on what they
+test, and one producer suffices: ``js`` is the ``encrypt_sdk``, and only its
+local headers and payload survive into a mutated container. Every
+``decrypt_sdk`` in the run matrix is exercised against each one.
+
+ZIP64 records declare version 4.5 as APPNOTE 4.4.3 requires, so (2) --
+gating the ZIP64 extra on that version -- is *not* exercised cross-SDK; a
+2.0 declaration is tested only against the Python inspector in
+``test_zip_conformance_units.py``.
 
 Platform PR #3981 adds independent ZIP64 EOCD triggers, conditional per-entry
 ZIP64 fields, and correct traversal past directory-entry comments. The small
@@ -133,14 +137,14 @@ def _with_zip64_fields(
 def _assert_faithful_roundtrip(
     decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path, pt_file: Path
 ) -> None:
-    """The unmutated control: decrypt must succeed and be byte-correct.
+    """The control: decrypt must succeed and be byte-correct.
 
     Mutated containers go through :class:`ZipOutcome`, which also accepts a
     clean rejection. This one does not, and has exactly one caller --
-    ``readable_zip_base``. An SDK that cannot read the container it was
-    handed before any mutation is a broken environment, not a finding about
-    ZIP conformance, and every other assertion in this module is worthless
-    until that is ruled out.
+    ``readable_zip_base``. An SDK that cannot read the rebuilt container
+    before any lie is added is a broken environment or a reader that refuses
+    the rebuild itself; either way, a rejection of the mutated container
+    would say nothing about the lie.
     """
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file, shallow=False), (
@@ -396,16 +400,15 @@ def _base_container(
 ) -> Path:
     """The one real, unmutated TDF each case starts from.
 
-    Only ``js`` (web-sdk) is used: it always writes ZIP64 regardless of
-    payload size, so a 128-byte plaintext already has the structure these
-    tests want to reshape. go/java cells for this fixture are skipped
-    rather than parametrized away, so each test still reports one cell per
-    ``decrypt_sdk`` instead of vanishing from the matrix.
+    Every case rebuilds this container's trailer, so the producer contributes
+    only local headers and payload, and one producer is enough: ``js``. go
+    and java encrypt cells are skipped rather than parametrized away, so each
+    test still reports one cell per ``decrypt_sdk`` instead of vanishing from
+    the matrix.
     """
     if encrypt_sdk.sdk != "js":
         pytest.skip(
-            "structural mutation needs exactly one producer; js is used "
-            "because it always emits ZIP64 regardless of payload size"
+            "the trailer is rebuilt, so one producer suffices; js is the one used"
         )
     return zip_conformance_tdf(
         encrypt_sdk,
@@ -427,7 +430,8 @@ def test_zip64_extra_field_not_first_is_still_resolved(
 
     An extended timestamp precedes the ZIP64 record to prove the reader does
     not assume ZIP64 comes first. This entry requires extraction version 4.5
-    because it uses ZIP64; the other entries retain version 2.0.
+    because it uses ZIP64; every other rebuilt entry declares zipmutate's 2.0
+    default, not the 4.5 js wrote.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -707,16 +711,25 @@ def readable_zip_base(
     attribute_default_rsa: Attribute,
     tmp_path: Path,
 ) -> Path:
-    """Prove this SDK/environment reads the control before testing rejection."""
+    """The rebuilt but unmutated container, proven readable before any lie.
+
+    ``load_trailer`` re-encodes the trailer rather than copying it (see
+    :meth:`zipmutate.MutableEntry.from_entry`), so the control is that
+    re-encoding, not the file js wrote. Decrypting the original instead would
+    let a reader that refuses the rebuild itself have every rejection below
+    credited as a conformant one.
+    """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     ct_file = _base_container(
         encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
     )
+    trailer, _ = zipmutate.load_trailer(ct_file)
+    baseline = zipmutate.rewrite(ct_file, tmp_path / "baseline.tdf", trailer)
     _assert_faithful_roundtrip(
-        decrypt_sdk, ct_file, tmp_path / "control.bin", zip_conformance_pt_file
+        decrypt_sdk, baseline, tmp_path / "control.bin", zip_conformance_pt_file
     )
-    return ct_file
+    return baseline
 
 
 _MALFORMED_CASES = [
