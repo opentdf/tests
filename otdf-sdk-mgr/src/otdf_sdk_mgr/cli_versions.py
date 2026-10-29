@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -23,7 +23,7 @@ def list_versions(
     ] = "all",
     stable: Annotated[bool, typer.Option("--stable", help="Only stable versions")] = False,
     latest: Annotated[
-        Optional[int], typer.Option("--latest", help="Show only N most recent versions")
+        int | None, typer.Option("--latest", help="Show only N most recent versions")
     ] = None,
     releases: Annotated[
         bool, typer.Option("--releases", help="Include GitHub Releases info for Java")

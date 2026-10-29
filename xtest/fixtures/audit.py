@@ -108,6 +108,7 @@ def audit_log_config(request: pytest.FixtureRequest) -> AuditLogConfig:
             "kas-delta",
             "kas-km1",
             "kas-km2",
+            "kas-km3",
         ]
 
     # Get output directory from CLI or use default
@@ -156,6 +157,7 @@ def kas_log_files(audit_log_config: AuditLogConfig) -> dict[str, Path] | None:
         "KAS_DELTA_LOG_FILE": "kas-delta",
         "KAS_KM1_LOG_FILE": "kas-km1",
         "KAS_KM2_LOG_FILE": "kas-km2",
+        "KAS_KM3_LOG_FILE": "kas-km3",
     }
 
     for env_var, service_name in kas_mapping.items():

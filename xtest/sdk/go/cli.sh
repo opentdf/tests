@@ -11,12 +11,12 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -87,6 +87,23 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
+    gmac_root_rejected)
+      # DSPX-4703: does decrypt refuse a manifest downgraded to
+      # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
+      # runs inside root-signature validation, which needs the unwrapped
+      # payload key and so happens after the KAS rewrap -- there is no flag,
+      # subcommand or version field to grep for.
+      #
+      # test_root_signature forges a root and watches the reader instead, and
+      # only consults this as an escape hatch: XT_FORCE_SUPPORTS=gmac_root_rejected
+      # runs the exploit cases unconditionally, turning a vulnerable build's
+      # skip into a red repro.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
+      exit 1
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
@@ -115,14 +132,43 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help policy kas-registry key create | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
       ;;
-    dpop | dpop_nonce_challenge)
-      # DPoP support is signalled by the --dpop / --dpop-key flag on encrypt.
-      # The same probe covers nonce-challenge support: when nonce mode is
-      # required by the server, the SDK's existing 401-retry uses the same
-      # plumbing as the base DPoP path.
+    session-key-mlkem)
+      # Unlike the java/js help text, otdfctl's decrypt help enum and its
+      # --session-key-algorithm parser gained mlkem:* in the same commit
+      # (opentdf/platform#3814), so the help text is a reliable signal here.
       set -o pipefail
-      "${cmd[@]}" help encrypt | grep -iE -- '--dpop'
+      "${cmd[@]}" help decrypt | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
+      ;;
+    dpop | dpop_nonce_challenge)
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
+ index($f)'
+      exit $?
+      ;;
+    chunky)
+      # Default an absent per-segment segmentSize/encryptedSegmentSize from
+      # the manifest-level defaults. Broken in every go build to date: a
+      # web-sdk TDF over 1 MiB fails in the GMAC check. Fix tracked as
+      # DSPX-4590; turn this into a version gate when it releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "chunky unsupported: see DSPX-4590"
+      exit 1
+      ;;
+    zip64-at-2gib)
+      # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
+      # 4 GiB, so a reader that widens the central-directory fields with a
+      # signed read can still open the container. Every go build to date gates
+      # on ^uint32(0) and so writes a real 32-bit value across the whole
+      # 2-4 GiB band. Fix tracked as DSPX-4590 finding 1 (platform#3981, open);
+      # turn this into a version gate when it releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip64-at-2gib unsupported: see DSPX-4590"
+      exit 1
       ;;
     *)
       echo "Unknown feature: $2"
@@ -176,9 +222,6 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$XT_WITH_ASSERTIONS" ]; then
     args+=(--with-assertions "$XT_WITH_ASSERTIONS")
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--wrapping-key-algorithm "ec:secp256r1")
-  fi
   if [ "$XT_WITH_ECDSA_BINDING" == "true" ]; then
     args+=(--ecdsa-binding)
   fi
@@ -200,8 +243,15 @@ elif [ "$1" == "decrypt" ]; then
   if [ -n "$XT_WITH_ASSERTION_VERIFICATION_KEYS" ]; then
     args+=(--with-assertion-verification-keys "$XT_WITH_ASSERTION_VERIFICATION_KEYS")
   fi
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--session-key-algorithm "ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    # otdfctl quietly falls back to rsa:2048 for any value its parser doesn't
+    # know, so refuse anything this build's help doesn't list rather than let a
+    # forced run (XT_FORCE_SUPPORTS) pass with the wrong session key.
+    if ! "${cmd[@]}" help decrypt | grep -F -- "$XT_WITH_SESSION_KEY_ALGORITHM" >/dev/null; then
+      echo "otdfctl does not list session key algorithm [$XT_WITH_SESSION_KEY_ALGORITHM]" >&2
+      exit 1
+    fi
+    args+=(--session-key-algorithm "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
   if [ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]; then
     args+=(--no-verify-assertions)

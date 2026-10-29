@@ -105,45 +105,8 @@ def wait_for_condition(
         try:
             if condition():
                 return True
-        except Exception:
-            pass  # Treat exceptions as "not ready yet"
+        except Exception:  # noqa: BLE001, S110 - arbitrary probe; any error means "not ready yet"
+            pass
         time.sleep(poll_interval)
 
     raise WaitTimeoutError(service_name, timeout)
-
-
-def wait_for_multiple(
-    checks: list[tuple[str, Callable[[], bool]]],
-    timeout: float = 60.0,
-    poll_interval: float = 1.0,
-) -> dict[str, bool]:
-    """Wait for multiple conditions, returning status of each.
-
-    Args:
-        checks: List of (name, condition_callable) tuples
-        timeout: Maximum time to wait in seconds
-        poll_interval: Time between check rounds
-
-    Returns:
-        Dict mapping service names to their final status (True if ready)
-    """
-    deadline = time.monotonic() + timeout
-    results = {name: False for name, _ in checks}
-    pending = list(checks)
-
-    while pending and time.monotonic() < deadline:
-        still_pending = []
-        for name, condition in pending:
-            try:
-                if condition():
-                    results[name] = True
-                else:
-                    still_pending.append((name, condition))
-            except Exception:
-                still_pending.append((name, condition))
-
-        pending = still_pending
-        if pending:
-            time.sleep(poll_interval)
-
-    return results

@@ -30,6 +30,7 @@ def run_otdf_local(*args, timeout=60) -> subprocess.CompletedProcess:
         cmd,
         capture_output=True,
         text=True,
+        check=False,
         timeout=timeout,
         cwd=_find_otdf_local_root(),
     )

@@ -43,6 +43,10 @@ class Service(ABC):
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        # Why the last start() returned False. start() stays a bool so call
+        # sites remain simple, but "it didn't come up" is not actionable on its
+        # own -- the reason lives here for the CLI to print.
+        self.start_error: str | None = None
 
     @property
     @abstractmethod
@@ -66,14 +70,13 @@ class Service(ABC):
     @abstractmethod
     def health_url(self) -> str:
         """Health check URL, if applicable."""
-        pass
 
     @abstractmethod
     def start(self) -> bool:
         """Start the service.
 
         Returns:
-            True if started successfully
+            True if started successfully. On False, ``start_error`` says why.
         """
         ...
 
@@ -118,13 +121,30 @@ class Service(ABC):
             health_url=self.health_url,
         )
 
+    def _preflight(self) -> bool:
+        """Do the part of start() that can fail without touching a running instance.
+
+        Returns:
+            True if start() may proceed. On False, ``start_error`` says why.
+        """
+        return True
+
     def restart(self) -> bool:
         """Restart the service.
+
+        Runs ``_preflight`` before ``stop``, so a config that start() would
+        reject leaves the running instance up.
 
         Returns:
             True if restarted successfully
         """
+        self.start_error = None
+        if not self._preflight():
+            return False
         self.stop()
         if self.is_running():
+            self.start_error = (
+                f"{self.name} is still running after stop(); refusing to restart"
+            )
             return False
         return self.start()

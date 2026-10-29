@@ -1,4 +1,5 @@
 import filecmp
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -6,9 +7,18 @@ from pathlib import Path
 import pytest
 
 import tdfs
-from abac import Attribute, ObligationValue
+from abac import (
+    Attribute,
+    KasEntry,
+    KasKey,
+    Namespace,
+    ObligationValue,
+    SubjectConditionSet,
+)
 from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
+from fixtures.keys import _create_keyed_attribute, _get_or_create_key
+from otdfctl import OpentdfCommandLineTool
 from test_policytypes import skip_rts_as_needed
 
 rewrap_403_pattern = (
@@ -104,6 +114,65 @@ def test_key_mapping_multiple_mechanisms(
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
     decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
     assert filecmp.cmp(pt_file, rt_file)
+
+
+def test_ec_wrapped_kao_roundtrip(
+    attribute_with_ec_key: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """Roundtrip a TDF whose KAO is EC-wrapped, selected via the attribute's key.
+
+    The wrapping mechanism is chosen by policy -- the attribute value is mapped
+    to an ec:secp256r1 managed key -- rather than by a client-side override, so
+    this covers the same ground the old ``ztdf-ecwrap`` container did without
+    conflating the KAO wrap key with the rewrap session key (see
+    ``test_pqc.py::test_session_key_roundtrip`` for the latter).
+
+    Because key selection now runs through the policy service, this needs
+    ``key_management`` + ``autoconfigure``; the retired client-side flag worked
+    on platform builds predating both. The key lives on km2, so this belongs in
+    a module CI runs after the km KAS instances start.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("key_management", "autoconfigure")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_ec_key
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    kao = manifest.encryptionInformation.keyAccess[0]
+    assert kao.type == "ec-wrapped"
+    assert kao.ephemeralPublicKey is not None
+    assert kao.kid in set(key_ids)
+    assert kao.url == kas_url_km2
+
+    tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    mark = audit_logs.mark("before_decrypt")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    audit_logs.assert_rewrap_success(
+        policy_uuid=manifest.encryptionInformation.policy_object.uuid,
+        key_id=kao.kid,
+        since_mark=mark,
+    )
 
 
 def test_key_mapping_extended_mechanisms(
@@ -897,6 +966,250 @@ Note:
 These tests should be last, because one sets a default key on the platform
 that cannot currently be unset.
 """
+
+
+@pytest.fixture(scope="module")
+def attribute_with_alternate_kas_registration(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km3: KasEntry,
+    root_key: str,
+    temporary_namespace: Namespace,
+    otdf_client_scs: SubjectConditionSet,
+) -> tuple[Attribute, KasKey]:
+    alternate_kas = otdfctl.kas_registry_create_if_not_present(
+        f"{kas_entry_km3.uri.rstrip('/')}/kas"
+    )
+    key = _get_or_create_key(
+        otdfctl, alternate_kas, "km3-alternate-uri", "rsa:2048", root_key
+    )
+    # Decryption must use the KAO registration, not km3's configured registration.
+    assert key.kas_uri == alternate_kas.uri != kas_entry_km3.uri
+    assert otdfctl.kas_registry_key_get(kas_entry_km3, key.key.key_id) is None
+    attr, _ = _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "alternate-kas-registration",
+        [("example", key)],
+        otdf_client_scs,
+    )
+    return attr, key
+
+
+def test_decrypt_uses_kao_kas_registration(
+    attribute_with_alternate_kas_registration: tuple[Attribute, KasKey],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """Decrypt a key registered only at km3/kas, not km3's default URI."""
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    decrypt_sdk.skip_if_unsupported("key_management")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key = attribute_with_alternate_kas_registration
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+    (kao,) = tdfs.manifest(ct_file).encryptionInformation.keyAccess
+    assert kao.url == key.kas_uri
+    assert kao.kid == key.key.key_id
+
+    # The /kas path also supports web-sdk HTTP requests.
+    # The dedicated km3 KAS explicitly enables services.kas.kas_uri_from_kao (default false).
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
+
+    audit_logs.assert_rewrap_success(
+        key_id=key.key.key_id,
+        attr_fqns=attr.value_fqns,
+        min_count=1,
+        since_mark=mark,
+    )
+    audit_logs.assert_contains(
+        rf'getting keyAccessServer by Key.*"key_id"\s*:\s*"{re.escape(key.key.key_id)}"'
+        rf'.*"kas_uri"\s*:\s*"{re.escape(key.kas_uri)}"',
+        since_mark=mark,
+    )
+
+
+@pytest.fixture(scope="module")
+def attribute_with_alternate_kas_registration_disabled(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km1: KasEntry,
+    root_key: str,
+    temporary_namespace: Namespace,
+    otdf_client_scs: SubjectConditionSet,
+) -> tuple[Attribute, KasKey]:
+    """Register a key only at km1/kas, while KM1 uses its configured URI."""
+    tdfs.get_platform_features().skip_if_unsupported("key_management")
+    alternate_kas = otdfctl.kas_registry_create_if_not_present(
+        f"{kas_entry_km1.uri.rstrip('/')}/kas"
+    )
+    key = _get_or_create_key(
+        otdfctl, alternate_kas, "km1-alternate-uri", "rsa:2048", root_key
+    )
+    assert key.kas_uri == alternate_kas.uri != kas_entry_km1.uri
+    assert otdfctl.kas_registry_key_get(kas_entry_km1, key.key.key_id) is None
+    attr, _ = _create_keyed_attribute(
+        otdfctl,
+        temporary_namespace,
+        "alternate-kas-registration-disabled",
+        [("example", key)],
+        otdf_client_scs,
+    )
+    return attr, key
+
+
+def test_decrypt_rejects_kao_kas_registration_when_disabled(
+    attribute_with_alternate_kas_registration_disabled: tuple[Attribute, KasKey],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    kas_url_km1: str,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """The alternate-registration round trip must fail on KAO-disabled KM1."""
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    decrypt_sdk.skip_if_unsupported("key_management")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key = attribute_with_alternate_kas_registration_disabled
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+    (kao,) = tdfs.manifest(ct_file).encryptionInformation.keyAccess
+    assert kao.url == key.kas_uri
+    assert kao.kid == key.key.key_id
+
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    mark = audit_logs.mark("before_decrypt")
+    assert_decrypt_fails_with_patterns(
+        decrypt_sdk,
+        ct_file,
+        rt_file,
+        "ztdf",
+        expected_patterns=[r"bad request|400"],
+    )
+
+    # Verify the failed lookup used KM1's configured URI and the KAO's KID.
+    audit_logs.assert_contains(
+        rf'"key_access_server_keys".*uri:\s*\\"{re.escape(kas_url_km1)}\\"'
+        rf'.*kid:\s*\\"{re.escape(key.key.key_id)}\\"',
+        since_mark=mark,
+    )
+
+
+@pytest.fixture(scope="module")
+def attributes_with_same_kid_in_different_registries(
+    otdfctl: OpentdfCommandLineTool,
+    kas_entry_km3: KasEntry,
+    root_key: str,
+    temporary_namespace: Namespace,
+    otdf_client_scs: SubjectConditionSet,
+) -> list[tuple[Attribute, KasKey]]:
+    """Create distinct basic-manager keys with one KID and root key on KM3."""
+    alternate_kas = otdfctl.kas_registry_create_if_not_present(
+        f"{kas_entry_km3.uri.rstrip('/')}/kas"
+    )
+    keys = [
+        _get_or_create_key(otdfctl, kas, "km3-shared-kid", "rsa:2048", root_key)
+        for kas in (kas_entry_km3, alternate_kas)
+    ]
+    first, second = keys
+    assert first.kas_id != second.kas_id
+    assert first.kas_uri != second.kas_uri
+    assert first.key.key_id == second.key.key_id
+    assert first.key.public_key_ctx.pem != second.key.public_key_ctx.pem
+
+    attributes = []
+    for index, key in enumerate(keys):
+        attr, _ = _create_keyed_attribute(
+            otdfctl,
+            temporary_namespace,
+            f"same-kid-registry-{index}",
+            [("example", key)],
+            otdf_client_scs,
+        )
+        attributes.append((attr, key))
+    return attributes
+
+
+def test_decrypt_same_kid_in_different_registries_with_cache(
+    attributes_with_same_kid_in_different_registries: list[tuple[Attribute, KasKey]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """Alternate KM3 keys sharing a KID and verify both cached keys decrypt."""
+    tdfs.get_platform_features().skip_if_unsupported(
+        "key_management", "kas_uri_from_kao"
+    )
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    decrypt_sdk.skip_if_unsupported("key_management")
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    ciphertexts = []
+    for attr, key in attributes_with_same_kid_in_different_registries:
+        ct_file = encrypted_tdf(
+            encrypt_sdk,
+            attr_values=attr.value_fqns,
+            target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        )
+        (kao,) = tdfs.manifest(ct_file).encryptionInformation.keyAccess
+        assert kao.url == key.kas_uri
+        assert kao.kid == key.key.key_id
+        ciphertexts.append((ct_file, key, attr))
+
+    # A, B, A, B exercises both cache population and reuse on the same KAS.
+    mark = audit_logs.mark("before_same_kid_decrypts")
+    for round_number in range(2):
+        for ct_file, key, attr in ciphertexts:
+            rt_file = encrypted_tdf.rt_file(
+                ct_file, decrypt_sdk, variant=f"round-{round_number}"
+            )
+            decrypt_mark = audit_logs.mark("before_decrypt")
+            decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+            assert filecmp.cmp(pt_file, rt_file, shallow=False)
+            audit_logs.assert_rewrap_success(
+                key_id=key.key.key_id,
+                attr_fqns=attr.value_fqns,
+                min_count=1,
+                since_mark=decrypt_mark,
+            )
+
+    # A passing round trip with caching disabled would miss the regression.
+    # Match the complete URI + KID so the /kas entry cannot match both keys.
+    for _, key, _ in ciphertexts:
+        cache_key_json = json.dumps(f'"{key.kas_uri}":"{key.key.key_id}"')
+        audit_logs.assert_contains(
+            rf'found private key in cache.*"cache_key":\s*{re.escape(cache_key_json)}',
+            since_mark=mark,
+        )
 
 
 def test_autoconfigure_key_management_two_kas_two_keys(

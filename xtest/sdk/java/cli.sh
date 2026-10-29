@@ -11,13 +11,13 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -41,6 +41,30 @@ else
   echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
+
+# Cache `java -jar cmdline.jar help [...]` output to avoid paying JVM startup
+# (typically 150-500ms) for the capability probes on every encrypt/decrypt.
+# Keyed by the jar's mtime so a reinstall invalidates the cache. stderr is
+# discarded to keep JVM warnings (reflective-access, agent notices) out of logs.
+jar_help() {
+  local jar="$SCRIPT_DIR/cmdline.jar"
+  local mtime
+  mtime=$(stat -c %Y "$jar" 2>/dev/null || stat -f %m "$jar" 2>/dev/null || echo 0)
+  local key
+  key=$(printf '%s' "$*" | tr -c 'a-zA-Z0-9' '_')
+  local uid
+  uid=$(id -u 2>/dev/null || echo default)
+  local cache="${TMPDIR:-/tmp}/xtest-java-help-${uid}-${mtime}-${key}"
+  if [[ ! -f "$cache" ]]; then
+    # Write to a process-unique temp file, then rename: concurrent xdist
+    # workers see either no cache or the complete file, never a partial read.
+    local tmp="${cache}.$$"
+    java -jar "$jar" help "$@" >"$tmp" 2>/dev/null
+    mv -f "$tmp" "$cache"
+  fi
+  cat "$cache"
+  return 0
+}
 
 if [ "$1" == "supports" ]; then
   case "$2" in
@@ -91,11 +115,43 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
+    gmac_root_rejected)
+      # DSPX-4703: does decrypt refuse a manifest downgraded to
+      # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
+      # runs inside root-signature validation, which needs the unwrapped
+      # payload key and so happens after the KAS rewrap -- there is no flag,
+      # subcommand or version field to grep for.
+      #
+      # test_root_signature forges a root and watches the reader instead, and
+      # only consults this as an escape hatch: XT_FORCE_SUPPORTS=gmac_root_rejected
+      # runs the exploit cases unconditionally, turning a vulnerable build's
+      # skip into a red repro.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
+      exit 1
+      ;;
     attribute_traversal)
       echo "attribute_traversal not supported"
       exit 1
       ;;
 
+    mechanism-mlkem)
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i "mlkem:768"
+      exit $?
+      ;;
+    session-key-mlkem)
+      # --rewrap-key-type has long accepted "mlkem:768" as a value (its choices
+      # come from the same KeyType enum used for KAS-managed-key mechanisms),
+      # so grepping --help for it would false-positive on builds that predate
+      # KASClient actually decapsulating an ML-KEM rewrap response. Use the
+      # explicit `supports` subcommand instead, which is a hardcoded,
+      # source-controlled feature list scoped to this exact capability.
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports session-key-mlkem
+      exit $?
+      ;;
     mechanism-rsa-4096 | mechanism-ec-curves-384-521)
       # rsa4096 support in >= 0.13.0
       set -o pipefail
@@ -113,12 +169,36 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     dpop)
-      set -o pipefail
-      java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -iE -- '--dpop'
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
       exit $?
       ;;
     dpop_nonce_challenge)
-      echo "dpop_nonce_challenge not supported"
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+      exit $?
+      ;;
+    chunky)
+      # Default an absent per-segment segmentSize/encryptedSegmentSize from
+      # the manifest-level defaults. Broken in every java build to date: a
+      # web-sdk TDF over 1 MiB fails in the GMAC check. Fix tracked as
+      # DSPX-4589; turn this into a version gate when it releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "chunky unsupported: see DSPX-4589"
+      exit 1
+      ;;
+    zip64-at-2gib)
+      # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
+      # 4 GiB. java-sdk adopted MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE in
+      # java-sdk#393, merged 2026-09-03 and not in any release through v0.18.0
+      # -- and a branch build reports the last released version here, so this
+      # answers no for java@main too. Evaluate such a build with
+      # XT_FORCE_SUPPORTS=zip64-at-2gib; turn this into a version gate when the
+      # fix releases.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "zip64-at-2gib unsupported: needs the release carrying java-sdk#393"
       exit 1
       ;;
     *)
@@ -135,7 +215,7 @@ args=(
 )
 
 # when we added support for KAS allowlist, we changed the platform endpoint format to require scheme
-if java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist; then
+if jar_help decrypt | grep -q kas-allowlist; then
   args+=("--platform-endpoint=$PLATFORMURL")
 else
   args+=("--platform-endpoint=$PLATFORMENDPOINT")
@@ -150,16 +230,12 @@ if [ "$1" == "encrypt" ]; then
     args+=(--ecdsa-binding)
   fi
 
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--encap-key-type="ec:secp256r1")
-  fi
-
   if [ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]; then
     args+=(--policy-type="plaintext")
   fi
 else
-  if [ "$XT_WITH_ECWRAP" == 'true' ]; then
-    args+=(--rewrap-key-type="ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    args+=(--rewrap-key-type="$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
 fi
 
@@ -195,6 +271,10 @@ fi
 
 if [ -n "$XT_WITH_TARGET_MODE" ]; then
   args+=(--with-target-mode "$XT_WITH_TARGET_MODE")
+fi
+
+if jar_help | grep -q -- '--verbose'; then
+  args+=(--verbose)
 fi
 
 echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"

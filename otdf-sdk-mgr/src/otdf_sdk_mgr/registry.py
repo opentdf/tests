@@ -12,13 +12,14 @@ import urllib.request
 from typing import Any
 
 from otdf_sdk_mgr.config import (
-    SDK_GITHUB_REPOS,
     SDK_GIT_URLS,
+    SDK_GITHUB_REPOS,
     SDK_MAVEN_COORDS,
     SDK_NPM_PACKAGES,
     SDK_TAG_INFIXES,
     go_module_for_tag,
 )
+from otdf_sdk_mgr.refs import git_ls_remote
 from otdf_sdk_mgr.semver import is_stable, parse_semver, semver_sort_key
 
 
@@ -83,7 +84,7 @@ def list_go_versions() -> list[dict[str, Any]]:
     from git import Git
 
     results: list[dict[str, Any]] = []
-    raw = Git().ls_remote(SDK_GIT_URLS["platform"], tags=True)
+    raw = git_ls_remote(Git(), SDK_GIT_URLS["platform"], tags=True)
     for line in raw.strip().split("\n"):
         if not line:
             continue
@@ -214,7 +215,7 @@ def list_platform_versions() -> list[dict[str, Any]]:
     from git import Git
 
     results: list[dict[str, Any]] = []
-    raw = Git().ls_remote(SDK_GIT_URLS["platform"], tags=True)
+    raw = git_ls_remote(Git(), SDK_GIT_URLS["platform"], tags=True)
     infix = SDK_TAG_INFIXES.get("platform", "service")
 
     for line in raw.strip().split("\n"):

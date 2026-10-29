@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
+
 from otdf_sdk_mgr.schema import (
     Instance,
     KasPin,
@@ -19,7 +21,6 @@ from otdf_sdk_mgr.schema import (
     load_scenario,
     scenario_to_pytest_sdks,
 )
-from pydantic import ValidationError
 
 
 def _minimal_scenario_yaml() -> str:

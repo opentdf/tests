@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+import subprocess
+from typing import Annotated
 
 import typer
 
@@ -39,7 +40,7 @@ def _install_platform_or_exit(
 @install_app.command()
 def stable(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to install (default: all)"),
     ] = None,
 ) -> None:
@@ -60,7 +61,7 @@ def stable(
 @install_app.command()
 def lts(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to install (default: all)"),
     ] = None,
 ) -> None:
@@ -87,7 +88,7 @@ def lts(
 @install_app.command()
 def tip(
     sdks: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="SDKs to build from source (default: all)"),
     ] = None,
     ref: Annotated[
@@ -121,7 +122,16 @@ def tip(
     if want_platform:
         _install_platform_or_exit(install_platform_source, ref, dist_name=platform_dist_name)
     if sdk_targets:
-        cmd_tip(sdk_targets, ref=ref)
+        try:
+            cmd_tip(sdk_targets, ref=ref)
+        # ValueError covers CheckoutError, and a ref that names no dist/
+        # directory, such as `sdk/`.
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as e:
+            typer.echo(f"Error: {e}", err=True)
+            # checkout._run captures git's stderr; make streams its own.
+            if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+                typer.echo(e.stderr.rstrip(), err=True)
+            raise typer.Exit(1)
 
 
 @install_app.command()
@@ -183,7 +193,7 @@ def artifact(
     sdk: Annotated[str, typer.Option(help="SDK to install")],
     version: Annotated[str, typer.Option(help="Version to install")],
     dist_name: Annotated[
-        Optional[str], typer.Option("--dist-name", help="Override dist directory name")
+        str | None, typer.Option("--dist-name", help="Override dist directory name")
     ] = None,
 ) -> None:
     """Install a single SDK version (used by CI)."""
