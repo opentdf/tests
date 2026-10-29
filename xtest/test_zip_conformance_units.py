@@ -18,6 +18,7 @@ get subtly wrong -- so it is checked here, offline, on every PR. Everything
 added for it must stay offline: fake the process result, never spawn a CLI.
 """
 
+import collections
 import dataclasses
 import json
 import struct
@@ -25,10 +26,12 @@ import subprocess
 import warnings
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import create_autospec
 
 import pytest
 
+import conftest
 import tdfs
 import test_zip_conformance as conformance
 import zipinspect
@@ -704,7 +707,10 @@ def _outcome_harness(
 @pytest.mark.parametrize("legality", ["spec-legal", "adversarial"])
 @pytest.mark.parametrize("reject", [False, True], ids=["accepted", "rejected"])
 def test_only_the_unexpected_quadrants_warn(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legality: str, reject: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    legality: zipreport.Legality,
+    reject: bool,
 ):
     """Both outcomes pass everywhere; exactly two of the four are remarkable.
 
@@ -721,7 +727,7 @@ def test_only_the_unexpected_quadrants_warn(
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        outcome(ct, rt, legality=legality)  # type: ignore[arg-type]
+        outcome(ct, rt, legality=legality)
 
     raised = [
         w for w in caught if issubclass(w.category, conformance.ZipConformanceWarning)
@@ -735,13 +741,16 @@ def test_only_the_unexpected_quadrants_warn(
     (cell,) = _recorded_cells(recorded)
     assert cell.outcome == ("rejected" if reject else "accepted")
     assert cell.legality == legality
-    assert cell.sdk == "go"
+    assert cell.sdk == "go@fake"
 
 
 @pytest.mark.parametrize("legality", ["spec-legal", "adversarial"])
 @pytest.mark.parametrize("reject", [False, True], ids=["accepted", "rejected"])
 def test_a_tolerated_outcome_never_echoes_the_command_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legality: str, reject: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    legality: zipreport.Legality,
+    reject: bool,
 ):
     """The go and java shims print client credentials on stdout every run.
 
@@ -753,7 +762,7 @@ def test_a_tolerated_outcome_never_echoes_the_command_line(
     outcome, ct, rt, recorded = _outcome_harness(tmp_path, monkeypatch, reject=reject)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        outcome(ct, rt, legality=legality)  # type: ignore[arg-type]
+        outcome(ct, rt, legality=legality)
 
     assert _SECRET in _GO_STDOUT.decode(), "the fixture must actually carry a secret"
     for w in caught:
@@ -860,7 +869,11 @@ def test_the_fixture_records_onto_the_cell_itself(
         outcome(tmp_path / "mutated.tdf", tmp_path / "rt.bin", legality="spec-legal")
 
     (cell,) = zipreport.collect(item.nodeid, item.user_properties)
-    assert (cell.sdk, cell.outcome, cell.node_id) == ("go", "rejected", item.nodeid)
+    assert (cell.sdk, cell.outcome, cell.node_id) == (
+        "go@fake",
+        "rejected",
+        item.nodeid,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -872,7 +885,12 @@ def test_the_fixture_records_onto_the_cell_itself(
 # ---------------------------------------------------------------------------
 
 
-def _cell(sdk: str, legality: str, outcome: str, node_id: str = "n") -> zipreport.Cell:
+def _cell(
+    sdk: str,
+    legality: zipreport.Legality,
+    outcome: zipreport.Outcome,
+    node_id: str = "n",
+) -> zipreport.Cell:
     return zipreport.Cell(node_id=node_id, sdk=sdk, legality=legality, outcome=outcome)
 
 
@@ -886,7 +904,7 @@ def _cell(sdk: str, legality: str, outcome: str, node_id: str = "n") -> ziprepor
     ],
 )
 def test_conformant_is_the_liberal_answer(
-    legality: str, outcome: str, conformant: bool
+    legality: zipreport.Legality, outcome: zipreport.Outcome, conformant: bool
 ):
     """Accept what APPNOTE permits, reject what contradicts itself.
 
@@ -904,8 +922,16 @@ def test_a_cell_that_judges_two_containers_reports_both():
     keep the last, losing a result without anything failing.
     """
     recorded = [
-        (zipreport.PROPERTY, zipreport.encode("go", "spec-legal", "rejected", "eocd")),
-        (zipreport.PROPERTY, zipreport.encode("go", "adversarial", "accepted", "")),
+        (
+            zipreport.PROPERTY,
+            zipreport.encode(
+                "go@main", legality="spec-legal", outcome="rejected", diagnostic="eocd"
+            ),
+        ),
+        (
+            zipreport.PROPERTY,
+            zipreport.encode("go@main", legality="adversarial", outcome="accepted"),
+        ),
     ]
     cells = zipreport.collect("test_x[go]", recorded)
     assert [(c.legality, c.outcome, c.diagnostic) for c in cells] == [
@@ -918,6 +944,29 @@ def test_a_cell_that_judges_two_containers_reports_both():
 def test_other_suites_properties_are_left_alone():
     """Every test in the run passes through this hook, not just these cells."""
     assert zipreport.collect("n", [("some_other_suite", "value")]) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "not json",
+        '["go@main", "spec-legal", "rejected"]',
+        '{"legality": "spec-legal", "outcome": "rejected"}',
+        '{"sdk": "go@main", "legality": "spec_legal", "outcome": "rejected"}',
+        '{"sdk": "go@main", "legality": "rejected", "outcome": "spec-legal"}',
+        '{"sdk": "go@main", "legality": "spec-legal", "outcome": "rejected", '
+        '"diagnostic": 7}',
+    ],
+    ids=["not-json", "not-object", "no-sdk", "typo", "transposed", "bad-diagnostic"],
+)
+def test_a_record_encode_could_not_write_is_refused(value: str):
+    """A garbled record must not be read as a conformant cell.
+
+    Every bad record here would otherwise fall outside NOT_CONFORMANT, and so
+    count as conformant -- the report quietly saying all is well.
+    """
+    with pytest.raises(zipreport.MalformedRecordError, match="test_x"):
+        zipreport.collect("test_x", [(zipreport.PROPERTY, value)])
 
 
 def test_the_summary_names_every_non_conformant_cell():
@@ -980,3 +1029,122 @@ def test_the_artifact_does_not_depend_on_worker_scheduling(tmp_path: Path):
         "test_c[js]",
     ]
     assert [c["conformant"] for c in payload["cells"]] == [True, False, False]
+
+
+# ---------------------------------------------------------------------------
+# conftest.py's hooks: the collecting end. Real TestReports, fake session.
+# ---------------------------------------------------------------------------
+
+
+def _hook_report(
+    when: str,
+    outcome: str,
+    *records: str,
+    marked: bool = True,
+) -> pytest.TestReport:
+    return pytest.TestReport(
+        "test_zip_conformance.py::t[go]",
+        ("test_zip_conformance.py", 0, "t"),
+        {"zip_conformance": 1} if marked else {},
+        outcome,  # type: ignore[arg-type]
+        None,
+        when,  # type: ignore[arg-type]
+        user_properties=[(zipreport.PROPERTY, r) for r in records],
+    )
+
+
+_RECORD = zipreport.encode("go@main", legality="spec-legal", outcome="accepted")
+
+
+@pytest.fixture
+def hook_state(monkeypatch: pytest.MonkeyPatch):
+    """Fresh module state, so the real run's table never sees these cells."""
+    cells: list[zipreport.Cell] = []
+    seen: collections.Counter[str] = collections.Counter()
+    faults: list[str] = []
+    monkeypatch.setattr(conftest, "_zip_conformance_cells", cells)
+    monkeypatch.setattr(conftest, "_zip_conformance_seen", seen)
+    monkeypatch.setattr(conftest, "_zip_conformance_faults", faults)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    return cells, seen, faults
+
+
+def test_only_a_passing_call_is_collected(hook_state):
+    cells, seen, faults = hook_state
+    conftest.pytest_runtest_logreport(_hook_report("setup", "passed", _RECORD))
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed", _RECORD))
+    conftest.pytest_runtest_logreport(_hook_report("teardown", "passed", _RECORD))
+    conftest.pytest_runtest_logreport(_hook_report("call", "failed", _RECORD))
+    assert [c.sdk for c in cells] == ["go@main"], "one passing call, one record"
+    assert seen == {"passed": 1, "failed": 1}
+    assert not faults
+
+
+def test_other_suites_reports_are_ignored(hook_state):
+    cells, seen, faults = hook_state
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed", marked=False))
+    assert (cells, seen, faults) == ([], {}, [])
+
+
+def test_a_passing_cell_that_recorded_nothing_is_a_fault(hook_state):
+    """Every conformance test ends in zip_outcome; silence means it broke."""
+    cells, _, faults = hook_state
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed"))
+    assert not cells
+    assert faults == [
+        "test_zip_conformance.py::t[go]: passed without recording a conformance outcome"
+    ]
+
+
+def test_a_malformed_record_is_a_fault_not_an_internal_error(hook_state):
+    """Raising here would abort every suite in the run, not just this one."""
+    _, _, faults = hook_state
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed", "not json"))
+    assert len(faults) == 1 and "not JSON" in faults[0]
+
+
+def _session(tmp_path: Path) -> SimpleNamespace:
+    lines: list[str] = []
+    reporter = SimpleNamespace(
+        write_sep=lambda _sep, title: lines.append(f"== {title}"),
+        write_line=lambda line, **_markup: lines.append(line),
+    )
+    config = SimpleNamespace(
+        rootpath=tmp_path,
+        pluginmanager=SimpleNamespace(get_plugin=lambda _name: reporter),
+    )
+    return SimpleNamespace(config=config, exitstatus=pytest.ExitCode.OK, lines=lines)
+
+
+def test_faults_fail_the_run(hook_state, tmp_path: Path):
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed"))
+    session = _session(tmp_path)
+    conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
+    assert session.exitstatus == pytest.ExitCode.TESTS_FAILED
+    assert any("passed without recording" in line for line in session.lines)
+
+
+def test_a_run_whose_cells_all_skipped_says_so(hook_state, tmp_path: Path):
+    """An empty table and a missing one look the same; say which this is."""
+    conftest.pytest_runtest_logreport(_hook_report("setup", "skipped"))
+    session = _session(tmp_path)
+    conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
+    assert session.lines == [
+        "== zip conformance outcomes",
+        "no outcomes recorded (1 skipped)",
+    ]
+    assert session.exitstatus == pytest.ExitCode.OK
+    assert not (tmp_path / zipreport.DEFAULT_OUT).exists()
+
+
+def test_a_run_without_conformance_cells_prints_nothing(hook_state, tmp_path: Path):
+    session = _session(tmp_path)
+    conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
+    assert session.lines == []
+
+
+def test_the_artifact_lands_under_the_rootdir(hook_state, tmp_path: Path):
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed", _RECORD))
+    session = _session(tmp_path)
+    conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
+    assert (tmp_path / zipreport.DEFAULT_OUT).is_file()

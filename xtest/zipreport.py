@@ -27,6 +27,7 @@ from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, TypeIs, get_args
 
 #: Property name every judged container is recorded under. One property
 #: carrying all the fields as JSON, rather than one property per field: a cell
@@ -34,13 +35,35 @@ from pathlib import Path
 #: property name would keep only the last without noticing it dropped one.
 PROPERTY = "zip_conformance"
 
-#: Where a run's records go when nobody says otherwise. Alongside the html and
-#: junit reports, because CI uploads that directory wholesale.
+#: Where a run's records go, relative to the rootdir. Alongside the html
+#: reports, because CI's upload step globs ``test-results/**/*.json``.
 DEFAULT_OUT = Path("test-results/zip-conformance.json")
+
+#: Whether a mutation produces a structure APPNOTE permits ("spec-legal") or
+#: one it does not ("adversarial"). This never changes whether a cell passes
+#: -- only which of the two passing outcomes is worth reporting.
+Legality = Literal["spec-legal", "adversarial"]
+
+#: What the decrypting SDK did with the container.
+Outcome = Literal["accepted", "rejected"]
 
 #: The two ``(legality, outcome)`` quadrants that pass without being
 #: conformant. The other two are the expected result and need no reporting.
-NOT_CONFORMANT = frozenset({("spec-legal", "rejected"), ("adversarial", "accepted")})
+NOT_CONFORMANT: frozenset[tuple[Legality, Outcome]] = frozenset(
+    {("spec-legal", "rejected"), ("adversarial", "accepted")}
+)
+
+
+def is_legality(val: object) -> TypeIs[Legality]:
+    return val in get_args(Legality)
+
+
+def is_outcome(val: object) -> TypeIs[Outcome]:
+    return val in get_args(Outcome)
+
+
+class MalformedRecordError(ValueError):
+    """A :data:`PROPERTY` value that did not come from :func:`encode`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,9 +71,10 @@ class Cell:
     """One mutated container, as judged by one decrypting SDK."""
 
     node_id: str
+    #: ``sdk@version``, so two builds of one SDK stay separate rows.
     sdk: str
-    legality: str
-    outcome: str
+    legality: Legality
+    outcome: Outcome
     diagnostic: str = ""
 
     @property
@@ -64,8 +88,14 @@ class Cell:
         return (self.legality, self.outcome) not in NOT_CONFORMANT
 
 
-def encode(sdk: str, legality: str, outcome: str, diagnostic: str) -> str:
+def encode(
+    sdk: str, *, legality: Legality, outcome: Outcome, diagnostic: str = ""
+) -> str:
     """Render one record for a cell's ``user_properties``.
+
+    Keyword-only because ``legality`` and ``outcome`` are both short strings:
+    passed positionally in the wrong order, every cell would read as
+    conformant and the report would quietly say nothing.
 
     ``diagnostic`` must already be the allowlist-matched slice: this value
     reaches CI logs and uploaded artifacts.
@@ -80,23 +110,44 @@ def collect(node_id: str, user_properties: Iterable[tuple[str, object]]) -> list
     """Every conformance record in one test report's properties.
 
     Properties other than :data:`PROPERTY` belong to some other suite and are
-    left alone.
+    left alone. A :data:`PROPERTY` value :func:`encode` could not have written
+    raises :class:`MalformedRecordError` rather than being dropped or read as
+    something it is not.
     """
     cells: list[Cell] = []
     for name, value in user_properties:
         if name != PROPERTY:
             continue
-        record = json.loads(str(value))
-        cells.append(
-            Cell(
-                node_id=node_id,
-                sdk=record["sdk"],
-                legality=record["legality"],
-                outcome=record["outcome"],
-                diagnostic=record.get("diagnostic", ""),
-            )
-        )
+        cells.append(_decode(node_id, value))
     return cells
+
+
+def _decode(node_id: str, value: object) -> Cell:
+    try:
+        record = json.loads(str(value))
+    except json.JSONDecodeError as e:
+        raise MalformedRecordError(f"{node_id}: {PROPERTY} is not JSON: {e}") from e
+    if not isinstance(record, dict):
+        raise MalformedRecordError(f"{node_id}: {PROPERTY} is not an object: {value!r}")
+    sdk = record.get("sdk")
+    legality = record.get("legality")
+    outcome = record.get("outcome")
+    diagnostic = record.get("diagnostic", "")
+    if not (
+        isinstance(sdk, str)
+        and sdk
+        and is_legality(legality)
+        and is_outcome(outcome)
+        and isinstance(diagnostic, str)
+    ):
+        raise MalformedRecordError(f"{node_id}: unrecognised {PROPERTY}: {value!r}")
+    return Cell(
+        node_id=node_id,
+        sdk=sdk,
+        legality=legality,
+        outcome=outcome,
+        diagnostic=diagnostic,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +162,8 @@ def summarize(cells: Iterable[Cell]) -> Summary:
     """Count every ``(sdk, legality, outcome)`` and keep the notable cells.
 
     Cells are sorted first: under xdist they arrive in whatever order the
-    workers finish, and an artifact that reorders itself between two identical
-    runs is one nobody can diff.
+    workers finish, and a printed table or step summary that reorders itself
+    between two identical runs is one nobody can compare.
     """
     counts: Counter[tuple[str, str, str]] = Counter()
     notable: dict[str, list[Cell]] = {}
@@ -125,8 +176,10 @@ def summarize(cells: Iterable[Cell]) -> Summary:
 
 def terminal_lines(summary: Summary) -> list[str]:
     """The summary as the terminal reporter prints it at end of run."""
+    width = max((len(sdk) for sdk, _, _ in summary.counts), default=0)
+    width = max(width, 5)
     lines = [
-        f"{sdk:5} {legality:12} {outcome:9} x{count}"
+        f"{sdk:{width}} {legality:12} {outcome:9} x{count}"
         for (sdk, legality, outcome), count in sorted(summary.counts.items())
     ]
     for sdk, cells in sorted(summary.notable.items()):

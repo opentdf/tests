@@ -14,6 +14,7 @@ Domain-specific fixtures are organized in the fixtures/ package:
 """
 
 import argparse
+import collections
 import json
 import logging
 import os
@@ -572,10 +573,16 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
-#: Conformance records for the whole run, in arrival order. A plain list
-#: rather than the config stash because :func:`pytest_runtest_logreport` is
-#: handed a report and nothing else.
+#: Conformance records for the whole run, in arrival order. Plain module
+#: state rather than the config stash because :func:`pytest_runtest_logreport`
+#: is handed a report and nothing else.
 _zip_conformance_cells: list[zipreport.Cell] = []
+#: ``zip_conformance`` cells by outcome, recorded or not -- what lets an empty
+#: table be told apart from a run where the module never ran.
+_zip_conformance_seen: collections.Counter[str] = collections.Counter()
+#: Harness faults: a passing cell that recorded nothing, or a record
+#: :func:`zipreport.collect` could not read. Each fails the run at the end.
+_zip_conformance_faults: list[str] = []
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
@@ -586,14 +593,36 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     (see :func:`_finish_zip_conformance`), so a worker's partial list dies
     with the worker.
 
+    Only a passing call is read: ``user_properties`` rides on every phase's
+    report, and a cell that failed after recording (``-W error`` on the
+    warning, say) is not one the table should list as passed.
+
+    A fault in the records is not raised from here -- an exception in this
+    hook is an INTERNALERROR that aborts every suite in the run. It is kept
+    and fails the session at the end instead.
+
     The parameter name is fixed by the hookspec and shadows the ``perf.report``
     import above; nothing in here needs that module.
     """
+    if "zip_conformance" not in report.keywords:
+        return
+    if report.when == "setup" and not report.passed:
+        _zip_conformance_seen["skipped" if report.skipped else "error"] += 1
     if report.when != "call":
         return
-    _zip_conformance_cells.extend(
-        zipreport.collect(report.nodeid, report.user_properties)
-    )
+    _zip_conformance_seen[report.outcome] += 1
+    if not report.passed:
+        return
+    try:
+        cells = zipreport.collect(report.nodeid, report.user_properties)
+    except zipreport.MalformedRecordError as e:
+        _zip_conformance_faults.append(str(e))
+        return
+    if not cells:
+        _zip_conformance_faults.append(
+            f"{report.nodeid}: passed without recording a conformance outcome"
+        )
+    _zip_conformance_cells.extend(cells)
 
 
 def _finish_zip_conformance(session: pytest.Session) -> None:
@@ -601,24 +630,39 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
 
     Every conformance cell passes whether the SDK read the mutated container
     or rejected it cleanly, so this table is the only place the difference
-    shows up. It is rendered here rather than by a CI step parsing the junit
-    XML so that a local run gets it too -- and so the records do not have to
-    survive a round trip that is only schema-valid under
-    ``junit_family = xunit1``.
+    shows up. It is rendered in-process so a local run gets it too.
+
+    Silent only when no ``zip_conformance`` cell was collected at all. A run
+    whose cells all skipped or failed says so, rather than printing nothing --
+    an empty table and a missing one look the same.
     """
     config = session.config
     if getattr(config, "workerinput", None) is not None:
         return  # an xdist worker sees only the cells it ran
-    if not _zip_conformance_cells:
+    if not _zip_conformance_seen:
         return
-    path = zipreport.write_json(zipreport.DEFAULT_OUT, _zip_conformance_cells)
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "zip conformance outcomes")
+    if _zip_conformance_faults:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        if reporter is not None:
+            reporter.write_line("harness faults (the run fails):", red=True)
+            for fault in _zip_conformance_faults:
+                reporter.write_line(f"  {fault}", red=True)
+    if not _zip_conformance_cells:
+        seen = ", ".join(f"{n} {o}" for o, n in sorted(_zip_conformance_seen.items()))
+        if reporter is not None:
+            reporter.write_line(f"no outcomes recorded ({seen})", yellow=True)
+        return
+    path = zipreport.write_json(
+        config.rootpath / zipreport.DEFAULT_OUT, _zip_conformance_cells
+    )
     summary = zipreport.summarize(_zip_conformance_cells)
     # A generic Actions helper that happens to live in the benchmark's report
     # module; writing a second copy of it here would be the worse trade.
     report.append_step_summary(zipreport.markdown(summary))
-    reporter = config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
-        reporter.write_sep("=", "zip conformance outcomes")
         for line in zipreport.terminal_lines(summary):
             reporter.write_line(line)
         reporter.write_line(f"per-cell outcomes: {path}")
@@ -626,8 +670,12 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     """Write the end-of-run artifacts for the suites that produce them."""
-    _finish_zip_conformance(session)
-    _finish_bench(session, exitstatus)
+    try:
+        _finish_zip_conformance(session)
+    finally:
+        # The bench gate decides the run's exit status; a reporting failure
+        # above must not skip it.
+        _finish_bench(session, exitstatus)
 
 
 def _finish_bench(session: pytest.Session, exitstatus: int) -> None:
