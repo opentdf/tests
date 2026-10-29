@@ -97,7 +97,6 @@ import subprocess
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
 
 import pytest
 
@@ -267,10 +266,7 @@ def _assert_zip_rejection(sdk: str, result: subprocess.CompletedProcess[bytes]) 
     return match.group()
 
 
-#: Whether a mutation produces a structure APPNOTE permits ("spec-legal") or
-#: one it does not ("adversarial"). This never changes whether a cell passes
-#: -- only which of the two passing outcomes is worth reporting.
-Legality = Literal["spec-legal", "adversarial"]
+Legality = zipreport.Legality
 
 
 class ZipConformanceWarning(UserWarning):
@@ -308,12 +304,12 @@ class ZipOutcome:
         decrypt_sdk: tdfs.SDK,
         pt_file: Path,
         node_id: str,
-        record_property: Callable[[str, object], None],
+        record: Callable[[str, object], None],
     ) -> None:
         self._sdk = decrypt_sdk
         self._pt_file = pt_file
         self._node_id = node_id
-        self._record_property = record_property
+        self._record = record
 
     def __call__(self, ct_file: Path, rt_file: Path, *, legality: Legality) -> None:
         result = _bounded_decrypt(self._sdk, ct_file, rt_file)
@@ -333,13 +329,20 @@ class ZipOutcome:
         )
         self._report("accepted", legality, "")
 
-    def _report(self, outcome: str, legality: Legality, diagnostic: str) -> None:
+    def _report(
+        self, outcome: zipreport.Outcome, legality: Legality, diagnostic: str
+    ) -> None:
         # ``diagnostic`` is the allowlist-matched substring only, never
         # result.stdout: the go and java shims echo command lines carrying
         # local client credentials.
-        self._record_property(
+        self._record(
             zipreport.PROPERTY,
-            zipreport.encode(self._sdk.sdk, legality, outcome, diagnostic),
+            zipreport.encode(
+                str(self._sdk),
+                legality=legality,
+                outcome=outcome,
+                diagnostic=diagnostic,
+            ),
         )
         if outcome == "rejected" and legality == "spec-legal":
             warnings.warn(
@@ -368,15 +371,11 @@ def zip_outcome(
 
     The cell's outcomes are per-test state, so a module-level helper cannot
     reach them. Binding the recorder here along with the decrypting SDK and
-    the plaintext is what keeps every call site a one-liner instead of
-    threading three values through ten test signatures no test body reads.
+    the plaintext keeps each call site to one line.
 
-    ``item.user_properties`` is appended to directly rather than through the
-    ``record_property`` fixture. They are the same list -- the fixture is that
-    append plus a warning that ``junit_family``'s default xunit2 schema has
-    nowhere to put the result. ``conftest.py`` collects these in-process (see
-    ``zipreport.py``), so the junit XML is not the channel and the warning's
-    advice to set ``junit_family = xunit1`` would buy nothing.
+    Records go straight onto ``item.user_properties`` -- the list the
+    ``record_property`` fixture appends to -- where ``conftest.py`` collects
+    them in-process (see ``zipreport.py``).
     """
     item = request.node
     assert isinstance(item, pytest.Item)
