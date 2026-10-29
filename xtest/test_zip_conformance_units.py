@@ -509,7 +509,13 @@ def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
             b"tdfReader.Manifest failed: 0.manifest.json size too large: 4194303 KiB",
         ),
         ("go", b"tdfReader.Manifest failed: zip: file not found"),
+        ("go", b"zipstream.NewTDFReader failed: readSeeker.Seek failed: EOF"),
         ("java", b"io.opentdf.platform.sdk.InvalidZipException: Invalid"),
+        # ZipReader.java's own throw, from source; no CI cell has reached it.
+        (
+            "java",
+            b"java.io.EOFException: Unexpected EOF when reading filename of length: 9",
+        ),
         ("java", b"java.lang.IllegalArgumentException: tdf doesn't contain a manifest"),
         ("js", b"InvalidFileError: extra field length exceeds extra field buffer size"),
         (
@@ -545,10 +551,16 @@ def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
         ("go", 1, b"zip: not a valid zip file\njava.lang.OutOfMemoryError"),
         ("go", 1, b"zip: not a valid zip file\njava.lang.NegativeArraySizeException"),
         ("go", 1, b"zip: not a valid zip file\nRangeError: Invalid array length"),
-        ("go", 1, b"authentication failed"),
-        ("go", 1, b"connection refused"),
-        ("go", 1, b"usage: decrypt input output"),
-        ("go", 1, b"cipher: message authentication failed"),
+        *(
+            (sdk, 1, unrelated)
+            for sdk in ("go", "java", "js")
+            for unrelated in (
+                b"authentication failed",
+                b"connection refused",
+                b"usage: decrypt input output",
+                b"cipher: message authentication failed",
+            )
+        ),
         # Real diagnostics, deliberately not allowlisted: each is the SDK
         # noticing by accident downstream of its ZIP layer rather than
         # diagnosing the container, so none is evidence of a bounds check.
@@ -567,6 +579,27 @@ def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
             b"(FileChannelImpl.java:383)\n"
             b"\tat io.opentdf.platform.sdk.ZipReader."
             b"extractZIP64CentralDirectoryInfo(ZipReader.java:159)",
+        ),
+        # The same accident in go: a negative position refused by the seeker,
+        # not past-the-end EOF. Representative wording; no CI build reaches it.
+        (
+            "go",
+            1,
+            b"zipstream.NewTDFReader failed: readSeeker.Seek failed: "
+            b"seek mutated.tdf: invalid argument",
+        ),
+        # EOFException from layers other than ZipReader: Gson on a truncated
+        # manifest, and okio when KAS drops the connection mid-response.
+        (
+            "java",
+            1,
+            b"com.google.gson.JsonSyntaxException: java.io.EOFException: "
+            b"End of input at line 1 column 1 path $",
+        ),
+        (
+            "java",
+            1,
+            b"Caused by: java.io.EOFException: \\n not found: limit=0 content=\xe2\x80\xa6",
         ),
         (
             "js",
