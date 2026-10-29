@@ -105,15 +105,22 @@ def _go_install(module: str, tag: str, gobin: Path) -> None:
         )
     except FileNotFoundError as e:
         raise InstallError(f"go install {module}@{tag} needs go on PATH: {e}") from e
+    stderr = result.stderr.strip()
     if result.returncode != 0:
-        msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
-        if module == GO_MODULE_PATH_PLATFORM:
+        msg = f"go install failed for {module}@{tag}: {stderr}"
+        # go calls a tag the module doesn't have an invalid version. Build,
+        # network and toolchain failures say something else.
+        if module == GO_MODULE_PATH_PLATFORM and "invalid version" in stderr:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
         raise InstallError(msg)
     if not (gobin / "otdfctl").is_file():
-        raise InstallError(f"go install {module}@{tag} did not produce an otdfctl binary")
+        produced = ", ".join(sorted(p.name for p in gobin.iterdir())) or "nothing"
+        raise InstallError(
+            f"go install {module}@{tag} did not produce an otdfctl binary"
+            f" (produced: {produced})" + (f": {stderr}" if stderr else "")
+        )
 
 
 def _go_release_without_binary(dist_dir: Path) -> bool:
