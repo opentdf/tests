@@ -1,14 +1,23 @@
-"""Unit tests for the benchmark report's rendering helpers.
+"""Unit tests for the benchmark report: its JSON shape and its rendering.
 
-Offline: no SDKs, no services. Builds `PairedComparison` values directly.
+Offline: no SDKs, no services. Builds `PairedComparison` and `CellResult`
+values directly.
 """
 
+import json
 import math
+import random
+from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
-from perf import stats
-from perf.report import _p_cell
+import conftest
+from fixtures import bench
+from perf import report, stats
+from perf.report import BenchmarkRecorder, _p_cell
+from perf.runner import BenchConfig, CellResult
 from perf.stats import Verdict
 
 
@@ -82,3 +91,103 @@ class TestPCell:
     def test_an_empty_comparison_shows_a_dash(self):
         c = _comparison(math.nan, p_value=math.nan, p_value_faster=math.nan)
         assert _p_cell(c) == "-"
+
+
+def _measured(cell_id: str, *, seed: int = 3) -> CellResult:
+    """A finished two-arm cell, as `run_cell` records it."""
+    rng = random.Random(seed)
+    samples = {
+        arm: {
+            m: [rng.lognormvariate(0, 0.02) for _ in range(20)]
+            for m in ("wall", "cpu", "rss")
+        }
+        for arm in ("baseline", "candidate")
+    }
+    return CellResult(
+        cell_id=cell_id,
+        baseline_label="go@v0.29.0",
+        candidate_label="go@main",
+        samples=samples,
+        n_warmup=2,
+        elapsed_s=12.0,
+        stopped_because="precision",
+        sdk="go",
+    )
+
+
+@pytest.fixture
+def cfg(monkeypatch: pytest.MonkeyPatch) -> BenchConfig:
+    """The config the hook sees, without the platform probe in its metadata."""
+    cfg = BenchConfig(n_resamples=300)
+    monkeypatch.setattr(bench, "config_from_options", lambda config: cfg)
+    monkeypatch.setattr(bench, "runner_metadata", lambda config: {"seed": cfg.seed})
+    return cfg
+
+
+def _finish(out_dir: Path, recorder: BenchmarkRecorder) -> None:
+    """Run the session-finish hook as pytest does after a ``--bench`` run."""
+    options: dict[str, object] = {"--bench": True, "--bench-out": out_dir}
+    config = SimpleNamespace(
+        getoption=lambda name, default=None: options.get(name, default),
+        stash=pytest.Stash(),
+        pluginmanager=SimpleNamespace(get_plugin=lambda name: None),
+    )
+    config.stash[report.RECORDER_KEY] = recorder
+    session = SimpleNamespace(config=config, exitstatus=pytest.ExitCode.OK)
+    conftest.pytest_sessionfinish(cast(pytest.Session, session), 0)
+
+
+class TestSessionFinish:
+    @pytest.mark.parametrize("broken", ["analyze", "to_dict"])
+    def test_a_failed_analysis_still_writes_the_raw_samples(
+        self,
+        broken: str,
+        cfg: BenchConfig,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # The run whose analysis broke is the one someone most needs the
+        # samples from, and the error must still end the session loudly.
+        error = KeyError("go-encrypt-1MiB/wall")
+
+        def fail(*args: object) -> None:
+            raise error
+
+        monkeypatch.setattr(report, broken, fail)
+        recorder = BenchmarkRecorder(
+            results=[_measured("go-encrypt-1MiB")],
+            skipped={"go-decrypt-1MiB": "no final release to compare against"},
+        )
+        out = tmp_path / "out"
+        with pytest.raises(KeyError) as raised:
+            _finish(out, recorder)
+
+        raw = out / "benchmarks.raw.json"
+        assert raw.is_file()
+        assert list(out.iterdir()) == [raw], "no normal artifact without a gate"
+        assert raised.value is error
+        assert raised.value.__notes__ == [f"raw samples, without statistics: {raw}"]
+        doc = json.loads(raw.read_text())
+        assert "schema" not in doc, "a reader of the normal artifact must trip"
+        assert doc["analysis_error"] == {"type": "KeyError", "message": str(error)}
+        assert doc["metadata"] == {"seed": 0}
+        assert doc["config"]["n_resamples"] == 300
+        assert doc["skipped"] == recorder.skipped
+        # Enough to re-analyse offline: every cell, samples included, rebuilds.
+        assert [CellResult(**c) for c in doc["cells"]] == recorder.results
+
+    def test_a_clean_analysis_writes_what_it_always_did(
+        self, cfg: BenchConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        summary = tmp_path / "summary.md"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        recorder = BenchmarkRecorder(results=[_measured("go-encrypt-1MiB")])
+        out = tmp_path / "out"
+        _finish(out, recorder)
+
+        gate = recorder.gate(cfg)
+        assert list(out.iterdir()) == [out / "benchmarks.json"]
+        assert (out / "benchmarks.json").read_text() == json.dumps(
+            report.to_dict(recorder, cfg, gate), indent=2
+        )
+        assert summary.read_text() == report.markdown(recorder, cfg, gate)
