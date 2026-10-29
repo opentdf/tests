@@ -405,11 +405,28 @@ def touch(path: Path) -> Path:
     return path
 
 
+class TestMultiArmSelection:
+    def test_named_arms_resolve_in_order(self, cwd: Path):
+        install(cwd, "go", "main", "v0.29.0", "my-branch")
+        arms = bench.select_arms("go", ["go@v0.29.0", "go@main", "go@my-branch"])
+        assert [a.version for a in arms] == ["v0.29.0", "main", "my-branch"]
+
+    def test_a_missing_arm_is_named(self, cwd: Path):
+        install(cwd, "go", "main", "v0.29.0")
+        with pytest.raises(bench.ArmSelectionError, match="arm 3"):
+            bench.select_arms("go", ["go@v0.29.0", "go@main", "go@nope"])
+
+
 #: Arms whose ids must give distinct output names, a release first as in the
 #: nightly pair. The release pair is the one ``Path.with_suffix`` gets wrong:
 #: it replaces the ".0" and ".1", so both builds would write
-#: ``bench-<cell>-v0.29.tdf``.
-BUILDS = {"branch": ("v0.29.0", "main"), "release-pair": ("v0.29.0", "v0.29.1")}
+#: ``bench-<cell>-v0.29.tdf``. Three and four arms take the same path.
+BUILDS = {
+    "branch": ("v0.29.0", "main"),
+    "release-pair": ("v0.29.0", "v0.29.1"),
+    "three-arms": ("v0.29.0", "v0.29.1", "main"),
+    "four-arms": ("v0.29.0", "v0.29.1", "main", "a--impl"),
+}
 
 
 class TestBuildArms:
@@ -418,8 +435,7 @@ class TestBuildArms:
         for v in versions:
             # `supports` runs the stub, which then answers yes to everything.
             (cwd / "sdk" / "go" / "dist" / v / "cli.sh").chmod(0o755)
-        baseline, candidate = (tdfs.SDK("go", v) for v in versions)
-        return bench.BenchArms(baseline, candidate)
+        return bench.BenchArms(tuple(tdfs.SDK("go", v) for v in versions))
 
     def build(
         self, cwd: Path, versions: Sequence[str], operation: str, *, control=False
@@ -464,8 +480,16 @@ class TestBuildArms:
         ]
         assert reads == [[str(cwd / "ct.tdf")]] * len(built)
 
-    def test_the_control_runs_the_baseline_twice_under_distinct_ids(self, cwd: Path):
-        _, built = self.build(cwd, BUILDS["branch"], "encrypt", control=True)
+    @pytest.mark.parametrize("versions", BUILDS.values(), ids=BUILDS.keys())
+    def test_the_control_is_k_copies_of_the_reference(
+        self, cwd: Path, versions: Sequence[str]
+    ):
+        # As many arms as the real cells: a K-arm round spreads a contrast's
+        # two arms further apart in time, on average, than a two-arm round
+        # does, and a two-arm control would understate that noise.
+        _, built = self.build(cwd, versions, "encrypt", control=True)
         assert {a.label for a in built} == {"go@v0.29.0"}
-        assert [a.name for a in built] == ["v0.29.0#1", "v0.29.0#2"]
-        assert len({a.invocation.output for a in built}) == 2
+        assert [a.name for a in built] == [
+            f"v0.29.0#{i + 1}" for i in range(len(versions))
+        ]
+        assert len({a.invocation.output for a in built}) == len(versions)

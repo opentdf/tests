@@ -16,6 +16,7 @@ argument check has no business pulling in.
 from __future__ import annotations
 
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -30,10 +31,11 @@ from perf.stats import (
     MIN_USABLE_ROUNDS,
 )
 
-#: Benchmark arm-count ceiling. Stage 3b raises this to 4 when multi-arm
-#: measurement lands; it is one constant so that stage changes one number
-#: rather than adding a second encoding.
-MAX_ARM_COUNT = 2
+#: Benchmark arm-count ceiling. A deliberate limit of the benchmark rather
+#: than of any installer: every arm runs once per round, so a fifth arm costs
+#: another 25% of every round while each candidate's interval stays as wide as
+#: the budget allows. Raise it by changing this one constant.
+MAX_ARM_COUNT = 4
 
 #: Default two-sided confidence level, derived from alpha rather than written
 #: out, so the interval and the test can never drift apart.
@@ -175,6 +177,46 @@ def parse_arm_spec(spec: str) -> ArmRequest:
     return ArmRequest(name=name, spec=version or None)
 
 
+def parse_refs(spec: str) -> tuple[ArmRequest, ...]:
+    """Parse a `--bench-refs` value into an ordered request, reference first.
+
+    Commas or whitespace separate the builds, so both the shell-friendly
+    ``go@main,go@my-branch`` and a quoted space-separated list work. The
+    result is validated by :class:`BenchmarkRequest` as well: 2 to
+    :data:`MAX_ARM_COUNT` builds of one known SDK, none named twice.
+    """
+    arms = tuple(parse_arm_spec(p) for p in re.split(r"[,\s]+", spec.strip()) if p)
+    if len(arms) < 2:
+        raise ValueError(
+            f"need 2 to {MAX_ARM_COUNT} refs, got {len(arms)}: {spec!r}. The "
+            "first is the reference every candidate is compared against."
+        )
+    BenchmarkRequest(arms=arms)
+    return arms
+
+
+def requested_arms(
+    refs: str | None, baseline_spec: str | None, candidate_spec: str | None
+) -> tuple[ArmRequest, ...]:
+    """The run's ordered arm request from whichever option form was used.
+
+    `--bench-refs` is the general form; `--bench-baseline` and
+    `--bench-candidate` are the two-arm adapter onto the same request. Mixing
+    them is an error rather than a merge -- there is no reading of
+    ``--bench-refs a,b --bench-candidate c`` that is not a mistake. Returns an
+    empty tuple when no arms were named, which leaves arm selection to its
+    defaults.
+    """
+    if refs is not None and (baseline_spec is not None or candidate_spec is not None):
+        raise ValueError(
+            "--bench-refs cannot be combined with --bench-baseline or "
+            "--bench-candidate; it supersedes both"
+        )
+    if refs is not None:
+        return parse_refs(refs)
+    return normalize_baseline_candidate(baseline_spec, candidate_spec)
+
+
 def normalize_baseline_candidate(
     baseline_spec: str | None, candidate_spec: str | None
 ) -> tuple[ArmRequest, ...]:
@@ -223,3 +265,16 @@ def default_budget_for_arm_count(
     if arm_count < 2:
         raise ValueError(f"arm_count must be at least 2; got {arm_count}")
     return base_budget * arm_count / 2.0
+
+
+def budget_seconds(explicit: float | None, arm_count: int) -> float:
+    """The run's budget: an explicit one as given, else the scaled default.
+
+    At a fixed budget the attained round count falls as ``2/K`` and every
+    interval widens as ``sqrt(K/2)``; the scaled default buys that back, so a
+    three-arm run is about as precise as the two-arm run the number was chosen
+    for. Someone who named a number has already decided what to spend.
+    """
+    if explicit is not None:
+        return explicit
+    return default_budget_for_arm_count(arm_count)

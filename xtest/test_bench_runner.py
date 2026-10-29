@@ -739,6 +739,52 @@ class TestMultiArmRoundLoop:
         assert result.n_rounds == 5
         assert {len(v) for s in result.samples.values() for v in s.values()} == {5}
 
+    @pytest.mark.parametrize("n_arms", [3, 4])
+    def test_each_arm_output_is_removed_before_its_own_run(
+        self, tmp_path: Path, n_arms: int
+    ):
+        names = [REF, "a", "b", "c"][:n_arms]
+        outputs = {name: tmp_path / f"{name}.out" for name in names}
+        for out in outputs.values():
+            out.write_bytes(b"stale")
+        stale: list[str] = []
+        runs = FakeRuns(dict.fromkeys(names, 1.0))
+
+        def observe(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
+            # What each arm finds where its own output goes when it starts.
+            out = outputs[argv[0]]
+            if out.exists():
+                stale.append(argv[0])
+            out.write_bytes(b"produced")
+            return runs(argv, env, **kwargs)
+
+        run_cell(
+            "cell",
+            [arm(name, name, outputs[name]) for name in names],
+            config(max_rounds=stats.MIN_USABLE_ROUNDS),
+            clock=clock_from(runs),
+            run=observe,
+        )
+        assert len(runs.calls) == n_arms * (2 + stats.MIN_USABLE_ROUNDS)
+        assert not stale, "a surviving output makes the next run measure an overwrite"
+
+    def test_warmup_gives_up_when_the_budget_runs_out_at_three_arms(self):
+        # The two-arm warm-up test, with a third arm making each round cost
+        # about three simulated seconds: two warm-up rounds finish, and the
+        # deadline passes during the second arm of the third.
+        runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0})
+        clock = clock_from(runs)
+        with pytest.raises(BudgetExhausted, match="during warm-up after 2 of 10"):
+            run_cell(
+                "cell",
+                [arm(REF, REF), arm("a", "a"), arm("b", "b")],
+                config(warmup=10),
+                deadline=clock() + 7.5,
+                clock=clock,
+                run=runs,
+            )
+        assert len(runs.calls) == 3 * 2 + 2, "warm-up ran past its own deadline"
+
     def test_a_warmup_failure_names_the_arm_and_measures_nothing(self):
         runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0})
 

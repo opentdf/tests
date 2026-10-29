@@ -1,8 +1,8 @@
 """SDK performance regression cells.
 
-One test per cell: an operation at a payload size, measuring the newest
-installed release against the branch build on the same runner, in the same
-round, in a randomized order.
+One test per cell: an operation at a payload size, measuring 2 to 4 builds --
+by default the newest installed release against the branch build -- on the
+same runner, in the same round, in a randomized order.
 
 **These tests do not assert.** Each one records its raw samples and passes.
 The verdict cannot be reached cell by cell: the multiplicity correction is
