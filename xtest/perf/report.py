@@ -193,6 +193,27 @@ def _jsonable(v: float | None) -> float | None:
     return v
 
 
+def neutral(recorder: BenchmarkRecorder) -> bool:
+    """True if preparation found every requested build at one commit."""
+    return recorder.metadata.get("preparation") == "neutral"
+
+
+def headline(recorder: BenchmarkRecorder, gate: stats.GateResult) -> str:
+    """The run's one-line answer, shared by the terminal and the summary.
+
+    A neutral preparation measured nothing on purpose, so it gets its own
+    answer instead of the gate's NOTHING MEASURED, which is a failure.
+    """
+    if not neutral(recorder):
+        return gate.summary
+    installed = recorder.metadata.get("installation")
+    message = installed.get("status_message", "") if isinstance(installed, dict) else ""
+    return (
+        "NEUTRAL: the requested builds are the same commit, so there was "
+        f"nothing to compare. {message}"
+    ).rstrip()
+
+
 def write_json(
     path: Path,
     recorder: BenchmarkRecorder,
@@ -223,10 +244,14 @@ def markdown(
         f"(+{threshold_pct:.0f}%) *and* the BH-adjusted p < {stats.DEFAULT_ALPHA}.",
         "",
     ]
-    lines += [f"**{gate.summary}**", ""]
+    lines += [f"**{headline(recorder, gate)}**", ""]
 
     noise = gate.noise
-    if noise is not None and noise.detail:
+    if neutral(recorder):
+        # No control ran because nothing was going to be compared; saying so
+        # would read as a second problem.
+        pass
+    elif noise is not None and noise.detail:
         lines += [f"> {noise.detail}", ""]
     elif noise is not None and math.isfinite(noise.width_ratio):
         lines += [
