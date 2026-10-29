@@ -66,10 +66,11 @@ def clean(
     for sdk in ALL_SDKS:
         sdk_dir = sdk_dirs[sdk]
         if remove_dist:
-            dist_dir = sdk_dir / "dist"
-            if dist_dir.exists():
-                shutil.rmtree(dist_dir)
-                typer.echo(f"Removed {dist_dir}")
+            # .staging holds go release installs that were killed mid-build.
+            for path in (sdk_dir / "dist", sdk_dir / ".staging"):
+                if path.exists():
+                    shutil.rmtree(path)
+                    typer.echo(f"Removed {path}")
 
         if remove_src:
             src_dir = sdk_dir / "src"

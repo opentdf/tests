@@ -102,7 +102,7 @@ def list_go_versions() -> list[dict[str, Any]]:
                 "sdk": "go",
                 "version": version,
                 "source": "platform-git-tag",
-                "install_method": f"go run {go_module_for_tag(version)}@{version}",
+                "install_method": f"go install {go_module_for_tag(version)}@{version}",
                 "stable": is_stable(version),
             }
         )
