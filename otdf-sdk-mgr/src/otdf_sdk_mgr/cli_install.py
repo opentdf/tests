@@ -112,7 +112,6 @@ def tip(
         otdf-sdk-mgr install tip --ref pr:42 go
         otdf-sdk-mgr install tip --ref abc123f platform java
     """
-    from otdf_sdk_mgr.checkout import CheckoutError
     from otdf_sdk_mgr.installers import cmd_tip
     from otdf_sdk_mgr.platform_installer import install_platform_source
 
@@ -125,7 +124,9 @@ def tip(
     if sdk_targets:
         try:
             cmd_tip(sdk_targets, ref=ref)
-        except (CheckoutError, RuntimeError, subprocess.CalledProcessError) as e:
+        # ValueError covers CheckoutError, and a ref that names no dist/
+        # directory, such as `sdk/`.
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as e:
             typer.echo(f"Error: {e}", err=True)
             # checkout._run captures git's stderr; make streams its own.
             if isinstance(e, subprocess.CalledProcessError) and e.stderr:
