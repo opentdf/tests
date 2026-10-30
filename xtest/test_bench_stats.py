@@ -305,8 +305,8 @@ class TestFasterTail:
         # *because of* the correction.
         weak = stats.PairedComparison(
             n_rounds=30,
-            baseline_median=1.0,
-            candidate_median=0.8,
+            a_median=1.0,
+            b_median=0.8,
             ratio=0.80,
             # Comfortably below 1/1.15, so the interval clause is satisfied
             # and only the p-value clause decides the verdict.
@@ -317,8 +317,8 @@ class TestFasterTail:
         )
         other = stats.PairedComparison(
             n_rounds=30,
-            baseline_median=1.0,
-            candidate_median=1.0,
+            a_median=1.0,
+            b_median=1.0,
             ratio=1.00,
             ci_low=0.95,
             ci_high=1.05,
@@ -425,6 +425,63 @@ class TestNoiseFloor:
         )
         assert g.comparisons["cell"].verdict is Verdict.INCONCLUSIVE
         assert not g.should_fail
+
+
+def aa_contrast(ci_low: float, ci_high: float) -> stats.PairedComparison:
+    """A hand-built A/A contrast with the given interval."""
+    ratio = math.sqrt(ci_low * ci_high) if ci_low > 0 else math.nan
+    return stats.PairedComparison(
+        n_rounds=30,
+        a_median=1.0,
+        b_median=ratio,
+        ratio=ratio,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        p_value=0.5,
+        p_value_faster=0.5,
+    )
+
+
+class TestWorstControlKey:
+    """Which of a K-copy control's A/A contrasts stands as the noise floor.
+
+    The deciding key is never first in these cases: a rule that returned the
+    first key, or ranked on width alone, would pass a test where it was.
+    """
+
+    def test_a_narrow_tripped_contrast_beats_a_wider_clean_one(self):
+        comparisons = {
+            "clean": aa_contrast(0.93, 1.08),
+            # Narrow, but it excludes the threshold: the harness is biased.
+            "tripped": aa_contrast(1.20, 1.22),
+        }
+        assert stats.worst_control_key(comparisons, ["clean", "tripped"]) == "tripped"
+
+    def test_a_nan_width_ranks_worst_among_untripped_contrasts(self):
+        comparisons = {
+            "clean": aa_contrast(0.98, 1.02),
+            "underpowered": aa_contrast(0.70, 1.40),
+            "unusable": aa_contrast(math.nan, math.nan),
+        }
+        keys = ["clean", "underpowered", "unusable"]
+        assert stats.worst_control_key(comparisons, keys) == "unusable"
+
+    def test_ties_go_to_the_first_key(self):
+        comparisons = {
+            "quiet": aa_contrast(0.99, 1.01),
+            "first": aa_contrast(0.95, 1.05),
+            "second": aa_contrast(0.95, 1.05),
+        }
+        keys = ["quiet", "first", "second"]
+        assert stats.worst_control_key(comparisons, keys) == "first"
+
+    def test_no_keys_means_no_floor(self):
+        assert stats.worst_control_key({}, []) is None
+
+    def test_a_missing_key_raises_rather_than_ranking_as_unusable(self):
+        # A wrongly built key must not quietly become the run's noise floor.
+        with pytest.raises(KeyError):
+            stats.worst_control_key({"real": aa_contrast(0.98, 1.02)}, ["real", "typo"])
 
 
 class TestMultiplicityControl:
