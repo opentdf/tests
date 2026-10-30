@@ -117,3 +117,15 @@ def chunky_tdf(
     """An :class:`EncryptFactory` bound to the 5 MiB multi-segment plaintext."""
     label = request.node.originalname or request.node.name
     return EncryptFactory(label, chunky_pt_file, tmp_dir, _encryption_cache)
+
+
+@pytest.fixture
+def zip_conformance_tdf(
+    request: pytest.FixtureRequest,
+    zip_conformance_pt_file: Path,
+    tmp_dir: Path,
+    _encryption_cache: dict[tuple, Path],
+) -> EncryptFactory:
+    """An :class:`EncryptFactory` bound to the 128-byte structural-test plaintext."""
+    label = request.node.originalname or request.node.name
+    return EncryptFactory(label, zip_conformance_pt_file, tmp_dir, _encryption_cache)

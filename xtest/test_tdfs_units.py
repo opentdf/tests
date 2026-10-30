@@ -182,6 +182,48 @@ class TestZip64ReaderIsBroken:
         assert not tdfs.zip64_reader_is_broken(_stub_sdk("java", None))
 
 
+# --- zip64-offset-bounds ------------------------------------------------------
+
+
+def _installed_sdk(sdk: tdfs.sdk_type, version: str) -> tdfs.SDK:
+    """A real SDK, minus the constructor's check that its cli.sh exists.
+
+    No ``path`` either: an answer that fell through to the shim would raise
+    AttributeError rather than quietly run whatever is installed.
+    """
+    s = object.__new__(tdfs.SDK)
+    s.sdk, s.version, s._supports = sdk, version, {}
+    return s
+
+
+class TestZip64OffsetBounds:
+    """Which decryptors ``test_zip_conformance.py`` skips the 2**63 offsets for.
+
+    Each "True" is a build held to a clean rejection, so a gate that were too
+    generous would skip a regression instead of reporting it.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_forced_supports(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset())
+
+    @pytest.mark.parametrize("version", ["v0.19.1", "v0.18.0"])
+    def test_java_releases_without_the_check_skip(self, version: str):
+        assert not _installed_sdk("java", version).supports("zip64-offset-bounds")
+
+    @pytest.mark.parametrize("version", ["v0.19.2", "v0.20.0"])
+    def test_a_later_java_release_runs(self, version: str):
+        assert _installed_sdk("java", version).supports("zip64-offset-bounds")
+
+    def test_a_java_branch_build_runs(self):
+        """main's jar reports the last release, so only the directory name counts."""
+        assert _installed_sdk("java", "main").supports("zip64-offset-bounds")
+
+    @pytest.mark.parametrize("sdk", ["go", "js"])
+    def test_other_sdks_always_run(self, sdk: tdfs.sdk_type):
+        assert _installed_sdk(sdk, "v0.1.0").supports("zip64-offset-bounds")
+
+
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------
 
 
