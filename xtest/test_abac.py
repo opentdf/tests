@@ -116,6 +116,65 @@ def test_key_mapping_multiple_mechanisms(
     assert filecmp.cmp(pt_file, rt_file)
 
 
+def test_ec_wrapped_kao_roundtrip(
+    attribute_with_ec_key: tuple[Attribute, list[str]],
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    kas_url_km2: str,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    audit_logs: AuditLogAsserter,
+):
+    """Roundtrip a TDF whose KAO is EC-wrapped, selected via the attribute's key.
+
+    The wrapping mechanism is chosen by policy -- the attribute value is mapped
+    to an ec:secp256r1 managed key -- rather than by a client-side override, so
+    this covers the same ground the old ``ztdf-ecwrap`` container did without
+    conflating the KAO wrap key with the rewrap session key (see
+    ``test_pqc.py::test_session_key_roundtrip`` for the latter).
+
+    Because key selection now runs through the policy service, this needs
+    ``key_management`` + ``autoconfigure``; the retired client-side flag worked
+    on platform builds predating both. The key lives on km2, so this belongs in
+    a module CI runs after the km KAS instances start.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("key_management", "autoconfigure")
+    encrypt_sdk.skip_if_unsupported("key_management", "autoconfigure")
+    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
+    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
+
+    attr, key_ids = attribute_with_ec_key
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        attr_values=attr.value_fqns,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+
+    manifest = tdfs.manifest(ct_file)
+    assert len(manifest.encryptionInformation.keyAccess) == 1
+    kao = manifest.encryptionInformation.keyAccess[0]
+    assert kao.type == "ec-wrapped"
+    assert kao.ephemeralPublicKey is not None
+    assert kao.kid in set(key_ids)
+    assert kao.url == kas_url_km2
+
+    tdfs.skip_if_unsupported(decrypt_sdk, "ecwrap")
+    mark = audit_logs.mark("before_decrypt")
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file)
+    audit_logs.assert_rewrap_success(
+        policy_uuid=manifest.encryptionInformation.policy_object.uuid,
+        key_id=kao.kid,
+        since_mark=mark,
+    )
+
+
 def test_key_mapping_extended_mechanisms(
     attribute_allof_with_extended_mechanisms: tuple[Attribute, list[str]],
     encrypt_sdk: tdfs.SDK,

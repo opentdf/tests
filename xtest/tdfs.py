@@ -109,16 +109,16 @@ def is_sdk_type(val: str) -> TypeIs[sdk_type]:
 
 focus_type = Literal[sdk_type, "all"]
 
-container_type = Literal[
-    "ztdf",
-    "ztdf-ecwrap",
-]
+container_type = Literal["ztdf"]
 
 feature_type = Literal[
     "assertions",
     "assertion_verification",
     "attribute_traversal",
     "audit_logging",
+    # Platform: rewrap audit events record the parsed client session-key type
+    # as eventMetaData.sessionKeyType (opentdf/platform#3814, service v0.29.0).
+    "audit-session-key-type",
     "autoconfigure",
     "better-messages-2024",
     "bulk_rewrap",
@@ -192,6 +192,11 @@ feature_type = Literal[
     # URI (the same KAS wrapping the same split more than once). go/java have
     # always tolerated this; web-sdk gained it in 0.20.0 (DSPX-3379).
     "multikao",
+    # Support for a client-generated ML-KEM key pair as the rewrap "session key"
+    # (the ephemeral key used to wrap the KAS's rewrap response back to the
+    # client), as opposed to "mechanism-mlkem" which covers ML-KEM as the
+    # KAS-managed TDF/KAO wrapping key.
+    "session-key-mlkem",
     "ns_grants",
     "obligations",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
@@ -227,7 +232,9 @@ ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
 #: ``autoconfigure`` and ``ecwrap`` need the SDK to emit them *and* the platform
 #: to honour them, so forcing either side alone is a reasonable thing to ask for.
 #: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
-PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset({"kas_uri_from_kao"})
+PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
+    {"audit-session-key-type", "kas_uri_from_kao"}
+)
 
 SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
 
@@ -368,6 +375,11 @@ class PlatformFeatureSet(BaseModel):
         if self.semver >= (0, 10, 0):
             self.features.add("audit_logging")
 
+        # Both added by opentdf/platform#3814, released in service v0.29.0.
+        session_key_fix = self.semver >= (0, 29, 0)
+        if session_key_fix:
+            self.features.add("audit-session-key-type")
+
         # Included in service v0.11.0, (Golang SDK v0.10.0, Web-SDK v0.5.0, Java SDK n/a)
         if self.semver >= (0, 11, 0):
             self.features.add("obligations")
@@ -400,6 +412,12 @@ class PlatformFeatureSet(BaseModel):
                 self.features.add("mechanism-secpmlkem")
             if any(a.startswith("mlkem:") for a in algs):
                 self.features.add("mechanism-mlkem")
+                # The rewrap session-key ML-KEM path is gated server-side by the
+                # same Preview.MLKEMTDFEnabled flag as the KAS-managed mechanism,
+                # but that flag predates the session-key code path, so also
+                # require a release that has it.
+                if session_key_fix:
+                    self.features.add("session-key-mlkem")
 
         # DPoP capabilities via well-known. Branch builds report stale semver
         # so we probe the live endpoint instead of gating by version.
@@ -727,12 +745,6 @@ def fmt_env(env: dict[str, str]) -> str:
     return " ".join(a)
 
 
-def simple_container(container: container_type) -> container_type:
-    if container == "ztdf-ecwrap":
-        return "ztdf"
-    return container
-
-
 class SDK:
     sdk: sdk_type
     version: str
@@ -807,14 +819,12 @@ class SDK:
         The returned env holds only the CLI-specific overrides; merge it over
         ``os.environ`` before handing it to a subprocess.
         """
-        use_ecwrap = container == "ztdf-ecwrap"
-        fmt = simple_container(container)
         c = [
             self.path,
             "encrypt",
             str(pt_file),
             str(ct_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
@@ -827,11 +837,9 @@ class SDK:
         if assert_value:
             local_env |= {"XT_WITH_ASSERTIONS": assert_value}
 
-        if fmt == "ztdf" and target_mode:
+        if target_mode:
             local_env |= {"XT_WITH_TARGET_MODE": target_mode}
 
-        if use_ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
         return c, local_env
 
     def encrypt(
@@ -875,9 +883,9 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ) -> tuple[list[str], dict[str, str]]:
         """Build the argv and CLI-specific env vars for a decrypt invocation.
 
@@ -885,21 +893,19 @@ class SDK:
         has no counterpart here: it selects how the caller runs the command,
         not what the command is.
         """
-        fmt = simple_container(container)
-
         c = [
             self.path,
             "decrypt",
             str(ct_file),
             str(rt_file),
-            fmt,
+            container,
         ]
 
         local_env: dict[str, str] = {}
         if assert_keys:
             local_env |= {"XT_WITH_ASSERTION_VERIFICATION_KEYS": assert_keys}
-        if ecwrap:
-            local_env |= {"XT_WITH_ECWRAP": "true"}
+        if session_key_algorithm:
+            local_env |= {"XT_WITH_SESSION_KEY_ALGORITHM": session_key_algorithm}
         if not verify_assertions:
             local_env |= {"XT_WITH_VERIFY_ASSERTIONS": "false"}
         if kasallowlist:
@@ -915,10 +921,10 @@ class SDK:
         container: container_type = "ztdf",
         assert_keys: str = "",
         verify_assertions: bool = True,
-        ecwrap: bool = False,
         expect_error: bool = False,
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
+        session_key_algorithm: str = "",
     ):
         c, local_env = self.decrypt_command(
             ct_file,
@@ -926,9 +932,9 @@ class SDK:
             container=container,
             assert_keys=assert_keys,
             verify_assertions=verify_assertions,
-            ecwrap=ecwrap,
             kasallowlist=kasallowlist,
             ignore_kas_allowlist=ignore_kas_allowlist,
+            session_key_algorithm=session_key_algorithm,
         )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
