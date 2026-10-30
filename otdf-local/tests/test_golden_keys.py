@@ -11,6 +11,7 @@ import stat
 from pathlib import Path
 
 import pytest
+
 from otdf_local.config.settings import Settings
 from otdf_local.services.platform import PlatformService
 from otdf_local.utils.keys import setup_golden_keys, validate_kid

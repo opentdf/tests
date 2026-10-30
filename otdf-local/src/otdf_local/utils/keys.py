@@ -229,8 +229,9 @@ def _read_extra_keys(path: Path) -> list[tuple[str, str, str, str]]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise ValueError(f"{path} is not valid JSON: {e}") from e
+    # ValueError even for the wrong JSON type (TRY004): see the docstring.
     if not isinstance(raw, list):
-        raise ValueError(f"{path} must hold a JSON array of keys")
+        raise ValueError(f"{path} must hold a JSON array of keys")  # noqa: TRY004
 
     entries = []
     # Case-folded: on a case-insensitive filesystem (macOS by default),
@@ -238,7 +239,7 @@ def _read_extra_keys(path: Path) -> list[tuple[str, str, str, str]]:
     seen_kids: set[str] = set()
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict):
-            raise ValueError(f"{path}: entry {i} is not a JSON object")
+            raise ValueError(f"{path}: entry {i} is not a JSON object")  # noqa: TRY004
         missing = [
             field
             for field in _EXTRA_KEY_FIELDS
