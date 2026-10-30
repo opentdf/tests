@@ -11,7 +11,7 @@ import typer
 
 from otdf_sdk_mgr.cli_install import install_app
 from otdf_sdk_mgr.cli_versions import versions_app
-from otdf_sdk_mgr.config import ALL_SDKS, get_sdk_dirs
+from otdf_sdk_mgr.config import ALL_SDKS, DEFAULT_SDKS, get_sdk_dirs
 
 app = typer.Typer(
     name="otdf-sdk-mgr",
@@ -27,7 +27,7 @@ app.add_typer(versions_app, name="versions")
 def checkout(
     sdk: Annotated[
         str | None,
-        typer.Argument(help="SDK to checkout (go, js, java)"),
+        typer.Argument(help="SDK to checkout (go, js, java, web)"),
     ] = None,
     branch: Annotated[str, typer.Argument(help="Branch to checkout")] = "main",
     all_sdks: Annotated[bool, typer.Option("--all", help="Checkout all SDKs")] = False,
@@ -37,7 +37,7 @@ def checkout(
 
     try:
         if all_sdks:
-            for s in ALL_SDKS:
+            for s in DEFAULT_SDKS:
                 checkout_sdk_branch(s, branch)
         elif sdk:
             checkout_sdk_branch(sdk, branch)

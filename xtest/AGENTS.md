@@ -1,7 +1,9 @@
 # xtest - Agent Guide
 
 The cross-client integration test suite. pytest with custom options that
-fan out tests across SDK CLIs (`go`, `java`, `js`) and TDF container types.
+fan out tests across SDK CLIs (`go`, `java`, `js`, `web`) and TDF container types.
+`js` is web-sdk via its Node CLI; `web` is the same library in headless
+Chromium (see "The `web` flavour" in `README.md`).
 
 For env-variable setup, audit-log details, and common-failure recipes,
 see the root `AGENTS.md`. This guide focuses on test authoring and the
@@ -16,14 +18,15 @@ fixture system.
 | `fixtures/` | Module-scoped pytest fixtures: `attributes.py`, `keys.py`, `audit.py`, `assertions.py`, `kas.py`, `encryption.py`, `obligations.py`. |
 | `tdfs.py` | SDK abstraction layer — wraps the `cli.sh` shims under `sdk/<lang>/dist/<version>/`. |
 | `perf/` | Paired A/B performance regression benchmarks (opt-in via `--bench`). **Read `perf/README.md` before changing anything in here** — the design decisions fail silently when undone. |
-| `sdk/{go,java,js}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
+| `sdk/{go,java,js,web}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
+| `sdk/web/` | Headless-browser flavour: `cli.sh`, `stage.sh` (assembles a dist dir), and `driver/` (Playwright driver, page, esbuild step). Source builds reuse the `sdk/js/src/` checkouts. |
 | `test.env` | Default endpoint and client-credential env vars. Source with `set -a && source test.env && set +a`. |
 
 ## Custom pytest Options (defined in `conftest.py`)
 
 | Option | Purpose |
 |--------|---------|
-| `--sdks "go java js"` | Which SDKs to use for both encrypt and decrypt. |
+| `--sdks "go java js web"` | Which SDKs to use for both encrypt and decrypt. Unset means every installed flavour. |
 | `--sdks-encrypt`, `--sdks-decrypt` | Asymmetric encrypt/decrypt SDK selection (use when reproducing cross-SDK interop bugs). |
 | `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
@@ -38,6 +41,18 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
 | `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
 | `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. |
+
+## The `web` Flavour
+
+- Same library as `js`, so `tdfs.WEB_SDK_FLAVOURS` groups the two wherever a
+  test special-cases web-sdk; use it rather than comparing to `"js"`.
+- `cli.sh supports` answers from `features.json` (written at install time);
+  no browser launch. Feature gates use the library version.
+- Driver failures print the page's error name, message and cause chain, so
+  the tamper/KAS-error regexes in `test_tdfs.py` match the same text as `js`.
+- Debug a cell with `XT_WEB_DEBUG=1` (page console) or `XT_WEB_HEADED=1`.
+- Platform/KAS calls are cross-origin and depend on the platform's CORS
+  config; Keycloak goes through the driver's `/__kc/` proxy. See README.
 
 ## Authoring a New Test
 
