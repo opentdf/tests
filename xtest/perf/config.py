@@ -30,10 +30,8 @@ from perf.stats import (
     MIN_USABLE_ROUNDS,
 )
 
-#: How many builds one benchmark run may name. Only `BenchmarkRequest` checks
-#: it; the round loop in `perf.runner` accepts any number of arms from two up.
-#: One constant, so that raising the cap changes one number rather than adding
-#: a second encoding.
+#: Most builds one benchmark run may name. Only `BenchmarkRequest` checks it;
+#: `perf.runner.run_cell` takes any number from two up.
 MAX_ARM_COUNT = 2
 
 #: Default two-sided confidence level, derived from alpha rather than written

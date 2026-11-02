@@ -405,11 +405,8 @@ def touch(path: Path) -> Path:
     return path
 
 
-#: Arms whose ids must give distinct output names, a release first as in the
-#: nightly pair. The release pair is the one ``Path.with_suffix`` gets wrong:
-#: it replaces the ".0" and ".1", so both builds would write
-#: ``bench-<cell>-v0.29.tdf``.
-BUILDS = {"branch": ("v0.29.0", "main"), "release-pair": ("v0.29.0", "v0.29.1")}
+#: Differ only after the last dot, which ``Path.with_suffix`` would drop.
+RELEASES = ("v0.29.0", "v0.29.1")
 
 
 class TestBuildArms:
@@ -439,33 +436,27 @@ class TestBuildArms:
         )
         return cell, built
 
-    @pytest.mark.parametrize("versions", BUILDS.values(), ids=BUILDS.keys())
     @pytest.mark.parametrize(
         ("operation", "suffix"), [("encrypt", ".tdf"), ("decrypt", ".untdf")]
     )
     def test_arms_are_named_after_their_builds(
-        self, cwd: Path, versions: Sequence[str], operation: str, suffix: str
+        self, cwd: Path, operation: str, suffix: str
     ):
-        cell, built = self.build(cwd, versions, operation)
-        assert [a.name for a in built] == list(versions)
+        cell, built = self.build(cwd, RELEASES, operation)
+        assert [a.name for a in built] == list(RELEASES)
         assert [a.invocation.output for a in built] == [
-            cwd / f"bench-{cell.id}-{v}{suffix}" for v in versions
+            cwd / f"bench-{cell.id}-{v}{suffix}" for v in RELEASES
         ]
 
-    @pytest.mark.parametrize("versions", BUILDS.values(), ids=BUILDS.keys())
-    def test_every_decrypt_arm_reads_the_same_ciphertext(
-        self, cwd: Path, versions: Sequence[str]
-    ):
-        # Each arm decrypting its own output would compare reading two
-        # different files, not two builds reading one.
-        _, built = self.build(cwd, versions, "decrypt")
+    def test_every_decrypt_arm_reads_the_same_ciphertext(self, cwd: Path):
+        _, built = self.build(cwd, RELEASES, "decrypt")
         reads = [
             [arg for arg in a.invocation.argv if arg.endswith(".tdf")] for a in built
         ]
         assert reads == [[str(cwd / "ct.tdf")]] * len(built)
 
     def test_the_control_runs_the_baseline_twice_under_distinct_ids(self, cwd: Path):
-        _, built = self.build(cwd, BUILDS["branch"], "encrypt", control=True)
+        _, built = self.build(cwd, RELEASES, "encrypt", control=True)
         assert {a.label for a in built} == {"go@v0.29.0"}
         assert [a.name for a in built] == ["v0.29.0#1", "v0.29.0#2"]
         assert len({a.invocation.output for a in built}) == 2

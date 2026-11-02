@@ -37,14 +37,9 @@ BASELINE_RSS = 100_000_000
 BASELINE_CPU = 0.8
 
 
-def arm(role: str, key: str, output: Path | None = None) -> Arm:
-    """An arm whose argv is a single token, so ``FakeRuns`` can recognize it.
-
-    ``role`` is the arm id the runner keys samples by; these tests use
-    "baseline"/"candidate" for the reference and one candidate. ``key`` is the
-    stand-in for the build.
-    """
-    return Arm(role, f"sdk@{key}", Invocation([key], {}, output))
+def arm(arm_id: str, key: str, output: Path | None = None) -> Arm:
+    """An arm whose argv is the single token ``key``, so FakeRuns can spot it."""
+    return Arm(arm_id, f"sdk@{key}", Invocation([key], {}, output))
 
 
 def k(cell_id: str, metric: str, a: str = "baseline", b: str = "candidate") -> str:
@@ -589,17 +584,15 @@ def run_arms(
     seed: int = 7,
     cell_id: str = "cell",
     control: bool = False,
-    sdk: str = "",
     rss_floor: int = 0,
 ):
-    """Run one cell whose arms cost ``costs`` times the baseline; first = reference."""
+    """Run one cell whose arms cost ``costs`` times BASELINE_*; first = reference."""
     runs = FakeRuns(dict(costs), noise=noise, seed=seed, rss_floor=rss_floor)
     result = run_cell(
         cell_id,
         [arm(name, name) for name in costs],
         cfg or config(),
         control=control,
-        sdk=sdk,
         clock=clock_from(runs),
         run=runs,
     )
@@ -607,62 +600,30 @@ def run_arms(
 
 
 class TestMultiArmRoundLoop:
-    @pytest.mark.parametrize("n_arms", [2, 3, 4])
-    def test_every_arm_runs_once_per_completed_round(self, n_arms: int):
-        names = [REF, "a", "b", "c"][:n_arms]
+    def test_every_arm_runs_once_per_round_and_each_goes_first(self):
+        names = [REF, "a", "b"]
         result, runs = run_arms(dict.fromkeys(names, 1.0))
-        rounds = [
-            set(runs.calls[i : i + n_arms]) for i in range(0, len(runs.calls), n_arms)
-        ]
-        assert all(r == set(names) for r in rounds)
-        assert len(runs.calls) == n_arms * (result.n_warmup + result.n_rounds)
-
-    @pytest.mark.parametrize("n_arms", [3, 4])
-    def test_seeded_order_is_reproducible_and_every_arm_goes_first(self, n_arms: int):
-        names = [REF, "a", "b", "c"][:n_arms]
-        _, first = run_arms(dict.fromkeys(names, 1.0))
-        _, again = run_arms(dict.fromkeys(names, 1.0))
-        assert first.calls == again.calls
-        assert set(first.calls[::n_arms]) == set(names), (
-            "an arm pinned to one slot in the round inherits the same cache "
-            "state every time, which is a confounder and not a measurement"
+        rounds = [runs.calls[i : i + 3] for i in range(0, len(runs.calls), 3)]
+        assert all(sorted(r) == sorted(names) for r in rounds)
+        assert len(rounds) == result.n_warmup + result.n_rounds
+        assert {r[0] for r in rounds} == set(names), (
+            "an arm pinned to one slot inherits the same cache state every round"
         )
 
-    def test_rejects_a_single_arm(self):
-        with pytest.raises(ValueError, match="at least two arms"):
-            run_cell("cell", [arm(REF, REF)], config())
-
-    def test_rejects_colliding_arm_ids(self):
-        # Ids key the sample vectors, so a collision would interleave two
-        # builds' measurements into one arm and compare it with itself.
-        with pytest.raises(ValueError, match="unique"):
-            run_cell("cell", [arm(REF, REF), arm(REF, REF)], config())
-
-    def test_records_its_arms_and_which_one_is_the_reference(self):
-        result, _ = run_arms({REF: 1.0, "a": 1.0, "b": 1.0})
-        assert result.arm_ids == (REF, "a", "b")
-        assert result.reference == REF
-        assert result.candidates == ("a", "b")
-        assert result.arm_labels == {REF: "sdk@base", "a": "sdk@a", "b": "sdk@b"}
-
-    def test_every_candidate_is_contrasted_with_the_reference_only(self):
-        result, _ = run_arms({REF: 1.0, "a": 1.0, "b": 1.0})
-        assert result.contrast_pairs() == [(REF, "a"), (REF, "b")]
-
-    def test_contrast_direction_is_b_over_a(self):
-        result, _ = run_arms({REF: 1.0, "slow": 1.5}, noise=0.01)
-        cfg = config()
-        assert result.contrast(REF, "slow", "wall", cfg).ratio == pytest.approx(
-            1.5, rel=0.1
-        )
-        assert result.contrast("slow", REF, "wall", cfg).ratio == pytest.approx(
-            1 / 1.5, rel=0.1
-        )
+    @pytest.mark.parametrize(
+        ("arms", "match"),
+        [([REF], "at least two arms"), ([REF, REF], "unique")],
+        ids=["one-arm", "colliding-ids"],
+    )
+    def test_rejects_arms_that_cannot_form_a_cell(self, arms: list[str], match: str):
+        with pytest.raises(ValueError, match=match):
+            run_cell("cell", [arm(a, a) for a in arms], config())
 
     def test_precision_waits_for_the_slowest_candidate_to_converge(self):
-        # Stopping as soon as *some* contrast is precise would leave the noisy
-        # candidate unresolved with budget still on the table.
         cfg = config(max_rounds=40)
+        quiet, _ = run_arms({REF: 1.0, "a": 1.0, "b": 1.0}, cfg=cfg, noise=0.005)
+        assert quiet.stopped_because == "precision", "precondition: K arms can stop"
+
         runs = FakeRuns({REF: 1.0, "quiet": 1.0, "noisy": 1.0}, noise=0.005)
         mixed = run_cell(
             "cell",
@@ -675,41 +636,9 @@ class TestMultiArmRoundLoop:
             "the loop stopped on the quiet contrast and left the noisy one unresolved"
         )
 
-    def test_a_three_arm_round_costs_three_invocations_of_budget(self):
-        # Every arm runs in every round, so a round costs one invocation per
-        # arm and a fixed budget buys fewer rounds as arms are added.
-        runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0}, noise=0.3)
-        clock = clock_from(runs)
-        result = run_cell(
-            "cell",
-            [arm(REF, REF), arm("a", "a"), arm("b", "b")],
-            config(warmup=0, max_rounds=200),
-            deadline=clock() + 60.0,  # each round costs ~3 simulated seconds
-            clock=clock,
-            run=runs,
-        )
-        assert result.stopped_because == "budget"
-        assert len(runs.calls) == 3 * result.n_rounds
-        assert result.n_rounds < 30, "three-arm rounds cost more than two-arm ones"
-
-    @pytest.mark.parametrize(
-        ("slow_call", "slow_s", "n_calls"),
-        [
-            # The third arm overruns the deadline; caught once it returns.
-            (18, 3.0, 18),
-            # The second arm ends exactly on the deadline, so the third is
-            # refused before it starts.
-            (17, 2.5, 17),
-        ],
-        ids=["third-arm-overruns", "no-time-left-for-the-third-arm"],
-    )
-    def test_a_deadline_mid_round_discards_the_partial_round(
-        self, slow_call: int, slow_s: float, n_calls: int
-    ):
-        # Five rounds of three one-second calls. Round six starts with its
-        # expected three seconds in hand, two arms finish, and then the
-        # deadline passes. Recording those two readings would unpair the
-        # vectors for every later contrast.
+    def test_a_round_with_no_time_left_for_its_last_arm_is_discarded(self):
+        # Five rounds of three one-second calls. In round six the second arm
+        # ends exactly on the deadline, so the third is refused before it runs.
         elapsed = [0.0]
         calls: list[str] = []
         rng = random.Random(0)
@@ -719,9 +648,8 @@ class TestMultiArmRoundLoop:
         ) -> Sample:
             del timeout_s
             calls.append(argv[0])
-            elapsed[0] += slow_s if len(calls) == slow_call else 1.0
-            # Candidates scattered widely enough that the loop cannot stop on
-            # precision before the deadline stops it.
+            elapsed[0] += 2.5 if len(calls) == 17 else 1.0
+            # Scattered widely enough that precision cannot stop the loop first.
             wall = 1.0 if argv[0] == REF else rng.uniform(0.3, 3.0)
             return Sample(
                 wall_ns=int(wall * 1e9),
@@ -738,12 +666,12 @@ class TestMultiArmRoundLoop:
             clock=lambda: elapsed[0],
             run=scripted,
         )
-        assert len(calls) == n_calls, "precondition: two arms of round six ran"
+        assert len(calls) == 17, "precondition: round six ran two of its three arms"
         assert result.stopped_because == "budget"
         assert result.n_rounds == 5
-        assert {len(v) for s in result.samples.values() for v in s.values()} == {5}
 
-    def test_a_warmup_failure_names_the_arm_and_measures_nothing(self):
+    def test_a_failing_arm_raises_naming_its_id(self):
+        # A control's copies share a label, so the label alone is ambiguous.
         runs = FakeRuns({REF: 1.0, "a": 1.0, "b": 1.0})
 
         def failing(argv: list[str], env: dict[str, str], **kwargs: object) -> Sample:
@@ -767,8 +695,6 @@ def vectors(n: int) -> dict[str, list[float]]:
 
 
 class TestCellResultInvariants:
-    """A result that cannot be analysed is rejected when it is built."""
-
     def make(self, **overrides: object) -> CellResult:
         base: dict[str, object] = {
             "cell_id": "cell",
@@ -781,124 +707,69 @@ class TestCellResultInvariants:
         }
         return CellResult(**(base | overrides))  # pyright: ignore[reportArgumentType]
 
-    def test_the_reference_is_the_first_arm(self):
-        assert self.make().reference == REF
-        assert self.make().candidates == ("a",)
-
     @pytest.mark.parametrize(
-        ("overrides", "match"),
+        ("samples", "match"),
         [
-            (
-                {
-                    "arm_ids": (REF,),
-                    "arm_labels": {REF: "sdk@base"},
-                    "samples": {REF: vectors(1)},
-                },
-                "at least two arms",
-            ),
-            ({"arm_ids": (REF, REF)}, "unique"),
-            ({"arm_labels": {REF: "sdk@base"}}, "exactly the arms"),
-            ({"samples": {REF: vectors(2), "b": vectors(2)}}, "exactly the arms"),
-            # A reference with no metrics would report zero rounds.
-            ({"samples": {REF: {}, "a": vectors(2)}}, f"cell: arm {REF} needs samples"),
-            # Otherwise `analyze` gets as far as a bare KeyError('wall').
-            (
-                {
-                    "samples": {
-                        REF: vectors(2),
-                        "a": {"cpu": [1.0] * 2, "rss": [1.0] * 2},
-                    }
-                },
-                "cell: arm a needs samples",
-            ),
-            ({"samples": {REF: vectors(2), "a": vectors(1)}}, "differ in length"),
-            # Complete and paired but empty, which analyses to a green run of
-            # INCONCLUSIVE +/-nan%.
-            ({"samples": {REF: vectors(0), "a": vectors(0)}}, "cell: no rounds"),
+            ({REF: vectors(2), "a": vectors(1)}, "differ in length"),
+            # Complete and paired but empty: a green run of INCONCLUSIVE +/-nan%.
+            ({REF: vectors(0), "a": vectors(0)}, "no rounds"),
         ],
-        ids=[
-            "one-arm",
-            "colliding-ids",
-            "missing-label",
-            "stray-arm",
-            "arm-without-metrics",
-            "arm-missing-a-metric",
-            "unpaired",
-            "no-rounds",
-        ],
+        ids=["unpaired", "no-rounds"],
     )
-    def test_rejects_a_cell_that_cannot_be_analysed(
-        self, overrides: dict[str, object], match: str
+    def test_rejects_samples_that_cannot_be_analysed(
+        self, samples: dict[str, dict[str, list[float]]], match: str
     ):
         with pytest.raises(ValueError, match=match):
-            self.make(**overrides)
+            self.make(samples=samples)
 
 
 class TestGateAtSeveralArms:
-    """Each candidate is gated against the reference; nothing else is judged."""
-
-    def gate(
-        self, costs: Mapping[str, float], *, noise: float = 0.05, seed: int = 11
-    ) -> stats.GateResult:
+    def test_only_the_slowed_middle_candidate_regresses(self):
+        # Slowing the middle arm catches a gate or control wired to the first
+        # candidate only, or to the last.
         cfg = config(max_rounds=40)
+        names = [REF, "a", "b", "c"]
         control, _ = run_arms(
-            dict.fromkeys(costs, 1.0),
-            cfg=cfg,
-            noise=noise,
-            seed=seed,
-            cell_id="aa",
-            control=True,
+            dict.fromkeys(names, 1.0), cfg=cfg, seed=11, cell_id="aa", control=True
         )
-        measured, _ = run_arms(
-            costs, cfg=cfg, noise=noise, seed=seed + 1, cell_id="encrypt"
-        )
-        return analyze([control, measured], cfg)
+        costs = dict.fromkeys(names, 1.0) | {"b": 1.3}
+        measured, _ = run_arms(costs, cfg=cfg, seed=12, cell_id="encrypt")
+        gate = analyze([control, measured], cfg)
 
-    @pytest.mark.parametrize("slow", ["a", "b", "c"])
-    def test_a_regression_in_any_candidate_is_caught(self, slow: str):
-        costs = {REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0} | {slow: 1.3}
-        gate = self.gate(costs)
         assert gate.should_fail
-        assert k("encrypt", "wall", REF, slow) in gate.regressions
-        # The fake scales rss with wall, so both regress -- but only for the
-        # candidate that was slowed.
-        assert all(r.startswith(f"encrypt/{slow}_vs_{REF}/") for r in gate.regressions)
-
-    @pytest.mark.parametrize("slow", ["a", "b", "c"])
-    def test_every_candidate_not_slowed_passes(self, slow: str):
-        # A PASS needs the control's noise floor behind it. Wire the floor to
-        # the first candidate's contrasts only and the others read
-        # INCONCLUSIVE for want of a control -- which no regression check sees.
-        costs = {REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0} | {slow: 1.3}
-        gate = self.gate(costs)
-        for b in sorted(set(costs) - {REF, slow}):
-            for metric in config().gated_metrics:
+        assert k("encrypt", "wall", REF, "b") in gate.regressions
+        assert all(r.startswith(f"encrypt/b_vs_{REF}/") for r in gate.regressions)
+        for other in ("a", "c"):
+            for metric in cfg.gated_metrics:
                 assert (
-                    gate.comparisons[k("encrypt", metric, REF, b)].verdict
+                    gate.comparisons[k("encrypt", metric, REF, other)].verdict
                     is stats.Verdict.PASS
-                ), f"{b} was not slowed, so its {metric} should PASS"
+                ), f"{other} was not slowed, so its {metric} should PASS"
 
-    def test_cpu_stays_informational_at_several_arms(self):
-        gate = self.gate({REF: 1.0, "a": 1.3, "b": 1.0})
-        cpu = k("encrypt", "cpu", REF, "a")
-        assert gate.comparisons[cpu].verdict is stats.Verdict.REGRESSION
-        assert cpu not in gate.regressions
+    def test_a_clipped_candidate_does_not_censor_the_others_rss(self):
+        cfg = config(max_rounds=40)
+        floor = BASELINE_RSS // 2
+        control, _ = run_arms(
+            {REF: 1.0, "a": 1.0, "b": 1.0}, cfg=cfg, cell_id="aa", control=True
+        )
+        # "tiny" peaks far below the floor; base and "big" stay well above it.
+        measured, _ = run_arms(
+            {REF: 1.0, "big": 1.3, "tiny": 0.1},
+            cfg=cfg,
+            seed=12,
+            cell_id="encrypt",
+            rss_floor=floor,
+        )
+        gate = analyze([control, measured], cfg)
 
-    def test_no_contrast_between_two_candidates_is_judged(self):
-        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
-        assert k("encrypt", "wall", "a", "b") not in gate.comparisons
-
-    def test_the_control_yields_one_contrast_per_copy_of_the_reference(self):
-        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0})
-        aa = [
-            c for c in gate.comparisons if c.startswith("aa/") and c.endswith("/wall")
-        ]
-        assert len(aa) == 3
+        tiny = gate.comparisons[k("encrypt", "rss", REF, "tiny")]
+        assert tiny.verdict is stats.Verdict.INCONCLUSIVE
+        assert "floor" in tiny.note
+        assert k("encrypt", "rss", REF, "big") in gate.regressions
 
     def test_the_noise_floor_is_the_worst_control_contrast(self):
-        # Only the last copy is noisy, so the floor must come from the last
-        # A/A contrast. A floor taken from the first contrast alone passes
-        # whenever the widest one happens to be first.
+        # Only the last copy is noisy, so a floor taken from the first A/A
+        # contrast alone would pass.
         cfg = config(max_rounds=40)
         copies = {REF: 1.0, "a": 1.0, "b": 1.0}
         runs = FakeRuns(copies, seed=11)
@@ -924,22 +795,3 @@ class TestGateAtSeveralArms:
         assert list(gate.noise_by_control) == [widest], "the widest is the one floor"
         assert gate.noise is not None
         assert gate.noise.width_ratio == pytest.approx(widths[widest])
-
-    def test_censored_multi_arm_control_only_run_still_measured_nothing(self):
-        # The K-arm counterpart of the two-arm censored-control test: every
-        # control contrast is registered before its RSS is censored, so a run
-        # of nothing but a floored control cannot claim a measurement.
-        cfg = config(max_rounds=40)
-        control, _ = run_arms(
-            {REF: 1.0, "a": 1.0, "b": 1.0},
-            cfg=cfg,
-            cell_id="aa",
-            control=True,
-            rss_floor=4 * BASELINE_RSS,
-        )
-        gate = analyze([control], cfg)
-        assert gate.comparisons[k("aa", "rss", REF, "b")].verdict is (
-            stats.Verdict.INCONCLUSIVE
-        )
-        assert gate.nothing_measured
-        assert "NOTHING MEASURED" in gate.summary

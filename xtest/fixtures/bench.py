@@ -537,7 +537,7 @@ def build_arms(
     tmp_dir: Path,
     attr_values: list[str],
 ) -> tuple[Arm, ...]:
-    """Turn a cell plus its two builds into one ready-to-run invocation each.
+    """Build the cell's arms: baseline and candidate, or two baseline copies.
 
     Everything that is not the build under test is pinned identically across
     the arms: same plaintext, same attribute (so both wrap with RSA), same
@@ -575,8 +575,7 @@ def build_arms(
         return Invocation(argv, env, out)
 
     if cell.control:
-        # The same build twice. The ids have to differ -- they key the sample
-        # vectors -- so each is the version plus a copy number: v0.29.0#1.
+        # Ids key the samples, so the copies are numbered: v0.29.0#1, #2.
         builds = [(f"{arms.baseline.version}#{i + 1}", arms.baseline) for i in range(2)]
     else:
         builds = [(sdk.version, sdk) for sdk in (arms.baseline, arms.candidate)]

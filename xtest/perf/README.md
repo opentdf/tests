@@ -52,18 +52,15 @@ The artifact is `"schema": 2`:
   which is an arm id. `samples` is keyed by arm id.
 - The statistics live under `contrasts`, one entry per candidate. Each has `a`
   (the reference's arm id), `b` (the candidate's), and `metrics`, whose
-  per-metric results carry `a_median` and `b_median`, those two arms' medians.
-- A two-arm cell also carries the `baseline` and `candidate` labels for
-  convenience. A cell with more candidates does not, since "the candidate"
-  would silently mean only the first.
+  per-metric results carry `a_median` and `b_median`.
+- Two-arm cells also carry the `baseline` and `candidate` labels.
 - `regressions`, `improvements` and `noise_floor_by_control` are keyed
   `<cell>/<b>_vs_<a>/<metric>`, e.g. `go-encrypt-1MiB/main_vs_v0.29.0/wall`.
-- The top level adds `nothing_measured`, true when no candidate was compared
-  with a reference (see [NOTHING MEASURED](#the-verdicts)).
+- Top-level `nothing_measured` is true when no candidate was compared with a
+  reference (see [NOTHING MEASURED](#the-verdicts)).
 
-Schema 1 had a single `metrics` block per cell, with
-`baseline_median`/`candidate_median`, and keys of the form `<cell>/<metric>`.
-Consumers must check `schema` before reading.
+Schema 1 (one `metrics` block per cell, `<cell>/<metric>` keys) is not
+compatible; check `schema` before reading.
 
 Each metric entry carries both directions of the test: `p_value` /
 `p_adjusted` are the one-sided "candidate is slower" pair that the regression
@@ -86,9 +83,8 @@ One row per candidate and metric; the reference is named under the table
 - **cell** — `<sdk>-<operation>-<payload>`, plus `-control` for the A/A cell.
   Payload sizes are 1 KiB, 1 MiB, and 32 MiB unless `--bench-payloads` (the
   `bench-payloads` workflow input) asks for others. The control is always 1 MiB.
-- **candidate** — the build compared with the reference. In the A/A control
-  every arm is the reference build, so the row reads `A/A <copy id>` instead:
-  the arm id of the copy compared with the first one, e.g. `v0.29.0#2`.
+- **candidate** — the build compared with the reference. Control rows read
+  `A/A <copy id>`, e.g. `A/A v0.29.0#2`.
 - **metric** — wall clock, CPU time or peak RSS. `(ungated)` marks a metric
   that is reported but cannot fail the run: CPU time by default, and every
   metric of the control, which judges the harness rather than a build.
@@ -185,11 +181,11 @@ one; the top-level `noise_floor` is the worst of them.
 Ungated rows are labelled `(ungated)` and reported for context only. They cannot
 fail the build.
 
-Peak RSS additionally gets **censored** when a cell's readings sit at the
-measurement floor (the RSS of the process that forked the command). Both arms
+Peak RSS additionally gets **censored** when either arm of a contrast sits at
+the measurement floor (the RSS of the process that forked the command). Both arms
 clip to the same value there, producing a `1.000x` ratio with a tight interval —
 the most convincing-looking PASS the harness can emit, and completely meaningless.
-Censored cells report inconclusive with the floor named in the note.
+Censored contrasts report inconclusive with the floor named in the note.
 
 ### My build was flagged. Now what?
 

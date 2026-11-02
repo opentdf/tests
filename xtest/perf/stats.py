@@ -89,8 +89,7 @@ class PairedComparison:
     """The statistical summary of one contrast: arm ``b`` against arm ``a``.
 
     Ratios are b-over-a: 1.20 means ``b`` took 20% longer (or used 20% more
-    memory) than ``a``. In a gated contrast ``a`` is the reference and ``b``
-    a candidate, so a ratio above 1 is the candidate being slower.
+    memory) than ``a``.
     """
 
     n_rounds: int
@@ -99,8 +98,7 @@ class PairedComparison:
     ratio: float
     ci_low: float
     ci_high: float
-    #: One-sided p-value for "``b`` is slower". Retains the original field
-    #: name for artifact/API compatibility; the opposite direction is explicit.
+    #: One-sided p-value for "``b`` is slower", the tail REGRESSION reads.
     p_value: float
     #: One-sided p-value for "``b`` is faster".
     p_value_faster: float
@@ -362,26 +360,19 @@ def worst_control_key(
     keys: Sequence[str],
     *,
     threshold: float = DEFAULT_THRESHOLD,
-) -> str | None:
-    """Which of several A/A contrasts should stand as the noise floor.
+) -> str:
+    """The least reassuring of a control's A/A contrasts.
 
-    A control cell with K copies of one build yields K-1 A/A contrasts. They
-    are interchangeable noisy readings of the same null -- every copy is the
-    same build, and the round loop shuffles their order every round -- so no
-    one of them is the right floor. Taking the least reassuring stops the
-    luckiest reading from setting the floor for the whole SDK. The choice
-    does not depend on the order the copies ran in, and ties break on input
-    order, so it is reproducible.
-
-    Every key must be in ``comparisons``; :func:`perf.runner.analyze` stores
-    each one before choosing. A missing key is a wrongly built one, and it
-    raises rather than quietly ranking as an unusable interval.
+    The copies are interchangeable readings of one null, so the luckiest must
+    not set the SDK's floor. Ties go to the earliest key. A missing key is a
+    wrongly built one and raises ``KeyError``.
     """
-    ranked = [
-        (_noise_rank(assess_noise_floor(comparisons[k], threshold=threshold)), i, k)
-        for i, k in enumerate(keys)
-    ]
-    return max(ranked, key=lambda r: (r[0], -r[1]))[2] if ranked else None
+    return max(
+        keys,
+        key=lambda k: _noise_rank(
+            assess_noise_floor(comparisons[k], threshold=threshold)
+        ),
+    )
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:

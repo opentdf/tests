@@ -32,15 +32,8 @@ from perf.cells import BenchCell
 from perf.measure import METRIC_LABELS, METRICS, format_metric
 from perf.runner import BenchConfig, CellResult, analyze, contrast_key
 
-#: Version of the JSON artifact's shape; consumers of version 1 must check it.
-#: Version 2 added multi-arm cells. Each cell names its ``arms`` (id, label)
-#: and ``reference`` arm id, and keys ``samples`` by arm id. Statistics live
-#: under ``contrasts`` -- one per candidate, with ``a``, ``b`` and ``metrics``
-#: -- not one ``metrics`` block, and medians are ``a_median``/``b_median``, not
-#: ``baseline_median``/``candidate_median``. Only two-arm cells keep the
-#: ``baseline``/``candidate`` labels. ``regressions``, ``improvements`` and
-#: ``noise_floor_by_control`` are keyed ``<cell>/<b>_vs_<a>/<metric>``, not
-#: ``<cell>/<metric>``. The top level adds ``nothing_measured``.
+#: The JSON artifact's shape, described in perf/README.md. Bump on any breaking
+#: change.
 SCHEMA_VERSION = 2
 
 #: Cells the session intends to run. Set by the conftest parametrizer, read by
@@ -125,8 +118,7 @@ def _cell_dict(r: CellResult, gate: stats.GateResult) -> dict[str, object]:
         "arms": [{"id": a, "label": r.arm_labels[a]} for a in r.arm_ids],
     }
     if len(r.candidates) == 1:
-        # The two-arm convenience labels. Omitted above two arms, where "the
-        # candidate" would silently mean only the first of several.
+        # Two arms only: with more, "the candidate" is ambiguous.
         cell["baseline"] = r.arm_labels[r.reference]
         cell["candidate"] = r.arm_labels[r.candidates[0]]
     cell |= {
@@ -136,8 +128,7 @@ def _cell_dict(r: CellResult, gate: stats.GateResult) -> dict[str, object]:
         "stopped_because": r.stopped_because,
         "rss_floor_bytes": r.rss_floor_bytes,
         "samples": r.samples,
-        # `analyze` stores every contrast_pairs() x METRICS key, so a missing
-        # one is a wrongly built key: raise rather than drop it from the JSON.
+        # Indexed, not filtered: `analyze` stores every key, so a miss is a bug.
         "contrasts": [
             {
                 "a": a,
@@ -209,15 +200,14 @@ def markdown(
 ) -> str:
     """Render the run as a GitHub step summary.
 
-    One row per candidate, cell and metric, each against that cell's
-    reference. Deliberately plain: it is a view of the JSON, not a separate
-    source, and every value in it can be found there.
+    One row per candidate, cell and metric. A view of the JSON; every value in
+    it is there too.
     """
     threshold_pct = (config.threshold - 1) * 100
     lines = [
         "## SDK performance regression benchmark",
         "",
-        f"Paired comparison on one runner: every build runs once per round, "
+        f"Paired comparison on one runner: every arm runs once per round, "
         f"and each candidate is compared with the reference. A cell fails only "
         f"if the 95% CI lower bound exceeds **{config.threshold:.2f}x** "
         f"(+{threshold_pct:.0f}%) *and* the BH-adjusted p < {stats.DEFAULT_ALPHA}.",

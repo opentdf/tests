@@ -6,10 +6,6 @@ loop runs every arm once per round, in a randomized order, until it has
 either enough precision or no more time. The first arm is the *reference*,
 and every other arm is compared against it.
 
-The round loop accepts any number of arms from two up. How many builds a run
-may name is capped earlier, at the request layer
-(:data:`perf.config.MAX_ARM_COUNT`).
-
 Why rounds rather than "run A 30 times, then B 30 times"
 --------------------------------------------------------
 A shared runner drifts: a noisy neighbour arrives, the CPU thermally throttles,
@@ -90,16 +86,11 @@ class Invocation:
 
 @dataclass(frozen=True, slots=True)
 class Arm:
-    """One build participating in a cell.
+    """One build in a cell. Which arm is the reference belongs to the cell."""
 
-    With more than two arms there is no such thing as "the candidate", so arms
-    are keyed by identity rather than by role: ``name`` is the arm id, and
-    which arm is the reference is a property of the cell, not of the arm.
-    """
-
-    #: Arm id, unique within a cell, since it keys the cell's samples.
-    #: ``build_arms`` uses the installed dist directory name, e.g. ``"main"``
-    #: or ``"v0.29.0"``, and ``#1``/``#2`` after it for the control's copies.
+    #: Arm id, unique within a cell: it keys the samples. ``build_arms`` uses
+    #: the dist directory name, e.g. ``"v0.29.0"``, or ``"v0.29.0#1"`` for a
+    #: control copy.
     name: str
     #: The build this arm runs, e.g. ``"go@v0.29.0"``.
     label: str
@@ -107,11 +98,7 @@ class Arm:
 
 
 def _check_arm_ids(cell_id: str, arm_ids: Sequence[str]) -> None:
-    """Reject arms that cannot form a cell: fewer than two, or colliding ids.
-
-    Ids key the sample vectors, so a collision would silently interleave two
-    builds' measurements into one arm and compare it with itself.
-    """
+    """Reject fewer than two arms, or colliding ids (which would merge samples)."""
     if len(arm_ids) < 2:
         raise ValueError(f"{cell_id}: a cell needs at least two arms to compare")
     if len(set(arm_ids)) != len(arm_ids):
@@ -173,21 +160,16 @@ class CellResult:
         """The arm every other arm is compared against: always the first."""
         return self.arm_ids[0]
 
-    @property
-    def rss_censored_reason(self) -> str | None:
-        """Why this cell's peak RSS cannot be compared, or None if it can.
+    def rss_censored_reason(self, a: str, b: str) -> str | None:
+        """Why the RSS contrast of ``b`` against ``a`` can't be judged, or None.
 
-        A command whose peak sits at the floor was not measured, it was
-        clipped. Any one arm touching the floor censors RSS for every contrast
-        in the cell, because clipping pulls every ratio it touches toward
-        1.000: two clipped arms compare as 1.000 with a tight interval, the
-        most convincing-looking PASS the harness can emit, and one clipped arm
-        overstates its own peak, shrinking a real difference against it.
+        A peak at the floor was clipped, not measured, and clipping pulls the
+        ratio toward 1.000: two clipped arms give a tight, meaningless PASS,
+        and one shrinks a real difference. Arms outside the pair don't count.
         """
         if self.rss_floor_bytes <= 0:
             return None
-        rss = [v for arm in self.samples.values() for v in arm["rss"]]
-        if min(rss) > self.rss_floor_bytes:
+        if min(self.samples[a]["rss"] + self.samples[b]["rss"]) > self.rss_floor_bytes:
             return None
         return (
             f"peak rss reaches the {self.rss_floor_bytes / 2**20:.0f} MiB "
@@ -206,13 +188,7 @@ class CellResult:
     def contrast(
         self, a: str, b: str, metric: str, config: BenchConfig
     ) -> stats.PairedComparison:
-        """Compare arm ``b`` against arm ``a`` -- a ratio of b over a.
-
-        The argument order matches the reading of the result:
-        ``contrast(reference, candidate, ...)`` answers "how much slower is the
-        candidate than the reference", which is the direction every ratio in
-        the report is quoted in.
-        """
+        """Compare arm ``b`` against arm ``a``: the ratio is b/a, as reported."""
         return stats.compare(
             self.samples[a][metric],
             self.samples[b][metric],
@@ -222,12 +198,18 @@ class CellResult:
         )
 
     def contrast_pairs(self) -> list[tuple[str, str]]:
-        """Every ordered ``(a, b)`` pair the analysis judges.
+        """The ``(a, b)`` contrasts this cell is judged on."""
+        return _contrast_pairs(self.arm_ids)
 
-        One per candidate, quoted as ``(reference, candidate)`` so it reads as
-        "candidate vs reference".
-        """
-        return [(self.reference, b) for b in self.candidates]
+
+def _contrast_pairs(arm_ids: Sequence[str]) -> list[tuple[str, str]]:
+    """``(reference, candidate)`` for each candidate.
+
+    The analysis and the precision stop rule both read this, so the loop waits
+    for exactly the contrasts that will be judged.
+    """
+    reference, *candidates = arm_ids
+    return [(reference, b) for b in candidates]
 
 
 def contrast_key(cell_id: str, a: str, b: str, metric: str) -> str:
@@ -255,12 +237,7 @@ def run_cell(
     Args:
         cell_id: stable identifier, also the per-cell RNG seed material so
             that two cells do not share an interleaving order.
-        arms: the builds to measure, all in every round: any number from
-            two up. How many builds a run may name is capped at the request
-            layer (:data:`perf.config.MAX_ARM_COUNT`), not here. The first is
-            the reference every other arm is compared against. For an A/A
-            control these are copies of one build running through identical
-            paths.
+        arms: two or more, all run every round; the first is the reference.
         config: round-loop knobs.
         deadline: absolute ``clock()`` value past which no new round starts.
         control: records that this is the A/A cell; does not change the loop.
@@ -282,6 +259,7 @@ def run_cell(
     # spend its budget first.
     _check_arm_ids(cell_id, arm_ids)
     reference = arm_ids[0]
+    pairs = _contrast_pairs(arm_ids)
 
     # Seeded per cell so a rerun reproduces the interleaving exactly, but the
     # cells do not all share one order (which would correlate their noise).
@@ -380,7 +358,7 @@ def run_cell(
         round_durations.append(clock() - round_start)
 
         n = len(samples[reference]["wall"])
-        if n >= config.min_rounds and _precise_enough(samples, config, arm_ids):
+        if n >= config.min_rounds and _precise_enough(samples, config, pairs):
             stopped_because = "precision"
             break
 
@@ -408,25 +386,19 @@ def run_cell(
 def _precise_enough(
     samples: dict[str, dict[str, list[float]]],
     config: BenchConfig,
-    arm_ids: Sequence[str],
+    pairs: Sequence[tuple[str, str]],
 ) -> bool:
-    """True once every candidate's gated CIs are narrow enough to decide on.
+    """True once every judged contrast's gated CIs are narrow enough.
 
-    Every candidate must be resolved on every gated metric, not just the
-    first: stopping as soon as *some* contrast is precise would leave the
-    rest INCONCLUSIVE while the budget was still there to spend on them, and
-    with several candidates the slowest contrast to converge is the one that
-    matters.
-
-    Deliberately looks only at interval *width*, never at where the interval
+    Stopping on the first precise contrast would leave the rest INCONCLUSIVE
+    with budget unspent. Looks only at interval *width*, never at where it
     sits or at any p-value -- see the module docstring.
     """
-    reference, *candidates = arm_ids
     for metric in config.gated_metrics:
-        for arm in candidates:
+        for a, b in pairs:
             c = stats.compare(
-                samples[reference][metric],
-                samples[arm][metric],
+                samples[a][metric],
+                samples[b][metric],
                 confidence=config.confidence,
                 seed=config.seed,
                 n_resamples=_INTERIM_RESAMPLES,
@@ -497,8 +469,8 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
     control_keys: set[str] = set()
 
     for result in results:
-        floored = result.rss_censored_reason
         for a, b in result.contrast_pairs():
+            floored = result.rss_censored_reason(a, b)
             for metric in METRICS:
                 key = contrast_key(result.cell_id, a, b, metric)
                 # Stored for every pair and metric, before any `continue`: the
