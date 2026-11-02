@@ -660,26 +660,17 @@ def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
 
     env_vars = {"BENCH_INSTALLATION_MANIFEST": str(manifest_path.resolve())}
 
-    # OTDFCTL_HEADS names the *provisioning* CLI, and only that. The measured
-    # SDK arms are deliberately excluded: letting a benchmark arm supply otdfctl
-    # is what made "otdfctl" mean "whatever the go arm happens to be", so the
-    # build under measurement would also be provisioning the fixtures it is
-    # measured against.
-    #
-    # The value is a JSON array, not a comma-separated list: `conftest.py`
-    # reads it with `json.loads` (see `load_otdfctl`), and CI passes the same
-    # shape through `fromJson` in xtest.yml. A bare string is invalid JSON
-    # there and gets silently discarded, dropping the run back onto the
-    # implicit `sdk/go/dist/main` fallback.
-    #
-    # A release pin is exported the same as a source pin. `installed_tag` is
-    # the `dist/` directory name either way, and the point of pinning at all
-    # is that the pin is what runs -- silently ignoring released pins would
-    # reinstate the fallback for exactly the runs that asked not to have it.
+    # OTDFCTL_HEADS names the `--otdfctl` pin, release or source alike, and
+    # never a measured arm: the build under measurement must not also provision
+    # the fixtures it is measured against. (CI's go bench job still does, until
+    # stage 5.) A JSON array, because `conftest.load_otdfctl` takes
+    # `json.loads(...)[0]`; a value that fails to parse falls back to
+    # sdk/go/dist/main or a system otdfctl, with a message pytest's capture
+    # hides.
     #
     # Warn rather than fail: stdout is eval'd for ordinary runs too, and a
-    # failed `env` would take their exports with it. The warnings go to stderr
-    # for the same reason, escaped since manifest text can hold Rich markup.
+    # failed `env` would take their exports with it. Warnings go to stderr for
+    # the same reason, escaped because manifest text can hold Rich markup.
     try:
         tag = otdfctl_pin(manifest_path)
     except (OSError, ValueError) as e:
@@ -714,9 +705,10 @@ def env(
 
     Use this command to configure your shell environment for running tests:
 
-        eval $(otdf-local env)
+        eval "$(otdf-local env)"
 
-    Or source it directly:
+    Quoted: unquoted, the shell globs the [...] in OTDFCTL_HEADS. Or source it
+    directly:
 
         . <(otdf-local env)
 

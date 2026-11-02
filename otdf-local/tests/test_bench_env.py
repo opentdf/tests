@@ -5,8 +5,8 @@ The contract under test is cross-package: `otdf-sdk-mgr` writes the manifest,
 consumes them. Nothing in the type system connects those three, so the shape is
 asserted here explicitly -- in particular that `OTDFCTL_HEADS` survives the
 `json.loads` in `conftest.load_otdfctl`, which is the failure mode that hides:
-an unparseable value is discarded silently and the run falls back to an
-unpinned CLI while still reporting success.
+an unparseable value falls back to an unpinned CLI, with a message pytest's
+capture hides, and the run still reports success.
 """
 
 import json

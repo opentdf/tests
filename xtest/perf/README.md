@@ -557,35 +557,38 @@ still look like numbers. That is why they are written down.
 
 ## 3. Local preparation and execution
 
-A benchmark run locally is the same run CI performs — same resolution, same
-installs, same manifest, same environment variables. That is the point of this
-section: a local sequence that diverges from the workflow measures something
-else, and the difference shows up as an unreproducible result rather than as
-an error.
+The local sequence: prepare, start, export, measure. CI does not use it yet —
+the workflow resolves and installs its arms itself, and sets `OTDFCTL_HEADS`
+from the go arm's heads. Moving CI onto `install benchmark` and
+`otdf-local env` is stage 5.
 
 ### Prerequisites
 
 - `otdf-sdk-mgr` installed: `cd otdf-sdk-mgr && uv tool install --editable .`
-- Nothing else listening on port 8080. A benchmark starts the platform and its
-  default KAS only — no alpha/beta/gamma/delta, no km instances. That is
-  deliberate: every extra Go service is a process competing for the CPU being
-  measured.
+- A platform source tree for `otdf-local` to run: a `platform/` checkout beside
+  `xtest/`, or `--platform <ref>` in step 1. See `otdf-local/AGENTS.md`.
+- Nothing else listening on port 8080. Step 2 starts Keycloak, Postgres, the
+  platform and its default KAS only — no alpha/beta/gamma/delta, no km
+  instances. That is deliberate: every extra Go service is a process
+  competing for the CPU being measured.
 
 ### Sequence
 
 ```bash
 # 1. Resolve and install every arm in one step, recording what was installed.
-#    The first ref is the reference; the rest are candidates.
+#    The first ref is the reference; the rest are candidates. pytest does not
+#    read the manifest yet, so step 4 names the arms again.
 cd otdf-sdk-mgr
-uv run otdf-sdk-mgr install benchmark go v0.29.0 main --otdfctl v0.30.0
+uv run otdf-sdk-mgr install benchmark go v0.29.0 main --otdfctl v0.38.1
 
 # 2. Start the platform and its default KAS.
 cd ../otdf-local
 uv run otdf-local up --services docker,platform
 
-# 3. Export the environment: log paths for the audit assertions, XT_TMP_DIR,
-#    and the pins recorded in step 1.
-eval $(uv run otdf-local env)
+# 3. Export the environment: XT_TMP_DIR and the otdfctl pin recorded in
+#    step 1. Quote it: unquoted, the shell globs the [...] in OTDFCTL_HEADS,
+#    and under nullglob drops it.
+eval "$(uv run otdf-local env)"
 
 # 4. Measure.
 cd ../xtest
@@ -605,26 +608,37 @@ uv run otdf-local down
 ```
 
 `install benchmark` is what writes the manifest. `install stable` and
-`install tip` still work for ordinary test runs, but they install without
-recording provenance, so step 3 has no pins to export and the run falls back
-to whatever happens to be in `dist/`.
+`install tip` still work for ordinary test runs, but they record nothing and
+leave an earlier manifest in place. Until that manifest is replaced or
+removed (`rm xtest/sdk/benchmark.installed.json`), `otdf-local env` keeps
+exporting its otdfctl pin into every shell it sets up — and says so on stderr
+each time.
 
 ### Environment variables
 
 `otdf-local env` exports, in addition to the platform settings:
 
-- `XT_TMP_DIR` — root for generated fixtures and ciphertexts
-- `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1
+- `XT_TMP_DIR` — root for generated fixtures and ciphertexts: `xtest/tmp`,
+  unless the variable is already set, in which case that value is kept.
+- `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1,
+  whenever it exists, whatever its `status`.
 - `OTDFCTL_HEADS` — a **JSON array** naming the `dist/` directory of the
-  provisioning CLI, e.g. `["v0.30.0"]`. `conftest.load_otdfctl` parses it with
-  `json.loads`; any other shape is discarded silently and the run falls back
-  to `sdk/go/dist/main/otdfctl.sh` or a system binary. It names the
-  provisioning CLI only — never a measured arm, which would make a build under
-  measurement responsible for provisioning its own fixtures.
+  provisioning CLI, e.g. `["v0.38.1"]`. It names the provisioning CLI only —
+  never a measured arm, which would make a build under measurement
+  responsible for provisioning its own fixtures. Exported only while the pin
+  is still the build that was recorded: preparation succeeded, the directory
+  exists, and any commit recorded in its `.version` matches. Otherwise `env`
+  says on stderr why not, and `conftest.load_otdfctl` falls back to
+  `sdk/go/dist/main/otdfctl.sh` or an `otdfctl` on `PATH`.
 
-Only set when the corresponding file exists: `PLATFORM_LOG_FILE`,
-`KAS_*_LOG_FILE` (the audit assertions need these), `SCHEMA_FILE`,
-`OT_ROOT_KEY`, `PLATFORM_VERSION`.
+Re-running `env` unsets `BENCH_INSTALLATION_MANIFEST` or `OTDFCTL_HEADS` if
+it exported them before and no longer does; it records which in
+`OTDF_LOCAL_BENCH_EXPORTS`. A value you set by hand is left alone.
+
+Exported when available: `PLATFORM_LOG_FILE`, `KAS_*_LOG_FILE` and
+`SCHEMA_FILE` if the file exists; `OT_ROOT_KEY` if the platform config sets
+`services.kas.root_key`; `PLATFORM_VERSION` if the platform is running and
+reports one.
 
 ### Installation manifest
 
@@ -639,23 +653,25 @@ fields, separate from the measured arms.
 
 The manifest is written on **every** exit path, including the failing ones, so
 a partial or failed preparation still says what it managed to install. Its
-`status` is one of `success`, `neutral`, `partial`, or `failed`, and
-`status_message` explains whichever it is — `neutral` is not an error, so the
-field is not named for one.
+`status` is one of `success`, `neutral`, `partial`, or `failed`.
+`status_message` says why for the last three; on `success` it is empty unless
+some arms turned out to be the same build.
 
 A source build records its commit in `dist/<slug>/.version` alongside the
 build. A later run reuses that directory only if the recorded commit matches;
 an unrecorded or mismatched one is discarded and rebuilt. Adopting a stale
 build costs nothing at install time and mislabels every measurement that
-follows.
+follows. Release directories are not checked: one that already exists is
+reused as it is.
 
 ### Neutral preparation
 
-When two distinct requested aliases resolve to one commit — `main` and
-`latest` both at `abc123` — preparation stops before any build and reports
+When every requested alias resolves to the same build — `main` and `latest`
+both at `abc123` — preparation stops before any build and reports
 **neutral**. There is nothing to compare, which is not the same as something
 having gone wrong; the manifest still records the commit everything collapsed
-onto. Local and CI share this path, so the outcome reads the same in both.
+onto. If only some arms collapse, preparation succeeds, and `status_message`
+names the ones that are the same build.
 
 ### Troubleshooting
 
@@ -671,15 +687,14 @@ uv run otdf-local logs -f
 ls -la xtest/sdk/go/dist/            # what is installed
 cat xtest/sdk/benchmark.installed.json  # and what preparation believes it installed
 ```
-A build with no `.version` beside it was not installed by
-`install benchmark`, so its provenance is unknown and the next preparation
-will rebuild it.
+A source build with no `.version` beside it, or one recording another
+commit, will be rebuilt by the next preparation.
 
-**Audit log assertions fail** — the log paths are only exported if the files
-already exist, so re-export after the services have started:
+**`OTDFCTL_HEADS` not exported** — `env` prints the reason on stderr: no pin
+was recorded (`--otdfctl`), preparation did not succeed, or the pinned build
+has been removed or rebuilt since. Re-run step 1 and re-export:
 ```bash
-echo $PLATFORM_LOG_FILE
-eval $(cd otdf-local && uv run otdf-local env)
+eval "$(cd otdf-local && uv run otdf-local env)"
 ```
 
 **Platform not reachable**:
