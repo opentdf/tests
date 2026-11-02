@@ -21,35 +21,34 @@ from otdf_local import cli
 from otdf_local.cli import bench_manifest_env, bench_manifest_path
 from otdf_local.config.settings import Settings
 
+#: The manifest otdf-sdk-mgr's tests hold its writer and reader to. Every
+#: manifest here is derived from it, so they have the shape that is written
+#: rather than the shape this file remembers.
+GOLDEN_MANIFEST = (
+    Path(__file__).parents[2]
+    / "otdf-sdk-mgr"
+    / "tests"
+    / "data"
+    / "benchmark.installed.golden.json"
+)
+GOLDEN = json.loads(GOLDEN_MANIFEST.read_text())
+PINNED_SHA = GOLDEN["otdfctl"]["commit_sha"]
+
 
 def _write_manifest(
     path: Path, otdfctl: dict[str, object] | None, **rest: object
 ) -> Path:
-    manifest: dict[str, object] = {
-        "schema_version": "v1alpha1",
-        "platform": None,
-        "otdfctl": otdfctl,
-        "sdk_arms": [],
-        "status": "success",
-        "status_message": "",
-        **rest,
-    }
-    path.write_text(json.dumps(manifest))
+    path.write_text(json.dumps({**GOLDEN, "otdfctl": otdfctl, **rest}))
     return path
-
-
-PINNED_SHA = "0" * 40
 
 
 def _identity(alias: str, tag: str, method: str) -> dict[str, object]:
     return {
+        **GOLDEN["otdfctl"],
         "requested_alias": alias,
-        "repository": "https://github.com/opentdf/otdfctl.git",
-        "commit_sha": PINNED_SHA,
         "installed_tag": tag,
-        "installed_path": f"/dist/{tag}",
+        "installed_path": f"/xtest/sdk/go/dist/{tag}",
         "installation_method": method,
-        "build_settings": {},
     }
 
 
@@ -90,6 +89,19 @@ class TestBenchManifestPath:
 
 
 class TestBenchManifestEnv:
+    def test_the_sdk_managers_golden_manifest_exports_its_pin(self, tmp_path: Path):
+        # Verbatim, so a renamed or moved field in what otdf-sdk-mgr writes
+        # fails here rather than silently dropping the pin.
+        path = bench_manifest_path(tmp_path)
+        path.parent.mkdir()
+        shutil.copy(GOLDEN_MANIFEST, path)
+        tag = GOLDEN["otdfctl"]["installed_tag"]
+        _install(path, tag, f"ref={tag}\nsha={PINNED_SHA}\n")
+
+        env = bench_manifest_env(path)
+
+        assert env["OTDFCTL_HEADS"] == json.dumps([tag])
+
     def test_no_manifest_exports_nothing(self, tmp_path: Path):
         assert bench_manifest_env(tmp_path / "absent.json") == {}
 
