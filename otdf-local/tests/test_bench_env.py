@@ -152,6 +152,9 @@ def run_env(tmp_path: Path, monkeypatch):
     # Bypass platform discovery and the version probe, which depend on the host.
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     monkeypatch.setattr(cli, "get_platform_service", lambda _s: _StoppedPlatform())
+    # Nor whatever the developer's own shell has exported.
+    for name in (*cli.BENCH_VARS, cli.BENCH_EXPORTS_VAR):
+        monkeypatch.delenv(name, raising=False)
 
     def _run(*args: str):
         result = CliRunner().invoke(cli.app, ["env", *args])
@@ -169,7 +172,9 @@ class TestEnvCommand:
         _prepare(state, tmp_path)
         result = run_env()
         for line in result.stdout.splitlines():
-            assert re.fullmatch(r"export [A-Z][A-Z0-9_]*='.*'", line), line
+            assert re.fullmatch(
+                r"export [A-Z][A-Z0-9_]*='.*';|unset [A-Z][A-Z0-9_]*;", line
+            ), line
 
     @pytest.mark.parametrize("state", MANIFEST_STATES)
     def test_json_output_parses(self, state, tmp_path: Path, run_env):
@@ -187,15 +192,67 @@ class TestEnvCommand:
     @pytest.mark.parametrize("state", MANIFEST_STATES)
     def test_eval_exports_everything(self, state, tmp_path: Path, run_env):
         _prepare(state, tmp_path)
-        result = run_env()
-        # Unquoted, as documented: word splitting and globbing both apply.
-        shell = subprocess.run(
-            ["bash", "-c", 'eval $1; printf "%s\\n" "$PLATFORMURL" "${OTDFCTL_HEADS-}"']
-            + ["_", result.stdout],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        platform_url, heads = shell.stdout.splitlines()
+        platform_url, heads = _eval(run_env().stdout, "PLATFORMURL", "OTDFCTL_HEADS")
         assert platform_url == "http://localhost:8080"
-        assert heads == ('["v0.38.1"]' if state == "pinned" else "")
+        assert heads == ('["v0.38.1"]' if state == "pinned" else "<unset>")
+
+    def test_xt_tmp_dir_defaults_to_xtest_tmp(
+        self, tmp_path: Path, run_env, monkeypatch
+    ):
+        monkeypatch.delenv("XT_TMP_DIR", raising=False)
+        exported = json.loads(run_env("--format", "json").stdout)
+        assert exported["XT_TMP_DIR"] == str((tmp_path / "tmp").resolve())
+
+    def test_xt_tmp_dir_already_set_is_kept(self, run_env, monkeypatch):
+        # How a multi-GiB run is pointed at a large volume.
+        monkeypatch.setenv("XT_TMP_DIR", "/mnt/big")
+        exported = json.loads(run_env("--format", "json").stdout)
+        assert exported["XT_TMP_DIR"] == "/mnt/big"
+
+    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    def test_rerun_unsets_what_the_last_run_exported(
+        self, tmp_path: Path, run_env, monkeypatch
+    ):
+        _prepare("pinned", tmp_path)
+        first = run_env().stdout
+        bench_manifest_path(tmp_path).unlink()
+        # The shell as the first eval left it.
+        for name in (*cli.BENCH_VARS, cli.BENCH_EXPORTS_VAR):
+            monkeypatch.setenv(name, _eval(first, name)[0])
+
+        second = run_env().stdout
+
+        # And the exports after the unsets still happen.
+        assert _eval(second, *cli.BENCH_VARS, "PLATFORMURL") == [
+            "<unset>",
+            "<unset>",
+            "http://localhost:8080",
+        ]
+
+    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    def test_rerun_keeps_values_set_by_hand(self, run_env, monkeypatch):
+        monkeypatch.setenv("BENCH_INSTALLATION_MANIFEST", "/elsewhere/m.json")
+        monkeypatch.setenv("OTDFCTL_HEADS", '["v0.38.1"]')
+
+        stdout = run_env().stdout
+
+        assert "unset" not in stdout
+        assert _eval(stdout, *cli.BENCH_VARS) == ["/elsewhere/m.json", '["v0.38.1"]']
+
+
+def _eval(stdout: str, *names: str) -> list[str]:
+    """The named variables after bash evals `stdout`, `<unset>` for unset ones.
+
+    Unquoted, as documented, so word splitting and globbing both apply. The
+    shell inherits the test's environment, as a user's shell would. A failing
+    statement fails the call: `unset` skips arguments it cannot unset, so the
+    variables asked about can look right while the rest went unexported.
+    """
+    printed = " ".join(f'"${{{name}-<unset>}}"' for name in names)
+    shell = subprocess.run(
+        ["bash", "-c", f'eval $1 || exit; printf "%s\\n" {printed}', "_", stdout],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return shell.stdout.splitlines()

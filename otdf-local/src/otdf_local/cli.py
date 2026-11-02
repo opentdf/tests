@@ -1,6 +1,7 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import os
 import shutil
 import sys
 import time
@@ -566,6 +567,19 @@ def restart(
     raise typer.Exit(1)
 
 
+#: Variables `env` derives from the benchmark manifest.
+BENCH_VARS = ("BENCH_INSTALLATION_MANIFEST", "OTDFCTL_HEADS")
+#: Which of BENCH_VARS the last `env` exported, so the next one can unset the
+#: ones that no longer apply without touching values the user set by hand.
+BENCH_EXPORTS_VAR = "OTDF_LOCAL_BENCH_EXPORTS"
+
+
+def stale_bench_vars(exported: dict[str, str]) -> list[str]:
+    """BENCH_VARS a previous `env` exported that this one does not."""
+    previous = os.environ.get(BENCH_EXPORTS_VAR, "").split()
+    return [name for name in BENCH_VARS if name in previous and name not in exported]
+
+
 def bench_manifest_path(xtest_root: Path) -> Path:
     """Where `otdf-sdk-mgr` writes the benchmark installation manifest.
 
@@ -700,24 +714,32 @@ def env(
     except Exception as e:  # noqa: BLE001 - best-effort, as above
         print_warning(f"Could not get platform version: {e}", err_console)
 
-    # Benchmark preparation: XT_TMP_DIR for generated fixtures
-    tmp_dir = settings.xtest_root / "tmp"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    env_vars["XT_TMP_DIR"] = str(tmp_dir.resolve())
+    # Root for generated fixtures and ciphertexts. A value already set wins: it
+    # is how a multi-GiB run is pointed at a large volume.
+    env_vars["XT_TMP_DIR"] = os.environ.get("XT_TMP_DIR") or str(
+        (settings.xtest_root / "tmp").resolve()
+    )
 
     # Benchmark preparation: point to installation manifest if it exists
-    env_vars.update(bench_manifest_env(bench_manifest_path(settings.xtest_root)))
+    bench_vars = bench_manifest_env(bench_manifest_path(settings.xtest_root))
+    env_vars.update(bench_vars)
 
     # Output in requested format
     if format == "json":
         console.print_json(json.dumps(env_vars, indent=2))
     else:
+        # Every statement ends in `;`: unquoted `eval $(otdf-local env)` joins
+        # the lines into one, and `unset A export B=...` would hand the exports
+        # to `unset`.
+        for key in stale_bench_vars(bench_vars):
+            print(f"unset {key};")
+        env_vars[BENCH_EXPORTS_VAR] = " ".join(bench_vars)
         # Shell export format - use plain print to avoid line wrapping
         for key, value in env_vars.items():
             # Escape single quotes in value for shell safety
             escaped_value = value.replace("'", "'\\''")
             # Use plain print to stdout to avoid rich console line wrapping
-            print(f"export {key}='{escaped_value}'", file=sys.stdout)
+            print(f"export {key}='{escaped_value}';", file=sys.stdout)
 
 
 if __name__ == "__main__":
