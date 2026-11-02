@@ -10,9 +10,16 @@ unpinned CLI while still reporting success.
 """
 
 import json
+import re
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
+
+from otdf_local import cli
 from otdf_local.cli import bench_manifest_env, bench_manifest_path
+from otdf_local.config.settings import Settings
 
 
 def _write_manifest(
@@ -104,9 +111,91 @@ class TestBenchManifestEnv:
         assert "OTDFCTL_HEADS" not in env
         # Still points at the manifest so the failure is diagnosable.
         assert "BENCH_INSTALLATION_MANIFEST" in env
-        assert "OTDFCTL_HEADS" in capsys.readouterr().out
+        # On stderr: stdout is eval'd.
+        out, err = capsys.readouterr()
+        assert out == ""
+        assert "OTDFCTL_HEADS" in err
 
     def test_pin_without_a_tag_exports_nothing(self, tmp_path: Path):
         # An empty tag would build the path sdk/go/dist//otdfctl.sh.
         path = _write_manifest(tmp_path / "m.json", _identity("main", "", "source"))
         assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
+
+
+class _StoppedPlatform:
+    def is_running(self) -> bool:
+        return False
+
+
+def _prepare(kind: str, xtest_root: Path) -> None:
+    """Leave the manifest `env` will find in the state named by `kind`."""
+    path = bench_manifest_path(xtest_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if kind == "pinned":
+        _write_manifest(path, _identity("v0.38.1", "v0.38.1", "release"))
+    elif kind == "malformed":
+        path.write_text("{not json")
+    elif kind == "directory":
+        path.mkdir()
+
+
+MANIFEST_STATES = ["absent", "pinned", "malformed", "directory"]
+
+
+@pytest.fixture
+def run_env(tmp_path: Path, monkeypatch):
+    """Invoke the real `env` command against a stub platform under tmp_path."""
+    from typer.testing import CliRunner
+
+    (tmp_path / "opentdf-dev.yaml").write_text("services:\n  kas:\n    root_key: k\n")
+    settings = Settings(xtest_root=tmp_path, platform_dir=tmp_path)
+    # Bypass platform discovery and the version probe, which depend on the host.
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+    monkeypatch.setattr(cli, "get_platform_service", lambda _s: _StoppedPlatform())
+
+    def _run(*args: str):
+        result = CliRunner().invoke(cli.app, ["env", *args])
+        assert result.exit_code == 0, result.output
+        return result
+
+    return _run
+
+
+class TestEnvCommand:
+    """What `eval $(otdf-local env)` and `env --format json | jq` actually see."""
+
+    @pytest.mark.parametrize("state", MANIFEST_STATES)
+    def test_shell_output_is_only_exports(self, state, tmp_path: Path, run_env):
+        _prepare(state, tmp_path)
+        result = run_env()
+        for line in result.stdout.splitlines():
+            assert re.fullmatch(r"export [A-Z][A-Z0-9_]*='.*'", line), line
+
+    @pytest.mark.parametrize("state", MANIFEST_STATES)
+    def test_json_output_parses(self, state, tmp_path: Path, run_env):
+        _prepare(state, tmp_path)
+        result = run_env("--format", "json")
+        assert json.loads(result.stdout)["PLATFORMURL"] == "http://localhost:8080"
+
+    def test_unreadable_manifest_is_reported_on_stderr(self, tmp_path: Path, run_env):
+        _prepare("malformed", tmp_path)
+        result = run_env()
+        assert "OTDFCTL_HEADS" not in result.stdout
+        assert "Could not read OTDFCTL_HEADS" in result.stderr
+
+    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    @pytest.mark.parametrize("state", MANIFEST_STATES)
+    def test_eval_exports_everything(self, state, tmp_path: Path, run_env):
+        _prepare(state, tmp_path)
+        result = run_env()
+        # Unquoted, as documented: word splitting and globbing both apply.
+        shell = subprocess.run(
+            ["bash", "-c", 'eval $1; printf "%s\\n" "$PLATFORMURL" "${OTDFCTL_HEADS-}"']
+            + ["_", result.stdout],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        platform_url, heads = shell.stdout.splitlines()
+        assert platform_url == "http://localhost:8080"
+        assert heads == ('["v0.38.1"]' if state == "pinned" else "")

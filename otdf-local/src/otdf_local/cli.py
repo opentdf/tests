@@ -610,7 +610,11 @@ def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
         if tag:
             env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
     except (OSError, ValueError, AttributeError) as e:
-        print_warning(f"Could not read OTDFCTL_HEADS from {manifest_path}: {e}")
+        # stderr: `env`'s stdout is eval'd, and a warning there is run as a
+        # command that takes every export on the line down with it.
+        print_warning(
+            f"Could not read OTDFCTL_HEADS from {manifest_path}: {e}", err_console
+        )
 
     return env_vars
 
