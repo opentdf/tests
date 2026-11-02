@@ -15,6 +15,7 @@ fixture system.
 | `conftest.py` | `pytest_addoption` + the encrypt/decrypt SDK parametrization. Defines `--sdks`, `--sdks-encrypt`, `--sdks-decrypt`, `--containers`, `--no-audit-logs`. |
 | `fixtures/` | Module-scoped pytest fixtures: `attributes.py`, `keys.py`, `audit.py`, `assertions.py`, `kas.py`, `encryption.py`, `obligations.py`. |
 | `tdfs.py` | SDK abstraction layer — wraps the `cli.sh` shims under `sdk/<lang>/dist/<version>/`. |
+| `validity/` | Cross-SDK "is this a valid TDF?" suite: corpus, baseline and `cli.sh validate` contract, with its own tests. See `../spec/tdf-validity.md`. |
 | `perf/` | Paired A/B performance regression benchmarks (opt-in via `--bench`). **Read `perf/README.md` before changing anything in here** — the design decisions fail silently when undone. |
 | `sdk/{go,java,js}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
 | `test.env` | Default endpoint and client-credential env vars. Source with `set -a && source test.env && set +a`. |
@@ -38,6 +39,7 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
 | `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
 | `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. |
+| `XT_VALIDATE_TIMEOUT` | Seconds one `cli.sh validate` may run before it is killed (default 60). See `validity/contract.py`. |
 
 ## Authoring a New Test
 

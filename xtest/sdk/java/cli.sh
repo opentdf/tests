@@ -9,6 +9,10 @@
 # ./cli.sh supports <feature>
 #   Check if the SDK supports a specific feature.
 #
+# ./cli.sh validate <file>
+#   Is <file> a valid TDF? Offline. Passes the CLI's stdout and exit status
+#   (0 valid, 3 invalid) through unchanged; see spec/tdf-validity.md.
+#
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
@@ -187,6 +191,13 @@ if [ "$1" == "supports" ]; then
       echo "chunky unsupported: see DSPX-4589"
       exit 1
       ;;
+    tdf_validity)
+      # `java -jar cmdline.jar validate <file>` (DSPX-5352). Asked of the jar
+      # itself, as for dpop: a jar that predates `supports`, or this feature,
+      # exits nonzero.
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports tdf_validity
+      exit $?
+      ;;
     zip64-at-2gib)
       # Switch to the ZIP64 sentinel plus extra field at 2 GiB rather than at
       # 4 GiB. java-sdk adopted MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE in
@@ -206,6 +217,15 @@ if [ "$1" == "supports" ]; then
       exit 2
       ;;
   esac
+fi
+
+if [[ "$1" == "validate" ]]; then
+  if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 validate <file>" >&2
+    exit 2
+  fi
+  # Offline: none of the platform or credential options below apply.
+  exec java -jar "$SCRIPT_DIR"/cmdline.jar validate "$2"
 fi
 
 args=(

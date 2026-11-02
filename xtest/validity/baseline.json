@@ -1,0 +1,270 @@
+{
+  "about": [
+    "Expected per-SDK answers for validity/test_tdf_validity.py (DSPX-5349). See spec/tdf-validity.md.",
+    "A case's agreed answer lives in corpus.py. This file records only what differs from it, each with the ticket that explains it, and every SDK's answer to the undecided and unspecified cases.",
+    "A cell is \"valid\" or \"invalid\" (never \"error\": a CLI that could not check a file always fails), or an object adding \"ticket\", \"layer\" (where the rejection lands, when not the case's layer) and \"note\".",
+    "Any difference from this file fails the run; each failure says which cell to add, change or delete."
+  ],
+  "format": 1,
+  "sdks": {
+    "go": {
+      "source": "otdfctl validate (DSPX-5350), built from opentdf/platform#4254 at e33f3cb and run over this corpus. It reports sdk.IsValidTdf from platform/sdk v0.35.0, with err.Error() as the reason.",
+      "reason_patterns": {
+        "archive": "NewTDFReader",
+        "manifest-missing": "Manifest failed",
+        "manifest-json": "could not validate manifest",
+        "manifest-schema": "manifest was not valid"
+      }
+    },
+    "java": {
+      "source": "java -jar cmdline.jar validate (DSPX-5352, opentdf/java-sdk#428). Seeded by running that command, built from #428 at 8e9221d (stacked on #418), over this corpus.",
+      "reason_patterns": {
+        "archive": "zip",
+        "manifest-missing": "doesn't contain a manifest",
+        "manifest-json": "JSON|byte order mark",
+        "manifest-schema": "lax manifest schema"
+      }
+    },
+    "js": {
+      "source": "@opentdf/ctl validate (DSPX-5351), built from opentdf/web-sdk#1119 at d293e509 (stacked on #1118, #1117 and #1104) and run over this corpus. Its verdicts match #1104 isValidTdf on every case.",
+      "reason_patterns": {
+        "archive": "central directory|local file header|compression method|compressed size",
+        "manifest-missing": "CD manifest",
+        "manifest-json": "not valid JSON",
+        "manifest-schema": "lax schema|not a JSON object"
+      }
+    }
+  },
+  "cells": {
+    "archive/cd-size-0xfffffff0": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      }
+    },
+    "archive/comment": {
+      "go": "invalid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "archive/comment-max": {
+      "go": "invalid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "archive/deflated-manifest": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-5354",
+        "layer": "manifest-json",
+        "note": "Go ignores the compression method and fails to parse the deflated bytes as JSON"
+      },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4924",
+        "layer": "manifest-json",
+        "note": "java-sdk#428 does not check the compression method and fails to parse the deflated bytes as JSON"
+      }
+    },
+    "archive/deflated-payload": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
+      }
+    },
+    "archive/method-8-on-stored-bytes": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
+      }
+    },
+    "archive/payload-size-mismatch": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5354"
+      },
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-4924",
+        "note": "java-sdk#428 reads a stored entry by its uncompressed size and checks neither the compression method nor that the two sizes agree"
+      }
+    },
+    "json/duplicate-key": {
+      "go": "invalid",
+      "java": "invalid",
+      "js": "invalid"
+    },
+    "json/nesting-1000": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "json/nesting-20000": {
+      "go": "invalid",
+      "java": "invalid",
+      "js": "valid"
+    },
+    "json/number-10001-digits": {
+      "go": "valid",
+      "java": "invalid",
+      "js": "valid"
+    },
+    "json/trailing-garbage": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5353"
+      }
+    },
+    "json/trailing-object": {
+      "go": {
+        "outcome": "valid",
+        "ticket": "DSPX-5353"
+      }
+    },
+    "profile/directory-entry": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "profile/duplicate-legacy-name-invalid-last": {
+      "go": "invalid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
+      "js": "invalid"
+    },
+    "profile/duplicate-legacy-name-valid-last": {
+      "go": "valid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
+      "js": "valid"
+    },
+    "profile/duplicate-pairs": {
+      "go": "valid",
+      "java": "invalid",
+      "js": "valid"
+    },
+    "profile/duplicate-spec-name-invalid-last": {
+      "go": "invalid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
+      "js": "invalid"
+    },
+    "profile/duplicate-spec-name-valid-last": {
+      "go": "valid",
+      "java": {
+        "outcome": "invalid",
+        "layer": "archive",
+        "note": "java-sdk#428 rejects any duplicated entry name before reading either copy"
+      },
+      "js": "valid"
+    },
+    "profile/encrypted-flag": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "profile/extra-entry": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "profile/manifest-first": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "profile/no-payload-entry": {
+      "go": "valid",
+      "java": "invalid",
+      "js": "valid"
+    },
+    "roundtrip/mlkem-768": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    },
+    "scope/manifest-crc-mismatch": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "scope/payload-corrupted": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "scope/payload-crc-mismatch": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "scope/payload-length-mismatch": {
+      "go": "valid",
+      "java": "valid",
+      "js": "valid"
+    },
+    "writer/go-mlkem-wrapped": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    },
+    "writer/js-mlkem-wrapped": {
+      "go": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "java": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      },
+      "js": {
+        "outcome": "invalid",
+        "ticket": "DSPX-4388"
+      }
+    },
+    "zip/manifest-size-into-cd": {
+      "java": {
+        "outcome": "valid",
+        "ticket": "DSPX-5103",
+        "note": "java-sdk#428 bounds an entry by the end of the file, not the start of the central directory, and reads a stored entry by its uncompressed size"
+      }
+    }
+  }
+}
