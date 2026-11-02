@@ -41,8 +41,6 @@ import test_zip_conformance as conformance
 import zipinspect
 import zipmutate
 import zipreport
-from abac import Attribute
-from fixtures.encryption import EncryptFactory
 from zipinspect import MalformedZipError
 
 _FOREIGN_EXTRA_TLV = conformance._FOREIGN_EXTRA_TLV
@@ -368,7 +366,6 @@ def test_fake_record_conformance_accepts_only_safe_outcomes(
     pt = tmp_path / "plaintext.bin"
     with zipfile.ZipFile(src) as z:
         pt.write_bytes(z.read("0.payload"))
-    monkeypatch.setattr(conformance, "_base_container", lambda *args: src)
     sdk = _fake_sdk()
     calls: list[Path] = []
 
@@ -379,8 +376,13 @@ def test_fake_record_conformance_accepts_only_safe_outcomes(
         assert ct_file.read_bytes()[: cd.cd_offset] == src.read_bytes()[: cd.cd_offset]
         with zipfile.ZipFile(ct_file) as z:
             assert z.comment.startswith(zipinspect.CEN_SIG)
-            (fake_offset,) = struct.unpack_from("<I", z.comment, 42)
-            assert fake_offset > ct_file.stat().st_size
+            # A 2**63 ZIP64 offset, not merely past EOF: pre-#1017 web-sdk
+            # parsed a past-EOF plant without failing (see the cell).
+            (raw_offset,) = struct.unpack_from("<I", z.comment, 42)
+            assert raw_offset == zipinspect.ZIP64_SENTINEL_32
+            assert z.comment.endswith(
+                struct.pack("<HHQ", zipinspect.ZIP64_EXTRA_ID, 8, 1 << 63)
+            )
             assert z.namelist() == ["0.payload", "0.manifest.json"]
             payload = z.read("0.payload")  # also validates the CRC-32
             assert payload == pt.read_bytes()
@@ -394,11 +396,7 @@ def test_fake_record_conformance_accepts_only_safe_outcomes(
 
     def run_case() -> None:
         conformance.test_comment_containing_a_fake_central_directory_record(
-            encrypt_sdk=sdk,
-            decrypt_sdk=sdk,
-            in_focus={sdk},
-            zip_conformance_tdf=create_autospec(EncryptFactory, instance=True),
-            attribute_default_rsa=create_autospec(Attribute, instance=True),
+            readable_zip_base=src,
             tmp_path=tmp_path,
             zip_outcome=conformance.ZipOutcome(
                 sdk, pt, "fake::node", lambda k, v: recorded.append((k, v))
@@ -442,24 +440,26 @@ def test_independent_entry_sentinels_preserve_contents(
     tmp_path: Path, fields: str, zip64_eocd: bool
 ):
     src = _ordinary_zip(tmp_path / "src.zip")
-    trailer, cd_offset = zipmutate.load_trailer(src)
-    original = trailer.entries[1]
-    trailer.entries[1] = conformance._with_zip64_fields(original, fields)
-    trailer = dataclasses.replace(trailer, force_zip64_eocd=zip64_eocd)
+    before = zipinspect.central_directory(src)
+    trailer = conformance._entry_sentinel_trailer(src, fields, zip64_eocd)
     dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
-    assert src.read_bytes()[:cd_offset] == dest.read_bytes()[:cd_offset]
-    entry = zipinspect.central_directory(dest).entries[1]
-    assert (entry.raw_compressed_size == 0xFFFFFFFF) == ("c" in fields)
-    assert (entry.raw_uncompressed_size == 0xFFFFFFFF) == ("u" in fields)
-    assert (entry.raw_local_header_offset == 0xFFFFFFFF) == ("o" in fields)
-    assert entry.compressed_size == original.compressed_size
-    assert entry.uncompressed_size == original.uncompressed_size
-    assert entry.local_header_offset == original.local_header_offset
-    with zipfile.ZipFile(src) as before, zipfile.ZipFile(dest) as after:
-        for name in before.namelist():
-            assert before.read(name) == after.read(name)
-        assert after.getinfo("0.manifest.json").extract_version == 45
-        assert after.getinfo("0.payload").extract_version == 20
+    assert src.read_bytes()[: before.cd_offset] == dest.read_bytes()[: before.cd_offset]
+    after = zipinspect.central_directory(dest)
+    # Every record, so a ZIP64 extra is followed by another record to misparse.
+    for original, entry in zip(before.entries, after.entries, strict=True):
+        assert entry.name == original.name
+        assert (entry.raw_compressed_size == 0xFFFFFFFF) == ("c" in fields)
+        assert (entry.raw_uncompressed_size == 0xFFFFFFFF) == ("u" in fields)
+        assert (entry.raw_local_header_offset == 0xFFFFFFFF) == ("o" in fields)
+        assert entry.compressed_size == original.compressed_size
+        assert entry.uncompressed_size == original.uncompressed_size
+        assert entry.local_header_offset == original.local_header_offset
+    with zipfile.ZipFile(src) as z_before, zipfile.ZipFile(dest) as z_after:
+        for info in z_after.infolist():
+            assert z_before.read(info.filename) == z_after.read(info.filename)
+            assert info.extract_version == 45
+            # Without it ahead of ZIP64, the cells stop testing TLV order.
+            assert info.extra.startswith(_FOREIGN_EXTRA_TLV)
 
 
 @pytest.mark.parametrize("field", ["count", "size", "offset"])
@@ -616,7 +616,8 @@ def test_expected_parser_rejections_are_accepted(sdk: str, diagnostic: bytes):
         # Real diagnostics, deliberately not allowlisted: each is the SDK
         # noticing by accident downstream of its ZIP layer rather than
         # diagnosing the container, so none is evidence of a bounds check.
-        # All three are filed upstream; see the comment above _ZIP_REJECTIONS.
+        # The go JSON, java seek and js JSON rows are fixed upstream and stay
+        # so a build from before the fix fails; see above _ZIP_REJECTIONS.
         (
             "go",
             1,
@@ -1128,12 +1129,34 @@ def _session(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(config=config, exitstatus=pytest.ExitCode.OK, lines=lines)
 
 
-def test_faults_fail_the_run(hook_state, tmp_path: Path):
+def test_faults_fail_the_run(
+    hook_state, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Every cell passed, so the reason for the red job has to be written down.
+
+    The html report and pytest's stats line count tests, and both stay green.
+    """
+    step_summary = tmp_path / "step-summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(step_summary))
     conftest.pytest_runtest_logreport(_hook_report("call", "passed"))
     session = _session(tmp_path)
     conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
     assert session.exitstatus == pytest.ExitCode.TESTS_FAILED
     assert any("passed without recording" in line for line in session.lines)
+    assert "passed without recording" in step_summary.read_text()
+
+
+@pytest.mark.parametrize(
+    "status", [pytest.ExitCode.INTERRUPTED, pytest.ExitCode.INTERNAL_ERROR]
+)
+def test_faults_never_mask_a_worse_exit_status(
+    hook_state, tmp_path: Path, status: pytest.ExitCode
+):
+    conftest.pytest_runtest_logreport(_hook_report("call", "passed"))
+    session = _session(tmp_path)
+    session.exitstatus = status
+    conftest._finish_zip_conformance(session)  # type: ignore[arg-type]
+    assert session.exitstatus == status
 
 
 def test_a_run_whose_cells_all_skipped_says_so(hook_state, tmp_path: Path):

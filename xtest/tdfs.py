@@ -216,7 +216,7 @@ feature_type = Literal[
     "zip64-at-2gib",
     # Reader-side: refuse a ZIP64 locator or central-directory offset that no
     # file position can hold before seeking to it. Without the check, java
-    # narrows 2**63 to a negative long and FileChannelImpl.position throws a
+    # reads 2**63 as a negative long and FileChannelImpl.position throws a
     # bare IllegalArgumentException -- a crash, not a ZIP diagnostic, so
     # test_zip_conformance.py fails the cell. java-sdk#398 added the check
     # after v0.19.1. Answered in SDK._uncached_supports rather than cli.sh;

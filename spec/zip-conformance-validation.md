@@ -29,25 +29,34 @@ and in `test-results/zip-conformance.json`.
     values truthful. The size-only case is compatibility coverage, since a
     reader ignoring directory size can pass it.
   - All seven combinations of per-entry compressed-size, uncompressed-size,
-    and local-header-offset sentinels, under both ZIP32 and ZIP64 EOCDs. A
-    foreign extra-field TLV precedes ZIP64.
+    and local-header-offset sentinels, under both ZIP32 and ZIP64 EOCDs, on
+    every directory record -- so a reader that steps past a ZIP64 extra by
+    the wrong length misparses the record after it. A foreign extra-field TLV
+    precedes ZIP64.
   - A comment on the first directory entry; the following manifest entry
-    must still be found.
+    should still be found.
   - Directory records of 65,535 and 65,536 bytes, using ordinary filenames
     and a large foreign extra field. APPNOTE 4.4.10 recommends keeping a
     record within 65,535 bytes, but nothing in either record contradicts
     anything else, so accepting is the conformant answer at both lengths.
-  - The original cases: a maximum-length archive comment, a ZIP64 locator
-    pushed past the first KiB by a comment, a central-directory record planted
-    in the archive comment, and a ZIP64 extra field that is not the first TLV.
+  - A maximum-length archive comment, and a ZIP64 locator pushed past the
+    first KiB by one.
+  - A central-directory record planted in the archive comment. It declares a
+    ZIP64 local-header offset of `2**63`, so a reader that scans backward for
+    record signatures fails on it; with an offset merely past EOF, the
+    pre-#1017 JS reader parsed the plant without failing and returned the
+    plaintext.
+  - A ZIP64 extra field that is not the first TLV.
 - Adversarial: truncated ZIP64 values, oversized extra-field declarations,
   invalid stored sizes, invalid local-header/locator/directory offsets,
   impossible entry counts, and an overstated entry count.
 
-The adversarial and record-length cells first decrypt the rebuilt but
-unmutated container as a control, which must succeed byte-for-byte; a reader
-that refused the rebuild itself would otherwise have each rejection credited
-as conformant.
+Every cell starts from the rebuilt but unmutated container, which each
+decryptor must first decrypt byte-for-byte as a control -- once per
+decryptor, not per cell. A reader that refused the rebuild itself would
+otherwise have each rejection credited to the mutation: as conformant in an
+adversarial cell, and as a refusal of the wrong structure in a spec-legal
+one.
 
 The `2**63` locator and directory offsets are skipped for decryptors
 without the `zip64-offset-bounds` check -- today, Java releases through
@@ -86,11 +95,13 @@ every malformed case required a recognized rejection, and every valid layout
 required byte-identical decryption. Under the current rule a lenient read of a
 malformed container, or a clean rejection of a valid one, passes with a
 warning instead -- so some failures below would now pass, and they are kept
-as the record of what each build did, not as current pass/fail counts.
+as the record of what each build did, not as current pass/fail counts. Two
+cases have also changed since: the per-entry sentinels then covered only the
+manifest's record, and the planted record's offset was merely past EOF.
 
 The full mutation matrix ran **266 cells: 213 passed, 53 failed, zero skipped**.
-Failures are intentionally visible: no expected-failure markers or feature
-skips hide the control regressions or other SDK validation gaps. Counts below
+That run used no expected-failure markers or feature skips, so the control
+regressions and other SDK validation gaps all show as failures. Counts below
 are **passed / failed**.
 
 | Decryptor | Added valid layouts (18) | Added malformed inputs (12) | Added record boundaries (2) | Original cases (6) |
@@ -103,10 +114,10 @@ are **passed / failed**.
 | JS main | 18 / 0 | 4 / 8 | 1 / 1 | 4 / 2 |
 | JS PR 1017 | 18 / 0 | 9 / 3 | 2 / 0 | 6 / 0 |
 
-The committed code was also rerun against Go PR 4043 alone: **all 32 added
-cases passed**. The offline suites (`test_zip_conformance_units.py` and
-`test_zip64_units.py`) passed **112 tests**, including real child-process
-cleanup on timeout. Ruff lint/format and Pyright passed.
+The code as of that comparison was also rerun against Go PR 4043 alone: **all
+32 added cases passed**. The offline suites (`test_zip_conformance_units.py`
+and `test_zip64_units.py`) then passed **112 tests**, including real
+child-process cleanup on timeout. Ruff lint/format and Pyright passed.
 
 ### Evidence distinguishing the fixes
 
@@ -194,8 +205,8 @@ which refs were conformant and which were merely safe.
 
 To isolate the 32 added cases, append
 `-k 'independent_sentinel or entry_comment or malformed_zip or record_length_boundary'`.
-The complete module also runs six pre-existing cases, including the
-archive comments some readers refuse (warned, not failed).
+The complete module also runs the six original cases from the results table,
+including the archive comments some readers refuse (warned, not failed).
 
 For the actual 2.1 GiB writer threshold, run:
 

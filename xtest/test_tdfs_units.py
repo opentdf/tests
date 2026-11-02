@@ -199,8 +199,10 @@ def _installed_sdk(sdk: tdfs.sdk_type, version: str) -> tdfs.SDK:
 class TestZip64OffsetBounds:
     """Which decryptors ``test_zip_conformance.py`` skips the 2**63 offsets for.
 
-    Each "True" is a build held to a clean rejection, so a gate that were too
-    generous would skip a regression instead of reporting it.
+    Each "True" is a build held to a clean rejection, and each "False" skips
+    the cells for that build -- so a gate that answered False too readily
+    would hide a regression instead of reporting it. One that answers True
+    too readily fails loudly on the crash instead.
     """
 
     @pytest.fixture(autouse=True)

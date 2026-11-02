@@ -127,6 +127,23 @@ def _with_zip64_fields(
     )
 
 
+def _entry_sentinel_trailer(
+    src: Path, fields: str, zip64_eocd: bool
+) -> zipmutate.MutableTrailer:
+    """``src``'s trailer with ``fields`` deferred to ZIP64 on every record.
+
+    Every record, not just the manifest's: a reader that steps past a ZIP64
+    extra by the wrong length only shows it on the record that follows, and
+    the manifest's record is the last.
+    """
+    trailer, _ = zipmutate.load_trailer(src)
+    return dataclasses.replace(
+        trailer,
+        entries=[_with_zip64_fields(e, fields) for e in trailer.entries],
+        force_zip64_eocd=zip64_eocd,
+    )
+
+
 def _assert_faithful_roundtrip(
     decrypt_sdk: tdfs.SDK, ct_file: Path, rt_file: Path, pt_file: Path
 ) -> None:
@@ -207,22 +224,32 @@ _RUNTIME_FAILURE = re.compile(
 # layer is not a parser diagnostic -- the same reason _RUNTIME_FAILURE
 # refuses NegativeArraySizeException:
 #
-# * A 2**63 offset narrowed to a negative file position and refused by the
-#   runtime rather than by a bounds check: java's message-less
+# * A 2**63 offset read as a negative file position and refused by the
+#   runtime rather than by a bounds check: java's bare, message-less
 #   IllegalArgumentException from FileChannelImpl.position via
 #   ZipReader.extractZIP64CentralDirectoryInfo. go's readSeeker.Seek and
 #   io.ReadFull are accepted only for EOF -- a seek or read past the end --
 #   so the same accident there fails too.
-# * A bare java EOFException: Gson's truncated-JSON error and OkHttp's dropped
-#   connection both carry one. Only ZipReader's own wording passes, or the
-#   MalformedTDFException that java-sdk#418 wraps around the Gson error.
+# * A bare java EOFException: Gson's truncated-JSON error and okio's, when
+#   KAS drops the connection, both carry one. Only ZipReader's own wording
+#   passes.
 # * js's "SyntaxError: Unexpected end of JSON input" from handing an empty
 #   read to JSON.parse in zip-reader.js.
 # * go's "json.Unmarshal failed:invalid character 'P' after top-level value",
 #   the manifest decoder reading past the manifest into payload bytes.
 #
-# The java seek, js and go JSON cases are filed upstream. Every one is pinned
-# as a negative row in test_abnormal_or_unrelated_failures_do_not_pass.
+# The java seek, js and go JSON cases are fixed upstream (java-sdk#398,
+# web-sdk#1079, opentdf/platform#4043). Every one stays pinned as a negative
+# row in test_abnormal_or_unrelated_failures_do_not_pass, so a build from
+# before its fix fails rather than passes.
+#
+# java's MalformedTDFException is not bare in that sense, and is accepted
+# whatever its cause. java-sdk#418 wraps container and manifest failures in
+# it -- InvalidZipException, IllegalArgumentException and Gson's
+# JsonParseException alike -- so a match trusts java-sdk's own judgement that
+# the input is malformed, as a go or js parser message is trusted. A seek
+# accident wrapped in one would pass; #398's bounds keep a 2**63 offset from
+# reaching the seek on any build that has #418.
 _ZIP_REJECTIONS = {
     "go": re.compile(
         r"zip: (?:not a valid|unable to read|file not found)|"
@@ -233,7 +260,8 @@ _ZIP_REJECTIONS = {
     ),
     # MalformedTDFException is the typed failure java-sdk reports for a container or
     # manifest it cannot read (java-sdk#418); it is public API, so it is matched by
-    # name, not by its cause. The two bare causes are what releases before it throw.
+    # name, not by its cause (see above). The other alternatives are what releases
+    # before it throw.
     "java": re.compile(
         r"MalformedTDFException|InvalidZipException|"
         r"EOFException: Unexpected EOF when reading filename|"
@@ -403,38 +431,72 @@ def zip_outcome(
     )
 
 
-def _base_container(
+@pytest.fixture(scope="module")
+def _proven_baselines() -> dict[tuple[Path, str], Path]:
+    """``readable_zip_base`` results, keyed by source TDF and decrypting SDK."""
+    return {}
+
+
+@pytest.fixture
+def readable_zip_base(
     encrypt_sdk: tdfs.SDK,
     decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
     zip_conformance_tdf: EncryptFactory,
+    zip_conformance_pt_file: Path,
     attribute_default_rsa: Attribute,
+    tmp_dir: Path,
+    _proven_baselines: dict[tuple[Path, str], Path],
 ) -> Path:
-    """The one real, unmutated TDF each case starts from.
+    """The rebuilt but unmutated container every case starts from.
 
     Every case rebuilds this container's trailer, so the producer contributes
     only local headers and payload, and one producer is enough: ``js``. go
     and java encrypt cells are skipped rather than parametrized away, so each
     test still reports one cell per ``decrypt_sdk`` instead of vanishing from
     the matrix.
+
+    It is proven readable before any lie is added. ``load_trailer``
+    re-encodes the trailer rather than copying it (see
+    :meth:`zipmutate.MutableEntry.from_entry`), so the control is that
+    re-encoding, not the file js wrote. Without it, a reader that refuses the
+    rebuild itself would have every rejection below credited to the
+    mutation: as conformant in an adversarial cell, and as a refusal of the
+    wrong structure in a spec-legal one.
+
+    The control says nothing about any one mutation, so it runs once per
+    source TDF and decryptor rather than once per cell.
     """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
     if encrypt_sdk.sdk != "js":
         pytest.skip(
             "the trailer is rebuilt, so one producer suffices; js is the one used"
         )
-    return zip_conformance_tdf(
+    ct_file = zip_conformance_tdf(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
+    key = (ct_file, str(decrypt_sdk))
+    if key not in _proven_baselines:
+        trailer, _ = zipmutate.load_trailer(ct_file)
+        baseline = zipmutate.rewrite(
+            ct_file, ct_file.with_name(f"{ct_file.stem}-rebuilt.tdf"), trailer
+        )
+        _assert_faithful_roundtrip(
+            decrypt_sdk,
+            baseline,
+            tmp_dir / f"{ct_file.stem}-control-{decrypt_sdk}.bin",
+            zip_conformance_pt_file,
+        )
+        _proven_baselines[key] = baseline
+    return _proven_baselines[key]
 
 
 def test_zip64_extra_field_not_first_is_still_resolved(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
     """Resolve a ZIP64 offset after a foreign extra-field TLV.
@@ -444,11 +506,7 @@ def test_zip64_extra_field_not_first_is_still_resolved(
     because it uses ZIP64; every other rebuilt entry declares zipmutate's 2.0
     default, not the 4.5 js wrote.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    ct_file = readable_zip_base
 
     trailer, _ = zipmutate.load_trailer(ct_file)
     true_offset: int | None = None
@@ -480,20 +538,12 @@ def test_zip64_extra_field_not_first_is_still_resolved(
 
 
 def test_eocd_with_max_length_comment(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
-    """A maximum-length (0xFFFF) EOCD comment is spec-legal and must round-trip."""
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    """A maximum-length (0xFFFF) EOCD comment is spec-legal and should round-trip."""
+    ct_file = readable_zip_base
 
     trailer, _ = zipmutate.load_trailer(ct_file)
     trailer = dataclasses.replace(trailer, comment=b"c" * 0xFFFF)
@@ -505,12 +555,8 @@ def test_eocd_with_max_length_comment(
 
 
 def test_zip64_locator_pushed_past_first_1kib_by_comment(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
     """A ZIP64 EOCD + locator that is not size-mandated is spec-legal.
@@ -520,11 +566,7 @@ def test_zip64_locator_pushed_past_first_1kib_by_comment(
     then pushes the locator behind whatever a reader's naive "look at the
     last 1 KiB" tail read would have found.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    ct_file = readable_zip_base
 
     trailer, _ = zipmutate.load_trailer(ct_file)
     trailer = dataclasses.replace(trailer, force_zip64_eocd=True, comment=b"c" * 0xFFFF)
@@ -573,36 +615,37 @@ def test_central_directory_entry_count_is_overstated(
 
 
 def test_comment_containing_a_fake_central_directory_record(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
     """DSPX-4591 finding 1, the case that motivated it.
 
     A ZIP comment can contain a complete central-directory record without
-    making it an entry. The bogus record points past EOF, so interpreting it
-    as structure causes a read failure. Placing it in the comment rather than
-    the encrypted payload keeps authentication intact -- so a reader that
-    stays anchored to the trailer gets the plaintext back, and nothing here
-    can be mistaken for an expected integrity failure. A reader that follows
-    the planted record instead must say so as a ZIP error; the warning names
-    it as non-conformant.
+    making it an entry. The planted copy of the manifest's record declares a
+    ZIP64 local-header offset of ``2**63``, which no reader can follow, so
+    interpreting it as structure fails. An offset merely past EOF is not
+    enough: web-sdk before #1017 scanned backward for record signatures and
+    did parse the plant, but resolved the manifest by its first match -- the
+    real record -- and read the plant's local header as an empty chunk
+    without complaint, so it returned the plaintext and looked conformant.
+
+    Placing it in the comment rather than the encrypted payload keeps
+    authentication intact -- so a reader that stays anchored to the trailer
+    gets the plaintext back, and nothing here can be mistaken for an expected
+    integrity failure. A reader that follows the planted record instead must
+    say so as a ZIP error; the warning names it as non-conformant.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    ct_file = readable_zip_base
 
     cd_before = zipinspect.central_directory(ct_file)
     trailer, _ = zipmutate.load_trailer(ct_file)
     manifest = next(e for e in trailer.entries if e.name == "0.manifest.json")
     fake_record = dataclasses.replace(
-        manifest, local_header_offset=ct_file.stat().st_size + 0x10000
+        manifest,
+        local_header_offset=1 << 63,
+        force_zip64_offset=True,
+        version_needed_to_extract=45,
     ).to_bytes()
     trailer = dataclasses.replace(trailer, comment=fake_record)
     mutated = tmp_path / "mutated.tdf"
@@ -622,12 +665,8 @@ def test_comment_containing_a_fake_central_directory_record(
 
 @pytest.mark.parametrize("eocd_field", ["count", "size", "offset"])
 def test_zip64_eocd_independent_sentinel(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
     eocd_field: zipmutate.Zip64EocdField,
 ):
@@ -638,11 +677,7 @@ def test_zip64_eocd_independent_sentinel(
     that consults the ZIP64 EOCD only when the offset field is 0xFFFFFFFF, as
     go did before opentdf/platform#3981.
     """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    ct_file = readable_zip_base
     trailer, _ = zipmutate.load_trailer(ct_file)
     trailer = dataclasses.replace(
         trailer, force_zip64_eocd=True, zip64_eocd_fields=frozenset({eocd_field})
@@ -654,49 +689,28 @@ def test_zip64_eocd_independent_sentinel(
 @pytest.mark.parametrize("fields", _ENTRY_ZIP64_FIELDS)
 @pytest.mark.parametrize("zip64_eocd", [False, True], ids=["zip32_eocd", "zip64_eocd"])
 def test_zip64_entry_independent_sentinels(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
     fields: str,
     zip64_eocd: bool,
 ):
-    """Resolve only the sentinel-selected values, after a foreign extra TLV."""
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
-    trailer, _ = zipmutate.load_trailer(ct_file)
-    trailer = dataclasses.replace(trailer, force_zip64_eocd=zip64_eocd)
-    manifest_index = next(
-        i for i, e in enumerate(trailer.entries) if e.name == "0.manifest.json"
-    )
-    trailer.entries[manifest_index] = _with_zip64_fields(
-        trailer.entries[manifest_index], fields
-    )
-    mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
+    """Resolve only the sentinel-selected values, after a foreign extra TLV.
+
+    On every directory record; see ``_entry_sentinel_trailer``.
+    """
+    trailer = _entry_sentinel_trailer(readable_zip_base, fields, zip64_eocd)
+    mutated = zipmutate.rewrite(readable_zip_base, tmp_path / "mutated.tdf", trailer)
     zip_outcome(mutated, tmp_path / "roundtrip.bin", legality="spec-legal")
 
 
 def test_central_directory_entry_comment(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
+    readable_zip_base: Path,
     zip_outcome: ZipOutcome,
-    attribute_default_rsa: Attribute,
     tmp_path: Path,
 ):
-    """An entry comment must not desynchronize traversal to the manifest."""
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
+    """An entry comment should not desynchronize traversal to the manifest."""
+    ct_file = readable_zip_base
     trailer, _ = zipmutate.load_trailer(ct_file)
     assert [e.name for e in trailer.entries] == ["0.payload", "0.manifest.json"]
     trailer.entries[0] = dataclasses.replace(
@@ -704,37 +718,6 @@ def test_central_directory_entry_comment(
     )
     mutated = zipmutate.rewrite(ct_file, tmp_path / "mutated.tdf", trailer)
     zip_outcome(mutated, tmp_path / "roundtrip.bin", legality="spec-legal")
-
-
-@pytest.fixture
-def readable_zip_base(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    in_focus: set[tdfs.SDK],
-    zip_conformance_tdf: EncryptFactory,
-    zip_conformance_pt_file: Path,
-    attribute_default_rsa: Attribute,
-    tmp_path: Path,
-) -> Path:
-    """The rebuilt but unmutated container, proven readable before any lie.
-
-    ``load_trailer`` re-encodes the trailer rather than copying it (see
-    :meth:`zipmutate.MutableEntry.from_entry`), so the control is that
-    re-encoding, not the file js wrote. Decrypting the original instead would
-    let a reader that refuses the rebuild itself have every rejection below
-    credited as a conformant one.
-    """
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    ct_file = _base_container(
-        encrypt_sdk, decrypt_sdk, zip_conformance_tdf, attribute_default_rsa
-    )
-    trailer, _ = zipmutate.load_trailer(ct_file)
-    baseline = zipmutate.rewrite(ct_file, tmp_path / "baseline.tdf", trailer)
-    _assert_faithful_roundtrip(
-        decrypt_sdk, baseline, tmp_path / "control.bin", zip_conformance_pt_file
-    )
-    return baseline
 
 
 _MALFORMED_CASES = [

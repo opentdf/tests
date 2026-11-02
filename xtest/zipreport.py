@@ -13,10 +13,15 @@ The collecting end is a pytest hook, so it lives in ``conftest.py``. Parsing
 and rendering live here so they can be exercised offline in
 ``test_zip_conformance_units.py`` rather than only by a full cross-SDK run.
 
-Summarising in-process is also what keeps ``junit_family`` at its default.
-Per-testcase properties are only schema-valid under ``xunit1``, so reading
-these back out of the junit XML costs a non-default ini setting, and buys a
-channel that exists only in CI -- the same run locally would print nothing.
+Summarising in-process is also what keeps the report independent of junit
+XML. Per-testcase properties are only schema-valid under ``xunit1``, so
+reading these back out of the XML would cost a non-default ini setting, and
+buy a channel that exists only for runs given ``--junitxml`` -- the same run
+locally would print nothing. pytest still copies every ``user_properties``
+entry into the XML of such a run, whatever ``junit_family`` says;
+``zip_outcome`` appends to the list directly rather than through
+``record_property`` only so that a default ``xunit2`` run is not warned
+about it.
 """
 
 from __future__ import annotations
@@ -217,6 +222,23 @@ def markdown(summary: Summary) -> str:
             f"- `{cell.node_id}`: {cell.outcome} [{cell.diagnostic or '-'}]"
             for cell in cells
         ]
+    return "\n".join(lines) + "\n"
+
+
+def faults_markdown(faults: Iterable[str]) -> str:
+    """Render harness faults as a GitHub step summary section.
+
+    A fault fails the run without failing any test, so the html report and
+    pytest's closing stats line both stay green; this is where the reason
+    for the red job shows up.
+    """
+    lines = [
+        "## ZIP conformance harness faults",
+        "",
+        "Each of these fails the run, whatever the test counts say.",
+        "",
+    ]
+    lines += [f"- `{fault}`" for fault in faults]
     return "\n".join(lines) + "\n"
 
 

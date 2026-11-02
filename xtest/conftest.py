@@ -632,9 +632,10 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
     or rejected it cleanly, so this table is the only place the difference
     shows up. It is rendered in-process so a local run gets it too.
 
-    Silent only when no ``zip_conformance`` cell was collected at all. A run
-    whose cells all skipped or failed says so, rather than printing nothing --
-    an empty table and a missing one look the same.
+    Silent only when no ``zip_conformance`` cell reported a result -- none
+    collected, or none run. A run whose cells all skipped or failed says so,
+    rather than printing nothing -- an empty table and a missing one look the
+    same.
     """
     config = session.config
     if getattr(config, "workerinput", None) is not None:
@@ -645,7 +646,11 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
     if reporter is not None:
         reporter.write_sep("=", "zip conformance outcomes")
     if _zip_conformance_faults:
-        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        # Never over an interrupted or internally failed run's status, which
+        # says more than this one would.
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        report.append_step_summary(zipreport.faults_markdown(_zip_conformance_faults))
         if reporter is not None:
             reporter.write_line("harness faults (the run fails):", red=True)
             for fault in _zip_conformance_faults:
@@ -673,8 +678,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     try:
         _finish_zip_conformance(session)
     finally:
-        # The bench gate decides the run's exit status; a reporting failure
-        # above must not skip it.
+        # The bench gate can fail the run too; an exception above must not
+        # skip it.
         _finish_bench(session, exitstatus)
 
 
