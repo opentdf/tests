@@ -589,10 +589,9 @@ def bench_manifest_path(xtest_root: Path) -> Path:
     the path and the JSON shape are a written convention rather than a shared
     import; change one and you must change both.
     """
-    sdk_dir = os.environ.get("OTDF_SDK_DIR")
-    return (
-        Path(sdk_dir) if sdk_dir else xtest_root / "sdk"
-    ) / "benchmark.installed.json"
+    override = os.environ.get("OTDF_SDK_DIR")
+    sdk_dir = Path(override) if override else xtest_root / "sdk"
+    return sdk_dir / "benchmark.installed.json"
 
 
 def _recorded_commit(dist_dir: Path) -> str | None:
@@ -792,12 +791,11 @@ def env(
         for key in stale_bench_vars(bench_vars):
             print(f"unset {key};")
         env_vars[BENCH_EXPORTS_VAR] = " ".join(bench_vars)
-        # Shell export format - use plain print to avoid line wrapping
+        # Plain print, not the Rich console, which would wrap long lines.
         for key, value in env_vars.items():
             # Escape single quotes in value for shell safety
             escaped_value = value.replace("'", "'\\''")
-            # Use plain print to stdout to avoid rich console line wrapping
-            print(f"export {key}='{escaped_value}';", file=sys.stdout)
+            print(f"export {key}='{escaped_value}';")
 
 
 if __name__ == "__main__":

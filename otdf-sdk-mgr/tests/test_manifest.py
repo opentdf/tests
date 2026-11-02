@@ -82,7 +82,7 @@ def _manifest(status: PreparationStatus, message: str = "why") -> InstallationMa
     )
 
 
-# Every key, both installation methods, a null pin, a null commit, a SHA-256
+# Every key, both installation methods, an otdfctl pin, a null commit, a SHA-256
 # commit, and metadata.sdk, written out as readers outside this package see it.
 # Checked in as JSON rather than written here: otdf-local's tests read the same
 # file, so a change to the shape this package writes fails there too.

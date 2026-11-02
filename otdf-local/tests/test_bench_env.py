@@ -61,11 +61,25 @@ def _install(manifest_path: Path, tag: str, version: str | None = None) -> Path:
     return dist_dir
 
 
-def _pinned(tmp_path: Path, tag: str = "v0.38.1", **rest: object) -> Path:
+def _pinned(path: Path, **rest: object) -> Path:
     """A manifest whose otdfctl pin is installed, as `install benchmark` leaves it."""
-    path = tmp_path / "m.json"
-    _install(path, tag)
-    return _write_manifest(path, _identity(tag, tag, "release"), **rest)
+    _install(path, "v0.38.1")
+    return _write_manifest(path, _identity("v0.38.1", "v0.38.1", "release"), **rest)
+
+
+def _refusal(path: Path, capsys: pytest.CaptureFixture[str]) -> str:
+    """What `bench_manifest_env(path)` said on stderr when it exported no pin.
+
+    Whatever the reason, it still points at the manifest, so the failure is
+    diagnosable and the manifest's own reader decides what it means; and it
+    says nothing on stdout, which is eval'd.
+    """
+    env = bench_manifest_env(path)
+    assert "OTDFCTL_HEADS" not in env
+    assert "BENCH_INSTALLATION_MANIFEST" in env
+    out, err = capsys.readouterr()
+    assert out == ""
+    return err
 
 
 class TestBenchManifestPath:
@@ -130,7 +144,7 @@ class TestBenchManifestEnv:
 
     def test_exported_pin_is_announced_on_stderr(self, tmp_path: Path, capsys):
         # It applies to every later run in the shell, not only benchmarks.
-        bench_manifest_env(_pinned(tmp_path))
+        bench_manifest_env(_pinned(tmp_path / "m.json"))
         out, err = capsys.readouterr()
         assert out == ""
         assert "pins otdfctl to v0.38.1" in err
@@ -146,25 +160,8 @@ class TestBenchManifestEnv:
                 _identity("v0.29.0", "v0.29.0", "release"),
             ],
         )
-        env = bench_manifest_env(path)
-        assert "OTDFCTL_HEADS" not in env
-        assert "BENCH_INSTALLATION_MANIFEST" in env
         # Falling back is allowed, but not silently.
-        assert "no otdfctl pin" in capsys.readouterr().err
-
-    def test_unreadable_manifest_warns_without_exporting_heads(
-        self, tmp_path: Path, capsys
-    ):
-        path = tmp_path / "m.json"
-        path.write_text("{not json")
-        env = bench_manifest_env(path)
-        assert "OTDFCTL_HEADS" not in env
-        # Still points at the manifest so the failure is diagnosable.
-        assert "BENCH_INSTALLATION_MANIFEST" in env
-        # On stderr: stdout is eval'd.
-        out, err = capsys.readouterr()
-        assert out == ""
-        assert "OTDFCTL_HEADS" in err
+        assert "no otdfctl pin" in _refusal(path, capsys)
 
     @pytest.mark.parametrize("status", ["failed", "partial", "neutral"])
     def test_unsuccessful_preparation_exports_no_pin(
@@ -172,20 +169,17 @@ class TestBenchManifestEnv:
     ):
         # install benchmark installs otdfctl last, so its own manifests never
         # pair a pin with these; a hand-edited or foreign one might.
-        path = _pinned(tmp_path, status=status, status_message="arm 2 failed")
-        env = bench_manifest_env(path)
-        assert "OTDFCTL_HEADS" not in env
-        # The reader of the manifest itself decides what a failure means.
-        assert "BENCH_INSTALLATION_MANIFEST" in env
-        assert "arm 2 failed" in capsys.readouterr().err
+        path = _pinned(
+            tmp_path / "m.json", status=status, status_message="arm 2 failed"
+        )
+        assert "arm 2 failed" in _refusal(path, capsys)
 
     def test_uninstalled_pin_is_not_exported(self, tmp_path: Path, capsys):
         # conftest would otherwise fail at import on the missing otdfctl.sh.
         path = _write_manifest(
             tmp_path / "m.json", _identity("v0.38.1", "v0.38.1", "release")
         )
-        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
-        assert "no longer installed" in capsys.readouterr().err
+        assert "no longer installed" in _refusal(path, capsys)
 
     def test_rebuilt_pin_is_not_exported(self, tmp_path: Path, capsys):
         # `install tip go` rebuilt dist/main after the benchmark pinned it: the
@@ -193,8 +187,7 @@ class TestBenchManifestEnv:
         path = tmp_path / "m.json"
         _install(path, "main", f"ref=main\nsha={'1' * 40}\n")
         _write_manifest(path, _identity("main", "main", "source"))
-        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
-        assert "rebuilt" in capsys.readouterr().err
+        assert "rebuilt" in _refusal(path, capsys)
 
     @pytest.mark.parametrize("tag", ["", True, 123, ["main"]])
     def test_pin_without_a_string_tag_exports_nothing(
@@ -204,23 +197,22 @@ class TestBenchManifestEnv:
         # non-string one sdk/go/dist/True/otdfctl.sh.
         pin = {**_identity("main", "main", "source"), "installed_tag": tag}
         path = _write_manifest(tmp_path / "m.json", pin)
-        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
-        assert "installed_tag" in capsys.readouterr().err
+        assert "installed_tag" in _refusal(path, capsys)
 
-    @pytest.mark.parametrize("content", ["[1, 2]", "null", '{"otdfctl": "v0.38.1"}'])
-    def test_misshapen_manifest_warns_without_raising(
+    @pytest.mark.parametrize(
+        "content", ["{not json", "[1, 2]", "null", '{"otdfctl": "v0.38.1"}']
+    )
+    def test_malformed_manifest_warns_without_raising(
         self, content, tmp_path: Path, capsys
     ):
         path = tmp_path / "m.json"
         path.write_text(content)
-        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
-        assert "Not exporting OTDFCTL_HEADS" in capsys.readouterr().err
+        assert "Not exporting OTDFCTL_HEADS" in _refusal(path, capsys)
 
     def test_markup_in_the_manifest_is_printed_not_parsed(self, tmp_path: Path, capsys):
         # Rich raises on an unmatched closing tag, and a raise empties stdout.
-        path = _pinned(tmp_path, status="failed", status_message="see [/x]")
-        bench_manifest_env(path)
-        assert "see [/x]" in capsys.readouterr().err
+        path = _pinned(tmp_path / "m.json", status="failed", status_message="see [/x]")
+        assert "see [/x]" in _refusal(path, capsys)
 
 
 class _StoppedPlatform:
@@ -233,8 +225,7 @@ def _prepare(kind: str, xtest_root: Path) -> None:
     path = bench_manifest_path(xtest_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     if kind == "pinned":
-        _install(path, "v0.38.1")
-        _write_manifest(path, _identity("v0.38.1", "v0.38.1", "release"))
+        _pinned(path)
     elif kind == "malformed":
         path.write_text("{not json")
     elif kind == "directory":
@@ -242,6 +233,8 @@ def _prepare(kind: str, xtest_root: Path) -> None:
 
 
 MANIFEST_STATES = ["absent", "pinned", "malformed", "directory"]
+
+needs_bash = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 
 
 @pytest.fixture
@@ -291,7 +284,7 @@ class TestEnvCommand:
         assert "OTDFCTL_HEADS" not in result.stdout
         assert "Not exporting OTDFCTL_HEADS" in result.stderr
 
-    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    @needs_bash
     @pytest.mark.parametrize("state", MANIFEST_STATES)
     def test_eval_exports_everything(self, state, tmp_path: Path, run_env):
         _prepare(state, tmp_path)
@@ -312,7 +305,7 @@ class TestEnvCommand:
         exported = json.loads(run_env("--format", "json").stdout)
         assert exported["XT_TMP_DIR"] == "/mnt/big"
 
-    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    @needs_bash
     def test_rerun_unsets_what_the_last_run_exported(
         self, tmp_path: Path, run_env, monkeypatch
     ):
@@ -332,7 +325,7 @@ class TestEnvCommand:
             "http://localhost:8080",
         ]
 
-    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    @needs_bash
     def test_rerun_keeps_values_set_by_hand(self, run_env, monkeypatch):
         monkeypatch.setenv("BENCH_INSTALLATION_MANIFEST", "/elsewhere/m.json")
         monkeypatch.setenv("OTDFCTL_HEADS", '["v0.38.1"]')
