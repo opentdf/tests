@@ -11,6 +11,7 @@ from typing import Annotated
 import httpx
 import typer
 from rich.live import Live
+from rich.markup import escape
 
 from otdf_local import __version__
 from otdf_local.config.ports import Ports
@@ -583,11 +584,69 @@ def stale_bench_vars(exported: dict[str, str]) -> list[str]:
 def bench_manifest_path(xtest_root: Path) -> Path:
     """Where `otdf-sdk-mgr` writes the benchmark installation manifest.
 
-    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path`. The two packages
-    do not depend on each other, so the path and the JSON shape are a written
-    convention rather than a shared import; change one and you must change both.
+    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path`, including the
+    `OTDF_SDK_DIR` override. The two packages do not depend on each other, so
+    the path and the JSON shape are a written convention rather than a shared
+    import; change one and you must change both.
     """
-    return xtest_root / "sdk" / "benchmark.installed.json"
+    sdk_dir = os.environ.get("OTDF_SDK_DIR")
+    return (
+        Path(sdk_dir) if sdk_dir else xtest_root / "sdk"
+    ) / "benchmark.installed.json"
+
+
+def _recorded_commit(dist_dir: Path) -> str | None:
+    """The commit `otdf-sdk-mgr` recorded in `dist_dir/.version`, if any.
+
+    Mirrors `otdf_sdk_mgr.bench_prepare.read_dist_commit`: a `sha=` line. A go
+    release's `.version` is a bare `module@tag`, which records no commit.
+    """
+    try:
+        lines = (dist_dir / ".version").read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        key, _, value = line.partition("=")
+        if key.strip() == "sha":
+            return value.strip()
+    return None
+
+
+def otdfctl_pin(manifest_path: Path) -> str:
+    """The `dist/` tag of the manifest's otdfctl pin, if it is still that build.
+
+    Raises:
+        OSError: The manifest cannot be read.
+        ValueError: It is not JSON, or it holds no pin worth exporting; the
+            message says which.
+    """
+    manifest = json.loads(manifest_path.read_text())
+    if not isinstance(manifest, dict):
+        raise ValueError("the manifest is not a JSON object")  # noqa: TRY004 - bad data, per the docstring
+    status = manifest.get("status")
+    if status != "success":
+        raise ValueError(
+            f"preparation was {status!r}: {manifest.get('status_message', '')}"
+        )
+    pin = manifest.get("otdfctl")
+    if pin is None:
+        raise ValueError(
+            "it records no otdfctl pin (`install benchmark --otdfctl`), so "
+            "provisioning falls back to sdk/go/dist/main or otdfctl on PATH"
+        )
+    tag = pin.get("installed_tag") if isinstance(pin, dict) else None
+    if not isinstance(tag, str) or not tag:
+        raise ValueError(f"the otdfctl pin names no installed_tag: {pin!r}")
+    # otdf-sdk-mgr installs otdfctl as a go CLI, into <sdk dir>/go/dist/<tag>.
+    dist_dir = manifest_path.parent / "go" / "dist" / tag
+    if not dist_dir.is_dir():
+        raise ValueError(f"otdfctl {tag} is no longer installed at {dist_dir}")
+    built, pinned = _recorded_commit(dist_dir), pin.get("commit_sha")
+    if built and pinned and built != pinned:
+        raise ValueError(
+            f"{dist_dir} was rebuilt at {built} after preparation pinned {pinned}"
+        )
+    return tag
 
 
 def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
@@ -617,19 +676,26 @@ def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
     # the `dist/` directory name either way, and the point of pinning at all
     # is that the pin is what runs -- silently ignoring released pins would
     # reinstate the fallback for exactly the runs that asked not to have it.
+    #
+    # Warn rather than fail: stdout is eval'd for ordinary runs too, and a
+    # failed `env` would take their exports with it. The warnings go to stderr
+    # for the same reason, escaped since manifest text can hold Rich markup.
     try:
-        manifest = json.loads(manifest_path.read_text())
-        otdfctl = manifest.get("otdfctl") or {}
-        tag = otdfctl.get("installed_tag", "")
-        if tag:
-            env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
-    except (OSError, ValueError, AttributeError) as e:
-        # stderr: `env`'s stdout is eval'd, and a warning there is run as a
-        # command that takes every export on the line down with it.
+        tag = otdfctl_pin(manifest_path)
+    except (OSError, ValueError) as e:
         print_warning(
-            f"Could not read OTDFCTL_HEADS from {manifest_path}: {e}", err_console
+            escape(f"Not exporting OTDFCTL_HEADS from {manifest_path}: {e}"),
+            err_console,
         )
+        return env_vars
 
+    env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
+    # Said every time: the pin applies to every run in this shell, benchmark or
+    # not, until the manifest is replaced.
+    print_info(
+        escape(f"OTDFCTL_HEADS pins otdfctl to {tag}, from {manifest_path}"),
+        err_console,
+    )
     return env_vars
 
 

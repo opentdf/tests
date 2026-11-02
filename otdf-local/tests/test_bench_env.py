@@ -38,11 +38,14 @@ def _write_manifest(
     return path
 
 
+PINNED_SHA = "0" * 40
+
+
 def _identity(alias: str, tag: str, method: str) -> dict[str, object]:
     return {
         "requested_alias": alias,
         "repository": "https://github.com/opentdf/otdfctl.git",
-        "commit_sha": "0" * 40,
+        "commit_sha": PINNED_SHA,
         "installed_tag": tag,
         "installed_path": f"/dist/{tag}",
         "installation_method": method,
@@ -50,14 +53,39 @@ def _identity(alias: str, tag: str, method: str) -> dict[str, object]:
     }
 
 
+def _install(manifest_path: Path, tag: str, version: str | None = None) -> Path:
+    """Lay down the go dist/ directory otdf-sdk-mgr would have installed `tag` to."""
+    dist_dir = manifest_path.parent / "go" / "dist" / tag
+    dist_dir.mkdir(parents=True)
+    if version is not None:
+        (dist_dir / ".version").write_text(version)
+    return dist_dir
+
+
+def _pinned(tmp_path: Path, tag: str = "v0.38.1", **rest: object) -> Path:
+    """A manifest whose otdfctl pin is installed, as `install benchmark` leaves it."""
+    path = tmp_path / "m.json"
+    _install(path, tag)
+    return _write_manifest(path, _identity(tag, tag, "release"), **rest)
+
+
 class TestBenchManifestPath:
-    def test_matches_the_sdk_manager_default(self, tmp_path: Path):
+    def test_matches_the_sdk_manager_default(self, tmp_path: Path, monkeypatch):
         # Kept in step with otdf_sdk_mgr.bench_prepare.default_manifest_path,
         # which is get_sdk_dir() / "benchmark.installed.json" where get_sdk_dir
         # is <xtest>/sdk.
+        monkeypatch.delenv("OTDF_SDK_DIR", raising=False)
         assert (
             bench_manifest_path(tmp_path)
             == tmp_path / "sdk" / "benchmark.installed.json"
+        )
+
+    def test_follows_the_sdk_dir_override(self, tmp_path: Path, monkeypatch):
+        # As get_sdk_dir does; otherwise env looks where nothing was written.
+        monkeypatch.setenv("OTDF_SDK_DIR", str(tmp_path / "elsewhere"))
+        assert (
+            bench_manifest_path(tmp_path)
+            == tmp_path / "elsewhere" / "benchmark.installed.json"
         )
 
 
@@ -71,23 +99,31 @@ class TestBenchManifestEnv:
         assert Path(env["BENCH_INSTALLATION_MANIFEST"]).is_absolute()
 
     def test_otdfctl_heads_is_json_conftest_can_parse(self, tmp_path: Path):
-        path = _write_manifest(
-            tmp_path / "m.json", _identity("pr:123", "refs--pull--123--head", "source")
-        )
+        path = tmp_path / "m.json"
+        _install(path, "refs--pull--123--head", f"ref=pr:123\nsha={PINNED_SHA}\n")
+        _write_manifest(path, _identity("pr:123", "refs--pull--123--head", "source"))
         env = bench_manifest_env(path)
         # The exact parse conftest.load_otdfctl performs.
         assert json.loads(env["OTDFCTL_HEADS"]) == ["refs--pull--123--head"]
 
     def test_released_pin_is_exported_too(self, tmp_path: Path):
         # A release pin that is not exported silently reinstates the
-        # dist/main fallback for a run that explicitly asked for a pin.
-        path = _write_manifest(
-            tmp_path / "m.json", _identity("v0.24.0", "v0.24.0", "release")
-        )
+        # dist/main fallback for a run that explicitly asked for a pin. A go
+        # release's .version records no commit, so there is nothing to verify.
+        path = tmp_path / "m.json"
+        _install(path, "v0.24.0", "github.com/opentdf/otdfctl@v0.24.0\n")
+        _write_manifest(path, _identity("v0.24.0", "v0.24.0", "release"))
         env = bench_manifest_env(path)
         assert json.loads(env["OTDFCTL_HEADS"]) == ["v0.24.0"]
 
-    def test_measured_arms_never_supply_otdfctl(self, tmp_path: Path):
+    def test_exported_pin_is_announced_on_stderr(self, tmp_path: Path, capsys):
+        # It applies to every later run in the shell, not only benchmarks.
+        bench_manifest_env(_pinned(tmp_path))
+        out, err = capsys.readouterr()
+        assert out == ""
+        assert "pins otdfctl to v0.38.1" in err
+
+    def test_measured_arms_never_supply_otdfctl(self, tmp_path: Path, capsys):
         # The provisioning CLI is pinned separately from the arms under
         # measurement; an arm must not become the tool that provisions it.
         path = _write_manifest(
@@ -101,6 +137,8 @@ class TestBenchManifestEnv:
         env = bench_manifest_env(path)
         assert "OTDFCTL_HEADS" not in env
         assert "BENCH_INSTALLATION_MANIFEST" in env
+        # Falling back is allowed, but not silently.
+        assert "no otdfctl pin" in capsys.readouterr().err
 
     def test_unreadable_manifest_warns_without_exporting_heads(
         self, tmp_path: Path, capsys
@@ -116,10 +154,61 @@ class TestBenchManifestEnv:
         assert out == ""
         assert "OTDFCTL_HEADS" in err
 
-    def test_pin_without_a_tag_exports_nothing(self, tmp_path: Path):
-        # An empty tag would build the path sdk/go/dist//otdfctl.sh.
-        path = _write_manifest(tmp_path / "m.json", _identity("main", "", "source"))
+    @pytest.mark.parametrize("status", ["failed", "partial", "neutral"])
+    def test_unsuccessful_preparation_exports_no_pin(
+        self, status, tmp_path: Path, capsys
+    ):
+        # install benchmark installs otdfctl last, so its own manifests never
+        # pair a pin with these; a hand-edited or foreign one might.
+        path = _pinned(tmp_path, status=status, status_message="arm 2 failed")
+        env = bench_manifest_env(path)
+        assert "OTDFCTL_HEADS" not in env
+        # The reader of the manifest itself decides what a failure means.
+        assert "BENCH_INSTALLATION_MANIFEST" in env
+        assert "arm 2 failed" in capsys.readouterr().err
+
+    def test_uninstalled_pin_is_not_exported(self, tmp_path: Path, capsys):
+        # conftest would otherwise fail at import on the missing otdfctl.sh.
+        path = _write_manifest(
+            tmp_path / "m.json", _identity("v0.38.1", "v0.38.1", "release")
+        )
         assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
+        assert "no longer installed" in capsys.readouterr().err
+
+    def test_rebuilt_pin_is_not_exported(self, tmp_path: Path, capsys):
+        # `install tip go` rebuilt dist/main after the benchmark pinned it: the
+        # directory is there, but it is no longer the build the manifest names.
+        path = tmp_path / "m.json"
+        _install(path, "main", f"ref=main\nsha={'1' * 40}\n")
+        _write_manifest(path, _identity("main", "main", "source"))
+        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
+        assert "rebuilt" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("tag", ["", True, 123, ["main"]])
+    def test_pin_without_a_string_tag_exports_nothing(
+        self, tag, tmp_path: Path, capsys
+    ):
+        # An empty tag would build the path sdk/go/dist//otdfctl.sh, and a
+        # non-string one sdk/go/dist/True/otdfctl.sh.
+        pin = {**_identity("main", "main", "source"), "installed_tag": tag}
+        path = _write_manifest(tmp_path / "m.json", pin)
+        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
+        assert "installed_tag" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("content", ["[1, 2]", "null", '{"otdfctl": "v0.38.1"}'])
+    def test_misshapen_manifest_warns_without_raising(
+        self, content, tmp_path: Path, capsys
+    ):
+        path = tmp_path / "m.json"
+        path.write_text(content)
+        assert "OTDFCTL_HEADS" not in bench_manifest_env(path)
+        assert "Not exporting OTDFCTL_HEADS" in capsys.readouterr().err
+
+    def test_markup_in_the_manifest_is_printed_not_parsed(self, tmp_path: Path, capsys):
+        # Rich raises on an unmatched closing tag, and a raise empties stdout.
+        path = _pinned(tmp_path, status="failed", status_message="see [/x]")
+        bench_manifest_env(path)
+        assert "see [/x]" in capsys.readouterr().err
 
 
 class _StoppedPlatform:
@@ -132,6 +221,7 @@ def _prepare(kind: str, xtest_root: Path) -> None:
     path = bench_manifest_path(xtest_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     if kind == "pinned":
+        _install(path, "v0.38.1")
         _write_manifest(path, _identity("v0.38.1", "v0.38.1", "release"))
     elif kind == "malformed":
         path.write_text("{not json")
@@ -149,6 +239,7 @@ def run_env(tmp_path: Path, monkeypatch):
 
     (tmp_path / "opentdf-dev.yaml").write_text("services:\n  kas:\n    root_key: k\n")
     settings = Settings(xtest_root=tmp_path, platform_dir=tmp_path)
+    monkeypatch.delenv("OTDF_SDK_DIR", raising=False)
     # Bypass platform discovery and the version probe, which depend on the host.
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     monkeypatch.setattr(cli, "get_platform_service", lambda _s: _StoppedPlatform())
@@ -186,7 +277,7 @@ class TestEnvCommand:
         _prepare("malformed", tmp_path)
         result = run_env()
         assert "OTDFCTL_HEADS" not in result.stdout
-        assert "Could not read OTDFCTL_HEADS" in result.stderr
+        assert "Not exporting OTDFCTL_HEADS" in result.stderr
 
     @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
     @pytest.mark.parametrize("state", MANIFEST_STATES)
