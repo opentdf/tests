@@ -49,7 +49,7 @@ from perf import stats
 # imported (not redefined) here because this is where callers look for the
 # round loop's settings.
 from perf.config import BenchConfig
-from perf.measure import METRICS, MeasurementError, Sample, measure
+from perf.measure import METRICS, MeasurementError, MeasurementTimeout, Sample, measure
 
 #: Bootstrap resamples for the between-round precision check. Far fewer than
 #: the final analysis uses: this only needs to answer "is the interval roughly
@@ -60,6 +60,14 @@ _INTERIM_RESAMPLES = 1000
 #: the most sensitive of the gated metrics to runner noise, which makes it the
 #: honest choice of canary.
 _CONTROL_METRIC = "wall"
+
+#: A timeout the deadline set is the budget's fault only if the invocation got
+#: less than this many times the longest one the cell has completed. The
+#: deadline clips nearly every timeout, so a build that never finishes runs
+#: out *at* the deadline exactly as one the budget cut short does, and only
+#: the time it was given tells them apart. Generous, because the opposite
+#: mistake fails a cell that merely ran out of time.
+_HANG_FACTOR = 10
 
 
 class BudgetExhausted(RuntimeError):
@@ -192,6 +200,8 @@ def run_cell(
     Raises:
         MeasurementError: if any invocation fails. A benchmark over an
             operation that errors out is measuring the error path.
+        MeasurementTimeout: if an invocation times out and the deadline does
+            not account for it; see ``_HANG_FACTOR``.
         BudgetExhausted: if the deadline passed before ``min_rounds``, or
             during warm-up.
     """
@@ -202,6 +212,9 @@ def run_cell(
     samples = _empty_samples()
     round_durations: list[float] = []
     rss_floor = 0
+    # The slowest invocation completed so far, any arm, warm-up included: the
+    # evidence a timeout is judged against.
+    longest_s = 0.0
     started = clock()
 
     def one_round(into: dict[str, dict[str, list[float]]]) -> None:
@@ -211,6 +224,14 @@ def run_cell(
         round_rss_floor = 0
         order = list(arms)
         rng.shuffle(order)
+        nonlocal longest_s
+        if config.warmup and not longest_s:
+            # The cell's first round, so there is no evidence yet to judge a
+            # timeout by. Running the reference first gives every other arm
+            # some. This round is warm-up, so its samples are dropped; the
+            # shuffle above still runs, so measured rounds draw the same
+            # orders as ever.
+            order.sort(key=lambda a: a is not arms[0])
         for arm in order:
             inv = arm.invocation
             if inv.output is not None:
@@ -220,21 +241,39 @@ def run_cell(
                 remaining_s = deadline - clock()
                 if remaining_s <= 0:
                     raise BudgetExhausted(
-                        f"{cell_id}: budget expired before {arm.label} could run"
+                        f"budget expired before {arm.label} could run"
                     )
                 timeout_s = min(timeout_s, remaining_s)
             try:
                 sample = run(inv.argv, inv.child_env(), timeout_s=timeout_s)
-            except MeasurementError as e:
-                if deadline is not None and clock() >= deadline:
+            except MeasurementTimeout as e:
+                # Only a timeout can be the budget's fault, and only one the
+                # deadline set; see _HANG_FACTOR. Calling a hang "budget"
+                # skips the cell, so a build that never finishes would leave
+                # the run green. With nothing completed yet there is no
+                # evidence either way; given a warm-up, that is only ever the
+                # reference's first run (see above), and it counts as budget.
+                seen = (
+                    f"longest completed invocation in this cell: {longest_s:.1f}s"
+                    if longest_s
+                    else "nothing in this cell had completed yet"
+                )
+                if timeout_s < config.timeout_s and (
+                    not longest_s or timeout_s < _HANG_FACTOR * longest_s
+                ):
                     raise BudgetExhausted(
-                        f"{cell_id}: budget expired while running {arm.label}"
+                        f"{arm.label} timed out after {timeout_s:.1f}s, all that "
+                        f"was left of the budget ({seen})"
                     ) from e
+                raise MeasurementTimeout(
+                    f"{cell_id}: {arm.label} timed out after {timeout_s:.1f}s, "
+                    f"too long to blame on the budget ({seen})"
+                ) from e
+            except MeasurementError as e:
                 raise MeasurementError(f"{cell_id}: {arm.label} failed: {e}") from e
             if deadline is not None and clock() > deadline:
-                raise BudgetExhausted(
-                    f"{cell_id}: budget expired while running {arm.label}"
-                )
+                raise BudgetExhausted(f"budget expired while running {arm.label}")
+            longest_s = max(longest_s, sample.wall_s)
             round_rss_floor = max(round_rss_floor, sample.rss_floor_bytes)
             for metric in METRICS:
                 completed[arm.name][metric].append(sample.metric(metric))
@@ -267,10 +306,11 @@ def run_cell(
         except BudgetExhausted as e:
             raise BudgetExhausted(
                 f"{cell_id}: budget ran out during warm-up after {i} of "
-                f"{config.warmup} rounds ({clock() - started:.0f}s)"
+                f"{config.warmup} rounds ({clock() - started:.0f}s): {e}"
             ) from e
 
     stopped_because = "max_rounds"
+    cut_short: BudgetExhausted | None = None
     for _ in range(config.max_rounds):
         round_start = clock()
         if deadline is not None and round_start >= deadline:
@@ -286,8 +326,9 @@ def run_cell(
                 break
         try:
             one_round(samples)
-        except BudgetExhausted:
+        except BudgetExhausted as e:
             stopped_because = "budget"
+            cut_short = e
             break
         round_durations.append(clock() - round_start)
 
@@ -299,10 +340,11 @@ def run_cell(
     elapsed = clock() - started
     n = len(samples["baseline"]["wall"])
     if n < config.min_rounds:
+        why = "" if cut_short is None else f": {cut_short}"
         raise BudgetExhausted(
             f"{cell_id}: only {n} rounds completed in {elapsed:.0f}s, "
-            f"below the configured minimum of {config.min_rounds}"
-        )
+            f"below the configured minimum of {config.min_rounds}{why}"
+        ) from cut_short
     return CellResult(
         cell_id=cell_id,
         baseline_label=baseline.label,
