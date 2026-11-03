@@ -83,26 +83,6 @@ def _refusal(path: Path, capsys: pytest.CaptureFixture[str]) -> str:
     return err
 
 
-class TestBenchManifestPath:
-    def test_matches_the_sdk_manager_default(self, tmp_path: Path, monkeypatch):
-        # Kept in step with otdf_sdk_mgr.bench_prepare.default_manifest_path,
-        # which is get_sdk_dir() / "benchmark.installed.json" where get_sdk_dir
-        # is <xtest>/sdk.
-        monkeypatch.delenv("OTDF_SDK_DIR", raising=False)
-        assert (
-            bench_manifest_path(tmp_path)
-            == tmp_path / "sdk" / "benchmark.installed.json"
-        )
-
-    def test_follows_the_sdk_dir_override(self, tmp_path: Path, monkeypatch):
-        # As get_sdk_dir does; otherwise env looks where nothing was written.
-        monkeypatch.setenv("OTDF_SDK_DIR", str(tmp_path / "elsewhere"))
-        assert (
-            bench_manifest_path(tmp_path)
-            == tmp_path / "elsewhere" / "benchmark.installed.json"
-        )
-
-
 class TestBenchManifestEnv:
     def test_the_sdk_managers_golden_manifest_exports_its_pin(self, tmp_path: Path):
         # Verbatim, so a renamed or moved field in what otdf-sdk-mgr writes
@@ -245,7 +225,6 @@ def run_env(tmp_path: Path, monkeypatch):
 
     (tmp_path / "opentdf-dev.yaml").write_text("services:\n  kas:\n    root_key: k\n")
     settings = Settings(xtest_root=tmp_path, platform_dir=tmp_path)
-    monkeypatch.delenv("OTDF_SDK_DIR", raising=False)
     # Bypass platform discovery and the version probe, which depend on the host.
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     monkeypatch.setattr(cli, "get_platform_service", lambda _s: _StoppedPlatform())
@@ -292,19 +271,6 @@ class TestEnvCommand:
         platform_url, heads = _eval(run_env().stdout, "PLATFORMURL", "OTDFCTL_HEADS")
         assert platform_url == "http://localhost:8080"
         assert heads == ('["v0.38.1"]' if state == "pinned" else "<unset>")
-
-    def test_xt_tmp_dir_defaults_to_xtest_tmp(
-        self, tmp_path: Path, run_env, monkeypatch
-    ):
-        monkeypatch.delenv("XT_TMP_DIR", raising=False)
-        exported = json.loads(run_env("--format", "json").stdout)
-        assert exported["XT_TMP_DIR"] == str((tmp_path / "tmp").resolve())
-
-    def test_xt_tmp_dir_already_set_is_kept(self, run_env, monkeypatch):
-        # How a multi-GiB run is pointed at a large volume.
-        monkeypatch.setenv("XT_TMP_DIR", "/mnt/big")
-        exported = json.loads(run_env("--format", "json").stdout)
-        assert exported["XT_TMP_DIR"] == "/mnt/big"
 
     @needs_bash
     def test_rerun_unsets_what_the_last_run_exported(

@@ -585,9 +585,9 @@ uv run otdf-sdk-mgr install benchmark go v0.29.0 main --otdfctl v0.38.1
 cd ../otdf-local
 uv run otdf-local up --services docker,platform
 
-# 3. Export the environment: XT_TMP_DIR and the otdfctl pin recorded in
-#    step 1. Quote it: unquoted, the shell globs the [...] in OTDFCTL_HEADS,
-#    and under nullglob drops it.
+# 3. Export the environment, including the otdfctl pin recorded in step 1.
+#    Quote it: unquoted, bash globs the [...] in OTDFCTL_HEADS, and under
+#    nullglob drops it.
 eval "$(uv run otdf-local env)"
 
 # 4. Measure.
@@ -618,8 +618,6 @@ each time.
 
 `otdf-local env` exports, in addition to the platform settings:
 
-- `XT_TMP_DIR` — root for generated fixtures and ciphertexts: `xtest/tmp`,
-  unless the variable is already set, in which case that value is kept.
 - `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1,
   whenever it exists, whatever its `status`.
 - `OTDFCTL_HEADS` — a **JSON array** naming the `dist/` directory of the

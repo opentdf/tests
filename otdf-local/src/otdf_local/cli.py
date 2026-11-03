@@ -584,14 +584,11 @@ def stale_bench_vars(exported: dict[str, str]) -> list[str]:
 def bench_manifest_path(xtest_root: Path) -> Path:
     """Where `otdf-sdk-mgr` writes the benchmark installation manifest.
 
-    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path`, including the
-    `OTDF_SDK_DIR` override. The two packages do not depend on each other, so
-    the path and the JSON shape are a written convention rather than a shared
-    import; change one and you must change both.
+    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path` by convention,
+    not import: change one and you must change both. Its `OTDF_SDK_DIR`
+    override is not followed, because xtest loads SDKs only from <xtest>/sdk.
     """
-    override = os.environ.get("OTDF_SDK_DIR")
-    sdk_dir = Path(override) if override else xtest_root / "sdk"
-    return sdk_dir / "benchmark.installed.json"
+    return xtest_root / "sdk" / "benchmark.installed.json"
 
 
 def _recorded_commit(dist_dir: Path) -> str | None:
@@ -775,12 +772,6 @@ def env(
                     env_vars["PLATFORM_VERSION"] = config["version"]
     except Exception as e:  # noqa: BLE001 - best-effort, as above
         print_warning(f"Could not get platform version: {e}", err_console)
-
-    # Root for generated fixtures and ciphertexts. A value already set wins: it
-    # is how a multi-GiB run is pointed at a large volume.
-    env_vars["XT_TMP_DIR"] = os.environ.get("XT_TMP_DIR") or str(
-        (settings.xtest_root / "tmp").resolve()
-    )
 
     # Benchmark preparation: point to installation manifest if it exists
     bench_vars = bench_manifest_env(bench_manifest_path(settings.xtest_root))
