@@ -257,9 +257,9 @@ def _add_benchmark_options(parser: pytest.Parser):
         "--bench-refs",
         help="2 to 4 builds of one sdk to compare, comma- or space-separated, "
         "e.g. 'go@v0.29.0,go@main,go@my-branch'. The first is the reference "
-        "every other build is compared against. Defaults to the newest "
-        "installed release against main. Supersedes "
-        "--bench-baseline/--bench-candidate",
+        "every other build is compared against. Defaults to the arms recorded "
+        "in $BENCH_INSTALLATION_MANIFEST when set, else the newest installed "
+        "release against main. Supersedes --bench-baseline/--bench-candidate",
     )
     group.addoption(
         "--bench-baseline",
@@ -456,8 +456,8 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
 def _bench_sdk_names(config: pytest.Config) -> list[str]:
     """SDKs the benchmark fans out over, in --sdks order."""
     # --sdks may be version-qualified (go@main); benchmark arms come from
-    # --bench-refs or --bench-baseline/--bench-candidate instead, so only the
-    # name matters.
+    # --bench-refs, --bench-baseline/--bench-candidate, or the installation
+    # manifest instead, so only the name matters.
     specs = config.getoption("--sdks") or " ".join(typing.get_args(tdfs.sdk_type))
     return list(dict.fromkeys(s.split("@", 1)[0] for s in str(specs).split()))
 
@@ -485,6 +485,7 @@ def pytest_configure(config: pytest.Config):
         arm_count,
         config_from_options,
         disk_shortfall,
+        installation_for,
         payloads_from_options,
     )
     from perf.cells import payloads_to_generate
@@ -495,6 +496,8 @@ def pytest_configure(config: pytest.Config):
         validate_sdk_name,
     )
 
+    # An unreadable manifest is a usage error now, not a fallback later.
+    installation_for(config)
     bench_config = config_from_options(config)
     payloads = payloads_from_options(config)
     refs = config.getoption("--bench-refs", default=None)
@@ -626,7 +629,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
         reporter.write_sep("=", "benchmark results")
-        reporter.write_line(gate.summary)
+        reporter.write_line(report.headline(recorder, gate))
         reporter.write_line(f"raw samples and statistics: {json_path}")
 
     if config.getoption("--bench-no-gate", default=False):
@@ -636,7 +639,14 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     # it with a green tick and an empty table is the one outcome nobody
     # inspects, so a benchmark that has quietly stopped measuring can survive
     # indefinitely. Every reason a cell skips is already in the report.
-    if gate.should_fail or gate.nothing_measured:
+    #
+    # The one exception is a neutral preparation: every requested alias
+    # resolved to one commit, so there was deliberately nothing to compare.
+    # That is an answer, reported as such, and it reads the same locally and
+    # in CI.
+    if gate.should_fail:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+    elif gate.nothing_measured and not bench.preparation_is_neutral(config):
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
