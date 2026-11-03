@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -36,17 +37,21 @@ class InstallError(Exception):
 
 
 def install_go_release(version: str, dist_dir: Path) -> None:
-    """Install a Go CLI release by writing a .version file.
+    """Install a Go CLI release as an `otdfctl` binary in dist_dir.
 
-    The cli.sh and otdfctl.sh wrappers read .version and use
-    `go run <module>@{version}` instead of a local binary. The .version file
-    contains `module-path@version` (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`).
-    Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path.
+    Runs `go install <module>@<tag>` with GOBIN set to the new dist, so the
+    cli.sh and otdfctl.sh wrappers run the binary directly, as for a source
+    build, rather than paying `go run`'s startup on every call, which the
+    benchmark would time. The user's own installed `otdfctl` is untouched.
+    Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path;
+    both name the binary `otdfctl`. `.version` records `module-path@version`
+    (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`); the wrappers
+    `go run` that if the binary is missing.
 
-    `go install` is run first to surface module-resolution failures eagerly;
-    only after it succeeds do we lay down `.version` + cli wrappers, so a
-    failed install never leaves a directory that looks successful to the
-    `dist_dir.exists()` skip check in `install_release`.
+    The dist is assembled under `.staging/`, beside `dist/`, and moved into
+    place only once complete, so a failed or interrupted install leaves nothing
+    the skip check in `install_release` would take for a finished one, and
+    leaves any dist_dir it was replacing where it was.
     """
     go_dir = get_sdk_dir() / "go"
     # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
@@ -54,26 +59,78 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
     module = go_module_for_tag(tag)
-    print(f"  Pre-warming Go cache for {module}@{tag}...")
-    result = subprocess.run(
-        ["go", "install", f"{module}@{tag}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # Not in dist/, where xtest lists every directory as a version, but on its
+    # filesystem, so each rename below is atomic.
+    staging_root = dist_dir.parent.parent / ".staging"
+    try:
+        staging_root.mkdir(parents=True, exist_ok=True)
+        dist_dir.parent.mkdir(parents=True, exist_ok=True)
+        # A leftover in .staging/ is harmless, so it shouldn't fail a finished install.
+        with tempfile.TemporaryDirectory(
+            prefix=f"{dist_dir.name}-", dir=staging_root, ignore_cleanup_errors=True
+        ) as tmp:
+            staging = Path(tmp) / dist_dir.name
+            staging.mkdir()
+            _go_install(module, tag, staging)
+            (staging / ".version").write_text(f"{module}@{tag}\n")
+            for name in ("cli.sh", "otdfctl.sh", "opentdfctl.yaml"):
+                shutil.copy(go_dir / name, staging / name)
+            replaced = Path(tmp) / "replaced"
+            try:
+                if dist_dir.exists():
+                    dist_dir.rename(replaced)
+                staging.rename(dist_dir)
+            except BaseException:
+                # Cleanup would delete it along with tmp. A dist_dir that
+                # exists now is a concurrent install's, so leave that one.
+                if replaced.exists() and not dist_dir.exists():
+                    replaced.rename(dist_dir)
+                raise
+    except OSError as e:
+        raise InstallError(f"Could not install {module}@{tag} to {dist_dir}: {e}") from e
+    print(f"  Go release {tag} installed to {dist_dir}")
+
+
+def _go_install(module: str, tag: str, gobin: Path) -> None:
+    """Build module@tag into gobin. Raises InstallError unless that yields `otdfctl`."""
+    print(f"  Building {module}@{tag}...")
+    try:
+        result = subprocess.run(
+            ["go", "install", f"{module}@{tag}"],
+            # go rejects a relative GOBIN, and OTDF_SDK_DIR may be relative.
+            env={**os.environ, "GOBIN": str(gobin.absolute())},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as e:
+        raise InstallError(f"go install {module}@{tag} needs go on PATH: {e}") from e
+    stderr = result.stderr.strip()
     if result.returncode != 0:
-        msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
-        if module == GO_MODULE_PATH_PLATFORM:
+        msg = f"go install failed for {module}@{tag}: {stderr}"
+        # go calls a tag the module doesn't have an invalid version. Build,
+        # network and toolchain failures say something else.
+        if module == GO_MODULE_PATH_PLATFORM and "invalid version" in stderr:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
         raise InstallError(msg)
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
-    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
-    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
-    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
-    print(f"  Go release {tag} installed to {dist_dir}")
+    if not (gobin / "otdfctl").is_file():
+        produced = ", ".join(sorted(p.name for p in gobin.iterdir())) or "nothing"
+        raise InstallError(
+            f"go install {module}@{tag} did not produce an otdfctl binary"
+            f" (produced: {produced})" + (f": {stderr}" if stderr else "")
+        )
+
+
+def _go_release_without_binary(dist_dir: Path) -> bool:
+    """Whether dist_dir has a `.version` but no `otdfctl`, so its wrappers `go run`.
+
+    Go release installs left exactly this before install_go_release built a
+    binary. Source builds have the binary, so they never match, whatever
+    their `.version` says.
+    """
+    return (dist_dir / ".version").is_file() and not (dist_dir / "otdfctl").is_file()
 
 
 def install_js_release(version: str, dist_dir: Path) -> None:
@@ -385,6 +442,9 @@ INSTALLERS = {
 def install_release(sdk: str, version: str, dist_name: str | None = None) -> Path:
     """Install a released version of an SDK CLI.
 
+    An existing dist is skipped, except a go dist with no otdfctl binary,
+    which is reinstalled.
+
     Raises InstallError if the SDK is unknown or installation fails.
     """
     if sdk not in INSTALLERS:
@@ -394,8 +454,10 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
     name = dist_name or normalize_version(version)
     dist_dir = sdk_dirs[sdk] / "dist" / name
     if dist_dir.exists():
-        print(f"  Dist directory already exists: {dist_dir} (skipping)")
-        return dist_dir
+        if not (sdk == "go" and _go_release_without_binary(dist_dir)):
+            print(f"  Dist directory already exists: {dist_dir} (skipping)")
+            return dist_dir
+        print(f"  {dist_dir} has no otdfctl binary (reinstalling)")
 
     INSTALLERS[sdk](version, dist_dir)
     return dist_dir
@@ -456,8 +518,6 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     ref is passed to `make` via `VERSIONS=<slug>` so only that checkout is
     (re)built, not every directory under `sdk/<lang>/src/`.
     """
-    import os
-
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
     from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand
 
