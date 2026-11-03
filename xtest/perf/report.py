@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import pytest
@@ -169,6 +169,32 @@ def write_json(
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(to_dict(recorder, config, gate), indent=2))
+    return path
+
+
+def write_raw_json(
+    path: Path,
+    recorder: BenchmarkRecorder,
+    config: BenchConfig,
+    error: Exception,
+) -> Path:
+    """Write what the run measured when analysing it raised ``error``.
+
+    Holds no statistics and no verdict, only what re-analysis needs. Cells are
+    serialized field by field rather than through :func:`to_dict`, which needs
+    a gate and may itself be what raised. There is deliberately no ``schema``:
+    this is not the normal artifact, and a reader of that one should trip on
+    it rather than read it as one.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = {
+        "analysis_error": {"type": type(error).__name__, "message": str(error)},
+        "metadata": recorder.metadata,
+        "config": asdict(config),
+        "skipped": recorder.skipped,
+        "cells": [asdict(r) for r in recorder.results],
+    }
+    path.write_text(json.dumps(doc, indent=2))
     return path
 
 
