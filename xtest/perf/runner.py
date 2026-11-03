@@ -3,8 +3,16 @@
 A *cell* is one operation at one payload size, measured over two or more
 arms: distinct SDK builds, or, in the A/A control, copies of one build. The
 loop runs every arm once per round, in a randomized order, until it has
-either enough precision or no more time. The first arm is the *reference*,
-and every other arm is compared against it.
+either enough precision or no more time. The first arm is the *reference*:
+every other arm is gated against it, and candidates are also compared with
+each other.
+
+Why every arm shares a round, and why that matters beyond two
+-------------------------------------------------------------
+Every arm runs in the same rounds on the same runner, so *every* pairwise
+contrast is a within-run ratio -- candidate against candidate as well as
+against the reference. Two separate two-arm jobs would land on different
+runners, whose timings are not comparable.
 
 Why rounds rather than "run A 30 times, then B 30 times"
 --------------------------------------------------------
@@ -98,11 +106,17 @@ class Arm:
 
 
 def _check_arm_ids(cell_id: str, arm_ids: Sequence[str]) -> None:
-    """Reject fewer than two arms, or colliding ids (which would merge samples)."""
+    """Reject fewer than two arms, or ids that collide or could collide in a key.
+
+    Equal ids would merge two builds' samples. An id holding ``_vs_`` or ``/``
+    lets two pairs share a ``<cell>/<b>_vs_<a>/<metric>`` key.
+    """
     if len(arm_ids) < 2:
         raise ValueError(f"{cell_id}: a cell needs at least two arms to compare")
     if len(set(arm_ids)) != len(arm_ids):
         raise ValueError(f"{cell_id}: arm ids must be unique, got {list(arm_ids)}")
+    if bad := [a for a in arm_ids if "_vs_" in a or "/" in a]:
+        raise ValueError(f"{cell_id}: arm ids cannot contain '_vs_' or '/': {bad}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,15 +215,23 @@ class CellResult:
         """The ``(a, b)`` contrasts this cell is judged on."""
         return _contrast_pairs(self.arm_ids)
 
+    def is_reference_pair(self, a: str, b: str) -> bool:
+        """True if this contrast is a candidate against the reference."""
+        return self.reference in (a, b)
+
 
 def _contrast_pairs(arm_ids: Sequence[str]) -> list[tuple[str, str]]:
-    """``(reference, candidate)`` for each candidate.
+    """``(reference, candidate)`` for each candidate, then each candidate pair.
 
-    The analysis and the precision stop rule both read this, so the loop waits
-    for exactly the contrasts that will be judged.
+    A candidate pair appears once: its inverse is the same measurement and
+    would double-count in the correction. In a control these are the
+    copy-to-copy pairs. The analysis and the precision stop rule both read
+    this, so the loop waits for exactly the contrasts that will be judged.
     """
     reference, *candidates = arm_ids
-    return [(reference, b) for b in candidates]
+    pairs = [(reference, b) for b in candidates]
+    pairs += [(a, b) for i, a in enumerate(candidates) for b in candidates[i + 1 :]]
+    return pairs
 
 
 def contrast_key(cell_id: str, a: str, b: str, metric: str) -> str:
@@ -450,21 +472,29 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
 
     ``GateResult.comparisons`` is keyed by ``"<cell_id>/<b>_vs_<a>/<metric>"``
     (see :func:`contrast_key`) and holds the *finalized* comparisons -- the
-    ones carrying adjusted p-values and verdicts. There is one contrast per
-    candidate, cell and metric: each candidate against the reference.
-    Ungated metrics are included so they appear in the report, but they
-    cannot fail the build, and they are corrected separately from the gated
-    ones: adjusting across tests nobody gates on only makes a real regression
-    harder to confirm.
+    ones carrying adjusted p-values and verdicts. Every pairwise contrast in
+    every cell is there, in three separately corrected groups:
+
+    - **Gated**: a candidate against the reference, on a gated metric. Only
+      these can fail the build.
+    - **Candidate-to-candidate**: two candidates against each other, on any
+      metric. Judged two-sided (FASTER/SLOWER/TIED) and never gated -- see
+      invariant 11 in ``README.md``.
+    - **Ungated**: a candidate against the reference on an ungated metric,
+      reported for context.
+
+    Adjusting the gate across tests nobody gates on only makes a real
+    regression harder to confirm, so none of them shares its family.
 
     Each SDK's cells are paired with *that SDK's* control. A run measuring go
     and java has two harness paths and two noise floors, and judging java's
     cells against go's control would be judging them against a floor that was
     never measured for them. A control with K copies of the reference yields
-    K-1 A/A contrasts, and the worst of them is the floor.
+    C(K,2) A/A contrasts, and the worst of them is the floor.
     """
     comparisons: dict[str, stats.PairedComparison] = {}
     gated: set[str] = set()
+    symmetric: set[str] = set()
     censored: dict[str, str] = {}
     control_keys: set[str] = set()
 
@@ -485,7 +515,11 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
                 if metric == "rss" and floored is not None:
                     censored[key] = floored
                     continue
-                if not result.control and metric in config.gated_metrics:
+                if result.control:
+                    continue
+                if not result.is_reference_pair(a, b):
+                    symmetric.add(key)
+                elif metric in config.gated_metrics:
                     gated.add(key)
 
     # Pick each SDK's noise floor only once every control contrast exists.
@@ -513,6 +547,7 @@ def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateRes
     return stats.apply_multiplicity_control(
         comparisons,
         gated=gated,
+        symmetric=symmetric,
         controls=controls,
         control_keys=control_keys,
         censored=censored,

@@ -612,8 +612,15 @@ class TestMultiArmRoundLoop:
 
     @pytest.mark.parametrize(
         ("arms", "match"),
-        [([REF], "at least two arms"), ([REF, REF], "unique")],
-        ids=["one-arm", "colliding-ids"],
+        [
+            ([REF], "at least two arms"),
+            ([REF, REF], "unique"),
+            # Keys read `<cell>/<b>_vs_<a>/<metric>`: (c, a_vs_b) and (b_vs_c, a)
+            # would both be "a_vs_b_vs_c".
+            ([REF, "c", "a_vs_b"], "cannot contain"),
+            ([REF, "c", "fix/thing"], "cannot contain"),
+        ],
+        ids=["one-arm", "colliding-ids", "vs-in-id", "slash-in-id"],
     )
     def test_rejects_arms_that_cannot_form_a_cell(self, arms: list[str], match: str):
         with pytest.raises(ValueError, match=match):
@@ -765,23 +772,32 @@ class TestCellResultInvariants:
 
 
 class TestGateAtSeveralArms:
+    def gate(
+        self, costs: Mapping[str, float], *, noise: float = 0.05
+    ) -> stats.GateResult:
+        """An A/A control of the same arm count, then a cell costing ``costs``."""
+        cfg = config(max_rounds=40)
+        control, _ = run_arms(
+            dict.fromkeys(costs, 1.0),
+            cfg=cfg,
+            noise=noise,
+            seed=11,
+            cell_id="aa",
+            control=True,
+        )
+        measured, _ = run_arms(costs, cfg=cfg, noise=noise, seed=12, cell_id="encrypt")
+        return analyze([control, measured], cfg)
+
     def test_only_the_slowed_middle_candidate_regresses(self):
         # Slowing the middle arm catches a gate or control wired to the first
         # candidate only, or to the last.
-        cfg = config(max_rounds=40)
-        names = [REF, "a", "b", "c"]
-        control, _ = run_arms(
-            dict.fromkeys(names, 1.0), cfg=cfg, seed=11, cell_id="aa", control=True
-        )
-        costs = dict.fromkeys(names, 1.0) | {"b": 1.3}
-        measured, _ = run_arms(costs, cfg=cfg, seed=12, cell_id="encrypt")
-        gate = analyze([control, measured], cfg)
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3, "c": 1.0})
 
         assert gate.should_fail
         assert k("encrypt", "wall", REF, "b") in gate.regressions
         assert all(r.startswith(f"encrypt/b_vs_{REF}/") for r in gate.regressions)
         for other in ("a", "c"):
-            for metric in cfg.gated_metrics:
+            for metric in config().gated_metrics:
                 assert (
                     gate.comparisons[k("encrypt", metric, REF, other)].verdict
                     is stats.Verdict.PASS
@@ -807,6 +823,38 @@ class TestGateAtSeveralArms:
         assert tiny.verdict is stats.Verdict.INCONCLUSIVE
         assert "floor" in tiny.note
         assert k("encrypt", "rss", REF, "big") in gate.regressions
+
+    def test_a_gap_between_candidates_never_fails_the_build(self):
+        # Neither candidate regressed against the reference; one is just slower
+        # than the other. That never turns the build red (invariant 11).
+        gate = self.gate({REF: 1.3, "slow": 1.3, "quick": 1.0})
+        h2h = k("encrypt", "wall", "slow", "quick")
+        assert gate.comparisons[h2h].verdict is stats.Verdict.FASTER
+        assert not gate.should_fail
+        assert h2h not in gate.regressions and h2h not in gate.improvements
+        assert h2h in gate.ranked
+
+    def test_candidates_are_compared_in_the_symmetric_vocabulary(self):
+        # PASS and REGRESSION presume an incumbent; between candidates there is
+        # none.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.3})
+        h2h = gate.comparisons[k("encrypt", "wall", "a", "b")]
+        assert h2h.verdict is stats.Verdict.SLOWER
+
+    def test_indistinguishable_candidates_are_tied_not_passed(self):
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0}, noise=0.01)
+        assert (
+            gate.comparisons[k("encrypt", "wall", "a", "b")].verdict
+            is stats.Verdict.TIED
+        )
+
+    def test_the_control_yields_one_contrast_per_pair_of_copies(self):
+        # C(4,2), not K-1: the floor has to cover candidate pairs too.
+        gate = self.gate({REF: 1.0, "a": 1.0, "b": 1.0, "c": 1.0})
+        aa = [
+            c for c in gate.comparisons if c.startswith("aa/") and c.endswith("/wall")
+        ]
+        assert len(aa) == 6
 
     def test_the_noise_floor_is_the_worst_control_contrast(self):
         # Only the last copy is noisy, so a floor taken from the first A/A
