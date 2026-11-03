@@ -557,16 +557,16 @@ still look like numbers. That is why they are written down.
 
 ## 3. Local preparation and execution
 
-The local sequence: prepare, start, export, measure. CI does not use it yet —
-the workflow resolves and installs its arms itself, and sets `OTDFCTL_HEADS`
-from the go arm's heads. Moving CI onto `install benchmark` and
-`otdf-local env` is stage 5.
+The local sequence: prepare, start, export, measure. CI does not use it yet:
+the workflow resolves and installs its arms itself, and its go job sets
+`OTDFCTL_HEADS` from the go arm's heads.
 
 ### Prerequisites
 
 - `otdf-sdk-mgr` installed: `cd otdf-sdk-mgr && uv tool install --editable .`
 - A platform source tree for `otdf-local` to run: a `platform/` checkout beside
-  `xtest/`, or `--platform <ref>` in step 1. See `otdf-local/AGENTS.md`.
+  `xtest/`, or `--platform <ref>` in step 1. A sibling checkout wins over the
+  one `--platform` installs. See `otdf-local/AGENTS.md`.
 - Nothing else listening on port 8080. Step 2 starts Keycloak, Postgres, the
   platform and its default KAS only — no alpha/beta/gamma/delta, no km
   instances. That is deliberate: every extra Go service is a process
@@ -630,7 +630,9 @@ each time.
 
 Re-running `env` unsets `BENCH_INSTALLATION_MANIFEST` or `OTDFCTL_HEADS` if
 it exported them before and no longer does; it records which in
-`OTDF_LOCAL_BENCH_EXPORTS`. A value you set by hand is left alone.
+`OTDF_LOCAL_BENCH_EXPORTS`. That record holds names, not values: a value you
+set by hand in place of one of those exports is unset too, and a valid pin
+overwrites a hand-set `OTDFCTL_HEADS`.
 
 Exported when available: `PLATFORM_LOG_FILE`, `KAS_*_LOG_FILE` and
 `SCHEMA_FILE` if the file exists; `OT_ROOT_KEY` if the platform config sets
@@ -651,8 +653,7 @@ fields, separate from the measured arms.
 The manifest is written on **every** exit path, including the failing ones, so
 a partial or failed preparation still says what it managed to install. Its
 `status` is one of `success`, `neutral`, `partial`, or `failed`.
-`status_message` says why for the last three; on `success` it is empty unless
-some arms turned out to be the same build.
+`status_message` says why for the last three.
 
 A source build records its commit in `dist/<slug>/.version` alongside the
 build, and `make` deletes that record whenever it rebuilds, so a build from
@@ -686,8 +687,6 @@ uv run otdf-local logs -f
 ls -la xtest/sdk/go/dist/            # what is installed
 cat xtest/sdk/benchmark.installed.json  # and what preparation believes it installed
 ```
-A source build with no `.version` beside it, or one recording another
-commit, will be rebuilt by the next preparation.
 
 **`OTDFCTL_HEADS` not exported** — `env` prints the reason on stderr: no pin
 was recorded (`--otdfctl`), preparation did not succeed, or the pinned build

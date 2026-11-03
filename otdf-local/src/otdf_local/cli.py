@@ -570,8 +570,8 @@ def restart(
 
 #: Variables `env` derives from the benchmark manifest.
 BENCH_VARS = ("BENCH_INSTALLATION_MANIFEST", "OTDFCTL_HEADS")
-#: Which of BENCH_VARS the last `env` exported, so the next one can unset the
-#: ones that no longer apply without touching values the user set by hand.
+#: Which of BENCH_VARS the last `env` exported, so the next one unsets only
+#: those, and only if it no longer exports them.
 BENCH_EXPORTS_VAR = "OTDF_LOCAL_BENCH_EXPORTS"
 
 
@@ -628,7 +628,8 @@ def otdfctl_pin(manifest_path: Path) -> str:
     if pin is None:
         raise ValueError(
             "it records no otdfctl pin (`install benchmark --otdfctl`), so "
-            "provisioning falls back to sdk/go/dist/main or otdfctl on PATH"
+            "provisioning falls back to sdk/go/dist/main, else "
+            "`go run …/otdfctl@latest`"
         )
     tag = pin.get("installed_tag") if isinstance(pin, dict) else None
     if not isinstance(tag, str) or not tag:
@@ -661,17 +662,11 @@ def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
 
     env_vars = {"BENCH_INSTALLATION_MANIFEST": str(manifest_path.resolve())}
 
-    # OTDFCTL_HEADS names the `--otdfctl` pin, release or source alike, and
-    # never a measured arm: the build under measurement must not also provision
-    # the fixtures it is measured against. (CI's go bench job still does, until
-    # stage 5.) A JSON array, because `conftest.load_otdfctl` takes
-    # `json.loads(...)[0]`; a value that fails to parse falls back to
-    # sdk/go/dist/main or a system otdfctl, with a message pytest's capture
-    # hides.
+    # OTDFCTL_HEADS comes only from the `--otdfctl` pin, never from sdk_arms.
+    # A JSON array: conftest.load_otdfctl takes `json.loads(...)[0]`.
     #
-    # Warn rather than fail: stdout is eval'd for ordinary runs too, and a
-    # failed `env` would take their exports with it. Warnings go to stderr for
-    # the same reason, escaped because manifest text can hold Rich markup.
+    # Warn, don't fail: stdout is eval'd for every run, and a failed `env`
+    # takes the other exports with it. Escaped: manifest text may hold markup.
     try:
         tag = otdfctl_pin(manifest_path)
     except (OSError, ValueError) as e:
@@ -682,8 +677,7 @@ def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
         return env_vars
 
     env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
-    # Said every time: the pin applies to every run in this shell, benchmark or
-    # not, until the manifest is replaced.
+    # Said every time: the pin applies to every later run in this shell.
     print_info(
         escape(f"OTDFCTL_HEADS pins otdfctl to {tag}, from {manifest_path}"),
         err_console,
@@ -708,7 +702,7 @@ def env(
 
         eval "$(otdf-local env)"
 
-    Quoted: unquoted, the shell globs the [...] in OTDFCTL_HEADS. Or source it
+    Quote it: unquoted, bash globs the [...] in OTDFCTL_HEADS. Or source it
     directly:
 
         . <(otdf-local env)
@@ -773,7 +767,6 @@ def env(
     except Exception as e:  # noqa: BLE001 - best-effort, as above
         print_warning(f"Could not get platform version: {e}", err_console)
 
-    # Benchmark preparation: point to installation manifest if it exists
     bench_vars = bench_manifest_env(bench_manifest_path(settings.xtest_root))
     env_vars.update(bench_vars)
 

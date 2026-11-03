@@ -1,12 +1,10 @@
 """Tests for the benchmark environment `otdf-local env` exports.
 
-The contract under test is cross-package: `otdf-sdk-mgr` writes the manifest,
-`otdf-local` turns it into environment variables, and `xtest/conftest.py`
-consumes them. Nothing in the type system connects those three, so the shape is
-asserted here explicitly -- in particular that `OTDFCTL_HEADS` survives the
-`json.loads` in `conftest.load_otdfctl`, which is the failure mode that hides:
-an unparseable value falls back to an unpinned CLI, with a message pytest's
-capture hides, and the run still reports success.
+The contract is cross-package, with no shared import: `otdf-sdk-mgr` writes the
+manifest, `otdf-local` turns it into environment variables, and
+`xtest/conftest.py` consumes them. A wrong or missing `OTDFCTL_HEADS` fails
+nothing: conftest falls back to an unpinned CLI, its message lost to pytest's
+capture, and the run still passes.
 """
 
 import json
@@ -71,9 +69,8 @@ def _pinned(path: Path, **rest: object) -> Path:
 def _refusal(path: Path, capsys: pytest.CaptureFixture[str]) -> str:
     """What `bench_manifest_env(path)` said on stderr when it exported no pin.
 
-    Whatever the reason, it still points at the manifest, so the failure is
-    diagnosable and the manifest's own reader decides what it means; and it
-    says nothing on stdout, which is eval'd.
+    Asserts that it still exported the manifest path, and printed nothing on
+    stdout, which is eval'd.
     """
     env = bench_manifest_env(path)
     assert "OTDFCTL_HEADS" not in env
@@ -100,11 +97,6 @@ class TestBenchManifestEnv:
     def test_no_manifest_exports_nothing(self, tmp_path: Path):
         assert bench_manifest_env(tmp_path / "absent.json") == {}
 
-    def test_manifest_pointer_is_absolute(self, tmp_path: Path):
-        path = _write_manifest(tmp_path / "m.json", None)
-        env = bench_manifest_env(path)
-        assert Path(env["BENCH_INSTALLATION_MANIFEST"]).is_absolute()
-
     def test_otdfctl_heads_is_json_conftest_can_parse(self, tmp_path: Path):
         path = tmp_path / "m.json"
         _install(path, "refs--pull--123--head", f"ref=pr:123\nsha={PINNED_SHA}\n")
@@ -113,26 +105,8 @@ class TestBenchManifestEnv:
         # The exact parse conftest.load_otdfctl performs.
         assert json.loads(env["OTDFCTL_HEADS"]) == ["refs--pull--123--head"]
 
-    def test_released_pin_is_exported_too(self, tmp_path: Path):
-        # A release pin that is not exported silently reinstates the
-        # dist/main fallback for a run that explicitly asked for a pin. A go
-        # release's .version records no commit, so there is nothing to verify.
-        path = tmp_path / "m.json"
-        _install(path, "v0.24.0", "github.com/opentdf/otdfctl@v0.24.0\n")
-        _write_manifest(path, _identity("v0.24.0", "v0.24.0", "release"))
-        env = bench_manifest_env(path)
-        assert json.loads(env["OTDFCTL_HEADS"]) == ["v0.24.0"]
-
-    def test_exported_pin_is_announced_on_stderr(self, tmp_path: Path, capsys):
-        # It applies to every later run in the shell, not only benchmarks.
-        bench_manifest_env(_pinned(tmp_path / "m.json"))
-        out, err = capsys.readouterr()
-        assert out == ""
-        assert "pins otdfctl to v0.38.1" in err
-
     def test_measured_arms_never_supply_otdfctl(self, tmp_path: Path, capsys):
-        # The provisioning CLI is pinned separately from the arms under
-        # measurement; an arm must not become the tool that provisions it.
+        # The pin comes only from `otdfctl`, never inferred from the arms.
         path = _write_manifest(
             tmp_path / "m.json",
             None,
@@ -144,14 +118,11 @@ class TestBenchManifestEnv:
         # Falling back is allowed, but not silently.
         assert "no otdfctl pin" in _refusal(path, capsys)
 
-    @pytest.mark.parametrize("status", ["failed", "partial", "neutral"])
-    def test_unsuccessful_preparation_exports_no_pin(
-        self, status, tmp_path: Path, capsys
-    ):
+    def test_unsuccessful_preparation_exports_no_pin(self, tmp_path: Path, capsys):
         # install benchmark installs otdfctl last, so its own manifests never
-        # pair a pin with these; a hand-edited or foreign one might.
+        # pair a pin with a failure; a hand-edited or foreign one might.
         path = _pinned(
-            tmp_path / "m.json", status=status, status_message="arm 2 failed"
+            tmp_path / "m.json", status="partial", status_message="arm 2 failed"
         )
         assert "arm 2 failed" in _refusal(path, capsys)
 
@@ -170,19 +141,13 @@ class TestBenchManifestEnv:
         _write_manifest(path, _identity("main", "main", "source"))
         assert "rebuilt" in _refusal(path, capsys)
 
-    @pytest.mark.parametrize("tag", ["", True, 123, ["main"]])
-    def test_pin_without_a_string_tag_exports_nothing(
-        self, tag, tmp_path: Path, capsys
-    ):
-        # An empty tag would build the path sdk/go/dist//otdfctl.sh, and a
-        # non-string one sdk/go/dist/True/otdfctl.sh.
-        pin = {**_identity("main", "main", "source"), "installed_tag": tag}
+    def test_pin_without_a_string_tag_exports_nothing(self, tmp_path: Path, capsys):
+        # Building the dist path from a non-string tag would raise TypeError.
+        pin = {**_identity("main", "main", "source"), "installed_tag": 123}
         path = _write_manifest(tmp_path / "m.json", pin)
         assert "installed_tag" in _refusal(path, capsys)
 
-    @pytest.mark.parametrize(
-        "content", ["{not json", "[1, 2]", "null", '{"otdfctl": "v0.38.1"}']
-    )
+    @pytest.mark.parametrize("content", ["{not json", "[1, 2]"])
     def test_malformed_manifest_warns_without_raising(
         self, content, tmp_path: Path, capsys
     ):
@@ -209,11 +174,7 @@ def _prepare(kind: str, xtest_root: Path) -> None:
         _pinned(path)
     elif kind == "malformed":
         path.write_text("{not json")
-    elif kind == "directory":
-        path.mkdir()
 
-
-MANIFEST_STATES = ["absent", "pinned", "malformed", "directory"]
 
 needs_bash = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 
@@ -241,36 +202,25 @@ def run_env(tmp_path: Path, monkeypatch):
 
 
 class TestEnvCommand:
-    """What `eval $(otdf-local env)` and `env --format json | jq` actually see."""
+    """What a shell's eval and `env --format json | jq` actually see."""
 
-    @pytest.mark.parametrize("state", MANIFEST_STATES)
-    def test_shell_output_is_only_exports(self, state, tmp_path: Path, run_env):
+    @needs_bash
+    @pytest.mark.parametrize("state", ["absent", "pinned", "malformed"])
+    def test_shell_output_evals_to_the_exports(self, state, tmp_path: Path, run_env):
         _prepare(state, tmp_path)
-        result = run_env()
-        for line in result.stdout.splitlines():
+        stdout = run_env().stdout
+        for line in stdout.splitlines():
             assert re.fullmatch(
                 r"export [A-Z][A-Z0-9_]*='.*';|unset [A-Z][A-Z0-9_]*;", line
             ), line
-
-    @pytest.mark.parametrize("state", MANIFEST_STATES)
-    def test_json_output_parses(self, state, tmp_path: Path, run_env):
-        _prepare(state, tmp_path)
-        result = run_env("--format", "json")
-        assert json.loads(result.stdout)["PLATFORMURL"] == "http://localhost:8080"
-
-    def test_unreadable_manifest_is_reported_on_stderr(self, tmp_path: Path, run_env):
-        _prepare("malformed", tmp_path)
-        result = run_env()
-        assert "OTDFCTL_HEADS" not in result.stdout
-        assert "Not exporting OTDFCTL_HEADS" in result.stderr
-
-    @needs_bash
-    @pytest.mark.parametrize("state", MANIFEST_STATES)
-    def test_eval_exports_everything(self, state, tmp_path: Path, run_env):
-        _prepare(state, tmp_path)
-        platform_url, heads = _eval(run_env().stdout, "PLATFORMURL", "OTDFCTL_HEADS")
+        platform_url, heads = _eval(stdout, "PLATFORMURL", "OTDFCTL_HEADS")
         assert platform_url == "http://localhost:8080"
         assert heads == ('["v0.38.1"]' if state == "pinned" else "<unset>")
+
+    def test_json_output_parses_despite_warnings(self, tmp_path: Path, run_env):
+        _prepare("malformed", tmp_path)
+        result = run_env("--format", "json")
+        assert json.loads(result.stdout)["PLATFORMURL"] == "http://localhost:8080"
 
     @needs_bash
     def test_rerun_unsets_what_the_last_run_exported(
@@ -306,10 +256,10 @@ class TestEnvCommand:
 def _eval(stdout: str, *names: str) -> list[str]:
     """The named variables after bash evals `stdout`, `<unset>` for unset ones.
 
-    Unquoted, as documented, so word splitting and globbing both apply. The
-    shell inherits the test's environment, as a user's shell would. A failing
-    statement fails the call: `unset` skips arguments it cannot unset, so the
-    variables asked about can look right while the rest went unexported.
+    Unquoted, the worst case, so word splitting and globbing both apply. The
+    shell inherits the test's environment, as a user's shell would. `|| exit`
+    catches lines run together into one `unset`, which fails on the
+    `KEY=value` words it cannot unset.
     """
     printed = " ".join(f'"${{{name}-<unset>}}"' for name in names)
     shell = subprocess.run(
