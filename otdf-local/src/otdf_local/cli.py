@@ -637,14 +637,19 @@ def otdfctl_pin(manifest_path: Path) -> str:
     if not isinstance(tag, str) or not tag:
         raise ValueError(f"the otdfctl pin names no installed_tag: {pin!r}")
     # otdf-sdk-mgr installs otdfctl as a go CLI, into <sdk dir>/go/dist/<tag>.
+    # conftest.load_otdfctl opens its otdfctl.sh, and fails at import without it.
     dist_dir = manifest_path.parent / "go" / "dist" / tag
-    if not dist_dir.is_dir():
+    if not (dist_dir / "otdfctl.sh").is_file():
         raise ValueError(f"otdfctl {tag} is no longer installed at {dist_dir}")
-    built, pinned = _recorded_commit(dist_dir), pin.get("commit_sha")
-    if built and pinned and built != pinned:
-        raise ValueError(
-            f"{dist_dir} was rebuilt at {built} after preparation pinned {pinned}"
-        )
+    # A go release's .version records no commit. A source build's does, until
+    # `make` replaces the binary and deletes it.
+    if pin.get("installation_method") == "source":
+        built, pinned = _recorded_commit(dist_dir), pin.get("commit_sha")
+        if built != pinned:
+            raise ValueError(
+                f"{dist_dir} was rebuilt after preparation pinned {pinned} "
+                f"(it records {built or 'no commit'})"
+            )
     return tag
 
 

@@ -16,6 +16,8 @@ endif
 all: build
 	@echo "Setup js sdk clis for versions: $(VERSIONS)"
 
+# Each build deletes dist/<version>/.version: the commit it records is the old
+# build's. `otdf-sdk-mgr install benchmark` records the new one.
 build:
 	@echo "Building binaries for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
@@ -29,6 +31,7 @@ build:
 		CLI_VERSION=$$(cd $(MAKEFILE_DIR)/src/$$version/cli && npm pkg get version | tr -d \"); \
 		CLI_PATH=$(MAKEFILE_DIR)/src/$$version/cli/$$(echo "$$CLI_NAME" | tr -d @ | sed s1/1-1)-$$CLI_VERSION.tgz; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
+		rm -f $(MAKEFILE_DIR)/dist/$$version/.version; \
 		cp $(MAKEFILE_DIR)/cli.sh $(MAKEFILE_DIR)/dist/$$version/ || { \
 			echo "Error: Failed to copy cli.sh for $$version"; \
 			exit 2; \

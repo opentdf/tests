@@ -56,6 +56,7 @@ def _install(manifest_path: Path, tag: str, version: str | None = None) -> Path:
     """Lay down the go dist/ directory otdf-sdk-mgr would have installed `tag` to."""
     dist_dir = manifest_path.parent / "go" / "dist" / tag
     dist_dir.mkdir(parents=True)
+    (dist_dir / "otdfctl.sh").touch()
     if version is not None:
         (dist_dir / ".version").write_text(version)
     return dist_dir
@@ -110,7 +111,7 @@ class TestBenchManifestEnv:
         path.parent.mkdir()
         shutil.copy(GOLDEN_MANIFEST, path)
         tag = GOLDEN["otdfctl"]["installed_tag"]
-        _install(path, tag, f"ref={tag}\nsha={PINNED_SHA}\n")
+        _install(path, tag, f"github.com/opentdf/platform/otdfctl@{tag}\n")
 
         env = bench_manifest_env(path)
 
@@ -182,10 +183,10 @@ class TestBenchManifestEnv:
         assert "no longer installed" in _refusal(path, capsys)
 
     def test_rebuilt_pin_is_not_exported(self, tmp_path: Path, capsys):
-        # `install tip go` rebuilt dist/main after the benchmark pinned it: the
-        # directory is there, but it is no longer the build the manifest names.
+        # `install tip go` rebuilt dist/main after the benchmark pinned it, and
+        # make deleted the .version that recorded the pinned commit.
         path = tmp_path / "m.json"
-        _install(path, "main", f"ref=main\nsha={'1' * 40}\n")
+        _install(path, "main")
         _write_manifest(path, _identity("main", "main", "source"))
         assert "rebuilt" in _refusal(path, capsys)
 

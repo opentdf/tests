@@ -623,13 +623,12 @@ each time.
 - `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1,
   whenever it exists, whatever its `status`.
 - `OTDFCTL_HEADS` — a **JSON array** naming the `dist/` directory of the
-  provisioning CLI, e.g. `["v0.38.1"]`. It names the provisioning CLI only —
-  never a measured arm, which would make a build under measurement
-  responsible for provisioning its own fixtures. Exported only while the pin
-  is still the build that was recorded: preparation succeeded, the directory
-  exists, and any commit recorded in its `.version` matches. Otherwise `env`
-  says on stderr why not, and `conftest.load_otdfctl` falls back to
-  `sdk/go/dist/main/otdfctl.sh` or an `otdfctl` on `PATH`.
+  provisioning CLI, e.g. `["v0.38.1"]`. It comes only from the `--otdfctl`
+  pin, never from the measured arms. Exported only while the pin is still the
+  build that was recorded: preparation succeeded, its `otdfctl.sh` is
+  installed, and, for a source build, its `.version` still records the pinned
+  commit. Otherwise `env` says on stderr why not, and `conftest.load_otdfctl`
+  falls back to `sdk/go/dist/main`, else `go run …/otdfctl@latest`.
 
 Re-running `env` unsets `BENCH_INSTALLATION_MANIFEST` or `OTDFCTL_HEADS` if
 it exported them before and no longer does; it records which in
@@ -658,11 +657,13 @@ a partial or failed preparation still says what it managed to install. Its
 some arms turned out to be the same build.
 
 A source build records its commit in `dist/<slug>/.version` alongside the
-build. A later run reuses that directory only if the recorded commit matches;
-an unrecorded or mismatched one is discarded and rebuilt. Adopting a stale
-build costs nothing at install time and mislabels every measurement that
-follows. Release directories are not checked: one that already exists is
-reused as it is.
+build, and `make` deletes that record whenever it rebuilds, so a build from
+`install tip` is never mistaken for the recorded one. A later run reuses
+the directory only if the recorded commit matches; an unrecorded or
+mismatched one is discarded and rebuilt. Adopting a stale build costs nothing
+at install time and mislabels every measurement that follows. Release
+directories are not checked: one that already exists is reused as it is,
+unless it is a go release with no `otdfctl` binary.
 
 ### Neutral preparation
 
