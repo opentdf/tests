@@ -1,14 +1,17 @@
 """Typer CLI for otdf_local - OpenTDF test environment management."""
 
 import json
+import os
 import shutil
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import httpx
 import typer
 from rich.live import Live
+from rich.markup import escape
 
 from otdf_local import __version__
 from otdf_local.config.ports import Ports
@@ -565,6 +568,123 @@ def restart(
     raise typer.Exit(1)
 
 
+#: Variables `env` derives from the benchmark manifest.
+BENCH_VARS = ("BENCH_INSTALLATION_MANIFEST", "OTDFCTL_HEADS")
+#: Which of BENCH_VARS the last `env` exported, so the next one unsets only
+#: those, and only if it no longer exports them.
+BENCH_EXPORTS_VAR = "OTDF_LOCAL_BENCH_EXPORTS"
+
+
+def stale_bench_vars(exported: dict[str, str]) -> list[str]:
+    """BENCH_VARS a previous `env` exported that this one does not."""
+    previous = os.environ.get(BENCH_EXPORTS_VAR, "").split()
+    return [name for name in BENCH_VARS if name in previous and name not in exported]
+
+
+def bench_manifest_path(xtest_root: Path) -> Path:
+    """Where `otdf-sdk-mgr` writes the benchmark installation manifest.
+
+    Mirrors `otdf_sdk_mgr.bench_prepare.default_manifest_path` by convention,
+    not import: change one and you must change both. Its `OTDF_SDK_DIR`
+    override is not followed, because xtest loads SDKs only from <xtest>/sdk.
+    """
+    return xtest_root / "sdk" / "benchmark.installed.json"
+
+
+def _recorded_commit(dist_dir: Path) -> str | None:
+    """The commit `otdf-sdk-mgr` recorded in `dist_dir/.version`, if any.
+
+    Mirrors `otdf_sdk_mgr.bench_prepare.read_dist_commit`: a `sha=` line. A go
+    release's `.version` is a bare `module@tag`, which records no commit.
+    """
+    try:
+        lines = (dist_dir / ".version").read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        key, _, value = line.partition("=")
+        if key.strip() == "sha":
+            return value.strip()
+    return None
+
+
+def otdfctl_pin(manifest_path: Path) -> str:
+    """The `dist/` tag of the manifest's otdfctl pin, if it is still that build.
+
+    Raises:
+        OSError: The manifest cannot be read.
+        ValueError: It is not JSON, or it holds no pin worth exporting; the
+            message says which.
+    """
+    manifest = json.loads(manifest_path.read_text())
+    if not isinstance(manifest, dict):
+        raise ValueError("the manifest is not a JSON object")  # noqa: TRY004 - bad data, per the docstring
+    status = manifest.get("status")
+    if status != "success":
+        raise ValueError(
+            f"preparation was {status!r}: {manifest.get('status_message', '')}"
+        )
+    pin = manifest.get("otdfctl")
+    if pin is None:
+        raise ValueError(
+            "it records no otdfctl pin (`install benchmark --otdfctl`), so "
+            "provisioning falls back to sdk/go/dist/main, else "
+            "`go run …/otdfctl@latest`"
+        )
+    tag = pin.get("installed_tag") if isinstance(pin, dict) else None
+    if not isinstance(tag, str) or not tag:
+        raise ValueError(f"the otdfctl pin names no installed_tag: {pin!r}")
+    # otdf-sdk-mgr installs otdfctl as a go CLI, into <sdk dir>/go/dist/<tag>.
+    # conftest.load_otdfctl opens its otdfctl.sh, and fails at import without it.
+    dist_dir = manifest_path.parent / "go" / "dist" / tag
+    if not (dist_dir / "otdfctl.sh").is_file():
+        raise ValueError(f"otdfctl {tag} is no longer installed at {dist_dir}")
+    # A go release's .version records no commit. A source build's does, until
+    # `make` replaces the binary and deletes it.
+    if pin.get("installation_method") == "source":
+        built, pinned = _recorded_commit(dist_dir), pin.get("commit_sha")
+        if built != pinned:
+            raise ValueError(
+                f"{dist_dir} was rebuilt after preparation pinned {pinned} "
+                f"(it records {built or 'no commit'})"
+            )
+    return tag
+
+
+def bench_manifest_env(manifest_path: Path) -> dict[str, str]:
+    """Environment for a prepared benchmark run, or empty if none was prepared.
+
+    A missing manifest is not an error: most `otdf-local env` invocations have
+    nothing to do with benchmarking.
+    """
+    if not manifest_path.exists():
+        return {}
+
+    env_vars = {"BENCH_INSTALLATION_MANIFEST": str(manifest_path.resolve())}
+
+    # OTDFCTL_HEADS comes only from the `--otdfctl` pin, never from sdk_arms.
+    # A JSON array: conftest.load_otdfctl takes `json.loads(...)[0]`.
+    #
+    # Warn, don't fail: stdout is eval'd for every run, and a failed `env`
+    # takes the other exports with it. Escaped: manifest text may hold markup.
+    try:
+        tag = otdfctl_pin(manifest_path)
+    except (OSError, ValueError) as e:
+        print_warning(
+            escape(f"Not exporting OTDFCTL_HEADS from {manifest_path}: {e}"),
+            err_console,
+        )
+        return env_vars
+
+    env_vars["OTDFCTL_HEADS"] = json.dumps([tag])
+    # Said every time: the pin applies to every later run in this shell.
+    print_info(
+        escape(f"OTDFCTL_HEADS pins otdfctl to {tag}, from {manifest_path}"),
+        err_console,
+    )
+    return env_vars
+
+
 @app.command()
 def env(
     format: Annotated[
@@ -580,9 +700,10 @@ def env(
 
     Use this command to configure your shell environment for running tests:
 
-        eval $(otdf-local env)
+        eval "$(otdf-local env)"
 
-    Or source it directly:
+    Quote it: unquoted, bash globs the [...] in OTDFCTL_HEADS. Or source it
+    directly:
 
         . <(otdf-local env)
 
@@ -646,16 +767,24 @@ def env(
     except Exception as e:  # noqa: BLE001 - best-effort, as above
         print_warning(f"Could not get platform version: {e}", err_console)
 
+    bench_vars = bench_manifest_env(bench_manifest_path(settings.xtest_root))
+    env_vars.update(bench_vars)
+
     # Output in requested format
     if format == "json":
         console.print_json(json.dumps(env_vars, indent=2))
     else:
-        # Shell export format - use plain print to avoid line wrapping
+        # Every statement ends in `;`: unquoted `eval $(otdf-local env)` joins
+        # the lines into one, and `unset A export B=...` would hand the exports
+        # to `unset`.
+        for key in stale_bench_vars(bench_vars):
+            print(f"unset {key};")
+        env_vars[BENCH_EXPORTS_VAR] = " ".join(bench_vars)
+        # Plain print, not the Rich console, which would wrap long lines.
         for key, value in env_vars.items():
             # Escape single quotes in value for shell safety
             escaped_value = value.replace("'", "'\\''")
-            # Use plain print to stdout to avoid rich console line wrapping
-            print(f"export {key}='{escaped_value}'", file=sys.stdout)
+            print(f"export {key}='{escaped_value}';")
 
 
 if __name__ == "__main__":

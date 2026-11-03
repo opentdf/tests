@@ -552,3 +552,151 @@ two builds doing different amounts of work) is invisible in the output.
 
 Every one of these fails *silently* and *plausibly* when broken: the numbers
 still look like numbers. That is why they are written down.
+
+---
+
+## 3. Local preparation and execution
+
+The local sequence: prepare, start, export, measure. CI does not use it yet:
+the workflow resolves and installs its arms itself, and its go job sets
+`OTDFCTL_HEADS` from the go arm's heads.
+
+### Prerequisites
+
+- `otdf-sdk-mgr` installed: `cd otdf-sdk-mgr && uv tool install --editable .`
+- A platform source tree for `otdf-local` to run: a `platform/` checkout beside
+  `xtest/`, or `--platform <ref>` in step 1. A sibling checkout wins over the
+  one `--platform` installs. See `otdf-local/AGENTS.md`.
+- Nothing else listening on port 8080. Step 2 starts Keycloak, Postgres, the
+  platform and its default KAS only — no alpha/beta/gamma/delta, no km
+  instances. That is deliberate: every extra Go service is a process
+  competing for the CPU being measured.
+
+### Sequence
+
+```bash
+# 1. Resolve and install every arm in one step, recording what was installed.
+#    The first ref is the reference; the rest are candidates. pytest does not
+#    read the manifest yet, so step 4 names the arms again.
+cd otdf-sdk-mgr
+uv run otdf-sdk-mgr install benchmark go v0.29.0 main --otdfctl v0.38.1
+
+# 2. Start the platform and its default KAS.
+cd ../otdf-local
+uv run otdf-local up --services docker,platform
+
+# 3. Export the environment, including the otdfctl pin recorded in step 1.
+#    Quote it: unquoted, bash globs the [...] in OTDFCTL_HEADS, and under
+#    nullglob drops it.
+eval "$(uv run otdf-local env)"
+
+# 4. Measure.
+cd ../xtest
+uv run pytest --bench --sdks go \
+  --bench-baseline go@v0.29.0 \
+  --bench-candidate go@main \
+  -v test_benchmarks.py
+
+# 5. Read the result. The JSON holds every sample and every interval; the
+#    terminal summary is a view of it, not a separate source.
+cat test-results/benchmarks/go.json
+
+# 6. Stop the services, whether or not the measurement passed. Logs stay
+#    under otdf-local's log directory afterwards.
+cd ../otdf-local
+uv run otdf-local down
+```
+
+`install benchmark` is what writes the manifest. `install stable` and
+`install tip` still work for ordinary test runs, but they record nothing and
+leave an earlier manifest in place. Until that manifest is replaced or
+removed (`rm xtest/sdk/benchmark.installed.json`), `otdf-local env` keeps
+exporting its otdfctl pin into every shell it sets up — and says so on stderr
+each time.
+
+### Environment variables
+
+`otdf-local env` exports, in addition to the platform settings:
+
+- `BENCH_INSTALLATION_MANIFEST` — path to the manifest written in step 1,
+  whenever it exists, whatever its `status`.
+- `OTDFCTL_HEADS` — a **JSON array** naming the `dist/` directory of the
+  provisioning CLI, e.g. `["v0.38.1"]`. It comes only from the `--otdfctl`
+  pin, never from the measured arms. Exported only while the pin is still the
+  build that was recorded: preparation succeeded, its `otdfctl.sh` is
+  installed, and, for a source build, its `.version` still records the pinned
+  commit. Otherwise `env` says on stderr why not, and `conftest.load_otdfctl`
+  falls back to `sdk/go/dist/main`, else `go run …/otdfctl@latest`.
+
+Re-running `env` unsets `BENCH_INSTALLATION_MANIFEST` or `OTDFCTL_HEADS` if
+it exported them before and no longer does; it records which in
+`OTDF_LOCAL_BENCH_EXPORTS`. That record holds names, not values: a value you
+set by hand in place of one of those exports is unset too, and a valid pin
+overwrites a hand-set `OTDFCTL_HEADS`.
+
+Exported when available: `PLATFORM_LOG_FILE`, `KAS_*_LOG_FILE` and
+`SCHEMA_FILE` if the file exists; `OT_ROOT_KEY` if the platform config sets
+`services.kas.root_key`; `PLATFORM_VERSION` if the platform is running and
+reports one.
+
+### Installation manifest
+
+`install benchmark` writes `xtest/sdk/benchmark.installed.json`, a versioned
+record of what was installed. Per artifact: requested alias, repository,
+immutable commit SHA, installed tag and path, installation method (release
+artifact or source build), and build settings. Request order is preserved, so
+the first `sdk_arms` entry is the reference.
+
+The platform pin and the provisioning `otdfctl` pin are recorded in their own
+fields, separate from the measured arms.
+
+The manifest is written on **every** exit path, including the failing ones, so
+a partial or failed preparation still says what it managed to install. Its
+`status` is one of `success`, `neutral`, `partial`, or `failed`.
+`status_message` says why for the last three.
+
+A source build records its commit in `dist/<slug>/.version` alongside the
+build, and `make` deletes that record whenever it rebuilds, so a build from
+`install tip` is never mistaken for the recorded one. A later run reuses
+the directory only if the recorded commit matches; an unrecorded or
+mismatched one is discarded and rebuilt. Adopting a stale build costs nothing
+at install time and mislabels every measurement that follows. Release
+directories are not checked: one that already exists is reused as it is,
+unless it is a go release with no `otdfctl` binary.
+
+### Neutral preparation
+
+When every requested alias resolves to the same build — `main` and `latest`
+both at `abc123` — preparation stops before any build and reports
+**neutral**. There is nothing to compare, which is not the same as something
+having gone wrong; the manifest still records the commit everything collapsed
+onto. If only some arms collapse, preparation succeeds, and `status_message`
+names the ones that are the same build.
+
+### Troubleshooting
+
+**Services won't start**:
+```bash
+cd otdf-local
+uv run otdf-local status
+uv run otdf-local logs -f
+```
+
+**Missing SDK build**:
+```bash
+ls -la xtest/sdk/go/dist/            # what is installed
+cat xtest/sdk/benchmark.installed.json  # and what preparation believes it installed
+```
+
+**`OTDFCTL_HEADS` not exported** — `env` prints the reason on stderr: no pin
+was recorded (`--otdfctl`), preparation did not succeed, or the pinned build
+has been removed or rebuilt since. Re-run step 1 and re-export:
+```bash
+eval "$(cd otdf-local && uv run otdf-local env)"
+```
+
+**Platform not reachable**:
+```bash
+curl http://localhost:8080/healthz
+cd otdf-local && uv run otdf-local restart platform
+```
