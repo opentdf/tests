@@ -221,9 +221,8 @@ class TestZip64OffsetBounds:
         """main's jar reports the last release, so only the directory name counts."""
         assert _installed_sdk("java", "main").supports("zip64-offset-bounds")
 
-    @pytest.mark.parametrize("sdk", ["go", "js"])
-    def test_other_sdks_always_run(self, sdk: tdfs.sdk_type):
-        assert _installed_sdk(sdk, "v0.1.0").supports("zip64-offset-bounds")
+    def test_js_always_runs(self):
+        assert _installed_sdk("js", "v0.1.0").supports("zip64-offset-bounds")
 
 
 # --- tdfs.elides_segment_sizes / tdfs.skip_chunky_skew ------------------------

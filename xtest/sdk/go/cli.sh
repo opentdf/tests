@@ -170,6 +170,16 @@ if [ "$1" == "supports" ]; then
       echo "zip64-at-2gib unsupported: see DSPX-4590"
       exit 1
       ;;
+    zip64-offset-bounds)
+      # Refuse a ZIP64 locator or central-directory offset that no file
+      # position can hold before seeking to it. opentdf/platform#4043 added
+      # the bounds, first released in sdk 0.35.0. Earlier builds, including
+      # release branches cut before it, fail with a seek error that
+      # test_zip_conformance.py does not count as a ZIP rejection.
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .sdk_version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 35)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     *)
       echo "Unknown feature: $2"
       exit 2
