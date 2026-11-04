@@ -271,7 +271,7 @@ jobs:
               out.write(f"budget-seconds={budget:g}\n")
               out.write(f"timeout-minutes={timeout}\n")
           PY
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - id: version-info
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
         # github-script authenticates its own `github` client, but the token
@@ -495,7 +495,7 @@ jobs:
           dpop-challenge-enabled: ${{ inputs.dpop-challenge || false }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Pinned so a new CPython release can't land before its wheels do.
           python-version: "3.15"
@@ -913,7 +913,7 @@ jobs:
           echo "platform_tag=${PLATFORM_TAG//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: upload-artifact
         if: success() || failure()
         with:
@@ -926,7 +926,7 @@ jobs:
             otdftests/xtest/test-results/**/*.json
 
       - name: Upload audit logs on failure
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: audit-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ steps.artifact-name.outputs.platform_tag }}
@@ -934,7 +934,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload server logs on failure
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: server-logs-${{ steps.artifact-name.outputs.sdk_version }}-${{ steps.artifact-name.outputs.platform_tag }}
@@ -1011,7 +1011,7 @@ jobs:
           pqc-enabled: true
 
       - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Pinned so a new CPython release can't land before its wheels do.
           python-version: "3.15"
@@ -1208,7 +1208,7 @@ jobs:
       # surprising result offline beats re-running a 30-minute job to look at
       # the same numbers again.
       - name: Upload benchmark results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success() || failure()
         with:
           name: ${{ job.status == 'success' && '✅' || '❌' }} bench-${{ matrix.sdk }}
@@ -1218,7 +1218,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload server logs on failure
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: bench-server-logs-${{ matrix.sdk }}
@@ -1323,7 +1323,7 @@ jobs:
           pqc-enabled: true
 
       - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Pinned so a new CPython release can't land before its wheels do.
           python-version: "3.15"
@@ -1576,7 +1576,7 @@ jobs:
           PY
 
       - name: Upload ZIP64 results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success() || failure()
         with:
           name: ${{ job.status == 'success' && '✅' || '❌' }} zip64-${{ matrix.sdk }}
@@ -1586,7 +1586,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload server logs on failure
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: zip64-server-logs-${{ matrix.sdk }}
