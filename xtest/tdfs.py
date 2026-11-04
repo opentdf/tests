@@ -219,8 +219,10 @@ feature_type = Literal[
     # reads 2**63 as a negative long and FileChannelImpl.position throws a
     # bare IllegalArgumentException -- a crash, not a ZIP diagnostic, so
     # test_zip_conformance.py fails the cell. java-sdk#398 added the check
-    # after v0.19.1. Answered in SDK._uncached_supports rather than cli.sh;
-    # see there for why.
+    # after v0.19.1, and opentdf/platform#4043 added it to go-sdk 0.35.0;
+    # older go builds fail with a seek error instead. java and js are
+    # answered in SDK._uncached_supports (see there for why); go answers from
+    # cli.sh, because otdfctl reports the SDK version it was built with.
     "zip64-offset-bounds",
 ]
 
@@ -1023,7 +1025,7 @@ class SDK:
                 # the cells instead of skipping them.
                 release = self.semver()
                 return release is None or release > (0, 19, 1)
-            case ("zip64-offset-bounds", ("go" | "js")):
+            case ("zip64-offset-bounds", "js"):
                 return True
             case _:
                 pass
