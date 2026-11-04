@@ -29,7 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pyright>=1.1.414",
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
 ]
 
 # Note: This is a test suite, not a distributable package.
