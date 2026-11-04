@@ -784,7 +784,7 @@ jobs:
       - name: Start additional kas
         id: kas-alpha
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           kas-name: alpha
@@ -797,7 +797,7 @@ jobs:
       - name: Start additional kas
         id: kas-beta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           kas-name: beta
@@ -810,7 +810,7 @@ jobs:
       - name: Start additional kas
         id: kas-gamma
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           kas-name: gamma
@@ -823,7 +823,7 @@ jobs:
       - name: Start additional kas
         id: kas-delta
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           kas-port: 8484
@@ -836,7 +836,7 @@ jobs:
       - name: Start additional KM kas (km1)
         id: kas-km1
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
@@ -850,7 +850,7 @@ jobs:
       - name: Start additional KM kas (km2)
         id: kas-km2
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           kas-name: km2
@@ -864,7 +864,7 @@ jobs:
       - name: Start dedicated KAO-enabled KM kas (km3)
         id: kas-km3
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        uses: opentdf/platform/test/start-additional-kas@2fc0bf52f898ea35c3948e9cec16a91bad057f42
+        uses: opentdf/platform/test/start-additional-kas@158f69838f474080ebc3502cb3c22fd6e6ad9e51
         with:
           ec-tdf-enabled: true
           key-management: ${{ steps.km-check.outputs.supported }}
