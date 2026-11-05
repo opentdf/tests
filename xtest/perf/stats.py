@@ -14,10 +14,11 @@ is testable without a platform, an SDK, or a subprocess.
 
 The scale
 ---------
-Comparisons use the log-ratio ``d_i = ln(candidate_i) - ln(baseline_i)`` of the
-i-th paired round. Logs make ratios symmetric (a 2x slowdown and a 2x speedup
-are equal and opposite) and additive, which is what the median and the
-bootstrap want. Results are exponentiated back to ratios for reporting.
+Comparisons use the log-ratio ``d_i = ln(b_i) - ln(a_i)`` of the i-th paired
+round, where ``b`` is a candidate and ``a`` the reference. Logs make ratios
+symmetric (a 2x slowdown and a 2x speedup are equal and opposite) and
+additive, which is what the median and the bootstrap want. Results are
+exponentiated back to ratios for reporting.
 
 The decision rule
 -----------------
@@ -85,22 +86,21 @@ class Verdict(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PairedComparison:
-    """The statistical summary of one (cell, metric) comparison.
+    """The statistical summary of one contrast: arm ``b`` against arm ``a``.
 
-    Ratios are candidate-over-baseline: 1.20 means the candidate took 20%
-    longer (or used 20% more memory) than the baseline.
+    Ratios are b-over-a: 1.20 means ``b`` took 20% longer (or used 20% more
+    memory) than ``a``.
     """
 
     n_rounds: int
-    baseline_median: float
-    candidate_median: float
+    a_median: float
+    b_median: float
     ratio: float
     ci_low: float
     ci_high: float
-    #: One-sided p-value for "candidate is slower". Retains the original field
-    #: name for artifact/API compatibility; the opposite direction is explicit.
+    #: One-sided p-value for "``b`` is slower", the tail REGRESSION reads.
     p_value: float
-    #: One-sided p-value for "candidate is faster".
+    #: One-sided p-value for "``b`` is faster".
     p_value_faster: float
     #: Set by :func:`apply_multiplicity_control` once every cell is known.
     p_adjusted: float | None = None
@@ -119,27 +119,27 @@ class PairedComparison:
         return (math.log(self.ci_high) - math.log(self.ci_low)) / 2
 
 
-def log_ratios(baseline: Samples, candidate: Samples) -> np.ndarray:
-    """Return per-round log-ratios ``ln(candidate) - ln(baseline)``.
+def log_ratios(a: Samples, b: Samples) -> np.ndarray:
+    """Return per-round log-ratios ``ln(b) - ln(a)``.
 
     The two vectors must be the same length: entry i of each comes from the
     same round, which is what makes the comparison paired. Non-positive
     measurements cannot be log-transformed and indicate a broken measurement
     rather than a fast one, so they are rejected outright.
     """
-    b = np.asarray(baseline, dtype=float)
-    c = np.asarray(candidate, dtype=float)
-    if b.shape != c.shape:
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
         raise ValueError(
-            f"paired vectors must be the same length, got {b.shape} and {c.shape}"
+            f"paired vectors must be the same length, got {a.shape} and {b.shape}"
         )
-    if b.size == 0:
+    if a.size == 0:
         return np.empty(0, dtype=float)
-    if not (np.all(np.isfinite(b)) and np.all(np.isfinite(c))):
+    if not (np.all(np.isfinite(a)) and np.all(np.isfinite(b))):
         raise ValueError("measurements must all be finite")
-    if np.any(b <= 0) or np.any(c <= 0):
+    if np.any(a <= 0) or np.any(b <= 0):
         raise ValueError("measurements must all be positive to take a log-ratio")
-    return np.log(c) - np.log(b)
+    return np.log(b) - np.log(a)
 
 
 def _bootstrap_ci(
@@ -212,29 +212,29 @@ def _one_sided_ps(d: np.ndarray) -> tuple[float, float]:
 
 
 def compare(
-    baseline: Samples,
-    candidate: Samples,
+    a: Samples,
+    b: Samples,
     *,
     confidence: float = 0.95,
     seed: int = 0,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
 ) -> PairedComparison:
-    """Compute the paired comparison for one metric of one cell.
+    """Compare arm ``b`` against arm ``a`` on one metric; ratios are b over a.
 
     The returned comparison has no final verdict yet: ``p_adjusted`` is unset
     and ``verdict`` is INCONCLUSIVE until :func:`apply_multiplicity_control`
     has seen every cell in the run.
     """
-    d = log_ratios(baseline, candidate)
+    d = log_ratios(a, b)
     n = int(d.size)
-    b_med = float(np.median(baseline)) if n else math.nan
-    c_med = float(np.median(candidate)) if n else math.nan
+    a_med = float(np.median(a)) if n else math.nan
+    b_med = float(np.median(b)) if n else math.nan
 
     if n < MIN_USABLE_ROUNDS:
         return PairedComparison(
             n_rounds=n,
-            baseline_median=b_med,
-            candidate_median=c_med,
+            a_median=a_med,
+            b_median=b_med,
             ratio=math.exp(float(np.median(d))) if n else math.nan,
             ci_low=math.nan,
             ci_high=math.nan,
@@ -249,8 +249,8 @@ def compare(
     p_slower, p_faster = _one_sided_ps(d)
     return PairedComparison(
         n_rounds=n,
-        baseline_median=b_med,
-        candidate_median=c_med,
+        a_median=a_med,
+        b_median=b_med,
         ratio=math.exp(float(np.median(d))),
         ci_low=math.exp(lo_log),
         ci_high=math.exp(hi_log),
@@ -338,6 +338,13 @@ def assess_noise_floor(
     )
 
 
+def _noise_rank(n: NoiseFloor) -> tuple[bool, bool, float]:
+    """Order noise floors from most to least reassuring."""
+    # A NaN width is an unusable interval, which is worse than any real one.
+    width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
+    return (n.tripped, n.underpowered, width)
+
+
 def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     """The least reassuring control in the run, or None if there were none.
 
@@ -345,13 +352,27 @@ def _worst_noise(noises: Iterable[NoiseFloor]) -> NoiseFloor | None:
     harness may be biased on this runner, and averaging that away with two
     quiet ones is exactly the reassurance the control exists to withhold.
     """
+    return max(noises, key=_noise_rank, default=None)
 
-    def rank(n: NoiseFloor) -> tuple[bool, bool, float]:
-        # A NaN width is an unusable interval, which is worse than any real one.
-        width = n.width_ratio if math.isfinite(n.width_ratio) else math.inf
-        return (n.tripped, n.underpowered, width)
 
-    return max(noises, key=rank, default=None)
+def worst_control_key(
+    comparisons: Mapping[str, PairedComparison],
+    keys: Sequence[str],
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+) -> str:
+    """The least reassuring of a control's A/A contrasts.
+
+    The copies are interchangeable readings of one null, so the luckiest must
+    not set the SDK's floor. Ties go to the earliest key. A missing key is a
+    wrongly built one and raises ``KeyError``.
+    """
+    return max(
+        keys,
+        key=lambda k: _noise_rank(
+            assess_noise_floor(comparisons[k], threshold=threshold)
+        ),
+    )
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
@@ -389,8 +410,8 @@ class GateResult:
     #: we still report, but a gate we cannot trust must not turn the build red.
     trustworthy: bool = True
     summary: str = ""
-    #: At least one comparison between distinct baseline and candidate roles
-    #: was measured. A clean A/A control alone says nothing about the candidate.
+    #: At least one candidate-vs-reference contrast was measured. A clean A/A
+    #: control alone says nothing about any candidate.
     has_candidate_comparisons: bool = False
 
     @property
@@ -399,7 +420,7 @@ class GateResult:
 
     @property
     def nothing_measured(self) -> bool:
-        """True if the run produced no baseline/candidate comparison.
+        """True if the run produced no candidate-vs-reference contrast.
 
         An A/A control measures the harness, not the candidate, so a control-only
         run still measured nothing that can answer the benchmark's question.
@@ -520,8 +541,8 @@ def apply_multiplicity_control(
             )
         result.comparisons[key] = PairedComparison(
             n_rounds=c.n_rounds,
-            baseline_median=c.baseline_median,
-            candidate_median=c.candidate_median,
+            a_median=c.a_median,
+            b_median=c.b_median,
             ratio=c.ratio,
             ci_low=c.ci_low,
             ci_high=c.ci_high,

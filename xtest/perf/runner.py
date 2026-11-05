@@ -1,16 +1,19 @@
 """The paired round loop that produces comparable samples for one cell.
 
-A *cell* is one operation at one payload size, measured for two SDK builds.
-The loop runs both arms once per round, in a randomized order, until it has
-either enough precision or no more time.
+A *cell* is one operation at one payload size, measured over two or more
+arms: distinct SDK builds, or, in the A/A control, copies of one build. The
+loop runs every arm once per round, in a randomized order, until it has
+either enough precision or no more time. The first arm is the *reference*,
+and every other arm is compared against it.
 
 Why rounds rather than "run A 30 times, then B 30 times"
 --------------------------------------------------------
 A shared runner drifts: a noisy neighbour arrives, the CPU thermally throttles,
 the page cache warms. Run all of A and then all of B and every one of those
 effects lands entirely on one arm and shows up as a difference between builds.
-Interleaving means both arms see the same conditions within a round, and the
-per-round ratio differences it out.
+Interleaving means every arm sees the same conditions within a round, and the
+per-round ratio differences it out. A round is recorded only once every arm
+in it has completed, so the vectors stay paired however many arms there are.
 
 The order *within* a round is randomized because a fixed order is itself a
 confounder -- whichever arm runs second inherits the first one's cache state.
@@ -83,16 +86,26 @@ class Invocation:
 
 @dataclass(frozen=True, slots=True)
 class Arm:
-    """One side of a comparison."""
+    """One build in a cell. Which arm is the reference belongs to the cell."""
 
-    #: ``"baseline"`` or ``"candidate"``; identifies the role, not the build.
+    #: Arm id, unique within a cell: it keys the samples. ``build_arms`` uses
+    #: the dist directory name, e.g. ``"v0.29.0"``, or ``"v0.29.0#1"`` for a
+    #: control copy.
     name: str
-    #: The build under this role, e.g. ``"go@v0.29.0"``.
+    #: The build this arm runs, e.g. ``"go@v0.29.0"``.
     label: str
     invocation: Invocation
 
 
-@dataclass(slots=True)
+def _check_arm_ids(cell_id: str, arm_ids: Sequence[str]) -> None:
+    """Reject fewer than two arms, or colliding ids (which would merge samples)."""
+    if len(arm_ids) < 2:
+        raise ValueError(f"{cell_id}: a cell needs at least two arms to compare")
+    if len(set(arm_ids)) != len(arm_ids):
+        raise ValueError(f"{cell_id}: arm ids must be unique, got {list(arm_ids)}")
+
+
+@dataclass(frozen=True, slots=True)
 class CellResult:
     """Everything one cell measured, before any verdict is assigned.
 
@@ -102,14 +115,17 @@ class CellResult:
     """
 
     cell_id: str
-    baseline_label: str
-    candidate_label: str
-    #: ``samples[arm_name][metric]`` is the per-round vector, warm-up excluded.
+    #: Arm ids in the order they were configured; the first is the reference.
+    arm_ids: tuple[str, ...]
+    #: Arm id -> the build it ran, e.g. ``"go@v0.29.0"``.
+    arm_labels: dict[str, str]
+    #: ``samples[arm_id][metric]`` is the per-round vector, warm-up excluded.
+    #: Every arm has every metric, and all vectors share one non-zero length.
     samples: dict[str, dict[str, list[float]]]
     n_warmup: int
     elapsed_s: float
     stopped_because: str
-    #: True for the A/A control, where both arms are the same build.
+    #: True for the A/A control, where every arm is the same build.
     control: bool = False
     #: Which SDK's control cell assesses this cell's noise floor. A run may
     #: measure several SDKs, and each has its own harness path and its own
@@ -119,53 +135,95 @@ class CellResult:
     #: that forked each invocation. See :mod:`perf._launcher`.
     rss_floor_bytes: int = 0
 
-    @property
-    def rss_censored_reason(self) -> str | None:
-        """Why this cell's peak RSS cannot be compared, or None if it can.
+    def __post_init__(self) -> None:
+        _check_arm_ids(self.cell_id, self.arm_ids)
+        if not set(self.arm_labels) == set(self.samples) == set(self.arm_ids):
+            raise ValueError(
+                f"{self.cell_id}: labels and samples must name exactly the arms"
+            )
+        # Every contrast reads every metric of both of its arms.
+        for arm_id in self.arm_ids:
+            if set(self.samples[arm_id]) != set(METRICS):
+                raise ValueError(
+                    f"{self.cell_id}: arm {arm_id} needs samples for exactly "
+                    f"{list(METRICS)}, got {sorted(self.samples[arm_id])}"
+                )
+        # Entry i of every vector is round i; unequal lengths are unpaired.
+        lengths = {len(v) for arm in self.samples.values() for v in arm.values()}
+        if len(lengths) > 1:
+            raise ValueError(f"{self.cell_id}: sample vectors differ in length")
+        if lengths == {0}:
+            raise ValueError(f"{self.cell_id}: no rounds were recorded")
 
-        A command whose peak sits at the floor was not measured, it was
-        clipped, and both arms clip to the same value. The resulting ratio is
-        1.000 with a tight interval, which is the most convincing-looking
-        PASS the harness can emit and means nothing at all.
+    @property
+    def reference(self) -> str:
+        """The arm every other arm is compared against: always the first."""
+        return self.arm_ids[0]
+
+    def rss_censored_reason(self, a: str, b: str) -> str | None:
+        """Why the RSS contrast of ``b`` against ``a`` can't be judged, or None.
+
+        A peak at the floor was clipped, not measured, and clipping pulls the
+        ratio toward 1.000: two clipped arms give a tight, meaningless PASS,
+        and one shrinks a real difference. Arms outside the pair don't count.
         """
         if self.rss_floor_bytes <= 0:
             return None
-        rss = [v for arm in self.samples.values() for v in arm.get("rss", [])]
-        if not rss or min(rss) > self.rss_floor_bytes:
+        if min(self.samples[a]["rss"] + self.samples[b]["rss"]) > self.rss_floor_bytes:
             return None
         return (
             f"peak rss reaches the {self.rss_floor_bytes / 2**20:.0f} MiB "
-            "measurement floor, so the two arms are not distinguishable"
+            "measurement floor, so the arms are not distinguishable"
         )
 
     @property
     def n_rounds(self) -> int:
-        first = next(iter(self.samples.values()), {})
-        return len(next(iter(first.values()), []))
+        return len(self.samples[self.reference]["wall"])
 
-    def metric_pair(self, metric: str) -> tuple[list[float], list[float]]:
-        """Return ``(baseline, candidate)`` vectors for one metric."""
-        return self.samples["baseline"][metric], self.samples["candidate"][metric]
+    @property
+    def candidates(self) -> tuple[str, ...]:
+        """Every arm id except the reference, in configured order."""
+        return tuple(a for a in self.arm_ids if a != self.reference)
 
-    def compare(self, metric: str, config: BenchConfig) -> stats.PairedComparison:
-        baseline, candidate = self.metric_pair(metric)
+    def contrast(
+        self, a: str, b: str, metric: str, config: BenchConfig
+    ) -> stats.PairedComparison:
+        """Compare arm ``b`` against arm ``a``: the ratio is b/a, as reported."""
         return stats.compare(
-            baseline,
-            candidate,
+            self.samples[a][metric],
+            self.samples[b][metric],
             confidence=config.confidence,
             seed=config.seed,
             n_resamples=config.n_resamples,
         )
 
+    def contrast_pairs(self) -> list[tuple[str, str]]:
+        """The ``(a, b)`` contrasts this cell is judged on."""
+        return _contrast_pairs(self.arm_ids)
 
-def _empty_samples() -> dict[str, dict[str, list[float]]]:
-    return {arm: {m: [] for m in METRICS} for arm in ("baseline", "candidate")}
+
+def _contrast_pairs(arm_ids: Sequence[str]) -> list[tuple[str, str]]:
+    """``(reference, candidate)`` for each candidate.
+
+    The analysis and the precision stop rule both read this, so the loop waits
+    for exactly the contrasts that will be judged.
+    """
+    reference, *candidates = arm_ids
+    return [(reference, b) for b in candidates]
+
+
+def contrast_key(cell_id: str, a: str, b: str, metric: str) -> str:
+    """The stable key for one contrast, as used throughout the analysis."""
+    return f"{cell_id}/{b}_vs_{a}/{metric}"
+
+
+def _empty_samples(arm_ids: Sequence[str]) -> dict[str, dict[str, list[float]]]:
+    return {arm: {m: [] for m in METRICS} for arm in arm_ids}
 
 
 def run_cell(
     cell_id: str,
-    baseline: Arm,
-    candidate: Arm,
+    arms: Sequence[Arm],
     config: BenchConfig,
     *,
     deadline: float | None = None,
@@ -179,9 +237,8 @@ def run_cell(
     Args:
         cell_id: stable identifier, also the per-cell RNG seed material so
             that two cells do not share an interleaving order.
-        baseline: the arm the candidate is compared against.
-        candidate: the arm under test. For an A/A control this is the same
-            build as ``baseline``, running through the identical path.
+        arms: two or more, all run every round; the first is the reference.
+        config: round-loop knobs.
         deadline: absolute ``clock()`` value past which no new round starts.
         control: records that this is the A/A cell; does not change the loop.
         sdk: which SDK this cell belongs to, so that the analysis can pair it
@@ -190,28 +247,39 @@ def run_cell(
         run: injectable measurement function, for testing the loop itself.
 
     Raises:
+        ValueError: if fewer than two arms were given or their ids collide.
         MeasurementError: if any invocation fails. A benchmark over an
             operation that errors out is measuring the error path.
         BudgetExhausted: if the deadline passed before ``min_rounds``, or
             during warm-up.
     """
-    arms = (baseline, candidate)
+    arms = tuple(arms)
+    arm_ids = tuple(a.name for a in arms)
+    # Before anything is measured: a cell that cannot be analysed must not
+    # spend its budget first.
+    _check_arm_ids(cell_id, arm_ids)
+    reference = arm_ids[0]
+    pairs = _contrast_pairs(arm_ids)
+
     # Seeded per cell so a rerun reproduces the interleaving exactly, but the
     # cells do not all share one order (which would correlate their noise).
     rng = random.Random(f"{config.seed}:{cell_id}")
-    samples = _empty_samples()
+    samples = _empty_samples(arm_ids)
     round_durations: list[float] = []
     rss_floor = 0
     started = clock()
 
     def one_round(into: dict[str, dict[str, list[float]]]) -> None:
-        # Build the round off to the side. If the deadline expires after one
-        # arm, none of that partial round may enter the paired sample vectors.
-        completed = _empty_samples()
+        # Build the round off to the side. If the deadline expires partway
+        # through, none of that partial round may enter the paired sample
+        # vectors.
+        completed = _empty_samples(arm_ids)
         round_rss_floor = 0
         order = list(arms)
         rng.shuffle(order)
         for arm in order:
+            # The label alone is ambiguous: a control's copies share one.
+            who = f"{arm.name} ({arm.label})"
             inv = arm.invocation
             if inv.output is not None:
                 inv.output.unlink(missing_ok=True)
@@ -220,7 +288,7 @@ def run_cell(
                 remaining_s = deadline - clock()
                 if remaining_s <= 0:
                     raise BudgetExhausted(
-                        f"{cell_id}: budget expired before {arm.label} could run"
+                        f"{cell_id}: budget expired before {who} could run"
                     )
                 timeout_s = min(timeout_s, remaining_s)
             try:
@@ -228,13 +296,11 @@ def run_cell(
             except MeasurementError as e:
                 if deadline is not None and clock() >= deadline:
                     raise BudgetExhausted(
-                        f"{cell_id}: budget expired while running {arm.label}"
+                        f"{cell_id}: budget expired while running {who}"
                     ) from e
-                raise MeasurementError(f"{cell_id}: {arm.label} failed: {e}") from e
+                raise MeasurementError(f"{cell_id}: {who} failed: {e}") from e
             if deadline is not None and clock() > deadline:
-                raise BudgetExhausted(
-                    f"{cell_id}: budget expired while running {arm.label}"
-                )
+                raise BudgetExhausted(f"{cell_id}: budget expired while running {who}")
             round_rss_floor = max(round_rss_floor, sample.rss_floor_bytes)
             for metric in METRICS:
                 completed[arm.name][metric].append(sample.metric(metric))
@@ -263,7 +329,7 @@ def run_cell(
                 "before any measurement began"
             )
         try:
-            one_round(_empty_samples())
+            one_round(_empty_samples(arm_ids))
         except BudgetExhausted as e:
             raise BudgetExhausted(
                 f"{cell_id}: budget ran out during warm-up after {i} of "
@@ -291,13 +357,13 @@ def run_cell(
             break
         round_durations.append(clock() - round_start)
 
-        n = len(samples["baseline"]["wall"])
-        if n >= config.min_rounds and _precise_enough(samples, config):
+        n = len(samples[reference]["wall"])
+        if n >= config.min_rounds and _precise_enough(samples, config, pairs):
             stopped_because = "precision"
             break
 
     elapsed = clock() - started
-    n = len(samples["baseline"]["wall"])
+    n = len(samples[reference]["wall"])
     if n < config.min_rounds:
         raise BudgetExhausted(
             f"{cell_id}: only {n} rounds completed in {elapsed:.0f}s, "
@@ -305,8 +371,8 @@ def run_cell(
         )
     return CellResult(
         cell_id=cell_id,
-        baseline_label=baseline.label,
-        candidate_label=candidate.label,
+        arm_ids=arm_ids,
+        arm_labels={a.name: a.label for a in arms},
         samples=samples,
         n_warmup=config.warmup,
         elapsed_s=elapsed,
@@ -318,26 +384,31 @@ def run_cell(
 
 
 def _precise_enough(
-    samples: dict[str, dict[str, list[float]]], config: BenchConfig
+    samples: dict[str, dict[str, list[float]]],
+    config: BenchConfig,
+    pairs: Sequence[tuple[str, str]],
 ) -> bool:
-    """True once every gated metric's CI is narrow enough to decide on.
+    """True once every judged contrast's gated CIs are narrow enough.
 
-    Deliberately looks only at interval *width*, never at where the interval
+    Stopping on the first precise contrast would leave the rest INCONCLUSIVE
+    with budget unspent. Looks only at interval *width*, never at where it
     sits or at any p-value -- see the module docstring.
     """
     for metric in config.gated_metrics:
-        c = stats.compare(
-            samples["baseline"][metric],
-            samples["candidate"][metric],
-            confidence=config.confidence,
-            seed=config.seed,
-            n_resamples=_INTERIM_RESAMPLES,
-        )
-        # `not (a <= b)` rather than `a > b`, which is not the same thing when
-        # a is NaN: an unusable interval must read as "keep going", and
-        # `NaN > b` is False, which would end the loop and call it precise.
-        if not c.ci_half_width_log <= config.target_half_width_log:  # NOSONAR
-            return False
+        for a, b in pairs:
+            c = stats.compare(
+                samples[a][metric],
+                samples[b][metric],
+                confidence=config.confidence,
+                seed=config.seed,
+                n_resamples=_INTERIM_RESAMPLES,
+            )
+            # `not (a <= b)` rather than `a > b`, which is not the same thing
+            # when a is NaN: an unusable interval must read as "keep going",
+            # and `NaN > b` is False, which would end the loop and call it
+            # precise.
+            if not c.ci_half_width_log <= config.target_half_width_log:  # NOSONAR
+                return False
     return True
 
 
@@ -377,45 +448,67 @@ class Budget:
 def analyze(results: Sequence[CellResult], config: BenchConfig) -> stats.GateResult:
     """Turn every cell's raw samples into one gate decision.
 
-    ``GateResult.comparisons`` is keyed by ``"<cell_id>/<metric>"`` and holds
-    the *finalized* comparisons -- the ones carrying adjusted p-values and
-    verdicts. Ungated metrics are included so they appear in the report, but
-    they cannot fail the build, and they are corrected separately from the
-    gated ones: adjusting across tests nobody gates on only makes a real
-    regression harder to confirm.
+    ``GateResult.comparisons`` is keyed by ``"<cell_id>/<b>_vs_<a>/<metric>"``
+    (see :func:`contrast_key`) and holds the *finalized* comparisons -- the
+    ones carrying adjusted p-values and verdicts. There is one contrast per
+    candidate, cell and metric: each candidate against the reference.
+    Ungated metrics are included so they appear in the report, but they
+    cannot fail the build, and they are corrected separately from the gated
+    ones: adjusting across tests nobody gates on only makes a real regression
+    harder to confirm.
 
     Each SDK's cells are paired with *that SDK's* control. A run measuring go
     and java has two harness paths and two noise floors, and judging java's
     cells against go's control would be judging them against a floor that was
-    never measured for them.
+    never measured for them. A control with K copies of the reference yields
+    K-1 A/A contrasts, and the worst of them is the floor.
     """
     comparisons: dict[str, stats.PairedComparison] = {}
     gated: set[str] = set()
     censored: dict[str, str] = {}
     control_keys: set[str] = set()
-    controls: dict[str, str] = {}
-    control_for_sdk = {
-        r.sdk: f"{r.cell_id}/{_CONTROL_METRIC}" for r in results if r.control
-    }
 
     for result in results:
-        floored = result.rss_censored_reason
-        for metric in METRICS:
-            key = f"{result.cell_id}/{metric}"
-            comparisons[key] = result.compare(metric, config)
-            control_key = control_for_sdk.get(result.sdk)
-            if control_key is not None:
-                controls[key] = control_key
-            # Identify every metric of a control before applying metric-specific
-            # censoring. Otherwise a floored control RSS key looks like an A/B
-            # comparison to the run-level "nothing measured" safeguard.
-            if result.control:
-                control_keys.add(key)
-            if metric == "rss" and floored is not None:
-                censored[key] = floored
-                continue
-            if not result.control and metric in config.gated_metrics:
-                gated.add(key)
+        for a, b in result.contrast_pairs():
+            floored = result.rss_censored_reason(a, b)
+            for metric in METRICS:
+                key = contrast_key(result.cell_id, a, b, metric)
+                # Stored for every pair and metric, before any `continue`: the
+                # report and the noise floor look keys up directly.
+                comparisons[key] = result.contrast(a, b, metric, config)
+                # Identify every metric of a control before applying
+                # metric-specific censoring. Otherwise a floored control RSS
+                # key looks like a candidate comparison to the run-level
+                # "nothing measured" safeguard.
+                if result.control:
+                    control_keys.add(key)
+                if metric == "rss" and floored is not None:
+                    censored[key] = floored
+                    continue
+                if not result.control and metric in config.gated_metrics:
+                    gated.add(key)
+
+    # Pick each SDK's noise floor only once every control contrast exists.
+    assessor_for_sdk = {
+        r.sdk: stats.worst_control_key(
+            comparisons,
+            [
+                contrast_key(r.cell_id, a, b, _CONTROL_METRIC)
+                for a, b in r.contrast_pairs()
+            ],
+            threshold=config.threshold,
+        )
+        for r in results
+        if r.control
+    }
+    controls: dict[str, str] = {}
+    for result in results:
+        assessor = assessor_for_sdk.get(result.sdk)
+        if assessor is None:
+            continue
+        for a, b in result.contrast_pairs():
+            for metric in METRICS:
+                controls[contrast_key(result.cell_id, a, b, metric)] = assessor
 
     return stats.apply_multiplicity_control(
         comparisons,

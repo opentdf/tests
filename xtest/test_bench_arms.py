@@ -26,12 +26,13 @@ from perf.cells import (
     CONTROL_PAYLOAD,
     DEFAULT_PAYLOAD_SPEC,
     PAYLOADS,
+    BenchCell,
     Payload,
     cells_for,
     parse_payload,
     parse_payloads,
 )
-from perf.runner import BenchConfig
+from perf.runner import Arm, BenchConfig
 
 
 def install(root: Path, sdk: str, *versions: str) -> None:
@@ -402,3 +403,60 @@ def subdir(root: Path, name: str) -> Path:
 def touch(path: Path) -> Path:
     path.write_bytes(b"x")
     return path
+
+
+#: Differ only after the last dot, which ``Path.with_suffix`` would drop.
+RELEASES = ("v0.29.0", "v0.29.1")
+
+
+class TestBuildArms:
+    def arms(self, cwd: Path, versions: Sequence[str]) -> bench.BenchArms:
+        install(cwd, "go", *versions)
+        for v in versions:
+            # `supports` runs the stub, which then answers yes to everything.
+            (cwd / "sdk" / "go" / "dist" / v / "cli.sh").chmod(0o755)
+        baseline, candidate = (tdfs.SDK("go", v) for v in versions)
+        return bench.BenchArms(baseline, candidate)
+
+    def build(
+        self, cwd: Path, versions: Sequence[str], operation: str, *, control=False
+    ) -> tuple[BenchCell, tuple[Arm, ...]]:
+        cell = next(
+            c
+            for c in cells_for(["go"])
+            if c.control == control and c.operation == operation
+        )
+        built = bench.build_arms(
+            cell,
+            self.arms(cwd, versions),
+            pt_file=cwd / "pt",
+            ct_file=cwd / "ct.tdf" if operation == "decrypt" else None,
+            tmp_dir=cwd,
+            attr_values=[],
+        )
+        return cell, built
+
+    @pytest.mark.parametrize(
+        ("operation", "suffix"), [("encrypt", ".tdf"), ("decrypt", ".untdf")]
+    )
+    def test_arms_are_named_after_their_builds(
+        self, cwd: Path, operation: str, suffix: str
+    ):
+        cell, built = self.build(cwd, RELEASES, operation)
+        assert [a.name for a in built] == list(RELEASES)
+        assert [a.invocation.output for a in built] == [
+            cwd / f"bench-{cell.id}-{v}{suffix}" for v in RELEASES
+        ]
+
+    def test_every_decrypt_arm_reads_the_same_ciphertext(self, cwd: Path):
+        _, built = self.build(cwd, RELEASES, "decrypt")
+        reads = [
+            [arg for arg in a.invocation.argv if arg.endswith(".tdf")] for a in built
+        ]
+        assert reads == [[str(cwd / "ct.tdf")]] * len(built)
+
+    def test_the_control_runs_the_baseline_twice_under_distinct_ids(self, cwd: Path):
+        _, built = self.build(cwd, RELEASES, "encrypt", control=True)
+        assert {a.label for a in built} == {"go@v0.29.0"}
+        assert [a.name for a in built] == ["v0.29.0#1", "v0.29.0#2"]
+        assert len({a.invocation.output for a in built}) == 2
