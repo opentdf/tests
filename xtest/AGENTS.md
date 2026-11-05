@@ -3,18 +3,14 @@
 The cross-client integration test suite. pytest with custom options that
 fan out tests across SDK CLIs (`go`, `java`, `js`) and TDF container types.
 
-For env-variable setup, audit-log details, and common-failure recipes,
-see the root `AGENTS.md`. This guide focuses on test authoring and the
-fixture system.
+For env-variable setup and audit-log details, see the root `AGENTS.md`.
+Common-failure recipes are in `../.claude/skills/xtest-troubleshooting/SKILL.md`.
+This guide focuses on test authoring and the fixture system.
 
 ## Layout
 
 | Path | Contents |
 |------|----------|
-| `test_*.py` | Test modules. One per concern: `test_tdfs.py` (core roundtrip), `test_tdf_assertions.py` (assertions), `test_abac.py` (ABAC), `test_legacy.py` (golden TDFs), `test_policytypes.py`, `test_self.py`, `test_audit_logs.py`, `test_pqc.py`. |
-| `conftest.py` | `pytest_addoption` + the encrypt/decrypt SDK parametrization. Defines `--sdks`, `--sdks-encrypt`, `--sdks-decrypt`, `--containers`, `--no-audit-logs`. |
-| `fixtures/` | Module-scoped pytest fixtures: `attributes.py`, `keys.py`, `audit.py`, `assertions.py`, `kas.py`, `encryption.py`, `obligations.py`. |
-| `tdfs.py` | SDK abstraction layer — wraps the `cli.sh` shims under `sdk/<lang>/dist/<version>/`. |
 | `perf/` | Paired A/B performance regression benchmarks (opt-in via `--bench`). **Read `perf/README.md` before changing anything in here** — the design decisions fail silently when undone. |
 | `sdk/{go,java,js}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
 | `test.env` | Default endpoint and client-credential env vars. Source with `set -a && source test.env && set +a`. |
@@ -36,8 +32,36 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 | Variable | Purpose |
 |----------|---------|
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
-| `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
-| `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. |
+| `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see below. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
+| `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. In CI, use `force-platform-supports`. See `README.md` for usage. |
+
+## Evaluating an unreleased fix: `XT_FORCE_SUPPORTS`
+
+`SDK.supports(feature)` answers from the `supports` case statements in
+`xtest/sdk/{go,java,js}/cli.sh` — **in this repo, not in the SDK repos**. Most
+cases are version gates, so a build from an unmerged branch reports the last
+*released* version and answers "no" for precisely the fix you are trying to
+evaluate. The cell then skips and the run is green without having tested
+anything.
+
+`XT_FORCE_SUPPORTS` short-circuits that:
+
+```bash
+otdf-sdk-mgr install tip --ref pr:396 java     # pr:N works on install
+XT_FORCE_SUPPORTS=chunky uv run pytest test_tdfs.py --sdks "js java" -v
+```
+
+It applies to every SDK in the run — to force one side only, narrow with
+`--sdks-encrypt` / `--sdks-decrypt`. An unrecognised feature name raises rather
+than being ignored, since a silently-ignored typo is indistinguishable from a
+clean run. In CI, pass `force-supports` to the `X-Test` workflow dispatch.
+
+A platform-only feature — one in `PLATFORM_ONLY_FEATURES` in `xtest/tdfs.py`,
+such as `kas_uri_from_kao` — raises here too, and directs you to
+`XT_FORCE_PLATFORM_SUPPORTS`.
+
+Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
+accept the `pr:N` shorthand — pass a branch name there instead.
 
 ## Authoring a New Test
 

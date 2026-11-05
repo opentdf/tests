@@ -130,14 +130,7 @@ cd otdf-local
 uv run otdf-local status
 uv run otdf-local ls --all
 
-# View service logs
-uv run otdf-local logs platform -f
-uv run otdf-local logs kas-alpha -f
-uv run otdf-local logs --grep error
-
-# Or check log files directly
-tail -f tmp/logs/platform.log
-tail -f tmp/logs/kas-alpha.log
+# Logs: see "Viewing Service Logs" above
 
 # Kill stuck processes
 pkill -9 -f "go run ./service start"
@@ -152,8 +145,6 @@ lsof -i :8888   # Keycloak
 
 The shell scripts in `scripts/lib/` are deprecated. For new automation:
 - Extend the `otdf-local` Python CLI instead of creating new shell scripts
-- The codebase uses Python with Pydantic for type safety and better error handling
-- See `README.md` for project structure
 
 To test changes:
 ```bash

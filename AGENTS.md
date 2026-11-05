@@ -4,19 +4,10 @@ This guide provides essential knowledge for AI agents performing updates, refact
 
 ## Repository Layout
 
-| Path | Purpose | Has its own AGENTS.md? |
-|------|---------|------------------------|
-| `xtest/` | pytest integration tests (the main test suite) | yes |
-| `otdf-sdk-mgr/` | Python CLI that installs SDK CLIs and the platform service from releases or source | yes |
-| `otdf-local/` | Python CLI that runs/stops the platform + KAS instances locally | yes |
-| `vulnerability/` | Playwright UI test suite (run with `npx playwright test`) | no |
-| `platform/` | Platform service source — **installed by `otdf-sdk-mgr install platform`**, not committed. Edits here may be wiped by a reinstall. |  |
-| `xtest/sdk/{go,java,js}/dist/` | Built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds) |  |
+- `platform/` — platform service source, **installed by `otdf-sdk-mgr install platform`**, not committed. Edits here may be wiped by a reinstall.
+- `xtest/sdk/{go,java,js}/dist/` — built SDK CLI wrappers, produced by `otdf-sdk-mgr install` (or by `cd xtest/sdk && make` for source builds).
 
 ## Test Framework Overview
-
-### Test Runner
-pytest with custom CLI options. Most work happens in `xtest/`.
 
 ### Configuring SDK Artifacts
 
@@ -39,12 +30,6 @@ uv run pytest --sdks go -v
 
 # Run with multiple SDKs (space-separated)
 uv run pytest --sdks "go java js" -v
-
-# Run specific test file
-uv run pytest test_tdfs.py --sdks go -v
-
-# Run specific test
-uv run pytest test_tdfs.py::test_tdf_roundtrip --sdks go -v
 ```
 
 ### Custom pytest Options and Env Vars
@@ -56,42 +41,12 @@ See `xtest/AGENTS.md` for the full table of `--sdks`, `--containers`,
 - `OT_ROOT_KEY` — root key for key-management tests
 - `SCHEMA_FILE` — path to manifest schema file
 - `DISABLE_AUDIT_ASSERTIONS` — set to `1`/`true`/`yes` to skip audit-log assertions (CI equivalent of `--no-audit-logs`)
-- `XT_TMP_DIR` — root for generated fixtures and ciphertexts (default `tmp/`).
-  Point it at a large volume for multi-GiB runs.
-- `XT_FORCE_SUPPORTS` — comma-separated feature names to treat as supported
-  regardless of what each SDK's `cli.sh supports` reports. See below.
 
-- `XT_FORCE_PLATFORM_SUPPORTS` — comma-separated platform features to treat as
-  supported, independent of SDK overrides. It does not enable service settings.
-  In CI, use `force-platform-supports`. See `xtest/README.md` for usage.
+`XT_*` variables are documented in `xtest/AGENTS.md`.
 
-### Evaluating an unreleased fix: `XT_FORCE_SUPPORTS`
-
-`SDK.supports(feature)` answers from the `supports` case statements in
-`xtest/sdk/{go,java,js}/cli.sh` — **in this repo, not in the SDK repos**. Most
-cases are version gates, so a build from an unmerged branch reports the last
-*released* version and answers "no" for precisely the fix you are trying to
-evaluate. The cell then skips and the run is green without having tested
-anything.
-
-`XT_FORCE_SUPPORTS` short-circuits that:
-
-```bash
-otdf-sdk-mgr install tip --ref pr:396 java     # pr:N works on install
-XT_FORCE_SUPPORTS=chunky uv run pytest test_tdfs.py --sdks "js java" -v
-```
-
-It applies to every SDK in the run — to force one side only, narrow with
-`--sdks-encrypt` / `--sdks-decrypt`. An unrecognised feature name raises rather
-than being ignored, since a silently-ignored typo is indistinguishable from a
-clean run. In CI, pass `force-supports` to the `X-Test` workflow dispatch.
-
-A platform-only feature — one in `PLATFORM_ONLY_FEATURES` in `xtest/tdfs.py`,
-such as `kas_uri_from_kao` — raises here too, and directs you to
-`XT_FORCE_PLATFORM_SUPPORTS`.
-
-Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
-accept the `pr:N` shorthand — pass a branch name there instead.
+**Evaluating an unreleased SDK fix?** Version gates in `xtest/sdk/*/cli.sh`
+make the cell skip and the run go green without testing anything. Use
+`XT_FORCE_SUPPORTS` — see "Evaluating an unreleased fix" in `xtest/AGENTS.md`.
 
 ### Audit Log Assertions
 
@@ -125,13 +80,9 @@ eval $(uv run otdf-local env)   # sets PLATFORM_LOG_FILE / KAS_*_LOG_FILE — re
 ### TDF Wrapping Algorithms
 
 **RSA Wrapping (wrapped)**:
-- Traditional approach
-- Uses RSA public key to wrap symmetric key
 - KAO type: "wrapped"
 
 **EC Wrapping (ec-wrapped)**:
-- Elliptic curve based wrapping
-- Uses ephemeral key pair + key derivation
 - KAO type: "ec-wrapped"
 - Requires: `ec_tdf_enabled: true` in platform config
 
@@ -144,68 +95,9 @@ yq e -i ".services.kas.root_key = \"$PLATFORM_ROOT_KEY\"" "$CONFIG_FILE"
 
 ## Common Test Failures and Debugging
 
-### EC Wrapping Test Failures: "EC wrapping not supported"
-
-**Fix**:
-```bash
-yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf.yaml
-yq e -i '.services.kas.preview.ec_tdf_enabled = true' platform/opentdf-dev.yaml
-# Restart the platform service
-```
-
-### ABAC Test Failures: Decrypt Errors
-
-**Symptom**: ABAC autoconfigure tests fail during decrypt
-
-**Root Cause**: KAS instances (alpha, beta, etc.) not registered in platform's KAS registry
-
-**Debug**:
-```bash
-curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq '.key_access_servers[].uri'
-# Expected: alpha=8181, beta=8282, gamma=8383, delta=8484
-```
-
-**Fix**: Ensure all KAS instances are properly registered during startup.
-
-### Legacy/Golden TDF Test Failures
-
-**Symptom**: "cipher: message authentication failed"
-
-**Root Cause**: Golden TDFs require specific keys loaded by the platform. Ensure the platform is configured with the correct golden keys.
-
-```bash
-cd xtest
-uv run pytest test_legacy.py --sdks go -v --no-audit-logs
-```
-
-### Missing Environment Variables
-
-**Symptom**: "OT_ROOT_KEY environment variable is not set"
-
-**Fix**:
-```bash
-export OT_ROOT_KEY=$(yq e '.services.kas.root_key' platform/opentdf-dev.yaml)
-export SCHEMA_FILE=manifest.schema.json
-```
-
-## Debugging Workflow
-
-1. **Run tests**: `uv run pytest --sdks go -v 2>&1 | tee test_output.log`
-2. **Analyze failures**: Read error messages, check which test category is failing, look for patterns
-3. **Inspect platform state**:
-   ```bash
-   curl http://localhost:8080/.well-known/opentdf-configuration | jq
-   curl http://localhost:8080/api/kas/v2/kas/key-access-servers | jq
-   curl http://localhost:8080/healthz
-   ```
-4. **Check service logs**: Look at platform and KAS log files for errors
-5. **Manual reproduction**:
-   ```bash
-   echo "hello tdf" > test.txt
-   sdk/go/dist/main/cli.sh encrypt test.txt test.tdf --attr https://example.com/attr/foo/value/bar
-   sdk/go/dist/main/cli.sh decrypt test.tdf test.out.txt
-   ```
-6. **Fix and verify**: Make changes, restart services if needed, re-run failing test, then run full suite
+Recipes for known failures (EC wrapping disabled, unregistered KAS instances,
+golden-TDF keys, missing `OT_ROOT_KEY`) live in
+`.claude/skills/xtest-troubleshooting/SKILL.md`.
 
 ## Code Modification Best Practices
 
@@ -216,12 +108,6 @@ After changes to SDK source, rebuild with `cd xtest/sdk && make`.
 ### When Modifying Platform Code
 
 Restart the platform service after making changes.
-
-### When Modifying Test Code
-
-- **Test fixtures**: Changes affect all tests using that fixture
-- **Helper functions**: Used across multiple test files
-- **Conftest.py**: Session-scoped fixtures, careful with modifications
 
 ### Before Committing Python Changes
 
@@ -245,19 +131,6 @@ does.
 Run all three. Don't skip steps because "it's a small change" — CI runs them
 and a failed check round-trips the PR. If `ruff format` rewrites a file you
 already staged, `git add` it again before committing.
-
-## Test File Organization
-
-For the canonical list of test modules, fixtures, and the SDK abstraction
-layer, see `xtest/AGENTS.md`. The short version:
-
-- Tests are grouped by concern, not by SDK (`test_tdfs.py`, `test_abac.py`,
-  `test_legacy.py`, `test_audit_logs.py`, `test_pqc.py`, etc.).
-- `xtest/tdfs.py` is the SDK abstraction layer — when a test passes for one
-  SDK and fails for another, suspect the CLI shim or manifest emission, not
-  the test.
-- `xtest/conftest.py` defines the `--sdks` / `--containers` parametrization.
-  Session-scoped fixtures live in `xtest/fixtures/`.
 
 ## Quick Reference
 
