@@ -99,7 +99,7 @@ def assertion_file_no_keys(tmp_dir: Path) -> Path:
             statement=assertions.Statement(
                 format="json+stanag5636",
                 schema="urn:nato:stanag:5636:A:1:elements:json",
-                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"@base":"urn:nato:stanag:5636:A:1:elements:json"}}',
             ),
             type="handling",
         )
@@ -123,7 +123,7 @@ def assertion_file_rs_and_hs_keys(
             statement=assertions.Statement(
                 format="json+stanag5636",
                 schema="urn:nato:stanag:5636:A:1:elements:json",
-                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"@base":"urn:nato:stanag:5636:A:1:elements:json"}}',
             ),
             type="handling",
             signingKey=assertions.AssertionKey(
@@ -138,7 +138,7 @@ def assertion_file_rs_and_hs_keys(
             statement=assertions.Statement(
                 format="json+stanag5636",
                 schema="urn:nato:stanag:5636:A:1:elements:json",
-                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"[@base](https://github.com/base)":"urn:nato:stanag:5636:A:1:elements:json"}}',
+                value='{"ocl":{"pol":"62c76c68-d73d-4628-8ccc-4c1e18118c22","cls":"SECRET","catl":[{"type":"P","name":"Releasable To","vals":["usa"]}],"dcr":"2024-10-21T20:47:36Z"},"context":{"@base":"urn:nato:stanag:5636:A:1:elements:json"}}',
             ),
             type="handling",
             signingKey=assertions.AssertionKey(
