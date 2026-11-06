@@ -48,6 +48,11 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 3. If your test needs to skip in certain SDK combos, use
    `pytest.skip(...)` with a clear reason — the parametrization will run
    it once per combo, so the skip message tells the next reader why.
+   When the reason is a missing feature, gate with
+   `sdk.skip_if_unsupported(...)` / `pfs.skip_if_unsupported(...)` instead:
+   the skip then quotes the probe's own explanation and is listed in the
+   end-of-run "capability gaps" section (and the Actions step summary), so
+   an SDK silently dropping out of a module is visible.
 4. Audit-log assertions are **on by default**. If your test does not
    exercise KAS, mark it with the existing `no_audit_logs` pattern; do
    not silently drop the fixture.

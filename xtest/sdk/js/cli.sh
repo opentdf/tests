@@ -17,8 +17,8 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
-#  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
-#  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (ES256, ES384, ES512 or RS256)
+#  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing; must match XT_WITH_DPOP
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
 #  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
@@ -154,12 +154,26 @@ if [[ "$1" == "supports" ]]; then
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
-      # JS CLI: top-level `help` only (no `help <subcommand>`); `--dpop` alone
-      # exists as an unwired boolean on pre-DPoP main, so discriminate on the
-      # companion --dpop-key flag that ships with the real implementation.
-      set -o pipefail
-      "$CLI" help | grep -iE -- '--dpop-key|--dpopKey'
-      exit $?
+      # Ask the CLI. web-sdk#991 adds `opentdf supports <feature>` alongside
+      # `--dpop=ALG` and `--dpopKey`, and its yargs `choices` reject any name
+      # the build does not implement -- so a build with DPoP but without the
+      # DPoP-Nonce retry (web-sdk#993) answers no for dpop_nonce_challenge
+      # instead of inheriting the dpop answer.
+      #
+      # Every release before #991 has only a bare boolean `--dpop`: no DPoP
+      # proof on the token request, and an RSA key whatever was asked for.
+      # Look for the subcommand in `help` rather than calling it blind, since
+      # an older yargs may answer an unknown command with help and exit 0.
+      if ! "$CLI" help | grep 'supports <feature>' >/dev/null; then
+        echo "$2 unsupported: this CLI predates \`opentdf supports\` and --dpop=ALG (web-sdk#991)"
+        exit 1
+      fi
+      if "$CLI" supports "$2"; then
+        exit 0
+      fi
+      # Exit 1 whatever the CLI returned: 2 means "no such case" in this shim.
+      echo "$2 unsupported: \`opentdf supports $2\` said no"
+      exit 1
       ;;
     chunky)
       # web-sdk omits a segment's sizes when they equal the manifest defaults
@@ -214,11 +228,19 @@ args=(
   --auth "${CLIENTID:-opentdf}:${CLIENTSECRET:-secret}"
 )
 
+# web-sdk#991: --dpop takes an optional algorithm and generates an ephemeral key
+# of that type, so XT_WITH_DPOP=ES256 is what makes the proof EC. Attach it
+# with `=`, the form the CLI documents.
 if [[ -n "$XT_WITH_DPOP" ]]; then
-  args+=(--dpop "$XT_WITH_DPOP")
+  args+=("--dpop=$XT_WITH_DPOP")
 fi
 if [[ -n "$XT_WITH_DPOP_KEY" ]]; then
-  args+=(--dpop-key "$XT_WITH_DPOP_KEY")
+  if [[ ! -f "$XT_WITH_DPOP_KEY" ]]; then
+    echo "Invalid or missing DPoP key file: $XT_WITH_DPOP_KEY"
+    exit 1
+  fi
+  # Resolved now: the CLI runs from $SCRIPT_DIR.
+  args+=(--dpopKey "$(realpath "$XT_WITH_DPOP_KEY")")
 fi
 
 args+=(--containerType tdf3)
