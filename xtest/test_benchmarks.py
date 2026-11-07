@@ -16,6 +16,7 @@ Nothing is collected here without ``--bench``; see ``conftest.py``.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import NoReturn
 
@@ -25,6 +26,7 @@ import abac
 from fixtures import bench
 from perf import report, runner
 from perf.cells import BenchCell
+from perf.measure import MeasurementError
 
 pytestmark = pytest.mark.benchmark
 
@@ -37,6 +39,7 @@ def test_sdk_performance(
     bench_ciphertexts: bench.CiphertextFactory,
     bench_budget: runner.Budget,
     bench_recorder: report.BenchmarkRecorder,
+    bench_cell_files: list[Path],
     attribute_default_rsa: abac.Attribute,
     tmp_dir: Path,
 ) -> None:
@@ -46,6 +49,9 @@ def test_sdk_performance(
     not be doing the same work, a budget that ran out -- is skipped *and*
     recorded as skipped, so that a quiet report is visibly quiet rather than
     indistinguishable from a clean one.
+
+    A cell that fails because the scratch disk filled up ends the session
+    instead, with one message saying so: see :func:`bench.disk_exhausted`.
     """
 
     def bail(reason: str) -> NoReturn:
@@ -61,21 +67,22 @@ def test_sdk_performance(
     if problem:
         bail(problem)
 
-    ct_file = (
-        bench_ciphertexts(arms, bench_cell.payload.label)
-        if bench_cell.operation == "decrypt"
-        else None
-    )
-    baseline, candidate = bench.build_arms(
-        bench_cell,
-        arms,
-        pt_file=bench_payloads[bench_cell.payload.label],
-        ct_file=ct_file,
-        tmp_dir=tmp_dir,
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-
     try:
+        ct_file = None
+        if bench_cell.operation == "decrypt":
+            ct_file = bench_ciphertexts(arms, bench_cell.payload.label)
+            bench_cell_files.append(ct_file)
+        baseline, candidate = bench.build_arms(
+            bench_cell,
+            arms,
+            pt_file=bench_payloads[bench_cell.payload.label],
+            ct_file=ct_file,
+            tmp_dir=tmp_dir,
+            attr_values=attribute_default_rsa.value_fqns,
+        )
+        bench_cell_files.extend(
+            out for arm in (baseline, candidate) if (out := arm.invocation.output)
+        )
         result = runner.run_cell(
             bench_cell.id,
             baseline,
@@ -87,5 +94,13 @@ def test_sdk_performance(
         )
     except runner.BudgetExhausted as e:
         bail(str(e))
+    except MeasurementError, subprocess.CalledProcessError:
+        disk_full = bench.disk_exhausted(tmp_dir)
+        if disk_full is None:
+            raise
+        bench_recorder.skip(bench_cell.id, disk_full)
+        pytest.exit(
+            f"{bench_cell.id}: {disk_full}", returncode=pytest.ExitCode.TESTS_FAILED
+        )
 
     bench_recorder.record(result)

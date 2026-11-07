@@ -22,18 +22,6 @@ def skip_rts_as_needed(
     pfs = tdfs.get_platform_features()
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if container == "ztdf-ecwrap":
-        if not encrypt_sdk.supports("ecwrap"):
-            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        if "ecwrap" not in pfs.features:
-            pytest.skip(
-                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
-            )
-        # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
-            pytest.skip(
-                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
-            )
 
 
 def test_or_attributes_success(

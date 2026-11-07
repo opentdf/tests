@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from otdf_sdk_mgr.bench_prepare import (
+    BenchPrepareError,
+    default_manifest_path,
+    prepare_benchmark,
+)
 from otdf_sdk_mgr.cli_scenario import install_scenario_cmd
 from otdf_sdk_mgr.config import ALL_SDKS
+from otdf_sdk_mgr.manifest import PreparationStatus
 
 install_app = typer.Typer(help="Install SDK CLI artifacts from registries or source.")
 install_app.command("scenario")(install_scenario_cmd)
@@ -121,7 +129,16 @@ def tip(
     if want_platform:
         _install_platform_or_exit(install_platform_source, ref, dist_name=platform_dist_name)
     if sdk_targets:
-        cmd_tip(sdk_targets, ref=ref)
+        try:
+            cmd_tip(sdk_targets, ref=ref)
+        # ValueError covers CheckoutError, and a ref that names no dist/
+        # directory, such as `sdk/`.
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as e:
+            typer.echo(f"Error: {e}", err=True)
+            # checkout._run captures git's stderr; make streams its own.
+            if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+                typer.echo(e.stderr.rstrip(), err=True)
+            raise typer.Exit(1)
 
 
 @install_app.command()
@@ -194,3 +211,84 @@ def artifact(
     except InstallError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+
+
+@install_app.command()
+def benchmark(
+    sdk: Annotated[str, typer.Argument(help="SDK to benchmark (go, java, js)")],
+    refs: Annotated[
+        list[str],
+        typer.Argument(help="Ordered refs to compare (first is reference, rest are candidates)"),
+    ],
+    platform: Annotated[
+        str | None,
+        typer.Option("--platform", help="Platform ref to install: a version, branch, SHA or pr:N"),
+    ] = None,
+    otdfctl: Annotated[
+        str | None,
+        typer.Option("--otdfctl", help="Provisioning otdfctl ref (separate from measured arms)"),
+    ] = None,
+    manifest: Annotated[
+        str | None,
+        typer.Option(
+            "--manifest",
+            help="Output manifest path (default: xtest/sdk/benchmark.installed.json)",
+        ),
+    ] = None,
+) -> None:
+    """Prepare a benchmark: resolve, install, and manifest SDK builds.
+
+    Exits 0 on success, and also when every ref names one build (neutral):
+    then there is nothing to compare, and the manifest says so. Exits 1 on a
+    partial or failed preparation.
+
+    Example:
+        otdf-sdk-mgr install benchmark go v0.38.0 main --otdfctl v0.38.1
+    """
+    try:
+        # Located even with --manifest: every install lands under xtest/sdk.
+        default_path = default_manifest_path()
+    except RuntimeError as e:
+        # What get_sdk_dir raises when it cannot locate xtest/sdk.
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1) from e
+    manifest_path = Path(manifest) if manifest else default_path
+    try:
+        result = prepare_benchmark(
+            sdk=sdk,
+            requested_aliases=refs,
+            platform_ref=platform,
+            otdfctl_ref=otdfctl,
+            manifest_path=manifest_path,
+        )
+    except BenchPrepareError as e:
+        # The first manifest write failed. Whatever is at manifest_path is an
+        # earlier run's, so naming it would misreport this one.
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except OSError as e:
+        # Raised after the first write, so the file records this run, as
+        # unfinished or aborted.
+        typer.echo(f"Error: {e}", err=True)
+        typer.echo(f"  Manifest: {manifest_path}", err=True)
+        raise typer.Exit(1) from e
+
+    # prepare_benchmark writes the manifest on every path, the failing ones
+    # included, so it is always worth naming: it records what the run installed.
+    typer.echo(f"  Manifest: {manifest_path}")
+
+    match result.status:
+        case PreparationStatus.SUCCESS:
+            typer.echo(f"✓ Installed {len(result.sdk_arms)} SDK arms")
+            if result.status_message:
+                typer.echo(f"⚠ {result.status_message}", err=True)
+        case PreparationStatus.NEUTRAL:
+            # Not an error. Every requested alias named one build, so there
+            # is nothing to compare -- the caller decides what that means.
+            typer.echo(f"⊗ Neutral preparation: {result.status_message}")
+        case PreparationStatus.PARTIAL:
+            typer.echo(f"⚠ Partial installation: {result.status_message}", err=True)
+            raise typer.Exit(1)
+        case PreparationStatus.FAILED:
+            typer.echo(f"✗ Preparation failed: {result.status_message}", err=True)
+            raise typer.Exit(1)
