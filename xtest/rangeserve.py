@@ -9,7 +9,8 @@ server that logs every request.
 
 A request touching a byte that was not kept gets ``410 Gone``, never zeros: a
 reader that over-fetches must fail loudly rather than decrypt garbage, and
-must not pass a test by accident.
+must not pass a test by accident. 410 is the signal; a front end that has to
+answer anyway, like an NFS server, picks its own filler.
 
 All ranges here are half-open ``(start, end)`` pairs.
 """
@@ -19,7 +20,6 @@ import errno
 import os
 import re
 import socket
-import struct
 import sys
 import threading
 import time
@@ -35,8 +35,6 @@ import zipinspect
 #: AES-GCM adds a 12-byte IV and a 16-byte tag to every segment.
 PAYLOAD_GCM_OVERHEAD = 28
 
-_LOCAL_HEADER_SIG = b"PK\x03\x04"
-_LOCAL_HEADER_FIXED_SIZE = 30
 _CHUNK = 1 << 20
 #: How long ``serve`` waits for handler threads once their sockets are shut.
 _JOIN_TIMEOUT = 10.0
@@ -57,15 +55,17 @@ def payload_start(path: Path) -> int:
     entry = next((e for e in cd.entries if e.name == "0.payload"), None)
     if entry is None:
         raise zipinspect.MalformedZipError(f"{path}: no 0.payload entry")
-    with path.open("rb") as f:
-        f.seek(entry.local_header_offset)
-        header = f.read(_LOCAL_HEADER_FIXED_SIZE)
-    if len(header) < _LOCAL_HEADER_FIXED_SIZE or header[:4] != _LOCAL_HEADER_SIG:
-        raise zipinspect.MalformedZipError(
-            f"{path}: no local file header at {entry.local_header_offset}"
-        )
-    name_len, extra_len = struct.unpack_from("<HH", header, 26)
-    return entry.local_header_offset + _LOCAL_HEADER_FIXED_SIZE + name_len + extra_len
+    return zipinspect.local_file_header_data_offset(path, entry)
+
+
+def data_end(*, payload_start: int, plaintext_length: int, segment_size: int) -> int:
+    """End of the last segment holding plaintext, where the tail starts.
+
+    Java follows a whole number of segments with an empty one, its IV and
+    tag, and go and java write one for empty plaintext. That is tail too.
+    """
+    segments = -(-plaintext_length // segment_size)
+    return payload_start + plaintext_length + segments * PAYLOAD_GCM_OVERHEAD
 
 
 def merge(extents: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -88,11 +88,10 @@ def retention_plan(
 ) -> list[tuple[int, int]]:
     """Ciphertext extents a partial decrypt of plaintext ``ranges`` reads.
 
-    Always includes the head, ``[0, payload_start)``. Excludes the tail,
-    whose start is not known until the payload has been written.
+    Always includes the head, ``[0, payload_start)``. Excludes the tail, from
+    :func:`data_end` on, whose length is not known until the TDF is written.
 
-    Fixed before encrypt: ciphertext is not deterministic, so a dropped
-    extent cannot be regenerated afterwards.
+    Plan before encrypt; only planned bytes are kept.
     """
     if segment_size <= 0:
         raise ValueError(f"segment_size must be positive, got {segment_size}")
@@ -117,6 +116,12 @@ def retention_plan(
 
 
 class Source(Protocol):
+    """Bytes for :func:`serve`.
+
+    ``check`` and ``read`` may be called concurrently, from handler threads.
+    ``length`` is fixed while the source is served.
+    """
+
     @property
     def length(self) -> int: ...
 
@@ -124,7 +129,12 @@ class Source(Protocol):
         """Raise :class:`Dropped` if any of ``[start, end)`` was not kept."""
         ...
 
-    def read(self, start: int, end: int) -> bytes: ...
+    def read(self, start: int, end: int) -> bytes:
+        """Exactly ``end - start`` bytes.
+
+        May raise :class:`Dropped` even after ``check`` passed.
+        """
+        ...
 
 
 class FullFile:
