@@ -669,11 +669,13 @@ jobs:
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_policytypes.py test_partial_decrypt.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
+          # At the default refs java@main and js@main decrypt in every lane.
+          XT_PARTIAL_DECRYPT_REQUIRED: ${{ !inputs.java-ref && !inputs.js-ref && '1' || '' }}
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -681,7 +683,7 @@ jobs:
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_policytypes.py test_partial_decrypt.py
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
