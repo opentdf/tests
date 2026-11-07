@@ -5,10 +5,12 @@ of real segments; nothing here decrypts, so random bytes stand in for
 ciphertext.
 """
 
+import http.client
 import random
 import socket
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -146,6 +148,8 @@ def test_sparse_store_serves_kept_and_refuses_dropped(tdf: Path, tmp_path: Path)
 
 def test_store_rejects_overlap(tmp_path: Path):
     store = ExtentStore(tmp_path, 100)
+    with pytest.raises(FileExistsError):
+        ExtentStore(tmp_path, 100)
     store.add(10, b"x" * 10)
     with pytest.raises(ValueError):
         store.add(15, b"y")
@@ -191,14 +195,29 @@ def test_huge_logical_length_bounded_disk(tmp_path: Path, logical: int):
 
 def test_server_stops_on_exit(tdf: Path):
     with serve(FullFile(tdf)) as (url, _):
-        port = int(url.split(":")[2].split("/")[0])
-        assert get(url, "bytes=0-0")[0] == 206
-    assert not any(t.name == f"rangeserve-{port}" for t in threading.enumerate())
+        port = urllib.parse.urlsplit(url).port
+        assert port
+        # Left idle on a keep-alive connection, its handler blocks on a read.
+        idle = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        idle.request("GET", "/", headers={"Range": "bytes=0-0"})
+        assert idle.getresponse().read() == b"P"
+    assert not [t for t in threading.enumerate() if f"rangeserve-{port}" in t.name]
+    idle.close()
     with (
         pytest.raises(ConnectionRefusedError),
         socket.create_connection(("127.0.0.1", port), timeout=2),
     ):
         pass
+
+
+def test_handler_error_fails_the_block(tdf: Path):
+    class Short(FullFile):
+        def read(self, start: int, end: int) -> bytes:
+            return super().read(start, end)[1:]
+
+    with pytest.raises(ExceptionGroup), serve(Short(tdf)) as (url, _):
+        with pytest.raises(OSError):
+            get(url, "bytes=0-9")
 
 
 def test_fixture_serves_several(range_server, tdf: Path):
