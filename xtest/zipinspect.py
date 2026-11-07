@@ -392,29 +392,34 @@ def read_central_directory(f: Seekable, file_size: int) -> CentralDirectory:
     )
 
 
+def read_local_file_header(f: Seekable, offset: int) -> tuple[str, int]:
+    """Name and data offset of the local file header at ``offset``."""
+    f.seek(offset)
+    header = f.read(LOCAL_FILE_HEADER_FIXED_SIZE)
+    if (
+        len(header) < LOCAL_FILE_HEADER_FIXED_SIZE
+        or header[:4] != LOCAL_FILE_HEADER_SIG
+    ):
+        raise MalformedZipError(f"no local file header at {offset}")
+    name_len, extra_len = struct.unpack_from("<HH", header, 26)
+    name = f.read(name_len).decode("utf-8", errors="replace")
+    return name, offset + LOCAL_FILE_HEADER_FIXED_SIZE + name_len + extra_len
+
+
 def local_file_header_data_offset(path: Path, entry: CentralDirectoryEntry) -> int:
     """Where ``entry``'s actual data begins, per its own local file header.
 
     A local file header's name/extra lengths are not guaranteed to match the
     central directory's -- APPNOTE allows them to differ -- so this reads the
-    30-byte fixed header at ``entry.local_header_offset`` (already resolved by
+    local header at ``entry.local_header_offset`` (already resolved by
     :func:`central_directory`) rather than assuming the CD's lengths apply.
     The one place besides the CD tail this module ever touches the file body.
     """
     with path.open("rb") as f:
-        f.seek(entry.local_header_offset)
-        header = f.read(LOCAL_FILE_HEADER_FIXED_SIZE)
-    if (
-        len(header) < LOCAL_FILE_HEADER_FIXED_SIZE
-        or header[:4] != LOCAL_FILE_HEADER_SIG
-    ):
-        raise MalformedZipError(
-            f"entry {entry.name!r}: no local file header at {entry.local_header_offset}"
-        )
-    name_len, extra_len = struct.unpack_from("<HH", header, 26)
-    return (
-        entry.local_header_offset + LOCAL_FILE_HEADER_FIXED_SIZE + name_len + extra_len
-    )
+        try:
+            return read_local_file_header(f, entry.local_header_offset)[1]
+        except MalformedZipError as e:
+            raise MalformedZipError(f"entry {entry.name!r}: {e}") from None
 
 
 def describe(entries: list[CentralDirectoryEntry]) -> str:
