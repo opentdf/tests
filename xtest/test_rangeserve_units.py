@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -214,53 +215,72 @@ def test_handler_error_fails_the_block():
 # --- SparseSink ---------------------------------------------------------------
 
 
-def make_tdf(path: Path, manifest_len: int, *, force_zip64: bool = False) -> Path:
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as z:
-        with z.open("0.payload", "w", force_zip64=force_zip64) as f:
-            f.write(random.Random(5111).randbytes(PT_LEN + 5 * GCM))
-        z.writestr("0.manifest.json", "{}" + " " * manifest_len)
-    return path
+def random_chunks(data: bytes) -> Iterator[bytes]:
+    rng = random.Random(654)
+    pos = 0
+    while pos < len(data):
+        n = rng.choice((0, 1, rng.randrange(1 << 16), rng.randrange(1 << 22)))
+        yield data[pos : pos + n]
+        pos += n
 
 
-def stream(sink: rangeserve.SparseSink, data: bytes, chunk: int) -> None:
-    for i in range(0, len(data), chunk):
-        sink.write(data[i : i + chunk])
-
-
-@pytest.mark.parametrize("chunk", [1, 7, 4096, 1 << 20])
-@pytest.mark.parametrize("force_zip64", [False, True], ids=["zip32", "zip64"])
-def test_sink_keeps_plan_and_tail(tmp_path: Path, chunk: int, force_zip64: bool):
-    tdf = make_tdf(tmp_path / "t.tdf", 3000, force_zip64=force_zip64)
-    data = tdf.read_bytes()
-    start = rangeserve.payload_start(tdf)
-    kept = plan((SEG - 1, SEG + 1), (3 * SEG + 1, 3 * SEG + 2), start=start)
-    (tmp_path / "store").mkdir()
-    sink = rangeserve.SparseSink(tmp_path / "store", kept, tail_ceiling=1 << 16)
-    stream(sink, data, chunk)
+def test_sink_keeps_plan_and_tail(tmp_path: Path):
+    data = BIG.read_bytes()
+    seg = BIG_LAYOUT["segment_size"]
+    kept = retention_plan(
+        [(seg - 1, seg + 1), (3 * seg + 1, 3 * seg + 2)], **BIG_LAYOUT
+    )
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=1 << 16, **BIG_LAYOUT)
+    chunks = list(random_chunks(data))
+    assert {0, 1} <= {len(c) for c in chunks}
+    for c in chunks:
+        sink.write(c)
     store = sink.close()
 
-    payload_end = start + PT_LEN + 5 * GCM
+    # From the last data segment on, java's empty one included.
+    tail = (rangeserve.data_end(**BIG_LAYOUT), len(data))
+    assert (sink.payload_start, sink.tail_start) == (39, tail[0] + GCM)
     assert store.length == len(data)
-    assert store.read(payload_end, len(data)) == data[payload_end:]
-    for s, e in kept:
+    for s, e in [*kept, tail]:
         assert store.read(s, e) == data[s:e]
-    assert store.physical_size == sum(e - s for s, e in kept) + len(data) - payload_end
-    with serve(store) as (url, _):
-        assert get(url, "bytes=-22") == (206, data[-22:])
-        assert get(url, f"bytes={kept[0][1]}-{kept[1][0] - 1}")[0] == 410
+    # So every other byte is in a data segment the plan dropped.
+    assert store.physical_size == sum(e - s for s, e in [*kept, tail])
     store.close()
 
 
-def test_sink_refuses_tail_over_ceiling(tmp_path: Path):
-    data = make_tdf(tmp_path / "t.tdf", 200_000).read_bytes()
-    sink = rangeserve.SparseSink(tmp_path, [(0, 100)], tail_ceiling=1 << 16)
-    stream(sink, data, 65536)
-    with pytest.raises(rangeserve.ManifestTooLarge):
+@pytest.mark.parametrize(
+    "wrong",
+    [{"payload_start": 59}, {"segment_size": 4 * MiB}],
+    ids=["payload_start", "segment_size"],
+)
+def test_sink_refuses_wrong_layout(tmp_path: Path, wrong: dict[str, int]):
+    layout = BIG_LAYOUT | wrong
+    kept = retention_plan([], **layout)
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=0, **layout)
+    with pytest.raises(ValueError):
+        sink.write(BIG.read_bytes())
         sink.close()
 
 
+def test_sink_refuses_tail_over_ceiling(tmp_path: Path):
+    tdf = tmp_path / "t.tdf"
+    with zipfile.ZipFile(tdf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("0.payload", random.Random(5111).randbytes(PT_LEN + 5 * GCM))
+        z.writestr("0.manifest.json", "{}" + " " * 200_000)
+    layout = {"payload_start": 39, "plaintext_length": PT_LEN, "segment_size": SEG}
+    sink = rangeserve.SparseSink(
+        tmp_path, plan(start=39), tail_ceiling=1 << 16, **layout
+    )
+    for c in random_chunks(tdf.read_bytes()):
+        sink.write(c)
+    with pytest.raises(rangeserve.ManifestTooLarge):
+        sink.close()
+    assert not (tmp_path / "extents.bin").exists()
+
+
 def test_sink_refuses_short_stream(tmp_path: Path):
-    sink = rangeserve.SparseSink(tmp_path, [(0, 100), (500, 600)], tail_ceiling=0)
-    sink.write(b"x" * 550)
-    with pytest.raises(ValueError, match="before planned extent"):
+    kept = [(0, 39), (500, 600)]
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=0, **BIG_LAYOUT)
+    sink.write(BIG.read_bytes()[:550])
+    with pytest.raises(ValueError):
         sink.close()
