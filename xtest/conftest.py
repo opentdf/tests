@@ -14,6 +14,7 @@ Domain-specific fixtures are organized in the fixtures/ package:
 """
 
 import argparse
+import collections
 import json
 import logging
 import os
@@ -27,9 +28,10 @@ import pytest
 
 import sizes
 import tdfs
+import zipreport
 from otdfctl import OpentdfCommandLineTool
 from perf import report, stats
-from perf.cells import cells_for
+from perf.cells import DEFAULT_PAYLOAD_SPEC, cells_for
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
@@ -265,6 +267,24 @@ def _add_benchmark_options(parser: pytest.Parser):
         "unreleased build of each sdk",
     )
     group.addoption(
+        "--bench-payloads",
+        default=DEFAULT_PAYLOAD_SPEC,
+        help="comma-separated payload sizes to measure, e.g. "
+        "'1KiB,1MiB,32MiB,1GiB' (default: %(default)s). Sizes above the "
+        "default are opt-in because they are what a throughput gate actually "
+        "needs and what a nightly cannot afford: each one adds two cells, and "
+        "a run needs scratch disk for every plaintext plus, with "
+        "--bench-prune-scratch, three times the largest size -- or, without "
+        "it, about five times the sum of the sizes per SDK",
+    )
+    group.addoption(
+        "--bench-prune-scratch",
+        action="store_true",
+        help="delete each benchmark file as soon as no remaining cell needs "
+        "it, instead of keeping outputs to inspect and plaintexts to reuse. "
+        "CI sets it; worth setting locally for large --bench-payloads",
+    )
+    group.addoption(
         "--bench-threshold",
         type=float,
         default=stats.DEFAULT_THRESHOLD,
@@ -325,7 +345,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     - encrypt_sdk: which SDK(s) to use for encryption
     - decrypt_sdk: which SDK(s) to use for decryption
     - in_focus: filter tests by SDK focus
-    - container: which container formats to test (ztdf, ztdf-ecwrap)
+    - container: which container formats to test (ztdf)
     """
     if "size" in metafunc.fixturenames:
         metafunc.parametrize("size", resolve_sizes(metafunc.config), scope="session")
@@ -415,7 +435,11 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     if not metafunc.config.getoption("--bench"):
         return
 
-    cells = cells_for(_bench_sdk_names(metafunc.config))
+    from fixtures.bench import payloads_from_options
+
+    cells = cells_for(
+        _bench_sdk_names(metafunc.config), payloads_from_options(metafunc.config)
+    )
     metafunc.config.stash[report.CELLS_KEY] = cells
     metafunc.parametrize("bench_cell", cells, ids=[c.id for c in cells])
 
@@ -447,7 +471,12 @@ def pytest_configure(config: pytest.Config):
     # --bench-threshold used to surface from the bench_config fixture, which
     # runs after the session has already built payloads and installed CLIs --
     # minutes of work discarded to report a typo.
-    from fixtures.bench import config_from_options
+    from fixtures.bench import (
+        config_from_options,
+        disk_shortfall,
+        payloads_from_options,
+    )
+    from perf.cells import payloads_to_generate
     from perf.config import (
         BenchmarkRequest,
         normalize_baseline_candidate,
@@ -456,6 +485,7 @@ def pytest_configure(config: pytest.Config):
     )
 
     bench_config = config_from_options(config)
+    payloads = payloads_from_options(config)
     baseline = config.getoption("--bench-baseline", default=None)
     candidate = config.getoption("--bench-candidate", default=None)
     try:
@@ -482,6 +512,19 @@ def pytest_configure(config: pytest.Config):
                 )
     except ValueError as e:
         raise pytest.UsageError(f"invalid benchmark options: {e}") from e
+
+    # Disk is checked here for the same reason. Found by a fixture instead,
+    # it would error every cell with one repeated traceback and leave no
+    # report; found by the CLI under measurement, it would read as that build
+    # failing.
+    shortfall = disk_shortfall(
+        _tmp_root(),
+        payloads_to_generate(payloads),
+        n_sdks=len(_bench_sdk_names(config)),
+        prune=bool(config.getoption("--bench-prune-scratch", default=False)),
+    )
+    if shortfall:
+        raise pytest.UsageError(shortfall)
 
 
 def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) -> bool:
@@ -531,7 +574,117 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
+#: Conformance records for the whole run, in arrival order. Plain module
+#: state rather than the config stash because :func:`pytest_runtest_logreport`
+#: is handed a report and nothing else.
+_zip_conformance_cells: list[zipreport.Cell] = []
+#: ``zip_conformance`` cells by outcome, recorded or not -- what lets an empty
+#: table be told apart from a run where the module never ran.
+_zip_conformance_seen: collections.Counter[str] = collections.Counter()
+#: Harness faults: a passing cell that recorded nothing, or a record
+#: :func:`zipreport.collect` could not read. Each fails the run at the end.
+_zip_conformance_faults: list[str] = []
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Accumulate ZIP conformance records as each cell finishes.
+
+    Under xdist this fires both on the worker that ran the cell and on the
+    controller that receives its report. Only the controller writes anything
+    (see :func:`_finish_zip_conformance`), so a worker's partial list dies
+    with the worker.
+
+    Only a passing call is read: ``user_properties`` rides on every phase's
+    report, and a cell that failed after recording (``-W error`` on the
+    warning, say) is not one the table should list as passed.
+
+    A fault in the records is not raised from here -- an exception in this
+    hook is an INTERNALERROR that aborts every suite in the run. It is kept
+    and fails the session at the end instead.
+
+    The parameter name is fixed by the hookspec and shadows the ``perf.report``
+    import above; nothing in here needs that module.
+    """
+    if "zip_conformance" not in report.keywords:
+        return
+    if report.when == "setup" and not report.passed:
+        _zip_conformance_seen["skipped" if report.skipped else "error"] += 1
+    if report.when != "call":
+        return
+    _zip_conformance_seen[report.outcome] += 1
+    if not report.passed:
+        return
+    try:
+        cells = zipreport.collect(report.nodeid, report.user_properties)
+    except zipreport.MalformedRecordError as e:
+        _zip_conformance_faults.append(str(e))
+        return
+    if not cells:
+        _zip_conformance_faults.append(
+            f"{report.nodeid}: passed without recording a conformance outcome"
+        )
+    _zip_conformance_cells.extend(cells)
+
+
+def _finish_zip_conformance(session: pytest.Session) -> None:
+    """Write and print which readers were conformant and which merely safe.
+
+    Every conformance cell passes whether the SDK read the mutated container
+    or rejected it cleanly, so this table is the only place the difference
+    shows up. It is rendered in-process so a local run gets it too.
+
+    Silent only when no ``zip_conformance`` cell reported a result -- none
+    collected, or none run. A run whose cells all skipped or failed says so,
+    rather than printing nothing -- an empty table and a missing one look the
+    same.
+    """
+    config = session.config
+    if getattr(config, "workerinput", None) is not None:
+        return  # an xdist worker sees only the cells it ran
+    if not _zip_conformance_seen:
+        return
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "zip conformance outcomes")
+    if _zip_conformance_faults:
+        # Never over an interrupted or internally failed run's status, which
+        # says more than this one would.
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        report.append_step_summary(zipreport.faults_markdown(_zip_conformance_faults))
+        if reporter is not None:
+            reporter.write_line("harness faults (the run fails):", red=True)
+            for fault in _zip_conformance_faults:
+                reporter.write_line(f"  {fault}", red=True)
+    if not _zip_conformance_cells:
+        seen = ", ".join(f"{n} {o}" for o, n in sorted(_zip_conformance_seen.items()))
+        if reporter is not None:
+            reporter.write_line(f"no outcomes recorded ({seen})", yellow=True)
+        return
+    path = zipreport.write_json(
+        config.rootpath / zipreport.DEFAULT_OUT, _zip_conformance_cells
+    )
+    summary = zipreport.summarize(_zip_conformance_cells)
+    # A generic Actions helper that happens to live in the benchmark's report
+    # module; writing a second copy of it here would be the worse trade.
+    report.append_step_summary(zipreport.markdown(summary))
+    if reporter is not None:
+        for line in zipreport.terminal_lines(summary):
+            reporter.write_line(line)
+        reporter.write_line(f"per-cell outcomes: {path}")
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
+    """Write the end-of-run artifacts for the suites that produce them."""
+    try:
+        _finish_zip_conformance(session)
+    finally:
+        # The bench gate can fail the run too; an exception above must not
+        # skip it.
+        _finish_bench(session, exitstatus)
+
+
+def _finish_bench(session: pytest.Session, exitstatus: int) -> None:
     """Analyse every recorded cell, write the artifacts, and gate the run.
 
     The gate lives here rather than in the cells because it is a run-level
@@ -629,9 +782,8 @@ def _write_bulk_plaintext(path: Path, length: int) -> None:
     window is 32 KiB -- so the payload stays realistically incompressible
     while costing one ``randbytes`` call instead of one per megabyte.
 
-    Deliberately not ``rng.randbytes(length)`` the way ``fixtures/bench.py``
-    does it: that materialises the whole payload in memory, which is fine at
-    32 MiB and fatal at 2.1 GiB.
+    Deliberately not one ``rng.randbytes(length)`` call: that materialises
+    the whole payload in memory, which is fine at 32 MiB and fatal at 2.1 GiB.
     """
     block = bytearray(random.Random("dspx-4592").randbytes(_BULK_BLOCK))
     view = memoryview(block)
@@ -684,11 +836,27 @@ def chunky_pt_file(tmp_dir: Path) -> Path:
 
     Independent of ``--sizes`` on purpose. Adding 'chunky' to the session's
     sizes would fan out every test that takes :func:`pt_file` -- the whole of
-    test_tdfs.py and test_policytypes.py -- to pay for a property one test
-    needs. A separate fixture buys the coverage for one extra encrypt and
-    decrypt of 5 MiB, which is cheap enough for the PR gate.
+    test_tdfs.py, test_tdf_assertions.py and test_policytypes.py -- to pay for
+    a property one test needs. A separate fixture buys the coverage for one
+    extra encrypt and decrypt of 5 MiB, which is cheap enough for the PR gate.
     """
     return _plaintext_of(tmp_dir, "chunky")
+
+
+def _tmp_root() -> Path:
+    """Root of every worker's :func:`tmp_dir`; ``XT_TMP_DIR`` relocates it."""
+    return Path(os.environ.get("XT_TMP_DIR", "tmp"))
+
+
+@pytest.fixture(scope="session")
+def zip_conformance_pt_file(tmp_dir: Path) -> Path:
+    """A 128-byte plaintext, independent of ``--sizes`` on purpose.
+
+    ``test_zip_conformance.py`` mutates the container's trailer after
+    encryption, so payload size is irrelevant to what it tests -- fanning it
+    out over ``--sizes`` would pay multi-GiB cost for zero extra coverage.
+    """
+    return _plaintext_of(tmp_dir, "small")
 
 
 @pytest.fixture(scope="session")
@@ -703,8 +871,7 @@ def tmp_dir(request: pytest.FixtureRequest) -> Path:
     override is hard-coding a runner-specific path here.
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    root = Path(os.environ.get("XT_TMP_DIR", "tmp"))
-    dname = root / worker_id
+    dname = _tmp_root() / worker_id
     dname.mkdir(parents=True, exist_ok=True)
     return dname
 

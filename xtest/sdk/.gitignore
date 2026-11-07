@@ -4,6 +4,9 @@
 */src
 */dist
 
+# go release installs in progress, or killed mid-build.
+*/.staging
+
 # Generated helper build .env files
 */*.env
 

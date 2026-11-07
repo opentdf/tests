@@ -11,7 +11,6 @@
 #
 # Extended Configuration:
 #  XT_WITH_ECDSA_BINDING [boolean] - Use ECDSA binding for encryption
-#  XT_WITH_ECWRAP [boolean] - Use EC wrap for encryption/decryption
 #  XT_WITH_VERIFY_ASSERTIONS [boolean] - Verify assertions during decryption
 #  XT_WITH_ASSERTIONS [string] - Path to assertions file, or JSON encoded as string
 #  XT_WITH_ASSERTION_VERIFICATION_KEYS [string] - Path to assertion verification private key file
@@ -20,14 +19,19 @@
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
+#  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
 #  CLIENTSECRET [string] - Override OIDC client secret (default: secret)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-CTL=@opentdf/ctl
-if grep opentdf/cli "$SCRIPT_DIR/package.json"; then
-  CTL=@opentdf/cli
+# Every @opentdf/ctl and @opentdf/cli release names its bin `opentdf`. Run it
+# directly, not through npx: when the local install is missing, npx fetches
+# the registry's latest and runs that instead -- testing the wrong build.
+CLI="$SCRIPT_DIR/node_modules/.bin/opentdf"
+if [[ ! -x "$CLI" ]]; then
+  echo "No CLI at $CLI; reinstall this SDK version" >&2
+  exit 1
 fi
 
 if [[ "$1" == "supports" ]]; then
@@ -38,29 +42,29 @@ if [[ "$1" == "supports" ]]; then
   case "$2" in
     assertions)
       set -o pipefail
-      npx $CTL help | grep assertions
+      "$CLI" help | grep assertions
       exit $?
       ;;
     assertion_verification)
       set -o pipefail
-      npx $CTL help | grep assertionVerificationKeys
+      "$CLI" help | grep assertionVerificationKeys
       exit $?
       ;;
     autoconfigure | ns_grants)
       set -o pipefail
-      npx $CTL help | grep autoconfigure
+      "$CLI" help | grep autoconfigure
       exit $?
       ;;
     kasallowlist)
       set -o pipefail
-      npx $CTL help | grep 'from "/key-access-servers" endpoint'
+      "$CLI" help | grep 'from "/key-access-servers" endpoint'
       exit $?
       ;;
     ecwrap)
       set -o pipefail
-      if npx $CTL help | grep encapKeyType; then
+      if "$CLI" help | grep encapKeyType; then
         # Claims to support ecwrap, but maybe with old salt? Look up version
-        npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
+        "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 4)) exit 0; else exit 1; }'
         exit $?
       else
         echo "ecwrap not supported"
@@ -69,35 +73,35 @@ if [[ "$1" == "supports" ]]; then
       ;;
     hexless)
       set -o pipefail
-      npx $CTL --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re .tdfSpecVersion | awk -F. '{ if ($1 > 4 || ($1 == 4 && $2 > 2) || ($1 == 4 && $2 == 3 && $3 >= 0)) exit 0; else exit 1; }'
       exit $?
       ;;
     hexaflexible)
       set -o pipefail
-      npx $CTL help | grep tdfSpecVersion
+      "$CLI" help | grep tdfSpecVersion
       exit $?
       ;;
     key_management)
       # Advanced key management from SDK version >= 0.8.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 7)) exit 0; else exit 1; }'
       exit $?
       ;;
     obligations)
       # Obligations support from SDK version >= 0.6.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 6)) exit 0; else exit 1; }'
       exit $?
       ;;
     attribute_traversal)
       # Attribute traversal support from web-sdk version >= 0.9.0
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 9)) exit 0; else exit 1; }'
       exit $?
       ;;
     mechanism-mlkem)
       set -o pipefail
-      npx $CTL encrypt --help | grep -i 'mlkem:768'
+      "$CLI" encrypt --help | grep -i 'mlkem:768'
       exit $?
       ;;
     gmac_root_rejected)
@@ -121,12 +125,32 @@ if [[ "$1" == "supports" ]]; then
       # Tolerate a KAO array where the same KAS wraps the same split more than
       # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
       set -o pipefail
-      npx $CTL --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      exit $?
+      ;;
+    session-key-mlkem)
+      # --rewrapKeyType has long accepted "mlkem:768" as a choice (it shares
+      # PUBLIC_KEY_ALGORITHMS with --encapKeyType, used for KAS-managed-key
+      # mechanisms), so grepping --help for it would false-positive on builds
+      # that predate decryptStreamFrom() actually forwarding the requested
+      # algorithm to unwrapKey(). Use the explicit supportedFeatures list from
+      # --version instead, which is hardcoded and scoped to this capability.
+      set -o pipefail
+      "$CLI" --version | jq -e '.supportedFeatures | index("session-key-mlkem")' >/dev/null
       exit $?
       ;;
     mechanism-xwing)
+      # The --encapKeyType choices are web-sdk's KEY_ALGORITHMS, the list it
+      # can wrap a KAS key for. No release has X-Wing yet.
       set -o pipefail
-      npx $CTL help | grep -i xwing
+      "$CLI" help | grep -i 'hpqt:xwing'
+      exit $?
+      ;;
+    mechanism-secpmlkem)
+      # As mechanism-xwing. web-sdk#1049 adds both secp+ML-KEM hybrids to
+      # KEY_ALGORITHMS, which turns this on without an edit here.
+      set -o pipefail
+      "$CLI" help | grep -i 'hpqt:secp256r1-mlkem768'
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
@@ -134,7 +158,7 @@ if [[ "$1" == "supports" ]]; then
       # exists as an unwired boolean on pre-DPoP main, so discriminate on the
       # companion --dpop-key flag that ships with the real implementation.
       set -o pipefail
-      npx $CTL help | grep -iE -- '--dpop-key|--dpopKey'
+      "$CLI" help | grep -iE -- '--dpop-key|--dpopKey'
       exit $?
       ;;
     chunky)
@@ -265,16 +289,12 @@ echo_redacted() {
 }
 
 if [[ "$1" == "encrypt" ]]; then
-  if npx $CTL help | grep autoconfigure; then
+  if "$CLI" help | grep autoconfigure; then
     args+=(--policyEndpoint "$PLATFORMURL" --autoconfigure true)
   fi
   if [[ "$XT_WITH_ECDSA_BINDING" == "true" ]]; then
     args+=(--policyBinding ecdsa)
   fi
-  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
-    args+=(--encapKeyType "ec:secp256r1")
-  fi
-
   if [[ "$XT_WITH_PLAINTEXT_POLICY" == "true" ]]; then
     args+=(--policyType plaintext)
   fi
@@ -282,14 +302,14 @@ if [[ "$1" == "encrypt" ]]; then
     args+=(--tdfSpecVersion "$XT_WITH_TARGET_MODE")
   fi
 
-  echo_redacted npx $CTL encrypt "$src_file" "${args[@]}"
-  npx $CTL encrypt "$src_file" "${args[@]}"
+  echo_redacted "$CLI" encrypt "$src_file" "${args[@]}"
+  "$CLI" encrypt "$src_file" "${args[@]}"
 elif [[ "$1" == "decrypt" ]]; then
   if [[ "$XT_WITH_VERIFY_ASSERTIONS" == 'false' ]]; then
     args+=(--noVerifyAssertions)
   fi
-  if [[ "$XT_WITH_ECWRAP" == 'true' ]]; then
-    args+=(--rewrapKeyType "ec:secp256r1")
+  if [[ -n "$XT_WITH_SESSION_KEY_ALGORITHM" ]]; then
+    args+=(--rewrapKeyType "$XT_WITH_SESSION_KEY_ALGORITHM")
   fi
   if [[ -n "$XT_WITH_KAS_ALLOW_LIST" ]]; then
     args+=(--allowList "$XT_WITH_KAS_ALLOW_LIST")
@@ -298,14 +318,14 @@ elif [[ "$1" == "decrypt" ]]; then
     args+=(--ignoreAllowList)
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
-  if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then
+  if "$CLI" help | grep 'from "/key-access-servers" endpoint'; then
     args+=(--policyEndpoint "$PLATFORMURL")
   else
     args+=(--ignoreAllowList)
   fi
 
-  echo_redacted npx $CTL decrypt "$src_file" "${args[@]}"
-  npx $CTL decrypt "$src_file" "${args[@]}"
+  echo_redacted "$CLI" decrypt "$src_file" "${args[@]}"
+  "$CLI" decrypt "$src_file" "${args[@]}"
 else
   echo "Incorrect argument provided"
   exit 1

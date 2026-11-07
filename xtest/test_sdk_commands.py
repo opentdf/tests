@@ -70,25 +70,6 @@ class TestEncryptCommand:
         )
         assert env["XT_WITH_TARGET_MODE"] == "4.3.0"
 
-    def test_ecwrap_container_maps_to_ztdf_plus_a_flag(self, sdk: tdfs.SDK):
-        argv, env = sdk.encrypt_command(
-            Path("in.txt"), Path("out.tdf"), container="ztdf-ecwrap"
-        )
-        assert argv[-1] == "ztdf", "the CLI format argument is the simple container"
-        assert env["XT_WITH_ECWRAP"] == "true"
-
-    def test_target_mode_survives_ecwrap(self, sdk: tdfs.SDK):
-        # The XT_WITH_TARGET_MODE guard tests the *simplified* format, and
-        # ztdf-ecwrap simplifies to ztdf, so target mode applies to both.
-        _, env = sdk.encrypt_command(
-            Path("in.txt"),
-            Path("out.tdf"),
-            container="ztdf-ecwrap",
-            target_mode="4.3.0",
-        )
-        assert env["XT_WITH_TARGET_MODE"] == "4.3.0"
-        assert env["XT_WITH_ECWRAP"] == "true"
-
 
 class TestDecryptCommand:
     def test_positional_arguments(self, sdk: tdfs.SDK):
@@ -110,9 +91,11 @@ class TestDecryptCommand:
         assert "XT_WITH_VERIFY_ASSERTIONS" not in on
         assert off["XT_WITH_VERIFY_ASSERTIONS"] == "false"
 
-    def test_ecwrap_flag(self, sdk: tdfs.SDK):
-        _, env = sdk.decrypt_command(Path("in.tdf"), Path("out.txt"), ecwrap=True)
-        assert env["XT_WITH_ECWRAP"] == "true"
+    def test_session_key_algorithm(self, sdk: tdfs.SDK):
+        _, env = sdk.decrypt_command(
+            Path("in.tdf"), Path("out.txt"), session_key_algorithm="mlkem:768"
+        )
+        assert env["XT_WITH_SESSION_KEY_ALGORITHM"] == "mlkem:768"
 
     def test_kas_allowlist(self, sdk: tdfs.SDK):
         _, env = sdk.decrypt_command(
@@ -124,12 +107,6 @@ class TestDecryptCommand:
         assert env["XT_WITH_KAS_ALLOWLIST"] == "http://localhost:8080"
         assert env["XT_WITH_IGNORE_KAS_ALLOWLIST"] == "true"
 
-    def test_ecwrap_container_maps_to_ztdf(self, sdk: tdfs.SDK):
-        argv, _ = sdk.decrypt_command(
-            Path("in.tdf"), Path("out.txt"), container="ztdf-ecwrap"
-        )
-        assert argv[-1] == "ztdf"
-
 
 class TestDeterminism:
     def test_builders_are_pure(self, sdk: tdfs.SDK):
@@ -137,7 +114,7 @@ class TestDeterminism:
         # builder that mutated shared state would make round N differ from
         # round 1 and show up as a phantom regression.
         args = (Path("in.txt"), Path("out.tdf"))
-        kwargs = {"container": "ztdf-ecwrap", "attr_values": ["a"]}
+        kwargs = {"container": "ztdf", "attr_values": ["a"]}
         first = sdk.encrypt_command(*args, **kwargs)
         second = sdk.encrypt_command(*args, **kwargs)
         assert first == second

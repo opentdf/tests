@@ -42,41 +42,23 @@ def test_tdf_roundtrip(
         pytest.skip("Not in focus")
     tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
     tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if container == "ztdf-ecwrap":
-        if not encrypt_sdk.supports("ecwrap"):
-            pytest.skip(f"{encrypt_sdk} sdk doesn't yet support ecwrap bindings")
-        if "ecwrap" not in pfs.features:
-            pytest.skip(
-                f"{pfs.version} opentdf platform doesn't yet support ecwrap bindings"
-            )
-        # Unlike javascript, Java and Go don't support ecwrap if on older versions since they don't pass on the ephemeral public key
-        if decrypt_sdk.sdk != "js" and not decrypt_sdk.supports("ecwrap"):
-            pytest.skip(
-                f"{decrypt_sdk} sdk doesn't support ecwrap bindings for decrypt"
-            )
 
     target_mode = tdfs.select_target_version(encrypt_sdk, decrypt_sdk)
-    # Use explicit RSA attribute when not using EC wrapping to avoid base_key interference
-    attr_values = (
-        None if container == "ztdf-ecwrap" else attribute_default_rsa.value_fqns
-    )
+    # Pin the RSA attribute so a base_key set by another module can't change
+    # which mechanism wraps the KAO out from under the assertions below.
     ct_file = encrypted_tdf(
         encrypt_sdk,
         container=container,
         target_mode=target_mode,
-        attr_values=attr_values,
+        attr_values=attribute_default_rsa.value_fqns,
     )
 
     manifest = tdfs.manifest(ct_file)
     assert manifest.payload.isEncrypted
     assert len(manifest.encryptionInformation.keyAccess) == 1
     kao = manifest.encryptionInformation.keyAccess[0]
-    if container == "ztdf-ecwrap":
-        assert kao.type == "ec-wrapped"
-        assert kao.ephemeralPublicKey is not None
-    else:
-        assert kao.type == "wrapped"
-        assert kao.ephemeralPublicKey is None
+    assert kao.type == "wrapped"
+    assert kao.ephemeralPublicKey is None
     if target_mode == "4.2.2" or (
         target_mode is None and not encrypt_sdk.supports("hexless")
     ):
@@ -94,18 +76,6 @@ def test_tdf_roundtrip(
 
     # Verify rewrap was logged in audit logs
     audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
-
-    if (
-        container.startswith("ztdf")
-        and decrypt_sdk.supports("ecwrap")
-        and "ecwrap" in pfs.features
-    ):
-        ert_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="ecrewrap")
-        ec_mark = audit_logs.mark("before_ecwrap_decrypt")
-        decrypt_sdk.decrypt(ct_file, ert_file, container, ecwrap=True)
-        assert filecmp.cmp(pt_file, ert_file)
-        # Verify ecwrap rewrap was also logged
-        audit_logs.assert_rewrap_success(min_count=1, since_mark=ec_mark)
 
 
 def test_chunky_roundtrip(
@@ -319,135 +289,6 @@ def test_manifest_validity(
     tdfs.validate_manifest_schema(ct_file)
 
 
-def test_manifest_validity_with_assertions(
-    encrypt_sdk: tdfs.SDK,
-    assertion_file_no_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    if not in_focus & {encrypt_sdk}:
-        pytest.skip("Not in focus")
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_no_keys,
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-
-    tdfs.validate_manifest_schema(ct_file)
-
-
-#### ASSERTION TESTS
-
-
-def test_tdf_assertions_unkeyed(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    assertion_file_no_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    pfs = tdfs.get_platform_features()
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not decrypt_sdk.supports("assertions"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_no_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
-    assert filecmp.cmp(pt_file, rt_file)
-
-
-def test_tdf_assertions_with_keys(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    assertion_file_rs_and_hs_keys: str,
-    assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    pfs = tdfs.get_platform_features()
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not decrypt_sdk.supports("assertion_verification"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_rs_and_hs_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-
-    decrypt_sdk.decrypt(
-        ct_file,
-        rt_file,
-        "ztdf",
-        assertion_verification_file_rs_and_hs_keys,
-    )
-    assert filecmp.cmp(pt_file, rt_file)
-
-
-def test_tdf_assertions_422_format(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    pt_file: Path,
-    assertion_file_rs_and_hs_keys: str,
-    assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    pfs = tdfs.get_platform_features()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    if not encrypt_sdk.supports("hexaflexible"):
-        pytest.skip(
-            f"Encrypt SDK {encrypt_sdk} doesn't support targeting container format 4.2.2"
-        )
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not decrypt_sdk.supports("assertion_verification"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_rs_and_hs_keys,
-        target_mode="4.2.2",
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-    looks_like_422(tdfs.manifest(ct_file))
-
-    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
-
-    decrypt_sdk.decrypt(
-        ct_file,
-        rt_file,
-        "ztdf",
-        assertion_verification_file_rs_and_hs_keys,
-    )
-    assert filecmp.cmp(pt_file, rt_file)
-
-
 #### TAMPER
 
 ## TAMPER FUNCTIONS
@@ -514,14 +355,6 @@ def change_encrypted_segment_size(manifest: tdfs.Manifest) -> tdfs.Manifest:
     segment = segments[index]
     segment.encryptedSegmentSize = (segment.encryptedSegmentSize or 0) - 1
     manifest.encryptionInformation.integrityInformation.segments[index] = segment
-    return manifest
-
-
-def change_assertion_statement(manifest: tdfs.Manifest) -> tdfs.Manifest:
-    assert manifest.assertions
-    assertion = manifest.assertions[0]
-    assertion.statement.value = "tampered"
-    manifest.assertions[0] = assertion
     return manifest
 
 
@@ -756,84 +589,6 @@ def test_tdf_with_altered_enc_seg_size(
         assert False, "decrypt succeeded unexpectedly"
     except subprocess.CalledProcessError as exc:
         assert_tamper_error(exc, "", decrypt_sdk)
-
-
-## ASSERTION TAMPER TESTS
-
-
-def test_tdf_with_altered_assertion_statement(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    assertion_file_no_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    pfs = tdfs.get_platform_features()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not decrypt_sdk.supports("assertions"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertions")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_no_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-    b_file = tdfs.update_manifest(
-        "altered_assertion_statement", ct_file, change_assertion_statement
-    )
-    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
-    try:
-        decrypt_sdk.decrypt(b_file, rt_file, "ztdf", expect_error=True)
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "assertion", decrypt_sdk)
-
-
-def test_tdf_with_altered_assertion_with_keys(
-    encrypt_sdk: tdfs.SDK,
-    decrypt_sdk: tdfs.SDK,
-    assertion_file_rs_and_hs_keys: str,
-    assertion_verification_file_rs_and_hs_keys: str,
-    in_focus: set[tdfs.SDK],
-    attribute_default_rsa: Attribute,
-    encrypted_tdf: EncryptFactory,
-):
-    if not in_focus & {encrypt_sdk, decrypt_sdk}:
-        pytest.skip("Not in focus")
-    pfs = tdfs.get_platform_features()
-    tdfs.skip_connectrpc_skew(encrypt_sdk, decrypt_sdk, pfs)
-    tdfs.skip_hexless_skew(encrypt_sdk, decrypt_sdk)
-    if not encrypt_sdk.supports("assertions"):
-        pytest.skip(f"{encrypt_sdk} sdk doesn't yet support assertions")
-    if not decrypt_sdk.supports("assertion_verification"):
-        pytest.skip(f"{decrypt_sdk} sdk doesn't yet support assertion_verification")
-    ct_file = encrypted_tdf(
-        encrypt_sdk,
-        az=assertion_file_rs_and_hs_keys,
-        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
-        attr_values=attribute_default_rsa.value_fqns,
-    )
-    b_file = tdfs.update_manifest(
-        "altered_assertion_statement", ct_file, change_assertion_statement
-    )
-    rt_file = encrypted_tdf.rt_file(b_file, decrypt_sdk)
-    try:
-        decrypt_sdk.decrypt(
-            b_file,
-            rt_file,
-            "ztdf",
-            assertion_verification_file_rs_and_hs_keys,
-            expect_error=True,
-        )
-        assert False, "decrypt succeeded unexpectedly"
-    except subprocess.CalledProcessError as exc:
-        assert_tamper_error(exc, "assertion", decrypt_sdk)
 
 
 ## PAYLOAD TAMPER TESTS

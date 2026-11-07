@@ -37,7 +37,44 @@ otdf-sdk-mgr install tip --ref refs/pull/42/head go  # raw ref
 # Install a published version with optional dist name (defaults to version tag)
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
+
+# Prepare a benchmark: the first ref is the reference, the rest candidates
+otdf-sdk-mgr install benchmark go v0.38.0 main pr:123 --platform main --otdfctl v0.38.1
 ```
+
+`install benchmark` resolves every ref (and the `--otdfctl` pin) to a commit
+before building anything. It rejects an abbreviated SHA that no branch, tag or
+PR head points at (give the full commit instead), and two refs that would share
+a `dist/` directory at different commits. Then it installs each side by side
+under `xtest/sdk/<sdk>/dist/`. A full SHA is not checked to exist, so a typo
+in one fails only when that arm checks out.
+
+A source build records the commit it actually built in `dist/<slug>/.version`,
+and a later run reuses it only while that record is the ref's commit. The
+record is all it checks: `make` in `xtest/sdk` rebuilds into the same directory
+without touching `.version`, so after building local edits by hand, delete
+`dist/<slug>` before benchmarking that ref. A release directory that already
+exists is reused as is.
+
+`pytest --bench` does not read the manifest yet. It picks its own arms from
+what is under `dist/`: the newest final release as the baseline, and `main`
+over other unreleased builds as the candidate. A release `--otdfctl` pin lands
+in `go/dist/` too and competes for the baseline, so name the arms you prepared
+with `--bench-baseline` and `--bench-candidate`.
+
+It writes `xtest/sdk/benchmark.installed.json` (`--manifest` to override) on
+every exit path. Its `status` is one of:
+
+| Status | Meaning | Exit |
+|---|---|---|
+| `success` | Every arm and pin installed. `status_message` warns if two arms are one build. | 0 |
+| `neutral` | Every ref resolved to one build, so nothing was installed or compared. | 0 |
+| `partial` | Some installs completed before one failed; the manifest lists them. | 1 |
+| `failed` | Nothing completed: a resolve error, a collision, or the first install failed. | 1 |
+
+Each arm records its requested alias, repository, `commit_sha` (`null` for a
+js release found on npm but not in git), dist directory, and install method;
+`metadata.sdk` names the SDK.
 
 ### versions
 
@@ -64,8 +101,8 @@ otdf-sdk-mgr java-fixup
 
 ## How Release Installs Work
 
-- **Go**: Writes a `.version` file containing `module-path@version`; `cli.sh`/`otdfctl.sh` use `go run <module>@<version>` (no local compilation needed, Go caches the binary). The resolver always targets the opentdf/platform monorepo (`github.com/opentdf/platform/otdfctl`) for v0.31.0 and newer; pre-v0.31.0 tags fall back to the archived standalone repo (`github.com/opentdf/otdfctl`) for artifact install via the Go module proxy. Bare semver inputs like `v0.32.0` are auto-prepended with `otdfctl/` when looking up platform tags.
-- **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory; `cli.sh` uses `npx` from local `node_modules/`
+- **Go**: Runs `go install <module>@<version>` with `GOBIN` set to the dist directory, so `cli.sh`/`otdfctl.sh` run the `otdfctl` binary directly, as for a source build, rather than paying `go run`'s startup on every call. Your own installed `otdfctl` is untouched. This needs a Go toolchain. A `.version` file records `module-path@version`; the wrappers `go run` that if the binary is missing. A go dist with a `.version` but no `otdfctl` is reinstalled rather than skipped. The build is staged in `sdk/go/.staging/`; `clean` removes what a killed install leaves there. The resolver always targets the opentdf/platform monorepo (`github.com/opentdf/platform/otdfctl`) for v0.31.0 and newer; pre-v0.31.0 tags fall back to the archived standalone repo (`github.com/opentdf/otdfctl`) for artifact install via the Go module proxy. Bare semver inputs like `v0.32.0` are auto-prepended with `otdfctl/` when looking up platform tags.
+- **JS**: Runs `npm install @opentdf/ctl@{version}` into the dist directory if npm has it. web-sdk has released without publishing the CLI (sdk 0.21.0 and 0.22.0 reached npm as `@opentdf/sdk` only), so otherwise, if `@opentdf/sdk` is on npm at that version, shallow-clones the release tag (`sdk-vX.Y.Z`, or `sdk/vX.Y.Z` through 0.4.0) and packs just `cli/` against the published sdk, skipping the lib build. This path needs `git` and Node, and takes about a minute. If neither works, the install fails and CI falls back to a full source build. `latest` and `install stable` mean the newest `sdk-v*` release tag, not the newest CLI on npm. `cli.sh` runs `node_modules/.bin/opentdf` directly, never `npx`, which would fetch and run npm's latest if the local install were missing
 - **Java**: Downloads `cmdline.jar` from GitHub Releases if the release has one. Otherwise, if `io.opentdf.platform:sdk` is on Maven Central at that version, shallow-clones the tag and builds only the CLI (`mvn -pl .,cmdline package`) against the published sdk jars, which skips the sdk module's `buf generate` and its buf.build rate limits. That build uses its own local Maven repository (`~/.m2/otdf-sdk-mgr-releases`) so a same-versioned head `mvn install`ed into `~/.m2/repository` can't shadow the release; delete it to reclaim space. This path needs `git`, a JDK, and Maven, and takes a few minutes. If neither works, the install fails and CI falls back to a full source build. `cli.sh` uses `java -jar cmdline.jar`
 
 ## Source Builds
