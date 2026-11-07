@@ -574,6 +574,37 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
+def require_partial_decrypt_cell(session: pytest.Session) -> None:
+    """Fail the run if no partial-decrypt range cell passed.
+
+    Every cell skips on an SDK without ``partial_decrypt``, so a run whose
+    probes all say no would otherwise go green having tested nothing. Opt in
+    with ``XT_PARTIAL_DECRYPT_REQUIRED=1``; the xdist controller judges.
+    """
+    config = session.config
+    if os.environ.get("XT_PARTIAL_DECRYPT_REQUIRED", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    if getattr(config, "workerinput", None) is not None:
+        return
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    passed = reporter.stats.get("passed", []) if reporter else []
+    cell = "test_partial_decrypt.py::test_partial_decrypt["
+    if any(cell in r.nodeid for r in passed):
+        return
+    if session.exitstatus == pytest.ExitCode.OK:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+    if reporter:
+        reporter.write_line(
+            "XT_PARTIAL_DECRYPT_REQUIRED: no test_partial_decrypt cell passed "
+            "(every SDK pair skipped?)",
+            red=True,
+        )
+
+
 #: Conformance records for the whole run, in arrival order. Plain module
 #: state rather than the config stash because :func:`pytest_runtest_logreport`
 #: is handed a report and nothing else.
@@ -676,6 +707,7 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     """Write the end-of-run artifacts for the suites that produce them."""
+    require_partial_decrypt_cell(session)
     try:
         _finish_zip_conformance(session)
     finally:
