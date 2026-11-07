@@ -99,6 +99,7 @@ def test_payload_start_finds_data(tdf: Path):
 def test_full_mode_serves_whole_file(tdf: Path):
     data = tdf.read_bytes()
     with serve(FullFile(tdf)) as (url, log):
+        assert url.endswith("/payload.tdf")
         assert get(url) == (200, data)
         assert get(url, "bytes=10-19") == (206, data[10:20])
         assert get(url, "bytes=-22") == (206, data[-22:])
@@ -106,8 +107,13 @@ def test_full_mode_serves_whole_file(tdf: Path):
         assert get(url, f"bytes=0-{len(data) * 2}") == (206, data)
         assert get(url, f"bytes={len(data)}-")[0] == 416
         assert get(url, "bytes=0-1,5-6")[0] == 400
-    assert [r.status for r in log] == [200, 206, 206, 206, 206, 416, 400]
-    assert log[1] == rangeserve.Request("GET", "bytes=10-19", 206, 10)
+        preflight = urllib.request.Request(url, method="OPTIONS")
+        with urllib.request.urlopen(preflight, timeout=10) as r:
+            assert r.status == 204
+            assert r.headers["Access-Control-Allow-Headers"] == "Range"
+            assert r.headers["Access-Control-Allow-Origin"] == "*"
+    assert [r.status for r in log] == [200, 206, 206, 206, 206, 416, 400, 204]
+    assert log[1] == rangeserve.Request("GET", "bytes=10-19", 206, 10, 10, 20)
 
 
 def test_head_reports_length(tdf: Path):
@@ -142,7 +148,9 @@ def test_sparse_store_serves_kept_and_refuses_dropped(tdf: Path, tmp_path: Path)
             # Straddling a kept/dropped edge is still refused.
             assert get(url, f"bytes={s - 1}-{s}")[0] == 410
         assert get(url)[0] == 410
-    assert all(r.bytes_served == 0 for r in log if r.status == 410)
+    refused = [r for r in log if r.status == 410]
+    assert all(r.bytes_served == 0 for r in refused)
+    assert {r.dropped_at for r in refused} == {s for s, _ in dropped}
     store.close()
 
 

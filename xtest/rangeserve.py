@@ -23,6 +23,7 @@ import struct
 import sys
 import threading
 import time
+import urllib.parse
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -43,6 +44,11 @@ _JOIN_TIMEOUT = 10.0
 
 class Dropped(Exception):
     """A read touched bytes that were deliberately not kept."""
+
+    def __init__(self, message: str, offset: int | None = None):
+        super().__init__(message)
+        #: The first byte not kept, if the source knows it.
+        self.offset = offset
 
 
 def payload_start(path: Path) -> int:
@@ -192,7 +198,7 @@ class ExtentStore:
                 or i >= len(self._index)
                 or not (self._index[i][0] <= pos < self._index[i][1])
             ):
-                raise Dropped(f"bytes {pos}-{end} were not kept")
+                raise Dropped(f"bytes {pos}-{end} were not kept", pos)
             lstart, lend, physical = self._index[i]
             n = min(lend, end) - pos
             yield physical + pos - lstart, n
@@ -216,13 +222,25 @@ def _exactly(data: bytes, start: int, end: int) -> bytes:
 
 
 class Request(NamedTuple):
+    """One answered request.
+
+    ``start`` and ``end`` are the half-open byte range the ``Range`` header
+    resolved to (the whole source for a plain GET); None when there was
+    none. ``dropped_at`` is the first byte not kept, on a 410 or a body cut
+    short.
+    """
+
     method: str
     range: str | None
     status: int
     bytes_served: int
+    start: int | None = None
+    end: int | None = None
+    dropped_at: int | None = None
 
 
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+_EXPOSED = "Content-Range, Content-Length, Accept-Ranges"
 
 
 def _parse_range(header: str, length: int) -> tuple[int, int] | None:
@@ -301,8 +319,13 @@ class _Server(ThreadingHTTPServer):
 
 
 @contextmanager
-def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
-    """Serve ``source`` on an ephemeral loopback port.
+def serve(
+    source: Source, name: str = "payload.tdf"
+) -> Iterator[tuple[str, list[Request]]]:
+    """Serve ``source`` at ``/name`` on an ephemeral loopback port.
+
+    Any path gets the same bytes; ``name`` is what a client takes the file to
+    be called. CORS is open, for the browser-based SDK.
 
     Yields ``(url, log)``. ``log`` gains one :class:`Request` as each response
     finishes. On exit, idle keep-alive connections are shut and every handler
@@ -318,15 +341,24 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
         def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
             pass  # ``log`` is the access log; log_error still reaches stderr.
 
-        def _reply(self, status: int, body: bytes = b"", **headers: str) -> None:
+        def end_headers(self) -> None:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Expose-Headers", _EXPOSED)
+            super().end_headers()
+
+        def _reply(
+            self, status: int, body: bytes = b"", *, request: Request | None = None
+        ) -> None:
             self.send_response(status)
             self.send_header("Content-Length", str(len(body)))
-            for k, v in headers.items():
-                self.send_header(k.replace("_", "-"), v)
+            if status == 416:
+                self.send_header("Content-Range", f"bytes */{source.length}")
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
-            log.append(Request(self.command, self.headers["Range"], status, 0))
+            log.append(
+                request or Request(self.command, self.headers["Range"], status, 0)
+            )
 
         def _read(self, start: int, end: int) -> bytes:
             return _exactly(source.read(start, end), start, end)
@@ -338,6 +370,13 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
             self.end_headers()
             log.append(Request("HEAD", self.headers["Range"], 200, 0))
 
+        def do_OPTIONS(self) -> None:
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Range")
+            self.end_headers()
+            log.append(Request("OPTIONS", self.headers["Range"], 204, 0))
+
         def do_GET(self) -> None:
             header = self.headers["Range"]
             start, end, status = 0, source.length, 200
@@ -347,13 +386,17 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
                 except ValueError as e:
                     return self._reply(400, str(e).encode())
                 if resolved is None:
-                    return self._reply(416, Content_Range=f"bytes */{source.length}")
+                    return self._reply(416)
                 (start, end), status = resolved, 206
             try:
                 source.check(start, end)
                 chunk = self._read(start, min(start + _CHUNK, end))
             except Dropped as e:
-                return self._reply(410, str(e).encode())
+                return self._reply(
+                    410,
+                    str(e).encode(),
+                    request=Request("GET", header, 410, 0, start, end, e.offset),
+                )
             self.send_response(status)
             self.send_header("Content-Length", str(end - start))
             self.send_header("Accept-Ranges", "bytes")
@@ -362,7 +405,7 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
                     "Content-Range", f"bytes {start}-{end - 1}/{source.length}"
                 )
             self.end_headers()
-            served = 0
+            served, dropped_at = 0, None
             try:
                 while True:
                     self.wfile.write(chunk)
@@ -370,11 +413,14 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
                     if (pos := start + served) == end:
                         break
                     chunk = self._read(pos, min(pos + _CHUNK, end))
-            except Dropped:
+            except Dropped as e:
                 # Too late for a 410: cut the body short so the client sees it.
+                dropped_at = e.offset
                 self.close_connection = True
             finally:
-                log.append(Request("GET", header, status, served))
+                log.append(
+                    Request("GET", header, status, served, start, end, dropped_at)
+                )
 
     server = _Server(Handler)
     thread = threading.Thread(
@@ -385,7 +431,8 @@ def serve(source: Source) -> Iterator[tuple[str, list[Request]]]:
     )
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}/payload.tdf", log
+        port = server.server_address[1]
+        yield f"http://127.0.0.1:{port}/{urllib.parse.quote(name)}", log
     finally:
         server.shutdown()
         thread.join()
