@@ -200,6 +200,10 @@ feature_type = Literal[
     # Decrypt only a plaintext byte range (``--offset``/``--length``), reading
     # just the segments that cover it. DSPX-5114/5115/5116.
     "partial_decrypt",
+    # DSPX-5219: does a range read check the recorded sizes of the segments it
+    # skips, rather than trusting them to place the ones it reads? Force-only,
+    # like ``gmac_root_rejected``: there is no CLI surface to ask.
+    "segment_layout_verified",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #

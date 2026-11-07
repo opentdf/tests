@@ -105,6 +105,12 @@ if [ "$1" == "supports" ]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side

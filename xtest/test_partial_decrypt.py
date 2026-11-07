@@ -9,13 +9,15 @@ count is what proves the read was partial.
 
 Gated on ``partial_decrypt`` (and ``http_range_source`` for the HTTP cells).
 To run against unreleased SDK builds, set
-``XT_FORCE_SUPPORTS=partial_decrypt,http_range_source``.
+``XT_FORCE_SUPPORTS=partial_decrypt,http_range_source``. The DSPX-5219
+relabel cases also need ``segment_layout_verified``, which only forcing sets.
 """
 
 import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import accumulate, pairwise
 from pathlib import Path
 
 import pytest
@@ -350,3 +352,97 @@ def test_partial_decrypt_tampered_root_signature_fails(
             b_file, rt_file, "ztdf", expect_error=True, plaintext_range=(0, 100)
         )
     assert_tamper_error(exc.value, "root", decrypt_sdk)
+
+
+#: Bytes the DSPX-5219 cases splice into the payload; small enough that the
+#: relabelled offset stays inside the real plaintext.
+PAD = 4096
+
+
+def inflate_first(m: tdfs.Manifest) -> tdfs.Manifest:
+    ii = m.encryptionInformation.integrityInformation
+    s = ii.segments[0]
+    s.segmentSize = (s.segmentSize or ii.segmentSizeDefault or 0) + PAD
+    s.encryptedSegmentSize = (
+        s.encryptedSegmentSize or ii.encryptedSegmentSizeDefault or 0
+    ) + PAD
+    return m
+
+
+def inflate_default(m: tdfs.Manifest) -> tdfs.Manifest:
+    ii = m.encryptionInformation.integrityInformation
+    *body, last = ii.segments
+    last.segmentSize = last.segmentSize or ii.segmentSizeDefault
+    last.encryptedSegmentSize = (
+        last.encryptedSegmentSize or ii.encryptedSegmentSizeDefault
+    )
+    for s in body:
+        if s.segmentSize:
+            s.segmentSize += PAD
+        if s.encryptedSegmentSize:
+            s.encryptedSegmentSize += PAD
+    ii.segmentSizeDefault = (ii.segmentSizeDefault or 0) + PAD
+    ii.encryptedSegmentSizeDefault = (ii.encryptedSegmentSizeDefault or 0) + PAD
+    return m
+
+
+@dataclass(frozen=True)
+class Relabel:
+    """Recorded sizes grow by PAD and the payload is padded to match, so the
+    segment hashes and the root still verify but every later offset shifts."""
+
+    change: Callable[[tdfs.Manifest], tdfs.Manifest]
+    #: How many leading segments get PAD bytes after them, of ``count``.
+    padded: Callable[[int], int]
+    #: Offset to read by the relabelled arithmetic, from ``(seg, count)``.
+    offset: Callable[[int, int], int]
+
+
+RELABELS: dict[str, Relabel] = {
+    # Seg 0 claims PAD more bytes; read seg 1.
+    "seg0_inflated": Relabel(inflate_first, lambda k: 1, lambda seg, k: seg + PAD + 10),
+    # Every non-last segment claims PAD more; read the last, whose own size is
+    # true, so only checking another segment against the default notices.
+    "default_relabeled": Relabel(
+        inflate_default, lambda k: k - 1, lambda seg, k: (k - 1) * (seg + PAD) + 10
+    ),
+}
+
+
+def pad_after(sizes: list[int], count: int) -> Callable[[bytes], bytes]:
+    def change(payload: bytes) -> bytes:
+        bounds = [0, *accumulate(sizes[:count])]
+        pieces = [payload[a:b] + bytes(PAD) for a, b in pairwise(bounds)]
+        return b"".join(pieces) + payload[bounds[-1] :]
+
+    return change
+
+
+@pytest.mark.parametrize("relabel", RELABELS)
+def test_partial_decrypt_relabeled_layout(
+    decrypt_sdk: tdfs.SDK, cell: Cell, relabel: str
+) -> None:
+    """Fail, or return the bytes really at the offset; never a shifted read."""
+    decrypt_sdk.skip_if_unsupported("segment_layout_verified")
+    r = RELABELS[relabel]
+    n = cell.pt.stat().st_size
+    seg = geometry(cell.ct, n)
+    sizes = tdfs.encrypted_segment_sizes(tdfs.manifest(cell.ct))
+    offset = r.offset(seg, len(sizes))
+    assert offset + 100 <= n
+    padded = tdfs.update_payload(
+        f"{relabel}_payload", cell.ct, pad_after(sizes, r.padded(len(sizes)))
+    )
+    b_file = tdfs.update_manifest(f"{relabel}_manifest", padded, r.change)
+    rt_file = cell.tdf.rt_file(b_file, decrypt_sdk)
+    try:
+        decrypt_sdk.decrypt(
+            b_file,
+            rt_file,
+            "ztdf",
+            expect_error=True,
+            plaintext_range=(offset, 100),
+        )
+    except subprocess.CalledProcessError:
+        return
+    assert_plaintext(rt_file.read_bytes(), offset, offset + 100)

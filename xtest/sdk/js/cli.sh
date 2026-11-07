@@ -118,6 +118,12 @@ if [[ "$1" == "supports" ]]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     multikao)
       # Tolerate a KAO array where the same KAS wraps the same split more than
       # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
