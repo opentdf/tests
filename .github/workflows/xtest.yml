@@ -903,6 +903,24 @@ jobs:
           KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
           KAS_KM3_LOG_FILE: "../../${{ steps.kas-km3.outputs.log-file }}"
 
+      # DSPX-5108. Probes which of a FIFO and a regular file the CLI accepts
+      # for each end of encrypt and decrypt, at 5 MiB, and runs the chosen
+      # routes as a control. The probe table goes to the job summary. Opt-in
+      # via --stream, so it adds nothing to the --sizes fanout.
+      - name: Run the 5 MiB streaming control
+        run: |-
+          uv run --frozen --no-build pytest -ra -v \
+            --html test-results/stream-${FOCUS_SDK}-${PLATFORM_TAG}.html \
+            --self-contained-html \
+            --sdks-encrypt "${ENCRYPT_SDK}" \
+            --stream chunky \
+            test_streaming.py
+        working-directory: otdftests/xtest
+        env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+
       - name: Sanitize SDK and platform refs for artifact names
         id: artifact-name
         if: success() || failure()
@@ -1473,6 +1491,29 @@ jobs:
         run: uv sync --locked --no-build
         working-directory: otdftests/xtest
 
+      # DSPX-5108's 2.1 GiB streaming control, on the routes its 5 MiB probe
+      # chooses. First, while /mnt is empty: it holds at most the ciphertext
+      # plus, for a CLI that needs a seekable input, a plaintext copy, and
+      # removes both. No heap overrides, so a CLI that buffers the payload
+      # shows up in peak RSS rather than being accommodated.
+      - name: Run the 2.1 GiB streaming control
+        id: stream
+        run: |-
+          uv run --frozen --no-build pytest -ra -v \
+            --stream medium \
+            --sdks-encrypt "$ZIP64_SDK" \
+            --junitxml "test-results/stream-${ZIP64_SDK}.xml" \
+            --html "test-results/stream-${ZIP64_SDK}.html" \
+            --self-contained-html \
+            test_streaming.py
+        working-directory: otdftests/xtest
+        env:
+          ZIP64_SDK: ${{ matrix.sdk }}
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_TAG: main
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          XT_TMP_DIR: /mnt/xtest-tmp
+
       # Deliberately serial: no -n / --dist. Three concurrent workers each
       # holding a 2.1 GiB plaintext, ciphertext and decrypt output would
       # exhaust the scratch volume long before the last cell.
@@ -1481,6 +1522,8 @@ jobs:
       # exist to find bugs in releases.
       - name: Run ZIP64 boundary tests
         id: zip64
+        # Independent of the streaming control above.
+        if: success() || steps.stream.outcome == 'failure'
         run: |-
           uv run --frozen --no-build pytest -ra -v \
             --sizes medium \

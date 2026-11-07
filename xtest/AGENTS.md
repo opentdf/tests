@@ -15,6 +15,7 @@ fixture system.
 | `conftest.py` | `pytest_addoption` + the encrypt/decrypt SDK parametrization. Defines `--sdks`, `--sdks-encrypt`, `--sdks-decrypt`, `--containers`, `--no-audit-logs`. |
 | `fixtures/` | Module-scoped pytest fixtures: `attributes.py`, `keys.py`, `audit.py`, `assertions.py`, `kas.py`, `encryption.py`, `obligations.py`. |
 | `tdfs.py` | SDK abstraction layer — wraps the `cli.sh` shims under `sdk/<lang>/dist/<version>/`. |
+| `streamharness.py` | Bounded streaming I/O for large runs (DSPX-5108): position-derivable plaintext generator, FIFO adapters, counted TDF sink, per-SDK route probe. Live controls in `test_streaming.py` (opt-in via `--stream`). |
 | `perf/` | Paired A/B performance regression benchmarks (opt-in via `--bench`). **Read `perf/README.md` before changing anything in here** — the design decisions fail silently when undone. |
 | `sdk/{go,java,js}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
 | `test.env` | Default endpoint and client-credential env vars. Source with `set -a && source test.env && set +a`. |
@@ -27,6 +28,7 @@ fixture system.
 | `--sdks-encrypt`, `--sdks-decrypt` | Asymmetric encrypt/decrypt SDK selection (use when reproducing cross-SDK interop bugs). |
 | `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
+| `--stream chunky[,medium]` | Run the streaming controls in `test_streaming.py`: probe each CLI's FIFO/file routes at 5 MiB, then the control at each size (`medium` = 2.1 GiB). Not collected without it, and a run where no control passes fails. |
 | `--sizes small,chunky` | Which payload sizes to parametrize over (`small` 128 B, `chunky` 5 MiB, `medium` 2.1 GiB, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
 
 ## Environment Variables
@@ -37,6 +39,7 @@ Beyond the repo-wide ones in `../AGENTS.md`:
 |----------|---------|
 | `XT_TMP_DIR` | Root for generated fixtures and ciphertexts (default `tmp/`). Point at a large volume for `medium`/`large` runs. |
 | `XT_FORCE_SUPPORTS` | Comma-separated features to treat as supported, bypassing the `cli.sh supports` gate. For evaluating a fix before it releases — see `../AGENTS.md`. Unknown names raise, as do platform-only ones (`PLATFORM_ONLY_FEATURES` in `tdfs.py`). |
+| `XT_STREAM_TIMEOUT`, `XT_STREAM_MAX_RSS`, `XT_STREAM_MAX_SCRATCH` | Per-invocation budget for the streaming controls: seconds, and bytes (`2GiB` style suffixes). RSS and scratch are recorded either way; set to fail over a limit. |
 | `XT_FORCE_PLATFORM_SUPPORTS` | Comma-separated platform features to treat as supported. Independent of SDK overrides; does not enable service configuration. Unknown names raise. |
 
 ## Authoring a New Test
