@@ -68,6 +68,7 @@ pytest_plugins = [
     "fixtures.encryption",
     "fixtures.bench",
     "fixtures.range_server",
+    "fixtures.nfs_mount",
 ]
 
 

@@ -44,9 +44,11 @@ def tdf(tmp_path: Path) -> Path:
     return path
 
 
-def plan(*ranges: tuple[int, int], start: int = 100) -> list[tuple[int, int]]:
+def plan(
+    *ranges: tuple[int, int], start: int = 100, pad: int = 0
+) -> list[tuple[int, int]]:
     return retention_plan(
-        ranges, plaintext_length=PT_LEN, segment_size=SEG, payload_start=start
+        ranges, plaintext_length=PT_LEN, segment_size=SEG, payload_start=start, pad=pad
     )
 
 
@@ -76,6 +78,17 @@ def test_plan_disjoint_and_overlapping_ranges():
 
 def test_plan_empty_range_keeps_only_head():
     assert plan((7, 7)) == [(0, 100)]
+
+
+def test_plan_pad_stays_in_payload_and_covers_tail_edge():
+    end = 100 + PT_LEN + 5 * GCM
+    got = plan((2 * SEG + 5, 2 * SEG + 6), pad=60)
+    assert got == [
+        (0, 160),
+        (100 + 2 * STRIDE - 60, 100 + 3 * STRIDE + 60),
+        (end - 60, end),
+    ]
+    assert plan((PT_LEN - 1, PT_LEN), pad=60)[-1] == (100 + 4 * STRIDE - 60, end)
 
 
 @pytest.mark.parametrize("bad", [(-1, 3), (5, 4), (0, PT_LEN + 1)])
