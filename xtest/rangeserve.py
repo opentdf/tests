@@ -73,19 +73,29 @@ def retention_plan(
     plaintext_length: int,
     segment_size: int,
     payload_start: int,
+    pad: int = 0,
 ) -> list[tuple[int, int]]:
     """Ciphertext extents a partial decrypt of plaintext ``ranges`` reads.
 
     Always includes the head, ``[0, payload_start)``. Excludes the tail,
     whose start is not known until the payload has been written.
 
+    ``pad`` widens each extent by that much on both sides, within the
+    payload, and keeps the last ``pad`` bytes before the tail. A reader that
+    rounds reads out to blocks, like a kernel NFS client, then stays inside
+    kept bytes.
+
     Fixed before encrypt: ciphertext is not deterministic, so a dropped
     extent cannot be regenerated afterwards.
     """
     if segment_size <= 0:
         raise ValueError(f"segment_size must be positive, got {segment_size}")
+    if pad < 0:
+        raise ValueError(f"pad must not be negative, got {pad}")
     stride = segment_size + PAYLOAD_GCM_OVERHEAD
-    extents = [(0, payload_start)]
+    segments = -(-plaintext_length // segment_size)
+    payload_end = payload_start + plaintext_length + segments * PAYLOAD_GCM_OVERHEAD
+    extents = [(0, payload_start), (payload_end, payload_end)]
     for start, end in ranges:
         if not 0 <= start <= end <= plaintext_length:
             raise ValueError(
@@ -101,7 +111,7 @@ def retention_plan(
                 payload_start + last * stride + last_size + PAYLOAD_GCM_OVERHEAD,
             )
         )
-    return merge(extents)
+    return merge([(max(0, s - pad), min(payload_end, e + pad)) for s, e in extents])
 
 
 class Source(Protocol):
