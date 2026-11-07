@@ -18,6 +18,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
 #  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
 #  CLIENTID [string] - Override OIDC client ID (default: opentdf)
@@ -143,15 +144,11 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
-    partial_decrypt | http_range_source)
-      # Decrypt a plaintext byte range, and load a TDF from an http(s) URL.
-      # Not yet in any release; see DSPX-5116. Turn this into a version
-      # gate when they ship.
-      #
-      # Explicit rather than falling through to "Unknown feature" so that a
-      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
-      echo "$2 unsupported: see DSPX-5116"
-      exit 1
+    http_range_source | partial_decrypt)
+      # Shipped together in web-sdk#1093 (DSPX-5116).
+      set -o pipefail
+      npx $CTL help | grep -- '--offset'
+      exit $?
       ;;
     zip64-at-2gib)
       # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
@@ -190,7 +187,11 @@ source "$XTEST_DIR"/test.env
 [[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
 [[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
-src_file=$(realpath "$2")
+if [[ "$2" =~ ^https?:// ]]; then
+  src_file="$2"
+else
+  src_file=$(realpath "$2")
+fi
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 
 args=(
@@ -306,6 +307,13 @@ elif [[ "$1" == "decrypt" ]]; then
   fi
   if [[ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]]; then
     args+=(--ignoreAllowList)
+  fi
+  if [[ -n "$XT_WITH_PLAINTEXT_RANGE" ]]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [[ -n "$range_length" ]]; then
+      args+=(--length "$range_length")
+    fi
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
   if npx $CTL help | grep 'from "/key-access-servers" endpoint'; then

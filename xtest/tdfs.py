@@ -167,11 +167,10 @@ feature_type = Literal[
     # still vulnerable rather than a skip.
     "gmac_root_rejected",
     "hexless",
-    # Load a TDF from an http(s) URL with Range requests, fetching only the
-    # bytes a read needs rather than the whole object. DSPX-5112/5113; JS has
-    # long had ``fromUrl``.
-    "http_range_source",
     "hexaflexible",
+    # Load a TDF from an http(s) URL with Range requests, fetching only the
+    # bytes a read needs rather than the whole object. DSPX-5112/5113.
+    "http_range_source",
     "kasallowlist",
     # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
     # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,

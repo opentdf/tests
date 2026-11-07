@@ -18,6 +18,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -158,12 +159,8 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
-      exit $?
-      ;;
-    dpop_nonce_challenge)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+    dpop | dpop_nonce_challenge | http_range_source | partial_decrypt)
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports "$2"
       exit $?
       ;;
     chunky)
@@ -175,16 +172,6 @@ if [ "$1" == "supports" ]; then
       # Explicit rather than falling through to "Unknown feature" so that a
       # typo'd feature name in tdfs.py cannot pass for a known-missing one.
       echo "chunky unsupported: see DSPX-4589"
-      exit 1
-      ;;
-    partial_decrypt | http_range_source)
-      # Decrypt a plaintext byte range, and load a TDF from an http(s) URL.
-      # Not yet in any release; see DSPX-5113 and DSPX-5115. Turn this into a version
-      # gate when they ship.
-      #
-      # Explicit rather than falling through to "Unknown feature" so that a
-      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
-      echo "$2 unsupported: see DSPX-5113 and DSPX-5115"
       exit 1
       ;;
     zip64-at-2gib)
@@ -250,6 +237,14 @@ if [ "$1" == "decrypt" ]; then
 
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--ignore-kas-allowlist=true)
+  fi
+
+  if [ -n "$XT_WITH_PLAINTEXT_RANGE" ]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [ -n "$range_length" ]; then
+      args+=(--length "$range_length")
+    fi
   fi
 fi
 
