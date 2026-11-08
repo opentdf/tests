@@ -46,17 +46,16 @@ import hashlib
 import hmac
 import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
 import rfc8785
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 import assertions
+from assertions import b64url
+from jsontext import BACKSLASH, Obj, Raw, esc, esc_non_ascii, quoted, text
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "assertions-phase0.json"
@@ -90,14 +89,6 @@ def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
-def b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _b64url_uint(n: int) -> str:
-    return b64url(n.to_bytes((n.bit_length() + 7) // 8, "big"))
-
-
 #: The key that key selection chose for most verify vectors.
 SIGNER = _private_key("rsa-signer")
 #: An unrelated RSA key that is never selected.
@@ -114,41 +105,20 @@ KEYS: dict[str, dict[str, str]] = {
 }
 
 
-def _self_signed_certificate(key: rsa.RSAPrivateKey, name: str, serial: int) -> str:
-    """Base64 DER of a fixed self-signed leaf, as an ``x5c`` entry."""
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
-    certificate = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(subject)
-        .public_key(key.public_key())
-        .serial_number(serial)
-        .not_valid_before(datetime(2026, 1, 1, tzinfo=UTC))
-        .not_valid_after(datetime(2036, 1, 1, tzinfo=UTC))
-        .add_extension(x509.BasicConstraints(ca=False, path_length=None), True)
-        .sign(key, hashes.SHA256())
-    )
-    return _b64(certificate.public_bytes(serialization.Encoding.DER))
-
-
-SIGNER_CERT = _self_signed_certificate(SIGNER, "DSPX-5520 vector signer", 0x55200001)
-OTHER_CERT = _self_signed_certificate(OTHER, "DSPX-5520 vector other key", 0x55200002)
+SIGNER_CERT = assertions.self_signed_certificate(
+    SIGNER, "DSPX-5520 vector signer", 0x55200001
+)
+OTHER_CERT = assertions.self_signed_certificate(
+    OTHER, "DSPX-5520 vector other key", 0x55200002
+)
 
 
 def rsa_jwk(key: rsa.RSAPrivateKey, **extra: Any) -> dict[str, Any]:
-    numbers = key.public_key().public_numbers()
-    return {
-        "kty": "RSA",
-        "n": _b64url_uint(numbers.n),
-        "e": _b64url_uint(numbers.e),
-    } | extra
+    return assertions.rsa_public_jwk(key.public_key(), **extra)
 
 
 def rsa_thumbprint(key: rsa.RSAPrivateKey) -> str:
-    """RFC 7638 SHA-256 JWK thumbprint."""
-    jwk = rsa_jwk(key)
-    required = {m: jwk[m] for m in ("e", "kty", "n")}
-    return b64url(hashlib.sha256(rfc8785.dumps(required)).digest())
+    return assertions.rsa_jwk_thumbprint(key.public_key())
 
 
 def _segment_tag(label: str) -> bytes:
@@ -162,97 +132,6 @@ OTHER_AGGREGATE = _segment_tag("segment 0, changed") + _segment_tag("segment 1")
 LEGACY_AGGREGATE = (
     hashlib.sha256(b"segment 0").hexdigest() + hashlib.sha256(b"segment 1").hexdigest()
 ).encode("ascii")
-
-#### JSON TEXT
-#
-# Vectors need JSON that a dict cannot hold (duplicate names, escapes, exact
-# number spellings), so inputs are built as text.
-
-
-class Raw(str):
-    """JSON text spliced in verbatim."""
-
-
-class Obj:
-    """A JSON object as ordered (name, value) pairs. Names may repeat."""
-
-    def __init__(self, *pairs: tuple[str, Any]) -> None:
-        self.pairs = list(pairs)
-
-    def plus(self, *pairs: tuple[str, Any]) -> Obj:
-        return Obj(*self.pairs, *pairs)
-
-    def without(self, *names: str) -> Obj:
-        return Obj(*((k, v) for k, v in self.pairs if k not in names))
-
-    def put(self, name: str, value: Any) -> Obj:
-        """Replace the value of ``name`` in place."""
-        assert any(k == name for k, _ in self.pairs), name
-        return Obj(*((k, value if k == name else v) for k, v in self.pairs))
-
-    def rename(self, name: str, new: str) -> Obj:
-        assert any(k == name for k, _ in self.pairs), name
-        return Obj(*((new if k == name else k, v) for k, v in self.pairs))
-
-    def after(self, name: str, *pairs: tuple[str, Any]) -> Obj:
-        """Insert ``pairs`` right after member ``name``."""
-        out: list[tuple[str, Any]] = []
-        for k, v in self.pairs:
-            out.append((k, v))
-            if k == name:
-                out.extend(pairs)
-        assert len(out) == len(self.pairs) + len(pairs), name
-        return Obj(*out)
-
-
-def text(value: Any) -> str:
-    match value:
-        case Raw():
-            return str(value)
-        case Obj():
-            return "{" + ",".join(f"{_name(k)}:{text(v)}" for k, v in value.pairs) + "}"
-        case dict():
-            return text(Obj(*value.items()))
-        case list():
-            return "[" + ",".join(text(v) for v in value) + "]"
-        case float():
-            raise TypeError("spell numbers out with Raw")
-        case _:
-            return json.dumps(value, ensure_ascii=False)
-
-
-def _name(name: str) -> str:
-    return str(name) if isinstance(name, Raw) else json.dumps(name, ensure_ascii=False)
-
-
-# JSON escapes are built from code points rather than spelled in this source,
-# so that no tool between an editor and the interpreter can decode them.
-BACKSLASH = chr(0x5C)
-
-
-def esc(*units: int) -> str:
-    """JSON text of a backslash-u escape for each UTF-16 code unit."""
-    return "".join(f"{BACKSLASH}u{unit:04x}" for unit in units)
-
-
-def esc_non_ascii(s: str) -> str:
-    """``s`` with every non-ASCII character as backslash-u escapes."""
-    out = []
-    for c in s:
-        if ord(c) < 0x80:
-            out.append(c)
-            continue
-        units = c.encode("utf-16-be")
-        out.append(
-            esc(*(int.from_bytes(units[i : i + 2]) for i in range(0, len(units), 2)))
-        )
-    return "".join(out)
-
-
-def quoted(*parts: str) -> Raw:
-    """A JSON string literal from already-escaped ``parts``."""
-    return Raw('"' + "".join(parts) + '"')
-
 
 GRINNING = chr(0x1F600)
 GRINNING_ESCAPED = esc(0xD83D, 0xDE00)
@@ -342,17 +221,7 @@ def extension(value: Any) -> Obj:
 
 #### BINDINGS
 
-Signer = rsa.RSAPrivateKey | bytes
-
-
-def _segment(value: Any) -> str:
-    return b64url(text(value).encode("utf-8"))
-
-
-def _signature(signing_input: bytes, signer: Signer) -> bytes:
-    if isinstance(signer, bytes):
-        return hmac.new(signer, signing_input, hashlib.sha256).digest()
-    return signer.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+Signer = assertions.Signer
 
 
 def jws(
@@ -363,9 +232,9 @@ def jws(
     header_segment: str | None = None,
     payload_segment: str | None = None,
 ) -> str:
-    h = _segment(header) if header_segment is None else header_segment
-    p = _segment(claims) if payload_segment is None else payload_segment
-    return f"{h}.{p}.{b64url(_signature(f'{h}.{p}'.encode('ascii'), signer))}"
+    h = assertions.json_segment(header) if header_segment is None else header_segment
+    p = assertions.json_segment(claims) if payload_segment is None else payload_segment
+    return assertions.compact_jws(h, p, signer)
 
 
 def bound_claims(
@@ -376,10 +245,7 @@ def bound_claims(
 ) -> dict[str, str]:
     """The ``assertionHash`` and ``assertionSig`` claims for ``unbound`` text."""
     h = assertions.assertion_hash(unbound) if hash_hex is None else hash_hex
-    return {
-        "assertionHash": h,
-        "assertionSig": assertions.bound_assertion_sig(aggregate, h, legacy),
-    }
+    return assertions.binding_claims(h, aggregate, legacy)
 
 
 def binding(token: Any, method: str | None = "jws") -> Obj:
@@ -417,24 +283,9 @@ def signed(a: Obj, *, method: str | None = "jws", **kwargs: Any) -> str:
 EXAMPLE_TOKEN = token_for(example())
 
 
-def _strip_js_excluded(value: Any) -> Any:
-    """What the old JS hash kept: every depth minus five member names."""
-    excluded = ("binding", "hash", "sign", "verify", "signingKey")
-    match value:
-        case dict():
-            return {
-                k: _strip_js_excluded(v) for k, v in value.items() if k not in excluded
-            }
-        case list():
-            return [_strip_js_excluded(v) for v in value]
-        case _:
-            return value
-
-
 def old_js_hash(raw: str) -> str:
     """The hash the old JS writer computed, which skipped names at any depth."""
-    stripped = _strip_js_excluded(assertions.parse_assertion(raw))
-    return hashlib.sha256(rfc8785.dumps(stripped)).hexdigest()
+    return assertions.old_js_assertion_hash(assertions.parse_assertion(raw))
 
 
 def stringified_value_hash(raw: str) -> str:
@@ -1894,7 +1745,7 @@ def verify_vectors(v: Vectors) -> None:
         fail(name, note, bound(a, binding(token)), "invalid-binding")
 
     # Algorithms (step 3.4).
-    none_token = f"{_segment({'alg': 'none'})}.{_segment(bound_claims(text(a)))}."
+    none_token = f"{assertions.json_segment({'alg': 'none'})}.{assertions.json_segment(bound_claims(text(a)))}."
     fail(
         "alg-none",
         "alg none against an RS256 key",
@@ -1921,8 +1772,8 @@ def verify_vectors(v: Vectors) -> None:
         bound(a, binding(jws(Obj(("alg", Raw("256"))), bound_claims(text(a)), SIGNER))),
         "unsupported-algorithm",
     )
-    hs512_header = _segment({"alg": "HS512"})
-    hs512_payload = _segment(bound_claims(text(a)))
+    hs512_header = assertions.json_segment({"alg": "HS512"})
+    hs512_payload = assertions.json_segment(bound_claims(text(a)))
     hs512_mac = hmac.new(
         CONFIGURED_SECRET,
         f"{hs512_header}.{hs512_payload}".encode("ascii"),
