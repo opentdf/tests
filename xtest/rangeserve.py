@@ -216,8 +216,7 @@ class ExtentStore:
             i += 1
 
     def check(self, start: int, end: int) -> None:
-        for _ in self._pieces(start, end):
-            pass
+        list(self._pieces(start, end))
 
     def read(self, start: int, end: int) -> bytes:
         fd = self._data.fileno()
