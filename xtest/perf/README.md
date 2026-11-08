@@ -62,7 +62,8 @@ fields; the artifact is still `"schema": 1`.
 ```
 
 - **cell** — `<sdk>-<operation>-<payload>`, plus `-control` for the A/A cell.
-  Payload sizes are 1 KiB, 1 MiB, and 32 MiB.
+  Payload sizes are 1 KiB, 1 MiB, and 32 MiB unless `--bench-payloads` (the
+  `bench-payloads` workflow input) asks for others. The control is always 1 MiB.
 - **ratio** — candidate ÷ baseline. `1.208x` means the candidate took 20.8%
   longer. Below 1.0 means faster.
 - **95% CI** — the bootstrap interval on that ratio. Its *width* is how precisely
@@ -165,8 +166,12 @@ Censored cells report inconclusive with the floor named in the note.
 2. **Check the control row.** If the A/A cell for your SDK also looks strange,
    suspect the runner before your code.
 3. **Look at which cells fired.** Only the 1 KiB cells means startup cost —
-   process boot, package resolution, TLS handshake, token fetch. Only 32 MiB
-   means throughput — the crypto and IO path. Both means something structural.
+   process boot, package resolution, TLS handshake, token fetch. Only the
+   largest size means throughput — the crypto and IO path. Both means something
+   structural. Startup is still ~86% of a 32 MiB go encrypt, so at the default
+   sizes a throughput regression fires only once it roughly doubles the
+   payload-dependent cost; add `1GiB` with `--bench-payloads` to see a smaller
+   one.
 4. **Reproduce locally.** The comparison is self-contained; it does not need CI.
 
 ```bash
@@ -183,6 +188,8 @@ Useful knobs while investigating:
 
 | Option | Default | Use |
 | --- | --- | --- |
+| `--bench-payloads` | `1KiB,1MiB,32MiB` | Sizes to measure. Add `1GiB` to gate throughput |
+| `--bench-prune-scratch` | off | Delete each file once no cell needs it. CI sets it |
 | `--bench-threshold` | `1.15` | Smallest slowdown worth failing on |
 | `--bench-min-rounds` / `--bench-max-rounds` | `20` / `60` | Rounds per cell |
 | `--bench-warmup` | `5` | Discarded rounds paying one-time costs |
@@ -501,11 +508,13 @@ CPU under measurement.
 
 ### Adding to it
 
-**A new payload size** — add a `Payload` to `PAYLOADS` in `cells.py`. Note that
-`CONTROL_PAYLOAD = PAYLOADS[1]`, so inserting at the front moves the control.
-Cell count per SDK is `1 + 2 × len(PAYLOADS)`; the 1500s budget is divided
-across all of them, so adding sizes makes every cell poorer unless the budget
-grows too.
+**A new payload size** — for one run, name it in `--bench-payloads` (or the
+`bench-payloads` workflow input); to change what the nightly measures, edit
+`DEFAULT_PAYLOAD_SPEC` in `cells.py`. `CONTROL_PAYLOAD` stays at 1 MiB whatever
+is selected. Cell count per SDK is `1 + 2 × len(payloads)`; the budget is
+divided across all of them, so adding sizes makes every cell poorer unless
+`--bench-budget-seconds` grows too. Mind the disk: `disk_shortfall()` in
+`fixtures/bench.py` refuses a set that will not fit before the session starts.
 
 **A new metric** — add it to `METRICS` and `METRIC_LABELS` in `measure.py`, teach
 `Sample.metric()` and `format_metric()` about it, and decide whether it belongs

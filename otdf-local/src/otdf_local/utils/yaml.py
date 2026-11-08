@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 # Configure YAML instance to preserve formatting
 _yaml = YAML()
@@ -12,15 +13,31 @@ _yaml.width = 120
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
-    """Load a YAML file, preserving comments and formatting."""
+    """Load a YAML file, preserving comments and formatting.
+
+    Raises:
+        OSError: The file cannot be read.
+        ValueError: The file is not valid YAML. ruamel's own errors derive
+            from neither, so callers catching (OSError, ValueError) would
+            otherwise miss them -- and they don't name the file.
+    """
     with open(path) as f:
-        return _yaml.load(f) or {}
+        try:
+            return _yaml.load(f) or {}
+        except YAMLError as e:
+            raise ValueError(f"{path} is not valid YAML: {e}") from e
 
 
 def save_yaml(path: Path, data: dict[str, Any]) -> None:
-    """Save data to a YAML file, preserving formatting."""
-    with open(path, "w") as f:
+    """Save data to a YAML file, preserving formatting.
+
+    Writes a sibling temp file and renames it over `path`, so an interrupted
+    write leaves the previous contents rather than a truncated file.
+    """
+    partial = path.with_name(path.name + ".tmp")
+    with open(partial, "w") as f:
         _yaml.dump(data, f)
+    partial.replace(path)
 
 
 def get_nested(data: dict[str, Any], path: str, default: Any = None) -> Any:
@@ -51,13 +68,21 @@ def set_nested(data: dict[str, Any], path: str, value: Any) -> None:
         path: Dot-separated path (e.g., "services.kas.root_key")
         value: The value to set
 
-    Creates intermediate dicts as needed.
+    Creates intermediate dicts as needed, including in place of an empty
+    (null) value. Raises ValueError if an intermediate value is a scalar or
+    list, which cannot hold the key.
     """
     keys = path.split(".")
     current = data
-    for key in keys[:-1]:
-        if key not in current:
+    for i, key in enumerate(keys[:-1]):
+        if current.get(key) is None:
             current[key] = {}
+        elif not isinstance(current[key], dict):
+            parent = ".".join(keys[: i + 1])
+            raise ValueError(
+                f"Cannot set {path}: {parent} is a {type(current[key]).__name__}, "
+                "not a mapping"
+            )
         current = current[key]
     current[keys[-1]] = value
 

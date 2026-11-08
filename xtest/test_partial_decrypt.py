@@ -221,8 +221,10 @@ def test_partial_decrypt(
     src: Path | str = cell.ct
     log: list[rangeserve.Request] = []
     if spec.server:
-        serve = request.getfixturevalue(spec.server)
-        src, log = serve(rangeserve.FullFile(cell.ct))
+        full = rangeserve.FullFile(cell.ct)
+        # Registered first, so it runs after the server stops.
+        request.addfinalizer(full.close)
+        src, log = request.getfixturevalue(spec.server)(full)
 
     rt_file = cell.tdf.rt_file(cell.ct, decrypt_sdk, variant=f"{case}-{source}")
     decrypt_sdk.decrypt(src, rt_file, "ztdf", plaintext_range=(offset, length))

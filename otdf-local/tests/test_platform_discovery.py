@@ -8,6 +8,7 @@ ancestor.
 from pathlib import Path
 
 import pytest
+
 from otdf_local.config.settings import Settings, _find_platform_dir
 
 

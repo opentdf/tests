@@ -55,9 +55,25 @@ class KASService(Service):
         config_path = self.settings.get_kas_config_path(self._kas_name)
         template_path = self.settings.kas_template_config
 
-        # Load platform config to get root_key
-        platform_config = load_yaml(self.settings.platform_config)
+        # The platform config is the single source of the root key --
+        # `PlatformService._generate_config` writes one if the template has
+        # none. Starting anyway with "" produces a KAS that unwraps nothing,
+        # which surfaces only at decrypt time as "cipher: message
+        # authentication failed", with no pointer to the config.
+        platform_config_path = self.settings.platform_config
+        start_platform_first = "Start the platform first so the config is generated."
+        if not platform_config_path.is_file():
+            raise ValueError(
+                f"No platform config at {platform_config_path}; cannot configure "
+                f"KAS {self._kas_name}. {start_platform_first}"
+            )
+        platform_config = load_yaml(platform_config_path)
         root_key = get_nested(platform_config, "services.kas.root_key", "")
+        if not root_key:
+            raise ValueError(
+                f"No services.kas.root_key in {platform_config_path}; cannot "
+                f"configure KAS {self._kas_name}. {start_platform_first}"
+            )
 
         # Detect platform features to determine supported config options
         features = PlatformFeatures.detect(self.settings.platform_dir)
@@ -84,16 +100,32 @@ class KASService(Service):
         copy_yaml_with_updates(template_path, config_path, updates)
         return config_path
 
+    def _preflight(self) -> bool:
+        """Generate and validate the config, reporting failure via start_error.
+
+        A bad config is reported the same way a failed launch is, so callers
+        keep the single `start() -> bool` + `start_error` contract of
+        `Service.start`.
+        """
+        self.settings.ensure_directories()
+        try:
+            self._generate_config()
+        except (OSError, ValueError) as e:
+            self.start_error = str(e)
+            return False
+        return True
+
     def start(self) -> bool:
         """Start the KAS instance."""
-        # Ensure directories exist
-        self.settings.ensure_directories()
+        # Validate before touching the port so a bad config leaves any running
+        # KAS in place. (`restart` stops first, so it runs this before stop.)
+        self.start_error = None
+        if not self._preflight():
+            return False
+        config_path = self.settings.get_kas_config_path(self._kas_name)
 
         # Kill any existing process on the port
         kill_process_on_port(self.port)
-
-        # Generate config
-        config_path = self._generate_config()
 
         # Build the command
         cmd = [
@@ -108,7 +140,6 @@ class KASService(Service):
         # Start the process
         log_file = self.settings.get_kas_log_path(self._kas_name)
 
-        self.start_error = None
         # See PlatformService.start: OPENTDF_LOG_LEVEL resolved to the config key
         # "log.level", not "logger.level", so it was never read. Level belongs in
         # the generated config.

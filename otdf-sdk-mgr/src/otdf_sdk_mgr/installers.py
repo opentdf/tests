@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -10,17 +11,24 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import git.exc
+from git import Git
+
 from otdf_sdk_mgr.checkout import checkout_sdk_branch
 from otdf_sdk_mgr.config import (
     GO_MODULE_PATH_PLATFORM,
     LTS_VERSIONS,
     SDK_GIT_URLS,
     SDK_MAVEN_COORDS,
+    SDK_NPM_PACKAGES,
+    SDK_TAG_INFIXES,
     get_sdk_dir,
     get_sdk_dirs,
     go_module_for_tag,
 )
-from otdf_sdk_mgr.registry import list_go_versions, list_java_github_releases, list_js_versions
+from otdf_sdk_mgr.refs import git_ls_remote
+from otdf_sdk_mgr.registry import fetch_json, list_go_versions, list_java_github_releases
+from otdf_sdk_mgr.resolve import is_resolve_success, resolve, strip_tag_infix
 from otdf_sdk_mgr.semver import normalize_version
 
 
@@ -29,17 +37,21 @@ class InstallError(Exception):
 
 
 def install_go_release(version: str, dist_dir: Path) -> None:
-    """Install a Go CLI release by writing a .version file.
+    """Install a Go CLI release as an `otdfctl` binary in dist_dir.
 
-    The cli.sh and otdfctl.sh wrappers read .version and use
-    `go run <module>@{version}` instead of a local binary. The .version file
-    contains `module-path@version` (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`).
-    Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path.
+    Runs `go install <module>@<tag>` with GOBIN set to the new dist, so the
+    cli.sh and otdfctl.sh wrappers run the binary directly, as for a source
+    build, rather than paying `go run`'s startup on every call, which the
+    benchmark would time. The user's own installed `otdfctl` is untouched.
+    Pre-v0.31.0 tags use the archived `github.com/opentdf/otdfctl` module path;
+    both name the binary `otdfctl`. `.version` records `module-path@version`
+    (e.g., `github.com/opentdf/platform/otdfctl@v0.31.0`); the wrappers
+    `go run` that if the binary is missing.
 
-    `go install` is run first to surface module-resolution failures eagerly;
-    only after it succeeds do we lay down `.version` + cli wrappers, so a
-    failed install never leaves a directory that looks successful to the
-    `dist_dir.exists()` skip check in `install_release`.
+    The dist is assembled under `.staging/`, beside `dist/`, and moved into
+    place only once complete, so a failed or interrupted install leaves nothing
+    the skip check in `install_release` would take for a finished one, and
+    leaves any dist_dir it was replacing where it was.
     """
     go_dir = get_sdk_dir() / "go"
     # Strip tag infix (e.g., "otdfctl/v0.24.0" → "v0.24.0")
@@ -47,41 +59,217 @@ def install_go_release(version: str, dist_dir: Path) -> None:
         version = version.rsplit("/", 1)[-1]
     tag = normalize_version(version)
     module = go_module_for_tag(tag)
-    print(f"  Pre-warming Go cache for {module}@{tag}...")
-    result = subprocess.run(
-        ["go", "install", f"{module}@{tag}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # Not in dist/, where xtest lists every directory as a version, but on its
+    # filesystem, so each rename below is atomic.
+    staging_root = dist_dir.parent.parent / ".staging"
+    try:
+        staging_root.mkdir(parents=True, exist_ok=True)
+        dist_dir.parent.mkdir(parents=True, exist_ok=True)
+        # A leftover in .staging/ is harmless, so it shouldn't fail a finished install.
+        with tempfile.TemporaryDirectory(
+            prefix=f"{dist_dir.name}-", dir=staging_root, ignore_cleanup_errors=True
+        ) as tmp:
+            staging = Path(tmp) / dist_dir.name
+            staging.mkdir()
+            _go_install(module, tag, staging)
+            (staging / ".version").write_text(f"{module}@{tag}\n")
+            for name in ("cli.sh", "otdfctl.sh", "opentdfctl.yaml"):
+                shutil.copy(go_dir / name, staging / name)
+            replaced = Path(tmp) / "replaced"
+            try:
+                if dist_dir.exists():
+                    dist_dir.rename(replaced)
+                staging.rename(dist_dir)
+            except BaseException:
+                # Cleanup would delete it along with tmp. A dist_dir that
+                # exists now is a concurrent install's, so leave that one.
+                if replaced.exists() and not dist_dir.exists():
+                    replaced.rename(dist_dir)
+                raise
+    except OSError as e:
+        raise InstallError(f"Could not install {module}@{tag} to {dist_dir}: {e}") from e
+    print(f"  Go release {tag} installed to {dist_dir}")
+
+
+def _go_install(module: str, tag: str, gobin: Path) -> None:
+    """Build module@tag into gobin. Raises InstallError unless that yields `otdfctl`."""
+    print(f"  Building {module}@{tag}...")
+    try:
+        result = subprocess.run(
+            ["go", "install", f"{module}@{tag}"],
+            # go rejects a relative GOBIN, and OTDF_SDK_DIR may be relative.
+            env={**os.environ, "GOBIN": str(gobin.absolute())},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as e:
+        raise InstallError(f"go install {module}@{tag} needs go on PATH: {e}") from e
+    stderr = result.stderr.strip()
     if result.returncode != 0:
-        msg = f"go install failed for {module}@{tag}: {result.stderr.strip()}"
-        if module == GO_MODULE_PATH_PLATFORM:
+        msg = f"go install failed for {module}@{tag}: {stderr}"
+        # go calls a tag the module doesn't have an invalid version. Build,
+        # network and toolchain failures say something else.
+        if module == GO_MODULE_PATH_PLATFORM and "invalid version" in stderr:
             raise InstallError(
                 f"{msg}\nThe platform module path {module}@{tag} may not be published yet."
             )
         raise InstallError(msg)
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    (dist_dir / ".version").write_text(f"{module}@{tag}\n")
-    shutil.copy(go_dir / "cli.sh", dist_dir / "cli.sh")
-    shutil.copy(go_dir / "otdfctl.sh", dist_dir / "otdfctl.sh")
-    shutil.copy(go_dir / "opentdfctl.yaml", dist_dir / "opentdfctl.yaml")
-    print(f"  Go release {tag} installed to {dist_dir}")
+    if not (gobin / "otdfctl").is_file():
+        produced = ", ".join(sorted(p.name for p in gobin.iterdir())) or "nothing"
+        raise InstallError(
+            f"go install {module}@{tag} did not produce an otdfctl binary"
+            f" (produced: {produced})" + (f": {stderr}" if stderr else "")
+        )
+
+
+def _go_release_without_binary(dist_dir: Path) -> bool:
+    """Whether dist_dir has a `.version` but no `otdfctl`, so its wrappers `go run`.
+
+    Go release installs left exactly this before install_go_release built a
+    binary. Source builds have the binary, so they never match, whatever
+    their `.version` says.
+    """
+    return (dist_dir / ".version").is_file() and not (dist_dir / "otdfctl").is_file()
 
 
 def install_js_release(version: str, dist_dir: Path) -> None:
-    """Install a JS CLI release from npm registry."""
+    """Install a JS CLI release.
+
+    Prefers `@opentdf/ctl` from npm. web-sdk has shipped releases without it
+    -- sdk 0.21.0 and 0.22.0 reached npm as `@opentdf/sdk` only (DSPX-5277) --
+    so failing that, builds the CLI from the release tag against the
+    `@opentdf/sdk` published to npm.
+
+    Raises InstallError if neither works, so CI (xtest/setup-cli-tool) can
+    fall back to a full source build.
+    """
+    # "sdk-v0.22.0", "sdk/v0.4.0" and "v0.22.0" all name npm version 0.22.0.
+    v = (strip_tag_infix(version, SDK_TAG_INFIXES["js"]) or version).lstrip("v")
+    if _on_npm(SDK_NPM_PACKAGES["js"], v):
+        _install_js_cli_from_npm(v, dist_dir)
+        return
+    print(f"  {SDK_NPM_PACKAGES['js']}@{v} is not on npm; building it against @opentdf/sdk@{v}...")
+    _build_js_cli_against_npm_sdk(v, dist_dir)
+
+
+def _on_npm(package: str, version: str) -> bool:
+    """Whether npm has `package` at `version` (or at the dist-tag `version`)."""
+    url = f"https://registry.npmjs.org/{package}/{version}"
+    try:
+        fetch_json(url)
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise InstallError(f"Could not check npm for {package}@{version}: {e}") from e
+    except (OSError, ValueError) as e:
+        raise InstallError(f"Could not reach npm to check for {package}@{version}: {e}") from e
+
+
+def _install_js_cli_from_npm(v: str, dist_dir: Path) -> None:
     js_dir = get_sdk_dir() / "js"
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
-    # Strip infix prefix (e.g., "sdk/v0.4.0" -> "v0.4.0") for npm install
-    v = version.split("/")[-1].lstrip("v")
-    print(f"  Installing @opentdf/ctl@{v} from npm...")
-    subprocess.check_call(
-        ["npm", "install", f"@opentdf/ctl@{v}"],
-        cwd=dist_dir,
-    )
+    package = SDK_NPM_PACKAGES["js"]
+    print(f"  Installing {package}@{v} from npm...")
+    installed = False
+    try:
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
+        subprocess.check_call(["npm", "install", f"{package}@{v}"], cwd=dist_dir)
+        installed = True
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise InstallError(f"Installing {package}@{v} from npm failed: {e}") from e
+    finally:
+        # A partial dist_dir would be skipped as "already installed" next
+        # time, whether the install failed or was interrupted (Ctrl-C).
+        if not installed:
+            shutil.rmtree(dist_dir, ignore_errors=True)
     print(f"  JS release {v} installed to {dist_dir}")
+
+
+def _js_release_tag(v: str) -> str:
+    """The web-sdk git tag for sdk release `v`: `sdk-vX.Y.Z`, or `sdk/vX.Y.Z` up to 0.4.0."""
+    infix = SDK_TAG_INFIXES["js"]
+    candidates = [f"{infix}-v{v}", f"{infix}/v{v}"]
+    try:
+        raw = git_ls_remote(Git(), SDK_GIT_URLS["js"], *candidates, tags=True)
+    except git.exc.GitCommandError as e:
+        raise InstallError(f"Could not list web-sdk tags: {e}") from e
+    found = {line.split("\t", 1)[1].removeprefix("refs/tags/") for line in raw.splitlines()}
+    for tag in candidates:
+        if tag in found:
+            return tag
+    raise InstallError(f"No web-sdk tag for sdk {v} (looked for {', '.join(candidates)})")
+
+
+def _build_js_cli_against_npm_sdk(v: str, dist_dir: Path) -> None:
+    """Build `cli/` from the release tag, resolving `@opentdf/sdk` from npm.
+
+    At a release tag, `cli/package.json` points `@opentdf/sdk` at
+    `../lib/opentdf-sdk-<v>.tgz`, which only a lib build produces. Swapping
+    that for the published package skips the lib build and tests the sdk that
+    users actually install. web-sdk's own `make cli` swaps in its tarball the
+    same way: uninstall, `npm ci`, then install the replacement.
+
+    The checkout lives in a temp dir, not under src/, so the js Makefile won't
+    pick it up for a second, full build. The packed CLI is copied into
+    dist_dir, so the `file:` dependency npm records stays valid.
+    """
+    if not _on_npm("@opentdf/sdk", v):
+        raise InstallError(f"Neither {SDK_NPM_PACKAGES['js']} nor @opentdf/sdk {v} is on npm")
+    tag = _js_release_tag(v)
+    js_dir = get_sdk_dir() / "js"
+    with tempfile.TemporaryDirectory(prefix=f"web-sdk-{v}-") as tmp:
+        src_dir = Path(tmp) / "web-sdk"
+        cli_dir = src_dir / "cli"
+        pack_dir = Path(tmp) / "pack"
+        pack_dir.mkdir()
+        steps: list[tuple[list[str], Path | None]] = [
+            (
+                [
+                    "git",
+                    "clone",
+                    "--quiet",
+                    "--depth=1",
+                    f"--branch={tag}",
+                    SDK_GIT_URLS["js"],
+                    str(src_dir),
+                ],
+                None,
+            ),
+            (["npm", "uninstall", "@opentdf/sdk"], cli_dir),
+            (["npm", "ci"], cli_dir),
+            (["npm", "install", "--save-exact", f"@opentdf/sdk@{v}"], cli_dir),
+            (["npm", "pack", "--pack-destination", str(pack_dir)], cli_dir),
+        ]
+        for cmd, cwd in steps:
+            try:
+                subprocess.check_call(cmd, cwd=cwd)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                raise InstallError(
+                    f"Running {' '.join(cmd[:2])} for the {v} CLI failed: {e}"
+                ) from e
+        packed = list(pack_dir.glob("*.tgz"))
+        if len(packed) != 1:
+            raise InstallError(f"Expected one packed CLI in {pack_dir}, found {packed}")
+        tgz = packed[0]
+        installed = False
+        try:
+            dist_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(js_dir / "cli.sh", dist_dir / "cli.sh")
+            shutil.copy(tgz, dist_dir / tgz.name)
+            subprocess.check_call(["npm", "install", f"./{tgz.name}"], cwd=dist_dir)
+            installed = True
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise InstallError(
+                f"Built the {v} CLI but could not install it to {dist_dir}: {e}"
+            ) from e
+        finally:
+            # A partial dist_dir would be skipped as "already installed" next
+            # time, whether the install failed or was interrupted (Ctrl-C).
+            if not installed:
+                shutil.rmtree(dist_dir, ignore_errors=True)
+    print(f"  JS release {v} built against @opentdf/sdk from npm and installed to {dist_dir}")
 
 
 def install_java_release(version: str, dist_dir: Path) -> None:
@@ -254,6 +442,9 @@ INSTALLERS = {
 def install_release(sdk: str, version: str, dist_name: str | None = None) -> Path:
     """Install a released version of an SDK CLI.
 
+    An existing dist is skipped, except a go dist with no otdfctl binary,
+    which is reinstalled.
+
     Raises InstallError if the SDK is unknown or installation fails.
     """
     if sdk not in INSTALLERS:
@@ -263,8 +454,10 @@ def install_release(sdk: str, version: str, dist_name: str | None = None) -> Pat
     name = dist_name or normalize_version(version)
     dist_dir = sdk_dirs[sdk] / "dist" / name
     if dist_dir.exists():
-        print(f"  Dist directory already exists: {dist_dir} (skipping)")
-        return dist_dir
+        if not (sdk == "go" and _go_release_without_binary(dist_dir)):
+            print(f"  Dist directory already exists: {dist_dir} (skipping)")
+            return dist_dir
+        print(f"  {dist_dir} has no otdfctl binary (reinstalling)")
 
     INSTALLERS[sdk](version, dist_dir)
     return dist_dir
@@ -276,8 +469,14 @@ def latest_stable_version(sdk: str) -> str | None:
         stable = [v for v in list_go_versions() if v.get("stable", False)]
         return stable[-1]["version"] if stable else None
     elif sdk == "js":
-        stable = [v for v in list_js_versions() if v.get("stable", False)]
-        return stable[-1]["version"] if stable else None
+        # The newest sdk release tag, as `versions resolve js latest` hands CI,
+        # rather than the newest @opentdf/ctl on npm: web-sdk has released
+        # without publishing the CLI (DSPX-5277), and install_js_release builds
+        # those from the tag.
+        latest = resolve("js", "latest", SDK_TAG_INFIXES["js"])
+        if not is_resolve_success(latest):
+            raise InstallError(f"Could not find the latest js release: {latest}")
+        return latest["tag"]
     elif sdk == "java":
         # No has_cli filter: install_java_release builds the CLI against Maven
         # Central when a release has no cmdline.jar asset (and fails, for a CI
@@ -319,15 +518,13 @@ def cmd_tip(sdks: list[str], ref: str = "main") -> None:
     ref is passed to `make` via `VERSIONS=<slug>` so only that checkout is
     (re)built, not every directory under `sdk/<lang>/src/`.
     """
-    import os
-
     from otdf_sdk_mgr.checkout import checkout_go_from_platform
-    from otdf_sdk_mgr.refs import expand_pr_shorthand
+    from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand
 
     expanded = expand_pr_shorthand(ref)
-    # Slug for SDK src/<slug> and dist/<slug> — mirrors the per-SDK
-    # `local_name` calculation in checkout.py.
-    slug = expanded.replace("/", "--").removeprefix("sdk--").removeprefix("otdfctl--")
+    # dist/<slug>, which make builds from src/<slug>. `manifest.dist_slug_for`
+    # predicts this directory with the same function, so change them together.
+    slug = dist_slug(expanded)
 
     sdk_dirs = get_sdk_dirs()
     for sdk in sdks:
