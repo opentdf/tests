@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import accumulate, pairwise
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -203,31 +204,45 @@ def assert_plaintext(actual: bytes, start: int, end: int) -> None:
         )
 
 
-def payload_extent(ct_file: Path) -> tuple[int, int]:
+class Layout(NamedTuple):
+    """Where a TDF's payload sits."""
+
+    payload_start: int
+    payload_end: int
+    length: int
+
+
+def tdf_layout(ct_file: Path) -> Layout:
     start = rangeserve.payload_start(ct_file)
     cd = zipinspect.central_directory(ct_file)
     entry = next(e for e in cd.entries if e.name == "0.payload")
-    return start, start + entry.compressed_size
+    return Layout(start, start + entry.compressed_size, ct_file.stat().st_size)
+
+
+def read_extent(seg: int, segments: int, start: int, end: int) -> tuple[int, int]:
+    """The plaintext a reader decrypts to return ``[start, end)``, given the
+    number of ``segments`` holding plaintext."""
+    # Starting in the last segment, web-sdk also reads the one before to check
+    # its size (DSPX-5219).
+    if start // seg == segments - 1 > 0:
+        start -= seg
+    return start, end
 
 
 def fetch_budget(
-    ct_file: Path, seg: int, pt_len: int, start: int, end: int, source: Source
+    layout: Layout, seg: int, pt_len: int, start: int, end: int, source: Source
 ) -> int:
     """Head + covering segments + tail + allowance, in bytes."""
     assert source.allowance is not None
-    first, payload_end = payload_extent(ct_file)
-    sizes = tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file))
-    # Not java's trailing empty segment, which is IV and tag alone.
-    count = sum(size > 28 for size in sizes)
-    # Starting in the last segment, web-sdk also reads the one before to check
-    # its size (DSPX-5219).
-    if start // seg == count - 1 > 0:
-        start -= seg
     plan = rangeserve.retention_plan(
-        [(start, end)], plaintext_length=pt_len, segment_size=seg, payload_start=first
+        # Not java's trailing empty segment.
+        [read_extent(seg, -(-pt_len // seg), start, end)],
+        plaintext_length=pt_len,
+        segment_size=seg,
+        payload_start=layout.payload_start,
     )
     a = source.align
-    extents = [*plan, (payload_end, ct_file.stat().st_size)]
+    extents = [*plan, (layout.payload_end, layout.length)]
     rounded = rangeserve.merge([(s // a * a, -(-e // a) * a) for s, e in extents])
     return sum(e - s for s, e in rounded) + source.allowance
 
@@ -316,7 +331,7 @@ def check_range(
     if log is not None and spec.allowance is not None and end > offset:
         log.settle()  # The CLI can exit before the last GET is logged.
         served = sum(r.bytes_served for r in log)
-        budget = fetch_budget(cell.ct, seg, n, offset, end, spec)
+        budget = fetch_budget(tdf_layout(cell.ct), seg, n, offset, end, spec)
         warnings.warn(
             f"{source} {variant}: served {served} of budget {budget} "
             f"({cell.ct.stat().st_size}-byte TDF)",

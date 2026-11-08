@@ -38,7 +38,7 @@ pytestmark = pytest.mark.core
 | `core` | Platform + SDKs, platform's own KAS. | `xtest.yml` standard step |
 | `legacy` | Golden TDFs and their keys. Decrypt-only. | `xtest.yml` legacy step |
 | `multikas` | KAS alpha..delta and km1..km3. | `xtest.yml` ABAC step |
-| `benchmark`, `stream`, `zip64` | `--bench` / `--stream` / `--sizes medium`. | nightly jobs; `stream` also at 5 MiB in `xtest.yml` |
+| `benchmark`, `sparse`, `stream`, `zip64` | `--bench` / `--sparse` / `--stream` / `--sizes medium`. | nightly or dispatch jobs; `stream` also at 5 MiB in `xtest.yml` |
 
 Pick the tier by what the test needs, not by topic: `test_pqc.py` is
 `multikas` because of its KAS fixtures, not because PQC is about ABAC.
@@ -52,6 +52,7 @@ Pick the tier by what the test needs, not by topic: `test_pqc.py` is
 | `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
 | `--stream chunky[,medium]` | Run the streaming controls in `test_streaming.py`: probe each CLI's FIFO/file routes at 5 MiB, then the control at each size (`medium` = 2.1 GiB). Not collected without it, and a run where no control passes fails. |
+| `--sparse 100GiB+112KiB` | Run `test_sparse_partial_decrypt.py` (DSPX-5545): each SDK encrypts that much generated plaintext once into a store keeping only planned extents, then every SDK partially decrypts them through an NFS mount. `--sparse-segment-size`, `--sparse-timeout`, `--sparse-seed`, `--sparse-report` tune it. Not collected without it, and a run where no encrypt or no decrypt passes fails. |
 | `--sizes small,chunky` | Which payload sizes to parametrize over (`small` 128 B, `chunky` 5 MiB, `medium` 2.1 GiB, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
 
 ## Environment Variables
