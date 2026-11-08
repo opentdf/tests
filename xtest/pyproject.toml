@@ -64,6 +64,7 @@ known-first-party = [
     "otdfctl",
     "assertions",
     "fixtures",
+    "jsontext",
     "perf",
     "sizes",
     "vectors",

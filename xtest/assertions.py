@@ -5,6 +5,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -13,7 +14,10 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.x509.oid import NameOID
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+
+import jsontext
 
 Type = Literal["handling", "other"]
 Scope = Literal["payload", "tdo"]
@@ -490,6 +494,156 @@ def assert_bound(
                 f"assertion {id!r} has no key of its own, so must be HS256 over "
                 f"the payload key; got {jws.header.get('alg')!r}"
             )
+
+
+#### BINDING CONSTRUCTION (spec Sections 4.3 and 5)
+#
+# What a writer does: hash the wire object, then sign the claims. Shared by
+# the DSPX-5520 vector generator and the xtest cases that put assertions into
+# real TDFs, both signed by the key a reader configured (positive controls)
+# and by keys it never configured.
+
+#: An RSA private key signs RS256; raw secret bytes sign HS256.
+Signer = rsa.RSAPrivateKey | bytes
+
+
+def b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def jws_signature(signing_input: bytes, signer: Signer) -> bytes:
+    if isinstance(signer, bytes):
+        return hmac.new(signer, signing_input, hashlib.sha256).digest()
+    return signer.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+
+
+def json_segment(value: Any) -> str:
+    """A JWS header or payload segment: base64url of compact JSON."""
+    return b64url(jsontext.text(value).encode("utf-8"))
+
+
+def compact_jws(header_segment: str, payload_segment: str, signer: Signer) -> str:
+    signing_input = f"{header_segment}.{payload_segment}".encode("ascii")
+    signature = b64url(jws_signature(signing_input, signer))
+    return f"{header_segment}.{payload_segment}.{signature}"
+
+
+def binding_claims(hash_hex: str, aggregate: bytes, legacy: bool) -> dict[str, str]:
+    """The ``assertionHash`` and ``assertionSig`` claims (spec 5.3)."""
+    return {
+        "assertionHash": hash_hex,
+        "assertionSig": bound_assertion_sig(aggregate, hash_hex, legacy),
+    }
+
+
+def manifest_aggregate(manifest: dict[str, Any]) -> bytes:
+    """The aggregate hash (spec 5.2) of a parsed manifest."""
+    segments = manifest["encryptionInformation"]["integrityInformation"]["segments"]
+    return b"".join(base64.b64decode(s["hash"], validate=True) for s in segments)
+
+
+def sign_assertion(
+    unbound: dict[str, Any],
+    signer: Signer,
+    *,
+    aggregate: bytes,
+    legacy: bool,
+    alg: str = "RS256",
+    header: dict[str, Any] | None = None,
+    method: str | None = "jws",
+    hash_hex: str | None = None,
+) -> dict[str, Any]:
+    """``unbound`` with a JWS ``binding`` appended, as a writer would sign it.
+
+    ``hash_hex`` overrides the hash to sign, for bindings computed under some
+    other rule. ``method=None`` leaves ``method`` out of the binding.
+    """
+    h = assertion_hash(unbound) if hash_hex is None else hash_hex
+    token = compact_jws(
+        json_segment({"alg": alg} | (header or {})),
+        json_segment(binding_claims(h, aggregate, legacy)),
+        signer,
+    )
+    binding = (
+        {"signature": token}
+        if method is None
+        else {"method": method, "signature": token}
+    )
+    return {k: v for k, v in unbound.items() if k != "binding"} | {"binding": binding}
+
+
+def _b64url_uint(n: int) -> str:
+    return b64url(n.to_bytes((n.bit_length() + 7) // 8, "big"))
+
+
+def rsa_public_jwk(public_key: rsa.RSAPublicKey, **extra: Any) -> dict[str, Any]:
+    numbers = public_key.public_numbers()
+    jwk = {"kty": "RSA", "n": _b64url_uint(numbers.n), "e": _b64url_uint(numbers.e)}
+    return jwk | extra
+
+
+def rsa_jwk_thumbprint(public_key: rsa.RSAPublicKey) -> str:
+    """RFC 7638 SHA-256 JWK thumbprint."""
+    jwk = rsa_public_jwk(public_key)
+    required = {m: jwk[m] for m in ("e", "kty", "n")}
+    return b64url(hashlib.sha256(rfc8785.dumps(required)).digest())
+
+
+def self_signed_certificate(
+    key: rsa.RSAPrivateKey,
+    common_name: str,
+    serial: int,
+    not_before: datetime = datetime(2026, 1, 1, tzinfo=UTC),
+    not_after: datetime = datetime(2036, 1, 1, tzinfo=UTC),
+) -> str:
+    """Base64 DER of a self-signed leaf for ``key``, as an ``x5c`` entry.
+
+    Deterministic for fixed arguments: RSA PKCS #1 v1.5 signatures are.
+    """
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(serial)
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), True)
+        .sign(key, hashes.SHA256())
+    )
+    return base64.b64encode(
+        certificate.public_bytes(serialization.Encoding.DER)
+    ).decode("ascii")
+
+
+#: The member names the old JS hash skipped at every depth.
+OLD_JS_EXCLUDED = ("binding", "hash", "sign", "verify", "signingKey")
+
+
+def _strip_old_js_excluded(value: Any) -> Any:
+    match value:
+        case dict():
+            return {
+                k: _strip_old_js_excluded(v)
+                for k, v in value.items()
+                if k not in OLD_JS_EXCLUDED
+            }
+        case list():
+            return [_strip_old_js_excluded(v) for v in value]
+        case _:
+            return value
+
+
+def old_js_assertion_hash(a: dict[str, Any]) -> str:
+    """The hash older JS writers signed: five member names dropped at any depth.
+
+    Not the contract's hash. A binding over it must fail with
+    ``binding-mismatch`` whenever one of those names appears below the top
+    level (spec 13).
+    """
+    stripped = _strip_old_js_excluded(_as_doubles(a))
+    return hashlib.sha256(rfc8785.dumps(stripped)).hexdigest()
 
 
 #### REFERENCE VERIFIER (spec Section 8, steps 3.3 to 3.9)
