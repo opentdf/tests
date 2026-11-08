@@ -146,6 +146,10 @@ feature_type = Literal[
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
     "ecwrap",
+    # Encrypt more than 64 GB (64e9 bytes) of plaintext. web-sdk refuses past
+    # GLOBAL_BYTE_LIMIT, 64e9 (WS-9363); java-sdk refused past 2**36 until
+    # java-sdk#393 (0.19.0). Answered in SDK._uncached_supports.
+    "encrypt_over_64gb",
     # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
     # has been downgraded to GMAC? Force-only -- every shim answers no, because
     # there is nothing to ask. The check lives in root-signature validation,
@@ -1048,6 +1052,13 @@ class SDK:
                 return release is None or release > (0, 19, 1)
             case ("zip64-offset-bounds", "js"):
                 return True
+            case ("encrypt_over_64gb", "go"):
+                return True
+            case ("encrypt_over_64gb", "java"):
+                release = self.semver()
+                return release is None or release >= (0, 19, 0)
+            case ("encrypt_over_64gb", "js"):
+                return False
             case _:
                 pass
 

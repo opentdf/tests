@@ -58,6 +58,31 @@ on:
         type: boolean
         default: false
         description: "Run 2.1 GiB ZIP64 boundary tests (one runner per encrypting SDK, up to the job's 90m timeout each)."
+      sparse-size:
+        required: false
+        type: string
+        default: ""
+        description: "Run the sparse partial decrypt (DSPX-5545) at this size, e.g. '100GiB+112KiB' (the weekly run's; the odd 112 KiB leaves a short last segment) or '4.5GiB+112KiB' to check wiring: each SDK encrypts once into a store that keeps only the planned extents, and every SDK partially decrypts them through an NFS mount. Empty skips it unless sparse-only is set."
+      sparse-only:
+        required: false
+        type: boolean
+        default: false
+        description: "Run only the sparse partial decrypt, at sparse-size or 100GiB+112KiB; skips the functional matrix."
+      sparse-sdks:
+        required: false
+        type: string
+        default: "go java js"
+        description: "SDKs that encrypt and decrypt in the sparse job; the first build of each *-ref is used."
+      sparse-segment-size:
+        required: false
+        type: string
+        default: ""
+        description: "Segment size each encrypting SDK must write in the sparse job, e.g. '2MiB'. No CLI can set it, so an SDK whose default differs skips. Empty takes each SDK's default."
+      sparse-timeout-minutes:
+        required: false
+        type: string
+        default: "180"
+        description: "Sparse job timeout, 45-360 minutes. Each encrypt gets all but 30 of them."
       force-supports:
         required: false
         type: string
@@ -114,6 +139,26 @@ on:
         required: false
         type: boolean
         default: false
+      sparse-size:
+        required: false
+        type: string
+        default: ""
+      sparse-only:
+        required: false
+        type: boolean
+        default: false
+      sparse-sdks:
+        required: false
+        type: string
+        default: "go java js"
+      sparse-segment-size:
+        required: false
+        type: string
+        default: ""
+      sparse-timeout-minutes:
+        required: false
+        type: string
+        default: "180"
       force-supports:
         required: false
         type: string
@@ -426,7 +471,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     needs: resolve-versions
-    if: ${{ !inputs.bench-only }}
+    if: ${{ !inputs.bench-only && !inputs.sparse-only }}
     # Keep read-only: this job builds third-party dependency trees, and on a
     # workflow_call the token is the *caller's*, so write scope here is write
     # scope for every repo calling xtest. publish-results below holds
@@ -1643,10 +1688,301 @@ jobs:
           path: ${{ steps.run-platform.outputs.platform-log-file }}
           if-no-files-found: ignore
 
+  # DSPX-5545: partial decrypt of a TDF too large to keep. Each SDK encrypts
+  # sparse-size bytes of generated plaintext once (100 GiB + 112 KiB, so the
+  # last segment is short), streamed into a store that keeps only the extents
+  # the planned reads need plus the ZIP tail; every SDK then decrypts each
+  # planned range from an NFS mount of the store. Local disk holds the
+  # manifest and a few segments, and the test asserts it, so a standard runner
+  # holds a 100 GiB TDF -- and, at a longer timeout, the DSPX-5546 sizes. One
+  # runner, SDKs in turn: each encrypt is the long part, and one platform
+  # serves them all.
+  #
+  # Weekly, and on dispatch. Never on pull requests.
+  sparse:
+    timeout-minutes: ${{ fromJSON(inputs.sparse-timeout-minutes || '180') }}
+    runs-on: ubuntu-latest
+    needs: resolve-versions
+    if: >-
+      github.event.schedule == '0 18 * * 0' ||
+      ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+       && (inputs.sparse-size != '' || inputs.sparse-only))
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SPARSE_SIZE: ${{ inputs.sparse-size || '100GiB+112KiB' }}
+      SPARSE_SDKS: ${{ inputs.sparse-sdks || 'go java js' }}
+      SPARSE_SEGMENT_SIZE: ${{ inputs.sparse-segment-size }}
+      SPARSE_TIMEOUT_MINUTES: ${{ inputs.sparse-timeout-minutes || '180' }}
+    steps:
+      # Before the platform: a typo here would otherwise fail 15 minutes in.
+      - name: Check the sparse settings
+        id: settings
+        run: |-
+          term='[0-9]+(\.[0-9]+)?(B|KiB|MiB|GiB|TiB)?'
+          size="^${term}(\+${term})*$"
+          if [[ ! "$SPARSE_SIZE" =~ $size ]]; then
+            echo "::error::sparse-size: expected e.g. 100GiB+112KiB; got '$SPARSE_SIZE'"
+            exit 1
+          fi
+          if [[ -n "$SPARSE_SEGMENT_SIZE" && ! "$SPARSE_SEGMENT_SIZE" =~ $size ]]; then
+            echo "::error::sparse-segment-size: expected e.g. 2MiB; got '$SPARSE_SEGMENT_SIZE'"
+            exit 1
+          fi
+          if [[ -z "${SPARSE_SDKS// /}" ]]; then
+            echo "::error::sparse-sdks is empty"
+            exit 1
+          fi
+          for sdk in $SPARSE_SDKS; do
+            case "$sdk" in
+              go | java | js) ;;
+              *)
+                echo "::error::sparse-sdks: unknown SDK '$sdk'"
+                exit 1
+                ;;
+            esac
+          done
+          if [[ ! "$SPARSE_TIMEOUT_MINUTES" =~ ^[0-9]+$ ]] \
+             || (( SPARSE_TIMEOUT_MINUTES < 45 || SPARSE_TIMEOUT_MINUTES > 360 )); then
+            echo "::error::sparse-timeout-minutes: expected 45-360; got '$SPARSE_TIMEOUT_MINUTES'"
+            exit 1
+          fi
+          # Setup takes ~15 minutes; a hung encrypt should say so before the job dies.
+          echo "encrypt-timeout-seconds=$(( (SPARSE_TIMEOUT_MINUTES - 30) * 60 ))" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentdf/tests
+          path: otdftests
+          persist-credentials: false
+
+      - name: load extra keys from file
+        id: load-extra-keys
+        run: |-
+          echo "EXTRA_KEYS=$(jq -c <otdftests/xtest/extra-keys.json)" >> "${GITHUB_OUTPUT}"
+
+      # Platform main with the default KAS only, as for zip64.
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # keycloak-26.4 (opentdf/platform#3792)
+        with:
+          platform-ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+          bootstrap-ref: main
+          ec-tdf-enabled: true
+          extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
+          log-type: json
+          pqc-enabled: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.15"
+      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
+        with:
+          setup_only: true
+          token: ${{ secrets.BUF_TOKEN }}
+          version: "1.56.0"
+      - name: Set up JDK
+        if: contains(env.SPARSE_SDKS, 'java')
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          java-version: "11"
+          distribution: "temurin"
+          server-id: github
+      - name: Set up Node 22
+        if: contains(env.SPARSE_SDKS, 'js')
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22.x"
+
+      - name: Capture platform otdfctl location
+        id: platform-otdfctl
+        run: |-
+          if [ -d "$PLATFORM_DIR/otdfctl" ] && [ -f "$PLATFORM_DIR/otdfctl/go.mod" ]; then
+            echo "dir=$(pwd)/$PLATFORM_DIR/otdfctl" >> "$GITHUB_OUTPUT"
+            sha=$(git -C "$PLATFORM_DIR" rev-parse HEAD) || {
+              echo "::error::Failed to get SHA from platform checkout at $PLATFORM_DIR"
+              exit 1
+            }
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_DIR: ${{ steps.run-platform.outputs.platform-working-dir }}
+
+      # The first ref of each *-ref input, main by default: every further
+      # build of an SDK would be another full-size encrypt.
+      - name: Pick one build per SDK
+        id: builds
+        env:
+          GO_INFO: ${{ needs.resolve-versions.outputs.go }}
+          JAVA_INFO: ${{ needs.resolve-versions.outputs.java }}
+          JS_INFO: ${{ needs.resolve-versions.outputs.js }}
+        run: |-
+          {
+            echo "go=$(jq -c '.[:1]' <<<"$GO_INFO")"
+            echo "java=$(jq -c '.[:1]' <<<"$JAVA_INFO")"
+            echo "js=$(jq -c '.[:1]' <<<"$JS_INFO")"
+          } >> "$GITHUB_OUTPUT"
+
+      # Always: conftest loads otdfctl at import.
+      - name: Configure go sdk
+        id: configure-go
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: go
+          version-info: ${{ steps.builds.outputs.go }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Configure java sdk
+        id: configure-java
+        if: contains(env.SPARSE_SDKS, 'java')
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: java
+          version-info: ${{ steps.builds.outputs.java }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Configure js sdk
+        id: configure-js
+        if: contains(env.SPARSE_SDKS, 'js')
+        uses: ./otdftests/xtest/setup-cli-tool
+        with:
+          path: otdftests/xtest/sdk
+          sdk: js
+          version-info: ${{ steps.builds.outputs.js }}
+          platform-otdfctl-dir: ${{ steps.platform-otdfctl.outputs.dir }}
+          platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
+
+      - name: Cache Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/go/src/*/go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Cache npm
+        if: contains(env.SPARSE_SDKS, 'js')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/js/src/**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Cache Maven repository
+        if: contains(env.SPARSE_SDKS, 'java')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('otdftests/xtest/sdk/java/src/**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      - name: point java heads at the platform under test
+        if: contains(env.SPARSE_SDKS, 'java') && fromJson(steps.configure-java.outputs.heads)[0] != null
+        run: |-
+          for row in $(echo "$java_version_info" | jq -c '.[]'); do
+            TAG=$(echo "$row" | jq -r '.tag')
+            HEAD=$(echo "$row" | jq -r '.head')
+            if [[ "$HEAD" == "true" ]]; then
+              echo "PLATFORM_BRANCH=$platform_ref" > "otdftests/xtest/sdk/java/${TAG}.env"
+            fi
+          done
+        env:
+          java_version_info: ${{ steps.builds.outputs.java }}
+          platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
+
+      - name: Build the go cli
+        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        run: make
+        working-directory: otdftests/xtest/sdk/go
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      - name: Build the java cli
+        if: steps.configure-java.outputs.needs-build == 'true'
+        run: make
+        working-directory: otdftests/xtest/sdk/java
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      - name: Build the js cli
+        if: steps.configure-js.outputs.needs-build == 'true'
+        run: make
+        working-directory: otdftests/xtest/sdk/js
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+      - name: Install test dependencies
+        run: uv sync --locked --no-build
+        working-directory: otdftests/xtest
+      - name: Install the NFS client
+        run: command -v mount.nfs >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q nfs-common; }
+
+      # Serial: the encrypts are the long part, and they share one CPU budget.
+      # No heap overrides, so a CLI that buffers shows up in peak RSS.
+      - name: Encrypt once per SDK, then partially decrypt through the mount
+        run: |-
+          seg=()
+          if [[ -n "$SPARSE_SEGMENT_SIZE" ]]; then
+            seg=(--sparse-segment-size "$SPARSE_SEGMENT_SIZE")
+          fi
+          uv run --frozen --no-build pytest -ra -v \
+            --sparse "$SPARSE_SIZE" "${seg[@]}" \
+            --sparse-timeout "$ENCRYPT_TIMEOUT_SECONDS" \
+            --sdks-encrypt "$SPARSE_SDKS" \
+            --sdks-decrypt "$SPARSE_SDKS" \
+            --junitxml test-results/sparse.xml \
+            --html test-results/sparse.html \
+            --self-contained-html \
+            test_sparse_partial_decrypt.py
+        working-directory: otdftests/xtest
+        env:
+          ENCRYPT_TIMEOUT_SECONDS: ${{ steps.settings.outputs.encrypt-timeout-seconds }}
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_TAG: main
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          XT_NFS_REQUIRED: "1"
+          # No cell asks for audit logs.
+          DISABLE_AUDIT_ASSERTIONS: "1"
+
+      - name: Upload sparse results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: success() || failure()
+        with:
+          name: ${{ job.status == 'success' && '✅' || '❌' }} sparse-partial-decrypt
+          path: |
+            otdftests/xtest/test-results/sparse-partial-decrypt.json
+            otdftests/xtest/test-results/sparse.xml
+            otdftests/xtest/test-results/sparse.html
+          if-no-files-found: warn
+
+      - name: Upload server logs on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: sparse-server-logs
+          path: ${{ steps.run-platform.outputs.platform-log-file }}
+          if-no-files-found: ignore
+
   publish-results:
     runs-on: ubuntu-latest
     needs: xct
-    if: always() && !inputs.bench-only # Always try to publish results, even if tests fail
+    if: always() && !inputs.bench-only && !inputs.sparse-only # Always try to publish results, even if tests fail
     permissions:
       pull-requests: write # Add comments to PRs
     steps:
@@ -1690,9 +2026,9 @@ jobs:
     # Capstone job: always runs, evaluates matrix job aggregate result and fails if any xct variant failed
     runs-on: ubuntu-latest
     needs: xct
-    # Skipped rather than failed on a bench-only run, where xct is skipped by
-    # request; a skipped job does not fail the run.
-    if: always() && !inputs.bench-only
+    # Skipped rather than failed on a bench-only or sparse-only run, where xct
+    # is skipped by request; a skipped job does not fail the run.
+    if: always() && !inputs.bench-only && !inputs.sparse-only
     permissions:
       contents: read
     steps:

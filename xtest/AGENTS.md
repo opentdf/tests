@@ -29,6 +29,7 @@ fixture system.
 | `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
 | `--stream chunky[,medium]` | Run the streaming controls in `test_streaming.py`: probe each CLI's FIFO/file routes at 5 MiB, then the control at each size (`medium` = 2.1 GiB). Not collected without it, and a run where no control passes fails. |
+| `--sparse 100GiB+112KiB` | Run `test_sparse_partial_decrypt.py` (DSPX-5545): each SDK encrypts that much generated plaintext once into a store keeping only planned extents, then every SDK partially decrypts them through an NFS mount. `--sparse-segment-size`, `--sparse-timeout`, `--sparse-seed`, `--sparse-report` tune it. Not collected without it, and a run where no encrypt or no decrypt passes fails. |
 | `--sizes small,chunky` | Which payload sizes to parametrize over (`small` 128 B, `chunky` 5 MiB, `medium` 2.1 GiB, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
 
 ## Environment Variables

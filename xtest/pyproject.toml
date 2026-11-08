@@ -93,6 +93,7 @@ markers = [
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",
     "stream: bounded streaming control (DSPX-5108); only collected under --stream",
+    "sparse: sparse-backed partial decrypt (DSPX-5545); only collected under --sparse",
     "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",
     "zip_conformance: fast structural/adversarial ZIP-layout conformance cell; collected by default",
 ]

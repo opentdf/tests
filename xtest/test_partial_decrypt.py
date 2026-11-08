@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import accumulate, pairwise
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -200,30 +201,46 @@ def assert_plaintext(actual: bytes, start: int, end: int) -> None:
         )
 
 
-def payload_extent(ct_file: Path) -> tuple[int, int]:
+class Layout(NamedTuple):
+    """Where a TDF's payload sits, and how many segments it holds."""
+
+    payload_start: int
+    payload_end: int
+    length: int
+    segments: int
+
+
+def tdf_layout(ct_file: Path) -> Layout:
     start = rangeserve.payload_start(ct_file)
     cd = zipinspect.central_directory(ct_file)
     entry = next(e for e in cd.entries if e.name == "0.payload")
-    return start, start + entry.compressed_size
+    ii = tdfs.manifest(ct_file).encryptionInformation.integrityInformation
+    return Layout(
+        start, start + entry.compressed_size, ct_file.stat().st_size, len(ii.segments)
+    )
+
+
+def read_extent(seg: int, segments: int, start: int, end: int) -> tuple[int, int]:
+    """The plaintext a reader decrypts to return ``[start, end)``."""
+    # web-sdk also reads the preceding segment to verify the size (DSPX-5219).
+    if start // seg == segments - 1 > 0:
+        start -= seg
+    return start, end
 
 
 def fetch_budget(
-    ct_file: Path, seg: int, pt_len: int, start: int, end: int, source: Source
+    layout: Layout, seg: int, pt_len: int, start: int, end: int, source: Source
 ) -> int:
     """Head + covering segments + tail + allowance, in bytes."""
     assert source.allowance is not None
-    first, payload_end = payload_extent(ct_file)
-    count = len(
-        tdfs.manifest(ct_file).encryptionInformation.integrityInformation.segments
-    )
-    # web-sdk also reads the preceding segment to verify the size (DSPX-5219).
-    if start // seg == count - 1 > 0:
-        start -= seg
     plan = rangeserve.retention_plan(
-        [(start, end)], plaintext_length=pt_len, segment_size=seg, payload_start=first
+        [read_extent(seg, layout.segments, start, end)],
+        plaintext_length=pt_len,
+        segment_size=seg,
+        payload_start=layout.payload_start,
     )
     a = source.align
-    extents = [*plan, (payload_end, ct_file.stat().st_size)]
+    extents = [*plan, (layout.payload_end, layout.length)]
     rounded = rangeserve.merge([(s // a * a, -(-e // a) * a) for s, e in extents])
     return sum(e - s for s, e in rounded) + source.allowance
 
@@ -293,7 +310,7 @@ def check_range(
 
     if spec.allowance is not None and end > offset:
         served = sum(r.bytes_served for r in log)
-        budget = fetch_budget(cell.ct, seg, n, offset, end, spec)
+        budget = fetch_budget(tdf_layout(cell.ct), seg, n, offset, end, spec)
         warnings.warn(
             f"{source} {variant}: served {served} of budget {budget} "
             f"({cell.ct.stat().st_size}-byte TDF)",
