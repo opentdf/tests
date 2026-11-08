@@ -93,6 +93,35 @@ such as `kas_uri_from_kao` — raises here too, and directs you to
 Note `versions resolve` (which backs the workflow's `*-ref` inputs) does **not**
 accept the `pr:N` shorthand — pass a branch name there instead.
 
+#### A fix that isn't pushed: `install local`
+
+`install tip` builds only refs that are on GitHub. To test a commit that is
+only in a local checkout, or changes to several repos together before any of
+them is published, build each SDK from its checkout:
+
+```bash
+otdf-sdk-mgr install local go ~/work/fix/platform     # or its otdfctl/
+otdf-sdk-mgr install local java ~/work/fix/java-sdk --rev my-fix
+XT_FORCE_SUPPORTS=<feature> uv run pytest test_tdfs.py --sdks "go@local java@local" -v
+```
+
+The commit (`--rev`, default `HEAD`, which is `@-` in a colocated jj repo) is
+cloned under `xtest/sdk/<sdk>/` and built there into `dist/local/`, or
+`dist/<name>/` with `--name`. The checkout itself is never written to.
+Re-running at the same commit reuses the build, and a new commit rebuilds it.
+A local build reports the version in its source tree, normally the last
+release, so it needs `XT_FORCE_SUPPORTS` just as a tip build does. Details are
+in `otdf-sdk-mgr/README.md`.
+
+`install local` doesn't build the platform service. otdf-local runs the
+platform from a source tree: a sibling `platform/` checkout, or
+`OTDF_LOCAL_PLATFORM_DIR` (see `otdf-local/AGENTS.md`). Point it at a
+**separate** checkout of the platform commit, not the one you are editing:
+`otdf-local up` regenerates the tracked `opentdf-dev.yaml` and writes key files
+into that directory. In a multi-repo workspace, otdf-local can find the
+`platform/` beside `tests/` on its own, so set `OTDF_LOCAL_PLATFORM_DIR`
+explicitly.
+
 ### Audit Log Assertions
 
 Audit-log assertions are **on by default** and tests fail loudly during
