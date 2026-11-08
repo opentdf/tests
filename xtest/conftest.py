@@ -72,6 +72,7 @@ pytest_plugins = [
     "fixtures.range_server",
     "fixtures.nfs_mount",
     "fixtures.streaming",
+    "fixtures.sparse",
 ]
 
 
