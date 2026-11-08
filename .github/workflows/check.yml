@@ -47,8 +47,9 @@ jobs:
         working-directory: xtest
       # Offline tests for the harnesses whose own correctness gates a nightly
       # job: the benchmark statistics, measurement and CLI command builders,
-      # the encryption fixture cache, the ZIP64 central-directory parser, and
-      # the sparse store and its HTTP and NFS front ends.
+      # the encryption fixture cache, the ZIP64 central-directory parser, the
+      # sparse store and its HTTP and NFS front ends, and the streaming
+      # harness's fault verdicts.
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
       # XT_NFS_REQUIRED turns a host that cannot mount into a failure, not a skip.
@@ -64,7 +65,7 @@ jobs:
           test_sdk_commands.py test_tdfs_units.py test_encryption_units.py
           test_sizes_units.py test_zip64_units.py test_assertions_units.py
           test_zip_conformance_units.py test_rangeserve_units.py
-          test_nfsmount_units.py
+          test_nfsmount_units.py test_streamharness_units.py
         working-directory: xtest
         env:
           XT_NFS_REQUIRED: "1"
