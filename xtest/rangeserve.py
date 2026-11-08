@@ -17,6 +17,7 @@ All ranges here are half-open ``(start, end)`` pairs.
 
 import bisect
 import errno
+import io
 import os
 import re
 import socket
@@ -190,7 +191,7 @@ class ExtentStore:
     def physical_size(self) -> int:
         return self.data_path.stat().st_size
 
-    def add(self, offset: int, data: bytes) -> None:
+    def add(self, offset: int, data: bytes | memoryview) -> None:
         end = offset + len(data)
         if not data:
             return
@@ -242,6 +243,199 @@ def _exactly(data: bytes, start: int, end: int) -> bytes:
     if len(data) != end - start:
         raise OSError(f"short read at {start}: {len(data)} of {end - start} bytes")
     return data
+
+
+class ManifestTooLarge(Exception):
+    """The TDF's tail did not fit in the sink's rolling buffer."""
+
+
+class SourceReader:
+    """``seek`` and ``read`` over a :class:`Source`, for :mod:`zipinspect`.
+
+    Over an :class:`ExtentStore` that kept the tail, it reads the directory
+    and manifest back without another copy of them.
+    """
+
+    def __init__(self, source: Source):
+        self._source, self._pos = source, 0
+
+    def seek(self, offset: int, /) -> int:
+        self._pos = offset
+        return offset
+
+    def read(self, n: int, /) -> bytes:
+        start = self._pos
+        self._pos = max(start, min(start + n, self._source.length))
+        return self._source.read(start, self._pos)
+
+
+class _TailView:
+    """The rolling tail buffer, addressed by offsets into the whole stream."""
+
+    def __init__(self, buf: bytearray, base: int):
+        self._buf, self._base, self._pos = buf, base, base
+
+    def seek(self, offset: int, /) -> int:
+        # The buffer covers the EOCD window, and a TDF's directory fits in it.
+        if offset < self._base:
+            raise zipinspect.MalformedZipError(
+                f"the ZIP points back to {offset}, before the buffered tail "
+                f"at {self._base}"
+            )
+        self._pos = offset
+        return offset
+
+    def read(self, n: int, /) -> bytes:
+        start = self._pos - self._base
+        self._pos += n
+        return bytes(self._buf[start : start + n])
+
+
+#: A local file header with the longest possible name.
+_HEAD_MAX = zipinspect.LOCAL_FILE_HEADER_FIXED_SIZE + 0xFFFF
+
+
+class SparseSink:
+    """Keep only the planned extents and the tail of a TDF as it streams past.
+
+    ``write`` the TDF in order, in chunks of any size, then ``close`` to get
+    the :class:`ExtentStore`, or ``abort`` to discard it. The tail is
+    everything from :func:`data_end` on: java's empty last segment if any,
+    the manifest entry, central directory and end records. Its length is not
+    known until the stream ends, so the last ``tail_ceiling`` bytes are held
+    in memory. A tail longer than that raises :class:`ManifestTooLarge`
+    rather than silently keeping part of it; at 50 TiB with 2 MiB segments
+    the manifest alone is about 2.6 GB, so size the ceiling to the run.
+
+    ``payload_start``, ``plaintext_length`` and ``segment_size`` are the
+    layout ``plan`` was made for. ``payload_start`` is checked against the
+    first local header as soon as it streams past, and the rest at close.
+    After ``close``, ``tail_start`` is where ``0.payload`` ends.
+    """
+
+    tail_start: int | None = None
+
+    def __init__(
+        self,
+        directory: Path,
+        plan: Sequence[tuple[int, int]],
+        *,
+        tail_ceiling: int,
+        payload_start: int,
+        plaintext_length: int,
+        segment_size: int,
+    ):
+        self._plan = merge(plan)
+        if not self._plan or self._plan[0][0] > 0 or self._plan[0][1] < payload_start:
+            raise ValueError(f"the plan does not keep the head, [0, {payload_start})")
+        self.payload_start = payload_start
+        self._data_end = data_end(
+            payload_start=payload_start,
+            plaintext_length=plaintext_length,
+            segment_size=segment_size,
+        )
+        # read_central_directory reads this much from the end, whatever the ceiling.
+        self._ceiling = max(tail_ceiling, zipinspect.MAX_EOCD_SEARCH)
+        self._next = 0  # first plan extent not yet fully written
+        self._pos = 0
+        self._head: bytearray | None = bytearray()  # until it has been checked
+        self._tail = bytearray()
+        self._store = ExtentStore(directory, 2**63)  # length unknown until close
+        self._done = False
+
+    def write(self, data: bytes) -> None:
+        if self._done:
+            raise ValueError("write to a closed SparseSink")
+        if self._head is not None:
+            self._head += data[: _HEAD_MAX - len(self._head)]
+            if len(self._head) == _HEAD_MAX:
+                self._check_head()
+        view = memoryview(data)
+        start, end = self._pos, self._pos + len(data)
+        i = self._next
+        while i < len(self._plan) and self._plan[i][0] < end:
+            lo, hi = max(self._plan[i][0], start), min(self._plan[i][1], end)
+            if lo < hi:
+                self._store.add(lo, view[lo - start : hi - start])
+            if self._plan[i][1] > end:
+                break
+            i += 1
+        self._next = i
+        self._pos = end
+        self._tail += data
+        del self._tail[: -self._ceiling]
+
+    def _check_head(self) -> None:
+        assert self._head is not None
+        head, self._head = self._head, None
+        name, start = zipinspect.read_local_file_header(io.BytesIO(head), 0)
+        # A rezipped TDF can put the manifest first; close() checks those.
+        if name == "0.payload":
+            self._check_payload_start(start)
+
+    def _check_payload_start(self, start: int) -> None:
+        if start != self.payload_start:
+            raise ValueError(
+                f"payload_start is {self.payload_start}, but 0.payload's data "
+                f"starts at {start}"
+            )
+
+    def close(self) -> ExtentStore:
+        if self._done:
+            raise ValueError("SparseSink is already closed")
+        try:
+            store = self._finish()
+        except BaseException:
+            self.abort()
+            raise
+        self._done = True
+        return store
+
+    def abort(self, *, unlink: bool = True) -> None:
+        """Close the store and, unless ``unlink`` is false, delete its file.
+
+        A no-op once closed: a store ``close`` returned is the caller's.
+        """
+        if self._done:
+            return
+        self._done = True
+        self._tail = bytearray()
+        self._store.close()
+        if unlink:
+            self._store.data_path.unlink(missing_ok=True)
+
+    def _finish(self) -> ExtentStore:
+        if self._head is not None:
+            self._check_head()
+        total = self._pos
+        if self._plan[-1][1] > total:
+            raise ValueError(
+                f"stream ended at {total}, before planned extent {self._plan[-1]}"
+            )
+        base = total - len(self._tail)
+        cd = zipinspect.read_central_directory(_TailView(self._tail, base), total)
+        payload = next((e for e in cd.entries if e.name == "0.payload"), None)
+        if payload is None:
+            raise zipinspect.MalformedZipError("no 0.payload entry")
+        self._store.length = total
+        at = payload.local_header_offset
+        assert at < self.payload_start, "the payload's local header is in the head"
+        _, start = zipinspect.read_local_file_header(SourceReader(self._store), at)
+        self._check_payload_start(start)
+        self.tail_start = start + payload.compressed_size
+        if not 0 <= self.tail_start - self._data_end <= PAYLOAD_GCM_OVERHEAD:
+            raise ValueError(
+                f"0.payload ends at {self.tail_start}, but its last data segment "
+                f"at {self._data_end}: plaintext_length or segment_size is wrong"
+            )
+        if self._data_end < base:
+            raise ManifestTooLarge(
+                f"the tail starts at {self._data_end}, but only bytes from {base} "
+                "were buffered; raise tail_ceiling"
+            )
+        self._store.add(self._data_end, memoryview(self._tail)[self._data_end - base :])
+        self._tail = bytearray()
+        return self._store
 
 
 class Request(NamedTuple):
