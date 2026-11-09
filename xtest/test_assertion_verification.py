@@ -853,10 +853,34 @@ def _duplicate_in_key_access(m: dict[str, Any]) -> Any:
     return m
 
 
-#: Raw manifest changes and the reason each must fail with. Duplicates repeat
-#: the same value, so a reader that keeps either one sees an unchanged
-#: manifest; only a strict parser notices.
-PROFILE_CASES: dict[str, tuple[str, ManifestChange]] = {
+def _url_variant_in_key_access(m: dict[str, Any]) -> Any:
+    kao = m["encryptionInformation"]["keyAccess"][0]
+    m["encryptionInformation"]["keyAccess"][0] = Obj.of(kao).after(
+        "url", ("URL", kao["url"])
+    )
+    return m
+
+
+def _renamed(parent: dict[str, Any], name: str, new: str) -> Obj:
+    """``parent`` with member ``name`` spelled ``new``, added if absent."""
+    if name in parent:
+        return Obj.of(parent).rename(name, new)
+    return Obj.of(parent).plus((new, True if name == "isStreamable" else "4.3.0"))
+
+
+def _legacy_isstreamable(m: dict[str, Any]) -> Any:
+    method = m["encryptionInformation"]["method"]
+    m["encryptionInformation"]["method"] = _renamed(
+        method, "isStreamable", "IsStreamable"
+    )
+    return m
+
+
+#: Raw manifest changes and the reason each must fail with, or None for a
+#: change every reader must accept. Duplicates repeat the same value, so a
+#: reader that keeps either one sees an unchanged manifest; only a strict
+#: parser notices.
+PROFILE_CASES: dict[str, tuple[str | None, ManifestChange]] = {
     "duplicate-root-member": (
         "duplicate-member",
         lambda m: Obj.of(m).plus(("payload", m["payload"])),
@@ -876,6 +900,17 @@ PROFILE_CASES: dict[str, tuple[str, ManifestChange]] = {
         "ambiguous-member",
         lambda m: Obj.of(m).after("assertions", ("Assertions", [])),
     ),
+    "Payload-alongside-payload": (
+        "ambiguous-member",
+        lambda m: Obj.of(m).after("payload", ("Payload", m["payload"])),
+    ),
+    "URL-in-key-access": ("ambiguous-member", _url_variant_in_key_access),
+    "SchemaVersion-alone": (
+        "ambiguous-member",
+        lambda m: _renamed(m, "schemaVersion", "SchemaVersion"),
+    ),
+    # java-sdk up to v0.7.5 wrote this spelling, exempt from rule R1 (spec 3.2).
+    "IsStreamable-alone": (None, _legacy_isstreamable),
     "ID-in-assertion": (
         "ambiguous-member",
         in_writer_assertion(lambda a: a.after("id", ("ID", UNKEYED_ID))),
@@ -913,12 +948,13 @@ def test_strict_manifest_parsing(
     in_focus: set[tdfs.SDK],
     unkeyed_ct: Callable[[], Path],
     encrypted_tdf: EncryptFactory,
+    pt_file: Path,
     case: str,
 ):
     """Duplicates, case variants, bad ids, and non-I-JSON fail by reason.
 
-    The control is the unaltered TDF: test_payload_key_accepts_writer_assertions,
-    and test_binding_forms' unaltered case.
+    The controls are the unaltered TDF (test_binding_forms' unaltered case)
+    and the legacy ``IsStreamable`` spelling, which every reader accepts.
     """
     skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
     reason, change = PROFILE_CASES[case]
@@ -929,7 +965,11 @@ def test_strict_manifest_parsing(
         return out
 
     ct = tdfs.update_manifest_text(f"profile-{case}", unkeyed_ct(), mutate)
-    fails_with(decrypt_sdk, ct, encrypted_tdf.rt_file(ct, decrypt_sdk), reason)
+    rt = encrypted_tdf.rt_file(ct, decrypt_sdk)
+    if reason is None:
+        decrypts(decrypt_sdk, ct, rt, pt_file)
+    else:
+        fails_with(decrypt_sdk, ct, rt, reason)
 
 
 #: DSPX-5520 assertion vectors that are injected as an extra assertion into a
