@@ -113,6 +113,17 @@ container_type = Literal["ztdf"]
 
 feature_type = Literal[
     "assertions",
+    # DSPX-1561 Phase 0: a reader verifies each assertion only with the key it
+    # selects from its own configuration -- the per-ID key, else the default
+    # key, else the payload key with HS256 -- and with that key's algorithm. A
+    # `jwk` or `x5c` in the binding JWS may only match the selected key, and
+    # the default key is honoured through each CLI's verification-keys file.
+    # Force-only until a release ships: every shim answers no, because the fix
+    # adds no flag, subcommand or version field to probe. Set
+    # XT_FORCE_SUPPORTS=assertion_header_key_pinning to run the cases against a
+    # branch build; against a released build that turns the skip into a red
+    # baseline.
+    "assertion_header_key_pinning",
     "assertion_verification",
     "attribute_traversal",
     "audit_logging",
@@ -582,31 +593,18 @@ def manifest_json(tdf_file: Path) -> dict[str, Any]:
             return json.load(manifestEntry)
 
 
-# Create a modified variant of a TDF by manipulating its manifest
-def update_manifest(
-    scenario_name: str, tdf_file: Path, manifest_change: Callable[[Manifest], Manifest]
+def _rewrite_manifest(
+    scenario_name: str, tdf_file: Path, transform: Callable[[bytes], bytes]
 ) -> Path:
-    # get the parent directory of the tdf file
+    """Write ``<stem>-<scenario_name>.tdf`` beside ``tdf_file``, its manifest
+    replaced by ``transform`` of the original manifest bytes."""
     tmp_dir = tdf_file.parent
     fname = tdf_file.stem
     unzipped_dir = tmp_dir / f"{fname}-{scenario_name}-unzipped"
     with zipfile.ZipFile(tdf_file, "r") as zipped:
         zipped.extractall(unzipped_dir)
-    with (unzipped_dir / "0.manifest.json").open("r") as manifest_file:
-        manifest_data = Manifest.model_validate_json(manifest_file.read())
-    new_manifest_data = manifest_change(manifest_data)
-    with (unzipped_dir / "0.manifest.json").open("w") as manifest_file:
-        # exclude_unset so the rewrite carries only what the original manifest
-        # said plus whatever manifest_change touched. Without it every optional
-        # field is re-emitted as an explicit null, and a reader that distinguishes
-        # absent from null changes its mind: web-sdk omits per-segment
-        # encryptedSegmentSize and falls back to encryptedSegmentSizeDefault, but
-        # "encryptedSegmentSize": null makes it fail with "Failed to fetch entire
-        # segment". A tamper test whose subject is mangled before the reader sees
-        # it fails for the wrong reason, and reports it as tamper detected.
-        manifest_file.write(
-            new_manifest_data.model_dump_json(by_alias=True, exclude_unset=True)
-        )
+    manifest_path = unzipped_dir / "0.manifest.json"
+    manifest_path.write_bytes(transform(manifest_path.read_bytes()))
     outfile = tmp_dir / f"{fname}-{scenario_name}.tdf"
     with zipfile.ZipFile(outfile, "w") as zipped:
         for folder_name, _, filenames in os.walk(unzipped_dir):
@@ -617,6 +615,45 @@ def update_manifest(
     # Cleanup the unzipped directory; its contents are now stored as outfile
     shutil.rmtree(unzipped_dir, ignore_errors=True)
     return outfile
+
+
+# Create a modified variant of a TDF by manipulating its manifest
+def update_manifest(
+    scenario_name: str, tdf_file: Path, manifest_change: Callable[[Manifest], Manifest]
+) -> Path:
+    def transform(raw: bytes) -> bytes:
+        new_manifest_data = manifest_change(Manifest.model_validate_json(raw))
+        # exclude_unset so the rewrite carries only what the original manifest
+        # said plus whatever manifest_change touched. Without it every optional
+        # field is re-emitted as an explicit null, and a reader that distinguishes
+        # absent from null changes its mind: web-sdk omits per-segment
+        # encryptedSegmentSize and falls back to encryptedSegmentSizeDefault, but
+        # "encryptedSegmentSize": null makes it fail with "Failed to fetch entire
+        # segment". A tamper test whose subject is mangled before the reader sees
+        # it fails for the wrong reason, and reports it as tamper detected.
+        return new_manifest_data.model_dump_json(
+            by_alias=True, exclude_unset=True
+        ).encode("utf-8")
+
+    return _rewrite_manifest(scenario_name, tdf_file, transform)
+
+
+def update_manifest_text(
+    scenario_name: str, tdf_file: Path, manifest_change: Callable[[str], str | bytes]
+) -> Path:
+    """Like :func:`update_manifest`, on the manifest's raw JSON text.
+
+    For changes the :class:`Manifest` model cannot carry or would normalize
+    away: members it does not model, duplicate or escaped member names, case
+    variants, lone surrogates, out-of-range numbers. ``manifest_change`` may
+    return bytes, to write a manifest that is not valid UTF-8.
+    """
+
+    def transform(raw: bytes) -> bytes:
+        changed = manifest_change(raw.decode("utf-8"))
+        return changed if isinstance(changed, bytes) else changed.encode("utf-8")
+
+    return _rewrite_manifest(scenario_name, tdf_file, transform)
 
 
 # Create a modified variant of a TDF by manipulating its payload
