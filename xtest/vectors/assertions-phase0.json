@@ -1,6 +1,91 @@
 {
   "format": "opentdf-assertion-vectors/1",
   "source": "opentdf/tests xtest/vectors/assertions-phase0.json (DSPX-5520)",
+  "description": "Shared conformance vectors for Phase 0 of the ZTDF assertions contract (DSPX-5519). modelledNames maps each level of the manifest that the case-variant rules check (spec 3.2, Table 3.2) to the member names listed for it. A level path is the member names from the manifest root joined by dots: the empty path is the root, and a name followed by [] means each element of that member's array. A level applies only where its value is a JSON object. caseVariantExceptions maps a level path to names that do not violate rule R1 there; rule R2 still applies to them. Manifest vectors apply the rules to the whole manifest; assertion objects in the other kinds are checked from the assertions[] level down. Each keys entry has an alg and one material member, publicKeyPem (a PEM public key) or secretBase64 (raw secret bytes). The material reflects the key's form, not its alg, and some entries are deliberately unusable: a verify harness passes the selected entry unchanged to the SDK's configured-key preparation, which must refuse those with configuration-error.",
+  "modelledNames": {
+    "": [
+      "assertions",
+      "encryptionInformation",
+      "payload",
+      "schemaVersion",
+      "tdf_spec_version"
+    ],
+    "payload": [
+      "type",
+      "url",
+      "protocol",
+      "mimeType",
+      "isEncrypted",
+      "tdf_spec_version"
+    ],
+    "encryptionInformation": [
+      "type",
+      "policy",
+      "keyAccess",
+      "method",
+      "integrityInformation"
+    ],
+    "encryptionInformation.keyAccess[]": [
+      "type",
+      "url",
+      "protocol",
+      "wrappedKey",
+      "policyBinding",
+      "encryptedMetadata",
+      "kid",
+      "sid",
+      "schemaVersion",
+      "ephemeralPublicKey"
+    ],
+    "encryptionInformation.keyAccess[].policyBinding": [
+      "alg",
+      "hash"
+    ],
+    "encryptionInformation.method": [
+      "algorithm",
+      "iv",
+      "isStreamable"
+    ],
+    "encryptionInformation.integrityInformation": [
+      "rootSignature",
+      "segmentHashAlg",
+      "segmentSizeDefault",
+      "encryptedSegmentSizeDefault",
+      "segments"
+    ],
+    "encryptionInformation.integrityInformation.rootSignature": [
+      "alg",
+      "sig"
+    ],
+    "encryptionInformation.integrityInformation.segments[]": [
+      "hash",
+      "segmentSize",
+      "encryptedSegmentSize"
+    ],
+    "assertions[]": [
+      "id",
+      "type",
+      "scope",
+      "appliesToState",
+      "statement",
+      "binding"
+    ],
+    "assertions[].statement": [
+      "format",
+      "schema",
+      "value"
+    ],
+    "assertions[].binding": [
+      "method",
+      "signature",
+      "bdo"
+    ]
+  },
+  "caseVariantExceptions": {
+    "encryptionInformation.method": [
+      "IsStreamable"
+    ]
+  },
   "keys": {
     "rsa-signer": {
       "alg": "RS256",
@@ -17,6 +102,18 @@
     "hs256-payload-key": {
       "alg": "HS256",
       "secretBase64": "+6JqBJ+febI0bll1y9XfkMkGrMeXh17LjwzRcasilWU="
+    },
+    "hs256-pem-secret": {
+      "alg": "HS256",
+      "secretBase64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFrK2p5VlVQMWZNMk94K1BldDN0SQpMRThJSEJ3K05uVCtPSFgvWlpjSE55WU5Xc3RucUFOMlYxb1JodWVTaXhuWktXdVBBanRXQXp1cURBd0JSRHFtCmpxU2N3R0l5VzZmcnlXM3FuTmZYU0dRaFRidjF2enpSRWVpd1dBRnF1RXNFWnJjZUtBUUdoa0NpczhhVmU5Q0IKWXdBamlIZFdTaVFGVk9XUnFiTnFHTW5ZNUk5ZW5idTl1aFdUSW5sS3EySWZNMm9oTEZ5YlprZ1FPdDBSZEVpLwpSNFF0Zkg1YmtDODV1b0xBZmQ5N2FiTGwvWk5kbmxuTGNFaVZhcVNRV0pxL2ZkeWZ6TE5PcVhkU1Zwa0Q1OGJQCk5Fc2xpY2psUjdaNkgvWU5kbmpscXU1REhrb2h2ZXpPOE0xdUJaSkwxdUZ4UndBTW9VbjEvdHQ4ZHFVTEYwaTUKN1FJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg=="
+    },
+    "rs256-lowercase-alg": {
+      "alg": "rs256",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAk+jyVUP1fM2Ox+Pet3tI\nLE8IHBw+NnT+OHX/ZZcHNyYNWstnqAN2V1oRhueSixnZKWuPAjtWAzuqDAwBRDqm\njqScwGIyW6fryW3qnNfXSGQhTbv1vzzREeiwWAFquEsEZrceKAQGhkCis8aVe9CB\nYwAjiHdWSiQFVOWRqbNqGMnY5I9enbu9uhWTInlKq2IfM2ohLFybZkgQOt0RdEi/\nR4QtfH5bkC85uoLAfd97abLl/ZNdnlnLcEiVaqSQWJq/fdyfzLNOqXdSVpkD58bP\nNEslicjlR7Z6H/YNdnjlqu5DHkohvezO8M1uBZJL1uFxRwAMoUn1/tt8dqULF0i5\n7QIDAQAB\n-----END PUBLIC KEY-----\n"
+    },
+    "unknown-alg": {
+      "alg": "XS256",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAk+jyVUP1fM2Ox+Pet3tI\nLE8IHBw+NnT+OHX/ZZcHNyYNWstnqAN2V1oRhueSixnZKWuPAjtWAzuqDAwBRDqm\njqScwGIyW6fryW3qnNfXSGQhTbv1vzzREeiwWAFquEsEZrceKAQGhkCis8aVe9CB\nYwAjiHdWSiQFVOWRqbNqGMnY5I9enbu9uhWTInlKq2IfM2ohLFybZkgQOt0RdEi/\nR4QtfH5bkC85uoLAfd97abLl/ZNdnlnLcEiVaqSQWJq/fdyfzLNOqXdSVpkD58bP\nNEslicjlR7Z6H/YNdnjlqu5DHkohvezO8M1uBZJL1uFxRwAMoUn1/tt8dqULF0i5\n7QIDAQAB\n-----END PUBLIC KEY-----\n"
     }
   },
   "vectors": [
@@ -341,13 +438,13 @@
       }
     },
     {
-      "name": "assertion-unmodelled-name-case-pair-allowed",
+      "name": "assertion-unlisted-case-pair",
       "kind": "assertion",
       "status": "required",
-      "note": "extensions and Extensions are both unmodelled, so both are hashed",
-      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"extensions\":{\"a\":1},\"Extensions\":{\"a\":2},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiZGM5Mjc3MGQ0NmYzMzI3MjRjYWVhZTExZjJhYzI2Nzc4OGI3YmVkOTRkNWQ2ZWJhNGMwNzMzMmUwMjQ5Mzc1NCIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCRExja25jTlJ2TXlja3l1cmhIeXJDWjNpTGUrMlUxZGJycE1Cek11QWtrM1ZBPT0ifQ.TD7hcfcAXtIfMAjEk1BNhsj3HRvfR2ksQ3DUYxPWz6kwW7FMWIzvut6W9lca9kpW-_JLg64fbVrYZpFQPPKeUw1-vK0dzUY_XLV28VsY-1ej45a4SaxcH51X8bZ5j8hdmZzPXXcSeIpR6BetLyd_TTdAU0DzOpBzAVvx_MK4RqDox1GzQwPTuJGbIC0Dno4LbmSxv-KXjNpKml8Ro52NzsMjNmkvfJ7bZH9XT-K7-2ORikaduMi0zrMUpn5qdhKqE0Ow3FQ8QGX2AttBp5gbmxMgYr5ww74IC-ZrV06dmdM0kJM8OcwkViPj_c4jA-Hw0dZFNv6bqAxS_VQs--uy8g\"}}",
+      "note": "extensions and Extensions are case variants of each other (rule R2)",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"extensions\":{\"a\":1},\"Extensions\":{\"a\":2}}",
       "expect": {
-        "assertionHash": "dc92770d46f332724caeae11f2ac267788b7bed94d5d6eba4c07332e02493754"
+        "reason": "ambiguous-member"
       }
     },
     {
@@ -1181,23 +1278,23 @@
       }
     },
     {
-      "name": "manifest-case-pair-at-unchecked-level",
+      "name": "manifest-Payload-alongside-payload",
       "kind": "manifest",
       "status": "required",
-      "note": "payload and Payload at the root: only assertions is modelled there",
+      "note": "payload and Payload at the root",
       "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}},{\"id\":\"3f1c2d9e-8a4b-4c6d-9e0f-1a2b3c4d5e6f\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"encrypted\",\"statement\":{\"format\":\"json-structured\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":{\"@context\":{\"@base\":\"urn:nato:stanag:5636:A:1:elements:json\"},\"ocl\":{\"pol\":\"62c76c68-d73d-4628-8ccc-4c1e18118c22\",\"cls\":\"CONFIDENTIAL\",\"catl\":[{\"type\":\"P\",\"name\":\"Releasable To\",\"vals\":[\"USA\"]}],\"dcr\":\"2026-11-06T12:00:00Z\"}}},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDY4NTNjYjUyOTEyZmQ3NmYzZmY5MGRmMzkzNjE1OGVlMjIwYjhlNTk3M2M1ZDAyYmI2ZTUwZjQ2ODU5NmZiYSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpHaFR5MUtSTDlkdlAva044NU5oV080aUM0NVpjOFhRSzdibEQwYUZsdnVnPT0ifQ.c-iW_TdRcnjNJY2gVHAW4HPKni1LDbaJ6lVtzJhipXwf_53QS_Rnutr6Hgdubxg8tQzDdWTNMIieBM_fi5DL_pkpiA6mOa5O_J0KPKIJ3HLF5z1yPAe3W4BHaSCrQlKlokypN07U_CxtNr5BJ2GboN2OdvxFkelvPBJQAEI2M1NdxEn65diD0KcI5522Xyq9_x9oKPbcTNIlbk6pBzZQDYovZ96yEc1Jcq9M6LPrGw3ghhHVL7y3aleWgZO2xOnnoE_-mKV_72FOkKzByTIgUxjEqqEfExnaUTjvqxe1GyrAnrKrpIeBsdfHnhe6jDpzdApL5jhsvvfZaVAPZWBpyQ\"}}],\"Payload\":{\"type\":\"reference\"}}",
       "expect": {
-        "ok": true
+        "reason": "ambiguous-member"
       }
     },
     {
-      "name": "manifest-case-pair-in-key-access",
+      "name": "manifest-URL-alongside-url-in-key-access",
       "kind": "manifest",
       "status": "required",
-      "note": "url and URL in a key access object, a level that is not checked",
+      "note": "url and URL in a key access object",
       "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"URL\":\"https://other.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}},{\"id\":\"3f1c2d9e-8a4b-4c6d-9e0f-1a2b3c4d5e6f\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"encrypted\",\"statement\":{\"format\":\"json-structured\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":{\"@context\":{\"@base\":\"urn:nato:stanag:5636:A:1:elements:json\"},\"ocl\":{\"pol\":\"62c76c68-d73d-4628-8ccc-4c1e18118c22\",\"cls\":\"CONFIDENTIAL\",\"catl\":[{\"type\":\"P\",\"name\":\"Releasable To\",\"vals\":[\"USA\"]}],\"dcr\":\"2026-11-06T12:00:00Z\"}}},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDY4NTNjYjUyOTEyZmQ3NmYzZmY5MGRmMzkzNjE1OGVlMjIwYjhlNTk3M2M1ZDAyYmI2ZTUwZjQ2ODU5NmZiYSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpHaFR5MUtSTDlkdlAva044NU5oV080aUM0NVpjOFhRSzdibEQwYUZsdnVnPT0ifQ.c-iW_TdRcnjNJY2gVHAW4HPKni1LDbaJ6lVtzJhipXwf_53QS_Rnutr6Hgdubxg8tQzDdWTNMIieBM_fi5DL_pkpiA6mOa5O_J0KPKIJ3HLF5z1yPAe3W4BHaSCrQlKlokypN07U_CxtNr5BJ2GboN2OdvxFkelvPBJQAEI2M1NdxEn65diD0KcI5522Xyq9_x9oKPbcTNIlbk6pBzZQDYovZ96yEc1Jcq9M6LPrGw3ghhHVL7y3aleWgZO2xOnnoE_-mKV_72FOkKzByTIgUxjEqqEfExnaUTjvqxe1GyrAnrKrpIeBsdfHnhe6jDpzdApL5jhsvvfZaVAPZWBpyQ\"}}]}",
       "expect": {
-        "ok": true
+        "reason": "ambiguous-member"
       }
     },
     {
@@ -1376,6 +1473,276 @@
       "status": "required",
       "note": "The byte 0xFF in an assertion's statement.value",
       "inputBase64": "eyJlbmNyeXB0aW9uSW5mb3JtYXRpb24iOnsidHlwZSI6InNwbGl0IiwicG9saWN5IjoiZXlKMWRXbGtJam9pTURBd01EQXdNREF0TURBd01DMDBNREF3TFRnd01EQXRNREF3TURBd01EQXdNREF3SWl3aVltOWtlU0k2ZXlKa1lYUmhRWFIwY21saWRYUmxjeUk2VzEwc0ltUnBjM05sYlNJNlcxMTlmUT09Iiwia2V5QWNjZXNzIjpbeyJ0eXBlIjoid3JhcHBlZCIsInVybCI6Imh0dHBzOi8va2FzLmV4YW1wbGUuY29tIiwicHJvdG9jb2wiOiJrYXMiLCJ3cmFwcGVkS2V5IjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPT0iLCJwb2xpY3lCaW5kaW5nIjp7ImFsZyI6IkhTMjU2IiwiaGFzaCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0sImtpZCI6InIxIn1dLCJtZXRob2QiOnsiYWxnb3JpdGhtIjoiQUVTLTI1Ni1HQ00iLCJpdiI6IiIsImlzU3RyZWFtYWJsZSI6dHJ1ZX0sImludGVncml0eUluZm9ybWF0aW9uIjp7InJvb3RTaWduYXR1cmUiOnsiYWxnIjoiSFMyNTYiLCJzaWciOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPSJ9LCJzZWdtZW50SGFzaEFsZyI6IkdNQUMiLCJzZWdtZW50U2l6ZURlZmF1bHQiOjIwOTcxNTIsImVuY3J5cHRlZFNlZ21lbnRTaXplRGVmYXVsdCI6MjA5NzE4MCwic2VnbWVudHMiOlt7Imhhc2giOiJ3TnI4SDJmdVZhVWNTU0FoVzVMTklBPT0iLCJzZWdtZW50U2l6ZSI6MTQsImVuY3J5cHRlZFNlZ21lbnRTaXplIjo0Mn1dfX0sInBheWxvYWQiOnsidHlwZSI6InJlZmVyZW5jZSIsInVybCI6IjAucGF5bG9hZCIsInByb3RvY29sIjoiemlwIiwibWltZVR5cGUiOiJhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0iLCJpc0VuY3J5cHRlZCI6dHJ1ZX0sInNjaGVtYVZlcnNpb24iOiI0LjMuMCIsImFzc2VydGlvbnMiOlt7ImlkIjoiY2xhc3NpZmljYXRpb24iLCJ0eXBlIjoiaGFuZGxpbmciLCJzY29wZSI6InBheWxvYWQiLCJhcHBsaWVzVG9TdGF0ZSI6InVuZW5jcnlwdGVkIiwic3RhdGVtZW50Ijp7ImZvcm1hdCI6Impzb24rc3RhbmFnNTYzNiIsInNjaGVtYSI6InVybjpuYXRvOnN0YW5hZzo1NjM2OkE6MTplbGVtZW50czpqc29uIiwidmFsdWUiOiJ7XCJvY2xcIjp7XCJwb2xcIjpcIjYyYzc2YzY4LWQ3M2QtNDYyOC04Y2NjLTRjMWUxODExOGMyMlwiLFwiY2xzXCI6XCJTRUNSRVRcIixcImRjclwiOlwiMjAyNC0xMC0yMVQyMDo0NzozNlpcIn19In0sImJpbmRpbmciOnsibWV0aG9kIjoiandzIiwic2lnbmF0dXJlIjoiZXlKaGJHY2lPaUpTVXpJMU5pSjkuZXlKaGMzTmxjblJwYjI1SVlYTm9Jam9pTkRVMlpEQTFaRFpoTTJZME9HRXhOR0ZsWldVeU1HTTRaRFZtTURReU9XUXdOMlUxWW1VelpqRTJPVFZtWTJWak1tUmlZemMxTldOa09XUTJORFE1TlNJc0ltRnpjMlZ5ZEdsdmJsTnBaeUk2SW5kT2NqaElNbVoxVm1GVlkxTlRRV2hYTlV4T1NVUkhPV1pFVm5ZNE9YbHdZVk5GVEhSdGMxVkNSRXBHWWxGWVYyOHZVMHRHU3pkMVNVMXFWamhGUzJSQ0sxY3JVSGhoVmk5UGQzUjJTRlpqTW1SYVJXeFJQVDBpZlEuWklHdDNva19lRmdjVnNwblVQWktLLWxfeVFHMTYxU3FjLUw5Yl91MXg2X2ljU01xeWxGbVMxZXRYWk9Kai1IVnVsRGFzcU1Da2dLMVFMOVI4VlVZQktjSWdFQlRaR0VBMFA3eHNXcGRON1ZNc0VVcjdaaVRCdThISkRpbGZtdmRzNXlUQ0pmLWZ0Z2FrbFBKNmJtVWRDN2ptZDRwaEJGWkNmdEY4QnpaSVdEaVp6eXQ3dk5SWnNrcnEtazJkdVhOTDlNR2ZseEJVbC0xWmk3U2VISlNUNmtNS0V1bXh1R015ZkRzeUJSdkthZlVyWWsxTEZ0QklmcEN1LXJiM2ZLbTNPa1kzSXBVVFZwd3hWNHkwWGlIZ0xtZ1BYZ3VQaV9uRGdVdzhwY2M4STVBVTVpRm5JcXItVzNjeWY5OE01NGZqTXZqSUhJWjB6dzNGS1VhOW1zdThRIn19LHsiaWQiOiJjbGFzc2lmaWNhdGlvbiIsInR5cGUiOiJoYW5kbGluZyIsInNjb3BlIjoicGF5bG9hZCIsImFwcGxpZXNUb1N0YXRlIjoidW5lbmNyeXB0ZWQiLCJzdGF0ZW1lbnQiOnsiZm9ybWF0IjoianNvbitzdGFuYWc1NjM2Iiwic2NoZW1hIjoidXJuOm5hdG86c3RhbmFnOjU2MzY6QToxOmVsZW1lbnRzOmpzb24iLCJ2YWx1ZSI6Iv8ifX1dfQ==",
+      "expect": {
+        "reason": "invalid-json"
+      }
+    },
+    {
+      "name": "manifest-root-Payload-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Payload without payload",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"Payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-root-EncryptionInformation-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "EncryptionInformation without encryptionInformation",
+      "input": "{\"EncryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-root-SchemaVersion-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "SchemaVersion without schemaVersion",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"SchemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-root-uppercase-tdf-spec-version-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "TDF_SPEC_VERSION, a variant of tdf_spec_version",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"TDF_SPEC_VERSION\":\"4.2.2\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-payload-IsEncrypted-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "IsEncrypted without isEncrypted in payload",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"IsEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-payload-mixed-case-tdf-spec-version-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Tdf_Spec_Version, a variant of tdf_spec_version, in payload",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true,\"Tdf_Spec_Version\":\"4.3.0\"},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-encryption-information-Policy-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Policy without policy in encryptionInformation",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"Policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-encryption-information-KeyAccess-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "KeyAccess without keyAccess in encryptionInformation",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"KeyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-key-access-URL-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "URL without url in a key access object",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"URL\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-key-access-SID-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "SID, a variant of sid, in a key access object",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\",\"SID\":\"s1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-key-access-kelvin-Kid-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Kid spelled with U+212A KELVIN SIGN, which folds to k",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"\u212aid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-policy-binding-Hash-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Hash without hash in a policy binding",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"Hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-method-ALGORITHM-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "ALGORITHM without algorithm in method",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"ALGORITHM\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-integrity-Segments-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Segments without segments in integrityInformation",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"Segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-integrity-long-s-segmentHashAlg-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "segmentHashAlg spelled with U+017F, which folds to s",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"\u017fegmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-root-signature-Sig-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Sig without sig in rootSignature",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"Sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-second-segment-Hash-alias-only",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Hash without hash in the second element of segments",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42},{\"Hash\":\"Mb18NW/z3KlpIQu2axQEMg==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-root-unlisted-case-pair",
+      "kind": "manifest",
+      "status": "required",
+      "note": "foo and Foo at the root: unlisted names that are case variants (R2)",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"foo\":1,\"Foo\":2,\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-method-IsStreamable-alone",
+      "kind": "manifest",
+      "status": "required",
+      "note": "IsStreamable, which java-sdk up to v0.7.5 wrote, is exempt from R1 (R4)",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"IsStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-method-isStreamable-and-IsStreamable",
+      "kind": "manifest",
+      "status": "required",
+      "note": "isStreamable and IsStreamable together: R2 still applies",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true,\"IsStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "reason": "ambiguous-member"
+      }
+    },
+    {
+      "name": "manifest-unlisted-keyAccesses-ok",
+      "kind": "manifest",
+      "status": "required",
+      "note": "keyAccesses is unlisted and not a case variant of keyAccess",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccesses\":[],\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-unlisted-segmentHash-ok",
+      "kind": "manifest",
+      "status": "required",
+      "note": "segmentHash is unlisted and not a case variant of segmentHashAlg",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHash\":\"x\",\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-payload-schemaVersion-ok",
+      "kind": "manifest",
+      "status": "required",
+      "note": "schemaVersion is listed at the root, not in payload, so it is unlisted there",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true,\"schemaVersion\":\"4.3.0\"},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-string-policyBinding-ok",
+      "kind": "manifest",
+      "status": "required",
+      "note": "A string policyBinding, as older writers emitted, is not a checked level",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-case-pair-inside-unlisted-member-ok",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Foo and foo inside an unlisted member's object value are not checked (R3)",
+      "input": "{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"meta\":{\"Foo\":1,\"foo\":2},\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "manifest-invalid-utf8-outside-assertions",
+      "kind": "manifest",
+      "status": "required",
+      "note": "The byte 0xFF in payload.mimeType, outside any assertion",
+      "inputBase64": "eyJlbmNyeXB0aW9uSW5mb3JtYXRpb24iOnsidHlwZSI6InNwbGl0IiwicG9saWN5IjoiZXlKMWRXbGtJam9pTURBd01EQXdNREF0TURBd01DMDBNREF3TFRnd01EQXRNREF3TURBd01EQXdNREF3SWl3aVltOWtlU0k2ZXlKa1lYUmhRWFIwY21saWRYUmxjeUk2VzEwc0ltUnBjM05sYlNJNlcxMTlmUT09Iiwia2V5QWNjZXNzIjpbeyJ0eXBlIjoid3JhcHBlZCIsInVybCI6Imh0dHBzOi8va2FzLmV4YW1wbGUuY29tIiwicHJvdG9jb2wiOiJrYXMiLCJ3cmFwcGVkS2V5IjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPT0iLCJwb2xpY3lCaW5kaW5nIjp7ImFsZyI6IkhTMjU2IiwiaGFzaCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0sImtpZCI6InIxIn1dLCJtZXRob2QiOnsiYWxnb3JpdGhtIjoiQUVTLTI1Ni1HQ00iLCJpdiI6IiIsImlzU3RyZWFtYWJsZSI6dHJ1ZX0sImludGVncml0eUluZm9ybWF0aW9uIjp7InJvb3RTaWduYXR1cmUiOnsiYWxnIjoiSFMyNTYiLCJzaWciOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPSJ9LCJzZWdtZW50SGFzaEFsZyI6IkdNQUMiLCJzZWdtZW50U2l6ZURlZmF1bHQiOjIwOTcxNTIsImVuY3J5cHRlZFNlZ21lbnRTaXplRGVmYXVsdCI6MjA5NzE4MCwic2VnbWVudHMiOlt7Imhhc2giOiJ3TnI4SDJmdVZhVWNTU0FoVzVMTklBPT0iLCJzZWdtZW50U2l6ZSI6MTQsImVuY3J5cHRlZFNlZ21lbnRTaXplIjo0Mn1dfX0sInBheWxvYWQiOnsidHlwZSI6InJlZmVyZW5jZSIsInVybCI6IjAucGF5bG9hZCIsInByb3RvY29sIjoiemlwIiwibWltZVR5cGUiOiJ0ZXh0L/9wbGFpbiIsImlzRW5jcnlwdGVkIjp0cnVlfSwic2NoZW1hVmVyc2lvbiI6IjQuMy4wIiwiYXNzZXJ0aW9ucyI6W3siaWQiOiJjbGFzc2lmaWNhdGlvbiIsInR5cGUiOiJoYW5kbGluZyIsInNjb3BlIjoicGF5bG9hZCIsImFwcGxpZXNUb1N0YXRlIjoidW5lbmNyeXB0ZWQiLCJzdGF0ZW1lbnQiOnsiZm9ybWF0IjoianNvbitzdGFuYWc1NjM2Iiwic2NoZW1hIjoidXJuOm5hdG86c3RhbmFnOjU2MzY6QToxOmVsZW1lbnRzOmpzb24iLCJ2YWx1ZSI6IntcIm9jbFwiOntcInBvbFwiOlwiNjJjNzZjNjgtZDczZC00NjI4LThjY2MtNGMxZTE4MTE4YzIyXCIsXCJjbHNcIjpcIlNFQ1JFVFwiLFwiZGNyXCI6XCIyMDI0LTEwLTIxVDIwOjQ3OjM2WlwifX0ifSwiYmluZGluZyI6eyJtZXRob2QiOiJqd3MiLCJzaWduYXR1cmUiOiJleUpoYkdjaU9pSlNVekkxTmlKOS5leUpoYzNObGNuUnBiMjVJWVhOb0lqb2lORFUyWkRBMVpEWmhNMlkwT0dFeE5HRmxaV1V5TUdNNFpEVm1NRFF5T1dRd04yVTFZbVV6WmpFMk9UVm1ZMlZqTW1SaVl6YzFOV05rT1dRMk5EUTVOU0lzSW1GemMyVnlkR2x2YmxOcFp5STZJbmRPY2poSU1tWjFWbUZWWTFOVFFXaFhOVXhPU1VSSE9XWkVWblk0T1hsd1lWTkZUSFJ0YzFWQ1JFcEdZbEZZVjI4dlUwdEdTemQxU1UxcVZqaEZTMlJDSzFjclVIaGhWaTlQZDNSMlNGWmpNbVJhUld4UlBUMGlmUS5aSUd0M29rX2VGZ2NWc3BuVVBaS0stbF95UUcxNjFTcWMtTDliX3UxeDZfaWNTTXF5bEZtUzFldFhaT0pqLUhWdWxEYXNxTUNrZ0sxUUw5UjhWVVlCS2NJZ0VCVFpHRUEwUDd4c1dwZE43Vk1zRVVyN1ppVEJ1OEhKRGlsZm12ZHM1eVRDSmYtZnRnYWtsUEo2Ym1VZEM3am1kNHBoQkZaQ2Z0RjhCelpJV0RpWnp5dDd2TlJac2tycS1rMmR1WE5MOU1HZmx4QlVsLTFaaTdTZUhKU1Q2a01LRXVteHVHTXlmRHN5QlJ2S2FmVXJZazFMRnRCSWZwQ3UtcmIzZkttM09rWTNJcFVUVnB3eFY0eTBYaUhnTG1nUFhndVBpX25EZ1V3OHBjYzhJNUFVNWlGbklxci1XM2N5Zjk4TTU0ZmpNdmpJSElaMHp3M0ZLVWE5bXN1OFEifX1dfQ==",
+      "expect": {
+        "reason": "invalid-json"
+      }
+    },
+    {
+      "name": "manifest-leading-byte-order-mark",
+      "kind": "manifest",
+      "status": "required",
+      "note": "Manifest text starting with U+FEFF",
+      "input": "\ufeff{\"encryptionInformation\":{\"type\":\"split\",\"policy\":\"eyJ1dWlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYm9keSI6eyJkYXRhQXR0cmlidXRlcyI6W10sImRpc3NlbSI6W119fQ==\",\"keyAccess\":[{\"type\":\"wrapped\",\"url\":\"https://kas.example.com\",\"protocol\":\"kas\",\"wrappedKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\",\"policyBinding\":{\"alg\":\"HS256\",\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"kid\":\"r1\"}],\"method\":{\"algorithm\":\"AES-256-GCM\",\"iv\":\"\",\"isStreamable\":true},\"integrityInformation\":{\"rootSignature\":{\"alg\":\"HS256\",\"sig\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"},\"segmentHashAlg\":\"GMAC\",\"segmentSizeDefault\":2097152,\"encryptedSegmentSizeDefault\":2097180,\"segments\":[{\"hash\":\"wNr8H2fuVaUcSSAhW5LNIA==\",\"segmentSize\":14,\"encryptedSegmentSize\":42}]}},\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\",\"protocol\":\"zip\",\"mimeType\":\"application/octet-stream\",\"isEncrypted\":true},\"schemaVersion\":\"4.3.0\",\"assertions\":[{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}]}",
       "expect": {
         "reason": "invalid-json"
       }
@@ -2722,6 +3089,328 @@
       "legacy": false,
       "expect": {
         "reason": "binding-mismatch"
+      }
+    },
+    {
+      "name": "verify-jws-header-nonzero-trailing-bits",
+      "kind": "verify",
+      "status": "required",
+      "note": "Header base64url with non-zero unused trailing bits",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9IB.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.FJy50H31jfIu5HWdNSMPAmBnYabJWxV7DiVfpYcEAyCMOdhhXgCYZRx03arwpnYqCAu41WrLIYvgK96DSvCQvQW1k2FJY7G6S2paFmZjKvNGt0-K24_jegqU4kkzifRl5nRv10OjoTuomZnKXnwlliYRNLenqYYzzPMdmdLPD4zQNG3AqipLYmB23x74vxJLzfOjAq3KIRakpKA8uMT2y5qreFTO_PlnVHoOUmXzg8sLkAy0WCcgYLMpVKptKJccJ0vc-m6c5HYMYPYNFOhBJNJ0DqcQuSleO_Xf0tDXUgKxeZmkCz7Bmq47k4f63un40ECLOpJf0pBpmzH4X0WyJg\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-binding"
+      }
+    },
+    {
+      "name": "verify-jws-claims-nonzero-trailing-bits",
+      "kind": "verify",
+      "status": "required",
+      "note": "Claims base64url with non-zero unused trailing bits",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifR.eFL14k7xrGbVBAM9erNfBwnlPLav6MgznGyYc1_ZcVtfC7rXLYYkqzO46zGhqi7X3CPlaxjvKmlMlod7URhICYChszeffxCx5DDzEYe8QrbnEmI2dZDCvax-9UHoYpYwFW5wIZHR2s6zXjo2KN-Wwqyd3MNczmjwOVSacYr5l1N96EULmiMMrD2ED-m8nPxFoNeKZ5N8uqkNWZOEqCYUqvgEedEdHv7jpXLuVOxaizhQt3wNeB9ygJAe8v2gBOf9dZ9MwzctSZyAyvIO1rLUKjyKKgq3mWjliNUf1Qq2203Yt6_ZlKCUz0kj5pzjDBngrswV_fWQdz6CQ3pHc4NUqA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-binding"
+      }
+    },
+    {
+      "name": "verify-jws-header-duplicate-member",
+      "kind": "verify",
+      "status": "required",
+      "note": "Duplicate alg members in the protected header",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImFsZyI6IlJTMjU2In0.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.fJywkAujZDJM_GkYnAtuRoXaMYyIPOT-jEhnsTCJ8ImN-bjI2P2GjVvqXeIRQNzYyYlWGvA75ZdSWWw3MEGHioJKU359NwNtEHBbBV_hsMD0LnI4dpeNwqzyUTMYPzQ_KVlynHc5LOQxD4FS67Dqrh7PcWLzP7GOikNP1tl7t1ri8l7v0b1_I10UgoDbLEAKgOcMXO9OjiIHIkZ5IxxPhu9f0dHgGPZAVqd5N3Y54YEzmSQgr7Q4GzqR1m165_LyNONC7-ffZ69j1b05MwJnOVQgu2uKMkZTMODw9M37JvkkFmTdkzGQtQ4ktC5WnW7rnB9JmZZa3PzKZtHmqufQfQ\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-binding"
+      }
+    },
+    {
+      "name": "verify-jws-claims-duplicate-member",
+      "kind": "verify",
+      "status": "required",
+      "note": "Duplicate assertionHash members in the claims",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvbkhhc2giOiI0NTZkMDVkNmEzZjQ4YTE0YWVlZTIwYzhkNWYwNDI5ZDA3ZTViZTNmMTY5NWZjZWMyZGJjNzU1Y2Q5ZDY0NDk1IiwiYXNzZXJ0aW9uU2lnIjoid05yOEgyZnVWYVVjU1NBaFc1TE5JREc5ZkRWdjg5eXBhU0VMdG1zVUJESkZiUVhXby9TS0ZLN3VJTWpWOEVLZEIrVytQeGFWL093dHZIVmMyZFpFbFE9PSJ9.Oq89Xrmat24Dz1kk2Odz2tiSYeS12rbG1JsVjFVUMNmPb8om8zFdbI_bQI48-gJ-89OQ8wRXMWPw6CL8FyWuWmjn7MVPPOYdeEv3hiZ2HuSjt2RiVKUlVXLQ6kT38jxTFVrIw_8eLZ42cw-PI_uLgpbF1TPWgB9xI58qbR_GZ0chFzfDYZCC9P4c8N4znOd9_KiQ8lCjQqJspDEfXk46HuQ88OXXPyeLRGwwg-L-zNcvgbeFbDoIfjnrm0bDTyTMFf20DYBl-23XqO4r3Wgj3D7RZtD7Qf3grEmhLXncdHZIBClT1DD9ivxlUqDnn2F0mFFhLg2M3_tWdIXWj4oazA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-binding"
+      }
+    },
+    {
+      "name": "verify-jws-signature-nonzero-trailing-bits",
+      "kind": "verify",
+      "status": "required",
+      "note": "Signature base64url with non-zero unused trailing bits",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8R\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "signature-invalid"
+      }
+    },
+    {
+      "name": "verify-jws-signature-not-base64url",
+      "kind": "verify",
+      "status": "required",
+      "note": "A signature segment outside the base64url alphabet",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9m+/==\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "signature-invalid"
+      }
+    },
+    {
+      "name": "verify-jwk-n-nonzero-trailing-bits",
+      "kind": "verify",
+      "status": "required",
+      "note": "The selected key's jwk with non-zero unused trailing bits in n; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJSU0EiLCJuIjoiay1qeVZVUDFmTTJPeC1QZXQzdElMRThJSEJ3LU5uVC1PSFhfWlpjSE55WU5Xc3RucUFOMlYxb1JodWVTaXhuWktXdVBBanRXQXp1cURBd0JSRHFtanFTY3dHSXlXNmZyeVczcW5OZlhTR1FoVGJ2MXZ6elJFZWl3V0FGcXVFc0VacmNlS0FRR2hrQ2lzOGFWZTlDQll3QWppSGRXU2lRRlZPV1JxYk5xR01uWTVJOWVuYnU5dWhXVElubEtxMklmTTJvaExGeWJaa2dRT3QwUmRFaV9SNFF0Zkg1YmtDODV1b0xBZmQ5N2FiTGxfWk5kbmxuTGNFaVZhcVNRV0pxX2ZkeWZ6TE5PcVhkU1Zwa0Q1OGJQTkVzbGljamxSN1o2SF9ZTmRuamxxdTVESGtvaHZlek84TTF1QlpKTDF1RnhSd0FNb1VuMV90dDhkcVVMRjBpNTdSIiwiZSI6IkFRQUIifX0.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.f4MgLVNuogbo4goMZjzb4Oqu4TH87C7RzdX584w9kECx0Yhzf1S1tgRpJBf1ncl3k0THUOyJT-kvvkeedc1cfqbma6gx5mVfGe-7MpnCIe0o8K4Xpc4n8APX-3uLL6VmqCaIpM12bhcTK-hFM_Os3HyeR4UMvYtW0JjEEDP3UizowLwQJepRVkOltw7lJXo0fjX1MDzW61nU1qpTyT1RuN-3tW3IY_NYmQGlKp5Ce6CvIcymWn8DABg5n6l6lCem8nLjlznaykBNPrUQrYjeWp_wLRhwmcexKms2wmVZ68fLAohzkyljAVHEmleeRNCE0KEZT7RPAKMXXQt2DjNGuA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-jwk-n-leading-zero-octet",
+      "kind": "verify",
+      "status": "required",
+      "note": "The selected key's jwk with a leading zero octet in n; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJSU0EiLCJuIjoiQUpQbzhsVkQ5WHpOanNmajNyZDdTQ3hQQ0J3Y1BqWjBfamgxXzJXWEJ6Y21EVnJMWjZnRGRsZGFFWWJua29zWjJTbHJqd0k3VmdNN3Fnd01BVVE2cG82a25NQmlNbHVuNjhsdDZwelgxMGhrSVUyNzliODgwUkhvc0ZnQmFyaExCR2EzSGlnRUJvWkFvclBHbFh2UWdXTUFJNGgzVmtva0JWVGxrYW16YWhqSjJPU1BYcDI3dmJvVmt5SjVTcXRpSHpOcUlTeGNtMlpJRURyZEVYUkl2MGVFTFh4LVc1QXZPYnFDd0gzZmUybXk1ZjJUWFo1WnkzQklsV3Fra0ZpYXYzM2NuOHl6VHFsM1VsYVpBLWZHenpSTEpZbkk1VWUyZWhfMkRYWjQ1YXJ1UXg1S0liM3N6dkROYmdXU1M5YmhjVWNBREtGSjlmN2JmSGFsQ3hkSXVlMCIsImUiOiJBUUFCIn19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.SZ9U5VtjZFXmfC-X_vk9kG3qibuiDT_1XBCn6AP_u_9AxtELJSr6MJ2tqwAHcZBvLxUjYvO5ABSM_RBJ4msOeww2TR67oFg0cDZaA_P1uPzTnDHOhFmnbPCKiAvczQ7BxKCIfeGoQgCY3z9CoenhFjWOQtgOV4kzUfR6q1-HBx8RmSUyJwwbnb_vOoyUC5Dx_bVMr-FqEDF_WYbuCX74fswl9hlS_IYBTyC5rHkf1vya5SXbHhhyAhDE7LpJ1sJXuXKT69vX6ZiqI7MFMyXD9Lw7fJSslJaJdFeRzzqScE_OLpHb9zsOi1lReQ0izniITbPxSYV-N2A5iNHml-T0rg\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-jwk-ec-short-x",
+      "kind": "verify",
+      "status": "required",
+      "note": "A P-256 jwk whose x is 31 octets; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6IjF6TGNXTzdnNGxvWjJYZ2RqZy13WWYyVXRvalZrVnJwbW8tQ2VSX3JQQSIsInkiOiJpcnRCQUwtenBKdXNxc01XQTZyU1NSY2RhV2Y3amplTjloeGdyeWt2RXRFIn19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.DCwIVfULZFc8495iZwBF-91b6K3Wrjj99pWt4WyT1kZ8oTy9OCRSrijsDlGBB0o4kdxsqLdFXbd2MVLZdsyS7LvG89l3m971yELYqjTIN_Cjfk38l5K0o1h0YkRyloCxT0TRx_862dBTvNBe7ZijT5E2bKrFWgAtLoOThB3C_gg4awmq_cxEpXJGPG0OUGKT-hZIvT_Y9qI3iS6AEMIQfc7eVQLIUzVK-e_i1U7m4-tVTe78K8jr4uaC2YZC6JvMMQJUha7sdNSl--clultc9VoDExK0v1xzXxS5msL-Hp0WIAZWqcX8Yp4R7FuMbZHIM0sRkTgMdSL1-PC3B2lDbg\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-jwk-ec-point-off-curve",
+      "kind": "verify",
+      "status": "required",
+      "note": "A P-256 jwk with exact-length coordinates that are not on the curve; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Inp0Y3kzRmp1NE9KYUdkbDRIWTRQc0dIOWxMYUkxWkZhNlpxUGdua2Y2enciLCJ5IjoiaXJ0QkFMLXpwSnVzcXNNV0E2clNTUmNkYVdmN2pqZU45aHhncnlrdkV0QSJ9fQ.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.dh7g6rTf9nZ3k596Efe57J1pBbU1fQlya6MYE6gvJK1eU9VWMk9eN4dhv4ZsZmatTrIlkLKWcxvTBye7ith5Z_ZSOzpuSB_RV-MtUDz3lyo7blqPcxSzm1JW7ecVd5RpOG7UPM-zLY8O8fgHjE7AR48NLIHCk9mFQtoRKynaQ5Pv__9y8ARhgHeBHCEzOzDZnhOhp8EOlr9beI9LU-_VZHsJGpK4W8CHMfybM4Im3uPBt6T9_C48YErhlrw52tTXd5FSngTcp06CocxDNcHiuZ-GXH-MbaBuElHCOfVAltN5NEcNtw0r837znRajkRXGoeWeDX_UAhrvYpk2EeWAIw\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-jwk-ec-p256",
+      "kind": "verify",
+      "status": "required",
+      "note": "A well-formed P-256 jwk against the selected RSA key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Inp0Y3kzRmp1NE9KYUdkbDRIWTRQc0dIOWxMYUkxWkZhNlpxUGdua2Y2enciLCJ5IjoiaXJ0QkFMLXpwSnVzcXNNV0E2clNTUmNkYVdmN2pqZU45aHhncnlrdkV0RSJ9fQ.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.SSvxXEecbrcLKhx3BO0ImwaspkVIuQZD1tjfgKpb_nSbQ_YpLkxK07WGc-wtI9LVdNl9beg1aOrqJv_A54wfbGo-ExJ2a4XMm7IyjD3XVLEMifolgtMq-pFzNpce06qmwcqBSEOsnGhZ1_ItVdbDEAXuLd0GoVTvh7kpZZvfTZZuSMLw4btcVoPVDY0Kr6-KQeYFt5ya6jBnry-OTM7jmk3xRf0AM6R9nkN1QSNZbLMSXS0xi1bSLB7C79JdSFM3yar_-fDikG9HQ9s6a4Toi-zua_LQrxn2Utn1tAZdooiFrD9UUMUbHAk7gtLb1ps4C4kJHu7frQMdbEOqOdEiIA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "signer-not-permitted"
+      }
+    },
+    {
+      "name": "verify-jwk-okp-ed25519",
+      "kind": "verify",
+      "status": "required",
+      "note": "A well-formed Ed25519 jwk against the selected RSA key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsImp3ayI6eyJrdHkiOiJPS1AiLCJjcnYiOiJFZDI1NTE5IiwieCI6InlHS2Z5REJMdVk5eFJYSlNSUm9zOFdjT3BRdWZabFZIeklvbzNNRmNfZGMifX0.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ON2-TPdyiZJ1rMlB947ak3JdkuszyfjszO2eLCPzTvJo3Vj9uJGcWATcsMDZ-8O8HTdERQdoL-6Z5WQOLwUCv_fTv1WSt7NAYobL-0K95wHeqDnfRxu5SzbuphOCtaxRGBXxgbjlsgtlyERia3ej--Fvwjx48QCe7CJV5Hn59AqUIqGNryGanIIrGcKE_IzG9XGcu5w-YclJuRff_42-KbLDwJP1Pa_h3I7IAjmubvFdfUWETjUNo7ruVMlA3V-fIxAl_PToVxo32SF3tDNks7dxiVbC-kgn_oyWzmQgIoj2UHPCxju2LKpYdpub6wOFN9BaoITFrj0f_hG1yyGh7g\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "signer-not-permitted"
+      }
+    },
+    {
+      "name": "verify-x5c-second-element-not-base64",
+      "kind": "verify",
+      "status": "required",
+      "note": "A valid leaf followed by an element that is not base64; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsIng1YyI6WyJNSUlDMGpDQ0FicWdBd0lCQWdJRVZTQUFBVEFOQmdrcWhraUc5dzBCQVFzRkFEQWlNU0F3SGdZRFZRUUREQmRFVTFCWUxUVTFNakFnZG1WamRHOXlJSE5wWjI1bGNqQWVGdzB5TmpBeE1ERXdNREF3TURCYUZ3MHpOakF4TURFd01EQXdNREJhTUNJeElEQWVCZ05WQkFNTUYwUlRVRmd0TlRVeU1DQjJaV04wYjNJZ2MybG5ibVZ5TUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFrK2p5VlVQMWZNMk94K1BldDN0SUxFOElIQncrTm5UK09IWC9aWmNITnlZTldzdG5xQU4yVjFvUmh1ZVNpeG5aS1d1UEFqdFdBenVxREF3QlJEcW1qcVNjd0dJeVc2ZnJ5VzNxbk5mWFNHUWhUYnYxdnp6UkVlaXdXQUZxdUVzRVpyY2VLQVFHaGtDaXM4YVZlOUNCWXdBamlIZFdTaVFGVk9XUnFiTnFHTW5ZNUk5ZW5idTl1aFdUSW5sS3EySWZNMm9oTEZ5YlprZ1FPdDBSZEVpL1I0UXRmSDVia0M4NXVvTEFmZDk3YWJMbC9aTmRubG5MY0VpVmFxU1FXSnEvZmR5ZnpMTk9xWGRTVnBrRDU4YlBORXNsaWNqbFI3WjZIL1lOZG5qbHF1NURIa29odmV6TzhNMXVCWkpMMXVGeFJ3QU1vVW4xL3R0OGRxVUxGMGk1N1FJREFRQUJveEF3RGpBTUJnTlZIUk1CQWY4RUFqQUFNQTBHQ1NxR1NJYjNEUUVCQ3dVQUE0SUJBUUJORUNNLzBnTWFUbGhyMmIyNVczaG11dUttZGtYTkwzYW9pMm8wQ2Z3cmhudFhnNjFtVFNubW9hams1enNTVmsxcHF0b2pxbmpwVkY2dzQrSXNuWW40VW5CdlZFMHZwK0VJdStDa2lSRC8zTGwxZUF4QnNTMG9CRlNJQkQ1cm9sN0NNZHF6YTlGY0FMbnREazFzWWRxdTJxb3JmNzltc09zYzdJZncrQ1V0ZVE1QVU2cExEMlhyd1FGWGRTNjlTNHg4Rm9uS3Y1aDcwSFdwVTI4bjQranRRVEhRNVE1UEYxWWVTS3ljLzdZZUM4b2hJbDZqaEtIdllFd3ZUNVJYSG1HeWw4Z25uQXRydFFDL2lMRHRwRmE1NnRmYkNmU1JnZTIxMWpCRExjdWJxeHFpbTVHd3o5Z1dvZTJVdXI2QzJlWjEwQXVGRUp6VlhFUEQ3Qkl4SGdlbSIsIm5vdCBiYXNlNjQhIl19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.YXA_ree9whIkaLZHbPMdj5zg4ry6hJBEhD6OSwWjTmKvnKmq9l4x-IgyZDcaOMiP_9CL73GBYbyXO-w9W3CjGmOPXbODW-ml4O8Lt0_TXAOk7cqbtvk55iEZilQs3jOWuJzc_keHE0Qo7-bKpSrxo-a-23ar3l9wOLqulG0yofspjuB768G_rwfpblSjbiGJ0Ce8jtKE1JG2_tBBejZb60dY62sWyz-JKG2Zn_h7Rvfrr4RCGSSl9Ct8OJNOFBa90kAi1dBDwur-ZkOE8_DfJjgWSLvgpxGW2ffe2U4f_ukq7cHBIJ9M_3KrWhSx2vf336_H2om-UWt5YSDf60uZKA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-x5c-leaf-trailing-bytes",
+      "kind": "verify",
+      "status": "required",
+      "note": "The selected key's certificate with a byte after its DER; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsIng1YyI6WyJNSUlDMGpDQ0FicWdBd0lCQWdJRVZTQUFBVEFOQmdrcWhraUc5dzBCQVFzRkFEQWlNU0F3SGdZRFZRUUREQmRFVTFCWUxUVTFNakFnZG1WamRHOXlJSE5wWjI1bGNqQWVGdzB5TmpBeE1ERXdNREF3TURCYUZ3MHpOakF4TURFd01EQXdNREJhTUNJeElEQWVCZ05WQkFNTUYwUlRVRmd0TlRVeU1DQjJaV04wYjNJZ2MybG5ibVZ5TUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFrK2p5VlVQMWZNMk94K1BldDN0SUxFOElIQncrTm5UK09IWC9aWmNITnlZTldzdG5xQU4yVjFvUmh1ZVNpeG5aS1d1UEFqdFdBenVxREF3QlJEcW1qcVNjd0dJeVc2ZnJ5VzNxbk5mWFNHUWhUYnYxdnp6UkVlaXdXQUZxdUVzRVpyY2VLQVFHaGtDaXM4YVZlOUNCWXdBamlIZFdTaVFGVk9XUnFiTnFHTW5ZNUk5ZW5idTl1aFdUSW5sS3EySWZNMm9oTEZ5YlprZ1FPdDBSZEVpL1I0UXRmSDVia0M4NXVvTEFmZDk3YWJMbC9aTmRubG5MY0VpVmFxU1FXSnEvZmR5ZnpMTk9xWGRTVnBrRDU4YlBORXNsaWNqbFI3WjZIL1lOZG5qbHF1NURIa29odmV6TzhNMXVCWkpMMXVGeFJ3QU1vVW4xL3R0OGRxVUxGMGk1N1FJREFRQUJveEF3RGpBTUJnTlZIUk1CQWY4RUFqQUFNQTBHQ1NxR1NJYjNEUUVCQ3dVQUE0SUJBUUJORUNNLzBnTWFUbGhyMmIyNVczaG11dUttZGtYTkwzYW9pMm8wQ2Z3cmhudFhnNjFtVFNubW9hams1enNTVmsxcHF0b2pxbmpwVkY2dzQrSXNuWW40VW5CdlZFMHZwK0VJdStDa2lSRC8zTGwxZUF4QnNTMG9CRlNJQkQ1cm9sN0NNZHF6YTlGY0FMbnREazFzWWRxdTJxb3JmNzltc09zYzdJZncrQ1V0ZVE1QVU2cExEMlhyd1FGWGRTNjlTNHg4Rm9uS3Y1aDcwSFdwVTI4bjQranRRVEhRNVE1UEYxWWVTS3ljLzdZZUM4b2hJbDZqaEtIdllFd3ZUNVJYSG1HeWw4Z25uQXRydFFDL2lMRHRwRmE1NnRmYkNmU1JnZTIxMWpCRExjdWJxeHFpbTVHd3o5Z1dvZTJVdXI2QzJlWjEwQXVGRUp6VlhFUEQ3Qkl4SGdlbUFBPT0iXX0.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.Xc6FD1Xr6cyEglxr8Cl4vKqtIsgNma4WYwDudkubYGYMA-SLlESJgYPJ4_PWCHKBAsPTOrvsblxCjYIfUImatcgkyoB19HuUS_jS8jrFcL8iPo-JgcpMNvCsOUVBAlvRsHCyVdJCzc-5zyh_AxnNRy__qq3wNHNNRNrJ_FjNT_FJ59af2G7drZdShJEqhyeudtX1QbcFHhsvjgnxFOOp_dfHRRagEKhg0HZckEmHLKq1peDcDuu6cdqlMugoD22I-9xj9Y98E9T5a_F7G17Nci2EuouKiz2i3Q2EWxxDsn47jaX_S_DHvcxt6OTVnYRYeF70Ty8gShkP3n3R7tCJkw\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-x5c-leaf-pem-text",
+      "kind": "verify",
+      "status": "required",
+      "note": "base64 of the selected key's certificate as PEM text; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsIng1YyI6WyJMUzB0TFMxQ1JVZEpUaUJEUlZKVVNVWkpRMEZVUlMwdExTMHRDazFKU1VNd2FrTkRRV0p4WjBGM1NVSkJaMGxGVmxOQlFVRlVRVTVDWjJ0eGFHdHBSemwzTUVKQlVYTkdRVVJCYVUxVFFYZElaMWxFVmxGUlJFUkNaRVVLVlRGQ1dVeFVWVEZOYWtGblpHMVdhbVJIT1hsSlNFNXdXakkxYkdOcVFXVkdkekI1VG1wQmVFMUVSWGROUkVGM1RVUkNZVVozTUhwT2FrRjRUVVJGZHdwTlJFRjNUVVJDWVUxRFNYaEpSRUZsUW1kT1ZrSkJUVTFHTUZKVVZVWm5kRTVVVlhsTlEwSXlXbGRPTUdJelNXZGpNbXh1WW0xV2VVMUpTVUpKYWtGT0NrSm5hM0ZvYTJsSE9YY3dRa0ZSUlVaQlFVOURRVkU0UVUxSlNVSkRaMHREUVZGRlFXc3JhbmxXVlZBeFprMHlUM2dyVUdWME0zUkpURVU0U1VoQ2R5c0tUbTVVSzA5SVdDOWFXbU5JVG5sWlRsZHpkRzV4UVU0eVZqRnZVbWgxWlZOcGVHNWFTMWQxVUVGcWRGZEJlblZ4UkVGM1FsSkVjVzFxY1ZOamQwZEplUXBYTm1aeWVWY3pjVzVPWmxoVFIxRm9WR0oyTVhaNmVsSkZaV2wzVjBGR2NYVkZjMFZhY21ObFMwRlJSMmhyUTJsek9HRldaVGxEUWxsM1FXcHBTR1JYQ2xOcFVVWldUMWRTY1dKT2NVZE5ibGsxU1RsbGJtSjFPWFZvVjFSSmJteExjVEpKWmsweWIyaE1SbmxpV210blVVOTBNRkprUldrdlVqUlJkR1pJTldJS2EwTTROWFZ2VEVGbVpEazNZV0pNYkM5YVRtUnViRzVNWTBWcFZtRnhVMUZYU25FdlptUjVabnBNVGs5eFdHUlRWbkJyUkRVNFlsQk9SWE5zYVdOcWJBcFNOMW8yU0M5WlRtUnVhbXh4ZFRWRVNHdHZhSFpsZWs4NFRURjFRbHBLVERGMVJuaFNkMEZOYjFWdU1TOTBkRGhrY1ZWTVJqQnBOVGRSU1VSQlVVRkNDbTk0UVhkRWFrRk5RbWRPVmtoU1RVSkJaamhGUVdwQlFVMUJNRWREVTNGSFUwbGlNMFJSUlVKRGQxVkJRVFJKUWtGUlFrNUZRMDB2TUdkTllWUnNhSElLTW1JeU5WY3phRzExZFV0dFpHdFlUa3d6WVc5cE1tOHdRMlozY21odWRGaG5OakZ0VkZOdWJXOWhhbXMxZW5OVFZtc3hjSEYwYjJweGJtcHdWa1kyZHdvMEswbHpibGx1TkZWdVFuWldSVEIyY0N0RlNYVXJRMnRwVWtRdk0weHNNV1ZCZUVKelV6QnZRa1pUU1VKRU5YSnZiRGREVFdSeGVtRTVSbU5CVEc1MENrUnJNWE5aWkhGMU1uRnZjbVkzT1cxelQzTmpOMGxtZHl0RFZYUmxVVFZCVlRad1RFUXlXSEozVVVaWVpGTTJPVk0wZURoR2IyNUxkalZvTnpCSVYzQUtWVEk0YmpRcmFuUlJWRWhSTlZFMVVFWXhXV1ZUUzNsakx6ZFpaVU00YjJoSmJEWnFhRXRJZGxsRmQzWlVOVkpZU0cxSGVXdzRaMjV1UVhSeWRGRkRMd3BwVEVSMGNFWmhOVFowWm1KRFpsTlNaMlV5TVRGcVFrUk1ZM1ZpY1hoeGFXMDFSM2Q2T1dkWGIyVXlWWFZ5TmtNeVpWb3hNRUYxUmtWS2VsWllSVkJFQ2pkQ1NYaElaMlZ0Q2kwdExTMHRSVTVFSUVORlVsUkpSa2xEUVZSRkxTMHRMUzBLIl19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.QHNsJ5LSfdMPOY2Y5u1zNX-IKco4RMqR31h1XeJtJpyUyL5TZ4gJoFD8yYt5NtILe8mEgcriXDi2Rtf-hWeBIQq6YskoJrJRLjAY8C6yJNafp8QiwgCG988sd-n_4UfOqbSR3eAaC9k4aBLmjqf9nfUlXCx8OEo9D_4hphBd1UnlWzqUb9OX_1nT5-sYxSqI4faUaq1rhfr-0Uf3IL7OzhVr38qDIxe_tEmvL_q8X3nnuNGiUVs4kRPS0DSx3Pgir8FwZksUo8YefLnYKZzabtcHQJAovyDn5wAEoeqz4oqxOlw2wkAlnvCH2esugOoQKVrsf_Nu3vFhKeeyGobupw\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-x5c-leaf-tlv-skeleton",
+      "kind": "verify",
+      "status": "required",
+      "note": "A leaf with only a certificate's TLV skeleton around the selected key; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsIng1YyI6WyJNSUlCT2pDQ0FURUNBUUV3QURBQU1BQXdBRENDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFKUG84bFZEOVh6TmpzZmozcmQ3U0N4UENCd2NQalowL2poMS8yV1hCemNtRFZyTFo2Z0RkbGRhRVlibmtvc1oyU2xyandJN1ZnTTdxZ3dNQVVRNnBvNmtuTUJpTWx1bjY4bHQ2cHpYMTBoa0lVMjc5Yjg4MFJIb3NGZ0JhcmhMQkdhM0hpZ0VCb1pBb3JQR2xYdlFnV01BSTRoM1Zrb2tCVlRsa2FtemFoakoyT1NQWHAyN3Zib1ZreUo1U3F0aUh6TnFJU3hjbTJaSUVEcmRFWFJJdjBlRUxYeCtXNUF2T2JxQ3dIM2ZlMm15NWYyVFhaNVp5M0JJbFdxa2tGaWF2MzNjbjh5elRxbDNVbGFaQStmR3p6UkxKWW5JNVVlMmVoLzJEWFo0NWFydVF4NUtJYjNzenZETmJnV1NTOWJoY1VjQURLRko5ZjdiZkhhbEN4ZEl1ZTBDQXdFQUFUQUFBd0VBIl19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.dHLbz6A96BY8cCaNyvtvM5bi0-6TjYSOX65GKDooubQUWYl5nYKm7HDx1i-KAo7y6zCUTszdF-6S9I2j92PVHjEc5KWlY2uk_-g3--aJf3zGgcuxHyk80XnhNh_0oUAusxR9DmG6PZNy5Y-qLwKTzpmiwBRb6sbSPqwwsPR5p_Lrqwzw_qtAsXMPTLsA5wQIThZsKRYdyhiZjC0QNyYDay0MEJVk9S0-7PJpXqY7NGuj-vqZy-k87BrhYSgG6goQJ4JI6KayZ7j8yQcJrAGBcN5PFLZLjf86tK_y6IGRnMWq-FhADHKk_GaWL79HNrFjoVEpY8m8qp4cvOcmILfDEA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-x5c-leaf-nonzero-trailing-bits",
+      "kind": "verify",
+      "status": "required",
+      "note": "A self-signed leaf of the selected key whose base64 sets a trailing bit; signed by the selected key",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiIsIng1YyI6WyJNSUlDMWpDQ0FiNmdBd0lCQWdJRVZTQUFBekFOQmdrcWhraUc5dzBCQVFzRkFEQWtNU0l3SUFZRFZRUUREQmxFVTFCWUxUVTFNakFnZG1WamRHOXlJSE5wWjI1bGNpQXlNQjRYRFRJMk1ERXdNVEF3TURBd01Gb1hEVE0yTURFd01UQXdNREF3TUZvd0pERWlNQ0FHQTFVRUF3d1pSRk5RV0MwMU5USXdJSFpsWTNSdmNpQnphV2R1WlhJZ01qQ0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0NnZ0VCQUpQbzhsVkQ5WHpOanNmajNyZDdTQ3hQQ0J3Y1BqWjAvamgxLzJXWEJ6Y21EVnJMWjZnRGRsZGFFWWJua29zWjJTbHJqd0k3VmdNN3Fnd01BVVE2cG82a25NQmlNbHVuNjhsdDZwelgxMGhrSVUyNzliODgwUkhvc0ZnQmFyaExCR2EzSGlnRUJvWkFvclBHbFh2UWdXTUFJNGgzVmtva0JWVGxrYW16YWhqSjJPU1BYcDI3dmJvVmt5SjVTcXRpSHpOcUlTeGNtMlpJRURyZEVYUkl2MGVFTFh4K1c1QXZPYnFDd0gzZmUybXk1ZjJUWFo1WnkzQklsV3Fra0ZpYXYzM2NuOHl6VHFsM1VsYVpBK2ZHenpSTEpZbkk1VWUyZWgvMkRYWjQ1YXJ1UXg1S0liM3N6dkROYmdXU1M5YmhjVWNBREtGSjlmN2JmSGFsQ3hkSXVlMENBd0VBQWFNUU1BNHdEQVlEVlIwVEFRSC9CQUl3QURBTkJna3Foa2lHOXcwQkFRc0ZBQU9DQVFFQUw1Ym5xdjFNc284bDArWGNQU04yQ1hwRVkxLys4MTdxRmF0cloycjBKRGVjcWxsZG16WG5kYm9RejZTZUViTnRFd0xUNzhtMHNEMzNMQjlYUWRzdkNLZXB5UW9xTDFvTGxJTW5lVVp6OWVoSEdwbmF3TTFzaDhzSjJ1dmhoQ1dkcGQrRTExV1c1Y3ZNNEsvL2ltaVhkZzA4VTE4THRYbGdMOGFXT0lyKzdWRFMyaXpKTUVDMFpaRnVqSVJLRVJ5aWE2MytRV0FPaEVRUEwwRTNYd2FONnlLR3pZWmlCRURwU0lNUDQ0eXBMaVQ2QmFjTElvL0FDc1h4WkVudjlzTkJBZHkzUURGclZ5U2w5Vkpmdll3ME9DekZwY1JDV2FSK3oyaFNaUk9Ec2QxWERTb0IvMmE0U2lCU0s3NXl6VTFKUFhnakdwNzBwL0hJMVJ2Mmc5QkVGaD09Il19.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.HMqUotNnqQf83EpoeKpbSM5Bsa-ZqPpQA7_0XIVu77kBwsYwmdYaARpJFK5rDsLHlwLiLzhs1-XUs0L-wiRpkrEpsfXNE5m-NEYWk3CoRz4m_WnKmNqRA1lhUuYVt83mRFHohWwhLpeH-B2f-h6e1GMlMIR6mndpxRnUasgWTHwxH27J_cte-E0FrlvfP8jXMHIce5FJRn_nS1otCkOciOH_3SE5RIpP7751y_FDPt-QwtR1Q8EVhMrrGks7UrFPD2I2x9pu6PTde8e20BPMLmIPSirHWvfzhcT6XyV48qfY5uSAV_vXJDtgd0695jIpQaL0_sWJSoDsjhmoh3ifXQ\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "invalid-embedded-key"
+      }
+    },
+    {
+      "name": "verify-claim-exp-past-ignored",
+      "kind": "verify",
+      "status": "required",
+      "note": "An exp claim in the past is ignored",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0iLCJleHAiOjE1MDAwMDAwMDB9.WtcrahIcnPL7aPolHhew8ce-IqMBOGhel9ybmy8EXz47TbZttHJMRE5KCCa8j0yFaULrOtj1WhbS8FDY0vRST97Dt7hJfzjj8RZG4x4U0iD8-Nf2jPshdh2wk6kYYSOJZlVkn_YVyAGI8Kab4BDZJM14t0MCZN0S72W5VzTTYa-rxYbafogNW5PKKCirttjze8yOBkJtflhsODrftVYnYsBE36cuVgMz7xurTHzf613V-htO8jWV1iXiZnAh1xuDzRCYpVVTS9PuTY8WRMPSkvYUgzMtTe5G8bzVlT2TyG--ivLp--CFU9ZrrMXCx7yX6srqt9INn_nqk9_cwPvzDA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "verify-claim-nbf-future-ignored",
+      "kind": "verify",
+      "status": "required",
+      "note": "An nbf claim in the future is ignored",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0iLCJuYmYiOjQxMDI0NDQ4MDB9.dqIfF75yC509sNcdCzPSIvZS529xjpc-INvnEWNmGwiq_2FWmDuDbFOYu13mRhzT-GH2CWGps1KyyOhxKwoDoGeZLU4v3_BcOmWOzX_S1QQSraHoeWmTFW6c7ZoiHDW3tWlP4cyKTgWZHYdfmbT_sp94tKpd09RJz6abMfh_AlyP_m-B5BHd0P19vS8otVOoXcDFjPKBduybNC7AGCcfreBkeL3rpFqCR7NP5jnrBqfHQo7GDSvBNgSk7j9H8RTh4a3r7FHDehoUXr96gM3GmHVhiqHwOKjfLQ0GOxXW83F77wmFGyuCrO2TtuVCtLAB8qVKX21bbx9TqWqkEOuWdQ\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "verify-claim-aud-iss-ignored",
+      "kind": "verify",
+      "status": "required",
+      "note": "aud and iss claims naming some other party is ignored",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0iLCJhdWQiOiJodHRwczovL290aGVyLmV4YW1wbGUuY29tIiwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIuZXhhbXBsZS5jb20ifQ.GylUtTjIHq596ai6iIRErweeFlKoGkXV1z1LVQpFn6qh0mt3t9OMlM6yBW3-LUOBMue-TXONs4AAmQc-7Jf7eUvPuGKEYuylzGl2ZvKHko8urXNF29i4g6hL7viD_lFROKFOH0NPVBIopfs_feVO5bb9jUHec5Cpz5ch3EbGfNCObNc6ulpeahg3xScxn7yqWK1JlijqSV1emtWE4_JBPNYMsijKC-EHSiBKCQX-zLHrQFDzcz72YqGbDBNwVO8tz2NYM5_eq1GH8INVz1tlzFQVFuGLMLMYlfi1XNfiu081jmQOHIC8YG3fXL7wyPE85aXpwxV_10jYqkCmzk13QA\"}}",
+      "selectedKey": "rsa-signer",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "verify-configured-hs256-pem-secret",
+      "kind": "verify",
+      "status": "required",
+      "note": "A configured HS256 secret that is PEM text",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJIUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.RszhBRIX0Hg8XgKc78Tq0XqDUSZXXwkdvTfAMUliPWg\"}}",
+      "selectedKey": "hs256-pem-secret",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "configuration-error"
+      }
+    },
+    {
+      "name": "verify-configured-alg-lowercase",
+      "kind": "verify",
+      "status": "required",
+      "note": "A configured key whose alg is rs256 rather than RS256",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}",
+      "selectedKey": "rs256-lowercase-alg",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "configuration-error"
+      }
+    },
+    {
+      "name": "verify-configured-alg-unknown",
+      "kind": "verify",
+      "status": "required",
+      "note": "A configured key with an unknown alg",
+      "input": "{\"id\":\"classification\",\"type\":\"handling\",\"scope\":\"payload\",\"appliesToState\":\"unencrypted\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"}}\"},\"binding\":{\"method\":\"jws\",\"signature\":\"eyJhbGciOiJSUzI1NiJ9.eyJhc3NlcnRpb25IYXNoIjoiNDU2ZDA1ZDZhM2Y0OGExNGFlZWUyMGM4ZDVmMDQyOWQwN2U1YmUzZjE2OTVmY2VjMmRiYzc1NWNkOWQ2NDQ5NSIsImFzc2VydGlvblNpZyI6IndOcjhIMmZ1VmFVY1NTQWhXNUxOSURHOWZEVnY4OXlwYVNFTHRtc1VCREpGYlFYV28vU0tGSzd1SU1qVjhFS2RCK1crUHhhVi9Pd3R2SFZjMmRaRWxRPT0ifQ.ZIGt3ok_eFgcVspnUPZKK-l_yQG161Sqc-L9b_u1x6_icSMqylFmS1etXZOJj-HVulDasqMCkgK1QL9R8VUYBKcIgEBTZGEA0P7xsWpdN7VMsEUr7ZiTBu8HJDilfmvds5yTCJf-ftgaklPJ6bmUdC7jmd4phBFZCftF8BzZIWDiZzyt7vNRZskrq-k2duXNL9MGflxBUl-1Zi7SeHJST6kMKEumxuGMyfDsyBRvKafUrYk1LFtBIfpCu-rb3fKm3OkY3IpUTVpwxV4y0XiHgLmgPXguPi_nDgUw8pcc8I5AU5iFnIqr-W3cyf98M54fjMvjIHIZ0zw3FKUa9msu8Q\"}}",
+      "selectedKey": "unknown-alg",
+      "keySource": "configured",
+      "aggregateHashBase64": "wNr8H2fuVaUcSSAhW5LNIDG9fDVv89ypaSELtmsUBDI=",
+      "legacy": false,
+      "expect": {
+        "reason": "configuration-error"
       }
     }
   ]
