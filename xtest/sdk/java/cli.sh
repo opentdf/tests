@@ -115,13 +115,15 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
-    assertion_header_key_pinning)
+    assertion_header_key_pinning | assertion_hash_raw)
       # DSPX-1561 Phase 0 assertion verification: keys selected only from the
       # reader's configuration, with the default key honoured through the
-      # verification-keys file. No release has it yet, and it adds no CLI
-      # surface to probe, so this answers no until one ships and then becomes
-      # a version gate. Branch builds run the cases with
-      # XT_FORCE_SUPPORTS=assertion_header_key_pinning.
+      # verification-keys file (assertion_header_key_pinning); the hash over
+      # the assertion as received, strict manifest parsing, and spec binding
+      # forms (assertion_hash_raw). No release has them yet, and neither adds
+      # CLI surface to probe, so this answers no until one ships and then
+      # becomes a version gate. Branch builds run the cases with
+      # XT_FORCE_SUPPORTS=assertion_header_key_pinning,assertion_hash_raw.
       #
       # Explicit rather than falling through to "Unknown feature" so that a
       # typo'd feature name in tdfs.py cannot pass for a known-missing one.
