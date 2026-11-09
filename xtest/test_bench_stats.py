@@ -19,6 +19,8 @@ import pytest
 from perf import stats
 from perf.stats import Verdict
 
+pytestmark = pytest.mark.units
+
 # Typical CI-runner dispersion for a CLI invocation: roughly +/-8% round to
 # round. Large enough to be realistic, small enough that 30 rounds can resolve
 # a 15% effect.

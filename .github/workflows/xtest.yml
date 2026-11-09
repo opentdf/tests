@@ -713,7 +713,7 @@ jobs:
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
-          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" test_self.py test_audit_logs.py
+          uv run pytest --html=test-results/helper-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -m harness
         working-directory: otdftests/xtest
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
@@ -732,7 +732,7 @@ jobs:
       - name: Run legacy decryption tests
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-decrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_legacy.py
+          uv run pytest -n auto --dist worksteal --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-decrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag -m legacy
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -743,7 +743,7 @@ jobs:
         if: ${{ env.FOCUS_SDK == 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py test_zip_conformance.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v $skip_flag -m core
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -755,7 +755,7 @@ jobs:
         if: ${{ env.FOCUS_SDK != 'all' }}
         run: |-
           skip_flag=$([[ "$SKIP_RELEASED_PAIRS" == "true" ]] && echo "--skip-released-pairs" || echo "")
-          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag test_tdfs.py test_tdf_assertions.py test_policytypes.py test_zip_conformance.py
+          uv run pytest -n auto --dist loadscope --html=test-results/sdk-${FOCUS_SDK}-${PLATFORM_TAG}.html --self-contained-html --sdks-encrypt "${ENCRYPT_SDK}" -ra -v --focus "$FOCUS_SDK" $skip_flag -m core
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -888,7 +888,7 @@ jobs:
             --sdks-encrypt "${ENCRYPT_SDK}" \
             --focus "$FOCUS_SDK" \
             $skip_flag \
-            test_abac.py test_pqc.py test_dpop.py
+            -m multikas
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
@@ -1173,7 +1173,7 @@ jobs:
             --bench-out test-results/benchmarks \
             --html "test-results/bench-${BENCH_SDK}.html" \
             --self-contained-html \
-            test_benchmarks.py
+            -m benchmark
         working-directory: otdftests/xtest
         env:
           BENCH_SDK: ${{ matrix.sdk }}
@@ -1489,7 +1489,7 @@ jobs:
             --junitxml "test-results/zip64-${ZIP64_SDK}.xml" \
             --html "test-results/zip64-${ZIP64_SDK}.html" \
             --self-contained-html \
-            test_zip64.py
+            -m zip64
         working-directory: otdftests/xtest
         env:
           ZIP64_SDK: ${{ matrix.sdk }}

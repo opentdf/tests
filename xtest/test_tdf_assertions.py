@@ -10,6 +10,8 @@ from abac import Attribute
 from fixtures.encryption import EncryptFactory
 from test_tdfs import assert_tamper_error, looks_like_422
 
+pytestmark = pytest.mark.core
+
 #### MANIFEST VALIDITY TESTS
 
 
