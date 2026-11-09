@@ -110,8 +110,10 @@ cloned under `xtest/sdk/<sdk>/` and built there into `dist/local/`, or
 `dist/<name>/` with `--name`. The checkout itself is never written to.
 Re-running at the same commit reuses the build, and a new commit rebuilds it.
 A local build reports the version in its source tree, normally the last
-release, so it needs `XT_FORCE_SUPPORTS` just as a tip build does. Details are
-in `otdf-sdk-mgr/README.md`.
+release, so it needs `XT_FORCE_SUPPORTS` just as a tip build does. A java build
+needs Maven to run on JDK 11 through 21 (set `JAVA_HOME`). Unlike
+`install tip java`, it installs into `xtest/sdk/java/.m2`, not
+`~/.m2/repository`. Details are in `otdf-sdk-mgr/README.md`.
 
 `install local` doesn't build the platform service. otdf-local runs the
 platform from a source tree: a sibling `platform/` checkout, or

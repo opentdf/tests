@@ -68,12 +68,31 @@ def _snapshot(repo: Path) -> dict[str, tuple[int, int]]:
 
 @pytest.fixture
 def sdk_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_git: None) -> Path:
-    """An empty xtest/sdk; git can't walk up out of tmp_path into a real repo."""
+    """An empty xtest/sdk; git can't walk up out of tmp_path into a real repo.
+
+    HOME is a fresh directory too, so no test can touch the real ~/.m2, and
+    `mvn` is a stand-in that reports the JDK in $FAKE_MVN_JAVA_VERSION.
+    """
     root = tmp_path / "sdk"
     for sdk in SDKS:
         (root / sdk).mkdir(parents=True)
     monkeypatch.setenv("OTDF_SDK_DIR", str(root))
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mvn = bin_dir / "mvn"
+    mvn.write_text(
+        "#!/bin/sh\n"
+        'echo "Apache Maven 3.9.9"\n'
+        'echo "Java version: $FAKE_MVN_JAVA_VERSION, vendor: Example, runtime: /jdk"\n'
+    )
+    mvn.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_MVN_JAVA_VERSION", "21.0.13.0.3")
+    monkeypatch.delenv("MAVEN_OPTS", raising=False)
     return root
 
 
@@ -449,6 +468,100 @@ class TestGoLayout:
         assert _head(clone) == _head(repo)
         assert os.readlink(link) == os.path.join("..", "platform-src", "local", "otdfctl")
         assert make[0]["GOWORK"] == str(clone / "go.work")
+
+
+class TestJava:
+    def test_build_installs_into_its_own_maven_repository(
+        self, checkout: CheckoutFactory, make: list, sdk_root: Path, tmp_path: Path
+    ):
+        """`mvn install` in ~/.m2/repository would replace released artifacts
+        with the branch's, which carry the last release's version."""
+        user_repo = tmp_path / "home" / ".m2" / "repository"
+        user_repo.mkdir(parents=True)
+
+        install_local("java", checkout("java"))
+
+        own_repo = sdk_root / "java" / ".m2" / "repository"
+        assert make[0]["MAVEN_OPTS"].split() == [
+            f"-Dmaven.repo.local={own_repo}",
+            f"-Dmaven.repo.local.tail={user_repo}",
+        ]
+
+    def test_callers_maven_opts_are_kept_and_come_first(
+        self, checkout: CheckoutFactory, make: list, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The JVM keeps the last of a repeated -D, so ours has to come last."""
+        monkeypatch.setenv("MAVEN_OPTS", "-Xmx2g -Dmaven.repo.local=/elsewhere")
+
+        install_local("java", checkout("java"))
+
+        opts = make[0]["MAVEN_OPTS"].split()
+        assert opts[:2] == ["-Xmx2g", "-Dmaven.repo.local=/elsewhere"]
+        assert opts[-1].startswith("-Dmaven.repo.local=")
+        assert opts[-1].endswith("/java/.m2/repository")
+
+    def test_no_tail_without_a_user_repository(self, checkout: CheckoutFactory, make: list):
+        install_local("java", checkout("java"))
+
+        assert "maven.repo.local.tail" not in make[0]["MAVEN_OPTS"]
+
+    @pytest.mark.parametrize("sdk", ["go", "js"])
+    def test_other_sdks_get_no_maven_settings(
+        self, sdk: str, checkout: CheckoutFactory, make: list
+    ):
+        install_local(sdk, checkout(sdk))
+
+        assert "MAVEN_OPTS" not in make[0]
+
+    @pytest.mark.parametrize("version", ["11.0.2", "17", "21.0.13.0.3"])
+    def test_supported_jdk(self, version: str, checkout: CheckoutFactory, make: list, monkeypatch):
+        monkeypatch.setenv("FAKE_MVN_JAVA_VERSION", version)
+
+        install_local("java", checkout("java"))
+
+        assert len(make) == 1
+
+    @pytest.mark.parametrize("version", ["1.8.0_292", "22.0.1", "27.0.1.0.3"])
+    def test_unsupported_jdk_is_refused_before_anything_is_copied(
+        self,
+        version: str,
+        checkout: CheckoutFactory,
+        make: list,
+        monkeypatch: pytest.MonkeyPatch,
+        sdk_root: Path,
+    ):
+        monkeypatch.setenv("FAKE_MVN_JAVA_VERSION", version)
+
+        result = _install("java", str(checkout("java")))
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit), result.exception
+        assert f"Maven runs on JDK {version}" in result.output
+        assert "needs JDK 11 through 21" in result.output
+        assert "JAVA_HOME" in result.output
+        assert make == []
+        assert not (sdk_root / "java" / "src").exists()
+
+    def test_unreadable_mvn_version_is_an_error(
+        self, checkout: CheckoutFactory, make: list, tmp_path: Path
+    ):
+        (tmp_path / "bin" / "mvn").write_text("#!/bin/sh\necho broken >&2\nexit 1\n")
+
+        with pytest.raises(LocalInstallError, match="could not tell which JDK.*broken"):
+            install_local("java", checkout("java"))
+        assert make == []
+
+    def test_reuse_does_not_need_a_supported_jdk(
+        self, checkout: CheckoutFactory, make: list, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Nothing is built, so nothing runs on the JDK."""
+        repo = checkout("java")
+        install_local("java", repo)
+        monkeypatch.setenv("FAKE_MVN_JAVA_VERSION", "27.0.1.0.3")
+
+        install_local("java", repo)
+
+        assert len(make) == 1
 
 
 class TestInstallTipUnchanged:

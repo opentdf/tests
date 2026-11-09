@@ -86,6 +86,16 @@ tip`, but none of tip's git machinery. Before editing `local_install.py`:
   is reused only while both the path and the commit match. A dist with no
   `source=` belongs to another installer, unless our clone sits beside it, in
   which case it is a build that died before it was recorded.
+- **Java builds never install into `~/.m2/repository`.** `mvn install` would
+  put the branch's modules there under the last release's version, replacing
+  the published artifacts. `isolate_maven` points `maven.repo.local` at
+  `xtest/sdk/java/.m2/repository`, with `~/.m2/repository` as a read-only
+  `maven.repo.local.tail`. It sets them in `MAVEN_OPTS`, not `MAVEN_ARGS`: a
+  Maven older than 3.9 ignores `MAVEN_ARGS` and would install into `~/.m2`
+  after all. `install tip java` still installs there.
+- **The JDK is checked first.** `check_jdk` asks `mvn --version`, since the
+  Homebrew launcher picks its own JDK when `JAVA_HOME` is unset, and refuses
+  anything outside `JAVA_MIN`..`JAVA_MAX`. Don't switch JDKs automatically.
 - **`install tip` is unaffected.** It still reads only origin, so a branch
   that isn't on origin is still refused there.
 

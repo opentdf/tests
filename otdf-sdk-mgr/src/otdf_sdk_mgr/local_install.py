@@ -53,6 +53,13 @@ _SHA_LIKE_RE = re.compile(r"v?[0-9a-f]{7,64}")
 # jj change ids are spelled with k-z only. git can't resolve them.
 _JJ_CHANGE_ID_RE = re.compile(r"[k-z]+")
 
+# The JDKs the java build is known to run on: CI builds it on 11 (xtest) and
+# 17 (java-sdk), and java-sdk's AGENTS.md sets up 21. Newer ones are refused
+# rather than tried. JDK 27 fails minutes into the build, when the sdk
+# module's Kotlin compiler can't parse its version.
+JAVA_MIN, JAVA_MAX = 11, 21
+_MVN_JAVA_VERSION_RE = re.compile(r"^Java version: ([^,\s]+)", re.MULTILINE)
+
 
 class LocalInstallError(InstallError):
     """A local checkout can't be built, or its build has nowhere safe to go."""
@@ -219,6 +226,72 @@ def _clone_source(clone_dir: Path) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def java_major(version: str) -> int | None:
+    """The feature release of a Java version string: 21 for `21.0.13.0.3`, 8 for `1.8.0_292`."""
+    m = re.match(r"(\d+)(?:\.(\d+))?", version)
+    if not m:
+        return None
+    major = int(m.group(1))
+    if major == 1 and m.group(2):
+        return int(m.group(2))
+    return major
+
+
+def check_jdk(env: dict[str, str]) -> None:
+    """Raise unless the JDK Maven would build with is one the java build supports.
+
+    Asks `mvn --version` rather than `java -version`: Maven runs on JAVA_HOME
+    when it is set, and otherwise its launcher may pick a JDK (Homebrew's does)
+    that is not the `java` on PATH. Only reports; switching JDKs is up to the
+    caller.
+    """
+    try:
+        result = subprocess.run(
+            ["mvn", "--version"], capture_output=True, text=True, env=env, check=False
+        )
+    except FileNotFoundError as e:
+        raise LocalInstallError(f"the java build needs Maven, and mvn is not on PATH ({e})") from e
+    m = _MVN_JAVA_VERSION_RE.search(result.stdout)
+    major = java_major(m.group(1)) if m else None
+    if result.returncode != 0 or m is None or major is None:
+        output = (result.stdout + result.stderr).strip()
+        raise LocalInstallError(
+            f"could not tell which JDK Maven runs on from `mvn --version`: {output}"
+        )
+    if not JAVA_MIN <= major <= JAVA_MAX:
+        raise LocalInstallError(
+            f"Maven runs on JDK {m.group(1)}, and the java build needs JDK {JAVA_MIN} "
+            f"through {JAVA_MAX}. Point JAVA_HOME at one, for example "
+            'export JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"'
+        )
+
+
+def isolate_maven(env: dict[str, str], sdk_dir: Path) -> Path:
+    """Point the java build's local Maven repository away from ~/.m2/repository; return it.
+
+    The Makefile runs `mvn install`, which installs every module under the
+    version in the pom. On a branch that is the last release's version, so in
+    ~/.m2/repository it would replace the published artifacts that release
+    installs and other projects resolve. The build installs into
+    `<sdk_dir>/.m2/repository` instead, and reads ~/.m2/repository as a
+    read-only tail (Maven 3.9 and later), so what is already downloaded is
+    reused and nothing there is written.
+
+    Set in MAVEN_OPTS, as JVM system properties, which every Maven version
+    honours. MAVEN_ARGS is read only from Maven 3.9, and an older Maven
+    ignoring it would install into ~/.m2 after all; an older one ignores the
+    tail instead, and only downloads again.
+    """
+    repo = sdk_dir / ".m2" / "repository"
+    props = [f"-Dmaven.repo.local={repo}"]
+    tail = Path.home() / ".m2" / "repository"
+    if tail.is_dir():
+        props.append(f"-Dmaven.repo.local.tail={tail}")
+    # After any the caller set: the JVM keeps the last of a repeated -D.
+    env["MAVEN_OPTS"] = " ".join([*env.get("MAVEN_OPTS", "").split(), *props])
+    return repo
+
+
 def _go_link_target(name: str) -> Path:
     """The `src/<name>` symlink target, relative as `checkout_go_from_platform` writes it."""
     return Path("..") / "platform-src" / name / "otdfctl"
@@ -310,18 +383,23 @@ def install_local(sdk: str, path: Path, rev: str = "HEAD", name: str | None = No
         print(f"  {layout.dist_dir} is already {sha[:12]} from {repo}; reusing.")
         return layout.dist_dir
 
-    # Flushed, or a piped log shows it after make's output.
-    print(f"Building {sdk} from {repo} at {sha[:12]} into {layout.dist_dir}...", flush=True)
-    if layout.dist_dir.exists():
-        shutil.rmtree(layout.dist_dir)
-    _fresh_clone(repo, sha, layout)
-
     env = os.environ.copy()
     env["VERSIONS"] = name
     if sdk == "go":
         # As cmd_tip does. The Makefile would find ../go.work itself, but an
         # inherited GOWORK would win over it.
         env["GOWORK"] = str(layout.clone_dir / "go.work")
+    elif sdk == "java":
+        # Before any work: an unsupported JDK fails minutes into the build.
+        check_jdk(env)
+        isolate_maven(env, layout.sdk_dir)
+
+    # Flushed, or a piped log shows it after make's output.
+    print(f"Building {sdk} from {repo} at {sha[:12]} into {layout.dist_dir}...", flush=True)
+    if layout.dist_dir.exists():
+        shutil.rmtree(layout.dist_dir)
+    _fresh_clone(repo, sha, layout)
+
     try:
         subprocess.check_call(["make"], cwd=layout.sdk_dir, env=env)
     except BaseException as e:

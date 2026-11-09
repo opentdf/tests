@@ -139,6 +139,13 @@ make
 ls -la dist/main/cli.sh
 ```
 
+The java build runs `mvn clean install`, so `install tip java` and a hand-run
+`make` in `sdk/java` install the branch's modules into `~/.m2/repository`. They
+go in under the version in its pom, normally the last release's, and replace
+the published artifacts of that version that other builds then resolve.
+`install local java` avoids this (see below). After a tip build, delete
+`~/.m2/repository/io/opentdf/platform/*/<version>` to restore them.
+
 ## Local Checkout Builds
 
 `install tip` builds only what GitHub has. `install local <sdk> <path>` builds
@@ -180,6 +187,16 @@ XT_FORCE_SUPPORTS=<feature> uv run pytest test_tdfs.py --sdks "go@local java@loc
   `rev=` and `sha=`. A re-run reuses the build while the path and commit both
   match. Otherwise it rebuilds from a fresh clone, for example after a new
   commit or from another checkout.
+- **Java builds keep out of `~/.m2/repository`.** They install into
+  `sdk/java/.m2/repository` instead, and read `~/.m2/repository` as a
+  read-only tail (`maven.repo.local.tail`, Maven 3.9 and later), so what is
+  already downloaded is reused. An older Maven downloads everything again into
+  `sdk/java/.m2`. Delete that directory to reclaim space.
+- **Java builds need JDK 11 through 21.** The JDK Maven runs on (per
+  `mvn --version`) is checked before anything is copied, and nothing switches
+  it for you. On JDK 27 the build fails partway through. Set `JAVA_HOME`, for
+  example
+  `export JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"`.
 - **Feature gates still need `XT_FORCE_SUPPORTS`.** The build reports the
   version in its source tree, normally the last release, so a version-gated
   `cli.sh supports` check says "no" for the change you are testing. See
