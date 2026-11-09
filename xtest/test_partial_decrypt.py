@@ -33,6 +33,8 @@ from test_tdfs import assert_tamper_error, change_root_signature
 #: A multiple of 16 for the line format, and not of 1 MiB, so every SDK ends
 #: on a short segment.
 PT_LENGTH = (5 << 20) + (112 << 10)
+#: Whole segments for every SDK (go and java 2 MiB, js 1 MiB).
+WHOLE_LENGTH = 8 << 20
 
 
 def line_bytes(start: int, end: int) -> bytes:
@@ -43,14 +45,24 @@ def line_bytes(start: int, end: int) -> bytes:
     return text[start - 16 * first : end - 16 * first]
 
 
+def line_plaintext(tmp_dir: Path, length: int) -> Path:
+    path = tmp_dir / f"test-plain-lines-{length}.txt"
+    if not (path.is_file() and path.stat().st_size == length):
+        with path.open("wb") as f:
+            for at in range(0, length, 1 << 20):
+                f.write(line_bytes(at, min(at + (1 << 20), length)))
+    return path
+
+
 @pytest.fixture(scope="session")
 def partial_pt_file(tmp_dir: Path) -> Path:
-    path = tmp_dir / "test-plain-partial.txt"
-    if not (path.is_file() and path.stat().st_size == PT_LENGTH):
-        with path.open("wb") as f:
-            for at in range(0, PT_LENGTH, 1 << 20):
-                f.write(line_bytes(at, min(at + (1 << 20), PT_LENGTH)))
-    return path
+    return line_plaintext(tmp_dir, PT_LENGTH)
+
+
+@pytest.fixture
+def cell_pt(request: pytest.FixtureRequest, tmp_dir: Path) -> Path:
+    """What a cell encrypts; parametrize indirectly with another length."""
+    return line_plaintext(tmp_dir, getattr(request, "param", PT_LENGTH))
 
 
 @dataclass(frozen=True)
@@ -140,21 +152,21 @@ def cell(
     decrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     attribute_default_rsa: Attribute,
-    partial_pt_file: Path,
+    cell_pt: Path,
     tmp_dir: Path,
     _encryption_cache: dict[tuple, Path],
 ) -> Cell:
     skip_unless_in_play(encrypt_sdk, decrypt_sdk, in_focus)
     decrypt_sdk.skip_if_unsupported(*SOURCES[source].features)
     label = request.node.originalname or request.node.name
-    factory = EncryptFactory(label, partial_pt_file, tmp_dir, _encryption_cache)
+    factory = EncryptFactory(label, cell_pt, tmp_dir, _encryption_cache)
     ct_file = factory(
         encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
     tdfs.skip_chunky_skew(ct_file, decrypt_sdk)
-    return Cell(partial_pt_file, factory, ct_file)
+    return Cell(cell_pt, factory, ct_file)
 
 
 def assert_plaintext(actual: bytes, start: int, end: int) -> None:
@@ -185,8 +197,11 @@ def fetch_budget(
     """Head + covering segments + tail + allowance, in bytes."""
     assert source.allowance is not None
     first, payload_end = payload_extent(ct_file)
+    count = len(
+        tdfs.manifest(ct_file).encryptionInformation.integrityInformation.segments
+    )
     # web-sdk also reads the preceding segment to verify the size (DSPX-5219).
-    if start // seg == -(-pt_len // seg) - 1 > 0:
+    if start // seg == count - 1 > 0:
         start -= seg
     plan = rangeserve.retention_plan(
         [(start, end)], plaintext_length=pt_len, segment_size=seg, payload_start=first
@@ -215,8 +230,36 @@ def test_partial_decrypt(
     n = cell.pt.stat().st_size
     seg = geometry(cell.ct, n)
     offset, length = RANGES[case](seg, n)
-    end = n if length is None else min(offset + length, n)
+    check_range(request, decrypt_sdk, cell, source, seg, offset, length, case)
 
+
+@pytest.mark.skipif(not FULL_TABLE, reason="segment layout is client-side")
+@pytest.mark.parametrize("source", ["http"])
+@pytest.mark.parametrize("cell_pt", [WHOLE_LENGTH], indirect=True, ids=["whole"])
+def test_partial_decrypt_whole_segments(
+    request: pytest.FixtureRequest, decrypt_sdk: tdfs.SDK, cell: Cell, source: str
+) -> None:
+    """Late in whole segments. java ends these with an empty segment, which
+    must not send a reader back to segment 0 (DSPX-5551)."""
+    n = cell.pt.stat().st_size
+    seg = geometry(cell.ct, n)
+    check_range(
+        request, decrypt_sdk, cell, source, seg, n - seg + seg // 4, 100, "whole"
+    )
+
+
+def check_range(
+    request: pytest.FixtureRequest,
+    decrypt_sdk: tdfs.SDK,
+    cell: Cell,
+    source: str,
+    seg: int,
+    offset: int,
+    length: int | None,
+    variant: str,
+) -> None:
+    n = cell.pt.stat().st_size
+    end = n if length is None else min(offset + length, n)
     spec = SOURCES[source]
     src: Path | str = cell.ct
     log: list[rangeserve.Request] = []
@@ -226,7 +269,7 @@ def test_partial_decrypt(
         request.addfinalizer(full.close)
         src, log = request.getfixturevalue(spec.server)(full)
 
-    rt_file = cell.tdf.rt_file(cell.ct, decrypt_sdk, variant=f"{case}-{source}")
+    rt_file = cell.tdf.rt_file(cell.ct, decrypt_sdk, variant=f"{variant}-{source}")
     decrypt_sdk.decrypt(src, rt_file, "ztdf", plaintext_range=(offset, length))
     assert_plaintext(rt_file.read_bytes(), offset, end)
 
