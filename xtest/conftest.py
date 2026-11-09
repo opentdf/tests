@@ -70,6 +70,9 @@ pytest_plugins = [
     "fixtures.encryption",
     "fixtures.bench",
     "fixtures.range_server",
+    "fixtures.nfs_mount",
+    "fixtures.streaming",
+    "fixtures.sparse",
 ]
 
 
@@ -579,30 +582,32 @@ def require_partial_decrypt_cell(session: pytest.Session) -> None:
 
     Every cell skips on an SDK without ``partial_decrypt``, so a run whose
     probes all say no would otherwise go green having tested nothing. Opt in
-    with ``XT_PARTIAL_DECRYPT_REQUIRED=1``; the xdist controller judges.
+    with ``XT_PARTIAL_DECRYPT_REQUIRED=1``, and for the cells through the NFS
+    mount (DSPX-5544) ``XT_NFS_PARTIAL_REQUIRED=1``; the xdist controller
+    judges.
     """
     config = session.config
-    if os.environ.get("XT_PARTIAL_DECRYPT_REQUIRED", "").lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return
     if getattr(config, "workerinput", None) is not None:
         return
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     passed = reporter.stats.get("passed", []) if reporter else []
-    cell = "test_partial_decrypt.py::test_partial_decrypt["
-    if any(cell in r.nodeid for r in passed):
-        return
-    if session.exitstatus == pytest.ExitCode.OK:
-        session.exitstatus = pytest.ExitCode.TESTS_FAILED
-    if reporter:
-        reporter.write_line(
-            "XT_PARTIAL_DECRYPT_REQUIRED: no test_partial_decrypt cell passed "
-            "(every SDK pair skipped?)",
-            red=True,
-        )
+    prefix = "test_partial_decrypt.py::test_partial_decrypt["
+    for var, suffix in (
+        ("XT_PARTIAL_DECRYPT_REQUIRED", ""),
+        ("XT_NFS_PARTIAL_REQUIRED", "-nfs]"),
+    ):
+        if os.environ.get(var, "").lower() not in ("1", "true", "yes"):
+            continue
+        if any(r.nodeid.startswith(prefix) and suffix in r.nodeid for r in passed):
+            continue
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        if reporter:
+            reporter.write_line(
+                f"{var}: no matching test_partial_decrypt cell passed "
+                "(every SDK pair skipped?)",
+                red=True,
+            )
 
 
 #: Conformance records for the whole run, in arrival order. Plain module
