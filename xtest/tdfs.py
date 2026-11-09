@@ -124,6 +124,13 @@ feature_type = Literal[
     # branch build; against a released build that turns the skip into a red
     # baseline.
     "assertion_header_key_pinning",
+    # DSPX-1561 Phase 0: the assertion hash covers the assertion as received,
+    # minus only its top-level `binding` (RFC 8785 JCS); manifests are parsed
+    # strictly (duplicate members, case variants of modelled member names,
+    # I-JSON inside assertions, exact string ids); and the binding form follows
+    # spec Section 5.1. The DSPX-5520 shared vectors in vectors/ fix the
+    # expected results. Force-only, like assertion_header_key_pinning.
+    "assertion_hash_raw",
     "assertion_verification",
     "attribute_traversal",
     "audit_logging",

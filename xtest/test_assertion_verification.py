@@ -1,12 +1,15 @@
 """Assertion verification across SDK pairings (DSPX-1561 Phase 0).
 
-One feature gate, force-only until a release ships:
+Two feature gates, both force-only until a release ships:
 
 ``assertion_header_key_pinning``
     Each assertion is verified with exactly one key the reader selects from
     its own configuration -- the per-ID key, else the default key, else the
     payload key with HS256 -- and with that key's algorithm. A ``jwk`` or
     ``x5c`` in the binding JWS may only match the selected key.
+``assertion_hash_raw``
+    The hash covers the assertion as received minus its top-level binding,
+    the manifest is parsed strictly, and the binding form follows spec 5.1.
 
 The assertions under test are built here and written into a TDF that the
 encrypting SDK produced. A binding covers only the assertion and the
@@ -22,6 +25,7 @@ control: the same verification configuration accepting the authorized or
 unaltered artifact.
 """
 
+import base64
 import filecmp
 import hashlib
 import hmac
@@ -40,8 +44,9 @@ import assertions
 import tdfs
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
-from jsontext import text
+from jsontext import Obj, Raw, esc, quoted, text
 from test_tdfs import assert_tamper_error
+from vectors import generate_assertion_vectors as vectors
 
 #### KEYS AND ASSERTIONS
 
@@ -754,3 +759,406 @@ def test_hmac_keyed_with_rsa_public_key(
         "algorithm-mismatch",
         keys,
     )
+
+
+#### assertion_hash_raw
+
+EXTENDED_ID = "extended-label"
+
+
+def extended(cls: str = "SECRET", note: str = "coi") -> dict[str, Any]:
+    """A label with unmodelled members, including nested reserved names."""
+    a = label(EXTENDED_ID, cls)
+    a["statement"] |= {
+        "encoding": "utf-8",
+        "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+        "binding": {"method": "jws", "signature": "e30.e30.c2ln"},
+        "signingKey": {"alg": "HS256", "key": "placeholder"},
+    }
+    a["extensions"] = {
+        "hash": "deadbeef",
+        "note": note,
+        "binding": {"signature": "e30.e30.c2ln"},
+        "signingKey": {"alg": "RS256", "key": "placeholder"},
+    }
+    return a
+
+
+def acp240_label() -> dict[str, Any]:
+    """The ACP 240-style label of spec 2.2: an object statement.value."""
+    return {
+        "id": "3f1c2d9e-8a4b-4c6d-9e0f-1a2b3c4d5e6f",
+        "type": "handling",
+        "scope": "payload",
+        "appliesToState": "encrypted",
+        "statement": {
+            "format": "json-structured",
+            "schema": SCHEMA,
+            "value": {
+                "@context": {"@base": SCHEMA},
+                "ocl": {
+                    "pol": POLICY_ID,
+                    "cls": "CONFIDENTIAL",
+                    "catl": [{"type": "P", "name": "Releasable To", "vals": ["USA"]}],
+                    "dcr": "2026-11-06T12:00:00Z",
+                },
+            },
+        },
+    }
+
+
+def appended_keys(tmp_dir: Path, id: str, signer: RsaSigner) -> Path:
+    return verification_file(
+        tmp_dir, f"per-id-{id}", keys={id: ("RS256", signer.public_pem)}
+    )
+
+
+HashCase = Literal["raw", "tampered-extension", "old-js-hash"]
+
+
+@pytest.mark.parametrize(
+    "case, reason",
+    [
+        ("raw", None),
+        ("tampered-extension", "binding-mismatch"),
+        ("old-js-hash", "binding-mismatch"),
+    ],
+)
+def test_unmodelled_members_are_hashed(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    unkeyed_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    pt_file: Path,
+    tmp_dir: Path,
+    authorized: RsaSigner,
+    case: HashCase,
+    reason: str | None,
+):
+    """Unmodelled members, nested hash/binding/signingKey included, are bound.
+
+    ``raw`` is signed over the assertion as written and verifies. Changing an
+    extension member after signing breaks it, and so does signing over the
+    hash older JS writers computed, which skipped those nested names.
+    """
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
+
+    def build(m: dict[str, Any]) -> list[Any]:
+        if case == "old-js-hash":
+            old_hash = assertions.old_js_assertion_hash(extended())
+            a = bind(m, extended(), authorized.private, hash_hex=old_hash)
+            check_signed_by(m, a, authorized.key, old_hash)
+        else:
+            a = bind(m, extended(), authorized.private)
+            check_signed_by(m, a, authorized.key)
+            if case == "tampered-extension":
+                a = extended(note="changed") | {"binding": a["binding"]}
+        assert predict(m, a, authorized.key) == reason
+        return [*m["assertions"], a]
+
+    ct = with_assertions(unkeyed_ct(), f"extended-{case}", build)
+    rt = encrypted_tdf.rt_file(ct, decrypt_sdk)
+    keys = appended_keys(tmp_dir, EXTENDED_ID, authorized)
+    if reason is None:
+        decrypts(decrypt_sdk, ct, rt, pt_file, keys)
+    else:
+        fails_with(decrypt_sdk, ct, rt, reason, keys)
+
+
+def test_object_valued_label_is_hashed_as_an_object(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    unkeyed_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    pt_file: Path,
+    tmp_dir: Path,
+    authorized: RsaSigner,
+):
+    """The ACP 240 label, signed over its object value, verifies everywhere."""
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
+    label_ = acp240_label()
+    assert assertions.assertion_hash(label_) == vectors.EXAMPLE_OBJECT_HASH
+
+    def build(m: dict[str, Any]) -> list[Any]:
+        a = bind(m, label_, authorized.private)
+        assert predict(m, a, authorized.key) is None
+        return [*m["assertions"], a]
+
+    ct = with_assertions(unkeyed_ct(), "acp240-object-value", build)
+    decrypts(
+        decrypt_sdk,
+        ct,
+        encrypted_tdf.rt_file(ct, decrypt_sdk),
+        pt_file,
+        appended_keys(tmp_dir, label_["id"], authorized),
+    )
+
+
+ManifestChange = Callable[[dict[str, Any]], Any]
+
+
+def in_writer_assertion(edit: Callable[[Obj], Obj]) -> ManifestChange:
+    """Apply ``edit`` to the writer's payload-key assertion."""
+
+    def change(m: dict[str, Any]) -> Any:
+        m["assertions"] = [
+            edit(Obj.of(a)) if a.get("id") == UNKEYED_ID else a for a in m["assertions"]
+        ]
+        return m
+
+    return change
+
+
+def _duplicate_in_key_access(m: dict[str, Any]) -> Any:
+    kao = m["encryptionInformation"]["keyAccess"][0]
+    m["encryptionInformation"]["keyAccess"][0] = Obj.of(kao).after(
+        "url", ("url", kao["url"])
+    )
+    return m
+
+
+def _url_variant_in_key_access(m: dict[str, Any]) -> Any:
+    kao = m["encryptionInformation"]["keyAccess"][0]
+    m["encryptionInformation"]["keyAccess"][0] = Obj.of(kao).after(
+        "url", ("URL", kao["url"])
+    )
+    return m
+
+
+def _renamed(parent: dict[str, Any], name: str, new: str) -> Obj:
+    """``parent`` with member ``name`` spelled ``new``, added if absent."""
+    if name in parent:
+        return Obj.of(parent).rename(name, new)
+    return Obj.of(parent).plus((new, True if name == "isStreamable" else "4.3.0"))
+
+
+def _legacy_isstreamable(m: dict[str, Any]) -> Any:
+    method = m["encryptionInformation"]["method"]
+    m["encryptionInformation"]["method"] = _renamed(
+        method, "isStreamable", "IsStreamable"
+    )
+    return m
+
+
+#: Raw manifest changes and the reason each must fail with, or None for a
+#: change every reader must accept. Duplicates repeat the same value, so a
+#: reader that keeps either one sees an unchanged manifest; only a strict
+#: parser notices.
+PROFILE_CASES: dict[str, tuple[str | None, ManifestChange]] = {
+    "duplicate-root-member": (
+        "duplicate-member",
+        lambda m: Obj.of(m).plus(("payload", m["payload"])),
+    ),
+    "duplicate-in-key-access": ("duplicate-member", _duplicate_in_key_access),
+    "duplicate-in-assertion": (
+        "duplicate-member",
+        in_writer_assertion(lambda a: a.after("id", ("id", UNKEYED_ID))),
+    ),
+    "escaped-duplicate-in-assertion": (
+        "duplicate-member",
+        in_writer_assertion(
+            lambda a: a.after("id", (quoted(esc(0x69), "d"), UNKEYED_ID))
+        ),
+    ),
+    "Assertions-alongside-assertions": (
+        "ambiguous-member",
+        lambda m: Obj.of(m).after("assertions", ("Assertions", [])),
+    ),
+    "Payload-alongside-payload": (
+        "ambiguous-member",
+        lambda m: Obj.of(m).after("payload", ("Payload", m["payload"])),
+    ),
+    "URL-in-key-access": ("ambiguous-member", _url_variant_in_key_access),
+    "SchemaVersion-alone": (
+        "ambiguous-member",
+        lambda m: _renamed(m, "schemaVersion", "SchemaVersion"),
+    ),
+    # java-sdk up to v0.7.5 wrote this spelling, exempt from rule R1 (spec 3.2).
+    "IsStreamable-alone": (None, _legacy_isstreamable),
+    "ID-in-assertion": (
+        "ambiguous-member",
+        in_writer_assertion(lambda a: a.after("id", ("ID", UNKEYED_ID))),
+    ),
+    "non-string-id": (
+        "invalid-id",
+        in_writer_assertion(lambda a: a.put("id", Raw("42"))),
+    ),
+    "lone-surrogate-in-assertion": (
+        "invalid-json",
+        in_writer_assertion(lambda a: a.plus(("note", quoted(esc(0xD800))))),
+    ),
+    "out-of-range-number-in-assertion": (
+        "invalid-json",
+        in_writer_assertion(lambda a: a.plus(("n", Raw("1e400")))),
+    ),
+}
+
+
+def predict_manifest(raw: bytes) -> str | None:
+    """Spec Section 8 steps 1 and 3.1 on a whole manifest."""
+    try:
+        m = assertions.parse_manifest(raw)
+        for a in m.get("assertions") or []:
+            assertions.assertion_id(a)
+    except assertions.AssertionFailure as e:
+        return e.reason
+    return None
+
+
+@pytest.mark.parametrize("case", list(PROFILE_CASES))
+def test_strict_manifest_parsing(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    unkeyed_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    pt_file: Path,
+    case: str,
+):
+    """Duplicates, case variants, bad ids, and non-I-JSON fail by reason.
+
+    The controls are the unaltered TDF (test_binding_forms' unaltered case)
+    and the legacy ``IsStreamable`` spelling, which every reader accepts.
+    """
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
+    reason, change = PROFILE_CASES[case]
+
+    def mutate(raw: str) -> str:
+        out = text(change(json.loads(raw)))
+        assert predict_manifest(out.encode("utf-8")) == reason
+        return out
+
+    ct = tdfs.update_manifest_text(f"profile-{case}", unkeyed_ct(), mutate)
+    rt = encrypted_tdf.rt_file(ct, decrypt_sdk)
+    if reason is None:
+        decrypts(decrypt_sdk, ct, rt, pt_file)
+    else:
+        fails_with(decrypt_sdk, ct, rt, reason)
+
+
+#: DSPX-5520 assertion vectors that are injected as an extra assertion into a
+#: real manifest. Each fails at manifest parsing or the id check, before any
+#: key is needed, so the TDF's own keys do not matter.
+INJECTED_VECTORS = [
+    "assertion-duplicate-id",
+    "assertion-escaped-duplicate-id",
+    "assertion-duplicate-deep-in-object-value",
+    "assertion-case-variant-Id-alias-only",
+    "assertion-case-variant-long-s-scope",
+    "assertion-statement-case-variant-Value",
+    "assertion-binding-case-variant-Method-alias-only",
+    "assertion-lone-surrogate-in-binding",
+    "assertion-noncharacter-fffe-escaped",
+    "assertion-number-1e400",
+    "assertion-invalid-utf8-byte-ff",
+    "assertion-id-number",
+    "assertion-id-missing",
+]
+
+
+def _vector(name: str) -> dict[str, Any]:
+    doc = json.loads(vectors.OUTPUT.read_bytes())
+    (found,) = [v for v in doc["vectors"] if v["name"] == name]
+    assert found["status"] == "required" and "reason" in found["expect"], name
+    return found
+
+
+@pytest.mark.parametrize("name", INJECTED_VECTORS)
+def test_vector_assertion_in_real_manifest(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    unkeyed_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    name: str,
+):
+    """A shared vector's assertion, added to a real manifest, fails by its reason."""
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
+    vector = _vector(name)
+    reason = vector["expect"]["reason"]
+    injected = (
+        vector["input"].encode("utf-8")
+        if "input" in vector
+        else base64.b64decode(vector["inputBase64"])
+    )
+    marker = "@@VECTOR@@"
+
+    def mutate(raw: str) -> bytes:
+        m = json.loads(raw)
+        m["assertions"] = [*m["assertions"], Raw(marker)]
+        out = text(m).encode("utf-8").replace(marker.encode(), injected)
+        assert predict_manifest(out) == reason
+        return out
+
+    ct = tdfs.update_manifest_text(f"vector-{name}", unkeyed_ct(), mutate)
+    fails_with(decrypt_sdk, ct, encrypted_tdf.rt_file(ct, decrypt_sdk), reason)
+
+
+BDO = "PEJpbmRpbmdJbmZvcm1hdGlvbi8+"
+
+BINDING_CASES: dict[str, tuple[str | None, Callable[[str], Any]]] = {
+    "unaltered": (None, lambda sig: {"method": "jws", "signature": sig}),
+    "method-missing": (None, lambda sig: {"signature": sig}),
+    "method-JWS": (None, lambda sig: {"method": "JWS", "signature": sig}),
+    "method-unknown": (
+        "unsupported-binding",
+        lambda sig: {"method": "xmldsig", "signature": sig},
+    ),
+    "method-mixed-case": (
+        "unsupported-binding",
+        lambda sig: {"method": "Jws", "signature": sig},
+    ),
+    "bdo-alone": ("unsupported-binding", lambda _: {"bdo": BDO}),
+    "both-forms": (
+        "invalid-binding",
+        lambda sig: {"method": "jws", "signature": sig, "bdo": BDO},
+    ),
+    "empty-object": ("invalid-binding", lambda _: {}),
+    "removed": ("invalid-binding", lambda _: None),
+}
+
+
+def predict_binding_form(a: dict[str, Any]) -> str | None:
+    try:
+        assertions.binding_form(a)
+    except assertions.AssertionFailure as e:
+        return e.reason
+    return None
+
+
+@pytest.mark.parametrize("case", list(BINDING_CASES))
+def test_binding_forms(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    unkeyed_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    pt_file: Path,
+    case: str,
+):
+    """Spec 5.1 binding forms, on the writer's payload-key assertion.
+
+    The binding is outside the hash, so a valid signature survives each
+    change; only the form decides.
+    """
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_hash_raw")
+    reason, binding = BINDING_CASES[case]
+
+    def build(m: dict[str, Any]) -> list[Any]:
+        out = []
+        for a in m["assertions"]:
+            if a.get("id") == UNKEYED_ID:
+                new = binding(a["binding"]["signature"])
+                a = unbound(a) if new is None else unbound(a) | {"binding": new}
+                assert predict_binding_form(a) == reason
+            out.append(a)
+        return out
+
+    ct = with_assertions(unkeyed_ct(), f"binding-{case}", build)
+    rt = encrypted_tdf.rt_file(ct, decrypt_sdk)
+    if reason is None:
+        decrypts(decrypt_sdk, ct, rt, pt_file)
+    else:
+        fails_with(decrypt_sdk, ct, rt, reason)
