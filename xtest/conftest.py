@@ -70,6 +70,7 @@ pytest_plugins = [
     "fixtures.encryption",
     "fixtures.bench",
     "fixtures.range_server",
+    "fixtures.nfs_mount",
 ]
 
 
@@ -575,44 +576,42 @@ def pytest_collection_modifyitems(
 
 
 def require_partial_decrypt_cell(session: pytest.Session) -> None:
-    """Fail the run unless a partial-decrypt range cell passed, over a file
-    and over HTTP.
+    """Fail the run unless a partial-decrypt range cell passed through each
+    required source.
 
     Every cell skips on an SDK without the feature, so a run whose probes all
     say no would otherwise go green having tested nothing. Opt in with
-    ``XT_PARTIAL_DECRYPT_REQUIRED=1``; the xdist controller judges.
+    ``XT_PARTIAL_DECRYPT_REQUIRED=1`` (file and HTTP), and for the NFS mount
+    (DSPX-5544) ``XT_NFS_PARTIAL_REQUIRED=1``; the xdist controller judges.
     """
     config = session.config
-    if os.environ.get("XT_PARTIAL_DECRYPT_REQUIRED", "").lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return
     if getattr(config, "workerinput", None) is not None:
         return
     reporter = config.pluginmanager.get_plugin("terminalreporter")
     passed = reporter.stats.get("passed", []) if reporter else []
-    cells = [
-        r.nodeid
-        for r in passed
-        if "test_partial_decrypt.py::test_partial_decrypt[" in r.nodeid
-    ]
-    missing = [
-        source
-        for source in ("file", "http")
-        if not any(c.endswith(f"-{source}]") for c in cells)
-    ]
-    if not missing:
-        return
-    if session.exitstatus == pytest.ExitCode.OK:
-        session.exitstatus = pytest.ExitCode.TESTS_FAILED
-    if reporter:
-        reporter.write_line(
-            "XT_PARTIAL_DECRYPT_REQUIRED: no test_partial_decrypt cell passed "
-            f"over {' or '.join(missing)} (every SDK pair skipped?)",
-            red=True,
-        )
+    prefix = "test_partial_decrypt.py::test_partial_decrypt["
+    cells = [r.nodeid for r in passed if r.nodeid.startswith(prefix)]
+    for var, sources in (
+        ("XT_PARTIAL_DECRYPT_REQUIRED", ("file", "http")),
+        ("XT_NFS_PARTIAL_REQUIRED", ("nfs",)),
+    ):
+        if os.environ.get(var, "").lower() not in ("1", "true", "yes"):
+            continue
+        missing = [
+            source
+            for source in sources
+            if not any(c.endswith(f"-{source}]") for c in cells)
+        ]
+        if not missing:
+            continue
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        if reporter:
+            reporter.write_line(
+                f"{var}: no test_partial_decrypt cell passed over "
+                f"{' or '.join(missing)} (every SDK pair skipped?)",
+                red=True,
+            )
 
 
 #: Conformance records for the whole run, in arrival order. Plain module

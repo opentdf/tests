@@ -1,9 +1,10 @@
 """Partial decrypt of a plaintext byte range, cross-SDK (DSPX-5117).
 
 Every case decrypts a slice of a multi-segment, position-unique plaintext and
-checks it against the generator, from a local file and over HTTP through the
-DSPX-5111 range server in full mode. Over HTTP the server's request log also
-bounds how much ciphertext the reader fetched: a reader that quietly downloads
+checks it against the generator, from a local file, over HTTP through the
+DSPX-5111 range server in full mode, and as a path on the DSPX-5543 NFS mount
+of that server (DSPX-5544; needs no URL input). Over HTTP and NFS the server's
+request log also bounds how much ciphertext the reader fetched: a reader that quietly downloads
 the whole payload and slices afterwards passes the content check, so the byte
 count is what proves the read was partial.
 
@@ -16,6 +17,7 @@ relabel cases also need ``segment_layout_verified``, which only forcing sets.
 import os
 import re
 import subprocess
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import accumulate, pairwise
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+import nfsmount
 import rangeserve
 import tdfs
 import zipinspect
@@ -36,6 +39,9 @@ from test_tdfs import assert_tamper_error, change_root_signature
 PT_LENGTH = (5 << 20) + (112 << 10)
 #: Whole segments for every SDK (go and java 2 MiB, js 1 MiB).
 WHOLE_LENGTH = 8 << 20
+#: The NFS cells' plaintext, 20 MiB + 112 KiB, so a whole-payload read
+#: overshoots the budget by far more than the mount's block rounding.
+NFS_PT_LENGTH = (20 << 20) + (112 << 10)
 
 
 def line_bytes(start: int, end: int) -> bytes:
@@ -61,9 +67,10 @@ def partial_pt_file(tmp_dir: Path) -> Path:
 
 
 @pytest.fixture
-def cell_pt(request: pytest.FixtureRequest, tmp_dir: Path) -> Path:
+def cell_pt(request: pytest.FixtureRequest, tmp_dir: Path, source: str) -> Path:
     """What a cell encrypts; parametrize indirectly with another length."""
-    return line_plaintext(tmp_dir, getattr(request, "param", PT_LENGTH))
+    default = NFS_PT_LENGTH if SOURCES[source].large else PT_LENGTH
+    return line_plaintext(tmp_dir, getattr(request, "param", default))
 
 
 @dataclass(frozen=True)
@@ -79,6 +86,10 @@ class Source:
     allowance: int | None = None
     #: The :data:`RANGES` cases run through this source; None for all.
     cases: frozenset[str] | None = None
+    #: Fetched extents are widened to multiples of this before summing.
+    align: int = 1
+    #: Use the NFS plaintext, large enough to tell a partial read from a whole.
+    large: bool = False
 
 
 SOURCES: dict[str, Source] = {
@@ -90,6 +101,11 @@ SOURCES: dict[str, Source] = {
         "range_server",
         64 * 1024,
         frozenset({"inside_one_segment", "crosses_boundary", "length_omitted"}),
+    ),
+    # Reads come in RSIZE blocks, and Linux read-ahead (one RSIZE window) can
+    # run up to two windows past the last byte read.
+    "nfs": Source(
+        (), "nfs_mount", 3 * nfsmount.RSIZE, align=nfsmount.RSIZE, large=True
     ),
 }
 
@@ -208,8 +224,10 @@ def fetch_budget(
     plan = rangeserve.retention_plan(
         [(start, end)], plaintext_length=pt_len, segment_size=seg, payload_start=first
     )
-    tail = ct_file.stat().st_size - payload_end
-    return sum(e - s for s, e in plan) + tail + source.allowance
+    a = source.align
+    extents = [*plan, (payload_end, ct_file.stat().st_size)]
+    rounded = rangeserve.merge([(s // a * a, -(-e // a) * a) for s, e in extents])
+    return sum(e - s for s, e in rounded) + source.allowance
 
 
 @pytest.mark.parametrize(
@@ -278,6 +296,11 @@ def check_range(
     if spec.allowance is not None and end > offset:
         served = sum(r.bytes_served for r in log)
         budget = fetch_budget(cell.ct, seg, n, offset, end, spec)
+        warnings.warn(
+            f"{source} {variant}: served {served} of budget {budget} "
+            f"({cell.ct.stat().st_size}-byte TDF)",
+            stacklevel=1,
+        )
         assert served <= budget, (
             f"reader fetched {served} bytes of a {cell.ct.stat().st_size}-byte "
             f"TDF for plaintext {offset}-{end}; budget {budget}. Requests: {log}"
@@ -344,9 +367,24 @@ SEGMENT_REJECTED = re.compile(
     rb"segment|integrity|tamper|tag mismatch|cipher job failed", re.IGNORECASE
 )
 
+#: Sources the tamper cases run through; their reads are not accounted.
+TAMPER_SOURCES = ["file", "nfs"]
 
+
+def tampered_src(
+    request: pytest.FixtureRequest, source: str, b_file: Path
+) -> Path | str:
+    spec = SOURCES[source]
+    if not spec.server:
+        return b_file
+    full = rangeserve.FullFile(b_file)
+    request.addfinalizer(full.close)
+    return request.getfixturevalue(spec.server)(full)[0]
+
+
+@pytest.mark.parametrize("source", TAMPER_SOURCES)
 def test_partial_decrypt_tampered_segment_in_range_fails(
-    decrypt_sdk: tdfs.SDK, cell: Cell
+    request: pytest.FixtureRequest, decrypt_sdk: tdfs.SDK, cell: Cell, source: str
 ) -> None:
     seg = geometry(cell.ct, cell.pt.stat().st_size)
     sizes = tdfs.encrypted_segment_sizes(tdfs.manifest(cell.ct))
@@ -356,7 +394,7 @@ def test_partial_decrypt_tampered_segment_in_range_fails(
     rt_file = cell.tdf.rt_file(b_file, decrypt_sdk)
     with pytest.raises(subprocess.CalledProcessError) as exc:
         decrypt_sdk.decrypt(
-            b_file,
+            tampered_src(request, source, b_file),
             rt_file,
             "ztdf",
             expect_error=True,
@@ -394,8 +432,9 @@ def test_partial_decrypt_tampered_segment_out_of_range(
     record_property("tampered_seg0_read_seg2", outcome)
 
 
+@pytest.mark.parametrize("source", TAMPER_SOURCES)
 def test_partial_decrypt_tampered_root_signature_fails(
-    decrypt_sdk: tdfs.SDK, cell: Cell
+    request: pytest.FixtureRequest, decrypt_sdk: tdfs.SDK, cell: Cell, source: str
 ) -> None:
     b_file = tdfs.update_manifest(
         "partial_broken_root_sig", cell.ct, change_root_signature
@@ -403,7 +442,11 @@ def test_partial_decrypt_tampered_root_signature_fails(
     rt_file = cell.tdf.rt_file(b_file, decrypt_sdk)
     with pytest.raises(subprocess.CalledProcessError) as exc:
         decrypt_sdk.decrypt(
-            b_file, rt_file, "ztdf", expect_error=True, plaintext_range=(0, 100)
+            tampered_src(request, source, b_file),
+            rt_file,
+            "ztdf",
+            expect_error=True,
+            plaintext_range=(0, 100),
         )
     assert_tamper_error(exc.value, "root", decrypt_sdk)
 
