@@ -17,6 +17,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -104,6 +105,12 @@ if [ "$1" == "supports" ]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
@@ -140,7 +147,7 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
       ;;
-    dpop | dpop_nonce_challenge)
+    dpop | dpop_nonce_challenge | partial_decrypt | http_range_source)
       set -o pipefail
       "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
  index($f)'
@@ -272,6 +279,13 @@ elif [ "$1" == "decrypt" ]; then
   # bypassing the allowlist may expose potential security risks
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--kas-allowlist '*')
+  fi
+  if [ -n "$XT_WITH_PLAINTEXT_RANGE" ]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [ -n "$range_length" ]; then
+      args+=(--length "$range_length")
+    fi
   fi
   echo "${cmd[@]}" decrypt "${args[@]}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"

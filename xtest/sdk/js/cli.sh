@@ -17,6 +17,7 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
 #  XT_WITH_DPOP [string] - Enable DPoP token binding; value selects algorithm (e.g. ES256)
 #  XT_WITH_DPOP_KEY [string] - Path to PEM-encoded PKCS8 private key for DPoP signing
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
@@ -121,6 +122,12 @@ if [[ "$1" == "supports" ]]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     multikao)
       # Tolerate a KAO array where the same KAS wraps the same split more than
       # once (DSPX-3379). Shipped in web-sdk >= 0.20.0.
@@ -167,6 +174,12 @@ if [[ "$1" == "supports" ]]; then
       # test. See DSPX-4591.
       exit 0
       ;;
+    http_range_source | partial_decrypt)
+      # Shipped together in web-sdk#1093 (DSPX-5116).
+      set -o pipefail
+      "$CLI" help | grep -- '--offset'
+      exit $?
+      ;;
     zip64-at-2gib)
       # web-sdk writes the ZIP64 sentinel unconditionally, so it is trivially
       # on the right side of the 2 GiB switch point. Predates any version we
@@ -204,7 +217,11 @@ source "$XTEST_DIR"/test.env
 [[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
 [[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
-src_file=$(realpath "$2")
+if [[ "$2" =~ ^https?:// ]]; then
+  src_file="$2"
+else
+  src_file=$(realpath "$2")
+fi
 dst_file=$(realpath "$(dirname "$3")")/$(basename "$3")
 
 args=(
@@ -316,6 +333,13 @@ elif [[ "$1" == "decrypt" ]]; then
   fi
   if [[ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]]; then
     args+=(--ignoreAllowList)
+  fi
+  if [[ -n "$XT_WITH_PLAINTEXT_RANGE" ]]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [[ -n "$range_length" ]]; then
+      args+=(--length "$range_length")
+    fi
   fi
   # only ignore allowlist if the kas allowlist fetching from kas registry has not been implemented
   if "$CLI" help | grep 'from "/key-access-servers" endpoint'; then
