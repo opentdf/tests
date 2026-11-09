@@ -278,8 +278,11 @@ def fails_with(
     rt_file: Path,
     reason: str,
     keys: Path | None = None,
-) -> None:
-    """Decrypt must fail, reporting ``reason`` (DSPX-1561 decisions, Section 3)."""
+) -> bytes:
+    """Decrypt must fail, reporting ``reason`` (DSPX-1561 decisions, Section 3).
+
+    Returns the CLI's output, for checks on the rest of the message.
+    """
     try:
         decrypt_sdk.decrypt(
             ct_file, rt_file, "ztdf", str(keys) if keys else "", expect_error=True
@@ -290,7 +293,7 @@ def fails_with(
             f"{exc.output[-4000:]!r}"
         )
         assert_tamper_error(exc, "assertion", decrypt_sdk)
-        return
+        return exc.output
     pytest.fail(f"{decrypt_sdk} decrypted {ct_file.name}; expected reason={reason}")
 
 
@@ -324,6 +327,21 @@ def unkeyed_ct(
     return lambda: encrypted_tdf(
         encrypt_sdk,
         az=assertion_file_no_keys,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+        attr_values=attribute_default_rsa.value_fqns,
+    )
+
+
+@pytest.fixture
+def plain_ct(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    attribute_default_rsa: Attribute,
+    encrypted_tdf: EncryptFactory,
+) -> Callable[[], Path]:
+    """A TDF written with no assertions requested; some writers add their own."""
+    return lambda: encrypted_tdf(
+        encrypt_sdk,
         target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         attr_values=attribute_default_rsa.value_fqns,
     )
@@ -653,6 +671,54 @@ def test_default_key_only_verification_file(
         pt_file,
         verification_file(tmp_dir, f"default-only-{alg}", default=(alg, pin)),
     )
+
+
+def test_default_key_applies_to_payload_key_assertions(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    plain_ct: Callable[[], Path],
+    encrypted_tdf: EncryptFactory,
+    pt_file: Path,
+    tmp_dir: Path,
+    authorized: RsaSigner,
+):
+    """A default key also covers the payload-key system-metadata assertion.
+
+    Intended and documented (spec 6.1; DSPX-1561 decisions, "Default key and
+    payload-key assertions"): a configured default key applies to every
+    assertion without a per-ID key, so the payload-key ``system-metadata``
+    assertion that Java writers always add fails under an RS256 default.
+    Readers that need both configure per-ID keys instead. The cases above that
+    drop writer-added assertions test the default key itself; this one pins
+    what happens to a Java-written TDF as it is.
+
+    The control reads the same file with an empty keys file, under which
+    ``system-metadata`` falls back to the payload key.
+    """
+    skip_unless(encrypt_sdk, decrypt_sdk, in_focus, "assertion_header_key_pinning")
+    if encrypt_sdk.sdk != "java":
+        pytest.skip("only Java writers add a payload-key system-metadata assertion")
+    ct = plain_ct()
+    written = [a.get("id") for a in tdfs.manifest_json(ct).get("assertions") or []]
+    assert written == ["system-metadata"], written
+    decrypts(
+        decrypt_sdk,
+        ct,
+        encrypted_tdf.rt_file(ct, decrypt_sdk, "no-keys"),
+        pt_file,
+        verification_file(tmp_dir, "empty"),
+    )
+    out = fails_with(
+        decrypt_sdk,
+        ct,
+        encrypted_tdf.rt_file(ct, decrypt_sdk, "default-key"),
+        "algorithm-mismatch",
+        verification_file(
+            tmp_dir, "default-only-RS256", default=("RS256", authorized.public_pem)
+        ),
+    )
+    assert b"system-metadata" in out, "the failure should name system-metadata"
 
 
 def test_hmac_keyed_with_rsa_public_key(
