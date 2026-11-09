@@ -17,6 +17,8 @@ import pytest
 
 import tdfs
 
+pytestmark = pytest.mark.units
+
 
 @pytest.fixture
 def sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tdfs.SDK:

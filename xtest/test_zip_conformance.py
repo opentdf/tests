@@ -102,7 +102,11 @@ from fixtures.encryption import EncryptFactory
 
 # ``no_audit_logs``: nothing here requests the ``audit_logs`` fixture -- this
 # module tests container encoding, not KAS rewrap events.
-pytestmark = [pytest.mark.zip_conformance, pytest.mark.no_audit_logs]
+pytestmark = [
+    pytest.mark.core,
+    pytest.mark.zip_conformance,
+    pytest.mark.no_audit_logs,
+]
 
 #: An extended-timestamp extra-field record (header id 0x5455), the shape
 #: real writers actually put ahead of a ZIP64 record in the wild.

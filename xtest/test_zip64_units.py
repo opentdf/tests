@@ -189,7 +189,7 @@ class TestZip64Selection:
 
 
 class _FakeConfig:
-    """The three things ``pytest_collection_modifyitems`` asks of a config.
+    """The three things ``_drop_unrequested`` asks of a config.
 
     A real ``pytest.Config`` would need a real session; the hook only reads
     two options, caches the resolved sizes in the stash, and calls one hook.
@@ -224,7 +224,7 @@ def _fake_item(name: str, *, marker: str | None = None, size: str | None = None)
 
 
 def _run_filter(config: _FakeConfig, items: list[pytest.Item]) -> list[str]:
-    conftest.pytest_collection_modifyitems(cast(pytest.Config, config), items)
+    conftest._drop_unrequested(cast(pytest.Config, config), items)
     return [i.name for i in items]
 
 

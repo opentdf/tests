@@ -31,6 +31,8 @@ from perf.config import (
     validate_sdk_name,
 )
 
+pytestmark = pytest.mark.units
+
 
 class TestArmRequest:
     def test_str_with_spec(self):

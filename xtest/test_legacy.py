@@ -5,6 +5,8 @@ import pytest
 
 import tdfs
 
+pytestmark = pytest.mark.legacy
+
 
 def get_golden_file(golden_file_name: str) -> Path:
     xtest_dir = Path(__file__).parent
