@@ -19,10 +19,13 @@ import pytest
 from perf import measure
 from perf.measure import MeasurementError, Sample
 
-pytestmark = pytest.mark.skipif(
-    not hasattr(os, "wait4"),
-    reason="per-process rusage requires os.wait4",
-)
+pytestmark = [
+    pytest.mark.units,
+    pytest.mark.skipif(
+        not hasattr(os, "wait4"),
+        reason="per-process rusage requires os.wait4",
+    ),
+]
 
 
 def python_child(body: str) -> list[str]:

@@ -9,6 +9,8 @@ import tdfs
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
 
+pytestmark = pytest.mark.core
+
 
 def skip_rts_as_needed(
     encrypt_sdk: tdfs.SDK,

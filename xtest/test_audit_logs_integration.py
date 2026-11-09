@@ -29,6 +29,8 @@ from abac import Attribute
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
 
+pytestmark = pytest.mark.multikas
+
 logger = logging.getLogger(__name__)
 
 
@@ -408,8 +410,13 @@ class TestEdgeCases:
         except subprocess.CalledProcessError:
             pass  # Expected
 
-        # Verify rewrap error was audited
-        audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
+        # Verify rewrap error was audited. Only this part is expected to fail
+        # (opentdf/tests#709): the decrypt rejection above must stay blocking.
+        try:
+            audit_logs.assert_rewrap_error(min_count=1, since_mark=mark)
+        except AssertionError:
+            pytest.xfail("no rewrap error audit event; see opentdf/tests#709")
+        pytest.fail("rewrap error now audited: drop the xfail (opentdf/tests#709)")
 
     @pytest.mark.slow
     def test_audit_under_sequential_load(

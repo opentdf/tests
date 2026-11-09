@@ -20,6 +20,8 @@ from audit_logs import (
     ParsedAuditEvent,  # noqa: F401 - Used in TestParsedAuditEvent class
 )
 
+pytestmark = pytest.mark.units
+
 
 class TestLogEntry:
     """Tests for the LogEntry class."""

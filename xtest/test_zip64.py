@@ -3,7 +3,7 @@
 Every test here is marked ``zip64`` and is deselected unless the session asks
 for a payload size that can reach ``2**31`` -- see the size table in
 ``sizes.py`` for why 2.1 GiB and not something rounder, and
-``pytest_collection_modifyitems`` in ``conftest.py`` for the deselection.
+``_drop_unrequested`` in ``conftest.py`` for the deselection.
 
 Run it with::
 

@@ -44,17 +44,15 @@ jobs:
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
       #
+      # -m units still collects every module, so conftest.py's tier check
+      # fails this step for any test the xtest.yml steps would not select.
+      #
       # --frozen --no-build: resolve nothing and build nothing, so a
       # dependency cannot slip in an unlocked version or a setup script on a
       # runner that already has everything installed from the step above.
       - name: Test xtest offline harnesses
         run: >-
-          uv run --frozen --no-build pytest --no-header -q
-          test_bench_stats.py test_bench_measure.py test_bench_runner.py
-          test_bench_arms.py test_bench_config.py test_bench_report.py
-          test_sdk_commands.py test_tdfs_units.py test_encryption_units.py
-          test_sizes_units.py test_zip64_units.py test_assertions_units.py
-          test_zip_conformance_units.py
+          uv run --frozen --no-build pytest --no-header -q -m units
         working-directory: xtest
       - name: Lint and test otdf-local
         run: |

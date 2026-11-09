@@ -11,6 +11,8 @@ from perf import stats
 from perf.report import _p_cell
 from perf.stats import Verdict
 
+pytestmark = pytest.mark.units
+
 
 def _comparison(
     ratio: float,

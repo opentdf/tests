@@ -16,6 +16,8 @@ from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 from tdfs import KeyAccessObject
 
+pytestmark = pytest.mark.multikas
+
 # Rewrap session-key algorithms, as passed to SDK.decrypt(session_key_algorithm=...)
 # / the CLI wrappers, mapped to the features that must be present to try them.
 # Every case also needs the platform's "audit-session-key-type". RSA is every SDK's

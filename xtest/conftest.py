@@ -425,7 +425,7 @@ def _parametrize_bench_cells(metafunc: pytest.Metafunc):
     """Fan the benchmark module out over its cells.
 
     Without --bench there is nothing to fan out over, and the items are
-    dropped wholesale in :func:`pytest_collection_modifyitems` rather than
+    dropped wholesale in :func:`_drop_unrequested` rather than
     parametrized here. Parametrizing over an empty list would *not* collect
     zero items: pytest's default ``empty_parameter_set_mark`` turns an empty
     set into one skipped item per test, so every ordinary run would carry
@@ -541,9 +541,44 @@ def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) ->
     return any(sizes.exercises_zip64_window(size) for size in session_sizes)
 
 
+# CI steps select tests by tier (``-m core``), not by file name, so a new
+# module is picked up by declaring ``pytestmark = pytest.mark.<tier>``. The
+# tiers are registered in pyproject.toml.
+TIERS = frozenset(
+    {"units", "harness", "core", "legacy", "multikas", "benchmark", "zip64"}
+)
+
+
+def _require_one_tier(items: list[pytest.Item]) -> None:
+    """Fail collection on any test without exactly one tier.
+
+    An untiered test is matched by no CI step's ``-m`` and would never run,
+    which looks exactly like passing. ``*_units.py`` is ``units`` by name.
+    """
+    bad: dict[str, int] = {}
+    for item in items:
+        if item.path.name.endswith("_units.py"):
+            item.add_marker(pytest.mark.units)
+        n = len({m.name for m in item.iter_markers()} & TIERS)
+        if n != 1:
+            bad.setdefault(item.nodeid.split("::")[0], n)
+    if bad:
+        found = ", ".join(f"{mod} ({n})" for mod, n in sorted(bad.items()))
+        raise pytest.UsageError(
+            f"need exactly one tier marker of {sorted(TIERS)}; found: {found}"
+        )
+
+
+# tryfirst: the tier check must see every item, before -m deselects any.
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
+    _require_one_tier(items)
+    _drop_unrequested(config, items)
+
+
+def _drop_unrequested(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Drop cells the session did not ask for.
 
     Two groups, deselected rather than skipped for the same reason: neither a
