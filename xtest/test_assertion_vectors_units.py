@@ -17,8 +17,6 @@ from typing import Any
 
 import pytest
 import rfc8785
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 import assertions
 from vectors import generate_assertion_vectors as generator
@@ -94,10 +92,19 @@ def test_vector_file_shape():
     assert DOC["source"] == (
         "opentdf/tests xtest/vectors/assertions-phase0.json (DSPX-5520)"
     )
+    assert list(DOC) == [
+        "format",
+        "source",
+        "description",
+        "modelledNames",
+        "caseVariantExceptions",
+        "keys",
+        "vectors",
+    ]
     for name, key in DOC["keys"].items():
-        assert key["alg"] in ("RS256", "HS256"), name
-        material = "publicKeyPem" if key["alg"] == "RS256" else "secretBase64"
-        assert set(key) == {"alg", material}, name
+        # The material reflects the key's form; alg may be deliberately bad.
+        assert isinstance(key["alg"], str), name
+        assert set(key) in ({"alg", "publicKeyPem"}, {"alg", "secretBase64"}), name
     names = [v["name"] for v in VECTORS]
     assert len(names) == len(set(names))
     for v in VECTORS:
@@ -129,15 +136,27 @@ def test_vector_file_shape():
             assert v["expect"] == {"reason": "invalid-statement"}, name
 
 
-def _key(name: str) -> assertions.VerificationKey:
-    spec = DOC["keys"][name]
-    if spec["alg"] == "HS256":
-        return assertions.VerificationKey(
-            "HS256", base64.b64decode(spec["secretBase64"])
-        )
-    public_key = serialization.load_pem_public_key(spec["publicKeyPem"].encode())
-    assert isinstance(public_key, rsa.RSAPublicKey)
-    return assertions.VerificationKey("RS256", public_key)
+def test_modelled_names_table():
+    """The file's case-variant table is the reference reader's (spec 3.2)."""
+    assert DOC["modelledNames"] == {
+        level: list(names) for level, names in assertions.MODELLED_NAMES.items()
+    }
+    assert DOC["caseVariantExceptions"] == {
+        level: list(names)
+        for level, names in assertions.CASE_VARIANT_EXCEPTIONS.items()
+    }
+
+
+def _key(vector: dict[str, Any]) -> assertions.VerificationKey:
+    """The selected key: configured keys go through key preparation."""
+    spec = DOC["keys"][vector["selectedKey"]]
+    secret = base64.b64decode(spec["secretBase64"]) if "secretBase64" in spec else None
+    if vector["keySource"] == "payload":
+        assert secret is not None
+        return assertions.VerificationKey("HS256", secret)
+    return assertions.configured_key(
+        spec["alg"], public_key_pem=spec.get("publicKeyPem"), secret=secret
+    )
 
 
 def _input(vector: dict[str, Any]) -> bytes:
@@ -167,9 +186,10 @@ def run_vector(vector: dict[str, Any]) -> dict[str, Any]:
                     )
                 }
             case "verify":
+                key = _key(vector)
                 assertions.verify_assertion_binding(
                     assertions.parse_assertion(raw),
-                    _key(vector["selectedKey"]),
+                    key,
                     base64.b64decode(vector["aggregateHashBase64"]),
                     vector["legacy"],
                 )

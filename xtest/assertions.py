@@ -13,7 +13,7 @@ import rfc8785
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509.oid import NameOID
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -105,39 +105,6 @@ class AssertionFailure(Exception):
         self.detail = detail
 
 
-#: Modelled member names per level (spec 3.2). No other level is checked.
-MANIFEST_NAMES = ("assertions",)
-ASSERTION_NAMES = ("id", "type", "scope", "appliesToState", "statement", "binding")
-STATEMENT_NAMES = ("format", "schema", "value")
-BINDING_NAMES = ("method", "signature", "bdo")
-
-# The simple case folds that Go's strings.EqualFold applies to ASCII letters,
-# besides the ASCII case pairs themselves: U+017F LATIN SMALL LETTER LONG S and
-# U+212A KELVIN SIGN.
-_NON_ASCII_FOLDS = {"\u017f": "s", "\u212a": "k"}
-
-
-def _fold(c: str) -> str:
-    if "A" <= c <= "Z":
-        return c.lower()
-    return _NON_ASCII_FOLDS.get(c, c)
-
-
-def is_case_variant(name: str, modelled: str) -> bool:
-    """True when ``name`` is a case variant of the ASCII name ``modelled``.
-
-    Same number of code points, and each folds to the lowercase of the
-    modelled name's code point at that position. Deliberately not Unicode
-    case folding, ``str.lower``, or Java's ``equalsIgnoreCase``: those also
-    match names such as ``ıd`` or ``ﬆatement``, which Go's decoder does not.
-    """
-    return (
-        name != modelled
-        and len(name) == len(modelled)
-        and all(_fold(n) == m.lower() for n, m in zip(name, modelled, strict=True))
-    )
-
-
 def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     obj: dict[str, Any] = {}
     for name, value in pairs:
@@ -214,38 +181,149 @@ def check_ijson(value: Any) -> None:
             pass
 
 
-def _check_names(obj: dict[str, Any], modelled: tuple[str, ...], level: str) -> None:
+#: Listed member names per checked level (spec Table 3.2; DSPX-1561
+#: decisions, "Modelled member names and case variants"). A level path is the
+#: dot-separated member names from the manifest root, ``""`` being the root;
+#: ``name[]`` means each element of that member's array. A level applies only
+#: where its value is a JSON object.
+MODELLED_NAMES: dict[str, tuple[str, ...]] = {
+    "": (
+        "assertions",
+        "encryptionInformation",
+        "payload",
+        "schemaVersion",
+        "tdf_spec_version",
+    ),
+    "payload": (
+        "type",
+        "url",
+        "protocol",
+        "mimeType",
+        "isEncrypted",
+        "tdf_spec_version",
+    ),
+    "encryptionInformation": (
+        "type",
+        "policy",
+        "keyAccess",
+        "method",
+        "integrityInformation",
+    ),
+    "encryptionInformation.keyAccess[]": (
+        "type",
+        "url",
+        "protocol",
+        "wrappedKey",
+        "policyBinding",
+        "encryptedMetadata",
+        "kid",
+        "sid",
+        "schemaVersion",
+        "ephemeralPublicKey",
+    ),
+    "encryptionInformation.keyAccess[].policyBinding": ("alg", "hash"),
+    "encryptionInformation.method": ("algorithm", "iv", "isStreamable"),
+    "encryptionInformation.integrityInformation": (
+        "rootSignature",
+        "segmentHashAlg",
+        "segmentSizeDefault",
+        "encryptedSegmentSizeDefault",
+        "segments",
+    ),
+    "encryptionInformation.integrityInformation.rootSignature": ("alg", "sig"),
+    "encryptionInformation.integrityInformation.segments[]": (
+        "hash",
+        "segmentSize",
+        "encryptedSegmentSize",
+    ),
+    "assertions[]": ("id", "type", "scope", "appliesToState", "statement", "binding"),
+    "assertions[].statement": ("format", "schema", "value"),
+    "assertions[].binding": ("method", "signature", "bdo"),
+}
+
+#: Names that do not violate rule R1 at a level (R4): java-sdk up to v0.7.5
+#: wrote ``IsStreamable``. R2 still applies to them.
+CASE_VARIANT_EXCEPTIONS: dict[str, tuple[str, ...]] = {
+    "encryptionInformation.method": ("IsStreamable",),
+}
+
+#: The level of an assertion object, for vectors that hold one assertion.
+ASSERTION_LEVEL = "assertions[]"
+
+# The simple case folds that Go's strings.EqualFold applies to ASCII letters,
+# besides the ASCII case pairs themselves: U+017F LATIN SMALL LETTER LONG S and
+# U+212A KELVIN SIGN.
+_NON_ASCII_FOLDS = {"\u017f": "s", "\u212a": "k"}
+
+
+def _fold(c: str) -> str:
+    if "A" <= c <= "Z":
+        return c.lower()
+    return _NON_ASCII_FOLDS.get(c, c)
+
+
+def fold_name(name: str) -> str:
+    """``name`` with the contract's case fold applied to each code point."""
+    return "".join(_fold(c) for c in name)
+
+
+def is_case_variant(name: str, other: str) -> bool:
+    """True when two member names are case variants of each other (spec 3.2).
+
+    They differ, and are equal after folding ASCII letters, U+017F, and U+212A
+    code point by code point (so the code point counts match too). Deliberately
+    not Unicode case folding, ``str.lower``, or Java's ``equalsIgnoreCase``:
+    those also match names such as ``ıd`` or ``ﬆatement``, which Go's decoder
+    does not.
+    """
+    return name != other and fold_name(name) == fold_name(other)
+
+
+def _check_level(obj: dict[str, Any], level: str) -> None:
+    """Rules R1 and R2 for one object at ``level``, then its child levels."""
+    listed = MODELLED_NAMES[level]
+    exempt = CASE_VARIANT_EXCEPTIONS.get(level, ())
+    where = level or "manifest root"
+    folded: dict[str, str] = {}
     for name in obj:
-        for m in modelled:
-            if is_case_variant(name, m):
-                raise AssertionFailure(
-                    "ambiguous-member",
-                    f"{level} member {name!r} is a case variant of {m!r}",
-                )
-
-
-def _check_assertion_names(a: dict[str, Any]) -> None:
-    _check_names(a, ASSERTION_NAMES, "assertion")
-    for member, modelled in (
-        ("statement", STATEMENT_NAMES),
-        ("binding", BINDING_NAMES),
-    ):
-        sub = a.get(member)
-        if isinstance(sub, dict):
-            _check_names(sub, modelled, member)
+        if name not in exempt:
+            for m in listed:
+                if is_case_variant(name, m):
+                    raise AssertionFailure(
+                        "ambiguous-member",
+                        f"{where}: {name!r} is a case variant of {m!r}",
+                    )
+        key = fold_name(name)
+        if key in folded:
+            raise AssertionFailure(
+                "ambiguous-member",
+                f"{where}: {folded[key]!r} and {name!r} are case variants",
+            )
+        folded[key] = name
+    for m in listed:
+        if m not in obj:
+            continue
+        child = f"{level}.{m}" if level else m
+        value = obj[m]
+        if child in MODELLED_NAMES and isinstance(value, dict):
+            _check_level(value, child)
+        elif f"{child}[]" in MODELLED_NAMES and isinstance(value, list):
+            for element in value:
+                if isinstance(element, dict):
+                    _check_level(element, f"{child}[]")
 
 
 def parse_assertion(raw: str | bytes) -> dict[str, Any]:
     """Spec Section 3 parsing of one assertion wire object's JSON text.
 
-    Duplicate members anywhere, case variants at the assertion, ``statement``,
-    and ``binding`` levels, then I-JSON. Does not check ``id``; see
-    ``assertion_id``.
+    Duplicate members anywhere, then case variants (rules R1 and R2) at the
+    ``assertions[]`` level and below, then I-JSON. Does not check ``id``;
+    see ``assertion_id``.
     """
     a = loads_strict(raw)
     if not isinstance(a, dict):
         raise AssertionFailure("invalid-json", "an assertion must be a JSON object")
-    _check_assertion_names(a)
+    _check_level(a, ASSERTION_LEVEL)
     check_ijson(a)
     return a
 
@@ -253,22 +331,19 @@ def parse_assertion(raw: str | bytes) -> dict[str, Any]:
 def parse_manifest(raw: str | bytes) -> dict[str, Any]:
     """The manifest-level Section 3 parse step (step 1 of spec Section 8).
 
-    Duplicate members anywhere in the manifest; case variants at the root and
-    in each assertion, ``statement``, and ``binding`` object; I-JSON inside
-    each assertion object. Nothing else about the manifest is checked.
+    Invalid UTF-8 or a byte-order mark anywhere; duplicate members anywhere;
+    case variants (rules R1 and R2) at every level of ``MODELLED_NAMES``;
+    I-JSON inside each assertion object. Nothing else is checked.
     """
     m = loads_strict(raw)
     if not isinstance(m, dict):
         raise AssertionFailure("invalid-json", "a manifest must be a JSON object")
-    _check_names(m, MANIFEST_NAMES, "manifest")
+    _check_level(m, "")
     listed = m.get("assertions")
-    objects = (
-        [a for a in listed if isinstance(a, dict)] if isinstance(listed, list) else []
-    )
-    for a in objects:
-        _check_assertion_names(a)
-    for a in objects:
-        check_ijson(a)
+    if isinstance(listed, list):
+        for a in listed:
+            if isinstance(a, dict):
+                check_ijson(a)
     return m
 
 
@@ -668,14 +743,52 @@ class VerificationKey:
     material: rsa.RSAPublicKey | bytes
 
 
+def configured_key(
+    alg: str, *, public_key_pem: str | None = None, secret: bytes | None = None
+) -> VerificationKey:
+    """Prepare a configured key (spec 6.1); ``configuration-error`` if unusable.
+
+    Exactly one form of material, matching ``alg`` exactly (``rs256`` is not
+    ``RS256``). A PEM text secret is refused, so public-key bytes can never be
+    an HMAC secret (spec 7).
+    """
+
+    def refuse(why: str) -> AssertionFailure:
+        return AssertionFailure("configuration-error", why)
+
+    if alg == "RS256":
+        if public_key_pem is None or secret is not None:
+            raise refuse("an RS256 key needs a public key and nothing else")
+        try:
+            public_key = serialization.load_pem_public_key(public_key_pem.encode())
+        except ValueError:
+            raise refuse("the RS256 key is not a PEM public key") from None
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise refuse("the RS256 key is not an RSA key")
+        return VerificationKey("RS256", public_key)
+    if alg == "HS256":
+        if not secret or public_key_pem is not None:
+            raise refuse("an HS256 key needs a nonempty secret and nothing else")
+        if b"-----BEGIN" in secret:
+            raise refuse("an HS256 secret must not be PEM text")
+        return VerificationKey("HS256", secret)
+    raise refuse(f"unsupported alg {alg!r}")
+
+
 _BASE64URL = re.compile(r"[A-Za-z0-9_-]*")
 
 
 def _b64url_strict(part: str) -> bytes | None:
-    """Unpadded base64url, as JWS requires, or None."""
+    """Canonical unpadded base64url, as JWS requires, or None.
+
+    The URL-safe alphabet, no padding, and zero in the unused trailing bits
+    of the last character, so that exactly one spelling decodes to any given
+    bytes (RFC 4648 Section 3.5).
+    """
     if not _BASE64URL.fullmatch(part) or len(part) % 4 == 1:
         return None
-    return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+    data = base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+    return data if b64url(data) == part else None
 
 
 def _jws_object(part: str, what: str) -> dict[str, Any]:
@@ -706,14 +819,73 @@ def _public_key_identity(public_key: Any) -> tuple[Any, ...]:
     )
 
 
-def _jwk_uint(jwk: dict[str, Any], member: str) -> int:
+def _jwk_bytes(jwk: dict[str, Any], member: str) -> bytes:
     value = jwk.get(member)
     data = _b64url_strict(value) if isinstance(value, str) else None
     if not data:
         raise AssertionFailure(
-            "invalid-embedded-key", f"jwk {member!r} is not a base64url integer"
+            "invalid-embedded-key", f"jwk {member!r} is not canonical base64url"
+        )
+    return data
+
+
+def _jwk_uint(jwk: dict[str, Any], member: str) -> int:
+    """An RSA jwk integer, which must use the minimum number of octets
+    (RFC 7518 Section 6.3.1.1): a leading zero octet is malformed."""
+    data = _jwk_bytes(jwk, member)
+    if data[0] == 0:
+        raise AssertionFailure(
+            "invalid-embedded-key", f"jwk {member!r} has a leading zero octet"
         )
     return int.from_bytes(data, "big")
+
+
+#: JWK ``crv`` values and their coordinate lengths (RFC 7518 Section 6.2.1).
+_EC_CURVES: dict[str, tuple[ec.EllipticCurve, int]] = {
+    "P-256": (ec.SECP256R1(), 32),
+    "P-384": (ec.SECP384R1(), 48),
+    "P-521": (ec.SECP521R1(), 66),
+}
+
+
+#: OKP signature ``crv`` values and their key lengths (RFC 8037 Section 2).
+#: X25519 and X448 are key-agreement curves, so they are malformed here.
+_OKP_CURVES: dict[str, int] = {"Ed25519": 32, "Ed448": 57}
+
+
+def _jwk_okp_identity(jwk: dict[str, Any]) -> tuple[Any, ...]:
+    """An OKP jwk's public key: a signature curve and an exact-length ``x``."""
+    crv = jwk.get("crv")
+    if not isinstance(crv, str) or crv not in _OKP_CURVES:
+        raise AssertionFailure("invalid-embedded-key", f"jwk crv {crv!r}")
+    x = _jwk_bytes(jwk, "x")
+    if len(x) != _OKP_CURVES[crv]:
+        raise AssertionFailure(
+            "invalid-embedded-key", f"jwk x is not {_OKP_CURVES[crv]} octets"
+        )
+    return ("OKP", crv, x)
+
+
+def _jwk_ec_identity(jwk: dict[str, Any]) -> tuple[Any, ...]:
+    """An EC jwk's public key; coordinates are exactly the curve's length."""
+    crv = jwk.get("crv")
+    if not isinstance(crv, str) or crv not in _EC_CURVES:
+        raise AssertionFailure("invalid-embedded-key", f"jwk crv {crv!r}")
+    curve, size = _EC_CURVES[crv]
+    x, y = (_jwk_bytes(jwk, m) for m in ("x", "y"))
+    if len(x) != size or len(y) != size:
+        raise AssertionFailure(
+            "invalid-embedded-key", f"jwk coordinates are not {size} octets"
+        )
+    try:
+        public_key = ec.EllipticCurvePublicNumbers(
+            int.from_bytes(x), int.from_bytes(y), curve
+        ).public_key()
+    except ValueError:
+        raise AssertionFailure(
+            "invalid-embedded-key", "jwk is not a point on its curve"
+        ) from None
+    return _public_key_identity(public_key)
 
 
 def _jwk_identity(jwk: Any) -> tuple[Any, ...]:
@@ -729,11 +901,14 @@ def _jwk_identity(jwk: Any) -> tuple[Any, ...]:
         raise AssertionFailure(
             "invalid-embedded-key", f"jwk has private members {private}"
         )
-    if kty != "RSA":
-        # Not an RSA key, so it cannot be the selected one; the RFC 7638
-        # thumbprints would differ whatever its other members say.
-        return ("JWK", kty, json.dumps(jwk, sort_keys=True))
-    return ("RSA", _jwk_uint(jwk, "n"), _jwk_uint(jwk, "e"))
+    if kty == "RSA":
+        return ("RSA", _jwk_uint(jwk, "n"), _jwk_uint(jwk, "e"))
+    if kty == "EC":
+        # Well formed, it is a different key type from any RSA selection.
+        return _jwk_ec_identity(jwk)
+    if kty == "OKP":
+        return _jwk_okp_identity(jwk)
+    raise AssertionFailure("invalid-embedded-key", f"jwk kty {kty!r}")
 
 
 def _x5c_identity(x5c: Any) -> tuple[Any, ...]:
@@ -742,10 +917,19 @@ def _x5c_identity(x5c: Any) -> tuple[Any, ...]:
             "invalid-embedded-key", "x5c is not a nonempty array of strings"
         )
     try:
-        leaf = x509.load_der_x509_certificate(base64.b64decode(x5c[0], validate=True))
+        # Every element must be canonical padded standard base64 (RFC 7515
+        # Section 4.1.6): zero trailing bits. Only the leaf is parsed,
+        # strictly, with no trailing data.
+        decoded = [base64.b64decode(c, validate=True) for c in x5c]
+        if any(
+            base64.b64encode(d).decode("ascii") != c
+            for d, c in zip(decoded, x5c, strict=True)
+        ):
+            raise ValueError("x5c base64 is not canonical")
+        leaf = x509.load_der_x509_certificate(decoded[0])
     except ValueError:
         raise AssertionFailure(
-            "invalid-embedded-key", "x5c leaf is not a base64 DER certificate"
+            "invalid-embedded-key", "x5c is not base64 DER with a valid leaf"
         ) from None
     # Only the leaf's public key is compared. No chain is built or validated,
     # so nothing here says the certificate is valid (spec 6.2).

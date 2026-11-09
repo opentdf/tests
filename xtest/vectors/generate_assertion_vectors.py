@@ -38,6 +38,12 @@ of ``input`` (JSON text) and ``inputBase64`` (bytes that are not UTF-8), and
 
 ``status: proposed`` vectors cover rules the spec marks Proposed. Run them,
 but report a mismatch instead of failing on it.
+
+The file also carries the case-variant table (``modelledNames`` and
+``caseVariantExceptions``, the same data as ``assertions.MODELLED_NAMES``),
+which each SDK's vector test compares with its own table, and a
+``description`` of the level-path syntax and of ``keys`` entries, some of
+which are deliberately unusable configured keys.
 """
 
 import argparse
@@ -50,8 +56,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 import rfc8785
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
 import assertions
 from assertions import b64url
@@ -62,6 +69,23 @@ OUTPUT = HERE / "assertions-phase0.json"
 
 FORMAT = "opentdf-assertion-vectors/1"
 SOURCE = "opentdf/tests xtest/vectors/assertions-phase0.json (DSPX-5520)"
+DESCRIPTION = (
+    "Shared conformance vectors for Phase 0 of the ZTDF assertions contract "
+    "(DSPX-5519). modelledNames maps each level of the manifest that the "
+    "case-variant rules check (spec 3.2, Table 3.2) to the member names listed "
+    "for it. A level path is the member names from the manifest root joined by "
+    "dots: the empty path is the root, and a name followed by [] means each "
+    "element of that member's array. A level applies only where its value is a "
+    "JSON object. caseVariantExceptions maps a level path to names that do not "
+    "violate rule R1 there; rule R2 still applies to them. Manifest vectors "
+    "apply the rules to the whole manifest; assertion objects in the other "
+    "kinds are checked from the assertions[] level down. Each keys entry has "
+    "an alg and one material member, publicKeyPem (a PEM public key) or "
+    "secretBase64 (raw secret bytes). The material reflects the key's form, "
+    "not its alg, and some entries are deliberately unusable: a verify harness "
+    "passes the selected entry unchanged to the SDK's configured-key "
+    "preparation, which must refuse those with configuration-error."
+)
 
 #### KEY MATERIAL
 
@@ -102,6 +126,13 @@ KEYS: dict[str, dict[str, str]] = {
     "rsa-other": {"alg": "RS256", "publicKeyPem": _public_pem(OTHER)},
     "hs256-configured": {"alg": "HS256", "secretBase64": _b64(CONFIGURED_SECRET)},
     "hs256-payload-key": {"alg": "HS256", "secretBase64": _b64(PAYLOAD_KEY)},
+    # Unusable configured keys: key preparation must refuse each one.
+    "hs256-pem-secret": {
+        "alg": "HS256",
+        "secretBase64": _b64(_public_pem(SIGNER).encode("ascii")),
+    },
+    "rs256-lowercase-alg": {"alg": "rs256", "publicKeyPem": _public_pem(SIGNER)},
+    "unknown-alg": {"alg": "XS256", "publicKeyPem": _public_pem(SIGNER)},
 }
 
 
@@ -119,6 +150,99 @@ def rsa_jwk(key: rsa.RSAPrivateKey, **extra: Any) -> dict[str, Any]:
 
 def rsa_thumbprint(key: rsa.RSAPrivateKey) -> str:
     return assertions.rsa_jwk_thumbprint(key.public_key())
+
+
+def with_spare_bit(segment: str) -> str:
+    """``segment`` with an unused trailing bit of its last character set.
+
+    Lenient base64url decoders return the same bytes; strict ones refuse it.
+    """
+    assert len(segment) % 4 in (2, 3), "no unused trailing bits"
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    spare = alphabet[alphabet.index(segment[-1]) | 1]
+    assert spare != segment[-1]
+    return segment[:-1] + spare
+
+
+def _der(tag: int, content: bytes) -> bytes:
+    length = len(content)
+    if length < 0x80:
+        return bytes([tag, length]) + content
+    octets = length.to_bytes((length.bit_length() + 7) // 8)
+    return bytes([tag, 0x80 | len(octets)]) + octets + content
+
+
+def skeleton_certificate(key: rsa.RSAPrivateKey) -> bytes:
+    """Certificate-shaped DER around ``key``: SEQ{SEQ{INT 1, four empty
+    SEQs, SPKI}, empty SEQ, empty BIT STRING}. Strict X.509 parsers refuse it."""
+    spki = key.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    empty = _der(0x30, b"")
+    tbs = _der(0x30, _der(0x02, b"\x01") + empty * 4 + spki)
+    return _der(0x30, tbs + empty + _der(0x03, b"\x00"))
+
+
+#: A fixed P-256 public key as a jwk, for key-type mismatches; ES256 is never
+#: signed, since Phase 0 Go and Java readers do not support it.
+_EC_KEY = (
+    ec.derive_private_key(
+        int.from_bytes(hashlib.sha256(b"DSPX-5520 vectors: P-256 key").digest()),
+        ec.SECP256R1(),
+    )
+    .public_key()
+    .public_numbers()
+)
+EC_X = _EC_KEY.x.to_bytes(32)
+EC_JWK = {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": b64url(EC_X),
+    "y": b64url(_EC_KEY.y.to_bytes(32)),
+}
+assert EC_X[0] != 0
+#: A y that puts the P-256 point off the curve, keeping its length.
+EC_Y_OFF_CURVE = bytes([*_EC_KEY.y.to_bytes(32)[:-1], _EC_KEY.y.to_bytes(32)[-1] ^ 1])
+try:
+    ec.EllipticCurvePublicNumbers(
+        _EC_KEY.x, int.from_bytes(EC_Y_OFF_CURVE), ec.SECP256R1()
+    ).public_key()
+    raise AssertionError("EC_Y_OFF_CURVE is on the curve")
+except ValueError:
+    pass
+#: A fixed Ed25519 public key as a jwk; never used to sign.
+OKP_JWK = {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": b64url(
+        ed25519.Ed25519PrivateKey.from_private_bytes(
+            hashlib.sha256(b"DSPX-5520 vectors: Ed25519 key").digest()
+        )
+        .public_key()
+        .public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    ),
+}
+#: Another self-signed leaf of the selected key, whose DER length leaves
+#: unused bits in its base64 (SIGNER_CERT's has none).
+SIGNER_CERT_PADDED = assertions.self_signed_certificate(
+    SIGNER, "DSPX-5520 vector signer 2", 0x55200003
+)
+assert SIGNER_CERT_PADDED.endswith("=")
+
+
+def with_spare_base64_bit(value: str) -> str:
+    """Padded standard base64 with an unused trailing bit set before the padding."""
+    body = value.rstrip("=")
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    spare = alphabet[alphabet.index(body[-1]) | 1]
+    assert spare != body[-1]
+    return body[:-1] + spare + value[len(body) :]
+
+
+#: The selected key's certificate as PEM text.
+PEM_CERT = x509.load_der_x509_certificate(base64.b64decode(SIGNER_CERT)).public_bytes(
+    serialization.Encoding.PEM
+)
 
 
 def _segment_tag(label: str) -> bytes:
@@ -807,14 +931,15 @@ def assertion_vectors(v: Vectors) -> None:
         ),
     )
     a(
-        "unmodelled-name-case-pair-allowed",
-        "extensions and Extensions are both unmodelled, so both are hashed",
-        signed(
+        "unlisted-case-pair",
+        "extensions and Extensions are case variants of each other (rule R2)",
+        text(
             example().plus(
                 ("extensions", Obj(("a", Raw("1")))),
                 ("Extensions", Obj(("a", Raw("2")))),
             )
         ),
+        reason="ambiguous-member",
     )
     a(
         "statement-names-at-assertion-level-allowed",
@@ -1342,17 +1467,19 @@ def manifest_vectors(v: Vectors) -> None:
         text(_manifest(("assertions", []))),
     )
     m(
-        "case-pair-at-unchecked-level",
-        "payload and Payload at the root: only assertions is modelled there",
+        "Payload-alongside-payload",
+        "payload and Payload at the root",
         text(_manifest(("assertions", good), ("Payload", Obj(("type", "reference"))))),
+        reason="ambiguous-member",
     )
     m(
-        "case-pair-in-key-access",
-        "url and URL in a key access object, a level that is not checked",
+        "URL-alongside-url-in-key-access",
+        "url and URL in a key access object",
         text(_manifest(("assertions", good))).replace(
             '"url":"https://kas.example.com"',
             '"url":"https://kas.example.com","URL":"https://other.example.com"',
         ),
+        reason="ambiguous-member",
     )
     m(
         "case-variants-in-object-value",
@@ -1488,6 +1615,191 @@ def manifest_vectors(v: Vectors) -> None:
         "The byte 0xFF in an assertion's statement.value",
         _with_bad_bytes(with_assertion(text(example(statement("@@BYTES@@")))), b"\xff"),
         reason=bad,
+    )
+
+
+def manifest_level_vectors(v: Vectors) -> None:
+    """Rules R1 to R4 (spec 3.2) at every level of the modelled-names table."""
+    m = v.manifest
+    base = text(_manifest(("assertions", [Raw(signed(example()))])))
+
+    def edited(*edits: tuple[str, str]) -> str:
+        """``base`` with each ``old`` text, which occurs once, replaced."""
+        out = base
+        for old, new in edits:
+            assert out.count(old) == 1, old
+            out = out.replace(old, new)
+        return out
+
+    policy_hash = f'"hash":"{_b64(bytes(32))}"'
+    first_segment = text(
+        Obj(
+            ("hash", _b64(_segment_tag("segment 0"))),
+            ("segmentSize", Raw("14")),
+            ("encryptedSegmentSize", Raw("42")),
+        )
+    )
+    second_segment = text(
+        Obj(
+            ("Hash", _b64(_segment_tag("segment 1"))),
+            ("segmentSize", Raw("14")),
+            ("encryptedSegmentSize", Raw("42")),
+        )
+    )
+    amb = "ambiguous-member"
+    alias_only = [
+        ("root-Payload", "Payload without payload", ('"payload":{', '"Payload":{')),
+        (
+            "root-EncryptionInformation",
+            "EncryptionInformation without encryptionInformation",
+            ('"encryptionInformation":{', '"EncryptionInformation":{'),
+        ),
+        (
+            "root-SchemaVersion",
+            "SchemaVersion without schemaVersion",
+            ('"schemaVersion":"4.3.0"', '"SchemaVersion":"4.3.0"'),
+        ),
+        (
+            "root-uppercase-tdf-spec-version",
+            "TDF_SPEC_VERSION, a variant of tdf_spec_version",
+            (
+                '"schemaVersion":"4.3.0"',
+                '"schemaVersion":"4.3.0","TDF_SPEC_VERSION":"4.2.2"',
+            ),
+        ),
+        (
+            "payload-IsEncrypted",
+            "IsEncrypted without isEncrypted in payload",
+            ('"isEncrypted":true', '"IsEncrypted":true'),
+        ),
+        (
+            "payload-mixed-case-tdf-spec-version",
+            "Tdf_Spec_Version, a variant of tdf_spec_version, in payload",
+            ('"isEncrypted":true', '"isEncrypted":true,"Tdf_Spec_Version":"4.3.0"'),
+        ),
+        (
+            "encryption-information-Policy",
+            "Policy without policy in encryptionInformation",
+            ('"policy":"', '"Policy":"'),
+        ),
+        (
+            "encryption-information-KeyAccess",
+            "KeyAccess without keyAccess in encryptionInformation",
+            ('"keyAccess":[', '"KeyAccess":['),
+        ),
+        (
+            "key-access-URL",
+            "URL without url in a key access object",
+            ('"url":"https://kas.example.com"', '"URL":"https://kas.example.com"'),
+        ),
+        (
+            "key-access-SID",
+            "SID, a variant of sid, in a key access object",
+            ('"kid":"r1"', '"kid":"r1","SID":"s1"'),
+        ),
+        (
+            "key-access-kelvin-Kid",
+            "Kid spelled with U+212A KELVIN SIGN, which folds to k",
+            ('"kid":"r1"', '"' + chr(0x212A) + 'id":"r1"'),
+        ),
+        (
+            "policy-binding-Hash",
+            "Hash without hash in a policy binding",
+            (policy_hash, policy_hash.replace('"hash"', '"Hash"')),
+        ),
+        (
+            "method-ALGORITHM",
+            "ALGORITHM without algorithm in method",
+            ('"algorithm":"AES-256-GCM"', '"ALGORITHM":"AES-256-GCM"'),
+        ),
+        (
+            "integrity-Segments",
+            "Segments without segments in integrityInformation",
+            ('"segments":[', '"Segments":['),
+        ),
+        (
+            "integrity-long-s-segmentHashAlg",
+            "segmentHashAlg spelled with U+017F, which folds to s",
+            ('"segmentHashAlg":"GMAC"', '"' + LONG_S + 'egmentHashAlg":"GMAC"'),
+        ),
+        (
+            "root-signature-Sig",
+            "Sig without sig in rootSignature",
+            ('"sig":"', '"Sig":"'),
+        ),
+        (
+            "second-segment-Hash",
+            "Hash without hash in the second element of segments",
+            (first_segment, f"{first_segment},{second_segment}"),
+        ),
+    ]
+    for name, note, edit in alias_only:
+        m(f"{name}-alias-only", note, edited(edit), reason=amb)
+    m(
+        "root-unlisted-case-pair",
+        "foo and Foo at the root: unlisted names that are case variants (R2)",
+        edited(('"schemaVersion":"4.3.0"', '"schemaVersion":"4.3.0","foo":1,"Foo":2')),
+        reason=amb,
+    )
+    m(
+        "method-IsStreamable-alone",
+        "IsStreamable, which java-sdk up to v0.7.5 wrote, is exempt from R1 (R4)",
+        edited(('"isStreamable":true', '"IsStreamable":true')),
+    )
+    m(
+        "method-isStreamable-and-IsStreamable",
+        "isStreamable and IsStreamable together: R2 still applies",
+        edited(('"isStreamable":true', '"isStreamable":true,"IsStreamable":true')),
+        reason=amb,
+    )
+    for name, note, edit in [
+        (
+            "unlisted-keyAccesses",
+            "keyAccesses is unlisted and not a case variant of keyAccess",
+            ('"keyAccess":[', '"keyAccesses":[],"keyAccess":['),
+        ),
+        (
+            "unlisted-segmentHash",
+            "segmentHash is unlisted and not a case variant of segmentHashAlg",
+            ('"segmentHashAlg":"GMAC"', '"segmentHash":"x","segmentHashAlg":"GMAC"'),
+        ),
+        (
+            "payload-schemaVersion",
+            "schemaVersion is listed at the root, not in payload, so it is unlisted there",
+            ('"isEncrypted":true', '"isEncrypted":true,"schemaVersion":"4.3.0"'),
+        ),
+        (
+            "string-policyBinding",
+            "A string policyBinding, as older writers emitted, is not a checked level",
+            (
+                '"policyBinding":{"alg":"HS256",' + policy_hash + "}",
+                f'"policyBinding":"{_b64(bytes(32))}"',
+            ),
+        ),
+        (
+            "case-pair-inside-unlisted-member",
+            "Foo and foo inside an unlisted member's object value are not checked (R3)",
+            (
+                '"schemaVersion":"4.3.0"',
+                '"schemaVersion":"4.3.0","meta":{"Foo":1,"foo":2}',
+            ),
+        ),
+    ]:
+        m(f"{name}-ok", note, edited(edit))
+    m(
+        "invalid-utf8-outside-assertions",
+        "The byte 0xFF in payload.mimeType, outside any assertion",
+        _with_bad_bytes(
+            edited(('"mimeType":"application/octet-stream"', '"mimeType":"@@BYTES@@"')),
+            b"text/\xffplain",
+        ),
+        reason="invalid-json",
+    )
+    m(
+        "leading-byte-order-mark",
+        "Manifest text starting with U+FEFF",
+        chr(0xFEFF) + base,
+        reason="invalid-json",
     )
 
 
@@ -2100,15 +2412,219 @@ def verify_vectors(v: Vectors) -> None:
         mismatch,
     )
 
+    # Strict base64url: a lenient decoder ignores non-zero unused trailing
+    # bits and decodes these to the same bytes as the canonical spelling.
+    def spare_bits_segment(json_text: str) -> str:
+        """base64url of ``json_text`` whose last character sets an unused bit."""
+        raw = json_text.encode("utf-8")
+        while len(raw) % 3 == 0:  # pad with JSON whitespace to leave spare bits
+            raw += b" "
+        return with_spare_bit(b64url(raw))
+
+    claims_text = text(bound_claims(text(a)))
+    header_text = text({"alg": "RS256"})
+    for name, note, h_seg, p_seg, reason in [
+        (
+            "jws-header-nonzero-trailing-bits",
+            "Header base64url with non-zero unused trailing bits",
+            spare_bits_segment(header_text),
+            assertions.json_segment(json.loads(claims_text)),
+            "invalid-binding",
+        ),
+        (
+            "jws-claims-nonzero-trailing-bits",
+            "Claims base64url with non-zero unused trailing bits",
+            assertions.json_segment({"alg": "RS256"}),
+            spare_bits_segment(claims_text),
+            "invalid-binding",
+        ),
+        (
+            "jws-header-duplicate-member",
+            "Duplicate alg members in the protected header",
+            b64url(b'{"alg":"RS256","alg":"RS256"}'),
+            assertions.json_segment(json.loads(claims_text)),
+            "invalid-binding",
+        ),
+        (
+            "jws-claims-duplicate-member",
+            "Duplicate assertionHash members in the claims",
+            assertions.json_segment({"alg": "RS256"}),
+            b64url(
+                claims_text.replace(
+                    '{"assertionHash":',
+                    '{"assertionHash":"'
+                    + json.loads(claims_text)["assertionHash"]
+                    + '","assertionHash":',
+                ).encode()
+            ),
+            "invalid-binding",
+        ),
+    ]:
+        fail(
+            name,
+            note,
+            bound(
+                a,
+                binding(
+                    jws(None, None, SIGNER, header_segment=h_seg, payload_segment=p_seg)
+                ),
+            ),
+            reason,
+        )
+    signature = EXAMPLE_TOKEN.split(".")[2]
+    fail(
+        "jws-signature-nonzero-trailing-bits",
+        "Signature base64url with non-zero unused trailing bits",
+        bound(a, binding(f"{h}.{p}.{with_spare_bit(signature)}")),
+        "signature-invalid",
+    )
+    fail(
+        "jws-signature-not-base64url",
+        "A signature segment outside the base64url alphabet",
+        bound(a, binding(f"{h}.{p}.{signature[:-4]}+/==")),
+        "signature-invalid",
+    )
+
+    # Embedded jwk encodings that are malformed for their kty.
+    selected_n = SIGNER.public_key().public_numbers().n
+    n_bytes = selected_n.to_bytes((selected_n.bit_length() + 7) // 8)
+    for name, note, jwk in [
+        (
+            "jwk-n-nonzero-trailing-bits",
+            "The selected key's jwk with non-zero unused trailing bits in n",
+            rsa_jwk(SIGNER) | {"n": with_spare_bit(rsa_jwk(SIGNER)["n"])},
+        ),
+        (
+            "jwk-n-leading-zero-octet",
+            "The selected key's jwk with a leading zero octet in n",
+            rsa_jwk(SIGNER) | {"n": b64url(b"\0" + n_bytes)},
+        ),
+        (
+            "jwk-ec-short-x",
+            "A P-256 jwk whose x is 31 octets",
+            EC_JWK | {"x": b64url(EC_X[1:])},
+        ),
+        (
+            "jwk-ec-point-off-curve",
+            "A P-256 jwk with exact-length coordinates that are not on the curve",
+            EC_JWK | {"y": b64url(EC_Y_OFF_CURVE)},
+        ),
+    ]:
+        fail(
+            name,
+            f"{note}; signed by the selected key",
+            signed(a, header={"jwk": jwk}),
+            iek,
+        )
+    fail(
+        "jwk-ec-p256",
+        "A well-formed P-256 jwk against the selected RSA key",
+        signed(a, header={"jwk": EC_JWK}),
+        snp,
+    )
+    fail(
+        "jwk-okp-ed25519",
+        "A well-formed Ed25519 jwk against the selected RSA key",
+        signed(a, header={"jwk": OKP_JWK}),
+        snp,
+    )
+
+    # Embedded x5c that is not a nonempty array of base64 DER certificates.
+    signer_der = base64.b64decode(SIGNER_CERT)
+    for name, note, x5c in [
+        (
+            "x5c-second-element-not-base64",
+            "A valid leaf followed by an element that is not base64",
+            [SIGNER_CERT, "not base64!"],
+        ),
+        (
+            "x5c-leaf-trailing-bytes",
+            "The selected key's certificate with a byte after its DER",
+            [_b64(signer_der + b"\0")],
+        ),
+        (
+            "x5c-leaf-pem-text",
+            "base64 of the selected key's certificate as PEM text",
+            [_b64(PEM_CERT)],
+        ),
+        (
+            "x5c-leaf-tlv-skeleton",
+            "A leaf with only a certificate's TLV skeleton around the selected key",
+            [_b64(skeleton_certificate(SIGNER))],
+        ),
+        (
+            "x5c-leaf-nonzero-trailing-bits",
+            "A self-signed leaf of the selected key whose base64 sets a trailing bit",
+            [with_spare_base64_bit(SIGNER_CERT_PADDED)],
+        ),
+    ]:
+        fail(
+            name,
+            f"{note}; signed by the selected key",
+            signed(a, header={"x5c": x5c}),
+            iek,
+        )
+
+    # Claims other than assertionHash and assertionSig are never validated.
+    for name, note, extra in [
+        ("claim-exp-past-ignored", "An exp claim in the past", {"exp": 1500000000}),
+        ("claim-nbf-future-ignored", "An nbf claim in the future", {"nbf": 4102444800}),
+        (
+            "claim-aud-iss-ignored",
+            "aud and iss claims naming some other party",
+            {"aud": "https://other.example.com", "iss": "https://issuer.example.com"},
+        ),
+    ]:
+        ok(name, f"{note} is ignored", signed(a, claims=bound_claims(text(a)) | extra))
+
+    # Configured keys that key preparation must refuse.
+    for name, note, key, token in [
+        (
+            "configured-hs256-pem-secret",
+            "A configured HS256 secret that is PEM text",
+            "hs256-pem-secret",
+            signed(a, signer=signer_pem, alg="HS256"),
+        ),
+        (
+            "configured-alg-lowercase",
+            "A configured key whose alg is rs256 rather than RS256",
+            "rs256-lowercase-alg",
+            signed(a),
+        ),
+        (
+            "configured-alg-unknown",
+            "A configured key with an unknown alg",
+            "unknown-alg",
+            signed(a),
+        ),
+    ]:
+        fail(name, note, token, "configuration-error", key=key)
+
 
 #### OUTPUT
 
 
 def build() -> dict[str, Any]:
     v = Vectors()
-    for add in (assertion_vectors, manifest_vectors, binding_vectors, verify_vectors):
+    for add in (
+        assertion_vectors,
+        manifest_vectors,
+        manifest_level_vectors,
+        binding_vectors,
+        verify_vectors,
+    ):
         add(v)
-    return {"format": FORMAT, "source": SOURCE, "keys": KEYS, "vectors": v.vectors}
+    return {
+        "format": FORMAT,
+        "source": SOURCE,
+        "description": DESCRIPTION,
+        "modelledNames": {k: list(v) for k, v in assertions.MODELLED_NAMES.items()},
+        "caseVariantExceptions": {
+            k: list(v) for k, v in assertions.CASE_VARIANT_EXCEPTIONS.items()
+        },
+        "keys": KEYS,
+        "vectors": v.vectors,
+    }
 
 
 def render(doc: dict[str, Any]) -> bytes:
