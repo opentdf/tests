@@ -104,6 +104,33 @@ if [[ "$1" == "supports" ]]; then
       "$CLI" encrypt --help | grep -i 'mlkem:768'
       exit $?
       ;;
+    assertion_header_key_pinning | assertion_hash_raw)
+      # DSPX-1561 Phase 0 assertion verification: keys selected only from the
+      # reader's configuration, with the default key honoured through the
+      # verification-keys file (assertion_header_key_pinning); the hash over
+      # the assertion as received, strict manifest parsing, and spec binding
+      # forms (assertion_hash_raw). No release has them yet, and neither adds
+      # CLI surface to probe, so this answers no until one ships and then
+      # becomes a version gate. Branch builds run the cases with
+      # XT_FORCE_SUPPORTS=assertion_header_key_pinning,assertion_hash_raw.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "$2 is force-only until a release ships: see DSPX-1561"
+      exit 1
+      ;;
+    reject_empty_key_access)
+      # DSPX-1561 Phase 0: refuse a manifest with an empty
+      # encryptionInformation.keyAccess when it is loaded, with the SDK's
+      # malformed-TDF error ("no key access objects"). No release has it yet,
+      # and it adds no CLI surface to probe, so this answers no until one ships.
+      # Branch builds run the case with XT_FORCE_SUPPORTS=reject_empty_key_access.
+      #
+      # Explicit rather than falling through to "Unknown feature" so that a
+      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
+      echo "reject_empty_key_access is force-only until a release ships: see DSPX-1561"
+      exit 1
+      ;;
     gmac_root_rejected)
       # DSPX-4703: does decrypt refuse a manifest downgraded to
       # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check
