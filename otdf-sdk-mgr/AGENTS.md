@@ -89,10 +89,14 @@ tip`, but none of tip's git machinery. Before editing `local_install.py`:
 - **Java builds never install into `~/.m2/repository`.** `mvn install` would
   put the branch's modules there under the last release's version, replacing
   the published artifacts. `isolate_maven` points `maven.repo.local` at
-  `xtest/sdk/java/.m2/repository`, with `~/.m2/repository` as a read-only
-  `maven.repo.local.tail`. It sets them in `MAVEN_OPTS`, not `MAVEN_ARGS`: a
-  Maven older than 3.9 ignores `MAVEN_ARGS` and would install into `~/.m2`
-  after all. `install tip java` still installs there.
+  `maven_repository()`, `${XDG_CACHE_HOME:-~/.cache}/otdf-sdk-mgr/maven-repository`,
+  with `~/.m2/repository` as a read-only `maven.repo.local.tail`. Keep that
+  repository outside the tests checkout. Under `xtest/sdk` it shows up as
+  untracked files in any checkout whose `.gitignore` doesn't cover it. And
+  `src/` and `dist/` entries are builds to the Makefiles and xtest. The
+  settings go in `MAVEN_OPTS`, not `MAVEN_ARGS`: a Maven older than 3.9
+  ignores `MAVEN_ARGS` and would install into `~/.m2` after all.
+  `install tip java` still installs there.
 - **The JDK is checked first.** `check_jdk` asks `mvn --version`, since the
   Homebrew launcher picks its own JDK when `JAVA_HOME` is unset, and refuses
   anything outside `JAVA_MIN`..`JAVA_MAX`. Don't switch JDKs automatically.

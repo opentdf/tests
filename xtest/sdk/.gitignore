@@ -7,10 +7,6 @@
 # go release installs in progress, or killed mid-build.
 */.staging
 
-# The Maven repository java builds from `install local` install into, in place
-# of ~/.m2/repository.
-*/.m2
-
 # Generated helper build .env files
 */*.env
 

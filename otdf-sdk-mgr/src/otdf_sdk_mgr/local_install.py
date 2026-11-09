@@ -266,23 +266,38 @@ def check_jdk(env: dict[str, str]) -> None:
         )
 
 
-def isolate_maven(env: dict[str, str], sdk_dir: Path) -> Path:
+def maven_repository() -> Path:
+    """The local Maven repository java builds install into: `otdf-sdk-mgr/maven-repository`
+    in the XDG cache directory, `~/.cache` by default.
+
+    Kept out of the tests checkout. Under xtest/sdk only a .gitignore entry
+    would keep it out of commits, and a tests checkout without that entry
+    would pick up tens of megabytes of untracked files. Nor can it go under
+    `src/` or `dist/`, whose entries the Makefiles and xtest read as builds.
+    """
+    # The XDG spec has relative paths ignored.
+    xdg = os.environ.get("XDG_CACHE_HOME", "")
+    cache = Path(xdg) if os.path.isabs(xdg) else Path.home() / ".cache"
+    return cache / "otdf-sdk-mgr" / "maven-repository"
+
+
+def isolate_maven(env: dict[str, str]) -> Path:
     """Point the java build's local Maven repository away from ~/.m2/repository; return it.
 
     The Makefile runs `mvn install`, which installs every module under the
     version in the pom. On a branch that is the last release's version, so in
     ~/.m2/repository it would replace the published artifacts that release
     installs and other projects resolve. The build installs into
-    `<sdk_dir>/.m2/repository` instead, and reads ~/.m2/repository as a
-    read-only tail (Maven 3.9 and later), so what is already downloaded is
-    reused and nothing there is written.
+    `maven_repository()` instead, and reads ~/.m2/repository as a read-only
+    tail (Maven 3.9 and later), so what is already downloaded is reused and
+    nothing there is written.
 
     Set in MAVEN_OPTS, as JVM system properties, which every Maven version
     honours. MAVEN_ARGS is read only from Maven 3.9, and an older Maven
     ignoring it would install into ~/.m2 after all; an older one ignores the
     tail instead, and only downloads again.
     """
-    repo = sdk_dir / ".m2" / "repository"
+    repo = maven_repository()
     props = [f"-Dmaven.repo.local={repo}"]
     tail = Path.home() / ".m2" / "repository"
     if tail.is_dir():
@@ -392,7 +407,7 @@ def install_local(sdk: str, path: Path, rev: str = "HEAD", name: str | None = No
     elif sdk == "java":
         # Before any work: an unsupported JDK fails minutes into the build.
         check_jdk(env)
-        isolate_maven(env, layout.sdk_dir)
+        isolate_maven(env)
 
     # Flushed, or a piped log shows it after make's output.
     print(f"Building {sdk} from {repo} at {sha[:12]} into {layout.dist_dir}...", flush=True)

@@ -93,6 +93,7 @@ def sdk_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_git: None
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_MVN_JAVA_VERSION", "21.0.13.0.3")
     monkeypatch.delenv("MAVEN_OPTS", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
     return root
 
 
@@ -481,11 +482,41 @@ class TestJava:
 
         install_local("java", checkout("java"))
 
-        own_repo = sdk_root / "java" / ".m2" / "repository"
+        own_repo = tmp_path / "home" / ".cache" / "otdf-sdk-mgr" / "maven-repository"
         assert make[0]["MAVEN_OPTS"].split() == [
             f"-Dmaven.repo.local={own_repo}",
             f"-Dmaven.repo.local.tail={user_repo}",
         ]
+
+    def test_maven_repository_follows_xdg_cache_home(
+        self,
+        checkout: CheckoutFactory,
+        make: list,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        install_local("java", checkout("java"))
+
+        own_repo = tmp_path / "cache" / "otdf-sdk-mgr" / "maven-repository"
+        assert make[0]["MAVEN_OPTS"].split() == [f"-Dmaven.repo.local={own_repo}"]
+
+    def test_relative_xdg_cache_home_is_ignored(
+        self,
+        checkout: CheckoutFactory,
+        make: list,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
+        """As the XDG spec says. Relative, it would resolve against wherever
+        Maven runs, which is inside xtest/sdk."""
+        monkeypatch.setenv("XDG_CACHE_HOME", "cache")
+
+        install_local("java", checkout("java"))
+
+        own_repo = tmp_path / "home" / ".cache" / "otdf-sdk-mgr" / "maven-repository"
+        assert make[0]["MAVEN_OPTS"].split() == [f"-Dmaven.repo.local={own_repo}"]
 
     def test_callers_maven_opts_are_kept_and_come_first(
         self, checkout: CheckoutFactory, make: list, monkeypatch: pytest.MonkeyPatch
@@ -498,7 +529,7 @@ class TestJava:
         opts = make[0]["MAVEN_OPTS"].split()
         assert opts[:2] == ["-Xmx2g", "-Dmaven.repo.local=/elsewhere"]
         assert opts[-1].startswith("-Dmaven.repo.local=")
-        assert opts[-1].endswith("/java/.m2/repository")
+        assert opts[-1].endswith("/otdf-sdk-mgr/maven-repository")
 
     def test_no_tail_without_a_user_repository(self, checkout: CheckoutFactory, make: list):
         install_local("java", checkout("java"))

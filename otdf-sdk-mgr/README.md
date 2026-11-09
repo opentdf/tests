@@ -188,10 +188,11 @@ XT_FORCE_SUPPORTS=<feature> uv run pytest test_tdfs.py --sdks "go@local java@loc
   match. Otherwise it rebuilds from a fresh clone, for example after a new
   commit or from another checkout.
 - **Java builds keep out of `~/.m2/repository`.** They install into
-  `sdk/java/.m2/repository` instead, and read `~/.m2/repository` as a
-  read-only tail (`maven.repo.local.tail`, Maven 3.9 and later), so what is
-  already downloaded is reused. An older Maven downloads everything again into
-  `sdk/java/.m2`. Delete that directory to reclaim space.
+  `${XDG_CACHE_HOME:-~/.cache}/otdf-sdk-mgr/maven-repository` instead, and
+  read `~/.m2/repository` as a read-only tail (`maven.repo.local.tail`,
+  Maven 3.9 and later), so what is already downloaded is reused. An older
+  Maven downloads everything again into that cache. Delete it to reclaim
+  space.
 - **Java builds need JDK 11 through 21.** The JDK Maven runs on (per
   `mvn --version`) is checked before anything is copied, and nothing switches
   it for you. On JDK 27 the build fails partway through. Set `JAVA_HOME`, for
