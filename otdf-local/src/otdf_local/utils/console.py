@@ -10,8 +10,9 @@ from rich.table import Table
 
 # Global console instance
 console = Console()
-# For diagnostics from commands whose stdout is machine-read (e.g. `env`)
-err_console = Console(stderr=True)
+# For diagnostics from commands whose stdout is machine-read (e.g. `env`).
+# Soft-wrapped, so the paths these messages name stay whole and copyable.
+err_console = Console(stderr=True, soft_wrap=True)
 
 
 def print_success(message: str) -> None:
@@ -29,9 +30,9 @@ def print_warning(message: str, out: Console = console) -> None:
     out.print(f"[yellow]![/yellow] {message}")
 
 
-def print_info(message: str) -> None:
+def print_info(message: str, out: Console = console) -> None:
     """Print an info message."""
-    console.print(f"[blue]ℹ[/blue] {message}")
+    out.print(f"[blue]ℹ[/blue] {message}")
 
 
 def print_header(title: str) -> None:

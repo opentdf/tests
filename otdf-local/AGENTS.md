@@ -16,7 +16,7 @@ Config is generated from `opentdf.yaml` into `opentdf-dev.yaml` on every `up`/`r
 
 ```bash
 cd otdf-local
-eval $(uv run otdf-local env)         # Sets PLATFORM_LOG_FILE, KAS_*_LOG_FILE, etc.
+eval "$(uv run otdf-local env)"       # Sets PLATFORM_LOG_FILE, KAS_*_LOG_FILE, etc.
 uv run otdf-local env --format json   # Output as JSON
 cd ../xtest
 uv run pytest --sdks go -v
