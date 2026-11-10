@@ -4,11 +4,14 @@ No platform, no SDK: the java goldens stand in for SDK output.
 """
 
 import http.client
+import random
 import socket
 import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -207,3 +210,77 @@ def test_handler_error_fails_the_block():
     with pytest.raises(ExceptionGroup), serve(Short(SMALL)) as (url, _):
         with pytest.raises(OSError):
             get(url, "bytes=0-9")
+
+
+# --- SparseSink ---------------------------------------------------------------
+
+
+def random_chunks(data: bytes) -> Iterator[bytes]:
+    rng = random.Random(654)
+    pos = 0
+    while pos < len(data):
+        n = rng.choice((0, 1, rng.randrange(1 << 16), rng.randrange(1 << 22)))
+        yield data[pos : pos + n]
+        pos += n
+
+
+def test_sink_keeps_plan_and_tail(tmp_path: Path):
+    data = BIG.read_bytes()
+    seg = BIG_LAYOUT["segment_size"]
+    kept = retention_plan(
+        [(seg - 1, seg + 1), (3 * seg + 1, 3 * seg + 2)], **BIG_LAYOUT
+    )
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=1 << 16, **BIG_LAYOUT)
+    chunks = list(random_chunks(data))
+    assert {0, 1} <= {len(c) for c in chunks}
+    for c in chunks:
+        sink.write(c)
+    store = sink.close()
+
+    # From the last data segment on, java's empty one included.
+    tail = (rangeserve.data_end(**BIG_LAYOUT), len(data))
+    assert (sink.payload_start, sink.tail_start) == (39, tail[0] + GCM)
+    assert store.length == len(data)
+    for s, e in [*kept, tail]:
+        assert store.read(s, e) == data[s:e]
+    # So every other byte is in a data segment the plan dropped.
+    assert store.physical_size == sum(e - s for s, e in [*kept, tail])
+    store.close()
+
+
+@pytest.mark.parametrize(
+    "wrong",
+    [{"payload_start": 59}, {"segment_size": 4 * MiB}],
+    ids=["payload_start", "segment_size"],
+)
+def test_sink_refuses_wrong_layout(tmp_path: Path, wrong: dict[str, int]):
+    layout = BIG_LAYOUT | wrong
+    kept = retention_plan([], **layout)
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=0, **layout)
+    with pytest.raises(ValueError):
+        sink.write(BIG.read_bytes())
+        sink.close()
+
+
+def test_sink_refuses_tail_over_ceiling(tmp_path: Path):
+    tdf = tmp_path / "t.tdf"
+    with zipfile.ZipFile(tdf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("0.payload", random.Random(5111).randbytes(PT_LEN + 5 * GCM))
+        z.writestr("0.manifest.json", "{}" + " " * 200_000)
+    layout = {"payload_start": 39, "plaintext_length": PT_LEN, "segment_size": SEG}
+    sink = rangeserve.SparseSink(
+        tmp_path, plan(start=39), tail_ceiling=1 << 16, **layout
+    )
+    for c in random_chunks(tdf.read_bytes()):
+        sink.write(c)
+    with pytest.raises(rangeserve.ManifestTooLarge):
+        sink.close()
+    assert not (tmp_path / "extents.bin").exists()
+
+
+def test_sink_refuses_short_stream(tmp_path: Path):
+    kept = [(0, 39), (500, 600)]
+    sink = rangeserve.SparseSink(tmp_path, kept, tail_ceiling=0, **BIG_LAYOUT)
+    sink.write(BIG.read_bytes()[:550])
+    with pytest.raises(ValueError):
+        sink.close()
