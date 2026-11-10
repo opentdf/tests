@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from otdf_sdk_mgr.checkout import BARE_REFRESH, CheckoutError, upstream_ref
+from otdf_sdk_mgr.checkout import BARE_REFRESH, CheckoutError, require_worktree, upstream_ref
 from otdf_sdk_mgr.config import SDK_GIT_URLS, SDK_TAG_INFIXES
 from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref, ref_slug
 from otdf_sdk_mgr.semver import normalize_version
@@ -89,6 +89,9 @@ def _ensure_bare_repo() -> Path:
     # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
     print(f"Fetching updates for {bare}...")
     _run(["git", f"--git-dir={bare}", *BARE_REFRESH])
+    # A worktree directory removed by hand stays registered, and `worktree
+    # add` refuses a registered path.
+    _run(["git", f"--git-dir={bare}", "worktree", "prune"])
     return bare
 
 
@@ -96,6 +99,14 @@ def _upstream_ref(bare: Path, ref: str) -> str:
     """`checkout.upstream_ref`, raising PlatformInstallError."""
     try:
         return upstream_ref(bare, ref)
+    except CheckoutError as e:
+        raise PlatformInstallError(str(e)) from e
+
+
+def _require_worktree(worktree: Path, bare: Path) -> None:
+    """`checkout.require_worktree`, raising PlatformInstallError."""
+    try:
+        require_worktree(worktree, bare)
     except CheckoutError as e:
         raise PlatformInstallError(str(e)) from e
 
@@ -167,8 +178,9 @@ def _ensure_worktree(ref: str) -> Path:
     Branch names resolve to origin's current tip via `upstream_ref`; a branch
     origin has deleted raises PlatformInstallError. For mutable refs
     (branches, PR heads) an existing worktree is reset to that tip so a
-    subsequent install picks up new commits. For immutable refs (tags, SHAs)
-    we just reuse.
+    subsequent install picks up new commits, unless it is not a worktree of
+    the bare repo (PlatformInstallError). For immutable refs (tags, SHAs) we
+    just reuse.
     """
     bare = _ensure_bare_repo()
     # `_ensure_bare_repo` refreshes branches and tags only (BARE_REFRESH), so
@@ -183,6 +195,7 @@ def _ensure_worktree(ref: str) -> Path:
     if worktree.exists():
         if is_mutable_ref(ref):
             print(f"Worktree exists at {worktree}; resetting to {ref}.")
+            _require_worktree(worktree, bare)
             _run(["git", "-C", str(worktree), "reset", "--hard", target])
         else:
             print(f"Worktree already exists at {worktree}; reusing.")
@@ -299,6 +312,7 @@ def install_helper_scripts(branch: str = HELPER_SCRIPTS_BRANCH) -> Path:
         _run(["git", f"--git-dir={bare}", "worktree", "add", "--detach", str(worktree), target])
     else:
         print(f"Updating scripts worktree at {worktree}...")
+        _require_worktree(worktree, bare)
         _run(["git", "-C", str(worktree), "reset", "--hard", target])
     src_scripts = worktree / "scripts"
     if not src_scripts.exists():
