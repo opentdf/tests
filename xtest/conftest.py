@@ -21,6 +21,7 @@ import os
 import random
 import typing
 import warnings
+from collections.abc import Generator
 from pathlib import Path
 from typing import cast
 
@@ -573,6 +574,65 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
+#: Cells skipped by each capability gate that said no, for the "capability
+#: gaps" section. Module state for the same reason as the conformance records
+#: below, and likewise only the controller's copy is ever printed.
+_capability_gaps: collections.Counter[tdfs.CapabilityGap] = collections.Counter()
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(
+    call: pytest.CallInfo[None],
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    """Tag a report whose skip came from a capability gate.
+
+    The gap travels in ``user_properties`` because that is what xdist ships
+    from worker to controller. Assigned as a new list: the report shares
+    ``item.user_properties``, and appending to it would repeat the gap on
+    every later phase's report.
+    """
+    rep = yield
+    excinfo = call.excinfo
+    gap = tdfs.CapabilityGap.carried_by(excinfo.value) if excinfo else None
+    if gap is not None:
+        rep.user_properties = [*rep.user_properties, gap.to_property()]
+    return rep
+
+
+def _record_capability_gaps(rep: pytest.TestReport) -> None:
+    if not rep.skipped:
+        return
+    try:
+        gaps = tdfs.CapabilityGap.from_properties(rep.user_properties)
+    except (ValueError, KeyError, TypeError) as e:
+        # Raising here is an INTERNALERROR that aborts the run; a summary line
+        # is not worth that.
+        logging.getLogger("xtest").warning(
+            "%s: unreadable capability gap record: %s", rep.nodeid, e
+        )
+        return
+    _capability_gaps.update(gaps)
+
+
+def pytest_terminal_summary(
+    terminalreporter: pytest.TerminalReporter, config: pytest.Config
+) -> None:
+    """List every capability gate that skipped cells, and why.
+
+    ``-ra`` already prints each skip's reason, but between the "not in focus"
+    and released-pair skips a whole SDK dropping out of a test module is one
+    line among hundreds -- which is how the js DPoP cells went unrun
+    (DSPX-4333). This section holds only capability skips, one line per gate.
+    Silent when no gate said no.
+    """
+    if getattr(config, "workerinput", None) is not None or not _capability_gaps:
+        return
+    terminalreporter.write_sep("=", "capability gaps", yellow=True)
+    for line in tdfs.capability_gap_lines(_capability_gaps):
+        terminalreporter.write_line(line)
+    report.append_step_summary(tdfs.capability_gap_markdown(_capability_gaps))
+
+
 #: Conformance records for the whole run, in arrival order. Plain module
 #: state rather than the config stash because :func:`pytest_runtest_logreport`
 #: is handed a report and nothing else.
@@ -586,12 +646,12 @@ _zip_conformance_faults: list[str] = []
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    """Accumulate ZIP conformance records as each cell finishes.
+    """Accumulate capability gaps and ZIP conformance records as each cell finishes.
 
     Under xdist this fires both on the worker that ran the cell and on the
     controller that receives its report. Only the controller writes anything
-    (see :func:`_finish_zip_conformance`), so a worker's partial list dies
-    with the worker.
+    (see :func:`_finish_zip_conformance` and :func:`pytest_terminal_summary`),
+    so a worker's partial list dies with the worker.
 
     Only a passing call is read: ``user_properties`` rides on every phase's
     report, and a cell that failed after recording (``-W error`` on the
@@ -604,6 +664,7 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     The parameter name is fixed by the hookspec and shadows the ``perf.report``
     import above; nothing in here needs that module.
     """
+    _record_capability_gaps(report)
     if "zip_conformance" not in report.keywords:
         return
     if report.when == "setup" and not report.passed:

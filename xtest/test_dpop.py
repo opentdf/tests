@@ -214,10 +214,16 @@ def _get_dpop_access_token() -> DPoPAccessToken:
     assert response.status_code == 200, response.text
     body = response.json()
     if body.get("token_type") != "DPoP":
-        pytest.skip(
-            f"Keycloak realm not configured for DPoP (token_type={body.get('token_type')!r}); "
-            "set the realm's OAuth client to require DPoP-bound tokens"
-        )
+        # A capability gap, not a plain skip, so a realm that hands the DPoP
+        # client plain Bearer tokens is listed in the end-of-run "capability
+        # gaps" section instead of hiding among the -ra skips.
+        tdfs.CapabilityGap(
+            subject=f"Keycloak client {client_id}",
+            feature="dpop",
+            detail="Keycloak realm not configured for DPoP "
+            f"(token_type={body.get('token_type')!r}); "
+            "set the realm's OAuth client to require DPoP-bound tokens",
+        ).skip()
     access_token = body["access_token"]
 
     token_payload = _jwt_payload(access_token)
@@ -344,6 +350,18 @@ def _assert_unauthorized(response: requests.Response) -> None:
     assert auth.startswith("DPoP"), f"expected DPoP challenge, got: {auth!r}"
 
 
+def _skip_unless_realm_issues_dpop_tokens() -> None:
+    """Skip unless the IdP issues DPoP-bound tokens to the client the shims use.
+
+    The SDK roundtrips mint their own tokens, so the realm check has to happen
+    out of band: ask for a token the same way the negative tests do and drop it.
+    Without this, a realm that answers with `token_type: Bearer` fails every
+    SDK that (correctly) refuses an unbound token after asking for DPoP, while
+    SDKs that do not check pass -- a realm gap reported as an SDK bug.
+    """
+    _get_dpop_access_token()
+
+
 def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) -> None:
     if encrypt_sdk not in in_focus:
         pytest.skip("Not in focus")
@@ -383,6 +401,7 @@ def test_dpop_happy_path_roundtrip(
     pfs.skip_if_unsupported("dpop")
     encrypt_sdk.skip_if_unsupported("dpop")
     decrypt_sdk.skip_if_unsupported("dpop")
+    _skip_unless_realm_issues_dpop_tokens()
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(

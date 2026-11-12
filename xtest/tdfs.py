@@ -8,9 +8,10 @@ import subprocess
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeIs, cast, get_args
+from typing import Any, Literal, NoReturn, TypeIs, cast, get_args
 
 import jsonschema
 import pytest
@@ -331,6 +332,138 @@ policy_type = Literal["plaintext", "encrypted"]
 """How policy (data attributes) should be bound within the output container on encrypt."""
 
 
+#: ``user_properties`` key conftest uses to carry a :class:`CapabilityGap` from
+#: the worker that skipped a cell to the controller that summarises the run.
+CAPABILITY_GAP_PROPERTY = "xt_capability_gap"
+#: Attribute :meth:`CapabilityGap.skip` sets on the skip exception it raises.
+_CAPABILITY_GAP_ATTR = "xt_capability_gap"
+
+
+@dataclass(frozen=True)
+class CapabilityGap:
+    """A capability gate that answered no, and why.
+
+    ``subject`` is whoever was asked -- ``js@v0.22.0``, or ``platform service
+    0.30.0`` -- and ``detail`` is its own explanation, such as the last line
+    the ``cli.sh supports`` probe printed.
+
+    The detail is the point. "doesn't yet support [dpop]" reads the same
+    whether the SDK lacks DPoP or the probe is grepping for a flag no release
+    ships, and the second is how every js DPoP cell skipped unnoticed
+    (DSPX-4333).
+    """
+
+    subject: str
+    feature: str
+    detail: str
+
+    @property
+    def reason(self) -> str:
+        return f"{self.subject} doesn't yet support [{self.feature}]: {self.detail}"
+
+    def skip(self) -> NoReturn:
+        """Skip the current test, carrying this gap on the skip exception.
+
+        A plain ``pytest.skip`` as far as pytest is concerned -- a subclass
+        would print its class name where the reason goes. The gap rides along
+        as an attribute so conftest's ``pytest_runtest_makereport`` can tell
+        this skip from the "not in focus" kind and list it under "capability
+        gaps" at the end of the run.
+        """
+        __tracebackhide__ = True  # report the gate's line, not this one
+        exc = pytest.skip.Exception(msg=self.reason)
+        setattr(exc, _CAPABILITY_GAP_ATTR, self)
+        raise exc
+
+    @staticmethod
+    def carried_by(exc: BaseException) -> CapabilityGap | None:
+        """The gap a :meth:`skip` exception carries, or None for any other."""
+        gap = getattr(exc, _CAPABILITY_GAP_ATTR, None)
+        return gap if isinstance(gap, CapabilityGap) else None
+
+    def to_property(self) -> tuple[str, str]:
+        """A ``user_properties`` entry, as JSON text so xdist can ship it."""
+        return CAPABILITY_GAP_PROPERTY, json.dumps(asdict(self), sort_keys=True)
+
+    @classmethod
+    def from_properties(
+        cls, properties: Iterable[tuple[str, object]]
+    ) -> list[CapabilityGap]:
+        """The gaps recorded by :meth:`to_property`; other properties are ignored."""
+        gaps: list[CapabilityGap] = []
+        for name, value in properties:
+            if name != CAPABILITY_GAP_PROPERTY or not isinstance(value, str):
+                continue
+            fields = json.loads(value)
+            gaps.append(
+                cls(
+                    subject=str(fields["subject"]),
+                    feature=str(fields["feature"]),
+                    detail=str(fields["detail"]),
+                )
+            )
+        return gaps
+
+
+def _probe_detail(feature: str, returncode: int, output: str) -> str:
+    """One line on why ``cli.sh supports <feature>`` said no, for a skip reason.
+
+    The exit status plus the last non-blank line the probe printed. Every shim
+    exits 2 with ``Unknown feature`` when it has no case for the name, so a
+    missing case reads differently from a deliberate no.
+    """
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    detail = f"`cli.sh supports {feature}` exited {returncode}"
+    if not lines:
+        return detail
+    last = lines[-1]
+    if len(last) > 200:
+        last = last[:197] + "..."
+    return f"{detail}: {last}"
+
+
+def capability_gap_lines(gaps: Mapping[CapabilityGap, int]) -> list[str]:
+    """Terminal lines for the end-of-run "capability gaps" section."""
+    total = sum(gaps.values())
+    lines = [
+        f"{total} cell{'s' if total != 1 else ''} skipped because a capability "
+        "gate said no. If one should say yes, fix the gate: the `supports` "
+        "case in sdk/<sdk>/cli.sh, or SDK._uncached_supports or "
+        "PlatformFeatureSet in tdfs.py. XT_FORCE_SUPPORTS and "
+        "XT_FORCE_PLATFORM_SUPPORTS run the cells regardless.",
+    ]
+    for gap in sorted(gaps, key=lambda g: (g.subject, g.feature, g.detail)):
+        n = gaps[gap]
+        lines.append(
+            f"  {gap.subject} [{gap.feature}] ({n} cell{'s' if n != 1 else ''}): "
+            f"{gap.detail}"
+        )
+    return lines
+
+
+def capability_gap_markdown(gaps: Mapping[CapabilityGap, int]) -> str:
+    """The same summary as :func:`capability_gap_lines`, for ``$GITHUB_STEP_SUMMARY``."""
+
+    def cell(text: str) -> str:
+        return text.replace("|", "\\|")
+
+    total = sum(gaps.values())
+    rows = [
+        "### Capability gaps",
+        "",
+        f"{total} cell{'s' if total != 1 else ''} skipped because a capability "
+        "gate said no.",
+        "",
+        "| Subject | Feature | Cells | Why |",
+        "| --- | --- | ---: | --- |",
+    ]
+    rows.extend(
+        f"| {cell(gap.subject)} | `{gap.feature}` | {gaps[gap]} | {cell(gap.detail)} |"
+        for gap in sorted(gaps, key=lambda g: (g.subject, g.feature, g.detail))
+    )
+    return "\n".join(rows) + "\n\n"
+
+
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
     semver: tuple[int, int, int] | None = None
@@ -443,11 +576,14 @@ class PlatformFeatureSet(BaseModel):
 
     def skip_if_unsupported(self, *features: feature_type):
         """Skip the current test if any of the given features are unsupported."""
-        missing = [f for f in features if f not in self.features]
-        if missing:
-            pytest.skip(
-                f"platform service {self.version} doesn't yet support {missing}"
-            )
+        for feature in features:
+            if feature not in self.features:
+                CapabilityGap(
+                    subject=f"platform service {self.version}",
+                    feature=feature,
+                    detail="not among the features detected for this "
+                    "platform, which the session header lists",
+                ).skip()
 
 
 _cached_pfs: PlatformFeatureSet | None = None
@@ -759,11 +895,14 @@ class SDK:
     sdk: sdk_type
     version: str
     _supports: dict[feature_type, bool]
+    #: Why the ``cli.sh supports`` probe said no, for features it was asked.
+    _probe_details: dict[feature_type, str]
 
     def __init__(self, sdk: sdk_type, version: str = "main"):
         self.sdk = sdk
         self.path = f"sdk/{sdk}/dist/{version}/cli.sh"
         self._supports = {}
+        self._probe_details = {}
         self.version = version
         if not os.path.isfile(self.path):
             raise FileNotFoundError(f"SDK executable not found at path: {self.path}")
@@ -977,7 +1116,15 @@ class SDK:
     def skip_if_unsupported(self, *features: feature_type):
         for feature in features:
             if not self.supports(feature):
-                pytest.skip(f"{self} sdk doesn't yet support [{feature}]")
+                CapabilityGap(
+                    subject=str(self),
+                    feature=feature,
+                    detail=self._probe_details.get(
+                        feature,
+                        "answered no by SDK._uncached_supports in tdfs.py, "
+                        "without asking cli.sh",
+                    ),
+                ).skip()
 
     def _uncached_supports(self, feature: feature_type) -> bool:
         match (feature, self.sdk):
@@ -1036,11 +1183,23 @@ class SDK:
             feature,
         ]
         logger.info(f"sup [{' '.join(c)}]")
-        try:
-            subprocess.check_call(c)
-        except subprocess.CalledProcessError:
-            return False
-        return True
+        # Captured, not inherited: pytest shows a test's output only when it
+        # fails, so the probe's explanation would never reach a skip.
+        result = subprocess.run(
+            c,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        output = result.stdout.strip()
+        if output:
+            logger.info(f"sup {self} {feature} -> {result.returncode}: {output}")
+        if result.returncode == 0:
+            return True
+        self._probe_details[feature] = _probe_detail(feature, result.returncode, output)
+        return False
 
 
 def all_versions_of(sdk: sdk_type) -> list[SDK]:

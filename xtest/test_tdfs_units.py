@@ -13,6 +13,7 @@ helper that quietly forges the wrong bytes would make the security tests in
 
 import base64
 import json
+import subprocess
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -192,7 +193,7 @@ def _installed_sdk(sdk: tdfs.sdk_type, version: str) -> tdfs.SDK:
     AttributeError rather than quietly run whatever is installed.
     """
     s = object.__new__(tdfs.SDK)
-    s.sdk, s.version, s._supports = sdk, version, {}
+    s.sdk, s.version, s._supports, s._probe_details = sdk, version, {}, {}
     return s
 
 
@@ -418,3 +419,152 @@ class TestEncryptedSegmentSizes:
     def test_uses_the_per_segment_override(self, tmp_path: Path):
         ct_file = _manifest_zip(tmp_path, "full.tdf", elides=False)
         assert tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file)) == [1028, 1028]
+
+
+# --- capability gaps (DSPX-4333) ----------------------------------------------
+
+
+def _probed_sdk(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, output: str
+) -> tdfs.SDK:
+    """A js SDK whose ``cli.sh supports`` exits ``returncode`` printing ``output``."""
+
+    def run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, returncode, stdout=output)
+
+    monkeypatch.setattr(tdfs.subprocess, "run", run)
+    s = _installed_sdk("js", "v0.21.0")
+    s.path = "sdk/js/dist/v0.21.0/cli.sh"
+    return s
+
+
+def _gap_of(excinfo: pytest.ExceptionInfo[BaseException]) -> tdfs.CapabilityGap:
+    gap = tdfs.CapabilityGap.carried_by(excinfo.value)
+    assert gap is not None, f"skip carries no capability gap: {excinfo.value!r}"
+    return gap
+
+
+class TestCapabilityGaps:
+    """What a capability skip says, and what the end-of-run summary prints.
+
+    The js DPoP cells skipped for as long as they existed because the probe
+    grepped for a flag no release had, and the skip said only "doesn't yet
+    support [dpop]". These hold each skip to naming who said no and why.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_forced_supports(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset())
+
+    def test_a_shim_no_carries_the_probes_last_line(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        s = _probed_sdk(
+            monkeypatch,
+            1,
+            "Usage: opentdf ...\n\ndpop unsupported: this CLI predates it\n\n",
+        )
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            s.skip_if_unsupported("dpop")
+        assert _gap_of(excinfo) == tdfs.CapabilityGap(
+            subject="js@v0.21.0",
+            feature="dpop",
+            detail="`cli.sh supports dpop` exited 1: dpop unsupported: this CLI "
+            "predates it",
+        )
+        assert excinfo.value.msg == (
+            "js@v0.21.0 doesn't yet support [dpop]: `cli.sh supports dpop` "
+            "exited 1: dpop unsupported: this CLI predates it"
+        )
+
+    def test_it_is_a_plain_pytest_skip(self, monkeypatch: pytest.MonkeyPatch):
+        """Not a subclass, which pytest would report by class name, not reason."""
+        s = _probed_sdk(monkeypatch, 1, "")
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            s.skip_if_unsupported("dpop")
+        assert type(excinfo.value) is pytest.skip.Exception
+
+    def test_an_ordinary_skip_carries_no_gap(self):
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            pytest.skip("Not in focus")
+        assert tdfs.CapabilityGap.carried_by(excinfo.value) is None
+
+    def test_a_missing_shim_case_reads_as_one(self, monkeypatch: pytest.MonkeyPatch):
+        s = _probed_sdk(monkeypatch, 2, "Unknown feature: dpopp\n")
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            s.skip_if_unsupported("dpop")
+        assert _gap_of(excinfo).detail == (
+            "`cli.sh supports dpop` exited 2: Unknown feature: dpopp"
+        )
+
+    def test_a_silent_probe_still_gives_its_exit_status(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        s = _probed_sdk(monkeypatch, 1, "")
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            s.skip_if_unsupported("assertions")
+        assert _gap_of(excinfo).detail == "`cli.sh supports assertions` exited 1"
+
+    def test_a_yes_does_not_skip(self, monkeypatch: pytest.MonkeyPatch):
+        _probed_sdk(monkeypatch, 0, "supported\n").skip_if_unsupported("dpop")
+
+    def test_a_python_side_no_says_so(self):
+        """Answered in tdfs.py without a probe, so there is no shim output to quote."""
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            _installed_sdk("js", "v0.2.0").skip_if_unsupported("key_management")
+        assert _gap_of(excinfo).subject == "js@v0.2.0"
+        assert _gap_of(excinfo).feature == "key_management"
+        assert "tdfs.py" in _gap_of(excinfo).detail
+
+    def test_a_forced_feature_never_probes_or_skips(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(tdfs, "FORCED_SUPPORTS", frozenset({"dpop"}))
+
+        def run(*_: object, **__: object) -> None:
+            raise AssertionError("a forced feature must not reach the shim")
+
+        monkeypatch.setattr(tdfs.subprocess, "run", run)
+        _installed_sdk("js", "v0.21.0").skip_if_unsupported("dpop")
+
+    def test_the_platform_gate_names_the_platform(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("PLATFORM_VERSION", "0.9.0")
+        monkeypatch.setattr(tdfs, "FORCED_PLATFORM_SUPPORTS", frozenset())
+        monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: None)
+        pfs = tdfs.PlatformFeatureSet()
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            pfs.skip_if_unsupported("assertions", "dpop")
+        assert _gap_of(excinfo).subject == "platform service 0.9.0"
+        assert _gap_of(excinfo).feature == "dpop"
+
+    def test_property_round_trip_ignores_other_properties(self):
+        gap = tdfs.CapabilityGap("js@v0.21.0", "dpop", "said no")
+        props: list[tuple[str, object]] = [
+            ("zip_conformance", "{}"),
+            gap.to_property(),
+        ]
+        assert tdfs.CapabilityGap.from_properties(props) == [gap]
+
+    def test_long_probe_output_is_truncated(self):
+        detail = tdfs._probe_detail("dpop", 1, "x" * 500)
+        assert detail.endswith("...")
+        assert len(detail) < 260
+
+    def test_summary_lines_count_cells_per_gate(self):
+        gaps = {
+            tdfs.CapabilityGap("js@v0.21.0", "dpop", "predates #991"): 6,
+            tdfs.CapabilityGap("go@v0.24.0", "chunky", "see DSPX-4590"): 1,
+        }
+        lines = tdfs.capability_gap_lines(gaps)
+        assert lines[0].startswith("7 cells skipped because a capability gate")
+        assert lines[1:] == [
+            "  go@v0.24.0 [chunky] (1 cell): see DSPX-4590",
+            "  js@v0.21.0 [dpop] (6 cells): predates #991",
+        ]
+
+    def test_summary_markdown_escapes_table_pipes(self):
+        gaps = {tdfs.CapabilityGap("js@v0.21.0", "dpop", "grep 'a|b' failed"): 2}
+        md = tdfs.capability_gap_markdown(gaps)
+        assert "| js@v0.21.0 | `dpop` | 2 | grep 'a\\|b' failed |" in md
