@@ -174,12 +174,24 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
-      exit $?
+    dpop | dpop_nonce_challenge)
+      # `cmdline.jar supports` exists from v0.18.0. Every older release
+      # always sends DPoP proofs (scheme DPoP), but has no KAS nonce retry.
+      if java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 > 0 || $2 >= 18) }'; then
+        java -jar "$SCRIPT_DIR"/cmdline.jar supports "$2"
+        exit $?
+      fi
+      if [[ "$2" == dpop ]]; then
+        exit 0
+      fi
+      echo "dpop_nonce_challenge unsupported: java-sdk before v0.18.0"
+      exit 1
       ;;
-    dpop_nonce_challenge)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+    dpop_path_htu)
+      # gRPC builds (before v0.8.0) sign "/" + the full method name. From
+      # v0.8.0 connect-kotlin signs the full request URL.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 == 0 && $2 < 8) }'
       exit $?
       ;;
     chunky)

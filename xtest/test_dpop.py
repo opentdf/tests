@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import pytest
@@ -179,13 +179,14 @@ class RewrapCall:
     body: str
 
 
-def _get_dpop_access_token() -> DPoPAccessToken:
+def _get_dpop_access_token(client_id: str | None = None) -> DPoPAccessToken:
     key = DPoPKey.generate()
     token_endpoint = _token_endpoint()
     # The dpop-bound client is provisioned alongside the default `opentdf`
-    # client by `service provision keycloak`. We default to it here so tests
-    # that mint DPoP-bound tokens via Keycloak don't need extra env wiring.
-    client_id = os.getenv("CLIENTID", "opentdf-dpop")
+    # client by `service provision keycloak` (or provision_dpop_client.py on
+    # older platforms). We default to it here so tests that mint DPoP-bound
+    # tokens via Keycloak don't need extra env wiring.
+    client_id = client_id or os.getenv("CLIENTID", "opentdf-dpop")
     client_secret = os.getenv("CLIENTSECRET", "secret")
 
     def post_token(nonce: str | None = None) -> requests.Response:
@@ -317,6 +318,7 @@ def _post_rewrap_with_nonce_retry(
     *,
     access_token: str,
     auth_scheme: str = "DPoP",
+    htu: str | None = None,
 ) -> requests.Response:
     """POST a rewrap, transparently satisfying a `require_nonce` challenge.
 
@@ -326,15 +328,17 @@ def _post_rewrap_with_nonce_retry(
     the same `auth_scheme`. This makes callers agnostic to whether
     `require_nonce` is enabled on the target KAS: with it off the first request
     is returned as-is; with it on the second (nonce-bearing) request is.
+    `htu` defaults to the request URL.
     """
-    proof = key.sign_dpop_proof(htm="POST", htu=call.url, access_token=access_token)
+    htu = htu or call.url
+    proof = key.sign_dpop_proof(htm="POST", htu=htu, access_token=access_token)
     response = _post_rewrap(
         call, access_token=access_token, dpop_proof=proof, auth_scheme=auth_scheme
     )
     nonce = response.headers.get("DPoP-Nonce")
     if response.status_code == 401 and nonce:
         proof = key.sign_dpop_proof(
-            htm="POST", htu=call.url, access_token=access_token, nonce=nonce
+            htm="POST", htu=htu, access_token=access_token, nonce=nonce
         )
         response = _post_rewrap(
             call, access_token=access_token, dpop_proof=proof, auth_scheme=auth_scheme
@@ -350,7 +354,7 @@ def _assert_unauthorized(response: requests.Response) -> None:
     assert auth.startswith("DPoP"), f"expected DPoP challenge, got: {auth!r}"
 
 
-def _skip_unless_realm_issues_dpop_tokens() -> None:
+def _skip_unless_realm_issues_dpop_tokens(client_id: str | None = None) -> None:
     """Skip unless the IdP issues DPoP-bound tokens to the client the shims use.
 
     The SDK roundtrips mint their own tokens, so the realm check has to happen
@@ -359,7 +363,7 @@ def _skip_unless_realm_issues_dpop_tokens() -> None:
     SDK that (correctly) refuses an unbound token after asking for DPoP, while
     SDKs that do not check pass -- a realm gap reported as an SDK bug.
     """
-    _get_dpop_access_token()
+    _get_dpop_access_token(client_id)
 
 
 def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) -> None:
@@ -368,6 +372,59 @@ def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) ->
     pfs = tdfs.get_platform_features()
     pfs.skip_if_unsupported("dpop")
     encrypt_sdk.skip_if_unsupported("dpop")
+
+
+def _htu_form(sdk: tdfs.SDK) -> Literal["path", "url"]:
+    return "path" if sdk.supports("dpop_path_htu") else "url"
+
+
+def _xfail_unless_htu_accepted(request: pytest.FixtureRequest, *sdks: tdfs.SDK) -> None:
+    """Mark the cell xfail when a client's htu form is one the server rejects.
+
+    These are known incompatibilities, not regressions: a full-URL client
+    against a server before v0.18.0 (DSPX-5528). XPASS means one was fixed.
+    """
+    pfs = tdfs.get_platform_features()
+    accepted = pfs.dpop_htu_forms()
+    for sdk in sdks:
+        if (form := _htu_form(sdk)) not in accepted:
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason=f"{sdk} signs {form} htu; platform {pfs.version} "
+                    f"accepts only {sorted(accepted)} on Connect routes (DSPX-5528)",
+                    strict=False,
+                )
+            )
+            return
+
+
+def _origin(url: str) -> str:
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _platform_kas_tdf(
+    encrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    """A TDF wrapped by the platform's own KAS, encrypted with a Bearer client.
+
+    Encrypting without DPoP keeps an SDK's own htu handling out of the
+    HTTP-level cases. Bypasses `encrypted_tdf`, whose cache key doesn't
+    include the client.
+    """
+    ct_file = tmp_path / f"bearer-{encrypt_sdk}.tdf"
+    with monkeypatch.context() as m:
+        m.setenv("CLIENTID", "opentdf")
+        m.delenv("XT_WITH_DPOP", raising=False)
+        encrypt_sdk.encrypt(pt_file, ct_file, container="ztdf")
+    kas_url = tdfs.manifest(ct_file).encryptionInformation.keyAccess[0].url
+    platform_url = os.getenv("PLATFORMURL", "http://localhost:8080")
+    if _origin(kas_url) != _origin(platform_url):
+        pytest.skip(f"KAO points at {kas_url}, not the platform at {platform_url}")
+    return ct_file
 
 
 @pytest.fixture(autouse=True)
@@ -379,6 +436,16 @@ def _dpop_client_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XT_WITH_DPOP", "ES256")
 
 
+@pytest.mark.parametrize(
+    "dpop_client",
+    [
+        pytest.param("opentdf-dpop", id="required"),
+        # Keycloak 26 binds a token to the proof whenever one is offered, so
+        # clients that attach proofs opportunistically (the pre-RFC 9449
+        # SDKs, dpop_path_htu) get DPoP-bound tokens from the plain client.
+        pytest.param("opentdf", id="optional"),
+    ],
+)
 def test_dpop_happy_path_roundtrip(
     attribute_single_kas_grant: Attribute,
     encrypt_sdk: tdfs.SDK,
@@ -386,22 +453,33 @@ def test_dpop_happy_path_roundtrip(
     pt_file: Path,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    dpop_client: str,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ):
-    """Encrypt + decrypt via a KAS that requires DPoP-bound access tokens.
+    """Encrypt + decrypt with DPoP-bound access tokens.
 
     Verifies the SDK transparently:
       1. mints a DPoP proof for the token request,
       2. recognizes the resulting `token_type: DPoP`,
-      3. mints a fresh DPoP proof (with `ath` claim) for the KAS rewrap,
-      4. sends `Authorization: DPoP <token>` instead of `Bearer`.
+      3. mints a fresh DPoP proof (with `ath` claim) for each platform and
+         KAS call, in the htu form the server accepts.
+
+    `required` needs an SDK that can authenticate as a DPoP-only client
+    (`dpop`); otdfctl before v0.37.0 can't, since its credential pre-flight
+    sends no proof. `optional` also runs the legacy path-only clients.
+    Cells whose htu form the server rejects are xfail.
     """
     if not in_focus & {encrypt_sdk, decrypt_sdk}:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
-    pfs.skip_if_unsupported("dpop")
-    encrypt_sdk.skip_if_unsupported("dpop")
-    decrypt_sdk.skip_if_unsupported("dpop")
-    _skip_unless_realm_issues_dpop_tokens()
+    pfs.skip_if_unsupported("dpop_bound_tokens")
+    for sdk in (encrypt_sdk, decrypt_sdk):
+        if dpop_client == "opentdf-dpop" or not sdk.supports("dpop_path_htu"):
+            sdk.skip_if_unsupported("dpop")
+    _skip_unless_realm_issues_dpop_tokens(dpop_client)
+    monkeypatch.setenv("CLIENTID", dpop_client)
+    _xfail_unless_htu_accepted(request, encrypt_sdk, decrypt_sdk)
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(
@@ -655,3 +733,49 @@ def test_dpop_rejects_tampered_nonce(
 
     _assert_unauthorized(response)
     assert response.headers.get("DPoP-Nonce")
+
+
+@pytest.mark.parametrize(
+    ("htu_form", "auth_scheme"),
+    [
+        # otdfctl before v0.37.0 and java-sdk before v0.8.0
+        pytest.param("path", "DPoP", id="legacy-sdk"),
+        # web-sdk's authTokenDPoPInterceptor era: proof, but the Bearer scheme
+        pytest.param("path", "Bearer", id="legacy-bearer"),
+        pytest.param("url", "DPoP", id="rfc9449"),
+    ],
+)
+def test_dpop_proof_shapes_across_versions(
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    pt_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    htu_form: Literal["path", "url"],
+    auth_scheme: str,
+):
+    """Hand-minted rewraps in each client generation's proof shape.
+
+    Characterizes the server independently of which SDK builds are
+    installed: every shape a released client sends is accepted unless the
+    server's htu rules exclude it (full URLs before service v0.18.0).
+    """
+    if encrypt_sdk not in in_focus:
+        pytest.skip("Not in focus")
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("dpop_bound_tokens")
+    ct_file = _platform_kas_tdf(encrypt_sdk, pt_file, tmp_path, monkeypatch)
+    dpop_access = _get_dpop_access_token()
+    call = _signed_rewrap_request(ct_file, dpop_access.key)
+
+    response = _post_rewrap_with_nonce_retry(
+        call,
+        dpop_access.key,
+        access_token=dpop_access.token,
+        auth_scheme=auth_scheme,
+        htu=urlparse(call.url).path if htu_form == "path" else call.url,
+    )
+    if htu_form in pfs.dpop_htu_forms():
+        assert response.status_code == 200, response.text
+    else:
+        assert response.status_code == 401, response.text

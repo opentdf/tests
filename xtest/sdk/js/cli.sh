@@ -175,6 +175,11 @@ if [[ "$1" == "supports" ]]; then
       echo "$2 unsupported: \`opentdf supports $2\` said no"
       exit 1
       ;;
+    dpop_path_htu)
+      # No released CLI sends a DPoP proof at all; web-sdk#991 signs full URLs.
+      echo "dpop_path_htu unsupported: the js CLI never signs path-only proofs"
+      exit 1
+      ;;
     chunky)
       # web-sdk omits a segment's sizes when they equal the manifest defaults
       # and defaults them back on read. Both halves predate any version we
