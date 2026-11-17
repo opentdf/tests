@@ -474,20 +474,34 @@ jobs:
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
 
+      # The action overlays docker-compose.yaml from bootstrap-ref, independent
+      # of platform-ref. main's compose is Keycloak 26.4 with DPoP. Released
+      # platform tags predate the switch to standard Keycloak token exchange,
+      # so they keep the `pqc-enabled` bootstrap, whose Keycloak 25.0 cannot
+      # bind tokens to a DPoP key; COMPOSE_FILE layers a 26.4 Keycloak with
+      # the legacy token-exchange features over it.
+      - name: Choose the DPoP lane
+        id: dpop-lane
+        run: |-
+          if [[ "$PLATFORM_TAG" == "main" ]]; then
+            printf '%s\n' bootstrap-ref=main compose-file=docker-compose.yaml >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' bootstrap-ref=pqc-enabled \
+              "compose-file=docker-compose.yaml:${OVERRIDE}" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OVERRIDE: ${{ github.workspace }}/otdftests/.github/keycloak-dpop.compose.yaml
+
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@11af44a5d4826ed281bf2e0e4e31d6ff6154b393  # keycloak-26.4 (opentdf/platform#3792)
+        uses: opentdf/platform/test/start-up-with-containers@e5f1783769c689a7c67f4249152b424452f27f9b  # main, 2026-10-06 (has bootstrap-ref and dpop-* inputs)
+        env:
+          COMPOSE_FILE: ${{ steps.dpop-lane.outputs.compose-file }}
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
-          # The action overlays docker-compose.yaml from bootstrap-ref, independent
-          # of platform-ref. The default `pqc-enabled` tag is still Keycloak 25.0,
-          # which cannot issue DPoP-bound access tokens, so test_dpop.py roundtrips
-          # fail with a plain Bearer token. main's compose is Keycloak 26.4 with
-          # KC_FEATURES: dpop. Only the main lane gets it -- released platform tags
-          # predate the switch to standard Keycloak token exchange and still need
-          # the 25.0 bootstrap.
-          bootstrap-ref: ${{ matrix.platform-tag == 'main' && 'main' || 'pqc-enabled' }}
+          bootstrap-ref: ${{ steps.dpop-lane.outputs.bootstrap-ref }}
           ec-tdf-enabled: true
           extra-keys: ${{ steps.load-extra-keys.outputs.EXTRA_KEYS }}
           log-type: json
@@ -499,6 +513,11 @@ jobs:
         with:
           # Pinned so a new CPython release can't land before its wheels do.
           python-version: "3.15"
+      # Platforms before service v0.18.0 don't provision the client
+      # test_dpop.py uses; without it every DPoP cell skips on those lanes.
+      - name: Provision the DPoP Keycloak client
+        run: uv run --frozen --no-build python provision_dpop_client.py
+        working-directory: otdftests/xtest
       - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
         with:
           setup_only: true
