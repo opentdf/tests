@@ -143,6 +143,15 @@ SDK, not just the DPoP cells: they sign full-URL htu, which those platforms
 reject on Connect routes (DSPX-5528). CI starts Keycloak there with
 `KC_FEATURES_DISABLED=dpop` and turns it on only for `test_dpop.py`.
 
+#### Strict DPoP htu
+
+`test_dpop.py`'s htu cases need the main platform started with
+`OPENTDF_SERVER_AUTH_DPOP_HTU_STRICT=true` and
+`OPENTDF_SERVER_AUTH_DPOP_HTU_ORIGINS=http://localhost:8080`, as CI's weekly main
+lane does (or any run with the `dpop-htu-strict` input). They read the origins
+from the well-known configuration and the mode from the platform log
+(`PLATFORM_LOG_FILE`), and skip if either is missing.
+
 #### Run TDF Tests
 
 ```shell
