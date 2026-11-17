@@ -105,6 +105,23 @@ def test_decrypt_SDKv0_9_0(
     assert file_stats.st_size == 92
 
 
+# test decryption of legacy tdf created with Java SDK v0_19_1 which is used in the DSP Gateway v2.79.0
+def test_decrypt_SDKv0_19_1(
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: set[tdfs.SDK],
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("xstext-java-v0.19.1-8e6f8bc-GW2.79.0.tdf")
+    rt_file = tmp_dir / f"0.19.1-java-{decrypt_sdk}.untdf"
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    file_stats = os.stat(rt_file)
+    assert file_stats.st_size == 88
+
+
 def test_decrypt_no_splitid(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
