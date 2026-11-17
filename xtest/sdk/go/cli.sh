@@ -200,6 +200,10 @@ if [ "$XTEST_DIR" = "/" ]; then
   exit 1
 fi
 
+# test.env resets CLIENTID; keep a caller's override (test_dpop.py's
+# opentdf-dpop client), as the js shim does.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
 if [ -f "$XTEST_DIR/test.env" ]; then
   # shellcheck disable=SC1091
   source "$XTEST_DIR/test.env"
@@ -207,6 +211,8 @@ else
   echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 args=(
   -o "$3"
