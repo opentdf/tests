@@ -199,6 +199,9 @@ jobs:
           elif [[ $CRON_WEEKLY == 'true' ]]; then
             echo "Running weekly tests"
             echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
+            # Current clients against a pre-RFC 9449 server (service v0.11.x
+            # ships in DSP 2.7), for test_dpop.py's compatibility cells.
+            echo "DEFAULT_PLATFORM_TAGS=main latest v0.11.6" >> "$GITHUB_ENV"
           else
             echo "Running PR, Workflow Dispatch, or manual trigger"
             echo "DEFAULT_TAGS=main latest" >> "$GITHUB_ENV"
@@ -299,7 +302,7 @@ jobs:
             core.setOutput('default-tags', defaultTags);
 
             const refs = {
-              platform: process.env.PLATFORM_REF || defaultTags,
+              platform: process.env.PLATFORM_REF || process.env.DEFAULT_PLATFORM_TAGS || defaultTags,
               go: process.env.OTDFCTL_REF || defaultTags,
               js: process.env.JS_REF || defaultTags,
               java: process.env.JAVA_REF || defaultTags
@@ -910,6 +913,47 @@ jobs:
             test_abac.py test_pqc.py test_dpop.py
         working-directory: otdftests/xtest
         env:
+          PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
+          PLATFORM_TAG: ${{ matrix.platform-tag }}
+          OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
+          KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
+          KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
+          KAS_GAMMA_LOG_FILE: "../../${{ steps.kas-gamma.outputs.log-file }}"
+          KAS_DELTA_LOG_FILE: "../../${{ steps.kas-delta.outputs.log-file }}"
+          KAS_KM1_LOG_FILE: "../../${{ steps.kas-km1.outputs.log-file }}"
+          KAS_KM2_LOG_FILE: "../../${{ steps.kas-km2.outputs.log-file }}"
+          KAS_KM3_LOG_FILE: "../../${{ steps.kas-km3.outputs.log-file }}"
+
+      # Released clients from before RFC 9449 against this lane's platform,
+      # with DPoP-bound tokens: otdfctl v0.28.0 (sdk v0.10.1, as service
+      # v0.11.x), java-sdk v0.7.9 (gRPC, path-only htu) and v0.11.1 (full-URL
+      # htu). Last, because the extra builds would otherwise join every
+      # suite's matrix. Known incompatibilities are xfail, not skips.
+      - name: DPoP compatibility with legacy SDK builds
+        if: >-
+          !cancelled() && steps.multikas.outputs.supported == 'true'
+          && (startsWith(matrix.sdk-version, 'go@') || startsWith(matrix.sdk-version, 'java@'))
+        run: |-
+          sdk="${ENCRYPT_SDK%%@*}"
+          legacy="$([[ "$sdk" == go ]] && echo "$LEGACY_GO" || echo "$LEGACY_JAVA")"
+          specs=() installs=()
+          for v in $legacy; do
+            specs+=("${sdk}@${v}")
+            installs+=("${sdk}:${v}")
+          done
+          uv run --project ../otdf-sdk-mgr otdf-sdk-mgr install release "${installs[@]}"
+          uv run pytest -ra -v --numprocesses auto --dist loadscope \
+            --html "test-results/dpop-legacy-${sdk}-${PLATFORM_TAG}.html" \
+            --self-contained-html \
+            --audit-log-dir test-results/audit-logs \
+            --sdks-encrypt "${specs[*]} ${ENCRYPT_SDK}" \
+            --sdks-decrypt "${specs[*]} ${ENCRYPT_SDK}" \
+            test_dpop.py
+        working-directory: otdftests/xtest
+        env:
+          LEGACY_GO: v0.28.0
+          LEGACY_JAVA: v0.7.9 v0.11.1
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}

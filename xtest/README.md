@@ -128,6 +128,16 @@ Both reject unknown feature names. A few features are platform-only
 rejected too, because it would force the feature on for every SDK while leaving
 the platform gate the tests read untouched — a green run that tested nothing.
 
+#### DPoP compatibility
+
+`test_dpop.py` needs a Keycloak that binds tokens to DPoP keys (26.x; 25.0
+answers `token_type: Bearer` even with the `dpop` feature on) and an
+`opentdf-dpop` client. Platforms before service v0.18.0 don't provision it;
+`uv run python provision_dpop_client.py` adds it. Install legacy clients with
+`otdf-sdk-mgr install release go:v0.28.0 java:v0.7.9` and name them in `--sdks`
+to run them: cells whose htu form the server rejects are xfail, so an XPASS
+means an incompatibility went away.
+
 #### Run TDF Tests
 
 ```shell
