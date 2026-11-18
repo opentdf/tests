@@ -22,6 +22,7 @@ class Ports:
     KAS_DELTA: int = 8484
     KAS_KM1: int = 8585
     KAS_KM2: int = 8686
+    KAS_KM3: int = 8787
 
     # Mapping from KAS name to class attribute name
     _KAS_NAMES: ClassVar[dict[str, str]] = {
@@ -31,6 +32,7 @@ class Ports:
         "delta": "KAS_DELTA",
         "km1": "KAS_KM1",
         "km2": "KAS_KM2",
+        "km3": "KAS_KM3",
     }
 
     @classmethod
@@ -54,9 +56,21 @@ class Ports:
     @classmethod
     def km_kas_names(cls) -> list[str]:
         """Return key management KAS instance names."""
-        return ["km1", "km2"]
+        return ["km1", "km2", "km3"]
 
     @classmethod
     def is_km_kas(cls, name: str) -> bool:
         """Check if a KAS instance is a key management instance."""
         return name in cls.km_kas_names()
+
+    @classmethod
+    def is_kao_uri_kas(cls, name: str) -> bool:
+        """Whether this instance resolves managed keys by the KAO's KAS URI.
+
+        Only km3. km1 is the negative control: xtest's
+        test_decrypt_rejects_kao_kas_registration_when_disabled registers a key under
+        km1's /kas URI and requires the rewrap to fail, which it only does while the
+        setting stays off there. km2 leaves it off as well, but that is just the default
+        -- no test asserts on it.
+        """
+        return name == "km3"

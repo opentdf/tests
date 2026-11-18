@@ -128,6 +128,32 @@ Both reject unknown feature names. A few features are platform-only
 rejected too, because it would force the feature on for every SDK while leaving
 the platform gate the tests read untouched — a green run that tested nothing.
 
+`kas_uri_from_kao` is force-only: no release detects it, so the gate never opens
+on its own. The `force-platform-supports` input exists only on
+`workflow_dispatch` and `workflow_call`, so on the PR gate and the nightlies the
+km3 KAS still starts — its workflow step is gated on `multikas`, not on the
+feature — but **every test behind this gate skips**:
+`test_decrypt_uses_kao_kas_registration`,
+`test_decrypt_rejects_kao_kas_registration_when_disabled`, and
+`test_decrypt_same_kid_in_different_registries_with_cache`. They are
+dispatch-only until the platform release ships and the feature gets a semver
+gate in `tdfs.py`. To run them:
+
+```shell
+# CI: dispatch X-Test with force-platform-supports: kas_uri_from_kao
+# Local: `otdf-local up` starts km3 (port 8787) with the setting enabled and km1
+# (port 8585) with it off. Both are needed -- the "when_disabled" test is the
+# negative control and runs against km1.
+XT_FORCE_PLATFORM_SUPPORTS=kas_uri_from_kao pytest test_abac.py \
+  -k "kao_kas_registration or same_kid_in_different_registries"
+```
+
+The override only opens the test gate; the KAS must separately be started with
+`services.kas.kas_uri_from_kao: true`. Once the gate is open, a km3 that isn't
+listening is a **failure**, not a skip — you asked for these tests, so a missing
+km3 is a broken environment rather than an unsupported build, and skipping there
+would read identically to the feature gate being shut.
+
 #### Run TDF Tests
 
 ```shell
