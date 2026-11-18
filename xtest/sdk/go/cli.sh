@@ -155,6 +155,10 @@ if [ "$1" == "supports" ]; then
       fi
       exit 0
       ;;
+    dpop_post_htm)
+      echo "dpop_post_htm unsupported: otdfctl signs the request's method"
+      exit 1
+      ;;
     dpop_path_htu)
       # Before otdfctl v0.37.0 (platform#3581) the SDK always attached a
       # proof, with the procedure path as htu (/kas.AccessService/Rewrap) and

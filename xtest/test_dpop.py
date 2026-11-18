@@ -366,12 +366,16 @@ def _skip_unless_realm_issues_dpop_tokens(client_id: str | None = None) -> None:
     _get_dpop_access_token(client_id)
 
 
-def _skip_unless_dpop_enabled(encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK]) -> None:
+def _skip_unless_dpop_enabled(
+    encrypt_sdk: tdfs.SDK, in_focus: set[tdfs.SDK], request: pytest.FixtureRequest
+) -> None:
     if encrypt_sdk not in in_focus:
         pytest.skip("Not in focus")
     pfs = tdfs.get_platform_features()
     pfs.skip_if_unsupported("dpop")
     encrypt_sdk.skip_if_unsupported("dpop")
+    # The fixture TDF is encrypted through the SDK with DPoP on.
+    _xfail_unless_htu_accepted(request, encrypt_sdk)
 
 
 def _htu_form(sdk: tdfs.SDK) -> Literal["path", "url"]:
@@ -379,14 +383,25 @@ def _htu_form(sdk: tdfs.SDK) -> Literal["path", "url"]:
 
 
 def _xfail_unless_htu_accepted(request: pytest.FixtureRequest, *sdks: tdfs.SDK) -> None:
-    """Mark the cell xfail when a client's htu form is one the server rejects.
+    """Mark the cell xfail when a client's proofs are ones the server rejects.
 
     These are known incompatibilities, not regressions: a full-URL client
-    against a server before v0.18.0 (DSPX-5528). XPASS means one was fixed.
+    against a server before v0.18.0 (DSPX-5528), or a client that signs htm
+    POST on Connect GETs against one that checks the method. XPASS means one
+    was fixed.
     """
     pfs = tdfs.get_platform_features()
     accepted = pfs.dpop_htu_forms()
     for sdk in sdks:
+        if "dpop" in pfs.features and sdk.supports("dpop_post_htm"):
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason=f"{sdk} signs htm POST on Connect GETs; platform "
+                    f"{pfs.version} checks the request method",
+                    strict=False,
+                )
+            )
+            return
         if (form := _htu_form(sdk)) not in accepted:
             request.applymarker(
                 pytest.mark.xfail(
@@ -535,6 +550,7 @@ def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
     audit_logs: AuditLogAsserter,
+    request: pytest.FixtureRequest,
 ):
     """A DPoP-bound access token presented with `Authorization: Bearer` is currently
     accepted (provided a valid DPoP proof header is attached) but the platform emits
@@ -549,7 +565,7 @@ def test_dpop_bearer_scheme_warns_but_accepted_for_dpop_token(
       - assert the Bearer-scheme call is rejected with 401 + WWW-Authenticate: DPoP
       - rename to test_dpop_rejects_bearer_scheme_on_dpop_token
     """
-    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus, request)
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
@@ -589,9 +605,10 @@ def test_dpop_rejects_tampered_proof_htu(
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    request: pytest.FixtureRequest,
 ):
     """A DPoP proof whose `htu` claim does not match the request URI MUST be rejected."""
-    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus, request)
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
@@ -621,11 +638,12 @@ def test_dpop_rejects_replayed_jti(
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    request: pytest.FixtureRequest,
 ):
     """Replaying a DPoP proof `jti` MUST be rejected — both as a byte-identical
     replay and as a freshly signed proof reusing the known jti (RFC 9449 §11.1).
     """
-    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus, request)
 
     attr = attribute_single_kas_grant
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attr.value_fqns)
@@ -692,9 +710,10 @@ def test_dpop_rejects_tampered_nonce(
     encrypt_sdk: tdfs.SDK,
     in_focus: set[tdfs.SDK],
     encrypted_tdf: EncryptFactory,
+    request: pytest.FixtureRequest,
 ):
     """When `require_nonce: true`, a tampered nonce MUST 401 with a fresh DPoP-Nonce."""
-    _skip_unless_dpop_enabled(encrypt_sdk, in_focus)
+    _skip_unless_dpop_enabled(encrypt_sdk, in_focus, request)
     pfs = tdfs.get_platform_features()
     pfs.skip_if_unsupported("dpop", "dpop_nonce_challenge")
 

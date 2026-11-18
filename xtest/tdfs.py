@@ -156,6 +156,11 @@ feature_type = Literal[
     # proofs whenever they can, so they bind tokens on any client that allows
     # DPoP, not only one that requires it.
     "dpop_path_htu",
+    # SDK: signs every Connect proof with htm POST, even for the GETs
+    # connect-kotlin sends for idempotent RPCs: java-sdk v0.8.0 to v0.17.x,
+    # before its RFC 9449 rewrite (java-sdk#374). Platforms that check the
+    # request's real method, from v0.18.0, reject those calls.
+    "dpop_post_htm",
     "ecwrap",
     # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
     # has been downgraded to GMAC? Force-only -- every shim answers no, because

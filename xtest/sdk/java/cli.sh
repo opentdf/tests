@@ -194,6 +194,13 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 == 0 && $2 < 8) }'
       exit $?
       ;;
+    dpop_post_htm)
+      # connect-kotlin builds before java-sdk#374 (v0.18.0) sign htm POST
+      # even on the GETs they send for idempotent RPCs.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 == 0 && $2 >= 8 && $2 < 18) }'
+      exit $?
+      ;;
     chunky)
       # Default an absent per-segment segmentSize/encryptedSegmentSize from
       # the manifest-level defaults. Broken in every java build to date: a
