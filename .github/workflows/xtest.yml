@@ -483,18 +483,27 @@ jobs:
       # so they keep the `pqc-enabled` bootstrap, whose Keycloak 25.0 cannot
       # bind tokens to a DPoP key; COMPOSE_FILE layers a 26.4 Keycloak with
       # the legacy token-exchange features over it.
+      #
+      # Platforms before service v0.18.0 reject the full-URL htu current SDKs
+      # sign once their token is bound (DSPX-5528), so there the Keycloak
+      # starts with the dpop feature off (idp-binds=false) and the DPoP
+      # compatibility step turns it on for test_dpop.py alone.
       - name: Choose the DPoP lane
         id: dpop-lane
         run: |-
           if [[ "$PLATFORM_TAG" == "main" ]]; then
-            printf '%s\n' bootstrap-ref=main compose-file=docker-compose.yaml >> "$GITHUB_OUTPUT"
+            printf '%s\n' bootstrap-ref=main compose-file=docker-compose.yaml idp-binds=true >> "$GITHUB_OUTPUT"
+          elif [[ "$PLATFORM_TAG" =~ ^v0\.([0-9]+)\. ]] && (( BASH_REMATCH[1] < 18 )); then
+            printf '%s\n' bootstrap-ref=pqc-enabled idp-binds=false \
+              "compose-file=docker-compose.yaml:${OVERRIDE}:${NO_DPOP}" >> "$GITHUB_OUTPUT"
           else
-            printf '%s\n' bootstrap-ref=pqc-enabled \
+            printf '%s\n' bootstrap-ref=pqc-enabled idp-binds=true \
               "compose-file=docker-compose.yaml:${OVERRIDE}" >> "$GITHUB_OUTPUT"
           fi
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OVERRIDE: ${{ github.workspace }}/otdftests/.github/keycloak-dpop.compose.yaml
+          NO_DPOP: ${{ github.workspace }}/otdftests/.github/keycloak-no-dpop.compose.yaml
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
@@ -930,19 +939,38 @@ jobs:
       # v0.11.x), java-sdk v0.7.9 (gRPC, path-only htu) and v0.11.1 (full-URL
       # htu). Last, because the extra builds would otherwise join every
       # suite's matrix. Known incompatibilities are xfail, not skips.
+      #
+      # On lanes whose Keycloak started without dpop (idp-binds=false) this
+      # turns it on first; the realm survives in the keycloak_data volume.
+      # That is also the only place current SDKs meet those platforms with
+      # bound tokens, so js runs here too. java v0.7.9's gRPC protos stop
+      # parsing GetAttributeValuesByFqns responses from v0.18.0, so it only
+      # runs on those lanes.
       - name: DPoP compatibility with legacy SDK builds
         if: >-
           !cancelled() && steps.multikas.outputs.supported == 'true'
-          && (startsWith(matrix.sdk-version, 'go@') || startsWith(matrix.sdk-version, 'java@'))
+          && (startsWith(matrix.sdk-version, 'go@') || startsWith(matrix.sdk-version, 'java@')
+              || steps.dpop-lane.outputs.idp-binds == 'false')
         run: |-
+          if [[ "$IDP_BINDS" == false ]]; then
+            (cd "$PLATFORM_DIR" && COMPOSE_FILE="docker-compose.yaml:${OVERRIDE}" \
+              docker compose up -d --wait --wait-timeout 240 --no-deps --force-recreate keycloak)
+            LEGACY_JAVA="v0.7.9 $LEGACY_JAVA"
+          fi
           sdk="${ENCRYPT_SDK%%@*}"
-          legacy="$([[ "$sdk" == go ]] && echo "$LEGACY_GO" || echo "$LEGACY_JAVA")"
+          case "$sdk" in
+            go) legacy="$LEGACY_GO" ;;
+            java) legacy="$LEGACY_JAVA" ;;
+            *) legacy= ;;
+          esac
           specs=() installs=()
           for v in $legacy; do
             specs+=("${sdk}@${v}")
             installs+=("${sdk}:${v}")
           done
-          uv run --project ../otdf-sdk-mgr otdf-sdk-mgr install release "${installs[@]}"
+          if (( ${#installs[@]} )); then
+            uv run --project ../otdf-sdk-mgr otdf-sdk-mgr install release "${installs[@]}"
+          fi
           uv run pytest -ra -v --numprocesses auto --dist loadscope \
             --html "test-results/dpop-legacy-${sdk}-${PLATFORM_TAG}.html" \
             --self-contained-html \
@@ -953,7 +981,9 @@ jobs:
         working-directory: otdftests/xtest
         env:
           LEGACY_GO: v0.28.0
-          LEGACY_JAVA: v0.7.9 v0.11.1
+          LEGACY_JAVA: v0.11.1
+          IDP_BINDS: ${{ steps.dpop-lane.outputs.idp-binds }}
+          OVERRIDE: ${{ github.workspace }}/otdftests/.github/keycloak-dpop.compose.yaml
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}

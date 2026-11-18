@@ -1,0 +1,8 @@
+# Layered over keycloak-dpop.compose.yaml for platforms before service
+# v0.18.0. With the dpop feature off Keycloak ignores proofs and issues Bearer
+# tokens, as 25.0 did; the DPoP compatibility step recreates it without this
+# file. See "Choose the DPoP lane" in xtest.yml.
+services:
+  keycloak:
+    environment:
+      KC_FEATURES_DISABLED: dpop

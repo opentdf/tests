@@ -138,6 +138,11 @@ answers `token_type: Bearer` even with the `dpop` feature on) and an
 to run them: cells whose htu form the server rejects are xfail, so an XPASS
 means an incompatibility went away.
 
+Against a platform before v0.18.0, a binding Keycloak breaks every current
+SDK, not just the DPoP cells: they sign full-URL htu, which those platforms
+reject on Connect routes (DSPX-5528). CI starts Keycloak there with
+`KC_FEATURES_DISABLED=dpop` and turns it on only for `test_dpop.py`.
+
 #### Run TDF Tests
 
 ```shell
