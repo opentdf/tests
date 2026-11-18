@@ -65,6 +65,39 @@ def _algs_from_km1_log() -> set[str]:
     return algs
 
 
+def _platform_log_path() -> Path | None:
+    """Return the main platform's log file path from env or auto-discovery."""
+    if p := os.getenv("PLATFORM_LOG_FILE"):
+        return Path(p)
+    platform_dir = os.getenv("PLATFORM_DIR", "../../platform")
+    candidate = Path(platform_dir) / "logs" / "kas-main.log"
+    return candidate if candidate.exists() else None
+
+
+def _dpop_htu_strict_from_log(log: Path | None) -> bool | None:
+    """Read the effective DPoP htu strict mode from the platform's startup log.
+
+    The well-known configuration publishes the origins but not the mode, so
+    this reads the `dpop htu matching` line opentdf/platform#4326 logs at
+    startup. The last one wins: watch.sh restarts the server when its config
+    changes. None when the log is missing or has no such line.
+    """
+    if not log or not log.exists():
+        return None
+    strict: bool | None = None
+    with log.open() as f:
+        for line in f:
+            if "dpop htu matching" not in line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("msg") == "dpop htu matching":
+                strict = entry.get("strict") is True
+    return strict
+
+
 def _fetch_well_known() -> dict[str, Any] | None:
     """Fetch the platform's /.well-known/opentdf-configuration. Returns None on error."""
     base = os.getenv("PLATFORMURL", "http://localhost:8080")
@@ -161,6 +194,12 @@ feature_type = Literal[
     # before its RFC 9449 rewrite (java-sdk#374). Platforms that check the
     # request's real method, from v0.18.0, reject those calls.
     "dpop_post_htm",
+    # Platform: a configured allowlist of public origins for full-URL DPoP
+    # `htu` claims, `server.auth.dpop.htu.origins`, plus `htu.strict`, which
+    # rejects path-only proofs (opentdf/platform#4326, DSPX-4707). Detected
+    # from the well-known `dpop.htu_origins` key; see
+    # PlatformFeatureSet.dpop_htu_origins for the configured values.
+    "dpop_htu_origins",
     "ecwrap",
     # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
     # has been downgraded to GMAC? Force-only -- every shim answers no, because
@@ -259,7 +298,12 @@ ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
 #: to honour them, so forcing either side alone is a reasonable thing to ask for.
 #: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
 PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
-    {"audit-session-key-type", "dpop_bound_tokens", "kas_uri_from_kao"}
+    {
+        "audit-session-key-type",
+        "dpop_bound_tokens",
+        "dpop_htu_origins",
+        "kas_uri_from_kao",
+    }
 )
 
 SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
@@ -482,6 +526,12 @@ def capability_gap_markdown(gaps: Mapping[CapabilityGap, int]) -> str:
 class PlatformFeatureSet(BaseModel):
     version: str | None = None
     semver: tuple[int, int, int] | None = None
+    # `server.auth.dpop.htu.origins` as published in the well-known config:
+    # None when the platform predates the setting, [] when it is unset.
+    dpop_htu_origins: list[str] | None = None
+    # `server.auth.dpop.htu.strict` (or the deprecated `strict_htu`), from the
+    # startup log. None when the log doesn't say.
+    dpop_htu_strict: bool | None = None
     features: set[feature_type] = {
         "assertions",
         "assertion_verification",
@@ -589,12 +639,26 @@ class PlatformFeatureSet(BaseModel):
                 self.features.update(("dpop", "dpop_bound_tokens"))
             if wk.get("dpop_nonce_required") is True:
                 self.features.add("dpop_nonce_challenge")
+            dpop_block = wk.get("dpop")
+            origins = (
+                dpop_block.get("htu_origins") if isinstance(dpop_block, dict) else None
+            )
+            if isinstance(origins, list):
+                self.features.add("dpop_htu_origins")
+                self.dpop_htu_origins = [str(o) for o in origins]
+                self.dpop_htu_strict = _dpop_htu_strict_from_log(_platform_log_path())
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
+        if self.dpop_htu_origins is not None:
+            print(
+                f"DPoP htu origins {self.dpop_htu_origins}, strict={self.dpop_htu_strict}"
+            )
 
     def dpop_htu_forms(self) -> frozenset[Literal["path", "url"]]:
         """The DPoP htu forms this platform accepts on Connect routes."""
         if "dpop" in self.features:  # RFC 9449, service v0.18.0+
+            if self.dpop_htu_strict:
+                return frozenset({"url"})
             return frozenset({"path", "url"})
         return frozenset({"path"})
 

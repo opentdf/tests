@@ -33,6 +33,11 @@ on:
         type: boolean
         default: false
         description: "Enable DPoP nonce challenge on KAS instances"
+      dpop-htu-strict:
+        required: false
+        type: boolean
+        default: false
+        description: "Run the main platform with strict DPoP htu matching and a configured origin (server.auth.dpop.htu.*). Path-only clients then xfail, so the legacy release gate does not run; the weekly schedule does this on its main lane."
       run-benchmarks:
         required: false
         type: boolean
@@ -91,6 +96,10 @@ on:
         type: string
         default: all
       dpop-challenge:
+        required: false
+        type: boolean
+        default: false
+      dpop-htu-strict:
         required: false
         type: boolean
         default: false
@@ -488,6 +497,12 @@ jobs:
       # sign once their token is bound (DSPX-5528), so there the Keycloak
       # starts with the dpop feature off (idp-binds=false) and the DPoP
       # compatibility step turns it on for test_dpop.py alone.
+      #
+      # Strict htu matching with a configured origin (server.auth.dpop.htu.*,
+      # DSPX-4707) goes on the main platform only when asked, or on the weekly
+      # main lane: under it path-only clients xfail, so the nightly keeps the
+      # default config that is the release gate for them. Builds without the
+      # settings ignore the variables and the dpop_htu_origins gate skips.
       - name: Choose the DPoP lane
         id: dpop-lane
         run: |-
@@ -500,17 +515,28 @@ jobs:
             printf '%s\n' bootstrap-ref=pqc-enabled idp-binds=true \
               "compose-file=docker-compose.yaml:${OVERRIDE}" >> "$GITHUB_OUTPUT"
           fi
+          if [[ "$HTU_STRICT" == true || ("$PLATFORM_TAG" == "main" && "$CRON_WEEKLY" == true) ]]; then
+            printf '%s\n' htu-strict=true htu-origins=http://localhost:8080 >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' htu-strict=false htu-origins= >> "$GITHUB_OUTPUT"
+          fi
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OVERRIDE: ${{ github.workspace }}/otdftests/.github/keycloak-dpop.compose.yaml
           NO_DPOP: ${{ github.workspace }}/otdftests/.github/keycloak-no-dpop.compose.yaml
+          HTU_STRICT: ${{ inputs.dpop-htu-strict || false }}
+          CRON_WEEKLY: ${{ github.event.schedule == '0 18 * * 0' }}
 
       ######## SPIN UP PLATFORM BACKEND #############
       - name: Check out and start up platform with deps/containers
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@e5f1783769c689a7c67f4249152b424452f27f9b  # main, 2026-10-06 (has bootstrap-ref and dpop-* inputs)
+        # Step env reaches the main platform only; the additional KAS steps
+        # don't see it.
         env:
           COMPOSE_FILE: ${{ steps.dpop-lane.outputs.compose-file }}
+          OPENTDF_SERVER_AUTH_DPOP_HTU_STRICT: ${{ steps.dpop-lane.outputs.htu-strict }}
+          OPENTDF_SERVER_AUTH_DPOP_HTU_ORIGINS: ${{ steps.dpop-lane.outputs.htu-origins }}
         with:
           platform-ref: ${{ fromJSON(needs.resolve-versions.outputs.platform-tag-to-sha)[matrix.platform-tag] }}
           bootstrap-ref: ${{ steps.dpop-lane.outputs.bootstrap-ref }}

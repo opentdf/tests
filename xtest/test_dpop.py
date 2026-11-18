@@ -378,6 +378,31 @@ def _skip_unless_dpop_enabled(
     _xfail_unless_htu_accepted(request, encrypt_sdk)
 
 
+def _require_htu_origins(*, strict: bool = False) -> list[str]:
+    """Skip unless the platform has `server.auth.dpop.htu.origins` configured.
+
+    With `strict`, also require `htu.strict`. Returns the configured origins.
+    """
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("dpop", "dpop_htu_origins")
+    subject = f"platform service {pfs.version}"
+    if not pfs.dpop_htu_origins:
+        tdfs.CapabilityGap(
+            subject=subject,
+            feature="dpop_htu_origins",
+            detail="server.auth.dpop.htu.origins is empty "
+            f"(well-known dpop.htu_origins={pfs.dpop_htu_origins!r})",
+        ).skip()
+    if strict and not pfs.dpop_htu_strict:
+        tdfs.CapabilityGap(
+            subject=subject,
+            feature="dpop_htu_origins",
+            detail="server.auth.dpop.htu.strict is off, or the platform log has "
+            f"no 'dpop htu matching' line (strict={pfs.dpop_htu_strict!r})",
+        ).skip()
+    return pfs.dpop_htu_origins
+
+
 def _htu_form(sdk: tdfs.SDK) -> Literal["path", "url"]:
     return "path" if sdk.supports("dpop_path_htu") else "url"
 
@@ -798,3 +823,95 @@ def test_dpop_proof_shapes_across_versions(
         assert response.status_code == 200, response.text
     else:
         assert response.status_code == 401, response.text
+
+
+# Strict htu and configured origins (server.auth.dpop.htu.*, DSPX-4707). These
+# target the platform's KAS on PLATFORMURL, the only server CI configures. The
+# path-only case is test_dpop_proof_shapes_across_versions, which reads strict
+# mode from dpop_htu_forms().
+
+
+def test_dpop_strict_htu_sdk_roundtrip(
+    encrypt_sdk: tdfs.SDK,
+    decrypt_sdk: tdfs.SDK,
+    pt_file: Path,
+    in_focus: set[tdfs.SDK],
+    encrypted_tdf: EncryptFactory,
+    request: pytest.FixtureRequest,
+):
+    """With htu.strict on, SDKs that sign full-URL proofs for the configured
+    origin roundtrip through the platform KAS. Path-only clients are xfail.
+    """
+    if not in_focus & {encrypt_sdk, decrypt_sdk}:
+        pytest.skip("Not in focus")
+    origins = _require_htu_origins(strict=True)
+    platform_origin = _origin(os.getenv("PLATFORMURL", "http://localhost:8080"))
+    if platform_origin not in origins:
+        pytest.skip(f"PLATFORMURL origin {platform_origin} is not in {origins}")
+    encrypt_sdk.skip_if_unsupported("dpop")
+    decrypt_sdk.skip_if_unsupported("dpop")
+    _skip_unless_realm_issues_dpop_tokens()
+    _xfail_unless_htu_accepted(request, encrypt_sdk, decrypt_sdk)
+
+    ct_file = encrypted_tdf(
+        encrypt_sdk,
+        target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
+    )
+    rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk)
+    decrypt_sdk.decrypt(ct_file, rt_file, "ztdf")
+    assert filecmp.cmp(pt_file, rt_file, shallow=False)
+
+
+def test_dpop_htu_rejects_unconfigured_origin(
+    encrypt_sdk: tdfs.SDK,
+    in_focus: set[tdfs.SDK],
+    pt_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A full-URL htu must use a configured origin, whatever the request's Host.
+
+    Same path, other origin: rejected. Proving configured origins replace
+    request-derived ones, a proof for the request's own origin is rejected
+    when that origin is not configured, and a configured origin is accepted
+    even when the request reached the server under another name.
+    """
+    if encrypt_sdk not in in_focus:
+        pytest.skip("Not in focus")
+    origins = _require_htu_origins()
+    ct_file = _platform_kas_tdf(encrypt_sdk, pt_file, tmp_path, monkeypatch)
+    dpop_access = _get_dpop_access_token()
+    call = _signed_rewrap_request(ct_file, dpop_access.key)
+    path = urlparse(call.url).path
+
+    _assert_unauthorized(
+        _post_rewrap_with_nonce_retry(
+            call,
+            dpop_access.key,
+            access_token=dpop_access.token,
+            htu=f"https://unconfigured.xtest.invalid{path}",
+        )
+    )
+
+    # Same server, reached as 127.0.0.1 and signed for that origin.
+    parsed = urlparse(call.url)
+    if parsed.hostname == "localhost":
+        alias_url = parsed._replace(
+            netloc=parsed.netloc.replace("localhost", "127.0.0.1", 1)
+        ).geturl()
+        alias_call = RewrapCall(url=alias_url, headers=call.headers, body=call.body)
+        if _origin(alias_url) not in origins:
+            _assert_unauthorized(
+                _post_rewrap_with_nonce_retry(
+                    alias_call, dpop_access.key, access_token=dpop_access.token
+                )
+            )
+        # Control: a configured origin is accepted via the alias, so the
+        # rejections above are about the origin, not the request.
+        accepted = _post_rewrap_with_nonce_retry(
+            alias_call,
+            dpop_access.key,
+            access_token=dpop_access.token,
+            htu=f"{origins[0]}{path}",
+        )
+        assert accepted.status_code == 200, accepted.text

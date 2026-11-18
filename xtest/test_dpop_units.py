@@ -1,4 +1,4 @@
-"""Offline tests for test_dpop.py's realm check (DSPX-4333).
+"""Offline tests for test_dpop.py's realm check (DSPX-4333) and htu detection.
 
 The DPoP roundtrips skip when the Keycloak realm hands the DPoP client plain
 Bearer tokens. That check talks to Keycloak, so these stand in a fake token
@@ -97,3 +97,47 @@ class TestRealmIssuesDPoPTokens:
         sent = _token_endpoint(monkeypatch, "DPoP", nonce_first=True)
         test_dpop._skip_unless_realm_issues_dpop_tokens()
         assert len(sent) == 2
+
+
+@pytest.mark.parametrize(
+    ("well_known", "log_lines", "origins", "strict"),
+    [
+        ({"dpop_signing_alg_values_supported": ["ES256"]}, [], None, None),
+        ({"dpop": {"htu_origins": []}}, [], [], None),
+        (
+            {"dpop": {"htu_origins": ["http://localhost:8080"]}},
+            # watch.sh restarts on a config change; the last startup wins.
+            [
+                {"msg": "dpop htu matching", "strict": False},
+                "not json",
+                {"msg": "dpop htu matching", "strict": True},
+            ],
+            ["http://localhost:8080"],
+            True,
+        ),
+    ],
+)
+def test_platform_dpop_htu_detection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    well_known: dict[str, Any],
+    log_lines: list[Any],
+    origins: list[str] | None,
+    strict: bool | None,
+):
+    log = tmp_path / "kas-main.log"
+    log.write_text(
+        "".join(
+            (line if isinstance(line, str) else json.dumps(line)) + "\n"
+            for line in log_lines
+        )
+    )
+    monkeypatch.setenv("PLATFORM_VERSION", "0.9.0")
+    monkeypatch.setenv("PLATFORM_LOG_FILE", str(log))
+    monkeypatch.setattr(tdfs, "FORCED_PLATFORM_SUPPORTS", frozenset())
+    monkeypatch.setattr(tdfs, "_fetch_well_known", lambda: well_known)
+
+    pfs = tdfs.PlatformFeatureSet()
+    assert ("dpop_htu_origins" in pfs.features) is (origins is not None)
+    assert pfs.dpop_htu_origins == origins
+    assert pfs.dpop_htu_strict is strict
