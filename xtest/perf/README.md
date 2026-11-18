@@ -40,6 +40,7 @@ measure.
 | --- | --- | --- |
 | Job summary | The Actions run page | The table below, plus the verdict |
 | `bench-<sdk>` artifact | Run artifacts | `<sdk>.json` with **every raw per-round sample**, and an HTML report |
+| `<sdk>.raw.json` | The same artifact, instead of `<sdk>.json` | Only when the analysis itself raised: the raw samples, the config and the error, with no statistics. The job fails on that error |
 | Terminal | Job log tail | One-line summary and the JSON path |
 
 The JSON is the useful one. It holds each cell's full per-round vectors for both
@@ -478,6 +479,13 @@ the run and the A/A control can invalidate all of it at once. So
 once, writes the artifacts **unconditionally and before gating** (a run about to
 fail is exactly the one whose raw numbers someone wants), and only then sets the
 exit status.
+
+That holds when `analyze()` or the JSON serialization itself raises. There is
+no gate to write then, so the hook writes `<name>.raw.json` — metadata,
+config, skipped cells, each `CellResult` field by field, and the error — and
+re-raises. It is a separate name with no `schema`, so nothing that reads
+`<name>.json` can take it for a complete run, and it is written only on that
+path, so a run that analyses cleanly writes exactly what it always did.
 
 A cell that cannot be measured is skipped *and* recorded as skipped, so a quiet
 report is visibly quiet rather than indistinguishable from a clean one. If
