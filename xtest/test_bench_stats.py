@@ -305,8 +305,8 @@ class TestFasterTail:
         # *because of* the correction.
         weak = stats.PairedComparison(
             n_rounds=30,
-            baseline_median=1.0,
-            candidate_median=0.8,
+            a_median=1.0,
+            b_median=0.8,
             ratio=0.80,
             # Comfortably below 1/1.15, so the interval clause is satisfied
             # and only the p-value clause decides the verdict.
@@ -317,8 +317,8 @@ class TestFasterTail:
         )
         other = stats.PairedComparison(
             n_rounds=30,
-            baseline_median=1.0,
-            candidate_median=1.0,
+            a_median=1.0,
+            b_median=1.0,
             ratio=1.00,
             ci_low=0.95,
             ci_high=1.05,
@@ -425,6 +425,32 @@ class TestNoiseFloor:
         )
         assert g.comparisons["cell"].verdict is Verdict.INCONCLUSIVE
         assert not g.should_fail
+
+
+def aa_contrast(ci_low: float, ci_high: float) -> stats.PairedComparison:
+    """A hand-built A/A contrast with the given interval."""
+    ratio = math.sqrt(ci_low * ci_high)
+    return stats.PairedComparison(
+        n_rounds=30,
+        a_median=1.0,
+        b_median=ratio,
+        ratio=ratio,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        p_value=0.5,
+        p_value_faster=0.5,
+    )
+
+
+class TestWorstControlKey:
+    def test_a_narrow_tripped_contrast_beats_a_wider_clean_one(self):
+        # Listed second, so neither "the first" nor "the widest" picks it.
+        comparisons = {
+            "clean": aa_contrast(0.93, 1.08),
+            # Narrow, but it excludes the threshold: the harness is biased.
+            "tripped": aa_contrast(1.20, 1.22),
+        }
+        assert stats.worst_control_key(comparisons, ["clean", "tripped"]) == "tripped"
 
 
 class TestMultiplicityControl:
