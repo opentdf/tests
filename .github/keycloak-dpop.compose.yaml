@@ -1,0 +1,11 @@
+# Compose override for lanes bootstrapped from the platform's `pqc-enabled`
+# tag, whose Keycloak 25.0 never binds client_credentials tokens to a DPoP key
+# (it answers token_type Bearer even with dpop:v1 enabled). 26.4 does. The
+# legacy features keep `service provision keycloak` from older platforms
+# working: it creates token-exchange permissions through the v1 fine-grained
+# admin API (checked with service/v0.11.6).
+services:
+  keycloak:
+    image: ghcr.io/opentdf/keycloak-standard:26.4.0
+    environment:
+      KC_FEATURES: "preview,token-exchange,admin-fine-grained-authz:v1"

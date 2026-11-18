@@ -34,6 +34,10 @@ if [ "$XTEST_DIR" = "/" ]; then
   exit 1
 fi
 
+# test.env resets CLIENTID; keep a caller's override (test_dpop.py's
+# opentdf-dpop client), as the js shim does.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
 if [ -f "$XTEST_DIR/test.env" ]; then
   # shellcheck disable=SC1091
   source "$XTEST_DIR/test.env"
@@ -41,6 +45,8 @@ else
   echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 # Cache `java -jar cmdline.jar help [...]` output to avoid paying JVM startup
 # (typically 150-500ms) for the capability probes on every encrypt/decrypt.
@@ -168,12 +174,31 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
+    dpop | dpop_nonce_challenge)
+      # `cmdline.jar supports` exists from v0.18.0. Every older release
+      # always sends DPoP proofs (scheme DPoP), but has no KAS nonce retry.
+      if java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 > 0 || $2 >= 18) }'; then
+        java -jar "$SCRIPT_DIR"/cmdline.jar supports "$2"
+        exit $?
+      fi
+      if [[ "$2" == dpop ]]; then
+        exit 0
+      fi
+      echo "dpop_nonce_challenge unsupported: java-sdk before v0.18.0"
+      exit 1
+      ;;
+    dpop_path_htu)
+      # gRPC builds (before v0.8.0) sign "/" + the full method name. From
+      # v0.8.0 connect-kotlin signs the full request URL.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 == 0 && $2 < 8) }'
       exit $?
       ;;
-    dpop_nonce_challenge)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+    dpop_post_htm)
+      # connect-kotlin builds before java-sdk#374 (v0.18.0) sign htm POST
+      # even on the GETs they send for idempotent RPCs.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ exit !($1 == 0 && $2 >= 8 && $2 < 18) }'
       exit $?
       ;;
     chunky)

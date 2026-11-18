@@ -146,6 +146,21 @@ feature_type = Literal[
     # because SDKs can support `dpop` without yet implementing the 401-retry
     # required by nonce mode (e.g. java-sdk's deferred 401-retry).
     "dpop_nonce_challenge",
+    # Platform: validates DPoP proofs for cnf-bound access tokens and skips
+    # the check for unbound ones, from service v0.2.0. Before v0.18.0 (where
+    # `dpop` starts) Connect routes accept only a path-only htu.
+    "dpop_bound_tokens",
+    # SDK: signs Connect/gRPC proofs with a path-only htu
+    # (/kas.AccessService/Rewrap) rather than the full URL: the pre-RFC 9449
+    # clients, otdfctl before v0.37.0 and java-sdk before v0.8.0. They attach
+    # proofs whenever they can, so they bind tokens on any client that allows
+    # DPoP, not only one that requires it.
+    "dpop_path_htu",
+    # SDK: signs every Connect proof with htm POST, even for the GETs
+    # connect-kotlin sends for idempotent RPCs: java-sdk v0.8.0 to v0.17.x,
+    # before its RFC 9449 rewrite (java-sdk#374). Platforms that check the
+    # request's real method, from v0.18.0, reject those calls.
+    "dpop_post_htm",
     "ecwrap",
     # DSPX-4703: does this build refuse a manifest whose ``rootSignature.alg``
     # has been downgraded to GMAC? Force-only -- every shim answers no, because
@@ -244,7 +259,7 @@ ALL_FEATURES: frozenset[feature_type] = frozenset(get_args(feature_type))
 #: to honour them, so forcing either side alone is a reasonable thing to ask for.
 #: Only add a name here when no ``sdk/*/cli.sh`` has a ``supports`` case for it.
 PLATFORM_ONLY_FEATURES: frozenset[feature_type] = frozenset(
-    {"audit-session-key-type", "kas_uri_from_kao"}
+    {"audit-session-key-type", "dpop_bound_tokens", "kas_uri_from_kao"}
 )
 
 SDK_FORCEABLE_FEATURES = ALL_FEATURES - PLATFORM_ONLY_FEATURES
@@ -504,6 +519,9 @@ class PlatformFeatureSet(BaseModel):
             self.features.add("hexless")
             self.features.add("hexaflexible")
 
+        if self.semver >= (0, 2, 0):
+            self.features.add("dpop_bound_tokens")
+
         if self.semver >= (0, 4, 19):
             self.features.add("ns_grants")
 
@@ -568,11 +586,17 @@ class PlatformFeatureSet(BaseModel):
         if wk:
             algs = wk.get("dpop_signing_alg_values_supported")
             if isinstance(algs, list) and algs:
-                self.features.add("dpop")
+                self.features.update(("dpop", "dpop_bound_tokens"))
             if wk.get("dpop_nonce_required") is True:
                 self.features.add("dpop_nonce_challenge")
 
         print(f"PLATFORM_VERSION '{v}' supports [{', '.join(self.features)}]")
+
+    def dpop_htu_forms(self) -> frozenset[Literal["path", "url"]]:
+        """The DPoP htu forms this platform accepts on Connect routes."""
+        if "dpop" in self.features:  # RFC 9449, service v0.18.0+
+            return frozenset({"path", "url"})
+        return frozenset({"path"})
 
     def skip_if_unsupported(self, *features: feature_type):
         """Skip the current test if any of the given features are unsupported."""

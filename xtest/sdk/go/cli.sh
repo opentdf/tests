@@ -141,9 +141,31 @@ if [ "$1" == "supports" ]; then
       exit $?
       ;;
     dpop | dpop_nonce_challenge)
+      # Self-reported since otdfctl v0.37.0. Older builds still send DPoP
+      # proofs (see dpop_path_htu), but their credential pre-flight sends
+      # none, so a client that requires DPoP rejects them.
+      features=$("${cmd[@]}" --version --json | jq -c .supported_features)
+      if [[ "$features" == null ]]; then
+        echo "$2 unsupported: otdfctl before v0.37.0, whose credential pre-flight sends no DPoP proof"
+        exit 1
+      fi
+      if ! jq -e --arg f "$2" 'index($f)' <<<"$features" >/dev/null; then
+        echo "$2 unsupported: not in supported_features $features"
+        exit 1
+      fi
+      exit 0
+      ;;
+    dpop_post_htm)
+      echo "dpop_post_htm unsupported: otdfctl signs the request's method"
+      exit 1
+      ;;
+    dpop_path_htu)
+      # Before otdfctl v0.37.0 (platform#3581) the SDK always attached a
+      # proof, with the procedure path as htu (/kas.AccessService/Rewrap) and
+      # the DPoP scheme. Standalone otdfctl before 0.4.0 sent no proofs.
       set -o pipefail
-      "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
- index($f)'
+      "${cmd[@]}" --version --json | jq -e '.supported_features == null and
+ (.version | ltrimstr("v") | split(".") | map(tonumber? // 0) >= [0, 4, 0])'
       exit $?
       ;;
     chunky)
@@ -200,6 +222,10 @@ if [ "$XTEST_DIR" = "/" ]; then
   exit 1
 fi
 
+# test.env resets CLIENTID; keep a caller's override (test_dpop.py's
+# opentdf-dpop client), as the js shim does.
+_pre_clientid="${CLIENTID:-}"
+_pre_clientsecret="${CLIENTSECRET:-}"
 if [ -f "$XTEST_DIR/test.env" ]; then
   # shellcheck disable=SC1091
   source "$XTEST_DIR/test.env"
@@ -207,6 +233,8 @@ else
   echo "test.env not found in xtest root: $XTEST_DIR"
   exit 1
 fi
+[[ -n "$_pre_clientid" ]] && CLIENTID="$_pre_clientid"
+[[ -n "$_pre_clientsecret" ]] && CLIENTSECRET="$_pre_clientsecret"
 
 args=(
   -o "$3"
