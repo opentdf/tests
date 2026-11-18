@@ -118,10 +118,16 @@ def test_decrypt_SDKv0_19_1(
     if not decrypt_sdk.supports("hexless"):
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.19.1-8e6f8bc-GW2.79.0.tdf")
+    manifest = tdfs.manifest(ct_file)
+    kao = manifest.encryptionInformation.keyAccess[0]
     rt_file = tmp_dir / f"0.19.1-java-{decrypt_sdk}.untdf"
     mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
-    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
+    audit_logs.assert_rewrap_success(
+        policy_uuid=manifest.encryptionInformation.policy_object.uuid,
+        key_id=kao.kid,
+        since_mark=mark,
+    )
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 88
     assert rt_file.read_bytes() == (
