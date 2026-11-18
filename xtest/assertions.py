@@ -2,10 +2,14 @@ import base64
 import hashlib
 import hmac
 import json
+import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+import rfc8785
+from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -57,10 +61,293 @@ def load_verification_keys(path: Path | str) -> AssertionVerificationKeys:
     return AssertionVerificationKeys.model_validate_json(Path(path).read_text())
 
 
+#### PARSING (spec Section 3 of the ZTDF assertions contract, DSPX-5519)
+#
+# A reference reader for the parts of the contract every SDK must agree on:
+# the strict JSON profile, case variants of modelled member names, the exact
+# `id`, the hash input, the binding form, and (below, after BINDING CHECKS)
+# single-assertion binding verification. The DSPX-5520 shared vectors in
+# vectors/assertions-phase0.json are checked against it.
+
+#: The spec Section 9 failure reasons that Phase 0 readers report.
+REASONS = frozenset(
+    {
+        "invalid-json",
+        "duplicate-member",
+        "ambiguous-member",
+        "invalid-id",
+        "invalid-statement",
+        "invalid-binding",
+        "unsupported-binding",
+        "unsupported-algorithm",
+        "algorithm-mismatch",
+        "invalid-embedded-key",
+        "signer-not-permitted",
+        "signature-invalid",
+        "binding-mismatch",
+        "configuration-error",
+    }
+)
+
+
+class AssertionFailure(Exception):
+    """A manifest or assertion fails a contract check with one Section 9 reason."""
+
+    def __init__(self, reason: str, detail: str) -> None:
+        if reason not in REASONS:
+            raise ValueError(f"unknown reason {reason!r}")
+        super().__init__(f"reason={reason}: {detail}")
+        self.reason = reason
+        self.detail = detail
+
+
+#: Modelled member names per level (spec 3.2). No other level is checked.
+MANIFEST_NAMES = ("assertions",)
+ASSERTION_NAMES = ("id", "type", "scope", "appliesToState", "statement", "binding")
+STATEMENT_NAMES = ("format", "schema", "value")
+BINDING_NAMES = ("method", "signature", "bdo")
+
+# The simple case folds that Go's strings.EqualFold applies to ASCII letters,
+# besides the ASCII case pairs themselves: U+017F LATIN SMALL LETTER LONG S and
+# U+212A KELVIN SIGN.
+_NON_ASCII_FOLDS = {"\u017f": "s", "\u212a": "k"}
+
+
+def _fold(c: str) -> str:
+    if "A" <= c <= "Z":
+        return c.lower()
+    return _NON_ASCII_FOLDS.get(c, c)
+
+
+def is_case_variant(name: str, modelled: str) -> bool:
+    """True when ``name`` is a case variant of the ASCII name ``modelled``.
+
+    Same number of code points, and each folds to the lowercase of the
+    modelled name's code point at that position. Deliberately not Unicode
+    case folding, ``str.lower``, or Java's ``equalsIgnoreCase``: those also
+    match names such as ``ıd`` or ``ﬆatement``, which Go's decoder does not.
+    """
+    return (
+        name != modelled
+        and len(name) == len(modelled)
+        and all(_fold(n) == m.lower() for n, m in zip(name, modelled, strict=True))
+    )
+
+
+def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    obj: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in obj:
+            raise AssertionFailure("duplicate-member", f"duplicate member {name!r}")
+        obj[name] = value
+    return obj
+
+
+def _not_json(name: str) -> Any:
+    raise AssertionFailure("invalid-json", f"{name} is not a JSON value")
+
+
+def loads_strict(raw: str | bytes) -> Any:
+    """Parse RFC 8259 JSON, rejecting duplicate member names while parsing.
+
+    Names are compared after escapes are decoded, so ``"id"`` and
+    ``"\\u0069d"`` are duplicates. Every number becomes a float, the IEEE 754
+    double that JCS works with; out-of-range numbers become infinities, which
+    ``check_ijson`` rejects where the contract requires it.
+    """
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise AssertionFailure("invalid-json", f"not UTF-8: {e}") from None
+    try:
+        return json.loads(
+            raw,
+            object_pairs_hook=_object_without_duplicates,
+            parse_float=float,
+            parse_int=float,
+            parse_constant=_not_json,
+        )
+    except json.JSONDecodeError as e:
+        raise AssertionFailure("invalid-json", str(e)) from None
+    except RecursionError:
+        raise AssertionFailure("invalid-json", "nested too deeply") from None
+
+
+def _check_text(text: str, what: str) -> None:
+    for c in text:
+        cp = ord(c)
+        if 0xD800 <= cp <= 0xDFFF:
+            raise AssertionFailure(
+                "invalid-json", f"{what} contains surrogate U+{cp:04X}"
+            )
+        if 0xFDD0 <= cp <= 0xFDEF or cp & 0xFFFE == 0xFFFE:
+            raise AssertionFailure(
+                "invalid-json", f"{what} contains noncharacter U+{cp:04X}"
+            )
+
+
+def check_ijson(value: Any) -> None:
+    """Reject what RFC 7493 (I-JSON) forbids inside an assertion (spec 3.1).
+
+    Surrogate code points (lone surrogates; a valid escaped pair has already
+    been combined into one code point), Unicode noncharacters, and numbers
+    outside the IEEE 754 double range.
+    """
+    match value:
+        case str():
+            _check_text(value, "string")
+        case float() if math.isinf(value):
+            raise AssertionFailure("invalid-json", "number outside the double range")
+        case dict():
+            for name, member in value.items():
+                _check_text(name, "member name")
+                check_ijson(member)
+        case list():
+            for element in value:
+                check_ijson(element)
+        case _:
+            pass
+
+
+def _check_names(obj: dict[str, Any], modelled: tuple[str, ...], level: str) -> None:
+    for name in obj:
+        for m in modelled:
+            if is_case_variant(name, m):
+                raise AssertionFailure(
+                    "ambiguous-member",
+                    f"{level} member {name!r} is a case variant of {m!r}",
+                )
+
+
+def _check_assertion_names(a: dict[str, Any]) -> None:
+    _check_names(a, ASSERTION_NAMES, "assertion")
+    for member, modelled in (
+        ("statement", STATEMENT_NAMES),
+        ("binding", BINDING_NAMES),
+    ):
+        sub = a.get(member)
+        if isinstance(sub, dict):
+            _check_names(sub, modelled, member)
+
+
+def parse_assertion(raw: str | bytes) -> dict[str, Any]:
+    """Spec Section 3 parsing of one assertion wire object's JSON text.
+
+    Duplicate members anywhere, case variants at the assertion, ``statement``,
+    and ``binding`` levels, then I-JSON. Does not check ``id``; see
+    ``assertion_id``.
+    """
+    a = loads_strict(raw)
+    if not isinstance(a, dict):
+        raise AssertionFailure("invalid-json", "an assertion must be a JSON object")
+    _check_assertion_names(a)
+    check_ijson(a)
+    return a
+
+
+def parse_manifest(raw: str | bytes) -> dict[str, Any]:
+    """The manifest-level Section 3 parse step (step 1 of spec Section 8).
+
+    Duplicate members anywhere in the manifest; case variants at the root and
+    in each assertion, ``statement``, and ``binding`` object; I-JSON inside
+    each assertion object. Nothing else about the manifest is checked.
+    """
+    m = loads_strict(raw)
+    if not isinstance(m, dict):
+        raise AssertionFailure("invalid-json", "a manifest must be a JSON object")
+    _check_names(m, MANIFEST_NAMES, "manifest")
+    listed = m.get("assertions")
+    objects = (
+        [a for a in listed if isinstance(a, dict)] if isinstance(listed, list) else []
+    )
+    for a in objects:
+        _check_assertion_names(a)
+    for a in objects:
+        check_ijson(a)
+    return m
+
+
+def assertion_id(a: dict[str, Any]) -> str:
+    """The exact ``id`` (spec 3.3): a nonempty string, never trimmed or folded."""
+    id = a.get("id")
+    if not isinstance(id, str) or not id:
+        raise AssertionFailure(
+            "invalid-id", f"id must be a nonempty string, not {id!r}"
+        )
+    return id
+
+
+def check_statement(a: dict[str, Any]) -> None:
+    """**Proposed** statement typing (spec 2.2). Not a Phase 0 check.
+
+    ``statement`` must be an object whose ``value`` is a string or an object.
+    """
+    statement = a.get("statement")
+    if not isinstance(statement, dict):
+        raise AssertionFailure("invalid-statement", "statement is not an object")
+    if not isinstance(statement.get("value"), str | dict):
+        raise AssertionFailure(
+            "invalid-statement", "statement.value is neither a string nor an object"
+        )
+
+
+def binding_form(a: dict[str, Any]) -> Literal["jws"]:
+    """The binding form (spec 5.1); only the JWS form is supported.
+
+    The form follows from which of ``signature`` and ``bdo`` are present,
+    before ``method`` is looked at.
+    """
+    if "binding" not in a:
+        raise AssertionFailure("invalid-binding", "no binding")
+    binding = a["binding"]
+    if not isinstance(binding, dict):
+        raise AssertionFailure("invalid-binding", "binding is not an object")
+    has_signature, has_bdo = "signature" in binding, "bdo" in binding
+    if has_signature and has_bdo:
+        raise AssertionFailure("invalid-binding", "binding has both forms")
+    if not has_signature and not has_bdo:
+        raise AssertionFailure("invalid-binding", "binding has neither form")
+    if has_bdo:
+        raise AssertionFailure(
+            "unsupported-binding", "STANAG 4778 binding objects are not supported"
+        )
+    if not isinstance(binding["signature"], str):
+        raise AssertionFailure("invalid-binding", "binding.signature is not a string")
+    method = binding.get("method", "jws")
+    if not isinstance(method, str):
+        raise AssertionFailure("invalid-binding", "binding.method is not a string")
+    if method not in ("jws", "JWS"):
+        raise AssertionFailure(
+            "unsupported-binding", f"unsupported binding method {method!r}"
+        )
+    return "jws"
+
+
+def _as_doubles(value: Any) -> Any:
+    """Every JSON number is a double to JCS, but ``json.load`` makes ints."""
+    match value:
+        case bool():
+            return value
+        case int():
+            try:
+                return float(value)
+            except OverflowError:
+                raise AssertionFailure(
+                    "invalid-json", "number outside the double range"
+                ) from None
+        case dict():
+            return {k: _as_doubles(v) for k, v in value.items()}
+        case list():
+            return [_as_doubles(v) for v in value]
+        case _:
+            return value
+
+
 #### BINDING CHECKS
 #
 # Every SDK binds an assertion the same way: a compact JWS whose claims are
-#   assertionHash: hex(SHA-256(JCS(assertion without its binding)))
+#   assertionHash: hex(SHA-256(JCS(assertion as received, minus its binding)))
 #   assertionSig:  base64(aggregateHash || assertionHash)
 # where aggregateHash is the concatenated, base64-decoded segment hashes, and
 # assertionHash is appended as raw bytes -- or as its hex text, for manifests
@@ -123,28 +410,37 @@ def verify_jws_signature(jws: Jws, key: AssertionKey) -> None:
             assert False, f"unsupported binding algorithm {key.alg!r}"
 
 
-def assertion_hash(assertion: dict[str, Any]) -> str:
-    """Hex SHA-256 of the RFC 8785 (JCS) form of ``assertion`` minus its binding.
+def assertion_hash(assertion: dict[str, Any] | str | bytes) -> str:
+    """``assertionHash`` for ``assertion``: spec Section 4.1.
 
-    Sorted keys and no whitespace is JCS for what an assertion holds: strings
-    and ASCII keys. It is not JCS for numbers, which no assertion carries.
+    Lowercase hex SHA-256 of the RFC 8785 (JCS) form of the assertion as
+    received, minus only its top-level ``binding``. Raw JSON text is parsed
+    under spec Section 3 first (see ``parse_assertion``); a dict, such as an
+    element of ``tdfs.manifest_json``, is taken as already parsed.
     """
-    unbound = {k: v for k, v in assertion.items() if k != "binding"}
-    canonical = json.dumps(
-        unbound, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    a = parse_assertion(assertion) if isinstance(assertion, str | bytes) else assertion
+    unbound = {k: _as_doubles(v) for k, v in a.items() if k != "binding"}
+    return hashlib.sha256(rfc8785.dumps(unbound)).hexdigest()
+
+
+def bound_assertion_sig(aggregate: bytes, hash_hex: str, legacy: bool) -> str:
+    """The ``assertionSig`` claim (spec 5.3) binding ``hash_hex`` to a payload.
+
+    ``aggregate`` is the concatenated, base64-decoded segment hashes. The
+    assertion hash is appended as its 32 raw bytes, or as its 64 hex
+    characters under the legacy (4.2.2) encoding.
+    """
+    bound = hash_hex.encode("ascii") if legacy else bytes.fromhex(hash_hex)
+    return base64.b64encode(aggregate + bound).decode("ascii")
 
 
 def assertion_sig(manifest: dict[str, Any], hash_hex: str) -> str:
     """The ``assertionSig`` claim a writer must produce for ``hash_hex``."""
     segments = manifest["encryptionInformation"]["integrityInformation"]["segments"]
     aggregate = b"".join(base64.b64decode(s["hash"], validate=True) for s in segments)
-    if manifest.get("schemaVersion"):
-        bound = bytes.fromhex(hash_hex)
-    else:
-        bound = hash_hex.encode("ascii")
-    return base64.b64encode(aggregate + bound).decode("ascii")
+    return bound_assertion_sig(
+        aggregate, hash_hex, legacy=not manifest.get("schemaVersion")
+    )
 
 
 def assert_bound(
@@ -194,3 +490,197 @@ def assert_bound(
                 f"assertion {id!r} has no key of its own, so must be HS256 over "
                 f"the payload key; got {jws.header.get('alg')!r}"
             )
+
+
+#### REFERENCE VERIFIER (spec Section 8, steps 3.3 to 3.9)
+#
+# Verifies one parsed assertion against a key that key selection (spec 6.1)
+# has already chosen. Embedded keys only ever have to match that key; the
+# signature is always checked with it, and `kid`, `jku`, and `x5u` are never
+# consulted.
+
+#: The algorithms every Phase 0 reader supports (spec 7). ES256 is Phase 1.
+SUPPORTED_ALGORITHMS = ("RS256", "HS256")
+
+#: JWK members that only a private or symmetric key has (RFC 7518 Section 6).
+PRIVATE_JWK_MEMBERS = ("d", "p", "q", "dp", "dq", "qi", "oth")
+
+
+@dataclass(frozen=True)
+class VerificationKey:
+    """A selected verification key: an RSA public key or an HMAC secret."""
+
+    alg: Literal["RS256", "HS256"]
+    material: rsa.RSAPublicKey | bytes
+
+
+_BASE64URL = re.compile(r"[A-Za-z0-9_-]*")
+
+
+def _b64url_strict(part: str) -> bytes | None:
+    """Unpadded base64url, as JWS requires, or None."""
+    if not _BASE64URL.fullmatch(part) or len(part) % 4 == 1:
+        return None
+    return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+
+
+def _jws_object(part: str, what: str) -> dict[str, Any]:
+    data = _b64url_strict(part)
+    if data is None:
+        raise AssertionFailure("invalid-binding", f"JWS {what} is not base64url")
+    try:
+        obj = loads_strict(data)
+    except AssertionFailure as e:
+        raise AssertionFailure(
+            "invalid-binding", f"JWS {what} is not JSON: {e.detail}"
+        ) from None
+    if not isinstance(obj, dict):
+        raise AssertionFailure("invalid-binding", f"JWS {what} is not a JSON object")
+    return obj
+
+
+def _public_key_identity(public_key: Any) -> tuple[Any, ...]:
+    if isinstance(public_key, rsa.RSAPublicKey):
+        numbers = public_key.public_numbers()
+        return ("RSA", numbers.n, numbers.e)
+    return (
+        "SPKI",
+        public_key.public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ),
+    )
+
+
+def _jwk_uint(jwk: dict[str, Any], member: str) -> int:
+    value = jwk.get(member)
+    data = _b64url_strict(value) if isinstance(value, str) else None
+    if not data:
+        raise AssertionFailure(
+            "invalid-embedded-key", f"jwk {member!r} is not a base64url integer"
+        )
+    return int.from_bytes(data, "big")
+
+
+def _jwk_identity(jwk: Any) -> tuple[Any, ...]:
+    if not isinstance(jwk, dict):
+        raise AssertionFailure("invalid-embedded-key", "jwk is not an object")
+    kty = jwk.get("kty")
+    if not isinstance(kty, str):
+        raise AssertionFailure("invalid-embedded-key", "jwk has no kty")
+    if kty == "oct":
+        raise AssertionFailure("invalid-embedded-key", "jwk is a symmetric key")
+    private = [m for m in PRIVATE_JWK_MEMBERS if m in jwk]
+    if private:
+        raise AssertionFailure(
+            "invalid-embedded-key", f"jwk has private members {private}"
+        )
+    if kty != "RSA":
+        # Not an RSA key, so it cannot be the selected one; the RFC 7638
+        # thumbprints would differ whatever its other members say.
+        return ("JWK", kty, json.dumps(jwk, sort_keys=True))
+    return ("RSA", _jwk_uint(jwk, "n"), _jwk_uint(jwk, "e"))
+
+
+def _x5c_identity(x5c: Any) -> tuple[Any, ...]:
+    if not isinstance(x5c, list) or not x5c or not all(isinstance(c, str) for c in x5c):
+        raise AssertionFailure(
+            "invalid-embedded-key", "x5c is not a nonempty array of strings"
+        )
+    try:
+        leaf = x509.load_der_x509_certificate(base64.b64decode(x5c[0], validate=True))
+    except ValueError:
+        raise AssertionFailure(
+            "invalid-embedded-key", "x5c leaf is not a base64 DER certificate"
+        ) from None
+    # Only the leaf's public key is compared. No chain is built or validated,
+    # so nothing here says the certificate is valid (spec 6.2).
+    return _public_key_identity(leaf.public_key())
+
+
+def _check_embedded_keys(header: dict[str, Any], key: VerificationKey) -> None:
+    present = [m for m in ("jwk", "x5c") if m in header]
+    if not present:
+        return
+    if key.alg == "HS256":
+        raise AssertionFailure(
+            "invalid-embedded-key", f"{present} present with an HMAC key"
+        )
+    identities = []
+    if "jwk" in header:
+        identities.append(_jwk_identity(header["jwk"]))
+    if "x5c" in header:
+        identities.append(_x5c_identity(header["x5c"]))
+    if len(identities) == 2 and identities[0] != identities[1]:
+        raise AssertionFailure("invalid-embedded-key", "jwk and x5c keys differ")
+    if identities[0] != _public_key_identity(key.material):
+        raise AssertionFailure(
+            "signer-not-permitted", "embedded key is not the selected key"
+        )
+
+
+def _check_signature(
+    signing_input: bytes, signature_part: str, key: VerificationKey
+) -> None:
+    signature = _b64url_strict(signature_part)
+    valid = False
+    if signature is not None:
+        if isinstance(key.material, bytes):
+            mac = hmac.new(key.material, signing_input, hashlib.sha256).digest()
+            valid = hmac.compare_digest(mac, signature)
+        else:
+            try:
+                key.material.verify(
+                    signature, signing_input, padding.PKCS1v15(), hashes.SHA256()
+                )
+                valid = True
+            except InvalidSignature:
+                pass
+    if not valid:
+        raise AssertionFailure(
+            "signature-invalid", f"signature does not verify under the {key.alg} key"
+        )
+
+
+def verify_assertion_binding(
+    a: dict[str, Any], key: VerificationKey, aggregate: bytes, legacy: bool
+) -> None:
+    """Spec Section 8 steps 3.3 to 3.9 for one parsed assertion.
+
+    ``key`` is the already-selected key, ``aggregate`` the decoded aggregate
+    hash, and ``legacy`` the SDK's legacy-encoding decision (spec 5.4).
+    Raises ``AssertionFailure`` with the first failing step's reason.
+    """
+    binding_form(a)
+    parts = a["binding"]["signature"].split(".")
+    if len(parts) != 3:
+        raise AssertionFailure(
+            "invalid-binding", f"JWS has {len(parts)} part(s), not 3"
+        )
+    header = _jws_object(parts[0], "header")
+    claims = _jws_object(parts[1], "payload")
+    if "crit" in header:
+        raise AssertionFailure("invalid-binding", "JWS has a crit header")
+    alg = header.get("alg")
+    if not isinstance(alg, str) or alg not in SUPPORTED_ALGORITHMS:
+        raise AssertionFailure("unsupported-algorithm", f"alg {alg!r}")
+    if alg != key.alg:
+        raise AssertionFailure(
+            "algorithm-mismatch", f"alg {alg!r} but the selected key is {key.alg}"
+        )
+    _check_embedded_keys(header, key)
+    _check_signature(f"{parts[0]}.{parts[1]}".encode("ascii"), parts[2], key)
+    hash_claim, sig_claim = claims.get("assertionHash"), claims.get("assertionSig")
+    if not isinstance(hash_claim, str) or not isinstance(sig_claim, str):
+        raise AssertionFailure(
+            "binding-mismatch", "assertionHash or assertionSig missing or not a string"
+        )
+    expected = assertion_hash(a)
+    if hash_claim != expected:
+        raise AssertionFailure(
+            "binding-mismatch", "assertionHash is not the hash of the assertion"
+        )
+    if sig_claim != bound_assertion_sig(aggregate, expected, legacy):
+        raise AssertionFailure(
+            "binding-mismatch", "assertionSig does not bind this payload"
+        )
