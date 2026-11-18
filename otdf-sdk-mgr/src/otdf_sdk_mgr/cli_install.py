@@ -142,6 +142,60 @@ def tip(
 
 
 @install_app.command()
+def local(
+    sdk: Annotated[str, typer.Argument(help="SDK to build: go, java, or js")],
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Local git checkout to build from: the opentdf/platform repo (or its "
+                "otdfctl/ directory) for go, java-sdk for java, web-sdk for js"
+            ),
+            show_default=False,
+        ),
+    ],
+    rev: Annotated[
+        str,
+        typer.Option(
+            "--rev",
+            help=(
+                "Commit to build: any revision the checkout resolves, such as a "
+                "local branch or a jj commit id. HEAD is `@-` in a colocated jj repo."
+            ),
+        ),
+    ] = "HEAD",
+    name: Annotated[
+        str | None,
+        typer.Option(
+            "--name",
+            help=(
+                "dist/ directory name, which xtest selects with --sdks <sdk>@<name>. "
+                "Default `local`. Release and tip names (main, versions, SHAs) are refused."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Build an SDK CLI from a commit in a local checkout, pushed or not.
+
+    The checkout is only read: the commit is cloned under xtest/sdk/<sdk>/ and
+    built there. Re-running at the same commit reuses the build.
+
+    Examples:
+        otdf-sdk-mgr install local go ../platform
+        otdf-sdk-mgr install local java ~/src/java-sdk --rev my-fix --name my-fix
+    """
+    from otdf_sdk_mgr.installers import InstallError
+    from otdf_sdk_mgr.local_install import install_local
+
+    try:
+        dist_dir = install_local(sdk, path, rev=rev, name=name)
+    except InstallError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  Run it in xtest with --sdks {sdk}@{dist_dir.name}")
+
+
+@install_app.command()
 def release(
     specs: Annotated[
         list[str],

@@ -10,12 +10,13 @@ Full command reference: [README.md](README.md).
 
 | File | Subcommand | Responsibility |
 |------|------------|----------------|
-| `cli_install.py` | `install {stable,lts,tip,release,scripts,artifact,scenario,benchmark}` | All `install` subcommands; delegates per-SDK work to `installers.py` and platform work to `platform_installer.py`. |
+| `cli_install.py` | `install {stable,lts,tip,local,release,scripts,artifact,scenario,benchmark}` | All `install` subcommands; delegates per-SDK work to `installers.py`, `install local` to `local_install.py`, and platform work to `platform_installer.py`. |
 | `cli_scenario.py` | `install scenario <path>` | Reads `scenarios.yaml` / `instance.yaml`, installs every referenced artifact, writes `<name>.installed.json`. |
 | `cli_versions.py` | `versions {list,resolve}` | Lists released versions (`--latest N` filters most-recent) and resolves tags to SHAs. |
 | `bench_prepare.py` | (lib) | `install benchmark`: resolves the arms, checks collisions and neutrality, installs, and writes `benchmark.installed.json` on every exit path. |
 | `manifest.py` | (lib) | The benchmark installation manifest (schema `v1alpha1`): its data model, strict reader and atomic writer, plus the pre-build checks on resolved artifacts (dist slug, collision, neutrality). |
 | `installers.py` | (lib) | Per-SDK install logic for go/java/js. |
+| `local_install.py` | (lib) | `install local`: builds one commit of a local checkout through the SDK Makefiles, without writing into the checkout. |
 | `platform_installer.py` | (lib) | Builds the platform `service` binary via git worktrees on a bare clone. |
 | `schema.py` | (lib) | Pydantic models for `Scenario` / `Instance` + `load_yaml_mapping`. |
 
@@ -60,6 +61,47 @@ before editing either module:
 - Subprocess output is **not captured** — long-running `go build` / `git
   clone` streams to the terminal so users can see progress. On failure the
   error message just reports the command and exit code.
+
+## Local Checkout Builds
+
+`install local <sdk> <path>` builds a commit that may exist only in the
+developer's checkout. It shares the source-build layout (`src/<name>`, and for
+go `platform-src/<name>` plus the symlink) and the Makefiles with `install
+tip`, but none of tip's git machinery. Before editing `local_install.py`:
+
+- **Never write into `<path>`.** Run only read-only git against it
+  (`rev-parse`, `cat-file`) and clone from it. Don't add a worktree, fetch into
+  it, or build in it: Java and JS build in place and would leave `target/` and
+  `node_modules/` there.
+- **Each build starts from a fresh `git clone --local`.** That copies or
+  hard-links the whole object store, so a commit no ref names, such as a jj
+  working-copy commit, is still there to check out. A fetch from the checkout
+  would only offer what its refs reach.
+- **A clone is marked as ours** by `otdf-sdk-mgr.source` in its own git
+  config. A directory without the mark may be a tip worktree or a checkout
+  placed by hand with uncommitted work, so it is refused, never deleted. Read
+  the mark with `--git-dir=<clone>/.git`: from a directory that is not a repo,
+  `git -C` walks up into the tests repo.
+- **`.version` decides reuse.** It holds `source=`, `rev=` and `sha=`. The build
+  is reused only while both the path and the commit match. A dist with no
+  `source=` belongs to another installer, unless our clone sits beside it, in
+  which case it is a build that died before it was recorded.
+- **Java builds never install into `~/.m2/repository`.** `mvn install` would
+  put the branch's modules there under the last release's version, replacing
+  the published artifacts. `isolate_maven` points `maven.repo.local` at
+  `maven_repository()`, `${XDG_CACHE_HOME:-~/.cache}/otdf-sdk-mgr/maven-repository`,
+  with `~/.m2/repository` as a read-only `maven.repo.local.tail`. Keep that
+  repository outside the tests checkout. Under `xtest/sdk` it shows up as
+  untracked files in any checkout whose `.gitignore` doesn't cover it. And
+  `src/` and `dist/` entries are builds to the Makefiles and xtest. The
+  settings go in `MAVEN_OPTS`, not `MAVEN_ARGS`: a Maven older than 3.9
+  ignores `MAVEN_ARGS` and would install into `~/.m2` after all.
+  `install tip java` still installs there.
+- **The JDK is checked first.** `check_jdk` asks `mvn --version`, since the
+  Homebrew launcher picks its own JDK when `JAVA_HOME` is unset, and refuses
+  anything outside `JAVA_MIN`..`JAVA_MAX`. Don't switch JDKs automatically.
+- **`install tip` is unaffected.** It still reads only origin, so a branch
+  that isn't on origin is still refused there.
 
 ## Before Committing
 
