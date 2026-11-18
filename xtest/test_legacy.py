@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 import tdfs
+from audit_logs import AuditLogAsserter
 
 
 def get_golden_file(golden_file_name: str) -> Path:
@@ -110,6 +111,7 @@ def test_decrypt_SDKv0_19_1(
     decrypt_sdk: tdfs.SDK,
     tmp_dir: Path,
     in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
 ):
     if not in_focus & {decrypt_sdk}:
         pytest.skip("Not in focus")
@@ -117,9 +119,15 @@ def test_decrypt_SDKv0_19_1(
         pytest.skip("Decrypting hexless files is not supported")
     ct_file = get_golden_file("xstext-java-v0.19.1-8e6f8bc-GW2.79.0.tdf")
     rt_file = tmp_dir / f"0.19.1-java-{decrypt_sdk}.untdf"
+    mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 88
+    assert rt_file.read_bytes() == (
+        b"test secret data to encrypt by the Java SDK v0.19.1 (cmdline) "
+        b"used in the DSP GW 2.79.0\n"
+    )
 
 
 def test_decrypt_no_splitid(
