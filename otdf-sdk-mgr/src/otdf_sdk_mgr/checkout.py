@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -84,6 +85,31 @@ def upstream_ref(git_dir: Path, ref: str) -> str:
     return ref
 
 
+def require_worktree(worktree: Path, bare_repo: Path) -> None:
+    """Raise CheckoutError unless `worktree` is a git worktree of `bare_repo`.
+
+    Worktrees live inside the opentdf/tests checkout. In one that has lost its
+    `.git` file, git climbs to that checkout, and a `reset --hard` meant for
+    the worktree throws away the developer's uncommitted work instead.
+    GIT_CEILING_DIRECTORIES stops the climb. Comparing the common dir refuses
+    a directory that belongs to some other repo, such as a clone made by hand.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "GIT_CEILING_DIRECTORIES": str(worktree.resolve().parent)},
+    )
+    # Relative to the worktree when git prints it relative (`.git` in a clone);
+    # not `--path-format=absolute`, which needs git 2.31.
+    common_dir = (worktree / result.stdout.strip()).resolve()
+    if result.returncode != 0 or common_dir != bare_repo.resolve():
+        raise CheckoutError(
+            f"{worktree} is not a git worktree of {bare_repo}; remove it and rerun to recreate it"
+        )
+
+
 def checkout_sdk_branch(language: str, branch: str) -> str:
     """Clone bare repo and create/update a worktree for the given branch.
 
@@ -126,6 +152,9 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
     print(f"Fetching updates into {bare_repo_path}...")
     _run(["git", f"--git-dir={bare_repo_path}", *BARE_REFRESH])
+    # A worktree directory removed by hand, or by `otdf-sdk-mgr clean`, stays
+    # registered, and `worktree add` refuses a registered path.
+    _run(["git", f"--git-dir={bare_repo_path}", "worktree", "prune"])
 
     # PR refs (`refs/pull/N/head`) aren't under refs/heads/, so BARE_REFRESH
     # skips them; fetch any explicit `refs/...` ref by name so worktree-add,
@@ -146,6 +175,7 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     if worktree_path.exists():
         if is_mutable_ref(branch):
             print(f"Worktree exists at {worktree_path}; resetting to '{branch}'.")
+            require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for '{branch}' already exists at {worktree_path}; reusing.")
@@ -197,6 +227,9 @@ def checkout_go_from_platform(ref: str) -> Path:
     # Refresh after a fresh clone too: the clone fills no remote-tracking refs.
     print(f"Fetching updates into {bare_repo_path}...")
     _run(["git", f"--git-dir={bare_repo_path}", *BARE_REFRESH])
+    # A worktree directory removed by hand stays registered, and `worktree
+    # add` refuses a registered path.
+    _run(["git", f"--git-dir={bare_repo_path}", "worktree", "prune"])
 
     # PR refs (`refs/pull/N/head`) aren't under refs/heads/, so BARE_REFRESH
     # skips them; fetch any explicit `refs/...` ref by name so worktree-add,
@@ -217,6 +250,7 @@ def checkout_go_from_platform(ref: str) -> Path:
     if worktree_path.exists():
         if is_mutable_ref(ref):
             print(f"Worktree for ref '{ref}' exists at {worktree_path}; resetting.")
+            require_worktree(worktree_path, bare_repo_path)
             _run(["git", "-C", str(worktree_path), "reset", "--hard", target])
         else:
             print(f"Worktree for ref '{ref}' already exists at {worktree_path}; reusing.")
