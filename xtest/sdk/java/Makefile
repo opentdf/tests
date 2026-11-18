@@ -16,6 +16,8 @@ endif
 all: build
 	@echo "Setup java sdk cli for versions: $(VERSIONS)"
 
+# Each build deletes dist/<version>/.version: the commit it records is the old
+# build's. `otdf-sdk-mgr install benchmark` records the new one.
 build:
 	@echo "Building java sdk and commandline for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
@@ -44,6 +46,7 @@ build:
 		fi; \
 		echo "Copying cmdline.jar and cli.sh to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
+		rm -f $(MAKEFILE_DIR)/dist/$$version/.version; \
 		cp $(MAKEFILE_DIR)/src/$$version/cmdline/target/cmdline.jar \
 		   $(MAKEFILE_DIR)/dist/$$version/cmdline.jar || { \
 			echo "Error: Failed to copy cmdline.jar for $$version"; \
