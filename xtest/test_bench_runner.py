@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from perf import stats
-from perf.measure import Sample
+from perf.measure import MeasurementError, MeasurementTimeout, Sample
 from perf.runner import (
     Arm,
     BenchConfig,
@@ -107,6 +107,38 @@ def clock_from(runs: FakeRuns) -> Callable[[], float]:
     return lambda: runs.elapsed
 
 
+#: One SDK's cell window in CI: the default 1500 s budget over its seven
+#: cells, far short of the default 600 s ``timeout_s``.
+CI_CELL_WINDOW_S = 1500.0 / 7
+
+
+def with_timeouts(
+    runs: FakeRuns, hangs: Callable[[str, int], bool]
+) -> Callable[..., Sample]:
+    """Make ``runs`` honour ``timeout_s`` the way the launcher does.
+
+    A call that would outlast its timeout is killed at it: all of ``timeout_s``
+    passes on the clock, then MeasurementTimeout. ``hangs`` is given each
+    call's argv[0] and how many calls that arm has had before it, and picks
+    the ones that would never finish at all.
+    """
+
+    def call(argv: list[str], env: dict[str, str], *, timeout_s: float) -> Sample:
+        key, started = argv[0], runs.elapsed
+        if hangs(key, runs.calls.count(key)):
+            runs.calls.append(key)
+        else:
+            sample = runs(argv, env)
+            if sample.wall_s <= timeout_s:
+                return sample
+        runs.elapsed = started + timeout_s
+        raise MeasurementTimeout(
+            f"{key!r} exceeded the {timeout_s:g}s measurement timeout"
+        )
+
+    return call
+
+
 def run(
     ratio: float,
     *,
@@ -133,6 +165,12 @@ def run(
         run=runs,
     )
     return result, runs
+
+
+def drawn_first(cell_id: str) -> str:
+    """The arm the seeded shuffle draws first in ``cell_id``'s first round."""
+    _, runs = run(1.0, cfg=config(warmup=0), cell_id=cell_id)
+    return runs.calls[0]
 
 
 class TestRoundLoop:
@@ -326,6 +364,175 @@ class TestStopping:
             for arm_samples in result.samples.values()
             for vector in arm_samples.values()
         ), "the discarded round left one arm ahead of the other"
+
+
+class TestTimeouts:
+    """A timeout fails the cell unless the budget caused it.
+
+    The deadline clips nearly every invocation's timeout, so a build that
+    never finishes runs out at the deadline just as a cell short of time does.
+    Read as the budget's fault, the worst regression there is becomes a skip,
+    and the run goes green around it.
+    """
+
+    @pytest.mark.parametrize(
+        "cell_id, drawn", [("encrypt", "base"), ("decrypt", "cand")]
+    )
+    def test_a_candidate_that_always_hangs_fails_the_cell(
+        self, cell_id: str, drawn: str
+    ):
+        assert drawn_first(cell_id) == drawn, "precondition: the shuffle's draw"
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.0)
+        # CI's numbers, where the deadline rather than timeout_s sets every
+        # timeout. The candidate had all but the reference's 1 s of the window.
+        with pytest.raises(
+            MeasurementTimeout, match=r"sdk@cand timed out after 213\.3s"
+        ):
+            run_cell(
+                cell_id,
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(warmup=5, timeout_s=600.0),
+                deadline=CI_CELL_WINDOW_S,
+                clock=clock_from(runs),
+                run=with_timeouts(runs, hangs=lambda key, n: key == "cand"),
+            )
+        assert runs.calls == ["base", "cand"]
+
+    def test_the_first_warmup_round_runs_the_reference_first(self):
+        # So that every other arm's first run has one to be judged against.
+        # The round is warm-up, so its order costs nothing, and the shuffle
+        # still runs: every later round draws what it always did.
+        assert drawn_first("decrypt") == "cand", "precondition: the shuffle's draw"
+        cfg = config(warmup=2)
+        _, runs = run(1.0, cfg=cfg, cell_id="decrypt")
+        rng = random.Random(f"{cfg.seed}:decrypt")
+        drawn: list[str] = []
+        while len(drawn) < len(runs.calls):
+            order = ["base", "cand"]
+            rng.shuffle(order)
+            drawn += order
+        assert runs.calls[:2] == ["base", "cand"]
+        assert runs.calls[2:] == drawn[2:]
+
+    @pytest.mark.parametrize(
+        "cost, window, hung, cause",
+        [
+            # Earlier cells overran, so this one starts with 1.5 s left.
+            pytest.param(1.0, 1.5, None, "sdk@cand timed out after 0.5s", id="late"),
+            # The rounds are slow, and the warm-ups simply do not fit.
+            pytest.param(
+                30.0, 100.0, None, "sdk@base timed out after 10.0s", id="slow"
+            ),
+            # The one run judged with no evidence is the reference's first, and
+            # it counts as budget even given the whole window: the candidate
+            # never ran, and the cell could not have been measured anyway.
+            pytest.param(
+                1.0,
+                CI_CELL_WINDOW_S,
+                "base",
+                "sdk@base timed out after 214.3s",
+                id="reference-hangs",
+            ),
+        ],
+    )
+    def test_a_cell_that_runs_out_of_time_still_skips(
+        self, cost: float, window: float, hung: str | None, cause: str
+    ):
+        runs = FakeRuns({"base": cost, "cand": cost}, noise=0.0)
+        with pytest.raises(BudgetExhausted, match="during warm-up") as caught:
+            run_cell(
+                "cell",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(warmup=5, timeout_s=600.0),
+                deadline=window,
+                clock=clock_from(runs),
+                run=with_timeouts(runs, hangs=lambda key, n: key == hung),
+            )
+        # The skip reason the report records says what happened, and the
+        # chain keeps it: the round's own BudgetExhausted, then the timeout.
+        assert f"{cause}, all that was left of the budget" in str(caught.value)
+        assert isinstance(caught.value.__cause__, BudgetExhausted)
+        assert isinstance(caught.value.__cause__.__cause__, MeasurementTimeout)
+
+    def test_too_few_rounds_says_what_cut_the_last_one_short(self):
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.0)
+        with pytest.raises(
+            BudgetExhausted,
+            match=r"minimum of 5: sdk@cand timed out after [12]\.5s, all that was",
+        ) as caught:
+            run_cell(
+                "cell",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(warmup=0),
+                # Four 2 s rounds fit, and the fifth's candidate stalls.
+                deadline=10.5,
+                clock=clock_from(runs),
+                run=with_timeouts(runs, hangs=lambda key, n: key == "cand" and n == 4),
+            )
+        assert isinstance(caught.value.__cause__, BudgetExhausted)
+        assert isinstance(caught.value.__cause__.__cause__, MeasurementTimeout)
+
+    def test_an_intermittent_hang_after_min_rounds_fails_the_cell(self):
+        # It used to end the loop as stopped_because="budget": a normal
+        # looking result, with the hang in no part of the report.
+        cfg = config(warmup=2, timeout_s=600.0)
+        stall = cfg.warmup + cfg.min_rounds + 3  # the candidate's run that hangs
+        # Noisy enough that precision does not end the loop first.
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.4)
+        with pytest.raises(MeasurementTimeout, match="sdk@cand timed out after"):
+            run_cell(
+                "cell",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                cfg,
+                deadline=CI_CELL_WINDOW_S,
+                clock=clock_from(runs),
+                run=with_timeouts(
+                    runs, hangs=lambda key, n: key == "cand" and n == stall
+                ),
+            )
+        assert runs.calls.count("cand") == stall + 1
+
+    def test_a_full_length_timeout_fails_even_at_the_deadline(self):
+        # Given all of timeout_s, the bound for a wedged CLI, a timeout is the
+        # build's whatever the budget did meanwhile.
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.0)
+        with pytest.raises(MeasurementTimeout, match=r"sdk@cand timed out after 5\.0s"):
+            run_cell(
+                "encrypt",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(warmup=5, timeout_s=5.0),
+                # The candidate follows the reference's 1 s, with exactly
+                # timeout_s left.
+                deadline=6.0,
+                clock=clock_from(runs),
+                run=with_timeouts(runs, hangs=lambda key, n: key == "cand"),
+            )
+
+    def test_a_crash_at_the_deadline_is_still_a_failure(self):
+        runs = FakeRuns({"base": 1.0, "cand": 1.0}, noise=0.0)
+
+        def crash(argv: list[str], env: dict[str, str], *, timeout_s: float) -> Sample:
+            if argv[0] != "cand":
+                return runs(argv, env)
+            # Exits non-zero just as the cell's time runs out.
+            runs.elapsed += timeout_s
+            raise MeasurementError(f"{argv[0]} exited 1\nstderr: boom")
+
+        with pytest.raises(MeasurementError, match="sdk@cand failed: cand exited 1"):
+            run_cell(
+                "cell",
+                arm("baseline", "base"),
+                arm("candidate", "cand"),
+                config(warmup=5, timeout_s=600.0),
+                deadline=CI_CELL_WINDOW_S,
+                clock=clock_from(runs),
+                run=crash,
+            )
 
 
 class TestBenchConfigValidation:

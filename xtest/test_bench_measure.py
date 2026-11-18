@@ -17,7 +17,7 @@ import textwrap
 import pytest
 
 from perf import measure
-from perf.measure import MeasurementError, Sample
+from perf.measure import MeasurementError, MeasurementTimeout, Sample
 
 pytestmark = pytest.mark.skipif(
     not hasattr(os, "wait4"),
@@ -168,8 +168,10 @@ class TestPeakRss:
 
 class TestFailureHandling:
     def test_non_zero_exit_raises_by_default(self):
-        with pytest.raises(MeasurementError, match="exited 3"):
+        with pytest.raises(MeasurementError, match="exited 3") as caught:
             measure.measure(python_child("raise SystemExit(3)"))
+        # Only a timeout may ever be put down to the budget running out.
+        assert not isinstance(caught.value, MeasurementTimeout)
 
     def test_error_includes_child_stderr(self):
         with pytest.raises(MeasurementError, match="disaster strikes"):
@@ -184,11 +186,12 @@ class TestFailureHandling:
         assert s.exit_code == 7
 
     def test_missing_executable_raises(self):
-        with pytest.raises(MeasurementError, match="could not start"):
+        with pytest.raises(MeasurementError, match="could not start") as caught:
             measure.measure(["/nonexistent/definitely-not-a-real-binary"])
+        assert not isinstance(caught.value, MeasurementTimeout)
 
     def test_timeout_kills_and_raises(self):
-        with pytest.raises(MeasurementError, match="measurement timeout"):
+        with pytest.raises(MeasurementTimeout, match="measurement timeout"):
             measure.measure(python_child("import time; time.sleep(30)"), timeout_s=0.5)
 
     def test_large_output_does_not_deadlock(self):
