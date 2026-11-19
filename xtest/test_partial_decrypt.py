@@ -199,10 +199,11 @@ def fetch_budget(
     """Head + covering segments + tail + allowance, in bytes."""
     assert source.allowance is not None
     first, payload_end = payload_extent(ct_file)
-    count = len(
-        tdfs.manifest(ct_file).encryptionInformation.integrityInformation.segments
-    )
-    # web-sdk also reads the preceding segment to verify the size (DSPX-5219).
+    sizes = tdfs.encrypted_segment_sizes(tdfs.manifest(ct_file))
+    # Not java's trailing empty segment, which is IV and tag alone.
+    count = sum(size > 28 for size in sizes)
+    # Starting in the last segment, web-sdk also reads the one before to check
+    # its size (DSPX-5219).
     if start // seg == count - 1 > 0:
         start -= seg
     plan = rangeserve.retention_plan(
