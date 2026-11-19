@@ -55,6 +55,7 @@ jobs:
           test_sdk_commands.py test_tdfs_units.py test_encryption_units.py
           test_sizes_units.py test_zip64_units.py test_assertions_units.py
           test_zip_conformance_units.py test_rangeserve_units.py
+          test_regenerate_units.py
         working-directory: xtest
       - name: Lint and test otdf-local
         run: |
