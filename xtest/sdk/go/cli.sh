@@ -17,8 +17,18 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  XT_CLI_LOG [string] - File to append diagnostics to, such as the SDK command line (default: stderr)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# Diagnostics go to $XT_CLI_LOG, or stderr, so error output is the SDK's alone.
+xtlog() {
+  if [[ -n "$XT_CLI_LOG" ]]; then
+    echo "$@" >>"$XT_CLI_LOG"
+  else
+    echo "$@" >&2
+  fi
+}
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [[ ! -f "$SCRIPT_DIR"/otdfctl ]]; then
@@ -241,7 +251,7 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$XT_WITH_TARGET_MODE" ]; then
     args+=(--target-mode "$XT_WITH_TARGET_MODE")
   fi
-  echo "${cmd[@]}" encrypt "${args[@]}" "$2"
+  xtlog "${cmd[@]}" encrypt "${args[@]//\"clientSecret\":\"*\"/\"clientSecret\":\"***\"}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then
     exit 1
   fi
@@ -273,7 +283,7 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--kas-allowlist '*')
   fi
-  echo "${cmd[@]}" decrypt "${args[@]}" "$2"
+  xtlog "${cmd[@]}" decrypt "${args[@]//\"clientSecret\":\"*\"/\"clientSecret\":\"***\"}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
 else
   echo "Incorrect argument provided"

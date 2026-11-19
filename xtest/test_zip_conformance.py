@@ -282,9 +282,9 @@ def _assert_zip_rejection(sdk: str, result: subprocess.CompletedProcess[bytes]) 
     """Assert a clean parser rejection; return the diagnostic that was matched.
 
     The return value is the *matched substring*, deliberately not the output:
-    callers warn and record it, and the go and java shims echo command lines
-    carrying local client credentials on stdout (js redacts via
-    ``echo_redacted``; the others do not). The matched slice comes from
+    callers warn and record it, and the output is the SDK's own, debug logging
+    included. The shims mask the client secret in the command lines they log,
+    but nothing masks what the SDKs print. The matched slice comes from
     ``_ZIP_REJECTIONS``, so it can only ever be parser wording.
 
     The stderr tail in the final assertion message is load-bearing: it is how
