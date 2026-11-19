@@ -14,6 +14,7 @@ relabel cases also need ``segment_layout_verified``, which only forcing sets.
 """
 
 import os
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -337,6 +338,13 @@ def flip_byte_in_segment(index: int, sizes: list[int]) -> Callable[[bytes], byte
     return change
 
 
+#: The segment hash, or the AES-GCM tag when a reader only decrypts the
+#: segments it reads (java: AEADBadTagException; node: "Cipher job failed").
+SEGMENT_REJECTED = re.compile(
+    rb"segment|integrity|tamper|tag mismatch|cipher job failed", re.IGNORECASE
+)
+
+
 def test_partial_decrypt_tampered_segment_in_range_fails(
     decrypt_sdk: tdfs.SDK, cell: Cell
 ) -> None:
@@ -354,7 +362,7 @@ def test_partial_decrypt_tampered_segment_in_range_fails(
             expect_error=True,
             plaintext_range=(seg + 10, 100),
         )
-    assert_tamper_error(exc.value, "segment", decrypt_sdk)
+    assert SEGMENT_REJECTED.search(exc.value.output), exc.value.output[-2000:]
 
 
 def test_partial_decrypt_tampered_segment_out_of_range(
