@@ -363,7 +363,7 @@ def test_partial_decrypt_tampered_segment_out_of_range(
     decrypt_sdk: tdfs.SDK,
     cell: Cell,
 ) -> None:
-    """Seg 0 tampered, seg 2 read. Noticing is optional, so record, don't judge."""
+    """Seg 0 tampered, seg 2 read. Rejecting is optional; wrong bytes are not."""
     seg = geometry(cell.ct, cell.pt.stat().st_size)
     sizes = tdfs.encrypted_segment_sizes(tdfs.manifest(cell.ct))
     b_file = tdfs.update_payload(
@@ -382,8 +382,8 @@ def test_partial_decrypt_tampered_segment_out_of_range(
     except subprocess.CalledProcessError:
         outcome = "rejected"
     else:
-        good = rt_file.read_bytes() == line_bytes(offset, offset + 100)
-        outcome = "decrypted" if good else "wrong bytes"
+        assert_plaintext(rt_file.read_bytes(), offset, offset + 100)
+        outcome = "decrypted"
     record_property("tampered_seg0_read_seg2", outcome)
 
 
