@@ -44,9 +44,11 @@ def get(url: str, range_header: str | None = None) -> tuple[int, bytes]:
         return e.code, e.read()
 
 
-def plan(*ranges: tuple[int, int], start: int = 100) -> list[tuple[int, int]]:
+def plan(
+    *ranges: tuple[int, int], start: int = 100, pad: int = 0
+) -> list[tuple[int, int]]:
     return retention_plan(
-        ranges, plaintext_length=PT_LEN, segment_size=SEG, payload_start=start
+        ranges, plaintext_length=PT_LEN, segment_size=SEG, payload_start=start, pad=pad
     )
 
 
@@ -68,6 +70,17 @@ def test_plan_crosses_segment_boundary():
 def test_plan_disjoint_and_overlapping_ranges():
     got = plan((2 * SEG + 5, 2 * SEG + 6), (3 * SEG, 3 * SEG + 1), (10, 20), start=50)
     assert got == [(0, 50 + STRIDE), (50 + 2 * STRIDE, 50 + 4 * STRIDE)]
+
+
+def test_plan_pad_stays_before_tail_and_covers_its_edge():
+    end = 100 + PT_LEN + 5 * GCM
+    got = plan((2 * SEG + 5, 2 * SEG + 6), pad=60)
+    assert got == [
+        (0, 160),
+        (100 + 2 * STRIDE - 60, 100 + 3 * STRIDE + 60),
+        (end - 60, end),
+    ]
+    assert plan((PT_LEN - 1, PT_LEN), pad=60)[-1] == (100 + 4 * STRIDE - 60, end)
 
 
 @pytest.mark.parametrize(
