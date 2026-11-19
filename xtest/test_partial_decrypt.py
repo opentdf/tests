@@ -82,13 +82,13 @@ class Source:
 
 SOURCES: dict[str, Source] = {
     "file": Source(),
-    # Room for HEAD/probe reads and read-ahead, far short of the payload. Only
-    # cases whose budget leaves out segment 0 and most of the payload.
+    # Room for probe reads and read-ahead, far short of the payload. Only
+    # cases whose budget leaves out segment 0.
     "http": Source(
         ("http_range_source",),
         "range_server",
         64 * 1024,
-        frozenset({"inside_one_segment", "length_omitted"}),
+        frozenset({"inside_one_segment", "crosses_boundary", "length_omitted"}),
     ),
 }
 
@@ -97,7 +97,7 @@ SOURCES: dict[str, Source] = {
 RANGES: dict[str, Callable[[int, int], tuple[int, int | None]]] = {
     "offset_zero": lambda seg, n: (0, 100),
     "inside_one_segment": lambda seg, n: (seg + seg // 4, 100),
-    "crosses_boundary": lambda seg, n: (seg - 50, 100),
+    "crosses_boundary": lambda seg, n: (2 * seg - 50, 100),
     "spans_segments": lambda seg, n: (seg - 50, seg + 100),
     "one_whole_segment": lambda seg, n: (seg, seg),
     "last_segment": lambda seg, n: ((n - 1) // seg * seg, n - (n - 1) // seg * seg),
