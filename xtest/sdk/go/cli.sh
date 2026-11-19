@@ -17,8 +17,19 @@
 #  XT_WITH_ATTRIBUTES [string] - Attributes to be used for encryption
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
+#  XT_CLI_LOG [string] - File to append diagnostics to, such as the SDK command line (default: stderr)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# Diagnostics go to $XT_CLI_LOG, or stderr, so error output is the SDK's alone.
+xtlog() {
+  if [[ -n "$XT_CLI_LOG" ]]; then
+    echo "$@" >>"$XT_CLI_LOG"
+  else
+    echo "$@" >&2
+  fi
+}
 
 cmd=("$SCRIPT_DIR"/otdfctl)
 if [[ ! -f "$SCRIPT_DIR"/otdfctl ]]; then
@@ -104,6 +115,12 @@ if [ "$1" == "supports" ]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     connectrpc)
       set -o pipefail
       # SDK version 0.4.5 introduces connectrpc client side
@@ -140,7 +157,7 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help decrypt | grep -iE 'mlkem:768|mlkem:1024'
       exit $?
       ;;
-    dpop | dpop_nonce_challenge)
+    dpop | dpop_nonce_challenge | partial_decrypt | http_range_source)
       set -o pipefail
       "${cmd[@]}" --version --json | jq -e --arg f "$2" '.supported_features |
  index($f)'
@@ -241,7 +258,7 @@ if [ "$1" == "encrypt" ]; then
   if [ -n "$XT_WITH_TARGET_MODE" ]; then
     args+=(--target-mode "$XT_WITH_TARGET_MODE")
   fi
-  echo "${cmd[@]}" encrypt "${args[@]}" "$2"
+  xtlog "${cmd[@]}" encrypt "${args[@]//\"clientSecret\":\"*\"/\"clientSecret\":\"***\"}" "$2"
   if ! "${cmd[@]}" encrypt "${args[@]}" "$2"; then
     exit 1
   fi
@@ -273,7 +290,14 @@ elif [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--kas-allowlist '*')
   fi
-  echo "${cmd[@]}" decrypt "${args[@]}" "$2"
+  if [ -n "$XT_WITH_PLAINTEXT_RANGE" ]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [ -n "$range_length" ]; then
+      args+=(--length "$range_length")
+    fi
+  fi
+  xtlog "${cmd[@]}" decrypt "${args[@]//\"clientSecret\":\"*\"/\"clientSecret\":\"***\"}" "$2"
   "${cmd[@]}" decrypt "${args[@]}" "$2"
 else
   echo "Incorrect argument provided"

@@ -5,10 +5,12 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, TypeIs, cast, get_args
 
@@ -21,6 +23,25 @@ import assertions as tdfassertions
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
+
+
+@contextmanager
+def cli_log(env: dict[str, str]) -> Iterator[None]:
+    """Point ``cli.sh`` diagnostics at a temp file, then log it.
+
+    Keeps the echoed command line, file paths included, out of the output
+    that tests search for error text.
+    """
+    fd, path = tempfile.mkstemp(prefix="xt-cli-", suffix=".log")
+    os.close(fd)
+    env["XT_CLI_LOG"] = path
+    try:
+        yield
+    finally:
+        log = Path(path)
+        if text := log.read_text(errors="replace").strip():
+            logger.debug("cli: %s", text)
+        log.unlink()
 
 
 def _km1_log_path() -> Path | None:
@@ -168,6 +189,9 @@ feature_type = Literal[
     "gmac_root_rejected",
     "hexless",
     "hexaflexible",
+    # Load a TDF from an http(s) URL with Range requests, fetching only the
+    # bytes a read needs rather than the whole object. DSPX-5112/5113.
+    "http_range_source",
     "kasallowlist",
     # Platform: resolve managed keys using the KAS URI from the KAO. Force-only
     # until the first supported release is known -- via XT_FORCE_PLATFORM_SUPPORTS,
@@ -199,6 +223,13 @@ feature_type = Literal[
     "session-key-mlkem",
     "ns_grants",
     "obligations",
+    # Decrypt only a plaintext byte range (``--offset``/``--length``), reading
+    # just the segments that cover it. DSPX-5114/5115/5116.
+    "partial_decrypt",
+    # DSPX-5219: does a range read check the recorded sizes of the segments it
+    # skips, rather than trusting them to place the ones it reads? Force-only,
+    # like ``gmac_root_rejected``: there is no CLI surface to ask.
+    "segment_layout_verified",
     # Writer-side: switch to the ZIP64 sentinel plus extra field at 2 GiB
     # rather than at 4 GiB.
     #
@@ -876,7 +907,8 @@ class SDK:
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
-        result = subprocess.run(c, env=env, capture_output=True)
+        with cli_log(env):
+            result = subprocess.run(c, env=env, capture_output=True)
         if result.returncode != 0:
             if result.stdout:
                 logger.error("enc stdout: %s", result.stdout.decode(errors="replace"))
@@ -888,7 +920,7 @@ class SDK:
 
     def decrypt_command(
         self,
-        ct_file: Path,
+        ct_file: Path | str,
         rt_file: Path,
         container: container_type = "ztdf",
         assert_keys: str = "",
@@ -896,12 +928,17 @@ class SDK:
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
         session_key_algorithm: str = "",
+        plaintext_range: tuple[int, int | None] | None = None,
     ) -> tuple[list[str], dict[str, str]]:
         """Build the argv and CLI-specific env vars for a decrypt invocation.
 
         See :meth:`encrypt_command` for why this is separate. ``expect_error``
         has no counterpart here: it selects how the caller runs the command,
         not what the command is.
+
+        ``ct_file`` may be an http(s) URL (feature ``http_range_source``).
+        ``plaintext_range`` is ``(offset, length)``; a length of None means to
+        the end (feature ``partial_decrypt``).
         """
         c = [
             self.path,
@@ -922,11 +959,15 @@ class SDK:
             local_env |= {"XT_WITH_KAS_ALLOWLIST": kasallowlist}
         if ignore_kas_allowlist:
             local_env |= {"XT_WITH_IGNORE_KAS_ALLOWLIST": "true"}
+        if plaintext_range is not None:
+            offset, length = plaintext_range
+            length_s = "" if length is None else str(length)
+            local_env |= {"XT_WITH_PLAINTEXT_RANGE": f"{offset}:{length_s}"}
         return c, local_env
 
     def decrypt(
         self,
-        ct_file: Path,
+        ct_file: Path | str,
         rt_file: Path,
         container: container_type = "ztdf",
         assert_keys: str = "",
@@ -935,6 +976,7 @@ class SDK:
         kasallowlist: str = "",
         ignore_kas_allowlist: bool = False,
         session_key_algorithm: str = "",
+        plaintext_range: tuple[int, int | None] | None = None,
     ):
         c, local_env = self.decrypt_command(
             ct_file,
@@ -945,14 +987,17 @@ class SDK:
             kasallowlist=kasallowlist,
             ignore_kas_allowlist=ignore_kas_allowlist,
             session_key_algorithm=session_key_algorithm,
+            plaintext_range=plaintext_range,
         )
         logger.info(f"dec [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
         if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+            with cli_log(env):
+                subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
         else:
-            result = subprocess.run(c, env=env, capture_output=True)
+            with cli_log(env):
+                result = subprocess.run(c, env=env, capture_output=True)
             if result.returncode != 0:
                 if result.stdout:
                     logger.error(

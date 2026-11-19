@@ -575,6 +575,45 @@ def pytest_collection_modifyitems(
         items[:] = [i for i in items if id(i) not in dropped]
 
 
+def require_partial_decrypt_cell(session: pytest.Session) -> None:
+    """Fail the run unless a partial-decrypt range cell passed through each
+    required source.
+
+    Every cell skips on an SDK without the feature, so a run whose probes all
+    say no would otherwise go green having tested nothing. Opt in with
+    ``XT_PARTIAL_DECRYPT_REQUIRED=1`` (file and HTTP), and for the NFS mount
+    (DSPX-5544) ``XT_NFS_PARTIAL_REQUIRED=1``; the xdist controller judges.
+    """
+    config = session.config
+    if getattr(config, "workerinput", None) is not None:
+        return
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    passed = reporter.stats.get("passed", []) if reporter else []
+    prefix = "test_partial_decrypt.py::test_partial_decrypt["
+    cells = [r.nodeid for r in passed if r.nodeid.startswith(prefix)]
+    for var, sources in (
+        ("XT_PARTIAL_DECRYPT_REQUIRED", ("file", "http")),
+        ("XT_NFS_PARTIAL_REQUIRED", ("nfs",)),
+    ):
+        if os.environ.get(var, "").lower() not in ("1", "true", "yes"):
+            continue
+        missing = [
+            source
+            for source in sources
+            if not any(c.endswith(f"-{source}]") for c in cells)
+        ]
+        if not missing:
+            continue
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        if reporter:
+            reporter.write_line(
+                f"{var}: no test_partial_decrypt cell passed over "
+                f"{' or '.join(missing)} (every SDK pair skipped?)",
+                red=True,
+            )
+
+
 #: Conformance records for the whole run, in arrival order. Plain module
 #: state rather than the config stash because :func:`pytest_runtest_logreport`
 #: is handed a report and nothing else.
@@ -677,6 +716,7 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     """Write the end-of-run artifacts for the suites that produce them."""
+    require_partial_decrypt_cell(session)
     try:
         _finish_zip_conformance(session)
     finally:

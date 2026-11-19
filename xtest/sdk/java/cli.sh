@@ -18,8 +18,19 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  XT_WITH_PLAINTEXT_RANGE [string] - <offset>:<length> plaintext bytes to decrypt; empty length means to the end
+#  XT_CLI_LOG [string] - File to append diagnostics to, such as the SDK command line (default: stderr)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# Diagnostics go to $XT_CLI_LOG, or stderr, so error output is the SDK's alone.
+xtlog() {
+  if [[ -n "$XT_CLI_LOG" ]]; then
+    echo "$@" >>"$XT_CLI_LOG"
+  else
+    echo "$@" >&2
+  fi
+}
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ "$XTEST_DIR" != "/" ]; do
@@ -132,6 +143,12 @@ if [ "$1" == "supports" ]; then
       echo "gmac_root_rejected is not probeable: the fix adds no CLI surface"
       exit 1
       ;;
+    segment_layout_verified)
+      # DSPX-5219: no CLI surface to ask. XT_FORCE_SUPPORTS=segment_layout_verified
+      # runs the relabel cases in test_partial_decrypt.py.
+      echo "segment_layout_verified is not probeable"
+      exit 1
+      ;;
     attribute_traversal)
       echo "attribute_traversal not supported"
       exit 1
@@ -168,12 +185,8 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop
-      exit $?
-      ;;
-    dpop_nonce_challenge)
-      java -jar "$SCRIPT_DIR"/cmdline.jar supports dpop_nonce_challenge
+    dpop | dpop_nonce_challenge | http_range_source | partial_decrypt)
+      java -jar "$SCRIPT_DIR"/cmdline.jar supports "$2"
       exit $?
       ;;
     chunky)
@@ -247,6 +260,14 @@ if [ "$1" == "decrypt" ]; then
   if [ "$XT_WITH_IGNORE_KAS_ALLOWLIST" == "true" ]; then
     args+=(--ignore-kas-allowlist=true)
   fi
+
+  if [ -n "$XT_WITH_PLAINTEXT_RANGE" ]; then
+    args+=(--offset "${XT_WITH_PLAINTEXT_RANGE%%:*}")
+    range_length="${XT_WITH_PLAINTEXT_RANGE#*:}"
+    if [ -n "$range_length" ]; then
+      args+=(--length "$range_length")
+    fi
+  fi
 fi
 
 if [ -n "$XT_WITH_MIME_TYPE" ]; then
@@ -277,5 +298,5 @@ if jar_help | grep -q -- '--verbose'; then
   args+=(--verbose)
 fi
 
-echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
+xtlog java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]/#--client-secret=*/--client-secret=***}" --file="$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" >"$3"
