@@ -18,8 +18,18 @@
 #  XT_WITH_MIME_TYPE [string] - MIME type for the encrypted file
 #  XT_WITH_TARGET_MODE [string] - Target spec mode for the encrypted file
 #  XT_WITH_SESSION_KEY_ALGORITHM [string] - Rewrap session key algorithm for decryption (e.g. mlkem:768)
+#  XT_CLI_LOG [string] - File to append diagnostics to, such as the SDK command line (default: stderr)
 #
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# Diagnostics go to $XT_CLI_LOG, or stderr, so error output is the SDK's alone.
+xtlog() {
+  if [[ -n "$XT_CLI_LOG" ]]; then
+    echo "$@" >>"$XT_CLI_LOG"
+  else
+    echo "$@" >&2
+  fi
+}
 
 XTEST_DIR="$SCRIPT_DIR"
 while [ "$XTEST_DIR" != "/" ]; do
@@ -277,5 +287,5 @@ if jar_help | grep -q -- '--verbose'; then
   args+=(--verbose)
 fi
 
-echo java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" ">" "$3"
+xtlog java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]/#--client-secret=*/--client-secret=***}" --file="$2" ">" "$3"
 java -jar "$SCRIPT_DIR"/cmdline.jar "${args[@]}" --file="$2" >"$3"
