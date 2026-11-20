@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 import tdfs
+from audit_logs import AuditLogAsserter
 
 
 def get_golden_file(golden_file_name: str) -> Path:
@@ -103,6 +104,36 @@ def test_decrypt_SDKv0_9_0(
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
     file_stats = os.stat(rt_file)
     assert file_stats.st_size == 92
+
+
+# test decryption of legacy tdf created with Java SDK v0_19_1 which is used in the DSP Gateway v2.79.0
+def test_decrypt_SDKv0_19_1(
+    decrypt_sdk: tdfs.SDK,
+    tmp_dir: Path,
+    in_focus: set[tdfs.SDK],
+    audit_logs: AuditLogAsserter,
+):
+    if not in_focus & {decrypt_sdk}:
+        pytest.skip("Not in focus")
+    if not decrypt_sdk.supports("hexless"):
+        pytest.skip("Decrypting hexless files is not supported")
+    ct_file = get_golden_file("xstext-java-v0.19.1-8e6f8bc-GW2.79.0.tdf")
+    manifest = tdfs.manifest(ct_file)
+    kao = manifest.encryptionInformation.keyAccess[0]
+    rt_file = tmp_dir / f"0.19.1-java-{decrypt_sdk}.untdf"
+    mark = audit_logs.mark("before_decrypt")
+    decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")
+    audit_logs.assert_rewrap_success(
+        policy_uuid=manifest.encryptionInformation.policy_object.uuid,
+        key_id=kao.kid,
+        since_mark=mark,
+    )
+    file_stats = os.stat(rt_file)
+    assert file_stats.st_size == 88
+    assert rt_file.read_bytes() == (
+        b"test secret data to encrypt by the Java SDK v0.19.1 (cmdline) "
+        b"used in the DSP GW 2.79.0\n"
+    )
 
 
 def test_decrypt_no_splitid(
