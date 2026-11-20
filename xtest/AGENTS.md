@@ -19,6 +19,29 @@ fixture system.
 | `sdk/{go,java,js}/dist/<version>/` | SDK CLI builds. Installed by `otdf-sdk-mgr install` (see `../otdf-sdk-mgr/AGENTS.md`). |
 | `test.env` | Default endpoint and client-credential env vars. Source with `set -a && source test.env && set +a`. |
 
+## Test Tiers
+
+CI selects tests by marker, not by file name, so adding a module never means
+editing a workflow. Every test needs exactly one tier; collection fails
+otherwise, because an untiered test would match no CI step and silently never
+run. Declare it once per module:
+
+```python
+pytestmark = pytest.mark.core
+```
+
+| Tier | Needs | Run by |
+|------|-------|--------|
+| `units` | Nothing: no platform, no SDK builds. Implied by a `*_units.py` file name. | `check.yml`, every PR |
+| `harness` | Platform; tests the harness itself. | `xtest.yml` helper step |
+| `core` | Platform + SDKs, platform's own KAS. | `xtest.yml` standard step |
+| `legacy` | Golden TDFs and their keys. Decrypt-only. | `xtest.yml` legacy step |
+| `multikas` | KAS alpha..delta and km1..km3. | `xtest.yml` ABAC step |
+| `benchmark`, `zip64` | `--bench` / `--sizes medium`. | nightly jobs |
+
+Pick the tier by what the test needs, not by topic: `test_pqc.py` is
+`multikas` because of its KAS fixtures, not because PQC is about ABAC.
+
 ## Custom pytest Options (defined in `conftest.py`)
 
 | Option | Purpose |

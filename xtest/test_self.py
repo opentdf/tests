@@ -1,9 +1,13 @@
 import random
 import string
 
+import pytest
+
 import abac
 from audit_logs import AuditLogAsserter
 from otdfctl import OpentdfCommandLineTool
+
+pytestmark = pytest.mark.harness
 
 otdfctl = OpentdfCommandLineTool()
 

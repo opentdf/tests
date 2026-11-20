@@ -36,6 +36,8 @@ from abac import Attribute
 from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 
+pytestmark = pytest.mark.multikas
+
 
 def _token_endpoint() -> str:
     if endpoint := os.getenv("TOKENENDPOINT"):

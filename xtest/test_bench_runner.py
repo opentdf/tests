@@ -30,6 +30,8 @@ from perf.runner import (
     run_cell,
 )
 
+pytestmark = pytest.mark.units
+
 BASELINE_WALL_S = 1.0
 BASELINE_RSS = 100_000_000
 BASELINE_CPU = 0.8

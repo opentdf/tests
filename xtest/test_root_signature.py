@@ -42,6 +42,8 @@ import tdfs
 from abac import Attribute
 from fixtures.encryption import EncryptFactory
 
+pytestmark = pytest.mark.core
+
 ManifestChange = Callable[[tdfs.Manifest], tdfs.Manifest]
 PayloadChange = Callable[[bytes], bytes]
 

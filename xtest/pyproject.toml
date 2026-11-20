@@ -90,6 +90,14 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-ra -v"
 markers = [
+    # Tiers: each test carries exactly one (conftest.py enforces it), and CI
+    # selects by tier with -m rather than by file name. benchmark and zip64
+    # below are tiers too.
+    "units: offline harness tests; no platform, no SDK builds (implied by *_units.py)",
+    "harness: harness self-tests against a running platform",
+    "core: cross-SDK tests against the platform's own KAS",
+    "legacy: golden TDF decryption; needs the golden keys loaded",
+    "multikas: needs the alpha..delta and km1..km3 KAS instances",
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",
     "zip64: multi-GiB ZIP64 boundary cell; only collected when --sizes reaches 2**31",

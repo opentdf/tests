@@ -13,6 +13,8 @@ from abac import Attribute
 from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 
+pytestmark = pytest.mark.core
+
 dspx1153Fails = []
 
 try:
