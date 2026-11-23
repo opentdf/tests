@@ -70,6 +70,9 @@ pytest_plugins = [
     "fixtures.encryption",
     "fixtures.bench",
     "fixtures.range_server",
+    "fixtures.nfs_mount",
+    "fixtures.streaming",
+    "fixtures.sparse",
 ]
 
 
@@ -546,7 +549,17 @@ def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) ->
 # module is picked up by declaring ``pytestmark = pytest.mark.<tier>``. The
 # tiers are registered in pyproject.toml.
 TIERS = frozenset(
-    {"units", "harness", "core", "legacy", "multikas", "benchmark", "zip64"}
+    {
+        "units",
+        "harness",
+        "core",
+        "legacy",
+        "multikas",
+        "benchmark",
+        "sparse",
+        "stream",
+        "zip64",
+    }
 )
 
 
