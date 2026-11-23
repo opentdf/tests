@@ -609,47 +609,6 @@ def _drop_unrequested(config: pytest.Config, items: list[pytest.Item]) -> None:
         items[:] = [i for i in items if id(i) not in dropped]
 
 
-def require_partial_decrypt_cell(session: pytest.Session) -> None:
-    """Fail the run unless a partial-decrypt range cell passed, over a file
-    and over HTTP.
-
-    Every cell skips on an SDK without the feature, so a run whose probes all
-    say no would otherwise go green having tested nothing. Opt in with
-    ``XT_PARTIAL_DECRYPT_REQUIRED=1``; the xdist controller judges.
-    """
-    config = session.config
-    if os.environ.get("XT_PARTIAL_DECRYPT_REQUIRED", "").lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return
-    if getattr(config, "workerinput", None) is not None:
-        return
-    reporter = config.pluginmanager.get_plugin("terminalreporter")
-    passed = reporter.stats.get("passed", []) if reporter else []
-    cells = [
-        r.nodeid
-        for r in passed
-        if "test_partial_decrypt.py::test_partial_decrypt[" in r.nodeid
-    ]
-    missing = [
-        source
-        for source in ("file", "http")
-        if not any(c.endswith(f"-{source}]") for c in cells)
-    ]
-    if not missing:
-        return
-    if session.exitstatus == pytest.ExitCode.OK:
-        session.exitstatus = pytest.ExitCode.TESTS_FAILED
-    if reporter:
-        reporter.write_line(
-            "XT_PARTIAL_DECRYPT_REQUIRED: no test_partial_decrypt cell passed "
-            f"over {' or '.join(missing)} (every SDK pair skipped?)",
-            red=True,
-        )
-
-
 #: Conformance records for the whole run, in arrival order. Plain module
 #: state rather than the config stash because :func:`pytest_runtest_logreport`
 #: is handed a report and nothing else.
@@ -752,7 +711,6 @@ def _finish_zip_conformance(session: pytest.Session) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     """Write the end-of-run artifacts for the suites that produce them."""
-    require_partial_decrypt_cell(session)
     try:
         _finish_zip_conformance(session)
     finally:

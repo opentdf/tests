@@ -185,8 +185,15 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep -i xwing
       exit $?
       ;;
-    dpop | dpop_nonce_challenge | http_range_source | partial_decrypt)
+    dpop | dpop_nonce_challenge)
       java -jar "$SCRIPT_DIR"/cmdline.jar supports "$2"
+      exit $?
+      ;;
+    http_range_source | partial_decrypt)
+      # java-sdk#420, first released in 0.20.0. A version gate rather than
+      # `cmdline.jar supports`, so a build with the feature cannot skip it.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
       exit $?
       ;;
     chunky)
