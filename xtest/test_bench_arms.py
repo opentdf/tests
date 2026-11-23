@@ -33,6 +33,8 @@ from perf.cells import (
 )
 from perf.runner import BenchConfig
 
+pytestmark = pytest.mark.units
+
 
 def install(root: Path, sdk: str, *versions: str) -> None:
     """Lay down a stub build tree, as ``otdf-sdk-mgr install`` would."""

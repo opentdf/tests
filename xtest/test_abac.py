@@ -21,6 +21,8 @@ from fixtures.keys import _create_keyed_attribute, _get_or_create_key
 from otdfctl import OpentdfCommandLineTool
 from test_policytypes import skip_rts_as_needed
 
+pytestmark = pytest.mark.multikas
+
 rewrap_403_pattern = (
     "tdf: rewrap request 403|403 for \\[https?://[^\\]]+\\]; rewrap permission denied"
 )
