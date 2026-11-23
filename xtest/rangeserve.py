@@ -17,6 +17,7 @@ All ranges here are half-open ``(start, end)`` pairs.
 
 import bisect
 import errno
+import functools
 import os
 import re
 import socket
@@ -24,7 +25,7 @@ import sys
 import threading
 import time
 import urllib.parse
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -327,10 +328,41 @@ class _Server(ThreadingHTTPServer):
         return [h for h in handlers if h.is_alive()]
 
 
+class RequestLog(list[Request]):
+    """A server's access log. Entries land after the response body is sent."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._idle = threading.Condition()
+        self._active = 0
+
+    @contextmanager
+    def _responding(self) -> Iterator[None]:
+        with self._idle:
+            self._active += 1
+        try:
+            yield
+        finally:
+            with self._idle:
+                self._active -= 1
+                self._idle.notify_all()
+
+    def settle(self, timeout: float = _JOIN_TIMEOUT) -> None:
+        """Wait until no response is in progress.
+
+        A client can read the last byte before its handler logs the request,
+        so call this before trusting the log while the server is still up.
+        Idle keep-alive connections do not count.
+        """
+        with self._idle:
+            if not self._idle.wait_for(lambda: self._active == 0, timeout):
+                raise TimeoutError(f"{self._active} responses still in progress")
+
+
 @contextmanager
 def serve(
     source: Source, name: str = "payload.tdf"
-) -> Iterator[tuple[str, list[Request]]]:
+) -> Iterator[tuple[str, RequestLog]]:
     """Serve ``source`` at ``/name`` on an ephemeral loopback port.
 
     Any path gets the same bytes; ``name`` is what a client takes the file to
@@ -342,7 +374,17 @@ def serve(
     ``source``. A handler that raised, or would not stop, fails the ``with``
     block with an :class:`ExceptionGroup`.
     """
-    log: list[Request] = []
+    log = RequestLog()
+
+    def responding(method: Callable[[Handler], None]) -> Callable[[Handler], None]:
+        """Count the response as in progress until it is logged."""
+
+        @functools.wraps(method)
+        def wrapper(self: Handler) -> None:
+            with log._responding():
+                method(self)
+
+        return wrapper
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -372,6 +414,7 @@ def serve(
         def _read(self, start: int, end: int) -> bytes:
             return _exactly(source.read(start, end), start, end)
 
+        @responding
         def do_HEAD(self) -> None:
             self.send_response(200)
             self.send_header("Content-Length", str(source.length))
@@ -379,6 +422,7 @@ def serve(
             self.end_headers()
             log.append(Request("HEAD", self.headers["Range"], 200, 0))
 
+        @responding
         def do_OPTIONS(self) -> None:
             self.send_response(204)
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
@@ -386,6 +430,7 @@ def serve(
             self.end_headers()
             log.append(Request("OPTIONS", self.headers["Range"], 204, 0))
 
+        @responding
         def do_GET(self) -> None:
             header = self.headers["Range"]
             start, end, status = 0, source.length, 200

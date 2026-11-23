@@ -266,7 +266,7 @@ def check_range(
     end = n if length is None else min(offset + length, n)
     spec = SOURCES[source]
     src: Path | str = cell.ct
-    log: list[rangeserve.Request] = []
+    log: rangeserve.RequestLog | None = None
     if spec.server:
         full = rangeserve.FullFile(cell.ct)
         # Registered first, so it runs after the server stops.
@@ -277,7 +277,8 @@ def check_range(
     decrypt_sdk.decrypt(src, rt_file, "ztdf", plaintext_range=(offset, length))
     assert_plaintext(rt_file.read_bytes(), offset, end)
 
-    if spec.allowance is not None and end > offset:
+    if log is not None and spec.allowance is not None and end > offset:
+        log.settle()  # The CLI can exit before the last GET is logged.
         served = sum(r.bytes_served for r in log)
         budget = fetch_budget(cell.ct, seg, n, offset, end, spec)
         assert served <= budget, (
