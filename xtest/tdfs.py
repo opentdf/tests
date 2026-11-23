@@ -5,10 +5,12 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, TypeIs, cast, get_args
 
@@ -21,6 +23,25 @@ import assertions as tdfassertions
 logger = logging.getLogger("xtest")
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
+
+
+@contextmanager
+def cli_log(env: dict[str, str]) -> Iterator[None]:
+    """Point ``cli.sh`` diagnostics at a temp file, then log it.
+
+    Keeps the echoed command line, file paths included, out of the output
+    that tests search for error text.
+    """
+    fd, path = tempfile.mkstemp(prefix="xt-cli-", suffix=".log")
+    os.close(fd)
+    env["XT_CLI_LOG"] = path
+    try:
+        yield
+    finally:
+        log = Path(path)
+        if text := log.read_text(errors="replace").strip():
+            logger.debug("cli: %s", text)
+        log.unlink()
 
 
 def _km1_log_path() -> Path | None:
@@ -876,7 +897,8 @@ class SDK:
         logger.debug(f"enc [{' '.join([fmt_env(local_env)] + c)}]")
         env = dict(os.environ)
         env |= local_env
-        result = subprocess.run(c, env=env, capture_output=True)
+        with cli_log(env):
+            result = subprocess.run(c, env=env, capture_output=True)
         if result.returncode != 0:
             if result.stdout:
                 logger.error("enc stdout: %s", result.stdout.decode(errors="replace"))
@@ -950,9 +972,11 @@ class SDK:
         env = dict(os.environ)
         env |= local_env
         if expect_error:
-            subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
+            with cli_log(env):
+                subprocess.check_output(c, stderr=subprocess.STDOUT, env=env)
         else:
-            result = subprocess.run(c, env=env, capture_output=True)
+            with cli_log(env):
+                result = subprocess.run(c, env=env, capture_output=True)
             if result.returncode != 0:
                 if result.stdout:
                     logger.error(
