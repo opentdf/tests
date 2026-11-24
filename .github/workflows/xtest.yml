@@ -580,7 +580,7 @@ jobs:
           platform-otdfctl-sha: ${{ steps.platform-otdfctl.outputs.sha }}
 
       - name: Cache Go modules
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        if: steps.configure-go.outputs.needs-build == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -599,7 +599,7 @@ jobs:
       # target — works for both the platform-embedded reuse case and the
       # fresh platform-src/{tag} checkout case.
       - name: Prepare go cli
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        if: steps.configure-go.outputs.needs-build == 'true'
         run: |-
           make
         working-directory: otdftests/xtest/sdk/go
@@ -1144,7 +1144,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Build otdfctl
-        if: matrix.sdk != 'go' && fromJson(steps.configure-otdfctl.outputs.heads)[0] != null
+        if: matrix.sdk != 'go' && steps.configure-otdfctl.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/go
         env:
@@ -1451,7 +1451,7 @@ jobs:
           platform_ref: ${{ needs.resolve-versions.outputs.platform-main-sha }}
 
       - name: Build the go cli
-        if: fromJson(steps.configure-go.outputs.heads)[0] != null
+        if: steps.configure-go.outputs.needs-build == 'true'
         run: make
         working-directory: otdftests/xtest/sdk/go
         env:

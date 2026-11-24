@@ -6,6 +6,8 @@ import pytest
 
 import conftest
 
+pytestmark = pytest.mark.no_audit_logs
+
 
 def test_release_only_selection_uses_installed_wrapper(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
