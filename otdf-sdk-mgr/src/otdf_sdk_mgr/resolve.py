@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import re
-from typing import NotRequired, TypedDict, TypeGuard
+from typing import Literal, NotRequired, TypedDict, TypeGuard
 
 import git.exc
 from git import Git
 
 from otdf_sdk_mgr.config import (
+    GO_MODULE_PATH_STANDALONE,
     JAVA_PLATFORM_BRANCH_MAP,
     LTS_VERSIONS,
     SDK_GIT_URLS,
     SDK_NPM_PACKAGES,
+    go_module_for_tag,
 )
 from otdf_sdk_mgr.refs import git_ls_remote
 
@@ -25,6 +27,7 @@ class ResolveSuccess(TypedDict):
     pr: NotRequired[str]
     release: NotRequired[str]
     sha: str
+    source: NotRequired[Literal["platform", "otdfctl"]]
     tag: str
 
 
@@ -218,14 +221,22 @@ def resolve(
     """Resolve a version spec to a concrete SHA and tag.
 
     For sdk='go', resolution targets the platform monorepo's otdfctl/ subtree
-    (tags `otdfctl/vX.Y.Z`). Tags not found there fall back to the archived
-    opentdf/otdfctl repo (pre-v0.31.0). The `infix` argument is ignored for go.
+    (tags `otdfctl/vX.Y.Z`). Older release tags can exist there while pointing
+    to a tree without otdfctl/, so they resolve against the archived
+    opentdf/otdfctl repo. The `infix` argument is ignored for go.
     """
     if sdk == "go":
         result = _resolve_against("go", version, "otdfctl", SDK_GIT_URLS["platform"])
-        if is_resolve_success(result):
+        if is_resolve_success(result) and (
+            "release" not in result or go_module_for_tag(result["tag"]) != GO_MODULE_PATH_STANDALONE
+        ):
+            result["source"] = "platform"
             return result
-        return _resolve_against("go", version, None, SDK_GIT_URLS["go"])
+        archive_version = strip_tag_infix(version, "otdfctl") or version
+        result = _resolve_against("go", archive_version, None, SDK_GIT_URLS["go"])
+        if is_resolve_success(result):
+            result["source"] = "otdfctl"
+        return result
 
     try:
         sdk_url = SDK_GIT_URLS[sdk]

@@ -915,13 +915,18 @@ def load_otdfctl() -> OpentdfCommandLineTool:
     """Load the otdfctl CLI tool from the SDK distribution.
 
     Attempts to load otdfctl in this order:
-    1. First head version from OTDFCTL_HEADS environment variable
-    2. Main branch version (sdk/go/dist/main/otdfctl.sh)
-    3. System-installed otdfctl
+    1. Explicit OTDFCTL_TAG selected by the CI setup action
+    2. First head version from OTDFCTL_HEADS environment variable
+    3. Main branch version (sdk/go/dist/main/otdfctl.sh)
+    4. Local sdk/go/otdfctl.sh wrapper
 
     Returns:
         OpentdfCommandLineTool instance configured for the available otdfctl
     """
+    selected_tag = os.environ.get("OTDFCTL_TAG")
+    if selected_tag:
+        return OpentdfCommandLineTool(f"sdk/go/dist/{selected_tag}/otdfctl.sh")
+
     oh = os.environ.get("OTDFCTL_HEADS", "[]")
     try:
         heads = json.loads(oh)
