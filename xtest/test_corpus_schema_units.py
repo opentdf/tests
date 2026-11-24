@@ -1,6 +1,7 @@
 """Offline tests for corpus sidecar parsing and per-SDK verdict resolution."""
 
 import hashlib
+import os
 import time
 from pathlib import Path
 
@@ -68,6 +69,32 @@ def test_malformed_bound_rejected(tmp_path: Path):
         load_sidecar(write(tmp_path, body))
 
 
+@pytest.mark.parametrize("bad", ["0.24.0bogus", "0.24.0.1", "0.24.0-rc1"])
+@pytest.mark.parametrize("key", corpus.BOUND_KEYS)
+def test_inexact_semver_bound_rejected(tmp_path: Path, key: str, bad: str):
+    body = (
+        f'[sdk]\ngo = [{{verdict="reject", {key}="{bad}"}}, {{verdict="decrypt"}}]\n'
+        'java = "decrypt"\njs = "decrypt"\n'
+    )
+    with pytest.raises(SidecarError, match=key):
+        load_sidecar(write(tmp_path, body))
+
+
+def test_v_prefixed_bound_accepted(tmp_path: Path):
+    body = (
+        f'[sdk]\nplaintext_sha256 = "{HASH}"\n'
+        'go = [{verdict="reject", before="v0.24.0"}, {verdict="decrypt"}]\n'
+        'java = "decrypt"\njs = "decrypt"\n'
+    )
+    assert table(tmp_path, body).verdicts["go"][0].before == (0, 24, 0)
+
+
+def test_toml_syntax_error_wrapped(tmp_path: Path):
+    p = write(tmp_path, "expect = \n")
+    with pytest.raises(SidecarError, match="a.tdf.expect.toml"):
+        load_sidecar(p)
+
+
 def test_inverted_bounds_rejected(tmp_path: Path):
     body = (
         '[sdk]\ngo = [{verdict="reject", since="0.25.0", before="0.24.0"},'
@@ -82,7 +109,17 @@ def test_last_entry_must_be_unbounded(tmp_path: Path):
         '[sdk]\ngo = [{verdict="reject", before="0.24.0"}]\n'
         'java = "decrypt"\njs = "decrypt"\n'
     )
-    with pytest.raises(SidecarError, match="go"):
+    with pytest.raises(SidecarError, match="unbounded"):
+        load_sidecar(write(tmp_path, body))
+
+
+def test_earlier_unbounded_entry_rejected(tmp_path: Path):
+    body = (
+        f'[sdk]\nplaintext_sha256 = "{HASH}"\n'
+        'go = [{verdict="reject"}, {verdict="decrypt", before="0.24.0"},'
+        ' {verdict="decrypt"}]\njava = "decrypt"\njs = "decrypt"\n'
+    )
+    with pytest.raises(SidecarError, match="unbounded"):
         load_sidecar(write(tmp_path, body))
 
 
@@ -179,6 +216,50 @@ def test_since_is_inclusive_before_exclusive(tmp_path: Path):
     assert resolve_verdict(t, "go", (0, 25, 0), None) == "decrypt"
 
 
+def test_resolve_unknown_sdk_raises_value_error(tmp_path: Path):
+    with pytest.raises(ValueError, match="rust"):
+        resolve_verdict(table(tmp_path), "rust", None, None)
+
+
+def test_platform_since_inclusive_and_excluded_below(tmp_path: Path):
+    body = (
+        f'[sdk]\nplaintext_sha256 = "{HASH}"\n'
+        'go = [{verdict="reject", platform_since="0.31.0"}, {verdict="decrypt"}]\n'
+        'java = "decrypt"\njs = "decrypt"\n'
+    )
+    t = table(tmp_path, body)
+    assert resolve_verdict(t, "go", (0, 24, 0), (0, 30, 9)) == "decrypt"
+    assert resolve_verdict(t, "go", (0, 24, 0), (0, 31, 0)) == "reject"
+    assert resolve_verdict(t, "go", (0, 24, 0), (0, 32, 0)) == "reject"
+
+
+def test_since_only_entry_matches_branch_build(tmp_path: Path):
+    body = (
+        f'[sdk]\nplaintext_sha256 = "{HASH}"\n'
+        'go = [{verdict="reject", since="0.24.0"}, {verdict="decrypt"}]\n'
+        'java = "decrypt"\njs = "decrypt"\n'
+    )
+    assert resolve_verdict(table(tmp_path, body), "go", None, None) == "reject"
+
+
+@pytest.mark.parametrize(
+    "version", ["0.31.0-14-gabcdef", "v0.32.0-rc.1", "0.31.0-dev", "0.31.0.1"]
+)
+def test_platform_semver_non_release_is_none(
+    monkeypatch: pytest.MonkeyPatch, version: str
+):
+    monkeypatch.delenv("PLATFORM_TAG", raising=False)
+    monkeypatch.setenv("PLATFORM_VERSION", version)
+    assert corpus.platform_semver() is None
+
+
+@pytest.mark.parametrize("version", ["0.31.0", "v0.31.0"])
+def test_platform_semver_release(monkeypatch: pytest.MonkeyPatch, version: str):
+    monkeypatch.delenv("PLATFORM_TAG", raising=False)
+    monkeypatch.setenv("PLATFORM_VERSION", version)
+    assert corpus.platform_semver() == (0, 31, 0)
+
+
 def test_platform_semver_branch_tag(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("PLATFORM_VERSION", "0.31.0")
     monkeypatch.setenv("PLATFORM_TAG", "main")
@@ -201,6 +282,12 @@ def test_classify_outcome(tmp_path: Path):
     assert corpus.classify_outcome(0, out, None) == "decrypt"
 
 
+def test_fixtures_skips_dotfiles(tmp_path: Path):
+    for name in (".DS_Store", "a.tdf"):
+        (tmp_path / name).write_bytes(b"")
+    assert [p.name for p in corpus.fixtures(tmp_path)] == ["a.tdf"]
+
+
 def test_fixtures_skips_subdirs_and_meta(tmp_path: Path):
     (tmp_path / "keys").mkdir()
     for name in (
@@ -220,3 +307,48 @@ def test_decrypt_timeout_is_an_error():
     with pytest.raises(DecryptHung):
         corpus.run_decrypt(["sleep", "5"], {}, timeout=0.2)
     assert time.monotonic() - start < 2
+
+
+def _wait_gone(pid: int) -> bool:
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    os.kill(pid, 9)
+    return False
+
+
+def test_decrypt_timeout_kills_process_group(tmp_path: Path):
+    pidfile = tmp_path / "pid"
+    with pytest.raises(DecryptHung):
+        corpus.run_decrypt(
+            ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], {}, timeout=0.5
+        )
+    assert _wait_gone(int(pidfile.read_text())), "grandchild survived the timeout"
+
+
+def test_decrypt_interrupt_kills_process_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    pidfile = tmp_path / "pid"
+    real = corpus.subprocess.Popen.communicate
+    calls = 0
+
+    def interrupt_first(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            while not pidfile.exists() or not pidfile.read_text().strip():
+                time.sleep(0.01)
+            raise KeyboardInterrupt
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(corpus.subprocess.Popen, "communicate", interrupt_first)
+    with pytest.raises(KeyboardInterrupt):
+        corpus.run_decrypt(
+            ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], {}, timeout=5
+        )
+    assert _wait_gone(int(pidfile.read_text())), "grandchild survived the interrupt"

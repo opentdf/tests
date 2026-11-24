@@ -3,6 +3,7 @@
 Pure and offline: no platform or SDK imports, so the units tier can use it.
 """
 
+import contextlib
 import hashlib
 import os
 import re
@@ -48,11 +49,11 @@ BOUND_KEYS = ("since", "before", "platform_since", "platform_before")
 ENTRY_KEYS = {"verdict", *BOUND_KEYS}
 
 _sha256_re = re.compile(r"[0-9a-f]{64}")
-_semver_re = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
+_semver_re = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 
 
 def _parse_semver(version: str) -> Semver | None:
-    m = _semver_re.match(version.removeprefix("v"))
+    m = _semver_re.fullmatch(version)
     if not m:
         return None
     return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
@@ -120,9 +121,15 @@ def _parse_verdicts(path: Path, sdk: str, value: object) -> list[Bounded]:
     if not isinstance(value, list) or not value:
         raise SidecarError(f"{path}: [sdk] {sdk}: expected a verdict or a list")
     entries = [_parse_entry(path, sdk, e) for e in value]
-    last = entries[-1]
-    if any(getattr(last, k) is not None for k in BOUND_KEYS):
-        raise SidecarError(f"{path}: [sdk] {sdk}: last entry must be unbounded")
+    for i, entry in enumerate(entries):
+        unbounded = all(getattr(entry, k) is None for k in BOUND_KEYS)
+        if unbounded and i != len(entries) - 1:
+            raise SidecarError(
+                f"{path}: [sdk] {sdk}: only the last entry may be unbounded;"
+                f" entry {i} shadows the rest"
+            )
+        if not unbounded and i == len(entries) - 1:
+            raise SidecarError(f"{path}: [sdk] {sdk}: last entry must be unbounded")
     return entries
 
 
@@ -160,8 +167,11 @@ def _parse_sdk_table(path: Path, raw: object) -> SdkTable:
 
 
 def load_sidecar(path: Path) -> Sidecar:
-    with path.open("rb") as f:
-        data = tomllib.load(f)
+    try:
+        with path.open("rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise SidecarError(f"{path}: invalid TOML: {e}") from e
     for key in data:
         if key != "sdk" and key not in TOP_LEVEL_KEYS:
             raise SidecarError(f"{path}: unknown key {key!r}")
@@ -187,6 +197,7 @@ def fixtures(root: Path = CORPUS_DIR) -> list[Path]:
         p
         for p in root.iterdir()
         if p.is_file()
+        and not p.name.startswith(".")
         and p.name not in NON_FIXTURES
         and not p.name.endswith(SIDECAR_SUFFIX)
     )
@@ -218,10 +229,12 @@ def resolve_verdict(
     table: SdkTable,
     sdk: str,
     sdk_semver: Semver | None,
-    platform_semver: Semver | None,
+    platform_version: Semver | None,
 ) -> Verdict:
+    if sdk not in SDK_NAMES:
+        raise ValueError(f"unknown sdk {sdk!r}; expected one of {SDK_NAMES}")
     for entry in table.verdicts[cast(Literal["go", "java", "js"], sdk)]:
-        if _matches(entry, sdk_semver, platform_semver):
+        if _matches(entry, sdk_semver, platform_version):
             return entry.verdict
     raise SidecarError(f"no verdict entry matches sdk {sdk}")
 
@@ -242,13 +255,21 @@ def classify_outcome(
         return "wrong-plaintext"
     if expected_sha256 is None:
         return "decrypt"
-    if hashlib.sha256(out.read_bytes()).hexdigest() == expected_sha256:
+    with out.open("rb") as f:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+    if digest == expected_sha256:
         return "decrypt"
     return "wrong-plaintext"
 
 
 class DecryptHung(Exception):
     pass
+
+
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
+    # Signals only the session that start_new_session=True created for proc.
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)  # NOSONAR
 
 
 def run_decrypt(
@@ -265,7 +286,10 @@ def run_decrypt(
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
+        _kill_group(proc)
         proc.communicate()
         raise DecryptHung(f"decrypt timed out after {timeout}s: {cmd}") from None
+    except BaseException:
+        _kill_group(proc)
+        raise
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
