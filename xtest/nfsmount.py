@@ -124,8 +124,10 @@ def _unmount(point: Path, *, force: bool = False) -> None:
 
 
 def _alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
     try:
-        os.kill(pid, 0)
+        os.kill(pid, 0)  # NOSONAR: signal 0 only checks that a positive PID exists.
     except ProcessLookupError:
         return False
     except PermissionError:

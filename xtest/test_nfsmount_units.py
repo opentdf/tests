@@ -194,18 +194,26 @@ def test_killed_run_is_reaped(nfsserve_binary: Path, tmp_dir: Path, tmp_path: Pa
         stdout=subprocess.PIPE,
         text=True,
     )
-    assert run.stdout
-    point, pid = run.stdout.readline().rsplit(maxsplit=1)
-    run.kill()
-    run.wait()
+    try:
+        assert run.stdout
+        point, pid = run.stdout.readline().rsplit(maxsplit=1)
+        run.kill()
+        run.wait()
 
-    # The server's stdin closes with its parent, so it exits on its own.
-    deadline = time.monotonic() + 10
-    while nfsmount._alive(int(pid)) and time.monotonic() < deadline:
-        time.sleep(0.1)
-    assert not nfsmount._alive(int(pid)), "nfsserve outlived the killed run"
+        # The server's stdin closes with its parent, so it exits on its own.
+        deadline = time.monotonic() + 10
+        while nfsmount._alive(int(pid)) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not nfsmount._alive(int(pid)), "nfsserve outlived the killed run"
 
-    assert point in nfsmount.mount_table()
-    nfsmount.reap(root)
+        assert point in nfsmount.mount_table()
+    finally:
+        if run.poll() is None:
+            run.kill()
+        run.wait()
+        if run.stdout:
+            run.stdout.close()
+        nfsmount.reap(root)
+
     assert point not in nfsmount.mount_table()
     assert not Path(point).exists()

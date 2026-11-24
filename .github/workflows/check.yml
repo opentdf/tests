@@ -51,7 +51,7 @@ jobs:
       # the sparse store and its HTTP and NFS front ends.
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
-      # XT_NFS_REQUIRED turns a host that cannot mount into a failure, not a skip.
+      # In CI, a host that cannot mount fails instead of skipping these tests.
       #
       # -m units still collects every module, so conftest.py's tier check
       # fails this step for any test the xtest.yml steps would not select.
@@ -63,8 +63,6 @@ jobs:
         run: >-
           uv run --frozen --no-build pytest --no-header -q -m units
         working-directory: xtest
-        env:
-          XT_NFS_REQUIRED: "1"
       - name: Lint and test otdf-local
         run: |
           uv sync

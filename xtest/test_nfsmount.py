@@ -11,6 +11,7 @@ import pytest
 import rangeserve
 import tdfs
 from abac import Attribute
+from audit_logs import AuditLogAsserter
 from fixtures.encryption import EncryptFactory
 from fixtures.nfs_mount import Mounter
 
@@ -25,6 +26,7 @@ def test_decrypt_through_nfs_mount(
     attribute_default_rsa: Attribute,
     encrypted_tdf: EncryptFactory,
     nfs_mount: Mounter,
+    audit_logs: AuditLogAsserter,
 ):
     if encrypt_sdk != decrypt_sdk:
         pytest.skip("the mount is a decrypt-side concern; one cell per SDK")
@@ -33,6 +35,9 @@ def test_decrypt_through_nfs_mount(
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attribute_default_rsa.value_fqns)
     path, log = nfs_mount(rangeserve.FullFile(ct_file))
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="nfs")
+    mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(path, rt_file, "ztdf")
+    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
+    audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
     assert filecmp.cmp(pt_file, rt_file)
     assert any(r.status == 206 for r in log), f"no reads through the mount: {log}"

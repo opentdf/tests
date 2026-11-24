@@ -750,7 +750,6 @@ jobs:
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
-          XT_NFS_REQUIRED: "1"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 
@@ -763,7 +762,6 @@ jobs:
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
-          XT_NFS_REQUIRED: "1"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
 

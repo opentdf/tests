@@ -1,7 +1,7 @@
 """The DSPX-5543 NFS front end as a fixture: a range server source as a local file.
 
-Skips where this host cannot mount. ``XT_NFS_REQUIRED=1`` makes that a
-failure instead, so CI cannot pass by skipping.
+Skips where a local host cannot mount. In CI, missing mount support fails
+instead, so a job cannot pass by skipping the NFS tests.
 """
 
 import os
@@ -34,8 +34,8 @@ def nfsserve_binary(tmp_dir: Path) -> Path:
         nfsmount.preflight()
         binary = nfsmount.build(tmp_dir)
     except nfsmount.Unavailable as e:
-        if os.environ.get("XT_NFS_REQUIRED", "").lower() in ("1", "true", "yes"):
-            pytest.fail(f"XT_NFS_REQUIRED is set, but {e}")
+        if os.environ.get("CI", "").lower() in ("1", "true", "yes"):
+            pytest.fail(f"CI requires NFS mount support, but {e}")
         pytest.skip(str(e))
     nfsmount.reap(nfs_root(tmp_dir))
     return binary
