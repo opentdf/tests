@@ -32,6 +32,9 @@ outputs:
   heads:
     description: "JSON list of tags that represent main or branch heads"
     value: ${{ steps.resolve.outputs.heads }}
+  selected-tag:
+    description: "First head tag, or first resolved release tag when there is no head"
+    value: ${{ steps.resolve.outputs.selected-tag }}
   needs-build:
     description: >-
       "true" if any version needs a source build: a head, or a release whose
@@ -86,6 +89,11 @@ runs:
         head_tags=$(echo "$version_info" | jq -c '[.[] | select(.head == true) | .tag]')
         echo "head_tags=$head_tags"
         echo "heads=$head_tags" >> $GITHUB_OUTPUT
+        selected_tag=$(echo "$head_tags" | jq -r '.[0] // empty')
+        if [[ -z "$selected_tag" ]]; then
+          selected_tag=$(echo "$version_info" | jq -r '.[0].tag // empty')
+        fi
+        echo "selected-tag=$selected_tag" >> "$GITHUB_OUTPUT"
       env:
         version_info: ${{ inputs.version-info }}
         INPUT_SDK: ${{ inputs.sdk }}

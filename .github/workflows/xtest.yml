@@ -718,6 +718,7 @@ jobs:
         env:
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
 
       - name: Validate otdf-local integration tests
         if: ${{ !inputs }}
@@ -738,6 +739,7 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
 
       - name: Run all standard xtests
         if: ${{ env.FOCUS_SDK == 'all' }}
@@ -750,6 +752,7 @@ jobs:
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
 
       - name: Run xtests focusing on a specific SDK
         if: ${{ env.FOCUS_SDK != 'all' }}
@@ -762,6 +765,7 @@ jobs:
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
 
       ######## ATTRIBUTE BASED CONFIGURATION #############
 
@@ -894,6 +898,7 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
           KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
           KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"
@@ -1183,12 +1188,13 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          # go's heads, not the matrix SDK's: conftest reads this to locate
-          # otdfctl under sdk/go/dist/<head>/, so pointing it at java's or
-          # js's head names a directory that does not exist.
+          # Use go's configured otdfctl, independent of the matrix SDK.
           OTDFCTL_HEADS: >-
             ${{ matrix.sdk == 'go' && steps.configure-sdk.outputs.heads
                 || steps.configure-otdfctl.outputs.heads }}
+          OTDFCTL_TAG: >-
+            ${{ matrix.sdk == 'go' && steps.configure-sdk.outputs.selected-tag
+                || steps.configure-otdfctl.outputs.selected-tag }}
           # The benchmark never touches the audit-log fixture; asserting on
           # logs would also add file IO to the measured path.
           DISABLE_AUDIT_ASSERTIONS: "1"
@@ -1496,9 +1502,9 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
-          # go's heads: conftest reads this to locate otdfctl under
-          # sdk/go/dist/<head>/, regardless of which SDK is encrypting.
+          # Use go's configured otdfctl, regardless of the encrypting SDK.
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
           # Nothing here requests the audit-log fixture, and a rewrap audit
           # event says nothing about the container's ZIP encoding.
           DISABLE_AUDIT_ASSERTIONS: "1"
