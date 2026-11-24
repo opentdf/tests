@@ -47,6 +47,7 @@ VERDICTS = ("decrypt", "reject")
 BOUND_KEYS = ("since", "before", "platform_since", "platform_before")
 ENTRY_KEYS = {"verdict", *BOUND_KEYS}
 
+_sha256_re = re.compile(r"[0-9a-f]{64}")
 _semver_re = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
 
 
@@ -135,9 +136,25 @@ def _parse_sdk_table(path: Path, raw: object) -> SdkTable:
         if name not in raw:
             raise SidecarError(f"{path}: [sdk] is missing {name!r}")
     verdicts = {name: _parse_verdicts(path, name, raw[name]) for name in SDK_NAMES}
+    digest = raw.get("plaintext_sha256")
+    if digest is not None and not (
+        isinstance(digest, str) and _sha256_re.fullmatch(digest)
+    ):
+        raise SidecarError(
+            f"{path}: [sdk] plaintext_sha256 must be 64 lowercase hex characters"
+        )
+    note = raw.get("note")
+    if note is not None and not isinstance(note, str):
+        raise SidecarError(f"{path}: [sdk] note must be a string")
+    if digest is None and any(
+        e.verdict == "decrypt" for entries in verdicts.values() for e in entries
+    ):
+        raise SidecarError(
+            f"{path}: [sdk] plaintext_sha256 is required when any verdict is decrypt"
+        )
     return SdkTable(
-        plaintext_sha256=raw.get("plaintext_sha256"),
-        note=raw.get("note"),
+        plaintext_sha256=digest,
+        note=note,
         verdicts=cast(dict[Literal["go", "java", "js"], list[Bounded]], verdicts),
     )
 
@@ -148,6 +165,17 @@ def load_sidecar(path: Path) -> Sidecar:
     for key in data:
         if key != "sdk" and key not in TOP_LEVEL_KEYS:
             raise SidecarError(f"{path}: unknown key {key!r}")
+    for key, value in data.items():
+        if key == "sdk":
+            continue
+        if isinstance(value, dict) or (
+            isinstance(value, list) and any(isinstance(v, dict) for v in value)
+        ):
+            raise SidecarError(
+                f"{path}: {key!r} must not be a table; [sdk] is the only one"
+            )
+    if "sdk" in data and list(data)[-1] != "sdk":
+        raise SidecarError(f"{path}: [sdk] must come after all top-level keys")
     sdk = _parse_sdk_table(path, data["sdk"]) if "sdk" in data else None
     raw = {k: v for k, v in data.items() if k != "sdk"}
     name = path.name.removesuffix(SIDECAR_SUFFIX)

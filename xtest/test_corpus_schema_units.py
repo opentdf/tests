@@ -9,15 +9,19 @@ import pytest
 import corpus
 from corpus import DecryptHung, SidecarError, load_sidecar, resolve_verdict
 
-ALL_SDKS = 'go = "decrypt"\njava = "decrypt"\njs = "decrypt"\n'
-JS_LIST = """
+HASH = "a" * 64
+ALL_SDKS = (
+    f'plaintext_sha256 = "{HASH}"\ngo = "decrypt"\njava = "decrypt"\njs = "decrypt"\n'
+)
+JS_LIST = f"""
 [sdk]
+plaintext_sha256 = "{HASH}"
 go = "decrypt"
 java = "decrypt"
 js = [
-  {verdict="decrypt", before="0.24.0"},
-  {verdict="reject", platform_before="0.32.0"},
-  {verdict="decrypt"},
+  {{verdict="decrypt", before="0.24.0"}},
+  {{verdict="reject", platform_before="0.32.0"}},
+  {{verdict="decrypt"}},
 ]
 """
 
@@ -83,16 +87,62 @@ def test_last_entry_must_be_unbounded(tmp_path: Path):
 
 
 def test_second_table_rejected(tmp_path: Path):
-    with pytest.raises(SidecarError, match="other"):
+    with pytest.raises(SidecarError, match="unknown key 'other'"):
         load_sidecar(write(tmp_path, f"[sdk]\n{ALL_SDKS}\n[other]\nx = 1\n"))
 
 
+def test_whitelisted_key_as_table_rejected(tmp_path: Path):
+    with pytest.raises(SidecarError, match="'key'"):
+        load_sidecar(write(tmp_path, "[key]\nx = 1\n"))
+
+
+def test_whitelisted_key_as_array_of_tables_rejected(tmp_path: Path):
+    with pytest.raises(SidecarError, match="'assertion_keys'"):
+        load_sidecar(write(tmp_path, "[[assertion_keys]]\nx = 1\n"))
+
+
+def test_sdk_must_come_last(tmp_path: Path):
+    body = (
+        f'sdk = {{plaintext_sha256 = "{HASH}", go = "reject", java = "reject", '
+        'js = "reject"}\nexpect = "invalid"\n'
+    )
+    with pytest.raises(SidecarError, match="after all top-level"):
+        load_sidecar(write(tmp_path, body))
+
+
+def test_decrypt_requires_plaintext_hash(tmp_path: Path):
+    body = '[sdk]\ngo = "decrypt"\njava = "reject"\njs = "reject"\n'
+    with pytest.raises(SidecarError, match="plaintext_sha256"):
+        load_sidecar(write(tmp_path, body))
+
+
+@pytest.mark.parametrize("bad", ["A" * 64, "a" * 63, "zz" * 32])
+def test_bad_plaintext_hash_rejected(tmp_path: Path, bad: str):
+    body = (
+        f'[sdk]\nplaintext_sha256 = "{bad}"\n'
+        'go = "reject"\njava = "reject"\njs = "reject"\n'
+    )
+    with pytest.raises(SidecarError, match="plaintext_sha256"):
+        load_sidecar(write(tmp_path, body))
+
+
+def test_non_string_note_rejected(tmp_path: Path):
+    body = '[sdk]\nnote = 1\ngo = "reject"\njava = "reject"\njs = "reject"\n'
+    with pytest.raises(SidecarError, match="note"):
+        load_sidecar(write(tmp_path, body))
+
+
+def test_all_reject_needs_no_hash(tmp_path: Path):
+    body = '[sdk]\ngo = "reject"\njava = "reject"\njs = "reject"\n'
+    assert table(tmp_path, body).plaintext_sha256 is None
+
+
 def test_bare_string_becomes_unbounded_entry(tmp_path: Path):
-    body = f'[sdk]\nplaintext_sha256 = "ab"\nnote = "n"\n{ALL_SDKS}'
+    body = f'[sdk]\nnote = "n"\n{ALL_SDKS}'
     sc = load_sidecar(write(tmp_path, body))
     assert sc.fixture == tmp_path / "a.tdf"
     assert sc.sdk is not None
-    assert sc.sdk.plaintext_sha256 == "ab"
+    assert sc.sdk.plaintext_sha256 == HASH
     assert sc.sdk.verdicts["go"] == [corpus.Bounded("decrypt", None, None, None, None)]
 
 
@@ -119,7 +169,8 @@ def test_branch_build_platform_skips_platform_before(tmp_path: Path):
 
 def test_since_is_inclusive_before_exclusive(tmp_path: Path):
     body = (
-        '[sdk]\ngo = [{verdict="reject", since="0.24.0", before="0.25.0"},'
+        f'[sdk]\nplaintext_sha256 = "{HASH}"\n'
+        'go = [{verdict="reject", since="0.24.0", before="0.25.0"},'
         ' {verdict="decrypt"}]\njava = "decrypt"\njs = "decrypt"\n'
     )
     t = table(tmp_path, body)
