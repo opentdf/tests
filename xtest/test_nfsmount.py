@@ -33,11 +33,16 @@ def test_decrypt_through_nfs_mount(
     if decrypt_sdk not in in_focus:
         pytest.skip("Not in focus")
     ct_file = encrypted_tdf(encrypt_sdk, attr_values=attribute_default_rsa.value_fqns)
+    manifest = tdfs.manifest(ct_file)
+    kao = manifest.encryptionInformation.keyAccess[0]
     path, log = nfs_mount(rangeserve.FullFile(ct_file))
     rt_file = encrypted_tdf.rt_file(ct_file, decrypt_sdk, variant="nfs")
     mark = audit_logs.mark("before_decrypt")
     decrypt_sdk.decrypt(path, rt_file, "ztdf")
-    audit_logs.assert_rewrap_success(min_count=1, since_mark=mark)
-    audit_logs.assert_contains(r"rewrap.*200", min_count=1, since_mark=mark)
+    audit_logs.assert_rewrap_success(
+        policy_uuid=manifest.encryptionInformation.policy_object.uuid,
+        key_id=kao.kid,
+        since_mark=mark,
+    )
     assert filecmp.cmp(pt_file, rt_file)
     assert any(r.status == 206 for r in log), f"no reads through the mount: {log}"
