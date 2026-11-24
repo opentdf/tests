@@ -80,7 +80,7 @@ typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 include = ["."]
-exclude = ["**/__pycache__", ".venv", ".ruff_cache", ".pytest_cache", "sdk", "tmp", "golden"]
+exclude = ["**/__pycache__", ".venv", ".ruff_cache", ".pytest_cache", "sdk", "tmp", "corpus"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 

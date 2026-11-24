@@ -1,0 +1,13 @@
+# DSP 2.0.2 and 2.0.3 output, written by the Java SDK v0.7.5 (94b161d53). Its quirks: method
+# "IsStreamable" capitalised, no method.iv, no schemaVersion, and legacy hex-then-base64 binding,
+# root signature and segment hashes. The Go SDK v0.36.0 decrypts it. Both warnings are advisory L2
+# schema findings, so it stays valid under --strict.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-xstext-java-v0.7.5-94b161d53-DSP2.0.2_and_2.0.3.dek"
+must_contain = ["TDF.SCHEMA.MISSING_FIELD", "TDF.SCHEMA.MISSING_SPEC_VERSION"]
+note = "DSP 2.0.2/2.0.3 (Java SDK v0.7.5): IsStreamable capitalised, no iv, no schemaVersion, hex legacy hashes; valid keyed and strict."

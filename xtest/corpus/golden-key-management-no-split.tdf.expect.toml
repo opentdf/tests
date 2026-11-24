@@ -1,0 +1,10 @@
+# Written through a key-management (KAS registry) key: kid is empty and the KAO points at
+# http://localhost:8686, but it is wrapped with golden-r1. Valid keyed and strict.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-key-management-no-split.dek"
+note = "Key-management golden (empty kid, KAS on :8686); valid keyed and strict."

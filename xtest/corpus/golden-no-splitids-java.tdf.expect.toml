@@ -1,0 +1,13 @@
+# Java SDK output with three KAOs and no split ids: two point at KAS hosts that do not exist and
+# carry a dummy wrappedKey ("this is some data"), the middle one is real. All three bindings are
+# HMACs of the policy under the DEK, so every one checks; the dummy wrapped keys cannot be checked
+# offline. The Go SDK v0.36.0 decrypts it through the real KAO.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-no-splitids-java.dek"
+must_contain = ["TDF.SCHEMA.MISSING_SPEC_VERSION"]
+note = "Java golden with no sids and two dummy KAOs on unreachable hosts; valid keyed and strict."

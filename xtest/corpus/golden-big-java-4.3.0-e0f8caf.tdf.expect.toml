@@ -1,0 +1,11 @@
+# Java SDK (e0f8caf) 4.3.0 output: 10 MiB payload in five whole 2 MiB segments, an HS256
+# assertion, and no schemaVersion.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-big-java-4.3.0-e0f8caf.dek"
+must_contain = ["TDF.SCHEMA.MISSING_SPEC_VERSION"]
+note = "Java SDK 4.3.0 10 MiB golden with an HS256 assertion; valid keyed and strict."

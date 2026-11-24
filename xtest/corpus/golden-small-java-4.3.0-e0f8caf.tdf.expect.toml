@@ -1,0 +1,11 @@
+# Java SDK (e0f8caf) 4.3.0 output: 5 KiB of zeros, an HS256 STANAG 5636 handling assertion, and no
+# schemaVersion. The Go SDK v0.36.0 decrypts it and verifies the assertion.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-small-java-4.3.0-e0f8caf.dek"
+must_contain = ["TDF.SCHEMA.MISSING_SPEC_VERSION"]
+note = "Java SDK 4.3.0 golden with an HS256 handling assertion; valid keyed and strict."
