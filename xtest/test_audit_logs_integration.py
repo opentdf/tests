@@ -198,11 +198,6 @@ class TestRewrapAudit:
 class TestPolicyCRUDAudit:
     """Tests for policy CRUD audit event coverage."""
 
-    @pytest.fixture
-    def otdfctl(self) -> OpentdfCommandLineTool:
-        """Get otdfctl instance for policy operations."""
-        return OpentdfCommandLineTool()
-
     def test_namespace_create_audit(
         self, otdfctl: OpentdfCommandLineTool, audit_logs: AuditLogAsserter
     ):
