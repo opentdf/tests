@@ -270,9 +270,9 @@ def test_default_integrity_algorithms(
     """Every SDK emits an HS256 root and GMAC segments, with no way to ask otherwise.
 
     No SDK exposes an integrity-algorithm option: the root is HMAC and the
-    segments are the AES-GCM tags, hardcoded, and all 8 golden TDFs in
-    ``corpus/`` carry that pair. Writing it down turns an undocumented
-    assumption into a tripwire -- an SDK that started emitting something else
+    segments are the AES-GCM tags, hardcoded. This test checks the files the SDKs
+    under test write now, not the goldens in ``corpus/``. Writing it down turns
+    an undocumented assumption into a tripwire -- an SDK that started emitting something else
     fails here instead of quietly shifting what every other test measures, and
     a GMAC root in particular is forgeable without any key (DSPX-4703).
 

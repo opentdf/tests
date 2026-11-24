@@ -23,10 +23,10 @@ from rangeserve import PAYLOAD_GCM_OVERHEAD as GCM
 from rangeserve import ExtentStore, FullFile, retention_plan, serve
 
 MiB = 1 << 20
-GOLDEN = corpus.CORPUS_DIR
-SMALL = GOLDEN / "golden-small-java-4.3.0-e0f8caf.tdf"
+CORPUS = corpus.CORPUS_DIR
+SMALL = CORPUS / "golden-small-java-4.3.0-e0f8caf.tdf"
 #: Five whole 2 MiB segments, so java appends an empty sixth.
-BIG = GOLDEN / "golden-big-java-4.3.0-e0f8caf.tdf"
+BIG = CORPUS / "golden-big-java-4.3.0-e0f8caf.tdf"
 BIG_LAYOUT = {
     "payload_start": 39,
     "plaintext_length": 10 * MiB,
@@ -83,7 +83,7 @@ def test_plan_disjoint_and_overlapping_ranges():
     ids=["whole-segments", "manifest-first"],
 )
 def test_layout_matches_java_goldens(name: str, start: int, pt_len: int, trailer: int):
-    path = GOLDEN / name
+    path = CORPUS / name
     cd = zipinspect.central_directory(path)
     payload = next(e for e in cd.entries if e.name == "0.payload")
     assert rangeserve.payload_start(path) == start

@@ -26,24 +26,28 @@ Top-level keys, all read by the validator:
 - `must_not_contain`: finding codes that must not be reported.
 - `note`: one-line description of the fixture.
 - `verify_crypto`: run the offline cryptographic checks.
-- `key`: path to the DEK file, relative to this directory (for example `keys/golden-<name>.dek`).
-- `share_keys`: key shares for split TDFs.
-- `assertion_keys`: public keys for assertion signature checks.
+- `key`: path to the DEK file, for example `key = "keys/golden-<name>.dek"`.
+- `share_keys`: key shares for split TDFs, for example `["<split-id>=keys/<file>", ...]`.
+- `assertion_keys`: public keys for assertion signature checks, each either `"keys/<file>"` or
+  `"<id>=keys/<file>"`.
+
+All key paths are relative to this directory. In `share_keys` the id and the path must both be
+non-empty. In `assertion_keys` the id is optional, but when present it must be non-empty.
 
 An optional `[sdk]` table records how each SDK is expected to handle the file. Golden sidecars
 carry no `[sdk]` table. The table has these keys:
 
 - `go`, `java`, `js` (all three required): the expected outcome, `"decrypt"` or `"reject"`, or a
   list of entries `{ verdict = ..., since = ..., before = ..., platform_since = ...,
-  platform_before = ... }` where the bounds are optional semver strings. The first matching entry
-  wins, and the last entry must have no bounds.
-- `plaintext_sha256`: SHA-256 of the expected plaintext.
-- `note`: free text. `[sdk]` is the only table a sidecar may contain, and it must come last,
-after all top-level keys. Any other table, and any unknown key, is rejected by
-`corpus.load_sidecar`.
+  platform_before = ... }` where the bounds are optional semver strings of the exact form
+  `X.Y.Z` or `vX.Y.Z`. The first matching entry wins, `since` is inclusive and `before` is
+  exclusive. Only the last entry may be unbounded, and it must be.
+- `plaintext_sha256`: SHA-256 of the expected plaintext, as 64 lowercase hex characters. Required
+  when any entry for any SDK is `"decrypt"`, whether given as a bare verdict or inside a list.
+- `note`: free text.
 
-When any SDK verdict is `"decrypt"`, the sidecar must also give `plaintext_sha256`: the SHA-256 of
-the expected plaintext as 64 lowercase hex characters.
+`[sdk]` is the only table a sidecar may contain, and it must come last, after all top-level keys.
+Any other table, and any unknown key, is rejected by `corpus.load_sidecar`.
 
 ## keys/
 

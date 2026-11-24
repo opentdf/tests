@@ -3,6 +3,7 @@
 import json
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -12,7 +13,6 @@ from corpus import (
     CORPUS_DIR,
     PREFIXES,
     SIDECAR_SUFFIX,
-    Sidecar,
     fixtures,
     load_sidecar,
 )
@@ -38,22 +38,105 @@ def _ids(paths: list[Path]) -> list[str]:
     return [p.name for p in paths]
 
 
-def _key_refs(sc: Sidecar) -> list[str]:
+def _bad(sidecar: str, key: str, value: object, why: str) -> AssertionError:
+    return AssertionError(f"{sidecar}: bad {key} value {value!r}: {why}")
+
+
+def _str_list(sidecar: str, raw: dict[str, Any], key: str) -> list[str]:
+    values = raw.get(key, [])
+    if not isinstance(values, list):
+        raise _bad(sidecar, key, values, "expected a list of strings")
+    for v in values:
+        if not isinstance(v, str):
+            raise _bad(sidecar, key, v, "expected a string")
+    return values
+
+
+def _split_ref(sidecar: str, key: str, value: str) -> str:
+    """Path half of an `<id>=<path>` reference."""
+    ident, sep, path = value.partition("=")
+    if not sep or not ident or not path:
+        raise _bad(sidecar, key, value, "expected <id>=<path>")
+    return path
+
+
+def _key_refs(sidecar: str, raw: dict[str, Any]) -> list[str]:
     """Key-file paths a sidecar references, relative to CORPUS_DIR."""
-    raw = sc.raw
     refs: list[str] = []
     if "key" in raw:
-        refs.append(raw["key"])
-    refs += [v.partition("=")[2] for v in raw.get("share_keys", [])]
-    for v in raw.get("assertion_keys", []):
-        refs.append(v.partition("=")[2] if "=" in v else v)
+        key = raw["key"]
+        if not isinstance(key, str) or not key:
+            raise _bad(sidecar, "key", key, "expected a non-empty path")
+        refs.append(key)
+    refs += [
+        _split_ref(sidecar, "share_keys", v)
+        for v in _str_list(sidecar, raw, "share_keys")
+    ]
+    for v in _str_list(sidecar, raw, "assertion_keys"):
+        if not v:
+            raise _bad(sidecar, "assertion_keys", v, "expected <path> or <id>=<path>")
+        refs.append(_split_ref(sidecar, "assertion_keys", v) if "=" in v else v)
     return refs
 
 
+def _sidecar_refs(sidecar: Path) -> list[str]:
+    return _key_refs(sidecar.name, load_sidecar(sidecar).raw)
+
+
 def _resolve_ref(ref: str) -> Path:
+    assert ref, "empty key reference"
     path = (CORPUS_DIR / ref).resolve()
     assert path.is_relative_to(CORPUS_DIR.resolve()), f"{ref!r} escapes the corpus"
+    assert path != CORPUS_DIR.resolve(), f"{ref!r} resolves to the corpus folder"
     return path
+
+
+def test_key_refs_all_three_forms():
+    raw = {
+        "key": "keys/a.dek",
+        "share_keys": ["s1=keys/b.dek", "s2=keys/c.dek"],
+        "assertion_keys": ["keys/d.pem", "kid=keys/e.pem"],
+    }
+    assert _key_refs("x", raw) == [
+        "keys/a.dek",
+        "keys/b.dek",
+        "keys/c.dek",
+        "keys/d.pem",
+        "keys/e.pem",
+    ]
+
+
+def test_key_refs_none():
+    assert _key_refs("x", {"expect": "valid"}) == []
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"key": ""},
+        {"key": 3},
+        {"share_keys": ["keys/a.dek"]},
+        {"share_keys": ["=keys/a.dek"]},
+        {"share_keys": ["s1="]},
+        {"share_keys": [3]},
+        {"share_keys": "s1=keys/a.dek"},
+        {"assertion_keys": [""]},
+        {"assertion_keys": ["=keys/a.pem"]},
+        {"assertion_keys": ["kid="]},
+        {"assertion_keys": [None]},
+        {"assertion_keys": "keys/a.pem"},
+    ],
+    ids=repr,
+)
+def test_key_refs_malformed(raw: dict[str, Any]):
+    with pytest.raises(AssertionError, match="x.expect.toml.*bad"):
+        _key_refs("x.expect.toml", raw)
+
+
+@pytest.mark.parametrize("ref", ["", ".", "keys/..", "../x"])
+def test_resolve_ref_rejects_bad_refs(ref: str):
+    with pytest.raises(AssertionError):
+        _resolve_ref(ref)
 
 
 def test_corpus_is_not_empty():
@@ -86,36 +169,45 @@ def test_fixture_has_known_prefix(fixture: Path):
 
 @pytest.mark.parametrize("sidecar", SIDECARS, ids=_ids(SIDECARS))
 def test_referenced_key_files_exist(sidecar: Path):
-    for ref in _key_refs(load_sidecar(sidecar)):
+    for ref in _sidecar_refs(sidecar):
         assert _resolve_ref(ref).is_file(), f"missing key file {ref}"
 
 
 def test_no_orphan_key_files():
-    referenced = {
-        _resolve_ref(ref) for sc in SIDECARS for ref in _key_refs(load_sidecar(sc))
-    }
+    referenced = {_resolve_ref(ref) for sc in SIDECARS for ref in _sidecar_refs(sc)}
     present = {
         p.resolve()
         for p in (CORPUS_DIR / "keys").rglob("*")
         if p.is_file() and not p.name.startswith(".")
     }
-    orphans = sorted(p.name for p in present - referenced)
+    root = CORPUS_DIR.resolve()
+    orphans = sorted(str(p.relative_to(root)) for p in present - referenced)
     assert not orphans, f"key files no sidecar references: {orphans}"
 
 
-@pytest.mark.parametrize("sidecar", SIDECARS, ids=_ids(SIDECARS))
+def _is_valid_tdf(sidecar: Path) -> bool:
+    raw = load_sidecar(sidecar).raw
+    return raw.get("expect") == "valid" and raw.get("format") == "tdf"
+
+
+VALID_TDF_SIDECARS = [p for p in SIDECARS if _is_valid_tdf(p)]
+
+
+def test_some_valid_tdf_fixture_exists():
+    assert VALID_TDF_SIDECARS
+
+
+@pytest.mark.parametrize("sidecar", VALID_TDF_SIDECARS, ids=_ids(VALID_TDF_SIDECARS))
 def test_valid_fixtures_open_as_tdf(sidecar: Path):
-    sc = load_sidecar(sidecar)
-    if sc.raw.get("expect") != "valid":
-        pytest.skip("not expected valid")
-    with zipfile.ZipFile(sc.fixture) as z:
+    fixture = sidecar.with_name(sidecar.name.removesuffix(SIDECAR_SUFFIX))
+    with zipfile.ZipFile(fixture) as z:
         names = z.namelist()
     assert "0.manifest.json" in names
     assert "0.payload" in names
 
 
-def _public_der(key: object) -> bytes:
-    return key.public_bytes(  # type: ignore[attr-defined]
+def _public_der(key: Any) -> bytes:
+    return key.public_bytes(
         serialization.Encoding.DER,
         serialization.PublicFormat.SubjectPublicKeyInfo,
     )
@@ -126,10 +218,13 @@ def _public_der(key: object) -> bytes:
 )
 def test_kas_keys_well_formed():
     entries = json.loads(KAS_KEYS.read_text())
-    assert isinstance(entries, list)
+    assert isinstance(entries, list), "kas-keys.json must be a JSON list"
     for entry in entries:
+        assert isinstance(entry, dict), f"entry is not an object: {entry!r}"
+    for entry in entries:
+        assert entry.get("kid"), f"entry has no kid: {sorted(entry)}"
         for field in KAS_KEY_FIELDS:
-            assert entry.get(field), f"{entry.get('kid')}: missing {field}"
+            assert entry.get(field), f"{entry['kid']}: missing {field}"
     assert len(entries) == len(EXPECTED_KAS_KEYS)
     assert {e["kid"] for e in entries} == set(EXPECTED_KAS_KEYS)
     for entry in entries:
