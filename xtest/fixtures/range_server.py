@@ -10,7 +10,7 @@ import rangeserve
 
 @pytest.fixture
 def range_server() -> Iterator[
-    Callable[[rangeserve.Source], tuple[str, list[rangeserve.Request]]]
+    Callable[[rangeserve.Source], tuple[str, rangeserve.RequestLog]]
 ]:
     """Call with a source; returns ``(url, request_log)``. Any number per test."""
     with ExitStack() as stack:
