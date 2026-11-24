@@ -1,0 +1,13 @@
+# Built by hand; everything else is well formed, but keyAccess[0].url is ftp://nope.
+expect = "valid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.KAS_URL_INVALID",
+]
+note = "Malformed KAS URL (ftp scheme) -> warning; file remains valid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

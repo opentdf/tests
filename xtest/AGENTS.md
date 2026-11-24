@@ -36,6 +36,7 @@ pytestmark = pytest.mark.core
 | `harness` | Platform; tests the harness itself. | `xtest.yml` helper step |
 | `core` | Platform + SDKs, platform's own KAS. | `xtest.yml` standard step |
 | `legacy` | Golden TDFs and their keys. Decrypt-only. | `xtest.yml` legacy step |
+| `corpus` | km1/km2 with corpus keys imported. Decrypt-only. | `xtest.yml` corpus step |
 | `multikas` | KAS alpha..delta and km1..km3. | `xtest.yml` ABAC step |
 | `benchmark`, `zip64` | `--bench` / `--sizes medium`. | nightly jobs |
 
@@ -51,6 +52,7 @@ Pick the tier by what the test needs, not by topic: `test_pqc.py` is
 | `--containers ztdf` | Which TDF container types to exercise. |
 | `--no-audit-logs` | Skip audit-log assertions for this run. CLI equivalent of `DISABLE_AUDIT_ASSERTIONS=1`. |
 | `--sizes small,chunky` | Which payload sizes to parametrize over (`small` 128 B, `chunky` 5 MiB, `medium` 2.1 GiB, `large` 5 GiB). Defaults to `small`. Every extra size fans out every test taking `pt_file`. `--large` is a deprecated alias for `small,large`. |
+| `--corpus-record PATH` | Corpus tests only: append each decrypt's outcome to the JSONL file `PATH` and pass whatever happens. Feeds `python -m corpus_gen verdicts` (see `corpus/README.md`). |
 
 ## Environment Variables
 

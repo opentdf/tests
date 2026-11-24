@@ -1,0 +1,14 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==); the method
+# member is missing from its encryptionInformation.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.METHOD_MISSING",
+]
+note = "Missing base component method -> semantic error (authoritative), file invalid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

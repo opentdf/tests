@@ -3,16 +3,23 @@
 Pure and offline: no platform or SDK imports, so the units tier can use it.
 """
 
+import base64
 import contextlib
+import fcntl
 import hashlib
+import json
 import os
 import re
 import signal
 import subprocess
 import tomllib
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, TypedDict, cast
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 Semver = tuple[int, int, int]
 Verdict = Literal["decrypt", "reject"]
@@ -192,6 +199,20 @@ def load_sidecar(path: Path) -> Sidecar:
     return Sidecar(fixture=path.with_name(name), raw=raw, sdk=sdk)
 
 
+class CorpusKey(TypedDict):
+    kid: str
+    alg: str
+    privateKey: str
+    cert: str
+    kas: Literal["km1", "km2"]
+
+
+def kas_keys(root: Path = CORPUS_DIR) -> dict[str, CorpusKey]:
+    """The stable KAS keys the corpus is encrypted to, keyed by kid."""
+    entries = json.loads((root / "kas-keys.json").read_text())
+    return {e["kid"]: cast(CorpusKey, e) for e in entries}
+
+
 def fixtures(root: Path = CORPUS_DIR) -> list[Path]:
     return sorted(
         p
@@ -255,11 +276,43 @@ def classify_outcome(
         return "wrong-plaintext"
     if expected_sha256 is None:
         return "decrypt"
-    with out.open("rb") as f:
-        digest = hashlib.file_digest(f, "sha256").hexdigest()
-    if digest == expected_sha256:
+    if output_sha256(out) == expected_sha256:
         return "decrypt"
     return "wrong-plaintext"
+
+
+def output_sha256(out: Path) -> str | None:
+    """Hex SHA-256 of the decrypt output file, or None when there is none."""
+    if not out.is_file():
+        return None
+    with out.open("rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def make_record(
+    *,
+    fixture: str,
+    sdk: str,
+    version: str,
+    outcome: str,
+    out: Path,
+    sdk_semver: Semver | None = None,
+    stderr_tail: str = "",
+) -> dict[str, Any]:
+    """One record-mode JSONL row. output_sha256 lets a later step check the bytes."""
+    plat = platform_semver()
+    return {
+        "fixture": fixture,
+        "sdk": sdk,
+        "version": version,
+        "sdk_semver": list(sdk_semver) if sdk_semver else None,
+        "platform_tag": os.environ.get("PLATFORM_TAG"),
+        "platform_version": os.environ.get("PLATFORM_VERSION"),
+        "platform_semver": list(plat) if plat else None,
+        "outcome": outcome,
+        "output_sha256": output_sha256(out),
+        "stderr_tail": stderr_tail,
+    }
 
 
 class DecryptHung(Exception):
@@ -294,3 +347,85 @@ def run_decrypt(
         proc.communicate()
         raise
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
+def read_manifest(fixture: Path) -> dict[str, Any] | None:
+    """The TDF manifest, or None when the file is not a ZIP with a readable one."""
+    try:
+        with zipfile.ZipFile(fixture) as z:
+            m = json.loads(z.read("0.manifest.json"))
+    except OSError, KeyError, ValueError, zipfile.BadZipFile, NotImplementedError:
+        return None
+    return m if isinstance(m, dict) else None
+
+
+def required_features(
+    manifest: dict[str, Any] | None, keys: dict[str, CorpusKey]
+) -> list[str]:
+    """Feature names a decrypt of this manifest needs from the SDK and platform."""
+    if manifest is None:
+        return []
+    need: list[str] = []
+    enc = manifest.get("encryptionInformation")
+    kaos = enc.get("keyAccess", []) if isinstance(enc, dict) else []
+    for kao in kaos if isinstance(kaos, list) else []:
+        if not isinstance(kao, dict):
+            continue
+        match kao.get("type"):
+            case "ec-wrapped":
+                need.append("ecwrap")
+            case "mlkem-wrapped":
+                need.append("mechanism-mlkem")
+            case "hybrid-wrapped":
+                alg = keys.get(str(kao.get("kid")), {}).get("alg", "")
+                if alg == "hpqt:xwing":
+                    need.append("mechanism-xwing")
+                elif alg.startswith("hpqt:secp"):
+                    need.append("mechanism-secpmlkem")
+    return list(dict.fromkeys(need))
+
+
+def has_data_attributes(manifest: dict[str, Any] | None) -> bool:
+    """True when the manifest's policy names data attributes."""
+    try:
+        enc = (manifest or {})["encryptionInformation"]
+        policy = json.loads(base64.b64decode(enc["policy"]))
+        return bool(policy["body"]["dataAttributes"])
+    except KeyError, TypeError, ValueError:
+        return False
+
+
+def assertion_verification_keys(
+    raw: dict[str, Any], manifest: dict[str, Any] | None, root: Path = CORPUS_DIR
+) -> dict[str, Any] | None:
+    """The CLI verification-keys JSON built from a sidecar's assertion_keys.
+
+    An entry ``id=path`` keys that assertion id; a bare path keys every assertion
+    in the manifest. None when no keys are listed or no assertion id is known.
+    """
+    entries: list[tuple[str | None, str]] = []
+    for v in raw.get("assertion_keys", []):
+        aid, sep, path = v.partition("=")
+        entries.append((aid, path) if sep else (None, v))
+    ids: list[str] = []
+    if manifest is not None:
+        ids = [a["id"] for a in manifest.get("assertions") or [] if "id" in a]
+    out: dict[str, dict[str, str]] = {}
+    for aid, path in entries:
+        pem = (root / path).read_text()
+        pub = serialization.load_pem_public_key(pem.encode())
+        alg = "RS256" if isinstance(pub, rsa.RSAPublicKey) else "ES256"
+        for i in [aid] if aid else ids:
+            out.setdefault(i, {"alg": alg, "key": pem})
+    return {"keys": out} if out else None
+
+
+def append_record(path: Path, record: dict[str, Any]) -> None:
+    """Append one JSON line; safe against concurrent xdist workers."""
+    line = (json.dumps(record, sort_keys=True) + "\n").encode()
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        os.write(fd, line)
+    finally:
+        os.close(fd)

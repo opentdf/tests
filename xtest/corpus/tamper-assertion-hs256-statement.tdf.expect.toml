@@ -1,0 +1,22 @@
+# Derived from the generator's go-assertion-hs256 base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Assertion system-metadata: the statement the SDK fills with its own system metadata, HS256-bound
+# under the payload key.
+# Edit: "plan9" replaces the writing host's OS as operating_system inside the system-metadata
+# statement value.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/tamper-go-assertion-hs256.dek"
+must_contain = [
+    "TDF.CRYPTO.ASSERTION_SIGNATURE_INVALID",
+]
+note = "HS256 assertion statement tampered; keyed assertion check fails."
+
+[sdk]
+plaintext_sha256 = "3040089cc50b0b9864134a5e82c8a976a85e272d31858f5de3b5f3f68ebc4c96"
+go = "reject"
+java = "reject"
+js = "reject"

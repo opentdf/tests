@@ -1,0 +1,19 @@
+# Derived from the generator's go-basic base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Edit: rootSignature.sig, an HS256 value, has its final 3 bytes XORed with 0xFF.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/tamper-go-basic.dek"
+must_contain = [
+    "TDF.CRYPTO.ROOT_SIGNATURE_INVALID",
+]
+note = "Root signature last 3 bytes changed; keyed root check fails."
+
+[sdk]
+plaintext_sha256 = "2ace4daf01b32427fe42265d44fd3b818f5573464fa9d39f2ce5e17bd6e00223"
+go = "reject"
+java = "reject"
+js = "reject"

@@ -1,0 +1,17 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==). Its
+# policyBinding is a plain base64 string, where an object holding alg and hash is expected.
+expect = "valid"
+format = "tdf"
+must_contain = [
+    "TDF.SCHEMA.VIOLATION",
+]
+must_not_contain = [
+    "TDF.SEMANTIC.FIELD_NOT_BASE64",
+]
+note = "Legacy string policyBinding; valid (schema object-shape demoted to advisory warning; string is valid base64)."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

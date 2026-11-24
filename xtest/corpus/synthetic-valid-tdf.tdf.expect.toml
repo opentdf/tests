@@ -1,0 +1,12 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==). Nothing the spec
+# requires is missing: it has a policy, that KAO, a method block and integrityInformation.
+expect = "valid"
+format = "tdf"
+must_contain = []
+note = "Well-formed, spec-complete TDF (full manifest + 0.payload); expected to pass cleanly."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

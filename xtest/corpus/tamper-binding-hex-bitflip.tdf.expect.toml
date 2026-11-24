@@ -1,0 +1,20 @@
+# Derived from the generator's go-basic base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Edit: policyBinding.hash keeps the SDK's base64-of-hex encoding, but the HMAC it encodes has its
+# first byte's low bit toggled.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/tamper-go-basic.dek"
+must_contain = [
+    "TDF.CRYPTO.POLICY_BINDING_INVALID",
+]
+note = "Policy binding HMAC bit flipped (hex form); keyed binding check fails."
+
+[sdk]
+plaintext_sha256 = "2ace4daf01b32427fe42265d44fd3b818f5573464fa9d39f2ce5e17bd6e00223"
+go = "reject"
+java = "reject"
+js = "reject"

@@ -66,6 +66,7 @@ pytest_plugins = [
     "fixtures.assertions",
     "fixtures.obligations",
     "fixtures.keys",
+    "fixtures.corpus",
     "fixtures.audit",
     "fixtures.encryption",
     "fixtures.bench",
@@ -239,6 +240,11 @@ def pytest_addoption(parser: pytest.Parser):
         "--sdks-encrypt",
         help="select which sdks to run for encrypt only; accepts same format as --sdks",
         type=sdk_spec_type,
+    )
+    parser.addoption(
+        "--corpus-record",
+        help="corpus tests: append each observed outcome to this JSONL file and pass",
+        type=Path,
     )
     _add_benchmark_options(parser)
 
@@ -546,7 +552,7 @@ def _item_exercises_zip64_window(item: pytest.Item, session_sizes: list[str]) ->
 # module is picked up by declaring ``pytestmark = pytest.mark.<tier>``. The
 # tiers are registered in pyproject.toml.
 TIERS = frozenset(
-    {"units", "harness", "core", "legacy", "multikas", "benchmark", "zip64"}
+    {"units", "harness", "core", "legacy", "corpus", "multikas", "benchmark", "zip64"}
 )
 
 

@@ -1,0 +1,20 @@
+# Produced by the generator's writer job for the Java SDK 0.20.0.
+# KAO: corpus-mlkem1024 (mlkem:1024) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# keys/ holds its DEK, recovered offline through kas-keys.json and confirmed against the known
+# plaintext.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/sdk-java-mlkem1024.dek"
+must_contain = [
+    "TDF.SCHEMA.VIOLATION",
+]
+note = "Java SDK 0.20.0: ML-KEM-1024 mlkem-wrapped key, KAS key corpus-mlkem1024 (mlkem:1024)."
+
+[sdk]
+plaintext_sha256 = "e7739f783692756c936d0aa5a27bd41dd10df1cacecf8d292c2be51c82b3e3ae"
+go = "decrypt"
+java = "decrypt"
+js = "decrypt"

@@ -1,0 +1,13 @@
+# Same as synthetic-valid-tdf.tdf apart from 34 bytes of junk following its final end record.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.CONTAINER.AMBIGUOUS_LAYOUT",
+]
+note = "Bytes after the end-of-central-directory record: the Go and Web SDKs cannot open the file."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

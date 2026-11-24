@@ -1,0 +1,17 @@
+# Made from a metadata-mimetype TDF that the Go SDK v0.34.0 wrote, whose KAO no key in
+# kas-keys.json unwraps; one ciphertext byte inside its encryptedMetadata was flipped. Its DEK
+# file is the original TDF's.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/synthetic-encrypted-metadata-tampered.dek"
+must_contain = [
+    "TDF.CRYPTO.ENCRYPTED_METADATA_INVALID",
+]
+note = "encryptedMetadata ciphertext tampered: does not decrypt under the payload key, so the reference SDK cannot read the file."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

@@ -23,10 +23,11 @@ faithfully.
 
 from __future__ import annotations
 
+import dataclasses
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import zipinspect
 
@@ -274,3 +275,140 @@ def rewrite(src: Path, dest: Path, trailer: MutableTrailer) -> Path:
             remaining -= len(chunk)
         f_out.write(trailer.to_bytes(cd_offset))
     return dest
+
+
+#: An extended-timestamp extra-field record (header id 0x5455), the shape
+#: real writers actually put ahead of a ZIP64 record in the wild.
+FOREIGN_EXTRA_TLV = struct.pack("<HH", 0x5455, 5) + b"\x01\x00\x00\x00\x00"
+
+
+def with_zip64_fields(entry: MutableEntry, fields: str) -> MutableEntry:
+    assert fields and set(fields) <= set("cuo"), f"unknown ZIP64 fields {fields!r}"
+    return cast(
+        MutableEntry,
+        dataclasses.replace(
+            entry,
+            force_zip64_compressed_size="c" in fields,
+            force_zip64_uncompressed_size="u" in fields,
+            force_zip64_offset="o" in fields,
+            version_needed_to_extract=45,
+            extra_prefix=FOREIGN_EXTRA_TLV,
+        ),
+    )
+
+
+def entry_sentinel_trailer(src: Path, fields: str, zip64_eocd: bool) -> MutableTrailer:
+    """``src``'s trailer with ``fields`` deferred to ZIP64 on every record.
+
+    Every record, not just the manifest's: a reader that steps past a ZIP64
+    extra by the wrong length only shows it on the record that follows, and
+    the manifest's record is the last.
+    """
+    trailer, _ = load_trailer(src)
+    return cast(
+        MutableTrailer,
+        dataclasses.replace(
+            trailer,
+            entries=[with_zip64_fields(e, fields) for e in trailer.entries],
+            force_zip64_eocd=zip64_eocd,
+        ),
+    )
+
+
+def malformed_trailer(src: Path, case: str) -> MutableTrailer:
+    """One malformed declaration per fixture; ciphertext/local headers survive.
+
+    No archive comment: readers that refuse long archive comments (see
+    ``test_eocd_with_max_length_comment``) must not stop before the
+    declaration under test. Positive
+    oversized values stay small enough that an old reader cannot allocate GiB.
+    """
+    trailer, cd_offset = load_trailer(src)
+    manifest_index = _manifest_index(trailer)
+    manifest = trailer.entries[manifest_index]
+    # About 4 KiB past EOF, allowing for these small ZIP64 records.
+    beyond = 1 << 63 if case.endswith("_int64") else src.stat().st_size + 4096
+    if case in {"truncated_zip64_value", "extra_length_overrun"}:
+        extra = (
+            struct.pack("<HHI", 1, 4, 0)
+            if case == "truncated_zip64_value"
+            else struct.pack("<HHQ", 1, 0xFFFF, manifest.local_header_offset)
+        )
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            force_zip64_offset=True,
+            version_needed_to_extract=45,
+            extra_override=extra,
+        )
+    elif case.startswith("manifest_size_"):
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            compressed_size=beyond,
+            force_zip64_compressed_size=True,
+            version_needed_to_extract=45,
+        )
+    elif case == "payload_overlaps_directory":
+        cd = zipinspect.central_directory(src)
+        payload = next(e for e in cd.entries if e.name == "0.payload")
+        data_start = zipinspect.local_file_header_data_offset(src, payload)
+        for i, entry in enumerate(trailer.entries):
+            if entry.name == "0.payload":
+                trailer.entries[i] = dataclasses.replace(
+                    entry,
+                    compressed_size=cd_offset - data_start + 1,
+                    uncompressed_size=cd_offset - data_start + 1,
+                )
+    elif case.startswith("header_offset_"):
+        trailer.entries[manifest_index] = dataclasses.replace(
+            manifest,
+            local_header_offset=beyond,
+            force_zip64_offset=True,
+            version_needed_to_extract=45,
+        )
+    elif case.startswith("locator_offset_"):
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, zip64_locator_offset_override=beyond
+        )
+    elif case.startswith("directory_offset_"):
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, cd_offset_override=beyond
+        )
+    elif case == "impossible_entry_count":
+        trailer = dataclasses.replace(
+            trailer, force_zip64_eocd=True, entry_count_override=(1 << 64) - 1
+        )
+    else:
+        raise ValueError(f"unknown malformed ZIP case: {case}")
+    return trailer
+
+
+def _manifest_index(trailer: MutableTrailer) -> int:
+    return next(i for i, e in enumerate(trailer.entries) if e.name == "0.manifest.json")
+
+
+def manifest_offset_after_foreign_extra(src: Path) -> MutableTrailer:
+    """``src``'s trailer, the manifest's offset deferred to a ZIP64 extra that
+    follows a foreign extra."""
+    trailer, _ = load_trailer(src)
+    i = _manifest_index(trailer)
+    trailer.entries[i] = dataclasses.replace(
+        trailer.entries[i],
+        force_zip64_offset=True,
+        extra_prefix=FOREIGN_EXTRA_TLV,
+        version_needed_to_extract=45,
+    )
+    return trailer
+
+
+def fake_record_comment_trailer(src: Path) -> MutableTrailer:
+    """``src``'s trailer with an archive comment holding a copy of the manifest's
+    directory record whose ZIP64 offset is 2**63."""
+    trailer, _ = load_trailer(src)
+    manifest = trailer.entries[_manifest_index(trailer)]
+    fake = dataclasses.replace(
+        manifest,
+        local_header_offset=1 << 63,
+        force_zip64_offset=True,
+        version_needed_to_extract=45,
+    )
+    return cast(MutableTrailer, dataclasses.replace(trailer, comment=fake.to_bytes()))

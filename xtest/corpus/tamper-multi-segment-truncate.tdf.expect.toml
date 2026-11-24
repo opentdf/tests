@@ -1,0 +1,22 @@
+# Derived from the generator's web-multi-segment base, which the Web SDK main (0b5a0dea, after
+# 0.23.0) wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 165 bytes in 64-byte segments.
+# Edit: the manifest's list omits the final segment, whose ciphertext the payload still contains.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/tamper-web-multi-segment.dek"
+must_contain = [
+    "TDF.SEMANTIC.SEGMENT_SIZE_MISMATCH",
+    "TDF.CRYPTO.ROOT_SIGNATURE_INVALID",
+    "TDF.CRYPTO.SEGMENT_HASH_UNVERIFIABLE",
+]
+note = "Multi-segment: last segment dropped from the manifest; keyed root check fails."
+
+[sdk]
+plaintext_sha256 = "7cb990c44b75a8a970c27fb6f9b7f6796b2a8925571237c1b74864216de83f68"
+go = "reject"
+java = "reject"
+js = "reject"

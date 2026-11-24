@@ -1,0 +1,14 @@
+# Same as synthetic-valid-tdf.tdf except that its end record now declares 35 bytes of comment
+# text, the last bytes in the file.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.CONTAINER.ARCHIVE_COMMENT",
+]
+note = "ZIP archive comment: legal ZIP, but the Go SDK cannot open the file, so an error."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

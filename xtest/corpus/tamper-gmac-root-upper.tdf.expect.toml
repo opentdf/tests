@@ -1,0 +1,20 @@
+# Derived from the generator's go-basic base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Edit: rootSignature claims alg "GMAC" now; anyone holding the manifest could compute its sig,
+# which is just the last 16 bytes of all segment hashes joined.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/tamper-go-basic.dek"
+must_contain = [
+    "TDF.SEMANTIC.ROOT_SIGNATURE_ALG_REJECTED",
+]
+note = "GMAC-forged root signature, alg \"GMAC\"; rejected by algorithm."
+
+[sdk]
+plaintext_sha256 = "2ace4daf01b32427fe42265d44fd3b818f5573464fa9d39f2ce5e17bd6e00223"
+go = "reject"
+java = "reject"
+js = "reject"

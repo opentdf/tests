@@ -667,6 +667,23 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return Namespace.model_validate_json(out)
 
+    def attribute_list(self) -> list[Attribute]:
+        cmd = self.otdfctl + "policy attributes list".split()
+        logger.info(f"attr-ls [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=process.returncode != 0)
+        if out:
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
+        o = json.loads(out)
+        if not o:
+            return []
+        if isinstance(o, dict):
+            o = o.get("attributes", [])
+        return [Attribute(**a) for a in o]
+
     def attribute_create(
         self,
         namespace: str | Namespace,
@@ -695,6 +712,36 @@ class OpentdfCommandLineTool:
             print(out, flush=process.returncode != 0)
         assert process.returncode == 0
         return Attribute.model_validate_json(out)
+
+    def attribute_value_get(self, value_id: str) -> AttributeValue:
+        cmd = self.otdfctl + "policy attributes values get".split()
+        cmd += [f"--id={value_id}"]
+        logger.info(f"attr-val-get [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=process.returncode != 0)
+        if out:
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
+        return AttributeValue.model_validate_json(out)
+
+    def scs_map_list(self) -> list[SubjectMapping]:
+        cmd = self.otdfctl + "policy subject-mappings list".split()
+        logger.info(f"sm-ls [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=process.returncode != 0)
+        if out:
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
+        o = json.loads(out)
+        if not o:
+            return []
+        if isinstance(o, dict):
+            o = o.get("subject_mappings", [])
+        return [SubjectMapping(**m) for m in o]
 
     def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
         cmd = self.otdfctl + "policy subject-condition-sets create".split()

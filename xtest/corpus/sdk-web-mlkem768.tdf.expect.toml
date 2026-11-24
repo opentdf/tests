@@ -1,0 +1,20 @@
+# Produced by the generator's writer job for the Web SDK main (0b5a0dea, after 0.23.0).
+# KAO: corpus-mlkem768 (mlkem:768) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# keys/ holds its DEK, recovered offline through kas-keys.json and confirmed against the known
+# plaintext.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/sdk-web-mlkem768.dek"
+must_contain = [
+    "TDF.SCHEMA.VIOLATION",
+]
+note = "Web SDK main (0b5a0dea, after 0.23.0): ML-KEM-768 mlkem-wrapped key, KAS key corpus-mlkem768 (mlkem:768)."
+
+[sdk]
+plaintext_sha256 = "42bba3b84abbdfb1c3b28bacf4ca8943d0e0a4ef8e0ac2d4b2cc5d4f75f9dae9"
+go = "decrypt"
+java = "decrypt"
+js = "decrypt"

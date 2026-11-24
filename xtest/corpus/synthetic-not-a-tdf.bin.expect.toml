@@ -1,0 +1,13 @@
+# One 48-byte line of ASCII prose, in neither ZIP nor any other TDF format.
+expect = "unknown-format"
+format = "unknown"
+must_contain = [
+    "CORE.DETECT.UNKNOWN_FORMAT",
+]
+note = "Not a container at all -> unknown format, exit 3."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no usable manifest."

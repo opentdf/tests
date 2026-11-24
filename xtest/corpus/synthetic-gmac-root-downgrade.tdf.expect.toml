@@ -1,0 +1,16 @@
+# A reworked synthetic-valid-tdf.tdf: its payload is now two 44-byte segments, each hashed as its
+# own GCM tag; rootSignature switches from HS256 to GMAC with the last segment's hash as its sig,
+# which needs no key; and schemaVersion appears at the top level. This is the keyless root forgery
+# of DSPX-4703, which test_root_signature.py also covers.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.ROOT_SIGNATURE_ALG_REJECTED",
+]
+note = "GMAC root-signature downgrade-and-forge (sig = published segment-hash aggregate tail) -> L3 error, file invalid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

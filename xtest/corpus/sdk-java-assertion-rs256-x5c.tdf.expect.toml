@@ -1,0 +1,22 @@
+# Produced by the generator's writer job for the Java SDK 0.20.0.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Assertion handling-rs256-x5c: handling, signed RS256 by a test leaf certificate under a
+# throwaway test CA, with x5c = [leaf, intermediate].
+# To verify it, use the leaf's public key in keys/sdk-java-assertion-rs256-x5c.leaf.pub.pem.
+# keys/ holds its DEK, recovered offline through kas-keys.json and confirmed against the known
+# plaintext.
+expect = "valid"
+format = "tdf"
+verify_crypto = true
+key = "keys/sdk-java-assertion-rs256-x5c.dek"
+must_contain = [
+    "TDF.CRYPTO.ASSERTION_SIGNATURE_UNVERIFIABLE",
+]
+note = "Java SDK 0.20.0: RS256 assertion with an x5c chain [leaf, intermediate] under a test CA; unverifiable without a key or trust anchor."
+
+[sdk]
+plaintext_sha256 = "a5a431c61c66f5e543f99bc759d512dd109630b26e1207c47049607601cd216e"
+go = "decrypt"
+java = "decrypt"
+js = "reject"
