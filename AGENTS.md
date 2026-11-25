@@ -105,7 +105,7 @@ live platform, debugging unrelated failures):
 - CI: `DISABLE_AUDIT_ASSERTIONS=1` (survives shell wrappers)
 - Local dev: `uv run pytest --sdks go --no-audit-logs -v`
 
-For wiring up the log-file env vars, prefer `eval $(uv run otdf-local env)`
+For wiring up the log-file env vars, prefer `eval "$(uv run otdf-local env)"`
 (see Environment Management below). Fixture details and the
 auto-discovery fallback under `../platform/logs/` live in
 `xtest/AGENTS.md`.
@@ -117,7 +117,7 @@ Use `otdf-local` for all environment management (starting/stopping services, vie
 Quick start:
 ```bash
 cd otdf-local && uv run otdf-local up
-eval $(uv run otdf-local env)   # sets PLATFORM_LOG_FILE / KAS_*_LOG_FILE — required for the default audit-log assertions
+eval "$(uv run otdf-local env)"   # sets PLATFORM_LOG_FILE / KAS_*_LOG_FILE — required for the default audit-log assertions
 ```
 
 ## Key Concepts

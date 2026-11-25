@@ -82,44 +82,12 @@ def _manifest(status: PreparationStatus, message: str = "why") -> InstallationMa
     )
 
 
-# Every key, both installation methods, a null pin, a null commit, a SHA-256
-# commit, and metadata.sdk, written out as readers outside this package see it.
-GOLDEN = {
-    "schema_version": "v1alpha1",
-    "platform": {
-        "requested_alias": "pr:42",
-        "repository": "https://github.com/opentdf/platform.git",
-        "commit_sha": "f00dcafef00dcafef00dcafef00dcafef00dcafe",
-        "installed_tag": "refs--pull--42--head",
-        "installed_path": "/xtest/platform/dist/refs--pull--42--head",
-        "installation_method": "source",
-        "build_settings": {},
-    },
-    "otdfctl": None,
-    "sdk_arms": [
-        {
-            "requested_alias": "latest",
-            "repository": "https://github.com/opentdf/web-sdk.git",
-            "commit_sha": None,
-            "installed_tag": "v0.4.0",
-            "installed_path": "/xtest/sdk/js/dist/v0.4.0",
-            "installation_method": "release",
-            "build_settings": {},
-        },
-        {
-            "requested_alias": "main",
-            "repository": "https://github.com/opentdf/web-sdk.git",
-            "commit_sha": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "installed_tag": "main",
-            "installed_path": "/xtest/sdk/js/dist/main",
-            "installation_method": "source",
-            "build_settings": {"NODE_VERSION": "22"},
-        },
-    ],
-    "status": "success",
-    "status_message": "",
-    "metadata": {"sdk": "js", "runner": "ubuntu-latest"},
-}
+# Every key, both installation methods, an otdfctl pin, a null commit, a SHA-256
+# commit and metadata.sdk, as readers outside this package see them. A JSON
+# file, so otdf-local's tests fail too when the shape written here changes.
+GOLDEN = json.loads(
+    (Path(__file__).parent / "data" / "benchmark.installed.golden.json").read_text()
+)
 
 
 class TestArtifactIdentity:
@@ -261,6 +229,14 @@ class TestInstallationManifest:
                 installed_tag="refs--pull--42--head",
                 installed_path="/xtest/platform/dist/refs--pull--42--head",
                 installation_method="source",
+            ),
+            otdfctl=ArtifactIdentity(
+                requested_alias="v0.38.1",
+                repository=PLATFORM_REPO,
+                commit_sha="c0ffee00" * 5,
+                installed_tag="v0.38.1",
+                installed_path="/xtest/sdk/go/dist/v0.38.1",
+                installation_method="release",
             ),
             sdk_arms=[
                 ArtifactIdentity(

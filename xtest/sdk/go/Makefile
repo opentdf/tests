@@ -16,6 +16,8 @@ endif
 all: build
 	@echo "Setup go sdk clis for versions: $(VERSIONS)"
 
+# Each build deletes dist/<version>/.version: the commit it records is the old
+# binary's. `otdf-sdk-mgr install benchmark` records the new one.
 build:
 	@echo "Building binaries for versions: $(VERSIONS)"
 	@for version in $(VERSIONS); do \
@@ -33,6 +35,7 @@ build:
 		}; \
 		echo "Copying binary and shell scripts to dist/$$version"; \
 		mkdir -p $(MAKEFILE_DIR)/dist/$$version; \
+		rm -f $(MAKEFILE_DIR)/dist/$$version/.version; \
 		mv $(MAKEFILE_DIR)/binary-$$version $(MAKEFILE_DIR)/dist/$$version/otdfctl || { \
 			echo "Error: Failed to copy binary for $$version"; \
 			exit 2; \

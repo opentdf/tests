@@ -154,7 +154,7 @@ Export environment variables needed by pytest (log file paths, etc.):
 
 ```bash
 # Set up environment for running tests
-eval $(otdf-local env)
+eval "$(otdf-local env)"
 
 # Output as JSON
 otdf-local env --format json
