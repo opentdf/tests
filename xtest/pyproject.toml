@@ -98,6 +98,7 @@ markers = [
     "harness: harness self-tests against a running platform",
     "core: cross-SDK tests against the platform's own KAS",
     "legacy: golden TDF decryption; needs the golden keys loaded",
+    "corpus: decrypts xtest/corpus fixtures; needs km1/km2",
     "multikas: needs the alpha..delta and km1..km3 KAS instances",
     "benchmark: paired A/B performance cell; only collected under --bench",
     "no_audit_logs: opt this test out of the default audit-log assertions",

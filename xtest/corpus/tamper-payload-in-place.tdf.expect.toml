@@ -1,0 +1,17 @@
+# Derived from the generator's go-basic base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Edit: payload byte 17 has its low bit toggled where it sits in the base archive, which is not
+# repacked, so the entry's recorded CRC-32 no longer fits.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.CONTAINER.PAYLOAD_CORRUPT",
+]
+note = "Payload byte flipped in place (stale CRC); container integrity fails."
+
+[sdk]
+plaintext_sha256 = "2ace4daf01b32427fe42265d44fd3b818f5573464fa9d39f2ce5e17bd6e00223"
+go = "reject"
+java = "reject"
+js = "reject"

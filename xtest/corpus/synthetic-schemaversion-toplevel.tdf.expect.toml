@@ -1,0 +1,17 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==). A top-level
+# schemaVersion of 4.3.0 is its only spec version; tdf_spec_version is absent.
+expect = "valid"
+format = "tdf"
+must_contain = []
+must_not_contain = [
+    "TDF.SCHEMA.MISSING_SPEC_VERSION",
+    "TDF.SCHEMA.UNKNOWN_SPEC_VERSION",
+    "TDF.SCHEMA.MISSING_FIELD",
+]
+note = "SDK top-level schemaVersion (4.3.0) is a recognized version location; clean and valid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

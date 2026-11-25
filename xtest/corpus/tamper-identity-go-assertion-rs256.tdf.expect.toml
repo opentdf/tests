@@ -1,0 +1,22 @@
+# Derived from the generator's go-assertion-rs256 base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Assertion handling-rs256: handling, signed RS256 by a generated key.
+# To verify it, use the signer's public key in keys/tamper-go-assertion-rs256.pub.pem.
+# Edit: nothing; this copy is a control.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/tamper-go-assertion-rs256.dek"
+assertion_keys = [
+    "keys/tamper-go-assertion-rs256.pub.pem",
+]
+note = "Control: go-assertion-rs256 base re-zipped unchanged; valid keyed and strict."
+
+[sdk]
+plaintext_sha256 = "15496451bef1aff9c4c344fc4e1a84994342965765103bc4c34034b2358cb576"
+go = "decrypt"
+java = "decrypt"
+js = "decrypt"

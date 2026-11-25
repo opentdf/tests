@@ -1,0 +1,16 @@
+# A hand-made ZIP whose only entry is 0.payload; 0.manifest.json is missing.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.STRUCTURE.MISSING_MANIFEST",
+]
+must_not_contain = [
+    "TDF.STRUCTURE.MISSING_PAYLOAD",
+]
+note = "Missing 0.manifest.json container entry (structural error); 0.payload is present, and schema/semantic are blocked for lack of a parsed manifest."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no usable manifest."

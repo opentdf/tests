@@ -1,0 +1,14 @@
+# Built by hand; encryptionInformation has no keyAccess member, so the file names no KAS and holds
+# no wrapped key.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.KEY_ACCESS_MISSING",
+]
+note = "Missing base component keyAccess -> semantic error (authoritative), file invalid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no key access object."

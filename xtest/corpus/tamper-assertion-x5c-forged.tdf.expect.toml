@@ -1,0 +1,25 @@
+# Derived from sdk-java-assertion-rs256-x5c.tdf, which the Java SDK 0.20.0 wrote.
+# Edit: "forged" replaces "x5c" as the caveat inside the handling statement value; the JWS then
+# had its assertionHash and assertionSig worked out again from the edited manifest, and was signed
+# RS256 by a separate certificate, self-signed and outside the test chain, that carries the
+# genuine leaf's subject and is the lone x5c entry.
+# Repacked as an uncompressed archive with fresh CRC-32s.
+expect = "invalid"
+format = "tdf"
+verify_crypto = true
+key = "keys/sdk-java-assertion-rs256-x5c.dek"
+assertion_keys = [
+    "keys/sdk-java-assertion-rs256-x5c.leaf.pub.pem",
+]
+must_contain = [
+    "TDF.CRYPTO.ASSERTION_SIGNATURE_INVALID",
+]
+note = "Forged x5c assertion (self-signed certificate, recomputed claims); invalid with the genuine signer key."
+
+[sdk]
+# Recorded on platforms main and v0.31.0 with go main and v0.41.0, java main, js main and v0.23.0;
+# expected to change with pending SDK assertion-verification work.
+plaintext_sha256 = "a5a431c61c66f5e543f99bc759d512dd109630b26e1207c47049607601cd216e"
+go = "decrypt"
+java = "decrypt"
+js = "decrypt"

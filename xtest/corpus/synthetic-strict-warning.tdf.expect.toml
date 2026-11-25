@@ -1,0 +1,15 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==). No
+# tdf_spec_version is given anywhere; no other required part is missing.
+expect = "valid"
+format = "tdf"
+strict = true
+must_contain = [
+    "TDF.SCHEMA.MISSING_SPEC_VERSION",
+]
+note = "Warning-only TDF; --strict does NOT promote the schema-layer warning, so it stays valid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

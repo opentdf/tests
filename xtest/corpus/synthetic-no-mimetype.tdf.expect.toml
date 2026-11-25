@@ -1,0 +1,17 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==); its payload
+# object omits mimeType.
+expect = "valid"
+format = "tdf"
+must_contain = [
+    "TDF.SCHEMA.MISSING_FIELD",
+]
+must_not_contain = [
+    "TDF.SEMANTIC.PAYLOAD_DESCRIPTOR_MISSING",
+]
+note = "Optional mimeType omitted; valid (schema required-field demoted to advisory warning)."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

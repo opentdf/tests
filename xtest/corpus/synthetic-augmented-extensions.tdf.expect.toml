@@ -1,0 +1,17 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==). Otherwise valid,
+# it adds fields that no spec defines: keyAccess[0].vendorExtension, payload.x-vendor and a
+# top-level x-company-profile.
+expect = "valid"
+format = "tdf"
+must_contain = []
+must_not_contain = [
+    "TDF.SCHEMA.MISSING_FIELD",
+    "TDF.SCHEMA.VIOLATION",
+]
+note = "Base TDF + unknown extension fields at multiple levels; validates with zero findings (open-world)."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

@@ -1,0 +1,16 @@
+# A hand-made ZIP whose sole entry is 0.manifest.json, a short manifest lacking
+# integrityInformation; 0.payload is absent.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.STRUCTURE.MISSING_PAYLOAD",
+    "TDF.SEMANTIC.INTEGRITY_MISSING",
+    "TDF.SEMANTIC.POLICY_INCOMPLETE",
+]
+note = "Missing 0.payload container entry (structural error); the manifest also lacks integrityInformation (base-component error) and carries an incomplete policy (warning)."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

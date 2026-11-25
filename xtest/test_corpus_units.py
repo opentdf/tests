@@ -163,6 +163,20 @@ def test_sidecar_parses(sidecar: Path):
     load_sidecar(sidecar)
 
 
+@pytest.mark.parametrize("sidecar", SIDECARS, ids=_ids(SIDECARS))
+def test_sdk_table_on_every_sidecar_but_goldens(sidecar: Path):
+    """Rule: non-golden sidecars record per-SDK verdicts in an [sdk] table;
+    goldens carry none, since test_legacy.py covers them."""
+    has_sdk = load_sidecar(sidecar).sdk is not None
+    if sidecar.name.startswith("golden-"):
+        assert not has_sdk, f"{sidecar.name}: goldens carry no [sdk] table"
+    else:
+        assert has_sdk, (
+            f"{sidecar.name}: no [sdk] table; record one as in"
+            ' "Recording the [sdk] tables" in xtest/corpus/README.md'
+        )
+
+
 @pytest.mark.parametrize("fixture", FIXTURES, ids=_ids(FIXTURES))
 def test_fixture_has_known_prefix(fixture: Path):
     matches = [p for p in PREFIXES if fixture.name.startswith(p)]

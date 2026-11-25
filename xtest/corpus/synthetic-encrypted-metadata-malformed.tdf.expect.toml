@@ -1,0 +1,14 @@
+# Made from a metadata-mimetype TDF that the Go SDK v0.34.0 wrote, whose KAO no key in
+# kas-keys.json unwraps; its encryptedMetadata was overwritten with the base64 form of "not json".
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.ENCRYPTED_METADATA_MALFORMED",
+]
+note = "encryptedMetadata is base64 but not the JSON object the reference SDK decrypts, so it cannot read the file."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

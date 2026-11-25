@@ -1,0 +1,18 @@
+# Built by hand around a stub KAO (url https://kas.example.com, wrappedKey QQ==), typed ec-wrapped
+# and holding an ephemeralPublicKey.
+expect = "valid"
+format = "tdf"
+must_contain = [
+    "TDF.SCHEMA.VIOLATION",
+]
+must_not_contain = [
+    "TDF.SEMANTIC.UNKNOWN_KEY_ACCESS_TYPE",
+    "TDF.SEMANTIC.EC_WRAPPED_MISSING_EPHEMERAL_KEY",
+]
+note = "ec-wrapped is a recognized reference-SDK wrap mode (no L3 warning); the narrower vendored schema still flags it advisorily at L2. Still valid."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

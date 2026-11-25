@@ -1,0 +1,17 @@
+# Built by hand; its one KAO is typed remote, points at https://kas.example.com and keeps a
+# policyBinding, but has no wrappedKey.
+expect = "valid"
+format = "tdf"
+must_contain = [
+    "TDF.SEMANTIC.WRAPPED_KEY_REMOTE_UNVERIFIED",
+]
+must_not_contain = [
+    "TDF.SEMANTIC.WRAPPED_KEY_MISSING",
+]
+note = "remote keyAccess without wrappedKey -> info WRAPPED_KEY_REMOTE_UNVERIFIED, still valid (D1+D5)."
+
+[sdk]
+go = "reject"
+java = "reject"
+js = "reject"
+note = "Synthetic: no KAS holds this key."

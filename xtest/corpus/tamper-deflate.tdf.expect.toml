@@ -1,0 +1,17 @@
+# Derived from the generator's go-basic base, which the Go SDK v0.36.0 wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 132 bytes.
+# Edit: manifest and payload bytes are untouched; the archive now holds both entries
+# DEFLATE-compressed.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.CONTAINER.ENTRY_NOT_STORED",
+]
+note = "Entries DEFLATE-compressed; TDF entries must be STORED."
+
+[sdk]
+plaintext_sha256 = "2ace4daf01b32427fe42265d44fd3b818f5573464fa9d39f2ce5e17bd6e00223"
+go = "reject"
+java = "reject"
+js = "reject"

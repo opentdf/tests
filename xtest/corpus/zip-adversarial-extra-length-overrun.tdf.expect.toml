@@ -1,0 +1,20 @@
+# Derived from the generator's web-basic base, which the Web SDK main (0b5a0dea, after 0.23.0)
+# wrote.
+# KAO: corpus-r2048 (rsa:2048) on km1, http://localhost:8585.
+# Plaintext: 165 bytes.
+# Everything before the central directory matches the base byte for byte; the directory and end
+# records alone were written afresh.
+# Contradictory trailer: in the manifest's directory record, a ZIP64 extra with a length field of
+# 0xFFFF carries only 8 bytes.
+expect = "invalid"
+format = "tdf"
+must_contain = [
+    "TDF.CONTAINER.INVALID_ZIP",
+]
+note = "Adversarial ZIP trailer: The manifest record's ZIP64 extra declares 0xFFFF bytes of data, overrunning the record; L0 error."
+
+[sdk]
+plaintext_sha256 = "ba7f7d4c568520d6197e5c79ddae60a9ee096b4dc222cfd5e1910b754dca3651"
+go = "reject"
+java = "reject"
+js = "reject"
