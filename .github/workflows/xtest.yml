@@ -710,6 +710,8 @@ jobs:
       - name: Install test dependencies
         run: uv sync
         working-directory: otdftests/xtest
+      - name: Install the NFS client for test_nfsmount.py
+        run: command -v mount.nfs >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q nfs-common; }
       - name: Validate xtest helper library (tests of the test harness and its utilities)
         if: ${{ !inputs }}
         run: |-
