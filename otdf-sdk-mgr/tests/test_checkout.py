@@ -1,5 +1,6 @@
 """Bare-repo checkouts against real git, with a local origin and no network."""
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -67,6 +68,31 @@ def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_git: None) 
     return repo
 
 
+@pytest.fixture
+def enclosing(tmp_path: Path, origin: Path) -> Path:
+    """Make the directory holding the bare repos and worktrees a repo too, as
+    the opentdf/tests checkout is, with uncommitted work. Like any clone it has
+    `refs/remotes/origin/main`, so a reset meant for a worktree would succeed
+    here."""
+    _git("init", "-q", "-b", "main", cwd=tmp_path)
+    (tmp_path / "work").write_text("committed\n")
+    _git("add", "work", cwd=tmp_path)
+    _git("commit", "-q", "-m", "first", cwd=tmp_path)
+    _git("update-ref", "refs/remotes/origin/main", "HEAD", cwd=tmp_path)
+    _git("commit", "-q", "--allow-empty", "-m", "local", cwd=tmp_path)
+    (tmp_path / "work").write_text("uncommitted\n")
+    return tmp_path
+
+
+def _assert_enclosing_untouched(enclosing: Path) -> None:
+    assert _git("log", "-1", "--format=%s", cwd=enclosing) == "local"
+    assert (enclosing / "work").read_text() == "uncommitted\n"
+
+
+def _not_a_worktree(path: Path) -> str:
+    return f"{re.escape(str(path))} is not a git worktree"
+
+
 ENTRY_POINTS = ["sdk", "go", "platform"]
 
 
@@ -119,6 +145,29 @@ class TestEveryEntryPoint:
         error = PlatformInstallError if entry == "platform" else CheckoutError
         with pytest.raises(error, match="'other' is not on origin"):
             _check_out(entry, origin, "other")
+
+    def test_directory_that_lost_its_git_file_is_refused(
+        self, entry: str, origin: Path, enclosing: Path
+    ):
+        """As an interrupted `clean` or `git worktree add` can leave it. git
+        would climb past it to the enclosing repo and reset that instead."""
+        worktree = _check_out(entry, origin, "main")
+        (worktree / ".git").unlink()
+
+        error = PlatformInstallError if entry == "platform" else CheckoutError
+        with pytest.raises(error, match=_not_a_worktree(worktree)):
+            _check_out(entry, origin, "main")
+
+        _assert_enclosing_untouched(enclosing)
+
+    def test_removed_worktree_is_added_again(self, entry: str, origin: Path):
+        """The way out of the refusal above, and how `clean` leaves SDK
+        worktrees: the bare repo still lists the directory, and `worktree add`
+        refuses a listed path."""
+        worktree = _check_out(entry, origin, "main")
+        shutil.rmtree(worktree)
+
+        assert _head(_check_out(entry, origin, "main")) == _head(origin)
 
     @pytest.mark.parametrize("kind", ["tag", "sha"])
     def test_immutable_ref_is_checked_out_then_reused(self, entry: str, kind: str, origin: Path):
@@ -181,6 +230,27 @@ class TestSdkCheckout:
 
         assert _head(worktree) == _head(origin)
 
+    def test_clone_in_place_of_the_worktree_is_refused(self, origin: Path):
+        """Say one made by hand to work on the SDK; a reset would discard the
+        work."""
+        worktree = _check_out("sdk", origin, "main")
+        shutil.rmtree(worktree)
+        _git("clone", "-q", str(origin), str(worktree), cwd=origin)
+        (worktree / "scripts" / "a.sh").write_text("work in progress\n")
+
+        with pytest.raises(CheckoutError, match=_not_a_worktree(worktree)):
+            _check_out("sdk", origin, "main")
+
+        assert (worktree / "scripts" / "a.sh").read_text() == "work in progress\n"
+
+    def test_worktree_of_a_recloned_bare_repo_is_refused(self, origin: Path):
+        """Its `.git` names an entry the new clone doesn't have."""
+        worktree = _check_out("sdk", origin, "main")
+        shutil.rmtree(origin.parent / "js" / "src" / config.SDK_BARE_REPOS["js"])
+
+        with pytest.raises(CheckoutError, match=_not_a_worktree(worktree)):
+            _check_out("sdk", origin, "main")
+
 
 class TestGoCheckout:
     def test_src_link_follows_the_refreshed_checkout(self, origin: Path):
@@ -210,6 +280,18 @@ class TestPlatformWorktree:
         platform_installer._ensure_worktree("main")
 
         _assert_untouched(worktree, before)
+
+    def test_scripts_directory_that_lost_its_git_file_is_refused(
+        self, origin: Path, enclosing: Path
+    ):
+        platform_installer.install_helper_scripts()
+        worktree = platform_installer._worktree_path_for("scripts--main")
+        (worktree / ".git").unlink()
+
+        with pytest.raises(PlatformInstallError, match=_not_a_worktree(worktree)):
+            platform_installer.install_helper_scripts()
+
+        _assert_enclosing_untouched(enclosing)
 
 
 class TestInstallTip:
