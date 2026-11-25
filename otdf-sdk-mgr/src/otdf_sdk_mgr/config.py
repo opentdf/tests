@@ -77,7 +77,7 @@ GO_MODULE_PATH_PLATFORM = "github.com/opentdf/platform/otdfctl"
 GO_MODULE_PATH_STANDALONE = "github.com/opentdf/otdfctl"
 
 # otdfctl moved into the platform monorepo at v0.31.0; tags below this resolve
-# against the archived standalone module path for artifact install only.
+# against the archived standalone module path for artifact installs.
 OTDFCTL_PLATFORM_MIN_VERSION = (0, 31, 0)
 
 

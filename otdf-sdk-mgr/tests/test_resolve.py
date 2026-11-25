@@ -4,6 +4,8 @@ import urllib.error
 from typing import cast
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from otdf_sdk_mgr.resolve import (
     ResolveResult,
     _try_resolve_js_npm,
@@ -59,6 +61,7 @@ class TestResolveMain:
             result = resolve("go", "main", None)
         assert is_resolve_success(result)
         assert result.get("head") is True
+        assert result.get("source") == "platform"
         assert result["tag"] == "main"
         assert result["sha"] == SHA40
 
@@ -385,7 +388,7 @@ class TestResolveLatest:
 
 
 class TestResolveGo:
-    """resolve() — go always tries the platform monorepo first."""
+    """resolve() — go uses the archive for pre-migration releases."""
 
     def test_main_resolves_against_platform(self):
         ls = make_ls_remote((SHA40, "refs/heads/main"))
@@ -400,6 +403,7 @@ class TestResolveGo:
             result = resolve("go", "otdfctl/v0.32.0", None)
         assert is_resolve_success(result)
         assert result["tag"] == "v0.32.0"
+        assert result.get("source") == "platform"
 
     def test_platform_miss_falls_back_to_archive(self):
         # Tags not present in opentdf/platform (e.g. pre-v0.31.0 releases)
@@ -409,6 +413,20 @@ class TestResolveGo:
             result = resolve("go", "v0.24.0", None)
         assert is_resolve_success(result)
         assert result["tag"] == "v0.24.0"
+        assert result.get("source") == "otdfctl"
+
+    @pytest.mark.parametrize("version", ["v0.24.0", "otdfctl/v0.24.0", "lts"])
+    def test_mirrored_old_platform_tag_uses_archive(self, version):
+        platform_tags = make_ls_remote((SHA40, "refs/tags/otdfctl/v0.24.0"))
+        archive_tags = make_ls_remote((SHA40, "refs/tags/v0.24.0"))
+        mock_git = MagicMock()
+        mock_git.ls_remote.side_effect = [platform_tags, archive_tags]
+        with patch("otdf_sdk_mgr.resolve.Git", return_value=mock_git):
+            result = resolve("go", version, None)
+        assert is_resolve_success(result)
+        assert result["tag"] == "v0.24.0"
+        assert result.get("release") == "v0.24.0"
+        assert result.get("source") == "otdfctl"
 
 
 class TestResolveJsGitTags:
