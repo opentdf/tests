@@ -49,6 +49,9 @@ class Recipe:
     # stored: re-zipped STORED; deflate: re-zipped DEFLATE; in-place: one
     # payload byte flipped inside the base's own archive, CRC left stale.
     container: Container = "stored"
+    # The payload bytes that change, negative from the end. Empty with
+    # ``payload``: the segments are reordered, each with its own bytes.
+    payload_bytes: tuple[int, ...] = ()
 
 
 def edit_manifest_text(text: str, old: str, new: str) -> str:
@@ -397,7 +400,11 @@ RECIPES: dict[str, Recipe] = {
         "go-basic", (f"{_KAO0}.policyBinding.hash",), _manifest_edit(_binding(_b64))
     ),
     "tamper-ciphertext-body": Recipe(
-        "go-basic", (), _payload_edit(_ciphertext_body), payload=True
+        "go-basic",
+        (),
+        _payload_edit(_ciphertext_body),
+        payload=True,
+        payload_bytes=(CIPHERTEXT_BYTE,),
     ),
     "tamper-deflate": Recipe("go-basic", (), _deflate, container="deflate"),
     "tamper-duplicate-kao": Recipe(
@@ -445,10 +452,19 @@ RECIPES: dict[str, Recipe] = {
         _segments(lambda xs: xs[:-1], payload=False),
     ),
     "tamper-payload-in-place": Recipe(
-        "go-basic", (), _payload_in_place, payload=True, container="in-place"
+        "go-basic",
+        (),
+        _payload_in_place,
+        payload=True,
+        container="in-place",
+        payload_bytes=(CIPHERTEXT_BYTE,),
     ),
     "tamper-payload-tag": Recipe(
-        "go-basic", (), _payload_edit(lambda p, _m: _invert_tail(p)), payload=True
+        "go-basic",
+        (),
+        _payload_edit(lambda p, _m: _invert_tail(p)),
+        payload=True,
+        payload_bytes=(-3, -2, -1),
     ),
     "tamper-policy-body": Recipe(
         "go-basic", ("encryptionInformation.policy",), _manifest_edit(_policy_body)
@@ -491,16 +507,61 @@ def _under(path: str, touch: str) -> bool:
     return path == touch or path.startswith((f"{touch}.", f"{touch}["))
 
 
-def _check_in_place(base: Path, out: Path) -> None:
-    a, b = base.read_bytes(), out.read_bytes()
+def _diff(a: bytes, b: bytes) -> list[int]:
     if len(a) != len(b):
         raise TamperError(f"size {len(b)}, base {len(a)}")
-    diff = [i for i, (x, y) in enumerate(zip(a, b, strict=True)) if x != y]
+    return [i for i, (x, y) in enumerate(zip(a, b, strict=True)) if x != y]
+
+
+def _offsets(recipe: Recipe, size: int) -> list[int]:
+    """The recipe's payload_bytes as offsets into a payload of ``size`` bytes."""
+    if any(not -size <= i < size for i in recipe.payload_bytes):
+        raise TamperError(f"a {size}-byte payload has no bytes {recipe.payload_bytes}")
+    return sorted(i % size for i in recipe.payload_bytes)
+
+
+def _segment_chunks(manifest: bytes, payload: bytes) -> list[tuple[Any, bytes]]:
+    """(segment record, its ciphertext bytes), in manifest order."""
+    integrity = _integrity(json.loads(manifest))
+    sizes = [enc for _, enc in deks.segment_sizes(integrity)]
+    if sum(sizes) != len(payload):
+        raise TamperError(f"segments {sizes} do not fill {len(payload)} bytes")
+    out: list[tuple[Any, bytes]] = []
+    at = 0
+    for seg, size in zip(integrity["segments"], sizes, strict=True):
+        out.append((seg, payload[at : at + size]))
+        at += size
+    return out
+
+
+def _check_payload(
+    recipe: Recipe, manifests: tuple[bytes, bytes], payloads: tuple[bytes, bytes]
+) -> None:
+    a, b = payloads
+    if not recipe.payload:
+        if a != b:
+            raise TamperError("payload changed")
+    elif recipe.payload_bytes:
+        diff, want = _diff(a, b), _offsets(recipe, len(a))
+        if diff != want:
+            raise TamperError(f"payload bytes {diff[:8]} differ; want {want}")
+    else:
+        if a == b:
+            raise TamperError("payload unchanged")
+        base = _segment_chunks(manifests[0], a)
+        for seg, chunk in _segment_chunks(manifests[1], b):
+            if (seg, chunk) not in base:
+                raise TamperError(f"segment {seg} does not hold its base bytes")
+
+
+def _check_in_place(recipe: Recipe, base: Path, out: Path) -> None:
+    diff = _diff(base.read_bytes(), out.read_bytes())
     start = _payload_offset(base)
     with zipfile.ZipFile(base) as z:
         size = z.getinfo(PAYLOAD).compress_size
-    if len(diff) != 1 or not start <= diff[0] < start + size:
-        raise TamperError(f"bytes {diff[:8]} differ; want one inside the payload")
+    want = [start + i for i in _offsets(recipe, size)]
+    if diff != want:
+        raise TamperError(f"bytes {diff[:8]} differ; want {want}")
     with zipfile.ZipFile(out) as z:
         if z.testzip() != PAYLOAD:
             raise TamperError("payload CRC is not stale")
@@ -509,7 +570,7 @@ def _check_in_place(base: Path, out: Path) -> None:
 def check_derived(recipe: Recipe, base: Path, out: Path) -> None:
     """Fail unless ``out`` differs from ``base`` exactly where ``recipe`` declares."""
     if recipe.container == "in-place":
-        _check_in_place(base, out)
+        _check_in_place(recipe, base, out)
         return
     method = (
         zipfile.ZIP_DEFLATED if recipe.container == "deflate" else zipfile.ZIP_STORED
@@ -522,6 +583,9 @@ def check_derived(recipe: Recipe, base: Path, out: Path) -> None:
             raise TamperError(f"bad CRC for {bad}")
         if any(i.compress_type != method for i in zo.infolist()):
             raise TamperError(f"entries not compressed with method {method}")
+        for name in names:
+            if name not in (MANIFEST, PAYLOAD) and zb.read(name) != zo.read(name):
+                raise TamperError(f"{name} changed")
         manifests = zb.read(MANIFEST), zo.read(MANIFEST)
         payloads = zb.read(PAYLOAD), zo.read(PAYLOAD)
     changed = json_changes(*(json.loads(m) for m in manifests))
@@ -533,8 +597,7 @@ def check_derived(recipe: Recipe, base: Path, out: Path) -> None:
         raise TamperError(f"declared change missing: {unchanged}")
     if not recipe.touches and manifests[0] != manifests[1]:
         raise TamperError("manifest text changed")
-    if (payloads[0] != payloads[1]) != recipe.payload:
-        raise TamperError(f"payload {'unchanged' if recipe.payload else 'changed'}")
+    _check_payload(recipe, manifests, payloads)
 
 
 def key_stem(base: str) -> str:

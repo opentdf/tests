@@ -722,6 +722,54 @@ def test_check_derived_rejects_undeclared_changes(derive: Derive):
         tamper.check_derived(tamper.RECIPES["tamper-payload-in-place"], base, same)
 
 
+def test_check_derived_rejects_other_entry_changes(
+    tamper_bases: dict[str, Path], tmp_path: Path
+):
+    base = tmp_path / "base.tdf"
+    shutil.copy(tamper_bases["go-basic"], base)
+    with zipfile.ZipFile(base, "a") as z:
+        z.writestr("notes.txt", b"notes")
+    identity, out = tamper.RECIPES["tamper-identity-go-basic"], tmp_path / "out.tdf"
+    identity.apply(base, out, {})
+    tamper.check_derived(identity, base, out)
+    tamper.rezip_stored(base, out, {"notes.txt": b"edited"})
+    with pytest.raises(tamper.TamperError, match="notes.txt changed"):
+        tamper.check_derived(identity, base, out)
+
+
+def test_check_derived_rejects_other_payload_edits(derive: Derive, tmp_path: Path):
+    base, _ = derive("tamper-payload-tag")
+    payload = _read(base, "0.payload")
+
+    def flipped(*at: int) -> bytes:
+        out = bytearray(payload)
+        for i in at:
+            out[i] ^= 1
+        return bytes(out)
+
+    for name, edit in [
+        ("tamper-payload-tag", flipped(17, -3, -2, -1)),
+        ("tamper-ciphertext-body", flipped(20)),
+    ]:
+        out = tmp_path / f"wrong-{name}.tdf"
+        tamper.rezip_stored(base, out, {"0.payload": edit})
+        with pytest.raises(tamper.TamperError, match="payload bytes"):
+            tamper.check_derived(tamper.RECIPES[name], base, out)
+    raw = bytearray(base.read_bytes())
+    raw[tamper._payload_offset(base) + 20] ^= 1
+    in_place = tmp_path / "wrong-in-place.tdf"
+    in_place.write_bytes(raw)
+    with pytest.raises(tamper.TamperError, match="differ"):
+        tamper.check_derived(tamper.RECIPES["tamper-payload-in-place"], base, in_place)
+    # The manifest's segments reversed, the payload's chunks in another order.
+    ms, rev = derive("tamper-multi-segment-reverse")
+    c = _chunks(ms)
+    out = tmp_path / "wrong-reverse.tdf"
+    tamper.rezip_stored(rev, out, {"0.payload": c[0] + c[2] + c[1]})
+    with pytest.raises(tamper.TamperError, match="base bytes"):
+        tamper.check_derived(tamper.RECIPES["tamper-multi-segment-reverse"], ms, out)
+
+
 def test_identity_rezips_unchanged(derive: Derive):
     for name in sorted(n for n in tamper.RECIPES if n.startswith("tamper-identity-")):
         base, out = derive(name)
