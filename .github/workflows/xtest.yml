@@ -749,7 +749,6 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
           OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
@@ -762,7 +761,6 @@ jobs:
         working-directory: otdftests/xtest
         env:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
           OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
@@ -1186,7 +1184,6 @@ jobs:
           BENCH_PAYLOADS: ${{ needs.resolve-versions.outputs.bench-payloads }}
           BENCH_BUDGET_SECONDS: ${{ needs.resolve-versions.outputs.bench-budget-seconds }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
           # Use go's configured otdfctl, independent of the matrix SDK.
           OTDFCTL_HEADS: >-
@@ -1500,7 +1497,6 @@ jobs:
         env:
           ZIP64_SDK: ${{ matrix.sdk }}
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
-          SCHEMA_FILE: "manifest.schema.json"
           PLATFORM_TAG: main
           # Use go's configured otdfctl, regardless of the encrypting SDK.
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
