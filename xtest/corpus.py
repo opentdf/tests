@@ -291,5 +291,6 @@ def run_decrypt(
         raise DecryptHung(f"decrypt timed out after {timeout}s: {cmd}") from None
     except BaseException:
         _kill_group(proc)
+        proc.communicate()
         raise
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)

@@ -321,12 +321,14 @@ def _wait_gone(pid: int) -> bool:
     return False
 
 
+def _spawn_grandchild(pidfile: Path) -> list[str]:
+    return ["sh", "-c", 'sleep 30 & echo $! > "$1"; wait', "sh", str(pidfile)]
+
+
 def test_decrypt_timeout_kills_process_group(tmp_path: Path):
     pidfile = tmp_path / "pid"
     with pytest.raises(DecryptHung):
-        corpus.run_decrypt(
-            ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], {}, timeout=0.5
-        )
+        corpus.run_decrypt(_spawn_grandchild(pidfile), {}, timeout=0.5)
     assert _wait_gone(int(pidfile.read_text())), "grandchild survived the timeout"
 
 
@@ -341,14 +343,15 @@ def test_decrypt_interrupt_kills_process_group(
         nonlocal calls
         calls += 1
         if calls == 1:
+            deadline = time.monotonic() + 5
             while not pidfile.exists() or not pidfile.read_text().strip():
+                if time.monotonic() > deadline:
+                    raise AssertionError(f"{pidfile} was never written")
                 time.sleep(0.01)
             raise KeyboardInterrupt
         return real(self, *args, **kwargs)
 
     monkeypatch.setattr(corpus.subprocess.Popen, "communicate", interrupt_first)
     with pytest.raises(KeyboardInterrupt):
-        corpus.run_decrypt(
-            ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], {}, timeout=5
-        )
+        corpus.run_decrypt(_spawn_grandchild(pidfile), {}, timeout=5)
     assert _wait_gone(int(pidfile.read_text())), "grandchild survived the interrupt"
