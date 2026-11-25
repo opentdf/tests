@@ -34,6 +34,10 @@ otdf-sdk-mgr install tip --ref pr:42 go              # pr:N → refs/pull/N/head
 otdf-sdk-mgr install tip --ref abc123f4 platform     # SHA (cached on re-run)
 otdf-sdk-mgr install tip --ref refs/pull/42/head go  # raw ref
 
+# Build a commit from a local checkout, pushed or not (see Local Checkout Builds)
+otdf-sdk-mgr install local go ../platform            # HEAD → dist/local, --sdks go@local
+otdf-sdk-mgr install local java ~/src/java-sdk --rev my-fix --name my-fix
+
 # Install a published version with optional dist name (defaults to version tag)
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0
 otdf-sdk-mgr install artifact --sdk go --version v0.24.0 --dist-name my-tag
@@ -134,6 +138,78 @@ make
 # Verify build worked
 ls -la dist/main/cli.sh
 ```
+
+The java build runs `mvn clean install`, so `install tip java` and a hand-run
+`make` in `sdk/java` install the branch's modules into `~/.m2/repository`. They
+go in under the version in its pom, normally the last release's, and replace
+the published artifacts of that version that other builds then resolve.
+`install local java` avoids this (see below). After a tip build, delete
+`~/.m2/repository/io/opentdf/platform/*/<version>` to restore them.
+
+## Local Checkout Builds
+
+`install tip` builds only what GitHub has. `install local <sdk> <path>` builds
+a commit from a git checkout on your machine, so xtest can run a change before
+you push it. It also works for a change that spans several repos, which you
+can test together before publishing any of them.
+
+```bash
+otdf-sdk-mgr install local go ~/work/fix/platform
+otdf-sdk-mgr install local java ~/work/fix/java-sdk
+otdf-sdk-mgr install local js ~/work/fix/web-sdk
+cd xtest
+XT_FORCE_SUPPORTS=<feature> uv run pytest test_tdfs.py --sdks "go@local java@local js@local" -v
+```
+
+- **`<path>`** is the repository root: opentdf/platform for go (its `otdfctl/`
+  directory works too), java-sdk for java, web-sdk for js. Colocated jj repos
+  work like any other git checkout. Any other directory fails before anything
+  is built, and so does a commit that lacks the files the SDK's build needs.
+- **`--rev`** (default `HEAD`) is any revision the checkout resolves: a local
+  branch, a tag, or a commit id, including one that no branch points at. Only
+  committed changes are built. In a colocated jj repo `HEAD` is `@-`, so run
+  `jj new` (or `jj commit`) first, or pass the working-copy commit with
+  `--rev "$(jj log -r @ --no-graph -T commit_id)"`. git can't resolve jj
+  change ids.
+- **The checkout is only read.** The commit is cloned with
+  `git clone --local` (which hard-links objects) into the same place a source
+  build uses: `sdk/{lang}/src/<name>/`, or for go `sdk/go/platform-src/<name>/`
+  plus the `sdk/go/src/<name>` symlink. The SDK's Makefile builds it there into
+  `sdk/{lang}/dist/<name>/`. Nothing is written into `<path>`: no build output,
+  worktrees, refs, or remotes. Dependencies are still downloaded as usual
+  (Go modules, npm, Maven, and the java build's `buf generate`).
+- **`--name`** defaults to `local`, and xtest selects the build with
+  `--sdks <sdk>@<name>`. The names release and tip builds use (`main`, `HEAD`,
+  versions, and SHAs) are refused. So is an existing `src/<name>` or
+  `dist/<name>` that `install local` didn't create, such as a tip build of a
+  branch that has the same name.
+- **`dist/<name>/.version`** records `source=` (the checkout's absolute path),
+  `rev=` and `sha=`. A re-run reuses the build while the path and commit both
+  match. Otherwise it rebuilds from a fresh clone, for example after a new
+  commit or from another checkout.
+- **Java builds keep out of `~/.m2/repository`.** They install into
+  `${XDG_CACHE_HOME:-~/.cache}/otdf-sdk-mgr/maven-repository` instead, and
+  read `~/.m2/repository` as a read-only tail (`maven.repo.local.tail`,
+  Maven 3.9 and later), so what is already downloaded is reused. An older
+  Maven downloads everything again into that cache. Delete it to reclaim
+  space.
+- **Java builds need JDK 11 through 21.** The JDK Maven runs on (per
+  `mvn --version`) is checked before anything is copied, and nothing switches
+  it for you. On JDK 27 the build fails partway through. Set `JAVA_HOME`, for
+  example
+  `export JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"`.
+- **Feature gates still need `XT_FORCE_SUPPORTS`.** The build reports the
+  version in its source tree, normally the last release, so a version-gated
+  `cli.sh supports` check says "no" for the change you are testing. See
+  "Evaluating an unreleased fix" in the root `AGENTS.md`.
+
+`install local` builds SDK CLIs only. otdf-local runs the platform service
+from a source tree: a sibling `platform/` checkout, or `OTDF_LOCAL_PLATFORM_DIR`
+(see `otdf-local/AGENTS.md`). To test a platform change, point it at a
+separate checkout of that commit, not the one you are editing. `otdf-local up`
+regenerates the tracked `opentdf-dev.yaml` in that directory and writes key
+files into it. In a multi-repo workspace it can find the `platform/` beside
+`tests/` on its own, so set `OTDF_LOCAL_PLATFORM_DIR`.
 
 ## Manual SDK Operations
 
