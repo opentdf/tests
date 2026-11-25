@@ -14,8 +14,10 @@ from corpus import (
     PREFIXES,
     SIDECAR_SUFFIX,
     fixtures,
+    key_feature,
     load_sidecar,
 )
+from corpus_kas import supported_keys
 
 FIXTURES = fixtures()
 SIDECARS = sorted(CORPUS_DIR.glob(f"*{SIDECAR_SUFFIX}"))
@@ -235,3 +237,21 @@ def test_kas_keys_well_formed():
             assert _public_der(cert.public_key()) == _public_der(
                 private.public_key()
             ), f"{entry['kid']}: cert does not match privateKey"
+
+
+@pytest.mark.parametrize("kid", sorted(EXPECTED_KAS_KEYS))
+def test_kas_key_is_rsa_or_feature_gated(kid: str):
+    """Rule: setup skips a corpus key the platform can't import, so every non-RSA
+    algorithm maps to the platform feature that gates it."""
+    alg, _ = EXPECTED_KAS_KEYS[kid]
+    assert alg.startswith("rsa:") or key_feature(alg), f"{kid}: no feature gates {alg}"
+
+
+def test_supported_keys_follow_platform_features():
+    rsa_only = {
+        k for k, (alg, _) in EXPECTED_KAS_KEYS.items() if alg.startswith("rsa:")
+    }
+    assert set(supported_keys(set())) == rsa_only
+    assert set(supported_keys({"mechanism-xwing"})) == rsa_only | {"corpus-xwing"}
+    every = {"ecwrap", "mechanism-xwing", "mechanism-secpmlkem", "mechanism-mlkem"}
+    assert set(supported_keys(every)) == set(EXPECTED_KAS_KEYS)
