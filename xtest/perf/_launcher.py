@@ -21,9 +21,15 @@ that is holding nothing, which is what this one is for.
 Its own RSS is the floor under every reading it produces, so it reports that
 alongside them: a measurement sitting at the floor is censored, not small.
 
-Private protocol -- :mod:`perf.measure` is the only caller::
+Private protocol -- :mod:`perf.measure` and :mod:`streamharness` are the only
+callers::
 
     <python> -I -S _launcher.py <result-file> <timeout|-> <cmd> [args...]
+
+SIGTERM and SIGINT end the run the way the timeout does: the measured process
+group is killed and the result written, with ``timed_out`` set. streamharness
+sends SIGTERM when a consumer fails mid-stream; SIGINT is a Ctrl-C, which never
+reaches the child's own process group.
 
 One line of space-separated integers is written to ``<result-file>``::
 
@@ -38,6 +44,9 @@ import os
 import signal
 import sys
 import time
+
+#: Signals that stop the run early. Nothing else would kill the child's group.
+_STOP = {signal.SIGTERM, signal.SIGINT}
 
 
 class _Timeout(Exception):
@@ -62,12 +71,13 @@ def _current_rss_bytes() -> int:
     return pages * os.sysconf("SC_PAGE_SIZE")
 
 
-def _spawn(command: list[str], err_w: int) -> int:
-    """Fork and exec ``command``, reporting a failed exec down ``err_w``."""
+def _spawn(command: list[str], err_w: int, mask: set[int | signal.Signals]) -> int:
+    """Fork and exec ``command`` with signal ``mask``; report a failed exec down ``err_w``."""
     pid = os.fork()
     if pid != 0:
         return pid
     try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
         # Its own process group, so a timeout kills the whole tree instead of
         # just the shim -- leaving a wedged JVM behind would hold the runner
         # until the job timeout.
@@ -106,20 +116,32 @@ def main(argv: list[str]) -> int:
 
     floor = _current_rss_bytes()
     started = time.perf_counter_ns()
-    pid = _spawn(command, err_w)
+    # The child leads its own process group, so a stop signal that ended only
+    # this process would orphan it. Held off until the handler that kills the
+    # group is in place.
+    mask = signal.pthread_sigmask(signal.SIG_BLOCK, _STOP)
+    pid = _spawn(command, err_w, mask)
     os.close(err_w)
 
     timed_out = False
+    for signum in _STOP:
+        signal.signal(signum, _on_alarm)
     if timeout is not None:
         signal.signal(signal.SIGALRM, _on_alarm)
         signal.setitimer(signal.ITIMER_REAL, timeout)
     try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
         _, status, ru = os.wait4(pid, 0)
     except _Timeout:
+        signal.pthread_sigmask(signal.SIG_BLOCK, _STOP)
         timed_out = True
         _kill_tree(pid)
         _, status, ru = os.wait4(pid, 0)
     finally:
+        try:
+            signal.pthread_sigmask(signal.SIG_BLOCK, _STOP)
+        except _Timeout:
+            pass
         if timeout is not None:
             # The alarm can fire between wait4 returning and the disarm below.
             # That is not a timeout -- the child already exited on its own --
