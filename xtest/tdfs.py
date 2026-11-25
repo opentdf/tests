@@ -135,6 +135,9 @@ container_type = Literal["ztdf"]
 feature_type = Literal[
     "assertions",
     "assertion_verification",
+    # DSPX-4686: the reader-selected key alone verifies an assertion binding.
+    # Force this for unreleased SDK branches; the fix adds no CLI probe.
+    "assertion_selected_key_only",
     "attribute_traversal",
     "audit_logging",
     # Platform: rewrap audit events record the parsed client session-key type
