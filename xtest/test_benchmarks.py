@@ -72,7 +72,7 @@ def test_sdk_performance(
         if bench_cell.operation == "decrypt":
             ct_file = bench_ciphertexts(arms, bench_cell.payload.label)
             bench_cell_files.append(ct_file)
-        baseline, candidate = bench.build_arms(
+        arms_to_run = bench.build_arms(
             bench_cell,
             arms,
             pt_file=bench_payloads[bench_cell.payload.label],
@@ -81,12 +81,11 @@ def test_sdk_performance(
             attr_values=attribute_default_rsa.value_fqns,
         )
         bench_cell_files.extend(
-            out for arm in (baseline, candidate) if (out := arm.invocation.output)
+            out for arm in arms_to_run if (out := arm.invocation.output)
         )
         result = runner.run_cell(
             bench_cell.id,
-            baseline,
-            candidate,
+            arms_to_run,
             bench_config,
             deadline=bench_budget.next_deadline(),
             control=bench_cell.control,
