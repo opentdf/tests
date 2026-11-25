@@ -81,7 +81,6 @@ Prerequisites:
   instances, as `otdf-local up` starts them, and `OT_ROOT_KEY` set to the platform's root key.
 - SDK builds in `xtest/sdk/{go,java,js}/dist/main` (`otdf-sdk-mgr install tip`), plus Go, Node
   and a JDK 21 on `JAVA_HOME` for the writers.
-- The xtest dev extra: `uv sync --extra dev`.
 
 From `xtest/`:
 
@@ -100,13 +99,15 @@ To check one writer before a full `write`, `uv run python -m corpus_gen.selfchec
 
 Every step but `install` and `verdicts` writes to a staging directory, `$XT_TMP_DIR/corpus_gen`
 (default `xtest/tmp/corpus_gen`). `sidecars` keeps the validator fields of the sidecars already
-here, and their `[sdk]` tables unchanged (`--from DIR` reads them from another corpus). It rebuilds
+here, and their `[sdk]` tables unchanged (`--from DIR` reads them from another corpus, which must hold every previous sidecar and the
+synthetic-* files). It rebuilds
 the key references from the staged key files and writes fresh comments. The Go and Java SDKs pick
 random split ids, so share file names change with each `write`.
 
 `install` refuses, changing nothing, if a fixture is missing or has no sidecar, if a referenced key
-file is missing, or if a key file or derived fixture is older than the file it came from. It
-replaces the generated files here and leaves everything else alone.
+file is missing or absolute, or if a key file or derived fixture is older than the file it came
+from. It replaces the generated files here only once every new file has been copied in, and leaves
+everything else alone.
 
 ### Recording the `[sdk]` tables
 
@@ -149,13 +150,15 @@ into the sidecar's staged copy too, when there is one, so a later `install` keep
   written, provided that entry gives every recorded cell. To record such a case, write the list
   by hand under the SDK's key in that sidecar's `[sdk]` table, and re-run `verdicts`.
 - An SDK with no cells (a decrypt skipped because the SDK lacks a capability the file needs)
-  gets the outcome every other SDK's cells share, and a `note` saying why it was skipped.
+  gets the outcome every other SDK's cells share, and a `note` saying why it was skipped,
+  provided it has no cells for any other fixture that needs that capability.
 
 `verdicts` refuses, writing nothing, if cells disagree and no earlier entry gives them all, if
 the SDKs that ran disagree about a fixture another SDK skipped, if no SDK has cells for a fixture
 (which points at the platform or the env, not the SDKs), if a decrypt's output is not the
-generator's plaintext, or if a synthetic file decrypts at all. Its output lists the disagreeing
-cells.
+generator's plaintext, if a synthetic file decrypts at all, if an SDK has no cells for a fixture
+although it has cells for other fixtures needing the same capabilities, or if a staged fixture
+differs from the corpus fixture that was recorded. Its output lists the disagreeing cells.
 
 `plaintext_sha256` is the generator's plaintext digest, read from the staging directory's
 `manifest.json`. A `tamper-` or `zip-` file takes its base's digest. When that scratch is gone, or

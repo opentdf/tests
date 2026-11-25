@@ -910,7 +910,7 @@ jobs:
 
       - name: Run corpus decryption tests
         if: ${{ steps.multikas.outputs.supported == 'true' }}
-        # loadscope: the module's key/attribute setup runs once per worker, and its value-key race handling isn't safe to parallelise yet.
+        # loadscope: the module's key/attribute setup runs once per worker.
         run: |-
           uv run --frozen --no-build pytest -ra -v --numprocesses auto --dist loadscope \
             --html test-results/corpus-${FOCUS_SDK}-${PLATFORM_TAG}.html \
