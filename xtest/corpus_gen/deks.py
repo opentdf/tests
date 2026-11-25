@@ -7,6 +7,7 @@ import base64
 import glob
 import hashlib
 import hmac
+import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -99,6 +100,18 @@ def check_binding(share: bytes, kao: dict[str, Any], policy: str) -> None:
         raise DekError("policy binding does not match the unwrapped share")
 
 
+def check_metadata(share: bytes, kao: dict[str, Any], want: str) -> None:
+    """The KAO's encryptedMetadata must decrypt under its share to ``want``."""
+    try:
+        meta = json.loads(base64.b64decode(kao["encryptedMetadata"], validate=True))
+        blob = base64.b64decode(meta["ciphertext"], validate=True)
+        got = AESGCM(share).decrypt(blob[:IV_SIZE], blob[IV_SIZE:], None)
+    except (KeyError, TypeError, ValueError, InvalidTag) as e:
+        raise DekError(f"KAO encryptedMetadata does not decrypt: {e!r}") from None
+    if got != want.encode():
+        raise DekError(f"KAO encryptedMetadata is {got!r}, the job asked for {want!r}")
+
+
 def segment_sizes(integrity: dict[str, Any]) -> list[tuple[int, int]]:
     plain = integrity.get("segmentSizeDefault")
     enc = integrity.get("encryptedSegmentSizeDefault")
@@ -119,8 +132,10 @@ def verify_dek(
     integrity = manifest["encryptionInformation"]["integrityInformation"]
     segments = segment_sizes(integrity)
     if not segments:
-        if plaintext:
-            raise DekError("manifest has no segments but the plaintext is not empty")
+        if plaintext or payload:
+            raise DekError(
+                "manifest has no segments but the plaintext or payload is not empty"
+            )
         mac = hmac.new(dek, b"", hashlib.sha256)
         if not _matches(mac, integrity["rootSignature"]["sig"]):
             raise DekError("root signature does not match the DEK")

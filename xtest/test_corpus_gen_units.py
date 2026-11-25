@@ -290,6 +290,28 @@ def test_verify_dek_without_segments_checks_root_signature():
     deks.verify_dek(dek, manifest, b"", b"")
     with pytest.raises(deks.DekError):
         deks.verify_dek(bytes(32), manifest, b"", b"")
+    with pytest.raises(deks.DekError, match="payload"):
+        deks.verify_dek(dek, manifest, b"stray", b"")
+
+
+def _encrypted_metadata(share: bytes, value: bytes) -> str:
+    """encryptedMetadata as the SDKs write it: the IV leads the ciphertext."""
+    iv = hashlib.sha256(value).digest()[:12]
+    blob = iv + AESGCM(share).encrypt(iv, value, None)
+    meta = {"ciphertext": _b64(blob), "iv": _b64(iv)}
+    return _b64(json.dumps(meta).encode())
+
+
+def test_check_metadata():
+    share, want = bytes(range(32)), '{"corpus":"metadata-mimetype"}'
+    kao = {"encryptedMetadata": _encrypted_metadata(share, want.encode())}
+    deks.check_metadata(share, kao, want)
+    with pytest.raises(deks.DekError, match="does not decrypt"):
+        deks.check_metadata(bytes(32), kao, want)
+    with pytest.raises(deks.DekError, match="asked for"):
+        deks.check_metadata(share, kao, '{"corpus":"other"}')
+    with pytest.raises(deks.DekError, match="does not decrypt"):
+        deks.check_metadata(share, {}, want)
 
 
 @pytest.mark.parametrize("form", ["hex-base64", "base64"])
@@ -336,6 +358,46 @@ def test_rewrite_clears_stale_key_files(tmp_path: Path):
         "sdk-java-assertion-rs256.pub.pem"
     ]
     assert deks.remove_key_files(tmp_path / "absent", "x") == []
+
+
+def _written(tmp_path: Path, name: str, sizes: list[int], **kao: str) -> steps.Planned:
+    """A planned output and a file with its KAO and the given segment sizes."""
+    keys = corpus.kas_keys()
+    (p,) = [p for p in steps.plan(keys, tmp_path) if p.name == name]
+    ((url, kid),) = steps._expected_kaos(p.job, keys)
+    integrity = {
+        "segmentSizeDefault": p.job.get("segment_size", 2097152),
+        "segments": [{"segmentSize": s} for s in sizes],
+    }
+    manifest = {
+        "encryptionInformation": {
+            "keyAccess": [{"url": url, "kid": kid, "type": "wrapped", **kao}],
+            "integrityInformation": integrity,
+        },
+        "payload": {"mimeType": p.job.get("mime_type", "application/octet-stream")},
+    }
+    p.out.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(p.out, "w") as z:
+        z.writestr("0.manifest.json", json.dumps(manifest))
+        z.writestr("0.payload", b"")
+    return p
+
+
+def test_check_written_wants_the_job_segment_layout(tmp_path: Path):
+    keys, kib = corpus.kas_keys(), 1024
+    name = "sdk-go-multi-segment.tdf"
+    steps.check_written(_written(tmp_path, name, [16 * kib, 16 * kib, 8 * kib]), keys)
+    p = _written(tmp_path, name, [16 * kib, 8 * kib, 16 * kib])
+    with pytest.raises(steps.StepError, match="expected"):
+        steps.check_written(p, keys)
+
+
+def test_check_written_wants_encrypted_metadata(tmp_path: Path):
+    keys, name = corpus.kas_keys(), "sdk-go-metadata-mimetype.tdf"
+    p = _written(tmp_path, name, [1024], encryptedMetadata="e30=")
+    steps.check_written(p, keys)
+    with pytest.raises(steps.StepError, match="encryptedMetadata"):
+        steps.check_written(_written(tmp_path, name, [1024]), keys)
 
 
 # The source corpus's tamper-* names. Hard-coded: the source corpus is not
@@ -2073,6 +2135,75 @@ def test_run_writers_accepts_planned_output(
     assert failed == [] and written[str(out)]["sdk"] == "s"
 
 
+def test_run_writers_kills_started_writers_when_a_launch_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import signal
+    import time
+
+    pid, beat = tmp_path / "pid", tmp_path / "beat"
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import os, sys, time\n"
+        "open(sys.argv[1], 'w').write(str(os.getpid()))\n"
+        "while True:\n"
+        "    open(sys.argv[2], 'a').write('.')\n"
+        "    time.sleep(0.02)\n"
+    )
+    # Like `go run`, the writer does its work in a child process.
+    writer = tmp_path / "writer.py"
+    writer.write_text(
+        "import subprocess, sys, time\n"
+        f"subprocess.Popen([sys.executable, {str(child)!r}, {str(pid)!r}, {str(beat)!r}])\n"
+        "time.sleep(60)\n"
+    )
+
+    def cmd(sdk: str) -> list[str]:
+        if sdk == "go":
+            return [sys.executable, str(writer)]
+        deadline = time.monotonic() + 10
+        while not beat.exists():
+            assert time.monotonic() < deadline, "the go writer's child never started"
+            time.sleep(0.01)
+        return [str(tmp_path / "no-such-writer")]
+
+    monkeypatch.setattr(steps.runtime, "writer_cmd", cmd)
+    monkeypatch.setattr(steps.runtime, "XTEST", tmp_path)
+    groups = {"go": [_planned(tmp_path / "a")], "java": [_planned(tmp_path / "b")]}
+    try:
+        with pytest.raises(FileNotFoundError):
+            steps._run_writers(groups, tmp_path, dict(os.environ))
+        time.sleep(0.1)
+        size = beat.stat().st_size
+        time.sleep(0.3)
+        assert beat.stat().st_size == size, "the go writer's child is still running"
+    finally:
+        try:
+            os.kill(int(pid.read_text()), signal.SIGKILL)
+        except FileNotFoundError, ProcessLookupError:
+            pass
+
+
+def test_run_write_drops_selected_entries_before_prepare(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    picked, other = "sdk-go-basic.tdf", "sdk-go-empty.tdf"
+    old = {picked: {"kind": "sdk", "version": "old"}, other: {"kind": "sdk"}}
+    (tmp_path / "manifest.json").write_text(json.dumps(old))
+    monkeypatch.setattr(steps.runtime, "scratch_dir", lambda: tmp_path)
+    monkeypatch.setattr(steps.runtime, "load_env", dict)
+    monkeypatch.setattr(steps.runtime, "setup_platform", lambda: None)
+
+    def launch_fails(*_args: object) -> Any:
+        raise FileNotFoundError("no java")
+
+    monkeypatch.setattr(steps, "_run_writers", launch_fails)
+    with pytest.raises(FileNotFoundError):
+        steps.run_write([picked])
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert manifest == {other: old[other]}
+
+
 @pytest.mark.parametrize(
     "entry",
     [
@@ -2089,6 +2220,35 @@ def test_manifest_paths_outside_scratch_are_refused(
     entry["plaintext_sha256"] = hashlib.sha256(b"").hexdigest()
     with pytest.raises((ValueError, steps.StepError), match="outside|escapes"):
         steps._key_files(entry, lambda kao: b"", tmp_path)  # type: ignore[arg-type]
+
+
+def test_key_files_check_encrypted_metadata(tmp_path: Path):
+    src = _write_base(tmp_path / "x.tdf")
+    m = _manifest(src)
+    m["encryptionInformation"]["keyAccess"][0]["encryptedMetadata"] = (
+        _encrypted_metadata(_DEK, b"want")
+    )
+    out = tmp_path / "stage" / "x.tdf"
+    out.parent.mkdir()
+    tamper.rezip_stored(src, out, {"0.manifest.json": json.dumps(m).encode()})
+    pt = tmp_path / "plaintexts" / "x.txt"
+    pt.parent.mkdir()
+    pt.write_bytes(variants.plaintext("x", 132))
+    entry = {
+        "plaintext": str(pt),
+        "plaintext_sha256": hashlib.sha256(pt.read_bytes()).hexdigest(),
+        "key_stem": "x",
+        "job": {"out": str(out), "encrypted_metadata": "want"},
+    }
+
+    def unwrap(_kao: dict[str, Any]) -> bytes:
+        return _DEK
+
+    files = steps._key_files(entry, unwrap, tmp_path)  # type: ignore[arg-type]
+    assert files == {"x.dek": _DEK.hex() + "\n"}
+    entry["job"]["encrypted_metadata"] = "other"
+    with pytest.raises(deks.DekError, match="asked for"):
+        steps._key_files(entry, unwrap, tmp_path)  # type: ignore[arg-type]
 
 
 def test_inside_allows_nested_and_refuses_escape(tmp_path: Path):

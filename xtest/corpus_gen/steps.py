@@ -12,10 +12,13 @@ Output goes to the scratch dir (runtime.scratch_dir()), never to xtest/corpus:
 """
 
 import base64
+import contextlib
 import fnmatch
 import hashlib
 import json
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import zipfile
@@ -180,11 +183,20 @@ def check_written(p: Planned, keys: Keys) -> None:
     if sum(sizes) != p.size:
         fail(f"segments hold {sum(sizes)} bytes, plaintext has {p.size}")
     seg = p.job.get("segment_size")
-    if seg is not None and (integrity["segmentSizeDefault"] != seg or len(sizes) < 2):
-        fail(f"segments {sizes} with default {integrity['segmentSizeDefault']}")
+    if seg is not None:
+        # Full segments, then the remainder.
+        want = [seg] * (p.size // seg) + ([p.size % seg] if p.size % seg else [])
+        default = integrity["segmentSizeDefault"]
+        if default != seg or len(sizes) < 2 or sizes != want:
+            fail(f"segments {sizes} with default {default}, expected {want}")
     mime = p.job.get("mime_type")
     if mime is not None and m["payload"].get("mimeType") != mime:
         fail(f"mimeType {m['payload'].get('mimeType')!r}")
+    # The value is checked under the DEK by `deks`.
+    if p.job.get("encrypted_metadata") and not all(
+        k.get("encryptedMetadata") for k in kaos
+    ):
+        fail("a KAO has no encryptedMetadata")
     if p.job.get("target_mode") == "4.2.2" and "schemaVersion" in m:
         fail("4.2.2 target but the manifest has schemaVersion")
 
@@ -224,6 +236,11 @@ def _load_manifest(scratch: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def _save_manifest(scratch: Path, manifest: dict[str, Any]) -> None:
+    with (scratch / "manifest.json").open("w") as f:
+        json.dump(manifest, f, indent=1, sort_keys=True)
+
+
 def _output_path(scratch: Path, out: str) -> Path:
     """A TDF path from writer output or the manifest: under stage/ or bases/."""
     for sub in ("stage", "bases"):
@@ -234,37 +251,56 @@ def _output_path(scratch: Path, out: str) -> Path:
     raise StepError(f"output path {out!r} is outside {scratch}/stage and /bases")
 
 
+def _stop(proc: subprocess.Popen[str]) -> None:
+    """Kill a writer's process group (`go run` leaves a child) and reap it."""
+    if proc.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
+    if proc.stdout:
+        proc.stdout.close()
+
+
 def _run_writers(
     groups: dict[str, list[Planned]], scratch: Path, env: dict[str, str]
 ) -> tuple[dict[str, dict[str, str]], list[str]]:
-    """Run each SDK's writer once over its jobs, concurrently."""
+    """Run each SDK's writer once over its jobs, concurrently. On any error,
+    the writers already started are killed before it propagates."""
     procs: dict[str, tuple[subprocess.Popen[str], Path]] = {}
-    for sdk, items in groups.items():
-        jobs = scratch / f"jobs-{sdk}.json"
-        jobs.write_text(json.dumps([p.job for p in items], indent=1))
-        log = scratch / f"writer-{sdk}.log"
-        with log.open("w") as err:
-            procs[sdk] = (
-                subprocess.Popen(
-                    [*runtime.writer_cmd(sdk), str(jobs)],
-                    cwd=runtime.XTEST,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=err,
-                    text=True,
-                ),
-                log,
-            )
     written: dict[str, dict[str, str]] = {}
     failed: list[str] = []
-    for sdk, (proc, log) in procs.items():
-        stdout, _ = proc.communicate()
-        for line in stdout.splitlines():
-            rec = json.loads(line)
-            written[str(_output_path(scratch, rec["out"]))] = rec
-        if proc.returncode != 0:
-            tail = "\n".join(log.read_text().splitlines()[-20:])
-            failed.append(f"{sdk} writer exited {proc.returncode} (log {log}):\n{tail}")
+    try:
+        for sdk, items in groups.items():
+            jobs = scratch / f"jobs-{sdk}.json"
+            jobs.write_text(json.dumps([p.job for p in items], indent=1))
+            log = scratch / f"writer-{sdk}.log"
+            with log.open("w") as err:
+                procs[sdk] = (
+                    subprocess.Popen(
+                        [*runtime.writer_cmd(sdk), str(jobs)],
+                        cwd=runtime.XTEST,
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=err,
+                        text=True,
+                        start_new_session=True,
+                    ),
+                    log,
+                )
+        for sdk, (proc, log) in procs.items():
+            stdout, _ = proc.communicate()
+            for line in stdout.splitlines():
+                rec = json.loads(line)
+                written[str(_output_path(scratch, rec["out"]))] = rec
+            if proc.returncode != 0:
+                tail = "\n".join(log.read_text().splitlines()[-20:])
+                failed.append(
+                    f"{sdk} writer exited {proc.returncode} (log {log}):\n{tail}"
+                )
+    except BaseException:
+        for proc, _ in procs.values():
+            _stop(proc)
+        raise
     return written, failed
 
 
@@ -285,6 +321,11 @@ def run_write(only: list[str] | None) -> int:
     env = runtime.load_env()
     runtime.setup_platform()
 
+    # Dropped before prepare deletes the outputs, so a failed run cannot leave
+    # an old entry describing a new file.
+    for p in todo:
+        manifest.pop(p.name, None)
+    _save_manifest(scratch, manifest)
     groups: dict[str, list[Planned]] = {}
     for p in todo:
         prepare(p, scratch)
@@ -292,7 +333,6 @@ def run_write(only: list[str] | None) -> int:
 
     written, failed = _run_writers(groups, scratch, env)
     for p in todo:
-        manifest.pop(p.name, None)
         rec = written.get(str(p.out))
         if rec is None:
             failed.append(f"{p.name}: not written")
@@ -316,8 +356,7 @@ def run_write(only: list[str] | None) -> int:
             "job": p.job,
         }
         print(f"ok   {p.name} ({rec['sdk']} {rec['version']}, {p.size} bytes)")
-    with (scratch / "manifest.json").open("w") as f:
-        json.dump(manifest, f, indent=1, sort_keys=True)
+    _save_manifest(scratch, manifest)
     for f in failed:
         print(f"FAIL {f}", file=sys.stderr)
     sdk_n = sum(1 for e in manifest.values() if e["kind"] == "sdk")
@@ -375,10 +414,13 @@ def _key_files(
         payload = z.read("0.payload")
     enc = manifest["encryptionInformation"]
     kaos = enc["keyAccess"]
+    meta = entry["job"].get("encrypted_metadata")
     pairs: list[tuple[str, bytes]] = []
     for kao in kaos:
         share = unwrap(kao)
         deks.check_binding(share, kao, enc["policy"])
+        if meta:
+            deks.check_metadata(share, kao, meta)
         pairs.append((kao.get("sid") or "", share))
     dek, shares = deks.combine(pairs)
     deks.verify_dek(dek, manifest, payload, plaintext)
