@@ -7,7 +7,6 @@ themselves at the container layer. Offline: nothing here talks to the platform.
 """
 
 import dataclasses
-import struct
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -40,50 +39,23 @@ def _with(src: Path, **changes: object) -> zipmutate.MutableTrailer:
     return dataclasses.replace(trailer, **changes)  # type: ignore[arg-type]
 
 
-def _manifest_zip64(src: Path, **changes: object) -> zipmutate.MutableTrailer:
-    return _entry(src, MANIFEST, version_needed_to_extract=45, **changes)
-
-
-def _beyond(src: Path) -> int:
-    """About 4 KiB past the end of the file."""
-    return src.stat().st_size + 4096
-
-
-def _payload_overlap(src: Path) -> zipmutate.MutableTrailer:
-    cd = zipinspect.central_directory(src)
-    payload = next(e for e in cd.entries if e.name == PAYLOAD)
-    size = cd.cd_offset - zipinspect.local_file_header_data_offset(src, payload) + 1
-    return _entry(src, PAYLOAD, compressed_size=size, uncompressed_size=size)
-
-
-def _extra_overrun(src: Path) -> zipmutate.MutableTrailer:
-    trailer, _ = zipmutate.load_trailer(src)
-    offset = next(e for e in trailer.entries if e.name == MANIFEST).local_header_offset
-    return _manifest_zip64(
-        src,
-        force_zip64_offset=True,
-        extra_override=struct.pack("<HHQ", 1, 0xFFFF, offset),
-    )
+def _malformed(case: str) -> Trailer:
+    """A zipmutate.malformed_trailer case, as test_zip_conformance.py builds it."""
+    return lambda src: zipmutate.malformed_trailer(src, case)
 
 
 ZIP_TRAILERS: dict[str, Trailer] = {
-    "zip-adversarial-directory-offset-past-eof": lambda s: _with(
-        s, force_zip64_eocd=True, cd_offset_override=_beyond(s)
-    ),
+    "zip-adversarial-directory-offset-past-eof": _malformed("directory_offset_eof"),
     "zip-adversarial-entry-count-overstated": lambda s: _with(
         s, entry_count_override=len(zipmutate.load_trailer(s)[0].entries) + 1
     ),
-    "zip-adversarial-extra-length-overrun": _extra_overrun,
-    "zip-adversarial-header-offset-int64": lambda s: _manifest_zip64(
-        s, local_header_offset=1 << 63, force_zip64_offset=True
+    "zip-adversarial-extra-length-overrun": _malformed("extra_length_overrun"),
+    "zip-adversarial-header-offset-int64": _malformed("header_offset_int64"),
+    "zip-adversarial-impossible-entry-count": _malformed("impossible_entry_count"),
+    "zip-adversarial-manifest-size-past-eof": _malformed("manifest_size_eof"),
+    "zip-adversarial-payload-overlaps-directory": _malformed(
+        "payload_overlaps_directory"
     ),
-    "zip-adversarial-impossible-entry-count": lambda s: _with(
-        s, force_zip64_eocd=True, entry_count_override=(1 << 64) - 1
-    ),
-    "zip-adversarial-manifest-size-past-eof": lambda s: _manifest_zip64(
-        s, compressed_size=_beyond(s), force_zip64_compressed_size=True
-    ),
-    "zip-adversarial-payload-overlaps-directory": _payload_overlap,
     FAKE_COMMENT: zipmutate.fake_record_comment_trailer,
     "zip-legal-entry-comment": lambda s: _entry(
         s, PAYLOAD, comment=b"comment on the payload directory entry"
@@ -132,11 +104,15 @@ class ZipCaseError(ValueError):
 
 
 def check_derived(name: str, base: Path, out: Path) -> None:
-    """Fail unless ``out`` is ``base`` with only its trailer rebuilt, and the
-    result is readable (legal) or differs from the base trailer (adversarial)."""
+    """Fail unless ``out`` is ``base`` with only its trailer rebuilt as the case
+    says, and the result is readable (legal) or differs from the base trailer
+    (adversarial)."""
     _, cd_offset = zipmutate.load_trailer(base)
-    if out.read_bytes()[:cd_offset] != base.read_bytes()[:cd_offset]:
+    raw = out.read_bytes()
+    if raw[:cd_offset] != base.read_bytes()[:cd_offset]:
         raise ZipCaseError("local headers or entry data changed")
+    if raw[cd_offset:] != ZIP_TRAILERS[name](base).to_bytes(cd_offset):
+        raise ZipCaseError("trailer is not the case's")
     if name.startswith("zip-adversarial-"):
         want, _ = zipmutate.load_trailer(base)
         if ZIP_TRAILERS[name](base) == want:

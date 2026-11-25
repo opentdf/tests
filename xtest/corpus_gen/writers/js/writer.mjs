@@ -418,4 +418,5 @@ try {
   console.error(e instanceof Error ? e.message : e);
   code = 1;
 }
-process.exit(code);
+// Pipe writes are async on POSIX: exit only once the queued records are flushed.
+process.stdout.write('', () => process.exit(code));

@@ -5,15 +5,17 @@ one file per platform, and appends an [sdk] table to every non-golden sidecar
 in xtest/corpus, and to its staged copy if there is one, replacing any earlier
 table. Where cells disagree in a way it cannot express, it keeps the earlier
 entry if that gives every cell. It writes nothing if any cell is wrong, no
-entry gives a disagreement, or a fixture has no cells at all.
+entry gives a disagreement, a fixture has no cells at all, or a staged copy's
+fixture is not the recorded one.
 """
 
+import filecmp
 import json
 import sys
 import tempfile
 import tomllib
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -211,11 +213,14 @@ def table_text(
     by_sdk: dict[str, list[Cell]],
     digest: str | None,
     needs: Sequence[str],
+    shown: Mapping[str, Collection[str]],
     earlier: Earlier | None = None,
 ) -> tuple[str, list[str]]:
     """The [sdk] table for one fixture, and the SDKs whose earlier entry it
-    kept. ``needs`` names the capabilities its decrypt needs; only they explain
-    an SDK with no cells, which then gets the outcome all other cells share."""
+    kept. ``needs`` names the capabilities its decrypt needs, and ``shown`` the
+    ones each SDK has cells for elsewhere. Only a needed capability not shown
+    explains an SDK with no cells, which then gets the outcome all other cells
+    share."""
     ran = [c for cells in by_sdk.values() for c in cells]
     if not ran:
         raise VerdictError(f"{name}: {_NO_CELLS}")
@@ -228,15 +233,21 @@ def table_text(
         cells = by_sdk.get(sdk, [])
         if not cells:
             outcomes = {c.outcome for c in ran}
+            lacks = [f for f in needs if f not in shown.get(sdk, ())]
             if not needs:
                 problems.append(f"no {sdk} cells, and no capability explains it")
+            elif not lacks:
+                problems.append(
+                    f"no {sdk} cells, though {sdk} has cells for other fixtures"
+                    f" that need {', '.join(needs)}"
+                )
             elif len(outcomes) > 1:
                 problems.append(
                     f"no {sdk} cells, and the SDKs that ran disagree:\n{_listing(ran)}"
                 )
             else:
                 out[sdk] = outcomes.pop()
-                notes.append(_skip_note(sdk, needs))
+                notes.append(_skip_note(sdk, lacks))
             continue
         for c in cells:
             if c.outcome not in corpus.VERDICTS:
@@ -283,6 +294,18 @@ def load_records(paths: Sequence[Path]) -> Records:
     return {f: dict(by) for f, by in out.items()}
 
 
+def shown_features(
+    records: Records, needs: Mapping[str, Sequence[str]]
+) -> dict[str, set[str]]:
+    """Per SDK, the capabilities needed by the fixtures it has cells for."""
+    out: dict[str, set[str]] = {sdk: set() for sdk in corpus.SDK_NAMES}
+    for name, features in needs.items():
+        for sdk, cells in records.get(name, {}).items():
+            if cells:
+                out[sdk].update(features)
+    return out
+
+
 def _check(texts: dict[Path, str], records: Records) -> list[str]:
     """Each new sidecar parses and resolves every recorded cell to its outcome."""
     problems: list[str] = []
@@ -305,6 +328,17 @@ def _check(texts: dict[Path, str], records: Records) -> list[str]:
     return problems
 
 
+def _check_staged(fixture: Path, staged: Path) -> None:
+    """The records describe ``fixture``; its staged copy must be the same bytes
+    to take their table."""
+    if not staged.is_file() or not filecmp.cmp(fixture, staged, shallow=False):
+        raise VerdictError(
+            f"{fixture.name}: the staged copy is missing or differs from {fixture},"
+            " which the records describe; install the stage and record again,"
+            " or remove the stage"
+        )
+
+
 def _earlier(path: Path, table: corpus.SdkTable | None) -> Earlier | None:
     if table is None:
         return None
@@ -315,16 +349,20 @@ def build_sidecars(
     records: Records, manifest: dict[str, Any], root: Path, stage: Path | None = None
 ) -> tuple[dict[Path, str], list[str]]:
     """New text for every non-golden sidecar in ``root``, and for its copy in
-    ``stage`` if there is one: its lines up to any earlier [sdk] table,
-    unchanged, then the new table. Also the earlier entries kept, as
-    "<fixture> <sdk>". ``manifest`` is the generator's; a fixture it lacks keeps
-    its sidecar's plaintext_sha256."""
+    ``stage`` if there is one, provided the staged fixture is the same bytes:
+    its lines up to any earlier [sdk] table, unchanged, then the new table.
+    Also the earlier entries kept, as "<fixture> <sdk>". ``manifest`` is the
+    generator's; a fixture it lacks keeps its sidecar's plaintext_sha256."""
     keys = corpus.kas_keys(root)
     names = [f.name for f in corpus.fixtures(root) if not f.name.startswith("golden-")]
     problems = [
         f"{n}: recorded, but not a non-golden fixture in {root}"
         for n in sorted(set(records) - set(names))
     ]
+    needs = {
+        n: corpus.required_features(corpus.read_manifest(root / n), keys) for n in names
+    }
+    shown = shown_features(records, needs)
     texts: dict[Path, str] = {}
     kept: list[str] = []
     for name in names:
@@ -338,13 +376,21 @@ def build_sidecars(
             digest = plaintext_digest(
                 manifest, name, sc.sdk.plaintext_sha256 if sc.sdk else None
             )
-            needs = corpus.required_features(corpus.read_manifest(root / name), keys)
             table, kept_sdks = table_text(
-                name, sc.raw, records[name], digest, needs, _earlier(path, sc.sdk)
+                name,
+                sc.raw,
+                records[name],
+                digest,
+                needs[name],
+                shown,
+                _earlier(path, sc.sdk),
             )
             kept += [f"{name} {sdk}" for sdk in kept_sdks]
-            copies = [path, *([stage / sidecar] if stage else [])]
-            for p in (p for p in copies if p.is_file()):
+            copies = [path]
+            if stage and (stage / sidecar).is_file():
+                _check_staged(root / name, stage / name)
+                copies.append(stage / sidecar)
+            for p in copies:
                 head, _ = sidecars.split_sdk_table(p.read_text())
                 texts[p] = sidecars.with_sdk_table(head, table)
         except (VerdictError, corpus.SidecarError, sidecars.SidecarGenError) as e:

@@ -23,7 +23,17 @@ import assertions
 import corpus
 import zipinspect  # noqa: F401
 import zipmutate
-from corpus_gen import deks, pki, sidecars, steps, tamper, variants, verdicts, zipcases
+from corpus_gen import (
+    deks,
+    pki,
+    selfcheck,
+    sidecars,
+    steps,
+    tamper,
+    variants,
+    verdicts,
+    zipcases,
+)
 
 # Suffixes of the source corpus's sdk-<sdk>-* names. Hard-coded: the source
 # corpus is not available in CI.
@@ -110,6 +120,54 @@ def test_jobs_fit_writer_limits(sdk: str):
             assert all("sid" not in s for s in split), name
         if sdk == "web":
             assert all(not k["alg"].startswith("hpqt:") for k in kas), name
+
+
+def test_selfcheck_outputs_are_per_sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("XT_TMP_DIR", str(tmp_path))
+    paths: list[str] = []
+    for sdk in selfcheck.CLI:
+        scratch = selfcheck._scratch(sdk)
+        scratch.mkdir(parents=True)
+        jobs, _ = selfcheck._jobs(scratch, sdk)
+        paths += [p for j in jobs for p in (j["out"], j["plaintext"])]
+    assert len(set(paths)) == len(paths)
+
+
+_UUIDS = [
+    "0f6e2f5c-4b1e-4c47-9d0a-6d1f3e0b9a11",
+    "7c3a9e42-1d5b-4f8e-a2c6-58b0d4e7f312",
+]
+
+
+@pytest.mark.parametrize(
+    ("sdk", "sids", "ok"),
+    [
+        ("go", ["s-0", "s-1"], True),
+        ("js", ["s-1", "s-0"], True),
+        ("go", [None, "s-1"], False),
+        ("js", ["", "s-1"], False),
+        ("go", ["s-1", "s-2"], False),
+        ("java", _UUIDS, True),
+        ("java", [None, _UUIDS[0]], False),
+        ("java", [_UUIDS[0], _UUIDS[0]], False),
+    ],
+)
+def test_selfcheck_split_ids(
+    sdk: str, sids: list[str | None], ok: bool, tmp_path: Path
+):
+    jobs, _ = selfcheck._jobs(tmp_path, sdk)
+    (job,) = [j for j in jobs if Path(j["out"]).stem == "split-two-kao"]
+    kao = {"url": selfcheck.KM1, "kid": selfcheck.KID}
+    kaos = [kao if s is None else {**kao, "sid": s} for s in sids]
+    tdf = tmp_path / "split-two-kao.tdf"
+    with zipfile.ZipFile(tdf, "w") as z:
+        manifest = {"encryptionInformation": {"keyAccess": kaos}}
+        z.writestr("0.manifest.json", json.dumps(manifest))
+    if ok:
+        selfcheck._check_manifest("split-two-kao", tdf, job)
+    else:
+        with pytest.raises(AssertionError, match="split ids"):
+            selfcheck._check_manifest("split-two-kao", tdf, job)
 
 
 def _handling(job: variants.WriteJob) -> variants.AssertionSpec:
@@ -232,6 +290,28 @@ def test_verify_dek_without_segments_checks_root_signature():
     deks.verify_dek(dek, manifest, b"", b"")
     with pytest.raises(deks.DekError):
         deks.verify_dek(bytes(32), manifest, b"", b"")
+    with pytest.raises(deks.DekError, match="payload"):
+        deks.verify_dek(dek, manifest, b"stray", b"")
+
+
+def _encrypted_metadata(share: bytes, value: bytes) -> str:
+    """encryptedMetadata as the SDKs write it: the IV leads the ciphertext."""
+    iv = hashlib.sha256(value).digest()[:12]
+    blob = iv + AESGCM(share).encrypt(iv, value, None)
+    meta = {"ciphertext": _b64(blob), "iv": _b64(iv)}
+    return _b64(json.dumps(meta).encode())
+
+
+def test_check_metadata():
+    share, want = bytes(range(32)), '{"corpus":"metadata-mimetype"}'
+    kao = {"encryptedMetadata": _encrypted_metadata(share, want.encode())}
+    deks.check_metadata(share, kao, want)
+    with pytest.raises(deks.DekError, match="does not decrypt"):
+        deks.check_metadata(bytes(32), kao, want)
+    with pytest.raises(deks.DekError, match="asked for"):
+        deks.check_metadata(share, kao, '{"corpus":"other"}')
+    with pytest.raises(deks.DekError, match="does not decrypt"):
+        deks.check_metadata(share, {}, want)
 
 
 @pytest.mark.parametrize("form", ["hex-base64", "base64"])
@@ -278,6 +358,46 @@ def test_rewrite_clears_stale_key_files(tmp_path: Path):
         "sdk-java-assertion-rs256.pub.pem"
     ]
     assert deks.remove_key_files(tmp_path / "absent", "x") == []
+
+
+def _written(tmp_path: Path, name: str, sizes: list[int], **kao: str) -> steps.Planned:
+    """A planned output and a file with its KAO and the given segment sizes."""
+    keys = corpus.kas_keys()
+    (p,) = [p for p in steps.plan(keys, tmp_path) if p.name == name]
+    ((url, kid),) = steps._expected_kaos(p.job, keys)
+    integrity = {
+        "segmentSizeDefault": p.job.get("segment_size", 2097152),
+        "segments": [{"segmentSize": s} for s in sizes],
+    }
+    manifest = {
+        "encryptionInformation": {
+            "keyAccess": [{"url": url, "kid": kid, "type": "wrapped", **kao}],
+            "integrityInformation": integrity,
+        },
+        "payload": {"mimeType": p.job.get("mime_type", "application/octet-stream")},
+    }
+    p.out.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(p.out, "w") as z:
+        z.writestr("0.manifest.json", json.dumps(manifest))
+        z.writestr("0.payload", b"")
+    return p
+
+
+def test_check_written_wants_the_job_segment_layout(tmp_path: Path):
+    keys, kib = corpus.kas_keys(), 1024
+    name = "sdk-go-multi-segment.tdf"
+    steps.check_written(_written(tmp_path, name, [16 * kib, 16 * kib, 8 * kib]), keys)
+    p = _written(tmp_path, name, [16 * kib, 8 * kib, 16 * kib])
+    with pytest.raises(steps.StepError, match="expected"):
+        steps.check_written(p, keys)
+
+
+def test_check_written_wants_encrypted_metadata(tmp_path: Path):
+    keys, name = corpus.kas_keys(), "sdk-go-metadata-mimetype.tdf"
+    p = _written(tmp_path, name, [1024], encryptedMetadata="e30=")
+    steps.check_written(p, keys)
+    with pytest.raises(steps.StepError, match="encryptedMetadata"):
+        steps.check_written(_written(tmp_path, name, [1024]), keys)
 
 
 # The source corpus's tamper-* names. Hard-coded: the source corpus is not
@@ -602,6 +722,54 @@ def test_check_derived_rejects_undeclared_changes(derive: Derive):
         tamper.check_derived(tamper.RECIPES["tamper-payload-in-place"], base, same)
 
 
+def test_check_derived_rejects_other_entry_changes(
+    tamper_bases: dict[str, Path], tmp_path: Path
+):
+    base = tmp_path / "base.tdf"
+    shutil.copy(tamper_bases["go-basic"], base)
+    with zipfile.ZipFile(base, "a") as z:
+        z.writestr("notes.txt", b"notes")
+    identity, out = tamper.RECIPES["tamper-identity-go-basic"], tmp_path / "out.tdf"
+    identity.apply(base, out, {})
+    tamper.check_derived(identity, base, out)
+    tamper.rezip_stored(base, out, {"notes.txt": b"edited"})
+    with pytest.raises(tamper.TamperError, match="notes.txt changed"):
+        tamper.check_derived(identity, base, out)
+
+
+def test_check_derived_rejects_other_payload_edits(derive: Derive, tmp_path: Path):
+    base, _ = derive("tamper-payload-tag")
+    payload = _read(base, "0.payload")
+
+    def flipped(*at: int) -> bytes:
+        out = bytearray(payload)
+        for i in at:
+            out[i] ^= 1
+        return bytes(out)
+
+    for name, edit in [
+        ("tamper-payload-tag", flipped(17, -3, -2, -1)),
+        ("tamper-ciphertext-body", flipped(20)),
+    ]:
+        out = tmp_path / f"wrong-{name}.tdf"
+        tamper.rezip_stored(base, out, {"0.payload": edit})
+        with pytest.raises(tamper.TamperError, match="payload bytes"):
+            tamper.check_derived(tamper.RECIPES[name], base, out)
+    raw = bytearray(base.read_bytes())
+    raw[tamper._payload_offset(base) + 20] ^= 1
+    in_place = tmp_path / "wrong-in-place.tdf"
+    in_place.write_bytes(raw)
+    with pytest.raises(tamper.TamperError, match="differ"):
+        tamper.check_derived(tamper.RECIPES["tamper-payload-in-place"], base, in_place)
+    # The manifest's segments reversed, the payload's chunks in another order.
+    ms, rev = derive("tamper-multi-segment-reverse")
+    c = _chunks(ms)
+    out = tmp_path / "wrong-reverse.tdf"
+    tamper.rezip_stored(rev, out, {"0.payload": c[0] + c[2] + c[1]})
+    with pytest.raises(tamper.TamperError, match="base bytes"):
+        tamper.check_derived(tamper.RECIPES["tamper-multi-segment-reverse"], ms, out)
+
+
 def test_identity_rezips_unchanged(derive: Derive):
     for name in sorted(n for n in tamper.RECIPES if n.startswith("tamper-identity-")):
         base, out = derive(name)
@@ -769,6 +937,94 @@ def test_x5c_forged(derive: Derive):
     assertions.verify_jws_signature(jws, key)
 
 
+def test_signer_key_never_publishes_a_partial_pem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real_fdopen = os.fdopen
+
+    class Partial:
+        """Writes part of the data, then fails."""
+
+        def __init__(self, fd: int, mode: str):
+            self.f = real_fdopen(fd, mode)
+
+        def __enter__(self) -> Partial:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            self.f.close()
+
+        def write(self, data: bytes) -> None:
+            self.f.write(data[:64])
+            raise OSError("disk full")
+
+    monkeypatch.setattr(os, "fdopen", Partial)
+    with pytest.raises(OSError, match="disk full"):
+        pki.signer_key(tmp_path, "rs256")
+    monkeypatch.undo()
+    assert list((tmp_path / "signers").iterdir()) == []
+    key = pki.signer_key(tmp_path, "rs256")
+    serialization.load_pem_private_key(key.encode(), password=None)
+    assert (tmp_path / "signers" / "rs256.key.pem").stat().st_mode & 0o777 == 0o600
+
+
+def _key_of(key_pem: str, cert_pem: str) -> bool:
+    key = serialization.load_pem_private_key(key_pem.encode(), password=None)
+    return (
+        key.public_key()
+        == x509.load_pem_x509_certificate(cert_pem.encode()).public_key()
+    )
+
+
+def test_forged_signer_rebuilds_a_mismatched_pair(tmp_path: Path):
+    subject = x509.Name.from_rfc4514_string("CN=corpus")
+    key, cert = pki.forged_signer(tmp_path, subject)
+    assert pki.forged_signer(tmp_path, subject) == (key, cert)
+    # A rebuild that stopped after writing its key, before its certificate.
+    other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    (tmp_path / "forged.key.pem").write_bytes(pki._key_pem(other))
+    key2, cert2 = pki.forged_signer(tmp_path, subject)
+    assert cert2 != cert
+    assert _key_of(key2, cert2)
+
+
+@pytest.fixture(scope="module")
+def x5c_generations(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    a, b = tmp_path_factory.mktemp("x5c-a"), tmp_path_factory.mktemp("x5c-b")
+    pki.x5c_chain(a)
+    pki.x5c_chain(b)
+    return a, b
+
+
+def test_x5c_chain_reuses_a_complete_generation(
+    x5c_generations: tuple[Path, Path], tmp_path: Path
+):
+    a, _ = x5c_generations
+    shutil.copytree(a, tmp_path / "pki")
+    assert pki.x5c_chain(tmp_path / "pki") == pki.x5c_chain(a)
+
+
+@pytest.mark.parametrize(
+    "stale", ["leaf.key.pem", "leaf.pem", "intermediate.pem", "ca.pem"]
+)
+def test_x5c_chain_rebuilds_a_mixed_generation(
+    stale: str, x5c_generations: tuple[Path, Path], tmp_path: Path
+):
+    a, b = x5c_generations
+    d = tmp_path / "pki"
+    shutil.copytree(a, d)
+    shutil.copy(b / stale, d / stale)
+    chain = pki.x5c_chain(d)
+    leaf, inter, ca = (
+        x509.load_pem_x509_certificate(p.encode())
+        for p in (chain.leaf, chain.intermediate, chain.ca)
+    )
+    leaf.verify_directly_issued_by(inter)
+    inter.verify_directly_issued_by(ca)
+    assert _key_of(chain.leaf_key, chain.leaf)
+    assert chain.leaf not in (pki.x5c_chain(a).leaf, pki.x5c_chain(b).leaf)
+
+
 # The source corpus's zip-* names, each with the trailer fields it changes.
 # Hard-coded for the same reason.
 SOURCE_ZIP: dict[str, set[str]] = {
@@ -866,6 +1122,33 @@ def test_adversarial_cases_contradict(name: str, zip_base: Path, tmp_path: Path)
     base_trailer, _ = zipmutate.load_trailer(zip_base)
     trailer = zipcases.ZIP_TRAILERS[name](zip_base)
     assert _trailer_diff(base_trailer, trailer) == SOURCE_ZIP[name]
+
+
+@pytest.mark.parametrize("name", ADVERSARIAL)
+def test_zip_check_reads_the_written_trailer(name: str, zip_base: Path, tmp_path: Path):
+    _, cd_offset = zipmutate.load_trailer(zip_base)
+    cut = tmp_path / "cut.tdf"
+    cut.write_bytes(zip_base.read_bytes()[:cd_offset])
+    for out in (zip_base, cut):
+        with pytest.raises(zipcases.ZipCaseError, match="not the case's"):
+            zipcases.check_derived(name, zip_base, out)
+
+
+def test_adversarial_trailers_read_back(zip_base: Path, tmp_path: Path):
+    """The contradictions in the written files, as zipinspect parses them."""
+
+    def entry(name: str, entry: str) -> zipinspect.CentralDirectoryEntry:
+        cd = zipinspect.central_directory(_build(name, zip_base, tmp_path))
+        return next(e for e in cd.entries if e.name == entry)
+
+    header = entry("zip-adversarial-header-offset-int64", "0.manifest.json")
+    assert header.local_header_offset == 1 << 63 and header.uses_zip64_for_offset
+    size = entry("zip-adversarial-manifest-size-past-eof", "0.manifest.json")
+    assert size.compressed_size == zip_base.stat().st_size + 4096
+    payload = entry("zip-adversarial-payload-overlaps-directory", "0.payload")
+    _, cd_offset = zipmutate.load_trailer(zip_base)
+    start = zipinspect.local_file_header_data_offset(zip_base, payload)
+    assert start + payload.compressed_size == cd_offset + 1
 
 
 def test_zip_entry_sentinels_defer_every_field(zip_base: Path):
@@ -1051,9 +1334,13 @@ SDK_TABLE = (
 )
 
 
-@pytest.mark.parametrize("header", ["[sdk]  # hand-edited", "  [sdk]", "[ sdk ]"])
+@pytest.mark.parametrize(
+    "header", ["[sdk]  # hand-edited", "  [sdk]", "[ sdk ]", '["sdk"]', "[ 'sdk' ]"]
+)
 def test_sidecars_keep_sdk_table_under_any_header(tmp_path: Path, header: str):
-    src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', header)}")
+    table = SDK_TABLE.replace("[sdk]", header)
+    src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{table}")
+    assert sidecars.split_sdk_table(src.read_text()) == (OLD_TAMPER, table)
     refs = sidecars.KeyRefs(key="keys/tamper-web-basic.dek")
     out = tmp_path / "new.tdf.expect.toml"
     out.write_text(sidecars.carry_sidecar(src, ["c"], refs))
@@ -1064,7 +1351,7 @@ def test_sidecars_keep_sdk_table_under_any_header(tmp_path: Path, header: str):
 
 def test_sidecars_refuse_an_sdk_table_they_cannot_carry(tmp_path: Path):
     src = _old_sidecar(
-        tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', '["sdk"]')}"
+        tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', '[sdk.go]')}"
     )
     with pytest.raises(sidecars.SidecarGenError, match="cannot carry"):
         sidecars.carry_sidecar(src, ["c"], sidecars.KeyRefs(key="keys/x.dek"))
@@ -1104,6 +1391,12 @@ def test_sidecars_keep_sdk_table(tmp_path: Path):
     text = sidecars.sidecar_text(ctx, f"{sidecars.FORGED}.tdf")
     assert text.endswith(f'"\n\n{SDK_TABLE}')
     assert _parse(text, tmp_path)["expect"] == "invalid"
+    # A table it cannot carry is refused, not dropped.
+    (src_dir / f"{sidecars.FORGED}.tdf.expect.toml").write_text(
+        f'expect = "invalid"\n\n{SDK_TABLE.replace("[sdk]", "[sdk.go]")}'
+    )
+    with pytest.raises(sidecars.SidecarGenError, match="cannot carry"):
+        sidecars.sidecar_text(ctx, f"{sidecars.FORGED}.tdf")
 
 
 def test_rewrite_note_writer_prefix():
@@ -1181,6 +1474,34 @@ def test_clear_outputs_removes_sidecars_and_synthetic_copies(tmp_path: Path):
     assert sorted(_tree(stage)) == ["keys/sdk-a.dek", "sdk-a.tdf"]
 
 
+@pytest.mark.parametrize("where", ["inside", "parent", "absolute"])
+def test_copy_synthetic_confines_dek_to_source(tmp_path: Path, where: str):
+    src, stage = tmp_path / "src", tmp_path / "stage"
+    (src / "keys").mkdir(parents=True)
+    stage.mkdir()
+    (src / "keys" / "x.dek").write_text("inside")
+    (tmp_path / "x.dek").write_text("outside")
+    ref = {
+        "inside": "keys/x.dek",
+        "parent": "../x.dek",
+        "absolute": str(tmp_path / "x.dek"),
+    }[where]
+    names = list(sidecars.RENAMES.values())
+    for name in names:
+        (src / name).write_bytes(b"x")
+        (src / f"{name}{corpus.SIDECAR_SUFFIX}").write_text('expect = "invalid"\n')
+    keyed = src / f"{names[0]}{corpus.SIDECAR_SUFFIX}"
+    keyed.write_text(f'expect = "invalid"\nkey = "{ref}"\n')
+    dek = stage / "keys" / f"{names[0].rsplit('.', 1)[0]}.dek"
+    if where == "inside":
+        sidecars.copy_synthetic(src, stage)
+        assert dek.read_text() == "inside"
+        return
+    with pytest.raises(sidecars.SidecarGenError, match="is outside"):
+        sidecars.copy_synthetic(src, stage)
+    assert not dek.exists()
+
+
 # A fake scratch with one sdk fixture and one tamper fixture plus its base, and
 # a corpus holding a golden, other files and an earlier generator output.
 SDK_FIXTURE = "sdk-go-basic.tdf"
@@ -1255,6 +1576,26 @@ def test_install_replaces_generator_outputs(fake: tuple[Path, Path]):
     assert {k: after[k] for k in kept} == {k: before[k] for k in kept}
 
 
+def test_install_keeps_old_outputs_when_a_copy_fails(
+    fake: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+):
+    scratch, dest = fake
+    before = _tree(dest)
+    copyfile = shutil.copyfile
+    calls: list[Path] = []
+
+    def fail_third(frm: Path, to: Path) -> Path:
+        calls.append(to)
+        if len(calls) == 3:
+            raise OSError("no space left")
+        return copyfile(frm, to)
+
+    monkeypatch.setattr(sidecars.shutil, "copyfile", fail_third)
+    with pytest.raises(OSError, match="no space left"):
+        sidecars.install(scratch, dest, FAKE_EXPECTED)
+    assert _tree(dest) == before
+
+
 def _refused(scratch: Path, dest: Path, match: str) -> None:
     before = _tree(dest)
     with pytest.raises(sidecars.InstallRefused) as e:
@@ -1276,6 +1617,15 @@ def test_install_refuses_missing_key(fake: tuple[Path, Path]):
     _refused(
         scratch, dest, f"{TAMPER_FIXTURE}: missing key file keys/tamper-go-basic.dek"
     )
+
+
+def test_install_refuses_absolute_key_reference(fake: tuple[Path, Path]):
+    scratch, dest = fake
+    stage = scratch / "stage"
+    key = (stage / "keys" / "sdk-go-basic.dek").resolve()
+    sidecar = f'expect = "valid"\nkey = "{key}"\n'
+    _touch(stage / f"{SDK_FIXTURE}.expect.toml", 400, sidecar)
+    _refused(scratch, dest, f"{SDK_FIXTURE}: key reference {key} is absolute")
 
 
 def test_install_refuses_stale_key(fake: tuple[Path, Path]):
@@ -1416,7 +1766,8 @@ FAKE_SIDECARS = {
         'expect = "invalid"\nmust_contain = ["TDF.SEMANTIC.KEY_ACCESS_MISSING"]\n'
     ),
 }
-STAGED = "sdk-go-basic.tdf.expect.toml"
+STAGED_FIXTURE = "sdk-go-basic.tdf"
+STAGED = f"{STAGED_FIXTURE}.expect.toml"
 STAGED_HEAD = '# Staged, newer comments.\nexpect = "valid"\n'
 
 
@@ -1451,6 +1802,7 @@ def vcorpus(tmp_path: Path) -> tuple[Path, Path]:
     stale = '\n[sdk]\ngo = "reject"\njava = "reject"\njs = "reject"\n'
     (scratch / "stage").mkdir()
     (scratch / "stage" / STAGED).write_text(STAGED_HEAD + stale)
+    shutil.copyfile(root / STAGED_FIXTURE, scratch / "stage" / STAGED_FIXTURE)
     return root, scratch
 
 
@@ -1596,6 +1948,32 @@ def test_verdicts_skipped_sdk_refusals(
     assert (_tree(root), _tree(scratch)) == before
 
 
+def test_verdicts_skipped_sdk_must_lack_a_needed_capability(
+    vcorpus: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """Only a needed capability the SDK has no cells for anywhere explains a
+    missing cell."""
+    root, scratch = vcorpus
+    other = "sdk-java-hybrid-xwing.tdf"
+    shutil.copyfile(root / HYBRID, root / other)
+    (root / f"{other}{corpus.SIDECAR_SUFFIX}").write_text('expect = "valid"\n')
+    rec = _record(tmp_path, _fake_rows({other: _rows(other, NONE)}))
+    before = _tree(root), _tree(scratch)
+    assert verdicts.run_verdicts([rec], scratch, root) == 1
+    assert (
+        f"{HYBRID}: no js cells, though js has cells for other fixtures that"
+        " need mechanism-xwing"
+    ) in capsys.readouterr().err
+    assert (_tree(root), _tree(scratch)) == before
+
+    # The note names only the capability the SDK lacks.
+    cells = _cells(_rows(HYBRID, GOOD, D2, skip=("js",)))
+    by_sdk = {sdk: [c for c in cells if c.sdk == sdk] for sdk in ("go", "java")}
+    needs = ["ecwrap", "mechanism-xwing"]
+    text, _ = verdicts.table_text(HYBRID, {}, by_sdk, D2, needs, {"js": {"ecwrap"}})
+    assert "because js lacks mechanism-xwing;" in text
+
+
 def test_verdicts_refuse_a_fixture_no_sdk_ran(
     vcorpus: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
@@ -1609,7 +1987,7 @@ def test_verdicts_refuse_a_fixture_no_sdk_ran(
     assert "PLATFORM_VERSION" in err
     assert (_tree(root), _tree(scratch)) == before
     with pytest.raises(verdicts.VerdictError, match="no SDK recorded a cell"):
-        verdicts.table_text(HYBRID, {}, {}, D2, ["mechanism-xwing"])
+        verdicts.table_text(HYBRID, {}, {}, D2, ["mechanism-xwing"], {})
 
 
 @pytest.mark.parametrize("scratch_state", ["absent", "lacks-fixtures"])
@@ -1729,7 +2107,33 @@ def test_verdicts_update_staged_copies(vcorpus: tuple[Path, Path], tmp_path: Pat
     assert verdicts.run_verdicts([_record(tmp_path, _fake_rows())], scratch, root) == 0
     _, table = sidecars.split_sdk_table((root / STAGED).read_text())
     assert (scratch / "stage" / STAGED).read_text() == f"{STAGED_HEAD}\n{table}"
-    assert sorted(p.name for p in (scratch / "stage").iterdir()) == [STAGED]
+    assert sorted(p.name for p in (scratch / "stage").iterdir()) == [
+        STAGED_FIXTURE,
+        STAGED,
+    ]
+
+
+@pytest.mark.parametrize("staged", ["regenerated", "missing"])
+def test_verdicts_refuse_a_staged_copy_of_other_bytes(
+    staged: str,
+    vcorpus: tuple[Path, Path],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+):
+    """The records describe the corpus's bytes, not a regenerated stage's."""
+    root, scratch = vcorpus
+    fixture = scratch / "stage" / STAGED_FIXTURE
+    if staged == "missing":
+        fixture.unlink()
+    else:
+        fixture.write_bytes(b"y")
+    rec = _record(tmp_path, _fake_rows())
+    before = _tree(root), _tree(scratch)
+    assert verdicts.run_verdicts([rec], scratch, root) == 1
+    assert f"{STAGED_FIXTURE}: the staged copy is missing or differs" in (
+        capsys.readouterr().err
+    )
+    assert (_tree(root), _tree(scratch)) == before
 
 
 @pytest.mark.parametrize("bad", ["../x.tdf", "/etc/x.tdf", "stage/../../x.tdf"])
@@ -1779,6 +2183,75 @@ def test_run_writers_accepts_planned_output(
     assert failed == [] and written[str(out)]["sdk"] == "s"
 
 
+def test_run_writers_kills_started_writers_when_a_launch_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import signal
+    import time
+
+    pid, beat = tmp_path / "pid", tmp_path / "beat"
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import os, sys, time\n"
+        "open(sys.argv[1], 'w').write(str(os.getpid()))\n"
+        "while True:\n"
+        "    open(sys.argv[2], 'a').write('.')\n"
+        "    time.sleep(0.02)\n"
+    )
+    # Like `go run`, the writer does its work in a child process.
+    writer = tmp_path / "writer.py"
+    writer.write_text(
+        "import subprocess, sys, time\n"
+        f"subprocess.Popen([sys.executable, {str(child)!r}, {str(pid)!r}, {str(beat)!r}])\n"
+        "time.sleep(60)\n"
+    )
+
+    def cmd(sdk: str) -> list[str]:
+        if sdk == "go":
+            return [sys.executable, str(writer)]
+        deadline = time.monotonic() + 10
+        while not beat.exists():
+            assert time.monotonic() < deadline, "the go writer's child never started"
+            time.sleep(0.01)
+        return [str(tmp_path / "no-such-writer")]
+
+    monkeypatch.setattr(steps.runtime, "writer_cmd", cmd)
+    monkeypatch.setattr(steps.runtime, "XTEST", tmp_path)
+    groups = {"go": [_planned(tmp_path / "a")], "java": [_planned(tmp_path / "b")]}
+    try:
+        with pytest.raises(FileNotFoundError):
+            steps._run_writers(groups, tmp_path, dict(os.environ))
+        time.sleep(0.1)
+        size = beat.stat().st_size
+        time.sleep(0.3)
+        assert beat.stat().st_size == size, "the go writer's child is still running"
+    finally:
+        try:
+            os.kill(int(pid.read_text()), signal.SIGKILL)
+        except FileNotFoundError, ProcessLookupError:
+            pass
+
+
+def test_run_write_drops_selected_entries_before_prepare(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    picked, other = "sdk-go-basic.tdf", "sdk-go-empty.tdf"
+    old = {picked: {"kind": "sdk", "version": "old"}, other: {"kind": "sdk"}}
+    (tmp_path / "manifest.json").write_text(json.dumps(old))
+    monkeypatch.setattr(steps.runtime, "scratch_dir", lambda: tmp_path)
+    monkeypatch.setattr(steps.runtime, "load_env", dict)
+    monkeypatch.setattr(steps.runtime, "setup_platform", lambda: None)
+
+    def launch_fails(*_args: object) -> Any:
+        raise FileNotFoundError("no java")
+
+    monkeypatch.setattr(steps, "_run_writers", launch_fails)
+    with pytest.raises(FileNotFoundError):
+        steps.run_write([picked])
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert manifest == {other: old[other]}
+
+
 @pytest.mark.parametrize(
     "entry",
     [
@@ -1795,6 +2268,35 @@ def test_manifest_paths_outside_scratch_are_refused(
     entry["plaintext_sha256"] = hashlib.sha256(b"").hexdigest()
     with pytest.raises((ValueError, steps.StepError), match="outside|escapes"):
         steps._key_files(entry, lambda kao: b"", tmp_path)  # type: ignore[arg-type]
+
+
+def test_key_files_check_encrypted_metadata(tmp_path: Path):
+    src = _write_base(tmp_path / "x.tdf")
+    m = _manifest(src)
+    m["encryptionInformation"]["keyAccess"][0]["encryptedMetadata"] = (
+        _encrypted_metadata(_DEK, b"want")
+    )
+    out = tmp_path / "stage" / "x.tdf"
+    out.parent.mkdir()
+    tamper.rezip_stored(src, out, {"0.manifest.json": json.dumps(m).encode()})
+    pt = tmp_path / "plaintexts" / "x.txt"
+    pt.parent.mkdir()
+    pt.write_bytes(variants.plaintext("x", 132))
+    entry = {
+        "plaintext": str(pt),
+        "plaintext_sha256": hashlib.sha256(pt.read_bytes()).hexdigest(),
+        "key_stem": "x",
+        "job": {"out": str(out), "encrypted_metadata": "want"},
+    }
+
+    def unwrap(_kao: dict[str, Any]) -> bytes:
+        return _DEK
+
+    files = steps._key_files(entry, unwrap, tmp_path)  # type: ignore[arg-type]
+    assert files == {"x.dek": _DEK.hex() + "\n"}
+    entry["job"]["encrypted_metadata"] = "other"
+    with pytest.raises(deks.DekError, match="asked for"):
+        steps._key_files(entry, unwrap, tmp_path)  # type: ignore[arg-type]
 
 
 def test_inside_allows_nested_and_refuses_escape(tmp_path: Path):

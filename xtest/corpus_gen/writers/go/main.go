@@ -32,7 +32,7 @@ type kasSpec struct {
 }
 
 type splitSpec struct {
-	KAS int    `json:"kas"`
+	KAS *int   `json:"kas"` // nil when missing or null
 	SID string `json:"sid"`
 }
 
@@ -200,11 +200,15 @@ func kasInfos(j job) ([]sdk.KASInfo, error) {
 			if s.SID != want {
 				return nil, fmt.Errorf("Go SDK %s writes split id %q at position %d, not %q", sdkVersion(), want, i, s.SID)
 			}
-			if s.KAS < 0 || s.KAS >= len(j.KAS) || seen[s.KAS] {
+			if s.KAS == nil {
+				return nil, errors.New("split entry missing kas")
+			}
+			k := *s.KAS
+			if k < 0 || k >= len(j.KAS) || seen[k] {
 				return nil, errors.New("split must name every kas exactly once")
 			}
-			seen[s.KAS] = true
-			order[i] = s.KAS
+			seen[k] = true
+			order[i] = k
 		}
 	}
 	infos := make([]sdk.KASInfo, 0, len(order))

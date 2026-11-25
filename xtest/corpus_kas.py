@@ -213,28 +213,46 @@ def ensure_corpus_attributes(
     return out
 
 
+def _grants_read(m: abac.SubjectMapping) -> bool:
+    """Whether the mapping includes the read action (DECRYPT on legacy platforms)."""
+    return any(
+        a.name == "read"
+        or (a.Value is not None and a.Value.Standard == abac.StandardAction.DECRYPT)
+        for a in m.actions
+    )
+
+
 def _mapped_value_ids(otdfctl: Any, scs: abac.SubjectConditionSet) -> set[str]:
-    """Value ids with a subject mapping to an equivalent condition set."""
+    """Value ids with a read subject mapping to an equivalent condition set."""
     return {
         m.attribute_value.id
         for m in otdfctl.scs_map_list()
-        if m.subject_condition_set.id == scs.id
-        or m.subject_condition_set.subject_sets == scs.subject_sets
+        if _grants_read(m)
+        and (
+            m.subject_condition_set.id == scs.id
+            or m.subject_condition_set.subject_sets == scs.subject_sets
+        )
     }
+
+
+def _value_keys(otdfctl: Any, val: abac.AttributeValue) -> set[tuple[str, str]]:
+    current = otdfctl.attribute_value_get(val.id)
+    return {(k.kas_uri, k.public_key.kid) for k in current.kas_keys or []}
 
 
 def _ensure_value_key(otdfctl: Any, val: abac.AttributeValue, key: abac.KasKey) -> None:
     """Assign key to the value; raise if it already carries a different key."""
-    current = otdfctl.attribute_value_get(val.id)
-    kids = {k.public_key.kid for k in current.kas_keys or []}
-    if kids == {key.key.key_id}:
+    expected = {(key.kas_uri, key.key.key_id)}
+    current = _value_keys(otdfctl, val)
+    if current == expected:
         return
-    if kids:
+    if current:
         raise CorpusValueMismatch(
-            f"{val.fqn} is mapped to {sorted(kids)}, expected {key.key.key_id!r}"
+            f"{val.fqn} is mapped to {sorted(current)}, expected {sorted(expected)}"
         )
     try:
         otdfctl.key_assign_value(key, val)
-    except Exception as e:
-        if not _EXISTS.search(str(e)):
+    except Exception:
+        # A concurrent setup may have assigned the same key first.
+        if _value_keys(otdfctl, val) != expected:
             raise

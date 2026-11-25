@@ -376,8 +376,10 @@ class FakeOtdfctl:
         self.mapped: list[str] = []
         self.fail_first_import = False
         self.fail_first_attr = False
-        self.value_keys: dict[str, list[str]] = {}
-        self.mappings: list[tuple[str, str]] = []
+        # value id -> [(kas_uri, kid)]
+        self.value_keys: dict[str, list[tuple[str, str]]] = {}
+        # (value id, condition set id, action name)
+        self.mappings: list[tuple[str, str, str]] = []
 
     def kas_registry_keys_list(self, kas: abac.KasEntry) -> list[abac.KasKey]:
         return list(self.keys.get(kas.uri, []))
@@ -446,11 +448,13 @@ class FakeOtdfctl:
 
     def key_assign_value(self, key: abac.KasKey, val: abac.AttributeValue) -> None:
         self.assigned.append((key.key.key_id, val.fqn or ""))
-        self.value_keys.setdefault(val.id, []).append(key.key.key_id)
+        self.value_keys.setdefault(val.id, []).append((key.kas_uri, key.key.key_id))
 
-    def scs_map(self, sc: Any, value: abac.AttributeValue) -> None:
+    def scs_map(
+        self, sc: Any, value: abac.AttributeValue, action: str = "read"
+    ) -> None:
         self.mapped.append(value.fqn or "")
-        self.mappings.append((value.id, sc.id))
+        self.mappings.append((value.id, sc.id, action))
 
     def attribute_value_get(self, value_id: str) -> abac.AttributeValue:
         return abac.AttributeValue(
@@ -458,10 +462,9 @@ class FakeOtdfctl:
             value="",
             kas_keys=[
                 abac.ValueKasKey(
-                    kas_uri="http://localhost:8585",
-                    public_key=abac.ValueKasKeyPublic(kid=kid),
+                    kas_uri=uri, public_key=abac.ValueKasKeyPublic(kid=kid)
                 )
-                for kid in self.value_keys.get(value_id, [])
+                for uri, kid in self.value_keys.get(value_id, [])
             ],
         )
 
@@ -471,9 +474,9 @@ class FakeOtdfctl:
                 id=f"sm{i}",
                 attribute_value=abac.AttributeValue(id=vid, value=""),
                 subject_condition_set=abac.SubjectConditionSet(id=sid, subject_sets=[]),
-                actions=[],
+                actions=[abac.Action(name=action)],
             )
-            for i, (vid, sid) in enumerate(self.mappings)
+            for i, (vid, sid, action) in enumerate(self.mappings)
         ]
 
 
@@ -635,12 +638,71 @@ def test_value_mapped_to_wrong_key_raises(two_kas):
         for v in a.values or []
         if v.fqn and v.fqn.endswith("split-allof/value/km2")
     )
-    fake.value_keys[val.id] = ["corpus-r2048"]
+    fake.value_keys[val.id] = [("http://localhost:8686", "corpus-r2048")]
     with pytest.raises(corpus_kas.CorpusValueMismatch) as ei:
         corpus_kas.ensure_corpus_attributes(fake, scs, keys)
     msg = str(ei.value)
     assert "split-allof/value/km2" in msg
     assert "corpus-r2048" in msg and "corpus-r2048-b" in msg
+
+
+def _value(fake: FakeOtdfctl, suffix: str) -> abac.AttributeValue:
+    return next(
+        v
+        for a in fake.attributes
+        for v in a.values or []
+        if v.fqn and v.fqn.endswith(suffix)
+    )
+
+
+def test_value_with_corpus_kid_under_other_kas_raises(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    val = _value(fake, "label/value/a")
+    fake.value_keys[val.id] = [("http://localhost:8686", "corpus-r2048")]
+    with pytest.raises(corpus_kas.CorpusValueMismatch):
+        corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+
+
+@pytest.mark.parametrize("rival_kid", [None, "corpus-r2048-b"])
+def test_value_key_assign_race(two_kas, rival_kid: str | None):
+    """A failed assign is fine only if the expected key is now on the value."""
+    fake, keys, scs = _setup_unmapped(two_kas)
+    plain_assign = fake.key_assign_value
+
+    def racing_assign(key: abac.KasKey, val: abac.AttributeValue) -> None:
+        if rival_kid is None:
+            plain_assign(key, val)
+        else:
+            plain_assign(keys[rival_kid], val)
+        raise AssertionError()
+
+    fake.key_assign_value = racing_assign  # type: ignore[method-assign]
+    if rival_kid is None:
+        corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    else:
+        with pytest.raises(AssertionError):
+            corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+
+
+def test_mapping_without_read_is_not_reused(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    val = _value(fake, "label/value/a")
+    fake.mappings.append((val.id, scs.id, "create"))
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert (val.id, scs.id, "read") in fake.mappings
+
+
+def test_legacy_decrypt_mapping_counts_as_read(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    legacy = abac.Action(Value=abac.SubjectAction(Standard=abac.StandardAction.DECRYPT))
+    fake.scs_map_list = lambda: [  # type: ignore[method-assign]
+        m.model_copy(update={"actions": [legacy]})
+        for m in FakeOtdfctl.scs_map_list(fake)
+    ]
+    fake.mapped.clear()
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert fake.mapped == []
 
 
 KEYS_BY_KID: Any = {

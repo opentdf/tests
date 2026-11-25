@@ -4,6 +4,12 @@
 sidecar (from --from, by default xtest/corpus), rebuilds its key references from
 the staged key files and writes fresh comments. `install` copies the stage into
 xtest/corpus once every fixture there is complete and current. Offline.
+
+`sidecars` does not build the synthetic-* fixtures or any validator fields: the
+--from corpus must already hold every fixture's previous sidecar and the
+synthetic-* files (under their corpus names or the names in RENAMES). Where
+xtest/corpus holds only the golden-* fixtures, pass --from a corpus that has
+them; without one, `sidecars` fails before writing any sidecar.
 """
 
 import glob
@@ -18,6 +24,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import tomli_w
 
 import corpus
 import corpus_kas
@@ -407,15 +415,14 @@ def comment_lines(comments: Sequence[str]) -> str:
 
 
 def render(comments: Sequence[str], fields: dict[str, Any]) -> str:
-    # A dev dependency, imported here so collecting the tests does not need it.
-    import tomli_w
-
     text = comment_lines(comments) + tomli_w.dumps(fields)
     check_public(text)
     return text
 
 
-_SDK_HEADER = re.compile(r"^[ \t]*\[[ \t]*sdk[ \t]*\][ \t]*(?:#.*)?$", re.M)
+_SDK_HEADER = re.compile(
+    r"^[ \t]*\[[ \t]*(?:sdk|\"sdk\"|'sdk')[ \t]*\][ \t]*(?:#.*)?$", re.M
+)
 
 
 def split_sdk_table(text: str) -> tuple[str, str]:
@@ -672,9 +679,10 @@ def sidecar_text(ctx: _Context, name: str) -> str:
             comments.append("Repacked as an uncompressed archive with fresh CRC-32s.")
         if stem == FORGED:
             try:
-                table = kept_sdk_table(_previous(ctx.src, name))
+                previous = _previous(ctx.src, name)
             except SidecarGenError:
-                table = ""
+                previous = None
+            table = kept_sdk_table(previous) if previous else ""
             return with_sdk_table(forged_sidecar(comments, refs), table)
         return carry_sidecar(
             _previous(ctx.src, name), comments, refs, note=NOTES.get(stem)
@@ -704,9 +712,12 @@ def copy_synthetic(src: Path, stage: Path) -> None:
         if "share_keys" in old or "assertion_keys" in old:
             raise SidecarGenError(f"{name}: only a DEK can be copied")
         if "key" in old:
+            key = (src / old["key"]).resolve()
+            if not key.is_relative_to(src.resolve()):
+                raise SidecarGenError(f"{name}: key {old['key']!r} is outside {src}")
             dest = stage / "keys" / f"{name.rsplit('.', 1)[0]}.dek"
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src / old["key"], dest)
+            shutil.copyfile(key, dest)
 
 
 def expected_fixtures() -> list[str]:
@@ -837,7 +848,9 @@ def _fixture_problems(scratch: Path, name: str) -> list[str]:
     keys_dir = (stage / "keys").resolve()
     for ref in key_refs(raw):
         path = (stage / ref).resolve()
-        if not path.is_relative_to(keys_dir):
+        if Path(ref).is_absolute():
+            out.append(f"{name}: key reference {ref} is absolute")
+        elif not path.is_relative_to(keys_dir):
             out.append(f"{name}: key reference {ref} is outside keys/")
         elif not path.is_file():
             out.append(f"{name}: missing key file {ref}")
@@ -874,12 +887,21 @@ def install(scratch: Path, dest: Path, expected: Iterable[str]) -> list[str]:
         sidecar = stage / f"{name}{SUFFIX}"
         for rel in (name, sidecar.name, *key_refs(corpus.load_sidecar(sidecar).raw)):
             copies[dest / rel] = stage / rel
+    # Copy to hidden names first, so a failed copy leaves the old outputs.
+    (dest / "keys").mkdir(exist_ok=True)
+    temps = {to: to.with_name(f".{to.name}.installing") for to in copies}
+    try:
+        for to, frm in copies.items():
+            shutil.copyfile(frm, temps[to])
+    except BaseException:
+        for tmp in temps.values():
+            tmp.unlink(missing_ok=True)
+        raise
     for old in [*dest.iterdir(), *(dest / "keys").glob("*")]:
         if old.is_file() and old.name.startswith(GENERATED):
             old.unlink()
-    (dest / "keys").mkdir(exist_ok=True)
-    for to, frm in copies.items():
-        shutil.copyfile(frm, to)
+    for to, tmp in temps.items():
+        tmp.replace(to)
     return names
 
 
