@@ -11,6 +11,7 @@ import logging
 import os
 import subprocess
 import sys
+from typing import Any
 
 from abac import (
     Action,
@@ -636,23 +637,38 @@ class OpentdfCommandLineTool:
         assert process.returncode == 0
         return KasGrantValue.model_validate_json(out)
 
+    def _list_all(self, cmd: list[str], key: str, tag: str) -> list[dict[str, Any]]:
+        """Run a policy list command, following pagination.next_offset to the end."""
+        items: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = cmd + ([f"--offset={offset}"] if offset else [])
+            logger.info(f"{tag} [{' '.join(page)}]")
+            process = subprocess.Popen(
+                page, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            out, err = process.communicate()
+            if err:
+                print(err, file=sys.stderr, flush=process.returncode != 0)
+            if out:
+                print(out, flush=process.returncode != 0)
+            assert process.returncode == 0
+            o = json.loads(out)
+            if not o:
+                return items
+            if not isinstance(o, dict):
+                # Older otdfctl prints a bare, unpaginated list.
+                return items + o
+            items += o.get(key) or []
+            next_offset = (o.get("pagination") or {}).get("next_offset") or 0
+            if not next_offset:
+                return items
+            assert next_offset > offset, f"{tag}: next_offset {next_offset} <= {offset}"
+            offset = next_offset
+
     def namespace_list(self) -> list[Namespace]:
         cmd = self.otdfctl + "policy attributes namespaces list".split()
-        logger.info(f"ns-ls [{' '.join(cmd)}]")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = process.communicate()
-        if err:
-            print(err, file=sys.stderr, flush=process.returncode != 0)
-        if out:
-            print(out, flush=process.returncode != 0)
-        assert process.returncode == 0
-        o = json.loads(out)
-        if not o:
-            return []
-        if isinstance(o, dict):
-            o = o.get("namespaces", [])
-
-        return [Namespace(**n) for n in o]
+        return [Namespace(**n) for n in self._list_all(cmd, "namespaces", "ns-ls")]
 
     def namespace_create(self, name: str) -> Namespace:
         cmd = self.otdfctl + "policy attributes namespaces create".split()
@@ -666,6 +682,10 @@ class OpentdfCommandLineTool:
             print(out, flush=process.returncode != 0)
         assert process.returncode == 0
         return Namespace.model_validate_json(out)
+
+    def attribute_list(self) -> list[Attribute]:
+        cmd = self.otdfctl + "policy attributes list".split()
+        return [Attribute(**a) for a in self._list_all(cmd, "attributes", "attr-ls")]
 
     def attribute_create(
         self,
@@ -695,6 +715,26 @@ class OpentdfCommandLineTool:
             print(out, flush=process.returncode != 0)
         assert process.returncode == 0
         return Attribute.model_validate_json(out)
+
+    def attribute_value_get(self, value_id: str) -> AttributeValue:
+        cmd = self.otdfctl + "policy attributes values get".split()
+        cmd += [f"--id={value_id}"]
+        logger.info(f"attr-val-get [{' '.join(cmd)}]")
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err, file=sys.stderr, flush=process.returncode != 0)
+        if out:
+            print(out, flush=process.returncode != 0)
+        assert process.returncode == 0
+        return AttributeValue.model_validate_json(out)
+
+    def scs_map_list(self) -> list[SubjectMapping]:
+        cmd = self.otdfctl + "policy subject-mappings list".split()
+        return [
+            SubjectMapping(**m)
+            for m in self._list_all(cmd, "subject_mappings", "sm-ls")
+        ]
 
     def scs_create(self, scs: list[SubjectSet]) -> SubjectConditionSet:
         cmd = self.otdfctl + "policy subject-condition-sets create".split()
