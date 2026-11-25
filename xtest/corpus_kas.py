@@ -6,6 +6,7 @@ corpus attributes, idempotently and tolerant of concurrent setup.
 
 import base64
 import re
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from cryptography import x509
@@ -106,13 +107,27 @@ def _find(keys: list[abac.KasKey], kid: str) -> abac.KasKey | None:
     return next((k for k in keys if k.key.key_id == kid), None)
 
 
+def supported_keys(features: Collection[str]) -> dict[str, CorpusKey]:
+    """The corpus keys whose algorithm needs no platform feature outside ``features``."""
+    return {
+        kid: entry
+        for kid, entry in corpus.kas_keys().items()
+        if (feature := corpus.key_feature(entry["alg"])) is None or feature in features
+    }
+
+
 def ensure_corpus_keys(
-    otdfctl: Any, km1: abac.KasEntry, km2: abac.KasEntry, root_key: str
+    otdfctl: Any,
+    km1: abac.KasEntry,
+    km2: abac.KasEntry,
+    root_key: str,
+    entries: Mapping[str, CorpusKey] | None = None,
 ) -> dict[str, abac.KasKey]:
-    """Import any missing corpus keys; reuse present ones that match."""
+    """Import any missing corpus keys (all of them unless ``entries`` narrows
+    the set); reuse present ones that match."""
     kases = {"km1": km1, "km2": km2}
     out: dict[str, abac.KasKey] = {}
-    for kid, entry in corpus.kas_keys().items():
+    for kid, entry in (corpus.kas_keys() if entries is None else entries).items():
         kas = kases[entry["kas"]]
         existing = _find(otdfctl.kas_registry_keys_list(kas), kid)
         if existing is not None:

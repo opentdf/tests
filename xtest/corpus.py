@@ -359,6 +359,19 @@ def read_manifest(fixture: Path) -> dict[str, Any] | None:
     return m if isinstance(m, dict) else None
 
 
+def key_feature(alg: str) -> str | None:
+    """The platform feature a KAS key algorithm needs; None for RSA or unknown."""
+    if alg.startswith("ec:"):
+        return "ecwrap"
+    if alg == "hpqt:xwing":
+        return "mechanism-xwing"
+    if alg.startswith("hpqt:secp"):
+        return "mechanism-secpmlkem"
+    if alg.startswith("mlkem:"):
+        return "mechanism-mlkem"
+    return None
+
+
 def required_features(
     manifest: dict[str, Any] | None, keys: dict[str, CorpusKey]
 ) -> list[str]:
@@ -378,10 +391,8 @@ def required_features(
                 need.append("mechanism-mlkem")
             case "hybrid-wrapped":
                 alg = keys.get(str(kao.get("kid")), {}).get("alg", "")
-                if alg == "hpqt:xwing":
-                    need.append("mechanism-xwing")
-                elif alg.startswith("hpqt:secp"):
-                    need.append("mechanism-secpmlkem")
+                if alg.startswith("hpqt:") and (feature := key_feature(alg)):
+                    need.append(feature)
     return list(dict.fromkeys(need))
 
 
