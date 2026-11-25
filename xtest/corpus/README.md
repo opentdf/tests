@@ -34,8 +34,9 @@ Top-level keys, all read by the validator:
 All key paths are relative to this directory. In `share_keys` the id and the path must both be
 non-empty. In `assertion_keys` the id is optional, but when present it must be non-empty.
 
-An optional `[sdk]` table records how each SDK is expected to handle the file. Golden sidecars
-carry no `[sdk]` table. The table has these keys:
+Every sidecar except the goldens ends with an `[sdk]` table recording how each SDK is expected
+to handle the file; golden sidecars carry none. The units check enforces both. The table has
+these keys:
 
 - `go`, `java`, `js` (all three required): the expected outcome, `"decrypt"` or `"reject"`, or a
   list of entries `{ verdict = ..., since = ..., before = ..., platform_since = ...,

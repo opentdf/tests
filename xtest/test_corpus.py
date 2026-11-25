@@ -35,9 +35,7 @@ def _sidecars() -> dict[str, Sidecar]:
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     if "corpus_fixture" not in metafunc.fixturenames:
         return
-    recording = metafunc.config.getoption("--corpus-record") is not None
-    names = [n for n, sc in _sidecars().items() if recording or sc.sdk is not None]
-    metafunc.parametrize("corpus_fixture", names)
+    metafunc.parametrize("corpus_fixture", list(_sidecars()))
 
 
 def test_corpus_keys_imported(
@@ -54,18 +52,6 @@ def test_corpus_keys_imported(
         assert key is not None, f"{kid} missing from {entry['kas']}"
         assert public_matches(entry, key.key.public_key_ctx.pem), kid
         assert kid in corpus_kas
-
-
-def test_corpus_has_sdk_verdicts(request: pytest.FixtureRequest):
-    """Rule: non-golden corpus sidecars record per-SDK verdicts in an [sdk] table."""
-    if request.config.getoption("--corpus-record") is not None:
-        pytest.skip("recording")
-    with_verdicts = [n for n, sc in _sidecars().items() if sc.sdk is not None]
-    assert with_verdicts, (
-        "rule: corpus sidecars record per-SDK verdicts in an [sdk] table. None does, "
-        "so test_corpus_fixture collects no cells. Record verdicts with "
-        "--corpus-record and add them to the sidecars."
-    )
 
 
 def _tail(data: bytes) -> str:
@@ -139,7 +125,7 @@ def test_corpus_fixture(
         )
         return
 
-    assert sc.sdk is not None
+    assert sc.sdk is not None, f"{corpus_fixture}: sidecar has no [sdk] table"
     assert outcome != "wrong-plaintext", (
         f"{corpus_fixture} with {decrypt_sdk}: wrong plaintext\n{stderr}"
     )
