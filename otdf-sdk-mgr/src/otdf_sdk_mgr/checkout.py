@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from otdf_sdk_mgr.config import SDK_BARE_REPOS, SDK_GIT_URLS, get_sdk_dirs
-from otdf_sdk_mgr.refs import expand_pr_shorthand, is_mutable_ref
+from otdf_sdk_mgr.refs import dist_slug, expand_pr_shorthand, is_mutable_ref
 
 # `git clone --bare` records no fetch refspec: `git fetch` alone updates no refs
 # and `--tags` adds only tags, so the bare repo's branches stay where the clone
@@ -87,9 +87,9 @@ def upstream_ref(git_dir: Path, ref: str) -> str:
 def checkout_sdk_branch(language: str, branch: str) -> str:
     """Clone bare repo and create/update a worktree for the given branch.
 
-    Returns the slug used for the local worktree directory under
-    `sdk/<lang>/src/<slug>` — callers use this as the dist-dir name and
-    as the `VERSIONS=` override when invoking `make`.
+    The worktree is `sdk/<lang>/src/<slug>`, where `<slug>` is
+    `refs.dist_slug(branch)`: the `VERSIONS=` that `cmd_tip` passes make,
+    which builds `src/$VERSIONS`. Returns the slug.
 
     For "go", use checkout_go_from_platform instead — the standalone
     opentdf/otdfctl repo is archived; otdfctl source builds come from the
@@ -115,9 +115,7 @@ def checkout_sdk_branch(language: str, branch: str) -> str:
     repo_url = SDK_GIT_URLS[language].removesuffix(".git")
 
     bare_repo_path = sdk_dir / "src" / bare_repo_name
-    local_name = branch.replace("/", "--")
-    if local_name.startswith("sdk--"):
-        local_name = local_name.removeprefix("sdk--")
+    local_name = dist_slug(branch)
     worktree_path = sdk_dir / "src" / local_name
 
     if not bare_repo_path.exists():
@@ -173,8 +171,8 @@ def checkout_go_from_platform(ref: str) -> Path:
     as a symlink to the otdfctl subdir of that checkout.
 
     Returns the platform checkout directory so callers can locate go.work for
-    GOWORK-based source builds. The slug (`Path.name` of the worktree dir) is
-    also the dist-dir name used by the go SDK Makefile.
+    GOWORK-based source builds. Both the worktree, `platform-src/<slug>`, and
+    the link are named with `refs.dist_slug(ref)`, as in checkout_sdk_branch.
 
     Accepts `pr:N` shorthand in addition to branches, tags, and SHAs.
     """
@@ -185,7 +183,7 @@ def checkout_go_from_platform(ref: str) -> Path:
     platform_src_dir = go_dir / "platform-src"
     bare_repo_path = platform_src_dir / "platform.git"
 
-    local_name = ref.replace("/", "--").removeprefix("otdfctl--")
+    local_name = dist_slug(ref)
     worktree_path = platform_src_dir / local_name
     src_link = go_dir / "src" / local_name
 
