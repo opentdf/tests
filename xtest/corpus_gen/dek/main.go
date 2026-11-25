@@ -198,7 +198,19 @@ func parseSigner(privPEM string) (crypto.Signer, error) {
 	if block == nil {
 		return nil, errors.New("no PEM block in private key")
 	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	// The classical encodings ocrypto.FromPrivatePEM reads.
+	var key any
+	var err error
+	switch block.Type {
+	case "PRIVATE KEY":
+		key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+	case "RSA PRIVATE KEY":
+		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		key, err = x509.ParseECPrivateKey(block.Bytes)
+	default:
+		return nil, fmt.Errorf("unsupported private key PEM block %q", block.Type)
+	}
 	if err != nil {
 		return nil, err
 	}

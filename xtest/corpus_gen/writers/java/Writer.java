@@ -1,7 +1,8 @@
 // Corpus writer for the Java SDK. Reads a JSON array of WriteJobs and writes one
 // TDF per job. See corpus_gen/selfcheck.py for the job shape.
 //
-//   java -cp sdk/java/dist/main/cmdline.jar Writer.java <jobs.json>
+// From xtest/:
+//   java -cp sdk/java/dist/main/cmdline.jar corpus_gen/writers/java/Writer.java <jobs.json>
 //
 // Needs PLATFORMURL, CLIENTID and CLIENTSECRET.
 

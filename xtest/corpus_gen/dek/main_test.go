@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -240,6 +242,50 @@ func TestPub(t *testing.T) {
 				t.Fatalf("pub = %q, want %q", out, want)
 			}
 		})
+	}
+}
+
+// pub reads the PKCS#1 and SEC 1 encodings that unwrap reads.
+func TestPubLegacyEncodings(t *testing.T) {
+	for _, alg := range []string{"rsa:2048", "ec:secp256r1"} {
+		t.Run(alg, func(t *testing.T) {
+			k := genKey(t, alg)
+			block, _ := pem.Decode([]byte(k.PrivateKey))
+			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var legacy *pem.Block
+			switch key := key.(type) {
+			case *rsa.PrivateKey:
+				legacy = &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}
+			case *ecdsa.PrivateKey:
+				der, err := x509.MarshalECPrivateKey(key)
+				if err != nil {
+					t.Fatal(err)
+				}
+				legacy = &pem.Block{Type: "EC PRIVATE KEY", Bytes: der}
+			default:
+				t.Fatalf("unexpected key type %T", key)
+			}
+			priv := writeTemp(t, "private.pem", pem.EncodeToMemory(legacy))
+			out, err := runCmd("pub", "--private", priv)
+			if err != nil {
+				t.Fatalf("pub %s: %v", legacy.Type, err)
+			}
+			if want := spkiPEMOfCert(t, k.Cert); out != want {
+				t.Fatalf("pub = %q, want %q", out, want)
+			}
+		})
+	}
+}
+
+func TestPubRejectsUnknownBlock(t *testing.T) {
+	k := genKey(t, "rsa:2048")
+	relabelled := strings.Replace(k.PrivateKey, "PRIVATE KEY", "OPENSSH PRIVATE KEY", 2)
+	priv := writeTemp(t, "private.pem", []byte(relabelled))
+	if out, err := runCmd("pub", "--private", priv); err == nil {
+		t.Fatalf("pub of an OPENSSH PRIVATE KEY block succeeded: %q", out)
 	}
 }
 
