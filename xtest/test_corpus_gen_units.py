@@ -1051,6 +1051,25 @@ SDK_TABLE = (
 )
 
 
+@pytest.mark.parametrize("header", ["[sdk]  # hand-edited", "  [sdk]", "[ sdk ]"])
+def test_sidecars_keep_sdk_table_under_any_header(tmp_path: Path, header: str):
+    src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', header)}")
+    refs = sidecars.KeyRefs(key="keys/tamper-web-basic.dek")
+    out = tmp_path / "new.tdf.expect.toml"
+    out.write_text(sidecars.carry_sidecar(src, ["c"], refs))
+    carried = corpus.load_sidecar(out).sdk
+    assert carried is not None
+    assert carried == corpus.load_sidecar(src).sdk
+
+
+def test_sidecars_refuse_an_sdk_table_they_cannot_carry(tmp_path: Path):
+    src = _old_sidecar(
+        tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', '["sdk"]')}"
+    )
+    with pytest.raises(sidecars.SidecarGenError, match="cannot carry"):
+        sidecars.carry_sidecar(src, ["c"], sidecars.KeyRefs(key="keys/x.dek"))
+
+
 def test_sidecars_keep_sdk_table(tmp_path: Path):
     src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE}")
     refs = sidecars.KeyRefs(key="keys/tamper-web-basic.dek")
@@ -1275,6 +1294,17 @@ def test_install_refuses_missing_fixture(fake: tuple[Path, Path]):
     scratch, dest = fake
     (scratch / "stage" / TAMPER_FIXTURE).unlink()
     _refused(scratch, dest, f"{TAMPER_FIXTURE}: not staged")
+
+
+def test_expected_fixtures_include_failed_writes():
+    # A failed writer job is dropped from manifest.json; install must still
+    # expect its fixture, so it refuses rather than deleting the old copy.
+    planned = {
+        p.name
+        for p in steps.plan(corpus.kas_keys(), Path("scratch"))
+        if p.kind == "sdk"
+    }
+    assert planned <= set(sidecars.expected_fixtures())
 
 
 # --- verdicts ----------------------------------------------------------------

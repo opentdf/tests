@@ -649,8 +649,14 @@ KEYS_BY_KID: Any = {
 }
 
 
-def manifest(*kaos: dict[str, str], attrs: list[str] | None = None) -> dict[str, Any]:
-    policy = {"body": {"dataAttributes": [{"attribute": a} for a in attrs or []]}}
+def manifest(
+    *kaos: dict[str, str], attrs: list[str] | None = None, uuid: str | None = None
+) -> dict[str, Any]:
+    policy: dict[str, Any] = {
+        "body": {"dataAttributes": [{"attribute": a} for a in attrs or []]}
+    }
+    if uuid is not None:
+        policy["uuid"] = uuid
     return {
         "encryptionInformation": {
             "keyAccess": list(kaos),
@@ -678,6 +684,13 @@ def test_required_features_dedupes_and_tolerates_no_manifest():
     two = manifest({"type": "ec-wrapped"}, {"type": "ec-wrapped"})
     assert corpus.required_features(two, KEYS_BY_KID) == ["ecwrap"]
     assert corpus.required_features(None, KEYS_BY_KID) == []
+
+
+def test_policy_uuid():
+    assert corpus.policy_uuid(manifest(uuid="u-1")) == "u-1"
+    assert corpus.policy_uuid(manifest()) is None
+    assert corpus.policy_uuid(None) is None
+    assert corpus.policy_uuid({"encryptionInformation": {"policy": "%%"}}) is None
 
 
 def test_has_data_attributes():

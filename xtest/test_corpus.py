@@ -10,6 +10,7 @@ import abac
 import assertions
 import corpus
 import tdfs
+from audit_logs import AuditLogAsserter
 from corpus import Sidecar
 from corpus_kas import public_matches
 from fixtures.assertions import write_assertion_verification_keys_to_file
@@ -77,6 +78,7 @@ def test_corpus_fixture(
     corpus_kas: dict[str, abac.KasKey],
     request: pytest.FixtureRequest,
     tmp_dir: Path,
+    audit_logs: AuditLogAsserter,
 ):
     if decrypt_sdk not in in_focus:
         pytest.skip(f"{decrypt_sdk} not in focus")
@@ -107,6 +109,7 @@ def test_corpus_fixture(
     cmd, local_env = decrypt_sdk.decrypt_command(
         sc.fixture, out, "ztdf", assert_keys=keys_file, verify_assertions=True
     )
+    mark = audit_logs.mark("before_decrypt")
     try:
         proc = corpus.run_decrypt(
             cmd, cast(dict[str, str], os.environ | local_env), DECRYPT_TIMEOUT
@@ -147,3 +150,8 @@ def test_corpus_fixture(
         ' "When a corpus cell goes red" in xtest/corpus/README.md\n'
         f"stderr tail:\n{stderr}"
     )
+    # Only a decrypt is sure to reach KAS; many rejections fail before rewrap.
+    if outcome == "decrypt":
+        uuid = corpus.policy_uuid(manifest)
+        assert uuid, f"{corpus_fixture}: decrypted, but its policy has no uuid"
+        audit_logs.assert_rewrap_success(policy_uuid=uuid, since_mark=mark)

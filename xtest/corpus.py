@@ -385,14 +385,27 @@ def required_features(
     return list(dict.fromkeys(need))
 
 
-def has_data_attributes(manifest: dict[str, Any] | None) -> bool:
-    """True when the manifest's policy names data attributes."""
+def _policy(manifest: dict[str, Any] | None) -> dict[str, Any]:
     try:
         enc = (manifest or {})["encryptionInformation"]
         policy = json.loads(base64.b64decode(enc["policy"]))
-        return bool(policy["body"]["dataAttributes"])
     except KeyError, TypeError, ValueError:
+        return {}
+    return policy if isinstance(policy, dict) else {}
+
+
+def has_data_attributes(manifest: dict[str, Any] | None) -> bool:
+    """True when the manifest's policy names data attributes."""
+    try:
+        return bool(_policy(manifest)["body"]["dataAttributes"])
+    except KeyError, TypeError:
         return False
+
+
+def policy_uuid(manifest: dict[str, Any] | None) -> str | None:
+    """The manifest's policy UUID, which KAS records in its rewrap audit events."""
+    uuid = _policy(manifest).get("uuid")
+    return uuid if isinstance(uuid, str) else None
 
 
 def assertion_verification_keys(

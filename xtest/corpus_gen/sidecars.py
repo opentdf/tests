@@ -415,7 +415,7 @@ def render(comments: Sequence[str], fields: dict[str, Any]) -> str:
     return text
 
 
-_SDK_HEADER = re.compile(r"^\[sdk\][ \t]*$", re.M)
+_SDK_HEADER = re.compile(r"^[ \t]*\[[ \t]*sdk[ \t]*\][ \t]*(?:#.*)?$", re.M)
 
 
 def split_sdk_table(text: str) -> tuple[str, str]:
@@ -437,7 +437,11 @@ def with_sdk_table(text: str, table: str) -> str:
 
 
 def kept_sdk_table(src: Path) -> str:
-    return split_sdk_table(src.read_text())[1]
+    text = src.read_text()
+    table = split_sdk_table(text)[1]
+    if not table and "sdk" in tomllib.loads(text):
+        raise SidecarGenError(f"{src.name}: cannot carry its [sdk] table header")
+    return table
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -705,11 +709,15 @@ def copy_synthetic(src: Path, stage: Path) -> None:
             shutil.copyfile(src / old["key"], dest)
 
 
-def expected_fixtures(manifest: dict[str, Any]) -> list[str]:
-    """Every fixture the generator installs."""
+def expected_fixtures() -> list[str]:
+    """Every fixture the generator installs, whether or not its write succeeded."""
     return sorted(
         [
-            *(n for n, e in manifest.items() if e["kind"] == "sdk"),
+            *(
+                f"sdk-{label}-{v}.tdf"
+                for label, vs in variants.WRITERS.items()
+                for v in vs
+            ),
             *(f"{n}.tdf" for n in tamper.RECIPES),
             *(f"{n}.tdf" for n in zipcases.ZIP_CASES),
             *RENAMES.values(),
@@ -742,7 +750,7 @@ def run_sidecars(scratch: Path, src: Path) -> int:
     if manifest is None:
         return 2
     stage = scratch / "stage"
-    names = expected_fixtures(manifest)
+    names = expected_fixtures()
     missing = [
         n for n in names if not n.startswith("synthetic-") and not (stage / n).is_file()
     ]
@@ -880,7 +888,7 @@ def run_install(scratch: Path, dest: Path) -> int:
     if manifest is None:
         return 2
     try:
-        names = install(scratch, dest, expected_fixtures(manifest))
+        names = install(scratch, dest, expected_fixtures())
     except InstallRefused as e:
         print(e, file=sys.stderr)
         return 1

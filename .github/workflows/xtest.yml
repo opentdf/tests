@@ -924,6 +924,7 @@ jobs:
           PLATFORM_DIR: "../../${{ steps.run-platform.outputs.platform-working-dir }}"
           PLATFORM_TAG: ${{ matrix.platform-tag }}
           OTDFCTL_HEADS: ${{ steps.configure-go.outputs.heads }}
+          OTDFCTL_TAG: ${{ steps.configure-go.outputs.selected-tag }}
           PLATFORM_LOG_FILE: "../../${{ steps.run-platform.outputs.platform-log-file }}"
           KAS_ALPHA_LOG_FILE: "../../${{ steps.kas-alpha.outputs.log-file }}"
           KAS_BETA_LOG_FILE: "../../${{ steps.kas-beta.outputs.log-file }}"

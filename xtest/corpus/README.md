@@ -168,6 +168,8 @@ The per-fixture records are not committed; only the `[sdk]` tables are.
 
 A failing `test_corpus_fixture` cell means an SDK build handled a fixture differently from what
 its sidecar's `[sdk]` table records. The failure names the sidecar and shows the decrypt's stderr.
+A cell that decrypts also requires a successful rewrap audit event for the fixture's policy UUID.
+If only that check fails, look at KAS audit logging, not at the verdict.
 
 - **A real SDK behaviour change**, such as a fix that now rejects a tampered file: update that
   SDK's entry. Either re-record (the dry run above) and re-run `verdicts`, or edit the entry by
