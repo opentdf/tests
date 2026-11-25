@@ -92,6 +92,11 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep with-assertion-verification-keys
       exit $?
       ;;
+    assertion_selected_key_only)
+      # DSPX-4686: force for branch builds until a fixed release can be gated.
+      echo "assertion_selected_key_only is force-only until a release ships"
+      exit 1
+      ;;
     kasallowlist)
       set -o pipefail
       java -jar "$SCRIPT_DIR"/cmdline.jar help decrypt | grep kas-allowlist

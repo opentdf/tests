@@ -61,6 +61,11 @@ if [[ "$1" == "supports" ]]; then
       "$CLI" help | grep assertionVerificationKeys
       exit $?
       ;;
+    assertion_selected_key_only)
+      # DSPX-4686: force for branch builds until a fixed release can be gated.
+      echo "assertion_selected_key_only is force-only until a release ships"
+      exit 1
+      ;;
     autoconfigure | ns_grants)
       set -o pipefail
       "$CLI" help | grep autoconfigure
