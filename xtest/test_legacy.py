@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import corpus
 import tdfs
 from audit_logs import AuditLogAsserter
 
@@ -10,8 +11,7 @@ pytestmark = pytest.mark.legacy
 
 
 def get_golden_file(golden_file_name: str) -> Path:
-    xtest_dir = Path(__file__).parent
-    filename = xtest_dir / "golden" / golden_file_name
+    filename = corpus.CORPUS_DIR / f"golden-{golden_file_name}"
     if filename.is_file():
         return filename
     raise FileNotFoundError(f"Golden file '{filename}' not found.")

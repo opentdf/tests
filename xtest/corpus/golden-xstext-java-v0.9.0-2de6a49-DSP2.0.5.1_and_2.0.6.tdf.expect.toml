@@ -1,0 +1,10 @@
+# DSP 2.0.5.1 and 2.0.6 output, written by the Java SDK v0.9.0 (2de6a49). The Go SDK v0.36.0
+# decrypts it.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-xstext-java-v0.9.0-2de6a49-DSP2.0.5.1_and_2.0.6.dek"
+note = "DSP 2.0.5.1/2.0.6 (Java SDK v0.9.0); valid keyed and strict."

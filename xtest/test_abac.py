@@ -1312,7 +1312,7 @@ def test_import_legacy_golden_r1_key_and_decrypt_no_split(
 
     from test_legacy import get_golden_file
 
-    golden_file_name = "key-management-no-split-golden"
+    golden_file_name = "key-management-no-split"
     ct_file = get_golden_file(f"{golden_file_name}.tdf")
     rt_file = tmp_dir / f"{golden_file_name}.untdf"
     decrypt_sdk.decrypt(ct_file, rt_file, container="ztdf")

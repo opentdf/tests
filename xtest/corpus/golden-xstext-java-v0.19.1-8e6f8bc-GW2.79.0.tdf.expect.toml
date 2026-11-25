@@ -1,0 +1,11 @@
+# DSP Gateway 2.79.0 output, written by the Java SDK v0.19.1 (8e6f8bc), with the system metadata
+# assertion (HS256) and encryptedMetadata. The Go SDK v0.36.0 decrypts it and verifies the
+# assertion.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+# Records what the validator reports today.
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-xstext-java-v0.19.1-8e6f8bc-GW2.79.0.dek"
+note = "DSP Gateway 2.79.0 (Java SDK v0.19.1); valid keyed and strict."

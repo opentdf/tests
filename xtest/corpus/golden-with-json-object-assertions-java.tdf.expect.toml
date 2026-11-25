@@ -1,0 +1,12 @@
+# Java SDK output whose two HS256 handling assertions carry statement.value as a JSON object, not a
+# string. The Go SDK's Statement unmarshaller re-encodes an object value as a JSON string
+# (json.Marshal of a map) before hashing, and the validator does the same, so both assertions
+# verify. The Go SDK v0.36.0 decrypts the file and verifies both assertions.
+# The DEK was unwrapped offline with the KAS key golden-r1 (xtest/extra-keys.json).
+expect = "valid"
+format = "tdf"
+strict = true
+verify_crypto = true
+key = "keys/golden-with-json-object-assertions-java.dek"
+must_not_contain = ["TDF.CRYPTO.ASSERTION_SIGNATURE_INVALID"]
+note = "Java golden with object-valued assertion statements: hashed as the Go SDK hashes them (the object re-encoded as a JSON string), so both assertions verify."
