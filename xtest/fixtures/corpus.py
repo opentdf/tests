@@ -16,8 +16,16 @@ def corpus_kas(
     otdf_client_scs: abac.SubjectConditionSet,
     root_key: str,
 ) -> dict[str, abac.KasKey]:
-    """Import the corpus keys and create the corpus attributes; returns keys by kid."""
-    tdfs.get_platform_features().skip_if_unsupported("key_management")
-    keys = ck.ensure_corpus_keys(otdfctl, kas_entry_km1, kas_entry_km2, root_key)
+    """Import the corpus keys the platform supports and create the corpus
+    attributes; returns keys by kid."""
+    pfs = tdfs.get_platform_features()
+    pfs.skip_if_unsupported("key_management")
+    keys = ck.ensure_corpus_keys(
+        otdfctl,
+        kas_entry_km1,
+        kas_entry_km2,
+        root_key,
+        ck.supported_keys(pfs.features),
+    )
     ck.ensure_corpus_attributes(otdfctl, otdf_client_scs, keys)
     return keys

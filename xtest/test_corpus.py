@@ -12,7 +12,7 @@ import corpus
 import tdfs
 from audit_logs import AuditLogAsserter
 from corpus import Sidecar
-from corpus_kas import public_matches
+from corpus_kas import public_matches, supported_keys
 from fixtures.assertions import write_assertion_verification_keys_to_file
 from otdfctl import OpentdfCommandLineTool
 
@@ -47,7 +47,8 @@ def test_corpus_keys_imported(
     kas_entry_km2: abac.KasEntry,
 ):
     kases = {"km1": kas_entry_km1, "km2": kas_entry_km2}
-    for kid, entry in corpus.kas_keys().items():
+    expected = supported_keys(tdfs.get_platform_features().features)
+    for kid, entry in expected.items():
         listed = otdfctl.kas_registry_keys_list(kases[entry["kas"]])
         key = next((k for k in listed if k.key.key_id == kid), None)
         assert key is not None, f"{kid} missing from {entry['kas']}"
