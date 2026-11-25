@@ -126,6 +126,14 @@ if [ "$1" == "supports" ]; then
       java -jar "$SCRIPT_DIR"/cmdline.jar help encrypt | grep with-target-mode
       exit $?
       ;;
+    reject_empty_key_access)
+      # DSPX-1561: v0.19.1 and LTS v0.9.0 decrypt an empty-keyAccess TDF.
+      # v0.20.0 is the first release with java-sdk#433 and passes this case.
+      # Force the gate to evaluate an unreleased fix on an older version.
+      set -o pipefail
+      java -jar "$SCRIPT_DIR"/cmdline.jar --version | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 >= 20)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     gmac_root_rejected)
       # DSPX-4703: does decrypt refuse a manifest downgraded to
       # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check

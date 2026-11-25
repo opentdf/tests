@@ -98,6 +98,15 @@ if [ "$1" == "supports" ]; then
       "${cmd[@]}" help encrypt | grep target-mode
       exit $?
       ;;
+    reject_empty_key_access)
+      # DSPX-1561: otdfctl v0.41.0 is the newest release known to decrypt a
+      # manifest with no key access objects. Use the CLI release version here;
+      # its sdk_version is a different number. Force the gate for branch builds
+      # that contain the fix but still report the last released version.
+      set -o pipefail
+      "${cmd[@]}" --version --json | jq -re .version | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 41) || ($1 == 0 && $2 == 41 && $3 > 0)) exit 0; else exit 1; }'
+      exit $?
+      ;;
     gmac_root_rejected)
       # DSPX-4703: does decrypt refuse a manifest downgraded to
       # `rootSignature.alg: GMAC`? Unanswerable here, and always no. The check

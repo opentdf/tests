@@ -216,6 +216,15 @@ feature_type = Literal[
     # URI (the same KAS wrapping the same split more than once). go/java have
     # always tolerated this; web-sdk gained it in 0.20.0 (DSPX-3379).
     "multikao",
+    # DSPX-1561 Phase 0: refuse a manifest whose encryptionInformation.keyAccess
+    # is empty (or yields no key) when it is loaded, before any KAS call,
+    # integrity check, or assertion check, with the SDK's malformed-TDF error;
+    # the message contains "no key access objects". The cli.sh gates enable
+    # the case for Java from the oldest confirmed passing release, and for Go
+    # and JS above their tested failing releases. Force it for branch builds
+    # that still report a prior release version:
+    # XT_FORCE_SUPPORTS=reject_empty_key_access.
+    "reject_empty_key_access",
     # Support for a client-generated ML-KEM key pair as the rewrap "session key"
     # (the ephemeral key used to wrap the KAS's rewrap response back to the
     # client), as opposed to "mechanism-mlkem" which covers ML-KEM as the
