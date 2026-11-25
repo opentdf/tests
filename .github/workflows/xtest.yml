@@ -912,7 +912,7 @@ jobs:
         if: ${{ steps.multikas.outputs.supported == 'true' }}
         # loadscope: the module's key/attribute setup runs once per worker, and its value-key race handling isn't safe to parallelise yet.
         run: |-
-          uv run pytest -ra -v --numprocesses auto --dist loadscope \
+          uv run --frozen --no-build pytest -ra -v --numprocesses auto --dist loadscope \
             --html test-results/corpus-${FOCUS_SDK}-${PLATFORM_TAG}.html \
             --self-contained-html \
             --audit-log-dir test-results/audit-logs \
