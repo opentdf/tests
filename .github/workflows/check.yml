@@ -47,8 +47,9 @@ jobs:
         working-directory: xtest
       # Offline tests for the harnesses whose own correctness gates a nightly
       # job: the benchmark statistics, measurement and CLI command builders,
-      # the encryption fixture cache, the ZIP64 central-directory parser, and
-      # the sparse store and its HTTP and NFS front ends.
+      # the encryption fixture cache, the ZIP64 central-directory parser, the
+      # sparse store and its HTTP and NFS front ends, and the streaming
+      # harness's fault verdicts.
       # No platform and no SDK builds required, so the part that has to be
       # *correct* is checked on every PR rather than only when the nightly runs.
       # In CI, a host that cannot mount fails instead of skipping these tests.
