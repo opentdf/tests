@@ -23,7 +23,17 @@ import assertions
 import corpus
 import zipinspect  # noqa: F401
 import zipmutate
-from corpus_gen import deks, pki, sidecars, steps, tamper, variants, verdicts, zipcases
+from corpus_gen import (
+    deks,
+    pki,
+    selfcheck,
+    sidecars,
+    steps,
+    tamper,
+    variants,
+    verdicts,
+    zipcases,
+)
 
 # Suffixes of the source corpus's sdk-<sdk>-* names. Hard-coded: the source
 # corpus is not available in CI.
@@ -110,6 +120,54 @@ def test_jobs_fit_writer_limits(sdk: str):
             assert all("sid" not in s for s in split), name
         if sdk == "web":
             assert all(not k["alg"].startswith("hpqt:") for k in kas), name
+
+
+def test_selfcheck_outputs_are_per_sdk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("XT_TMP_DIR", str(tmp_path))
+    paths: list[str] = []
+    for sdk in selfcheck.CLI:
+        scratch = selfcheck._scratch(sdk)
+        scratch.mkdir(parents=True)
+        jobs, _ = selfcheck._jobs(scratch, sdk)
+        paths += [p for j in jobs for p in (j["out"], j["plaintext"])]
+    assert len(set(paths)) == len(paths)
+
+
+_UUIDS = [
+    "0f6e2f5c-4b1e-4c47-9d0a-6d1f3e0b9a11",
+    "7c3a9e42-1d5b-4f8e-a2c6-58b0d4e7f312",
+]
+
+
+@pytest.mark.parametrize(
+    ("sdk", "sids", "ok"),
+    [
+        ("go", ["s-0", "s-1"], True),
+        ("js", ["s-1", "s-0"], True),
+        ("go", [None, "s-1"], False),
+        ("js", ["", "s-1"], False),
+        ("go", ["s-1", "s-2"], False),
+        ("java", _UUIDS, True),
+        ("java", [None, _UUIDS[0]], False),
+        ("java", [_UUIDS[0], _UUIDS[0]], False),
+    ],
+)
+def test_selfcheck_split_ids(
+    sdk: str, sids: list[str | None], ok: bool, tmp_path: Path
+):
+    jobs, _ = selfcheck._jobs(tmp_path, sdk)
+    (job,) = [j for j in jobs if Path(j["out"]).stem == "split-two-kao"]
+    kao = {"url": selfcheck.KM1, "kid": selfcheck.KID}
+    kaos = [kao if s is None else {**kao, "sid": s} for s in sids]
+    tdf = tmp_path / "split-two-kao.tdf"
+    with zipfile.ZipFile(tdf, "w") as z:
+        manifest = {"encryptionInformation": {"keyAccess": kaos}}
+        z.writestr("0.manifest.json", json.dumps(manifest))
+    if ok:
+        selfcheck._check_manifest("split-two-kao", tdf, job)
+    else:
+        with pytest.raises(AssertionError, match="split ids"):
+            selfcheck._check_manifest("split-two-kao", tdf, job)
 
 
 def _handling(job: variants.WriteJob) -> variants.AssertionSpec:
@@ -767,6 +825,94 @@ def test_x5c_forged(derive: Derive):
     )
     key = assertions.AssertionKey(alg="RS256", key=pem.decode())
     assertions.verify_jws_signature(jws, key)
+
+
+def test_signer_key_never_publishes_a_partial_pem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real_fdopen = os.fdopen
+
+    class Partial:
+        """Writes part of the data, then fails."""
+
+        def __init__(self, fd: int, mode: str):
+            self.f = real_fdopen(fd, mode)
+
+        def __enter__(self) -> Partial:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            self.f.close()
+
+        def write(self, data: bytes) -> None:
+            self.f.write(data[:64])
+            raise OSError("disk full")
+
+    monkeypatch.setattr(os, "fdopen", Partial)
+    with pytest.raises(OSError, match="disk full"):
+        pki.signer_key(tmp_path, "rs256")
+    monkeypatch.undo()
+    assert list((tmp_path / "signers").iterdir()) == []
+    key = pki.signer_key(tmp_path, "rs256")
+    serialization.load_pem_private_key(key.encode(), password=None)
+    assert (tmp_path / "signers" / "rs256.key.pem").stat().st_mode & 0o777 == 0o600
+
+
+def _key_of(key_pem: str, cert_pem: str) -> bool:
+    key = serialization.load_pem_private_key(key_pem.encode(), password=None)
+    return (
+        key.public_key()
+        == x509.load_pem_x509_certificate(cert_pem.encode()).public_key()
+    )
+
+
+def test_forged_signer_rebuilds_a_mismatched_pair(tmp_path: Path):
+    subject = x509.Name.from_rfc4514_string("CN=corpus")
+    key, cert = pki.forged_signer(tmp_path, subject)
+    assert pki.forged_signer(tmp_path, subject) == (key, cert)
+    # A rebuild that stopped after writing its key, before its certificate.
+    other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    (tmp_path / "forged.key.pem").write_bytes(pki._key_pem(other))
+    key2, cert2 = pki.forged_signer(tmp_path, subject)
+    assert cert2 != cert
+    assert _key_of(key2, cert2)
+
+
+@pytest.fixture(scope="module")
+def x5c_generations(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    a, b = tmp_path_factory.mktemp("x5c-a"), tmp_path_factory.mktemp("x5c-b")
+    pki.x5c_chain(a)
+    pki.x5c_chain(b)
+    return a, b
+
+
+def test_x5c_chain_reuses_a_complete_generation(
+    x5c_generations: tuple[Path, Path], tmp_path: Path
+):
+    a, _ = x5c_generations
+    shutil.copytree(a, tmp_path / "pki")
+    assert pki.x5c_chain(tmp_path / "pki") == pki.x5c_chain(a)
+
+
+@pytest.mark.parametrize(
+    "stale", ["leaf.key.pem", "leaf.pem", "intermediate.pem", "ca.pem"]
+)
+def test_x5c_chain_rebuilds_a_mixed_generation(
+    stale: str, x5c_generations: tuple[Path, Path], tmp_path: Path
+):
+    a, b = x5c_generations
+    d = tmp_path / "pki"
+    shutil.copytree(a, d)
+    shutil.copy(b / stale, d / stale)
+    chain = pki.x5c_chain(d)
+    leaf, inter, ca = (
+        x509.load_pem_x509_certificate(p.encode())
+        for p in (chain.leaf, chain.intermediate, chain.ca)
+    )
+    leaf.verify_directly_issued_by(inter)
+    inter.verify_directly_issued_by(ca)
+    assert _key_of(chain.leaf_key, chain.leaf)
+    assert chain.leaf not in (pki.x5c_chain(a).leaf, pki.x5c_chain(b).leaf)
 
 
 # The source corpus's zip-* names, each with the trailer fields it changes.

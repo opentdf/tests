@@ -58,7 +58,7 @@ def _jobs(scratch: Path, sdk: str) -> tuple[list[dict[str, Any]], dict[str, byte
     return jobs, plain
 
 
-def _check_manifest(name: str, tdf: Path) -> None:
+def _check_manifest(name: str, tdf: Path, job: dict[str, Any]) -> None:
     with zipfile.ZipFile(tdf) as z:
         manifest = json.loads(z.read("0.manifest.json"))
     enc = manifest["encryptionInformation"]
@@ -67,11 +67,20 @@ def _check_manifest(name: str, tdf: Path) -> None:
         assert kao["url"] == KM1, f"{name}: KAO url {kao['url']}"
         assert kao.get("kid") == KID, f"{name}: KAO kid {kao.get('kid')}"
     if name == "split-two-kao":
-        sids = {kao.get("sid") for kao in kaos}
-        assert len(kaos) == 2 and len(sids) == 2, f"{name}: split ids {sids}"
+        sids = [kao.get("sid") for kao in kaos]
+        assert all(isinstance(s, str) and s for s in sids), f"{name}: split ids {sids}"
+        assert len(sids) == 2 and len(set(sids)) == 2, f"{name}: split ids {sids}"
+        # Jobs for OWN_SPLIT_IDS writers name no sids.
+        want = {s["sid"] for s in job["split"] if "sid" in s}
+        assert not want or set(sids) == want, f"{name}: split ids {sids}, job {want}"
     if name == "multi-segment":
         segs = enc["integrityInformation"]["segments"]
         assert len(segs) > 1, f"{name}: only {len(segs)} segment(s)"
+
+
+def _scratch(sdk: str) -> Path:
+    """Per-SDK, so concurrent runs for different SDKs keep their outputs apart."""
+    return scratch_dir() / "selfcheck" / sdk
 
 
 def main() -> int:
@@ -81,7 +90,7 @@ def main() -> int:
     os.chdir(XTEST)
     env = load_env()
 
-    scratch = scratch_dir() / "selfcheck"
+    scratch = _scratch(args.sdk)
     scratch.mkdir(parents=True, exist_ok=True)
 
     setup_platform(attributes=False)
@@ -111,7 +120,7 @@ def main() -> int:
             )
             assert dec.returncode == 0, f"decrypt failed: {dec.stderr[-500:]}"
             assert rt.read_bytes() == plain[name], "plaintext mismatch"
-            _check_manifest(name, tdf)
+            _check_manifest(name, tdf, job)
             print(f"ok   {args.sdk} {name}")
         except (AssertionError, OSError, KeyError, ValueError) as e:
             failures += 1
