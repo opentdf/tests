@@ -115,16 +115,13 @@ if [[ "$1" == "supports" ]]; then
       exit $?
       ;;
     reject_empty_key_access)
-      # DSPX-1561 Phase 0: refuse a manifest with an empty
-      # encryptionInformation.keyAccess when it is loaded, with the SDK's
-      # malformed-TDF error ("no key access objects"). No release has it yet,
-      # and it adds no CLI surface to probe, so this answers no until one ships.
-      # Branch builds run the case with XT_FORCE_SUPPORTS=reject_empty_key_access.
-      #
-      # Explicit rather than falling through to "Unknown feature" so that a
-      # typo'd feature name in tdfs.py cannot pass for a known-missing one.
-      echo "reject_empty_key_access is force-only until a release ships: see DSPX-1561"
-      exit 1
+      # DSPX-1561: @opentdf/sdk v0.23.0 rejects an empty keyAccess only when
+      # merging zero key splits, without the required malformed-TDF error.
+      # Force the gate for branch builds that contain the fix but still report
+      # the last released version.
+      set -o pipefail
+      "$CLI" --version | jq -re '.["@opentdf/sdk"]' | awk -F. '{ if ($1 > 0 || ($1 == 0 && $2 > 23) || ($1 == 0 && $2 == 23 && $3 > 0)) exit 0; else exit 1; }'
+      exit $?
       ;;
     gmac_root_rejected)
       # DSPX-4703: does decrypt refuse a manifest downgraded to
