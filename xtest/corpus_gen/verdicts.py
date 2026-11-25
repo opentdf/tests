@@ -137,8 +137,8 @@ def _skip_note(sdk: str, needs: Sequence[str]) -> str:
 
 
 def _forged_comment(by_sdk: dict[str, list[Cell]]) -> list[str]:
-    """What the recorded runs saw for the forged x5c fixture, when every
-    build decrypted it."""
+    """Where the forged x5c fixture's verdicts were recorded, when every build
+    decrypted it."""
     cells = [c for cs in by_sdk.values() for c in cs]
     if not cells or any(c.outcome != "decrypt" for c in cells):
         return []
@@ -153,9 +153,8 @@ def _forged_comment(by_sdk: dict[str, list[Cell]]) -> list[str]:
     )
     platforms = names({c.platform: c.platform_semver for c in cells})
     return [
-        f"Observed when these verdicts were recorded, on platforms {platforms}:"
-        f" every SDK build tested ({builds}) decrypts this file with the genuine"
-        " signer's public key configured."
+        f"Recorded on platforms {platforms} with {builds}; expected to change"
+        " with pending SDK assertion-verification work."
     ]
 
 

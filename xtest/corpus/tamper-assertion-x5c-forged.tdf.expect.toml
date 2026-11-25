@@ -17,9 +17,8 @@ must_contain = [
 note = "Forged x5c assertion (self-signed certificate, recomputed claims); invalid with the genuine signer key."
 
 [sdk]
-# Observed when these verdicts were recorded, on platforms main and v0.31.0: every SDK build
-# tested (go main and v0.41.0, java main, js main and v0.23.0) decrypts this file with the genuine
-# signer's public key configured.
+# Recorded on platforms main and v0.31.0 with go main and v0.41.0, java main, js main and v0.23.0;
+# expected to change with pending SDK assertion-verification work.
 plaintext_sha256 = "a5a431c61c66f5e543f99bc759d512dd109630b26e1207c47049607601cd216e"
 go = "decrypt"
 java = "decrypt"

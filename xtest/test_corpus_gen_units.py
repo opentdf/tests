@@ -1473,9 +1473,10 @@ def test_verdicts_collapse_agreeing_cells(vcorpus: tuple[Path, Path], tmp_path: 
         assert {_resolve(table, sdk, v) for sdk, v in BUILDS} == {"reject"}
     forged = after[f"{FORGED_TDF}{corpus.SIDECAR_SUFFIX}"].decode()
     forged = forged.replace("\n# ", " ")
-    assert "(go main and v0.41.0, java main, js main and v0.23.0)" in forged
-    # Exit 0 with the right plaintext is all the records show.
-    assert "with the genuine signer's public key configured.\n" in forged
+    assert "with go main and v0.41.0, java main, js main and v0.23.0;" in forged
+    assert (
+        "expected to change with pending SDK assertion-verification work.\n" in forged
+    )
     assert "assertion error" not in forged
     # A second run replaces the tables it wrote.
     assert verdicts.run_verdicts(recs, scratch, root) == 0
