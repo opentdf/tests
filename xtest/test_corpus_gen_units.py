@@ -1197,9 +1197,13 @@ SDK_TABLE = (
 )
 
 
-@pytest.mark.parametrize("header", ["[sdk]  # hand-edited", "  [sdk]", "[ sdk ]"])
+@pytest.mark.parametrize(
+    "header", ["[sdk]  # hand-edited", "  [sdk]", "[ sdk ]", '["sdk"]', "[ 'sdk' ]"]
+)
 def test_sidecars_keep_sdk_table_under_any_header(tmp_path: Path, header: str):
-    src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', header)}")
+    table = SDK_TABLE.replace("[sdk]", header)
+    src = _old_sidecar(tmp_path, f"{OLD_TAMPER}\n{table}")
+    assert sidecars.split_sdk_table(src.read_text()) == (OLD_TAMPER, table)
     refs = sidecars.KeyRefs(key="keys/tamper-web-basic.dek")
     out = tmp_path / "new.tdf.expect.toml"
     out.write_text(sidecars.carry_sidecar(src, ["c"], refs))
@@ -1210,7 +1214,7 @@ def test_sidecars_keep_sdk_table_under_any_header(tmp_path: Path, header: str):
 
 def test_sidecars_refuse_an_sdk_table_they_cannot_carry(tmp_path: Path):
     src = _old_sidecar(
-        tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', '["sdk"]')}"
+        tmp_path, f"{OLD_TAMPER}\n{SDK_TABLE.replace('[sdk]', '[sdk.go]')}"
     )
     with pytest.raises(sidecars.SidecarGenError, match="cannot carry"):
         sidecars.carry_sidecar(src, ["c"], sidecars.KeyRefs(key="keys/x.dek"))
@@ -1250,6 +1254,12 @@ def test_sidecars_keep_sdk_table(tmp_path: Path):
     text = sidecars.sidecar_text(ctx, f"{sidecars.FORGED}.tdf")
     assert text.endswith(f'"\n\n{SDK_TABLE}')
     assert _parse(text, tmp_path)["expect"] == "invalid"
+    # A table it cannot carry is refused, not dropped.
+    (src_dir / f"{sidecars.FORGED}.tdf.expect.toml").write_text(
+        f'expect = "invalid"\n\n{SDK_TABLE.replace("[sdk]", "[sdk.go]")}'
+    )
+    with pytest.raises(sidecars.SidecarGenError, match="cannot carry"):
+        sidecars.sidecar_text(ctx, f"{sidecars.FORGED}.tdf")
 
 
 def test_rewrite_note_writer_prefix():
@@ -1327,6 +1337,34 @@ def test_clear_outputs_removes_sidecars_and_synthetic_copies(tmp_path: Path):
     assert sorted(_tree(stage)) == ["keys/sdk-a.dek", "sdk-a.tdf"]
 
 
+@pytest.mark.parametrize("where", ["inside", "parent", "absolute"])
+def test_copy_synthetic_confines_dek_to_source(tmp_path: Path, where: str):
+    src, stage = tmp_path / "src", tmp_path / "stage"
+    (src / "keys").mkdir(parents=True)
+    stage.mkdir()
+    (src / "keys" / "x.dek").write_text("inside")
+    (tmp_path / "x.dek").write_text("outside")
+    ref = {
+        "inside": "keys/x.dek",
+        "parent": "../x.dek",
+        "absolute": str(tmp_path / "x.dek"),
+    }[where]
+    names = list(sidecars.RENAMES.values())
+    for name in names:
+        (src / name).write_bytes(b"x")
+        (src / f"{name}{corpus.SIDECAR_SUFFIX}").write_text('expect = "invalid"\n')
+    keyed = src / f"{names[0]}{corpus.SIDECAR_SUFFIX}"
+    keyed.write_text(f'expect = "invalid"\nkey = "{ref}"\n')
+    dek = stage / "keys" / f"{names[0].rsplit('.', 1)[0]}.dek"
+    if where == "inside":
+        sidecars.copy_synthetic(src, stage)
+        assert dek.read_text() == "inside"
+        return
+    with pytest.raises(sidecars.SidecarGenError, match="is outside"):
+        sidecars.copy_synthetic(src, stage)
+    assert not dek.exists()
+
+
 # A fake scratch with one sdk fixture and one tamper fixture plus its base, and
 # a corpus holding a golden, other files and an earlier generator output.
 SDK_FIXTURE = "sdk-go-basic.tdf"
@@ -1401,6 +1439,26 @@ def test_install_replaces_generator_outputs(fake: tuple[Path, Path]):
     assert {k: after[k] for k in kept} == {k: before[k] for k in kept}
 
 
+def test_install_keeps_old_outputs_when_a_copy_fails(
+    fake: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+):
+    scratch, dest = fake
+    before = _tree(dest)
+    copyfile = shutil.copyfile
+    calls: list[Path] = []
+
+    def fail_third(frm: Path, to: Path) -> Path:
+        calls.append(to)
+        if len(calls) == 3:
+            raise OSError("no space left")
+        return copyfile(frm, to)
+
+    monkeypatch.setattr(sidecars.shutil, "copyfile", fail_third)
+    with pytest.raises(OSError, match="no space left"):
+        sidecars.install(scratch, dest, FAKE_EXPECTED)
+    assert _tree(dest) == before
+
+
 def _refused(scratch: Path, dest: Path, match: str) -> None:
     before = _tree(dest)
     with pytest.raises(sidecars.InstallRefused) as e:
@@ -1422,6 +1480,15 @@ def test_install_refuses_missing_key(fake: tuple[Path, Path]):
     _refused(
         scratch, dest, f"{TAMPER_FIXTURE}: missing key file keys/tamper-go-basic.dek"
     )
+
+
+def test_install_refuses_absolute_key_reference(fake: tuple[Path, Path]):
+    scratch, dest = fake
+    stage = scratch / "stage"
+    key = (stage / "keys" / "sdk-go-basic.dek").resolve()
+    sidecar = f'expect = "valid"\nkey = "{key}"\n'
+    _touch(stage / f"{SDK_FIXTURE}.expect.toml", 400, sidecar)
+    _refused(scratch, dest, f"{SDK_FIXTURE}: key reference {key} is absolute")
 
 
 def test_install_refuses_stale_key(fake: tuple[Path, Path]):
@@ -1562,7 +1629,8 @@ FAKE_SIDECARS = {
         'expect = "invalid"\nmust_contain = ["TDF.SEMANTIC.KEY_ACCESS_MISSING"]\n'
     ),
 }
-STAGED = "sdk-go-basic.tdf.expect.toml"
+STAGED_FIXTURE = "sdk-go-basic.tdf"
+STAGED = f"{STAGED_FIXTURE}.expect.toml"
 STAGED_HEAD = '# Staged, newer comments.\nexpect = "valid"\n'
 
 
@@ -1597,6 +1665,7 @@ def vcorpus(tmp_path: Path) -> tuple[Path, Path]:
     stale = '\n[sdk]\ngo = "reject"\njava = "reject"\njs = "reject"\n'
     (scratch / "stage").mkdir()
     (scratch / "stage" / STAGED).write_text(STAGED_HEAD + stale)
+    shutil.copyfile(root / STAGED_FIXTURE, scratch / "stage" / STAGED_FIXTURE)
     return root, scratch
 
 
@@ -1742,6 +1811,32 @@ def test_verdicts_skipped_sdk_refusals(
     assert (_tree(root), _tree(scratch)) == before
 
 
+def test_verdicts_skipped_sdk_must_lack_a_needed_capability(
+    vcorpus: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """Only a needed capability the SDK has no cells for anywhere explains a
+    missing cell."""
+    root, scratch = vcorpus
+    other = "sdk-java-hybrid-xwing.tdf"
+    shutil.copyfile(root / HYBRID, root / other)
+    (root / f"{other}{corpus.SIDECAR_SUFFIX}").write_text('expect = "valid"\n')
+    rec = _record(tmp_path, _fake_rows({other: _rows(other, NONE)}))
+    before = _tree(root), _tree(scratch)
+    assert verdicts.run_verdicts([rec], scratch, root) == 1
+    assert (
+        f"{HYBRID}: no js cells, though js has cells for other fixtures that"
+        " need mechanism-xwing"
+    ) in capsys.readouterr().err
+    assert (_tree(root), _tree(scratch)) == before
+
+    # The note names only the capability the SDK lacks.
+    cells = _cells(_rows(HYBRID, GOOD, D2, skip=("js",)))
+    by_sdk = {sdk: [c for c in cells if c.sdk == sdk] for sdk in ("go", "java")}
+    needs = ["ecwrap", "mechanism-xwing"]
+    text, _ = verdicts.table_text(HYBRID, {}, by_sdk, D2, needs, {"js": {"ecwrap"}})
+    assert "because js lacks mechanism-xwing;" in text
+
+
 def test_verdicts_refuse_a_fixture_no_sdk_ran(
     vcorpus: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
@@ -1755,7 +1850,7 @@ def test_verdicts_refuse_a_fixture_no_sdk_ran(
     assert "PLATFORM_VERSION" in err
     assert (_tree(root), _tree(scratch)) == before
     with pytest.raises(verdicts.VerdictError, match="no SDK recorded a cell"):
-        verdicts.table_text(HYBRID, {}, {}, D2, ["mechanism-xwing"])
+        verdicts.table_text(HYBRID, {}, {}, D2, ["mechanism-xwing"], {})
 
 
 @pytest.mark.parametrize("scratch_state", ["absent", "lacks-fixtures"])
@@ -1875,7 +1970,33 @@ def test_verdicts_update_staged_copies(vcorpus: tuple[Path, Path], tmp_path: Pat
     assert verdicts.run_verdicts([_record(tmp_path, _fake_rows())], scratch, root) == 0
     _, table = sidecars.split_sdk_table((root / STAGED).read_text())
     assert (scratch / "stage" / STAGED).read_text() == f"{STAGED_HEAD}\n{table}"
-    assert sorted(p.name for p in (scratch / "stage").iterdir()) == [STAGED]
+    assert sorted(p.name for p in (scratch / "stage").iterdir()) == [
+        STAGED_FIXTURE,
+        STAGED,
+    ]
+
+
+@pytest.mark.parametrize("staged", ["regenerated", "missing"])
+def test_verdicts_refuse_a_staged_copy_of_other_bytes(
+    staged: str,
+    vcorpus: tuple[Path, Path],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+):
+    """The records describe the corpus's bytes, not a regenerated stage's."""
+    root, scratch = vcorpus
+    fixture = scratch / "stage" / STAGED_FIXTURE
+    if staged == "missing":
+        fixture.unlink()
+    else:
+        fixture.write_bytes(b"y")
+    rec = _record(tmp_path, _fake_rows())
+    before = _tree(root), _tree(scratch)
+    assert verdicts.run_verdicts([rec], scratch, root) == 1
+    assert f"{STAGED_FIXTURE}: the staged copy is missing or differs" in (
+        capsys.readouterr().err
+    )
+    assert (_tree(root), _tree(scratch)) == before
 
 
 @pytest.mark.parametrize("bad", ["../x.tdf", "/etc/x.tdf", "stage/../../x.tdf"])

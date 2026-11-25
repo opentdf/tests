@@ -873,13 +873,13 @@ dependencies = [
     { name = "pytest-xdist" },
     { name = "requests" },
     { name = "scipy" },
+    { name = "tomli-w" },
 ]
 
 [package.optional-dependencies]
 dev = [
     { name = "pyright" },
     { name = "ruff" },
-    { name = "tomli-w" },
 ]
 
 [package.metadata]
@@ -896,6 +896,6 @@ requires-dist = [
     { name = "requests", specifier = ">=2.34.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.17.3" },
     { name = "scipy", specifier = ">=1.18.1" },
-    { name = "tomli-w", marker = "extra == 'dev'", specifier = ">=1.2.0" },
+    { name = "tomli-w", specifier = ">=1.2.0" },
 ]
 provides-extras = ["dev"]

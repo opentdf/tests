@@ -24,13 +24,13 @@ dependencies = [
     "requests>=2.34.2",
     "numpy>=2.5.4",
     "scipy>=1.18.1",
+    "tomli-w>=1.2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pyright>=1.1.414",
     "ruff>=0.17.3",
-    "tomli-w>=1.2.0",
 ]
 
 # Note: This is a test suite, not a distributable package.
