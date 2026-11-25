@@ -1,13 +1,20 @@
 """Offline tests for corpus sidecar parsing and per-SDK verdict resolution."""
 
+import base64
 import hashlib
+import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
+import abac
 import corpus
+import corpus_kas
 from corpus import DecryptHung, SidecarError, load_sidecar, resolve_verdict
 
 HASH = "a" * 64
@@ -355,3 +362,399 @@ def test_decrypt_interrupt_kills_process_group(
     with pytest.raises(KeyboardInterrupt):
         corpus.run_decrypt(_spawn_grandchild(pidfile), {}, timeout=5)
     assert _wait_gone(int(pidfile.read_text())), "grandchild survived the interrupt"
+
+
+class FakeOtdfctl:
+    """In-memory otdfctl double covering the calls corpus_kas makes."""
+
+    def __init__(self) -> None:
+        self.keys: dict[str, list[abac.KasKey]] = {}
+        self.namespaces: list[abac.Namespace] = []
+        self.attributes: list[abac.Attribute] = []
+        self.imports: list[dict[str, Any]] = []
+        self.assigned: list[tuple[str, str]] = []
+        self.mapped: list[str] = []
+        self.fail_first_import = False
+        self.fail_first_attr = False
+        self.value_keys: dict[str, list[str]] = {}
+        self.mappings: list[tuple[str, str]] = []
+
+    def kas_registry_keys_list(self, kas: abac.KasEntry) -> list[abac.KasKey]:
+        return list(self.keys.get(kas.uri, []))
+
+    def add_key(self, kas: abac.KasEntry, kid: str, pem: str) -> abac.KasKey:
+        k = abac.KasKey(
+            kas_id=kas.id,
+            kas_uri=kas.uri,
+            key=abac.KasKeyResponseKeyDetails(
+                id=f"id-{kid}",
+                key_id=kid,
+                key_algorithm=1,
+                key_status=1,
+                key_mode=1,
+                public_key_ctx=abac.KasKeyResponsePublicKeyContext(pem=pem),
+            ),
+        )
+        self.keys.setdefault(kas.uri, []).append(k)
+        return k
+
+    def kas_registry_import_key(
+        self, kas: abac.KasEntry, public_pem: str, key_id: str, **kw: Any
+    ) -> abac.KasKey:
+        self.imports.append({"kas": kas.uri, "key_id": key_id, **kw})
+        key = self.add_key(kas, key_id, public_pem)
+        if self.fail_first_import:
+            self.fail_first_import = False
+            raise AssertionError("Key import failed: key already exists")
+        return key
+
+    def namespace_list(self) -> list[abac.Namespace]:
+        return list(self.namespaces)
+
+    def namespace_create(self, name: str) -> abac.Namespace:
+        ns = abac.Namespace(id=f"ns-{name}", name=name, fqn=f"https://{name}")
+        self.namespaces.append(ns)
+        return ns
+
+    def attribute_list(self) -> list[abac.Attribute]:
+        return list(self.attributes)
+
+    def attribute_create(
+        self,
+        namespace: abac.Namespace,
+        name: str,
+        t: abac.AttributeRule,
+        values: list[str],
+    ) -> abac.Attribute:
+        fqn = f"{namespace.fqn}/attr/{name}"
+        attr = abac.Attribute(
+            id=f"attr-{name}",
+            namespace=namespace,
+            name=name,
+            rule=t,
+            fqn=fqn,
+            values=[
+                abac.AttributeValue(id=f"v-{name}-{v}", value=v, fqn=f"{fqn}/value/{v}")
+                for v in values
+            ],
+        )
+        self.attributes.append(attr)
+        if self.fail_first_attr:
+            self.fail_first_attr = False
+            raise AssertionError("attribute already exists")
+        return attr
+
+    def key_assign_value(self, key: abac.KasKey, val: abac.AttributeValue) -> None:
+        self.assigned.append((key.key.key_id, val.fqn or ""))
+        self.value_keys.setdefault(val.id, []).append(key.key.key_id)
+
+    def scs_map(self, sc: Any, value: abac.AttributeValue) -> None:
+        self.mapped.append(value.fqn or "")
+        self.mappings.append((value.id, sc.id))
+
+    def attribute_value_get(self, value_id: str) -> abac.AttributeValue:
+        return abac.AttributeValue(
+            id=value_id,
+            value="",
+            kas_keys=[
+                abac.ValueKasKey(
+                    kas_uri="http://localhost:8585",
+                    public_key=abac.ValueKasKeyPublic(kid=kid),
+                )
+                for kid in self.value_keys.get(value_id, [])
+            ],
+        )
+
+    def scs_map_list(self) -> list[abac.SubjectMapping]:
+        return [
+            abac.SubjectMapping(
+                id=f"sm{i}",
+                attribute_value=abac.AttributeValue(id=vid, value=""),
+                subject_condition_set=abac.SubjectConditionSet(id=sid, subject_sets=[]),
+                actions=[],
+            )
+            for i, (vid, sid) in enumerate(self.mappings)
+        ]
+
+
+def _kas(name: str, port: int) -> abac.KasEntry:
+    return abac.KasEntry(
+        id=f"kas-{name}", uri=f"http://localhost:{port}", public_key=None
+    )
+
+
+@pytest.fixture
+def two_kas() -> tuple[abac.KasEntry, abac.KasEntry]:
+    return _kas("km1", 8585), _kas("km2", 8686)
+
+
+def _pem(kid: str) -> str:
+    return corpus_kas.registry_pem(corpus.kas_keys()[kid])
+
+
+def test_existing_kid_with_other_key_raises(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    fake.add_key(km1, "corpus-r2048", _pem("corpus-r2048-b"))
+    with pytest.raises(corpus_kas.CorpusKeyMismatch) as ei:
+        corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    assert "corpus-r2048" in str(ei.value)
+
+
+def test_import_uses_stable_settings(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    keys = corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    assert set(keys) == set(corpus.kas_keys())
+    assert len(fake.imports) == 8
+    for imp in fake.imports:
+        assert imp["legacy"] is False
+        assert imp["wrapping_key_id"] == "root"
+    on = {i["key_id"]: i["kas"] for i in fake.imports}
+    assert on["corpus-r2048-b"] == km2.uri
+    assert on["corpus-xwing"] == km1.uri
+    corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    assert len(fake.imports) == 8
+
+
+def test_create_race_reuses_existing(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    fake.fail_first_import = True
+    keys = corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    assert set(keys) == set(corpus.kas_keys())
+
+
+def test_create_race_with_other_key_raises(two_kas):
+    km1, km2 = two_kas
+
+    class Rival(FakeOtdfctl):
+        def kas_registry_import_key(self, kas, public_pem, key_id, **kw):
+            pem = _pem("corpus-r2048-b") if key_id == "corpus-r2048" else public_pem
+            self.add_key(kas, key_id, pem)
+            raise AssertionError("Key import failed: already_exists")
+
+    with pytest.raises(corpus_kas.CorpusKeyMismatch):
+        corpus_kas.ensure_corpus_keys(Rival(), km1, km2, "rootkey")
+
+
+def test_ensure_attributes_creates_and_maps(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    keys = corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    scs = abac.SubjectConditionSet(id="scs", subject_sets=[])
+    vals = corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    base = "https://corpus.opentdf.example/attr"
+    assert set(vals) == {
+        f"{base}/split-allof/value/km1",
+        f"{base}/split-allof/value/km2",
+        f"{base}/split-anyof/value/km1",
+        f"{base}/split-anyof/value/km2",
+        f"{base}/label/value/a",
+    }
+    assert sorted(fake.mapped) == sorted(vals)
+    assigned = {fqn: kid for kid, fqn in fake.assigned}
+    assert assigned[f"{base}/split-allof/value/km2"] == "corpus-r2048-b"
+    assert assigned[f"{base}/split-anyof/value/km1"] == "corpus-r2048"
+    assert assigned[f"{base}/label/value/a"] == "corpus-r2048"
+    assert {a.name: a.rule for a in fake.attributes} == {
+        "split-allof": abac.AttributeRule.ALL_OF,
+        "split-anyof": abac.AttributeRule.ANY_OF,
+        "label": abac.AttributeRule.ANY_OF,
+    }
+    n_attrs, n_maps = len(fake.attributes), len(fake.mapped)
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert (len(fake.attributes), len(fake.mapped)) == (n_attrs, n_maps)
+
+
+def test_attribute_create_race_reuses_existing(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    keys = corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    fake.fail_first_attr = True
+    scs = abac.SubjectConditionSet(id="scs", subject_sets=[])
+    vals = corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert len(vals) == 5
+    assert len(fake.attributes) == 3
+
+
+def test_public_matches_accepts_base64_registry_pem():
+    import base64
+
+    for kid, entry in corpus.kas_keys().items():
+        pem = corpus_kas.registry_pem(entry)
+        assert corpus_kas.public_matches(entry, pem), kid
+        assert corpus_kas.public_matches(
+            entry, base64.b64encode(pem.encode()).decode()
+        ), kid
+    assert not corpus_kas.public_matches(
+        corpus.kas_keys()["corpus-r2048"], _pem("corpus-r2048-b")
+    )
+
+
+def _setup_unmapped(two_kas):
+    km1, km2 = two_kas
+    fake = FakeOtdfctl()
+    keys = corpus_kas.ensure_corpus_keys(fake, km1, km2, "rootkey")
+    scs = abac.SubjectConditionSet(id="scs", subject_sets=[])
+    # Interrupted earlier run: attributes exist, nothing mapped.
+    fake.fail_first_attr = False
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    fake.assigned.clear()
+    fake.mapped.clear()
+    fake.value_keys.clear()
+    fake.mappings.clear()
+    return fake, keys, scs
+
+
+def test_existing_unmapped_attributes_get_mapped(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    n_attrs = len(fake.attributes)
+    vals = corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert len(fake.attributes) == n_attrs
+    assert sorted(fake.mapped) == sorted(vals)
+    assert len(fake.assigned) == 5
+    assert len(fake.mappings) == len(set(fake.mappings)) == 5
+
+
+def test_fully_mapped_attributes_make_no_calls(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    n_attrs = len(fake.attributes)
+    fake.assigned.clear()
+    fake.mapped.clear()
+    corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    assert (len(fake.attributes), fake.assigned, fake.mapped) == (n_attrs, [], [])
+
+
+def test_value_mapped_to_wrong_key_raises(two_kas):
+    fake, keys, scs = _setup_unmapped(two_kas)
+    val = next(
+        v
+        for a in fake.attributes
+        for v in a.values or []
+        if v.fqn and v.fqn.endswith("split-allof/value/km2")
+    )
+    fake.value_keys[val.id] = ["corpus-r2048"]
+    with pytest.raises(corpus_kas.CorpusValueMismatch) as ei:
+        corpus_kas.ensure_corpus_attributes(fake, scs, keys)
+    msg = str(ei.value)
+    assert "split-allof/value/km2" in msg
+    assert "corpus-r2048" in msg and "corpus-r2048-b" in msg
+
+
+KEYS_BY_KID: Any = {
+    "k-xwing": {"alg": "hpqt:xwing"},
+    "k-secp": {"alg": "hpqt:secp256r1-mlkem768"},
+}
+
+
+def manifest(
+    *kaos: dict[str, str], attrs: list[str] | None = None, uuid: str | None = None
+) -> dict[str, Any]:
+    policy: dict[str, Any] = {
+        "body": {"dataAttributes": [{"attribute": a} for a in attrs or []]}
+    }
+    if uuid is not None:
+        policy["uuid"] = uuid
+    return {
+        "encryptionInformation": {
+            "keyAccess": list(kaos),
+            "policy": base64.b64encode(json.dumps(policy).encode()).decode(),
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("kao", "expected"),
+    [
+        ({"type": "wrapped"}, []),
+        ({"type": "ec-wrapped"}, ["ecwrap"]),
+        ({"type": "mlkem-wrapped", "kid": "x"}, ["mechanism-mlkem"]),
+        ({"type": "hybrid-wrapped", "kid": "k-xwing"}, ["mechanism-xwing"]),
+        ({"type": "hybrid-wrapped", "kid": "k-secp"}, ["mechanism-secpmlkem"]),
+        ({"type": "hybrid-wrapped", "kid": "unknown"}, []),
+    ],
+)
+def test_required_features_by_kao(kao: dict[str, str], expected: list[str]):
+    assert corpus.required_features(manifest(kao), KEYS_BY_KID) == expected
+
+
+def test_required_features_dedupes_and_tolerates_no_manifest():
+    two = manifest({"type": "ec-wrapped"}, {"type": "ec-wrapped"})
+    assert corpus.required_features(two, KEYS_BY_KID) == ["ecwrap"]
+    assert corpus.required_features(None, KEYS_BY_KID) == []
+
+
+def test_policy_uuid():
+    assert corpus.policy_uuid(manifest(uuid="u-1")) == "u-1"
+    assert corpus.policy_uuid(manifest()) is None
+    assert corpus.policy_uuid(None) is None
+    assert corpus.policy_uuid({"encryptionInformation": {"policy": "%%"}}) is None
+
+
+def test_has_data_attributes():
+    assert corpus.has_data_attributes(manifest(attrs=["https://x/attr/a/value/b"]))
+    assert not corpus.has_data_attributes(manifest())
+    assert not corpus.has_data_attributes(None)
+
+
+def test_read_manifest_none_for_non_zip(tmp_path: Path):
+    p = tmp_path / "x.tdf"
+    p.write_bytes(b"not a zip")
+    assert corpus.read_manifest(p) is None
+    assert corpus.read_manifest(tmp_path / "missing.tdf") is None
+
+
+def test_assertion_verification_keys(tmp_path: Path):
+    pem = (
+        rsa.generate_private_key(65537, 2048)
+        .public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
+    (tmp_path / "a.pem").write_text(pem)
+    m = {"assertions": [{"id": "one"}, {"id": "two"}]}
+    both = {"alg": "RS256", "key": pem}
+    got = corpus.assertion_verification_keys({"assertion_keys": ["a.pem"]}, m, tmp_path)
+    assert got == {"keys": {"one": both, "two": both}}
+    named = corpus.assertion_verification_keys(
+        {"assertion_keys": ["x=a.pem"]}, None, tmp_path
+    )
+    assert named == {"keys": {"x": both}}
+    assert corpus.assertion_verification_keys({}, m, tmp_path) is None
+    bare = {"assertion_keys": ["a.pem"]}
+    assert corpus.assertion_verification_keys(bare, None, tmp_path) is None
+
+
+def test_output_sha256_hashes_file_or_none(tmp_path: Path):
+    out = tmp_path / "out.bin"
+    out.write_bytes(b"plaintext")
+    assert corpus.output_sha256(out) == hashlib.sha256(b"plaintext").hexdigest()
+    assert corpus.output_sha256(tmp_path / "missing.bin") is None
+
+
+def test_make_record_carries_output_hash(tmp_path: Path):
+    out = tmp_path / "out.bin"
+    out.write_bytes(b"abc")
+    rec = corpus.make_record(
+        fixture="f.tdf", sdk="go", version="main", outcome="decrypt", out=out
+    )
+    assert rec["output_sha256"] == hashlib.sha256(b"abc").hexdigest()
+    assert rec["fixture"] == "f.tdf" and rec["outcome"] == "decrypt"
+    out.unlink()
+    rec = corpus.make_record(
+        fixture="f.tdf", sdk="go", version="main", outcome="reject", out=out
+    )
+    assert "output_sha256" in rec and rec["output_sha256"] is None
+
+
+def test_append_record_one_line_each(tmp_path: Path):
+    p = tmp_path / "rec.jsonl"
+    corpus.append_record(p, {"fixture": "a", "outcome": "decrypt"})
+    corpus.append_record(p, {"fixture": "b", "outcome": "reject"})
+    rows = [json.loads(line) for line in p.read_text().splitlines()]
+    assert [r["fixture"] for r in rows] == ["a", "b"]

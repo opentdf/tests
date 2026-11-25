@@ -37,10 +37,20 @@ class AttributeRule(enum.IntEnum):
     HIERARCHY = 3
 
 
+class ValueKasKeyPublic(BaseModelIgnoreExtra):
+    kid: str
+
+
+class ValueKasKey(BaseModelIgnoreExtra):
+    kas_uri: str
+    public_key: ValueKasKeyPublic
+
+
 class AttributeValue(BaseModelIgnoreExtra):
     id: str
     value: str
     fqn: str | None = None
+    kas_keys: list[ValueKasKey] | None = None
     active: BoolValue | None = None
     metadata: Metadata | None = None
 

@@ -43,7 +43,7 @@ import zipmutate
 import zipreport
 from zipinspect import MalformedZipError
 
-_FOREIGN_EXTRA_TLV = conformance._FOREIGN_EXTRA_TLV
+_FOREIGN_EXTRA_TLV = zipmutate.FOREIGN_EXTRA_TLV
 
 
 def _ordinary_zip(path: Path) -> Path:
@@ -441,7 +441,7 @@ def test_independent_entry_sentinels_preserve_contents(
 ):
     src = _ordinary_zip(tmp_path / "src.zip")
     before = zipinspect.central_directory(src)
-    trailer = conformance._entry_sentinel_trailer(src, fields, zip64_eocd)
+    trailer = zipmutate.entry_sentinel_trailer(src, fields, zip64_eocd)
     dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
     assert src.read_bytes()[: before.cd_offset] == dest.read_bytes()[: before.cd_offset]
     after = zipinspect.central_directory(dest)
@@ -507,7 +507,7 @@ def test_directory_entry_comment_preserves_following_entry(tmp_path: Path):
 def test_malformed_fixture_targets_metadata_only(tmp_path: Path, case: str):
     src = _ordinary_zip(tmp_path / "src.zip")
     before = zipinspect.central_directory(src)
-    trailer = conformance._malformed_trailer(src, case)
+    trailer = zipmutate.malformed_trailer(src, case)
     dest = zipmutate.rewrite(src, tmp_path / "dest.zip", trailer)
     raw = dest.read_bytes()
     assert raw[: before.cd_offset] == src.read_bytes()[: before.cd_offset]

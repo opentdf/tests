@@ -213,9 +213,6 @@ def _public_der(key: Any) -> bytes:
     )
 
 
-@pytest.mark.skipif(
-    not KAS_KEYS.exists(), reason="xtest/corpus/kas-keys.json does not exist yet"
-)
 def test_kas_keys_well_formed():
     entries = json.loads(KAS_KEYS.read_text())
     assert isinstance(entries, list), "kas-keys.json must be a JSON list"
