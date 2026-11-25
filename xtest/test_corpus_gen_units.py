@@ -1014,6 +1014,33 @@ def test_adversarial_cases_contradict(name: str, zip_base: Path, tmp_path: Path)
     assert _trailer_diff(base_trailer, trailer) == SOURCE_ZIP[name]
 
 
+@pytest.mark.parametrize("name", ADVERSARIAL)
+def test_zip_check_reads_the_written_trailer(name: str, zip_base: Path, tmp_path: Path):
+    _, cd_offset = zipmutate.load_trailer(zip_base)
+    cut = tmp_path / "cut.tdf"
+    cut.write_bytes(zip_base.read_bytes()[:cd_offset])
+    for out in (zip_base, cut):
+        with pytest.raises(zipcases.ZipCaseError, match="not the case's"):
+            zipcases.check_derived(name, zip_base, out)
+
+
+def test_adversarial_trailers_read_back(zip_base: Path, tmp_path: Path):
+    """The contradictions in the written files, as zipinspect parses them."""
+
+    def entry(name: str, entry: str) -> zipinspect.CentralDirectoryEntry:
+        cd = zipinspect.central_directory(_build(name, zip_base, tmp_path))
+        return next(e for e in cd.entries if e.name == entry)
+
+    header = entry("zip-adversarial-header-offset-int64", "0.manifest.json")
+    assert header.local_header_offset == 1 << 63 and header.uses_zip64_for_offset
+    size = entry("zip-adversarial-manifest-size-past-eof", "0.manifest.json")
+    assert size.compressed_size == zip_base.stat().st_size + 4096
+    payload = entry("zip-adversarial-payload-overlaps-directory", "0.payload")
+    _, cd_offset = zipmutate.load_trailer(zip_base)
+    start = zipinspect.local_file_header_data_offset(zip_base, payload)
+    assert start + payload.compressed_size == cd_offset + 1
+
+
 def test_zip_entry_sentinels_defer_every_field(zip_base: Path):
     trailer = zipcases.ZIP_TRAILERS["zip-legal-zip64-entry-sentinels"](zip_base)
     assert trailer.force_zip64_eocd and len(trailer.entries) == 2
